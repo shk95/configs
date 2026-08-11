@@ -39,8 +39,8 @@ The current Unix-like outputs are:
 
 Windows desired state is declared directly in
 `windows/desired/manifest.json`. Its payloads, including the Windows-owned
-WezTerm copy, live below `windows/desired/files/`. Neither requires Nix to
-author, validate, or consume.
+WezTerm and Zellij copies, live below `windows/desired/files/`. Neither requires
+Nix to author, validate, or consume.
 
 ## Develop
 

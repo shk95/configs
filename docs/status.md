@@ -34,10 +34,17 @@ The Windows domain is independent:
 - Native desired-state validation, Pester, and `bootstrap.ps1 -Check` provide
   Windows evidence.
 - Nix has no Windows options, package output, renderer, or generated consumer.
-- Unix-like and Windows WezTerm payloads are independent copies and may diverge.
+- Unix-like and Windows WezTerm and Zellij payloads are independent copies and
+  may diverge.
 - Hooks and CI no longer make a Windows artifact depend on Unix-like evaluation.
 
 No explicit `common/` component has yet been justified or created.
+
+The Unix-like Zellij keymap was adopted by copying the Windows implementation.
+The copies intentionally differ in platform-owned shell and session values and
+have no synchronization dependency. Promotion to `common` remains deferred
+until both implementations demonstrate stable semantics across independent
+version and validation cycles.
 
 ## Versioning and deployment decision
 
