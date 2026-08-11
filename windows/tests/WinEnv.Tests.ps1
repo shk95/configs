@@ -1,6 +1,6 @@
 $repositoryRoot = Split-Path -Parent $PSScriptRoot
 $monorepoRoot = Split-Path -Parent $repositoryRoot
-$bundleRoot = Join-Path $repositoryRoot 'generated'
+$desiredStateRoot = Join-Path $repositoryRoot 'desired'
 Import-Module (Join-Path $repositoryRoot 'src\WinEnv.psm1') -Force
 
 function Test-Throws {
@@ -9,14 +9,14 @@ function Test-Throws {
 }
 
 Describe 'win-env manifest' {
-    It 'loads schema 1 and the generated compatibility version' {
-        $manifest = Get-WinEnvManifest -Path (Join-Path $bundleRoot 'manifest.json')
+    It 'loads schema 1 and the desired-state compatibility version' {
+        $manifest = Get-WinEnvManifest -Path (Join-Path $desiredStateRoot 'manifest.json')
         $manifest.SchemaVersion | Should Be 1
         $manifest.ProjectVersion | Should Be '0.2.0'
     }
 
     It 'pins the v3.5.0 D2Koding asset and hashes' {
-        $manifest = Get-WinEnvManifest -Path (Join-Path $bundleRoot 'manifest.json')
+        $manifest = Get-WinEnvManifest -Path (Join-Path $desiredStateRoot 'manifest.json')
         $manifest.Font.Version | Should Be '3.5.0'
         $manifest.Font.Name | Should Be 'D2KodingLigature Nerd Font Mono'
         $manifest.Font.Sha256 | Should Match '^[0-9a-f]{64}$'
@@ -24,23 +24,23 @@ Describe 'win-env manifest' {
     }
 
     It 'uses exact expected WinGet IDs' {
-        $manifest = Get-WinEnvManifest -Path (Join-Path $bundleRoot 'manifest.json')
+        $manifest = Get-WinEnvManifest -Path (Join-Path $desiredStateRoot 'manifest.json')
         (($manifest.Packages.Id | Sort-Object) -join ',') | Should Be 'Microsoft.PowerShell,Microsoft.PowerToys,Microsoft.WindowsTerminal,wez.wezterm,Zellij.Zellij'
     }
 
     It 'connects the Terminal profile to the pinned font and GUIDs' {
-        $manifest = Get-WinEnvManifest -Path (Join-Path $bundleRoot 'manifest.json')
-        $terminal = Get-Content (Join-Path $bundleRoot 'files\terminal\settings.json') -Raw | ConvertFrom-Json
+        $manifest = Get-WinEnvManifest -Path (Join-Path $desiredStateRoot 'manifest.json')
+        $terminal = Get-Content (Join-Path $desiredStateRoot 'files\terminal\settings.json') -Raw | ConvertFrom-Json
         $terminal.defaultProfile | Should Be $manifest.Terminal.DefaultProfileGuid
         $terminal.profiles.defaults.font.face | Should Be $manifest.Font.Name
         ($terminal.profiles.list | Where-Object name -eq 'Zellij Workspace').guid | Should Be $manifest.Terminal.ZellijProfileGuid
     }
 
     It 'manages the current Windows-side WSL configuration' {
-        $manifest = Get-WinEnvManifest -Path (Join-Path $bundleRoot 'manifest.json')
+        $manifest = Get-WinEnvManifest -Path (Join-Path $desiredStateRoot 'manifest.json')
         $wsl = $manifest.ManagedFiles | Where-Object Id -eq 'WslConfig'
         $wsl.Target | Should Be '{USERPROFILE}\.wslconfig'
-        $content = Get-Content (Join-Path $bundleRoot $wsl.Source) -Raw
+        $content = Get-Content (Join-Path $desiredStateRoot $wsl.Source) -Raw
         $content | Should Match '(?m)^networkingMode=Mirrored$'
         $content | Should Not Match '(?m)^firewall\s*='
         $content | Should Match '(?m)^hostAddressLoopback=true$'
@@ -112,22 +112,22 @@ Describe 'state safety' {
     It 'atomically writes valid state' {
         $path = Join-Path $TestDrive 'state\state.json'
         $fontRegisteredAtUtc = '2026-08-10T07:42:46.5260930+00:00'
-        $bundleHash = '0123456789abcdef0123456789abcdef0123456789abcdef0123456789abcdef'
-        Write-WinEnvState -Path $path -ProjectVersion '0.1.0' -GitCommit '0123456789abcdef' -BundleHash $bundleHash -FontRegisteredAtUtc $fontRegisteredAtUtc
+        $desiredStateHash = '0123456789abcdef0123456789abcdef0123456789abcdef0123456789abcdef'
+        Write-WinEnvState -Path $path -ProjectVersion '0.1.0' -GitCommit '0123456789abcdef' -DesiredStateHash $desiredStateHash -FontRegisteredAtUtc $fontRegisteredAtUtc
         $state = Get-WinEnvState -Path $path
         $state.projectVersion | Should Be '0.1.0'
         $state.gitCommit | Should Be '0123456789abcdef'
-        $state.bundleHash | Should Be $bundleHash
+        $state.bundleHash | Should Be $desiredStateHash
         ([DateTimeOffset]$state.fontRegisteredAtUtc).UtcTicks | Should Be ([DateTimeOffset]$fontRegisteredAtUtc).UtcTicks
     }
 
-    It 'changes the bundle hash when generated content changes' {
-        $root = Join-Path $TestDrive 'bundle'
+    It 'changes the desired-state hash when content changes' {
+        $root = Join-Path $TestDrive 'desired'
         [void](New-Item -ItemType Directory -Path $root)
         [IO.File]::WriteAllText((Join-Path $root 'manifest.json'), '{}')
-        $before = Get-WinEnvBundleHash -Root $root
+        $before = Get-WinEnvDesiredStateHash -Root $root
         [IO.File]::WriteAllText((Join-Path $root 'manifest.json'), '{"changed":true}')
-        $after = Get-WinEnvBundleHash -Root $root
+        $after = Get-WinEnvDesiredStateHash -Root $root
         $before | Should Match '^[0-9a-f]{64}$'
         $after | Should Match '^[0-9a-f]{64}$'
         $after | Should Not Be $before
@@ -135,20 +135,30 @@ Describe 'state safety' {
 }
 
 Describe 'managed sources' {
-    It 'parses every PowerShell and JSON source' {
-        $manifest = Get-WinEnvManifest -Path (Join-Path $bundleRoot 'manifest.json')
+    It 'parses every source that needs no external parser' {
+        $manifest = Get-WinEnvManifest -Path (Join-Path $desiredStateRoot 'manifest.json')
         foreach ($definition in $manifest.ManagedFiles) {
             if ($definition.Parser -ne 'Kdl') {
-                { Test-WinEnvSourceFile -Definition $definition -RepositoryRoot $bundleRoot } | Should Not Throw
+                { Test-WinEnvSourceFile -Definition $definition -RepositoryRoot $desiredStateRoot } | Should Not Throw
             }
         }
     }
 
     It 'does not contain excluded host and runtime files' {
-        (Test-Path (Join-Path $bundleRoot 'files\powertoys\Workspaces\workspaces.json')) | Should Be $false
-        (Test-Path (Join-Path $bundleRoot 'files\powertoys\FancyZones\applied-layouts.json')) | Should Be $false
-        $all = Get-ChildItem (Join-Path $bundleRoot 'files\powertoys') -File -Recurse | ForEach-Object { Get-Content $_.FullName -Raw }
+        (Test-Path (Join-Path $desiredStateRoot 'files\powertoys\Workspaces\workspaces.json')) | Should Be $false
+        (Test-Path (Join-Path $desiredStateRoot 'files\powertoys\FancyZones\applied-layouts.json')) | Should Be $false
+        $all = Get-ChildItem (Join-Path $desiredStateRoot 'files\powertoys') -File -Recurse | ForEach-Object { Get-Content $_.FullName -Raw }
         ($all -join "`n") | Should Not Match 'C:\\\\Users\\\\user1'
+    }
+
+    It 'declares every deployable desired-state payload exactly once' {
+        $manifest = Get-WinEnvManifest -Path (Join-Path $desiredStateRoot 'manifest.json')
+        $declared = @($manifest.ManagedFiles.Source | ForEach-Object { $_.Replace('\', '/') } | Sort-Object)
+        $filesRoot = Join-Path $desiredStateRoot 'files'
+        $actual = @(Get-ChildItem $filesRoot -File -Recurse | Where-Object Extension -ne '.example' | ForEach-Object {
+            'files/' + [IO.Path]::GetRelativePath($filesRoot, $_.FullName).Replace('\', '/')
+        } | Sort-Object)
+        ($declared -join "`n") | Should Be ($actual -join "`n")
     }
 }
 

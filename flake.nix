@@ -1,5 +1,5 @@
 {
-  description = "Dendritic configuration for Unix-like hosts and generated Windows state";
+  description = "Dendritic configuration for Unix-like hosts";
 
   inputs = {
     nixpkgs.url = "github:nixos/nixpkgs/nixos-unstable";

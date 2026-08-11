@@ -12,24 +12,28 @@ concurrency:
 
 jobs:
   unix:
-    name: Flake, hosts, and generated Windows state
+    name: Flake and Unix-like hosts
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v7
       - uses: DeterminateSystems/nix-installer-action@main
       - run: tool/checks/format
       - run: tool/checks/lint
-      - run: tool/checks/windows-generated
       - run: tool/checks/test
 
   windows:
-    name: Windows consumer
+    name: Windows desired state
     runs-on: windows-latest
     steps:
       - uses: actions/checkout@v7
-      - name: Parse and test PowerShell
+      - name: Validate desired state and test PowerShell
         shell: pwsh
         run: |
+          winget install --id DEVCOM.Lua --version 5.4.6 --exact --source winget --accept-source-agreements --accept-package-agreements --disable-interactivity
+          winget install --id Zellij.Zellij --exact --source winget --accept-source-agreements --accept-package-agreements --disable-interactivity
+          $machinePath = [Environment]::GetEnvironmentVariable('Path', 'Machine')
+          $userPath = [Environment]::GetEnvironmentVariable('Path', 'User')
+          $env:Path = "$machinePath;$userPath;$env:Path"
           Get-ChildItem -Recurse -Include *.ps1,*.psm1 | ForEach-Object {
             $tokens = $null
             $errors = $null
@@ -40,6 +44,7 @@ jobs:
             ) | Out-Null
             if ($errors.Count) { throw "$($_.FullName): $($errors[0].Message)" }
           }
+          .\windows\tools\check-desired-state.ps1
           Invoke-Pester .\windows\tests
 
   secrets:

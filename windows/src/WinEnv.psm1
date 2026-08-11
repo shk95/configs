@@ -24,7 +24,7 @@ function Compare-WinEnvVersion {
     return $repository.CompareTo($applied)
 }
 
-function Get-WinEnvBundleHash {
+function Get-WinEnvDesiredStateHash {
     param([Parameter(Mandatory)][string] $Root)
 
     $resolvedRoot = [System.IO.Path]::GetFullPath($Root)
@@ -101,7 +101,7 @@ function Write-WinEnvState {
         [Parameter(Mandatory)][string] $Path,
         [Parameter(Mandatory)][string] $ProjectVersion,
         [Parameter(Mandatory)][string] $GitCommit,
-        [Parameter(Mandatory)][string] $BundleHash,
+        [Parameter(Mandatory)][string] $DesiredStateHash,
         [string] $FontRegisteredAtUtc
     )
 
@@ -110,7 +110,8 @@ function Write-WinEnvState {
         projectVersion = $ProjectVersion
         appliedAtUtc   = [DateTimeOffset]::UtcNow.ToString('o')
         gitCommit      = $GitCommit
-        bundleHash     = $BundleHash
+        # Retain the state key for compatibility with already-applied state.
+        bundleHash     = $DesiredStateHash
     }
     if (-not [string]::IsNullOrWhiteSpace($FontRegisteredAtUtc)) {
         $state.fontRegisteredAtUtc = $FontRegisteredAtUtc
@@ -505,8 +506,8 @@ function Test-WinEnvSourceFile {
             }
         }
         'Lua' {
-            # Lua syntax is verified while rendering the bundle on Unix-like
-            # development hosts. Windows consumes the committed result.
+            # WezTerm loads these files on native Windows. Pester verifies the
+            # source inventory and JSON manifest without a Unix-like renderer.
         }
         'Text' {
             # Existence and content are checked by the managed-file path.

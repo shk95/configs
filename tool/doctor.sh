@@ -127,12 +127,7 @@ if grep -Rqs --include='*.nix' 'darwinConfigurations' flake.nix modules 2>/dev/n
   fi
 fi
 
-if grep -Rqs --include='*.nix' 'windows-bundle' modules 2>/dev/null; then
-  found=1
-  ok "Windows desired state — render here, consume on native Windows"
-fi
-
-[ "$found" -eq 1 ] || warn "no host configurations or Windows bundle in the flake sources" \
+[ "$found" -eq 1 ] || warn "no Unix-like host configurations in the flake sources" \
      "tool/checks/test has nothing to verify."
 
 echo
