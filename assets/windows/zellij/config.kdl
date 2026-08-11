@@ -1,0 +1,56 @@
+keybinds clear-defaults=true {
+    locked {
+        bind "Ctrl g" { SwitchToMode "normal"; }
+    }
+    normal {
+        bind "Ctrl g" { SwitchToMode "locked"; }
+        bind "Ctrl p" { SwitchToMode "pane"; }
+        bind "Ctrl t" { SwitchToMode "tab"; }
+        bind "Ctrl r" { SwitchToMode "resize"; }
+        bind "Ctrl s" { SwitchToMode "scroll"; }
+        bind "Ctrl q" { Quit; }
+    }
+    pane {
+        bind "h" "left" { MoveFocus "left"; }
+        bind "j" "down" { MoveFocus "down"; }
+        bind "k" "up" { MoveFocus "up"; }
+        bind "l" "right" { MoveFocus "right"; }
+        bind "n" { NewPane; SwitchToMode "locked"; }
+        bind "x" { CloseFocus; SwitchToMode "locked"; }
+        bind "f" { ToggleFocusFullscreen; SwitchToMode "locked"; }
+        bind "esc" { SwitchToMode "locked"; }
+    }
+    tab {
+        bind "h" "left" { GoToPreviousTab; }
+        bind "l" "right" { GoToNextTab; }
+        bind "n" { NewTab; SwitchToMode "locked"; }
+        bind "x" { CloseTab; SwitchToMode "locked"; }
+        bind "esc" { SwitchToMode "locked"; }
+    }
+    resize {
+        bind "h" "left" { Resize "Increase left"; }
+        bind "j" "down" { Resize "Increase down"; }
+        bind "k" "up" { Resize "Increase up"; }
+        bind "l" "right" { Resize "Increase right"; }
+        bind "+" "=" { Resize "Increase"; }
+        bind "-" { Resize "Decrease"; }
+        bind "esc" { SwitchToMode "locked"; }
+    }
+    scroll {
+        bind "j" "down" { ScrollDown; }
+        bind "k" "up" { ScrollUp; }
+        bind "PageDown" { PageScrollDown; }
+        bind "PageUp" { PageScrollUp; }
+        bind "Ctrl c" "esc" { ScrollToBottom; SwitchToMode "locked"; }
+    }
+}
+
+default_mode "locked"
+default_shell "pwsh.exe"
+copy_clipboard "system"
+copy_on_select true
+session_name "win-env"
+attach_to_session true
+on_force_close "detach"
+show_startup_tips false
+show_release_notes false

@@ -1,0 +1,303 @@
+{
+  "Font": {
+    "Files": [
+      {
+        "FileName": "D2KodingLigatureNerdFontMono-Regular.ttf",
+        "FullName": "D2KodingLigature Nerd Font Mono",
+        "RegistryName": "D2KodingLigature Nerd Font Mono (TrueType)",
+        "Sha256": "be8964904705f43a1e5a62339629d9e20eb37316008dda4de5b5681547ea2996"
+      },
+      {
+        "FileName": "D2KodingLigatureNerdFontMono-Bold.ttf",
+        "FullName": "D2KodingLigature Nerd Font Mono Bold",
+        "RegistryName": "D2KodingLigature Nerd Font Mono Bold (TrueType)",
+        "Sha256": "6bf59e7bf1df834c2acfd2139b9e10e5dcec747ba602f1a33ae9195daa202909"
+      }
+    ],
+    "Name": "D2KodingLigature Nerd Font Mono",
+    "Sha256": "576b27f898420acadb0ba1782063b9fa2b1388db6567e6b1ea753e01e5842868",
+    "Url": "https://github.com/ryanoasis/nerd-fonts/releases/download/v3.5.0/D2Coding.zip",
+    "Version": "3.5.0"
+  },
+  "ManagedFiles": [
+    {
+      "Compare": "JsonSubset",
+      "Group": "PowerToys",
+      "Id": "advancedPaste",
+      "Parser": "Json",
+      "Source": "files/powertoys/AdvancedPaste/settings.json",
+      "Target": "{LOCALAPPDATA}\\Microsoft\\PowerToys\\AdvancedPaste\\settings.json"
+    },
+    {
+      "Compare": "JsonSubset",
+      "Group": "PowerToys",
+      "Id": "awake",
+      "Parser": "Json",
+      "Source": "files/powertoys/Awake/settings.json",
+      "Target": "{LOCALAPPDATA}\\Microsoft\\PowerToys\\Awake\\settings.json"
+    },
+    {
+      "Compare": "JsonSubset",
+      "Group": "PowerToys",
+      "Id": "commandPalette",
+      "Parser": "Json",
+      "Source": "files/powertoys/CmdPal/settings.json",
+      "Target": "{LOCALAPPDATA}\\Packages\\Microsoft.CommandPalette_8wekyb3d8bbwe\\LocalState\\settings.json"
+    },
+    {
+      "Compare": "JsonSubset",
+      "Group": "PowerToys",
+      "Id": "fancyZones",
+      "Parser": "Json",
+      "Source": "files/powertoys/FancyZones/settings.json",
+      "Target": "{LOCALAPPDATA}\\Microsoft\\PowerToys\\FancyZones\\settings.json"
+    },
+    {
+      "Compare": "ExactJson",
+      "Group": "PowerToys",
+      "Id": "fancyZonesCustomLayouts",
+      "Parser": "Json",
+      "Source": "files/powertoys/FancyZones/custom-layouts.json",
+      "Target": "{LOCALAPPDATA}\\Microsoft\\PowerToys\\FancyZones\\custom-layouts.json"
+    },
+    {
+      "Compare": "ExactJson",
+      "Group": "PowerToys",
+      "Id": "fancyZonesDefaultLayouts",
+      "Parser": "Json",
+      "Source": "files/powertoys/FancyZones/default-layouts.json",
+      "Target": "{LOCALAPPDATA}\\Microsoft\\PowerToys\\FancyZones\\default-layouts.json"
+    },
+    {
+      "Compare": "ExactJson",
+      "Group": "PowerToys",
+      "Id": "fancyZonesLayoutHotkeys",
+      "Parser": "Json",
+      "Source": "files/powertoys/FancyZones/layout-hotkeys.json",
+      "Target": "{LOCALAPPDATA}\\Microsoft\\PowerToys\\FancyZones\\layout-hotkeys.json"
+    },
+    {
+      "Compare": "JsonSubset",
+      "Group": "PowerToys",
+      "Id": "fileExplorer",
+      "Parser": "Json",
+      "Source": "files/powertoys/File Explorer/settings.json",
+      "Target": "{LOCALAPPDATA}\\Microsoft\\PowerToys\\File Explorer\\settings.json"
+    },
+    {
+      "Compare": "ExactJson",
+      "Group": "PowerToys",
+      "Id": "fileLocksmith",
+      "Parser": "Json",
+      "Source": "files/powertoys/File Locksmith/file-locksmith-settings.json",
+      "Target": "{LOCALAPPDATA}\\Microsoft\\PowerToys\\File Locksmith\\file-locksmith-settings.json"
+    },
+    {
+      "Compare": "JsonSubset",
+      "Group": "PowerToys",
+      "Id": "findMyMouse",
+      "Parser": "Json",
+      "Source": "files/powertoys/FindMyMouse/settings.json",
+      "Target": "{LOCALAPPDATA}\\Microsoft\\PowerToys\\FindMyMouse\\settings.json"
+    },
+    {
+      "Compare": "JsonSubset",
+      "Group": "PowerToys",
+      "Id": "keyboardManager",
+      "Parser": "Json",
+      "Source": "files/powertoys/Keyboard Manager/settings.json",
+      "Target": "{LOCALAPPDATA}\\Microsoft\\PowerToys\\Keyboard Manager\\settings.json"
+    },
+    {
+      "Compare": "ExactJson",
+      "Group": "PowerToys",
+      "Id": "keyboardManagerMapping",
+      "Parser": "Json",
+      "Source": "files/powertoys/Keyboard Manager/default.json",
+      "Target": "{LOCALAPPDATA}\\Microsoft\\PowerToys\\Keyboard Manager\\default.json"
+    },
+    {
+      "Compare": "JsonSubset",
+      "Group": "PowerToys",
+      "Id": "newPlus",
+      "Parser": "Json",
+      "Source": "files/powertoys/NewPlus/settings.json",
+      "Target": "{LOCALAPPDATA}\\Microsoft\\PowerToys\\NewPlus\\settings.json"
+    },
+    {
+      "Compare": "JsonSubset",
+      "Group": "PowerToys",
+      "Id": "peek",
+      "Parser": "Json",
+      "Source": "files/powertoys/Peek/settings.json",
+      "Target": "{LOCALAPPDATA}\\Microsoft\\PowerToys\\Peek\\settings.json"
+    },
+    {
+      "Compare": "ExactJson",
+      "Group": "PowerToys",
+      "Id": "peekPreview",
+      "Parser": "Json",
+      "Source": "files/powertoys/Peek/preview-settings.json",
+      "Target": "{LOCALAPPDATA}\\Microsoft\\PowerToys\\Peek\\preview-settings.json"
+    },
+    {
+      "Compare": "ExactJson",
+      "Group": "PowerToys",
+      "Id": "powerRename",
+      "Parser": "Json",
+      "Source": "files/powertoys/PowerRename/power-rename-settings.json",
+      "Target": "{LOCALAPPDATA}\\Microsoft\\PowerToys\\PowerRename\\power-rename-settings.json"
+    },
+    {
+      "Compare": "JsonSubset",
+      "Group": "PowerToys",
+      "Id": "powerToysRoot",
+      "Parser": "Json",
+      "Source": "files/powertoys/settings.json",
+      "Target": "{LOCALAPPDATA}\\Microsoft\\PowerToys\\settings.json"
+    },
+    {
+      "Compare": "Text",
+      "Id": "powershellProfile",
+      "Parser": "PowerShell",
+      "Source": "files/powershell/profile.ps1",
+      "Target": "{LOCALAPPDATA}\\win-env\\powershell\\profile.ps1"
+    },
+    {
+      "Compare": "Text",
+      "Id": "weztermAppearance",
+      "Parser": "Lua",
+      "Source": "files/wezterm/config/appearance.lua",
+      "Target": "{USERPROFILE}\\.config\\wezterm\\config\\appearance.lua"
+    },
+    {
+      "Compare": "Text",
+      "Id": "weztermBehavior",
+      "Parser": "Lua",
+      "Source": "files/wezterm/config/behavior.lua",
+      "Target": "{USERPROFILE}\\.config\\wezterm\\config\\behavior.lua"
+    },
+    {
+      "Compare": "Text",
+      "Id": "weztermBindings",
+      "Parser": "Lua",
+      "Source": "files/wezterm/config/bindings.lua",
+      "Target": "{USERPROFILE}\\.config\\wezterm\\config\\bindings.lua"
+    },
+    {
+      "Compare": "Text",
+      "Id": "weztermDarwin",
+      "Parser": "Lua",
+      "Source": "files/wezterm/platform/darwin.lua",
+      "Target": "{USERPROFILE}\\.config\\wezterm\\platform\\darwin.lua"
+    },
+    {
+      "Compare": "ExactJson",
+      "Id": "weztermFontManifest",
+      "Parser": "Json",
+      "Source": "files/wezterm/fonts.json",
+      "Target": "{USERPROFILE}\\.config\\wezterm\\fonts.json"
+    },
+    {
+      "Compare": "Text",
+      "Id": "weztermFonts",
+      "Parser": "Lua",
+      "Source": "files/wezterm/config/fonts.lua",
+      "Target": "{USERPROFILE}\\.config\\wezterm\\config\\fonts.lua"
+    },
+    {
+      "Compare": "Text",
+      "Id": "weztermLinux",
+      "Parser": "Lua",
+      "Source": "files/wezterm/platform/linux.lua",
+      "Target": "{USERPROFILE}\\.config\\wezterm\\platform\\linux.lua"
+    },
+    {
+      "Compare": "Text",
+      "Id": "weztermRoot",
+      "Parser": "Lua",
+      "Source": "files/wezterm/wezterm.lua",
+      "Target": "{USERPROFILE}\\.config\\wezterm\\wezterm.lua"
+    },
+    {
+      "Compare": "Text",
+      "Id": "weztermWindows",
+      "Parser": "Lua",
+      "Source": "files/wezterm/platform/windows.lua",
+      "Target": "{USERPROFILE}\\.config\\wezterm\\platform\\windows.lua"
+    },
+    {
+      "Compare": "ExactJson",
+      "Id": "windowsTerminal",
+      "Parser": "Json",
+      "Source": "files/terminal/settings.json",
+      "Target": "{LOCALAPPDATA}\\Packages\\Microsoft.WindowsTerminal_8wekyb3d8bbwe\\LocalState\\settings.json"
+    },
+    {
+      "Compare": "JsonSubset",
+      "Group": "PowerToys",
+      "Id": "workspaces",
+      "Parser": "Json",
+      "Source": "files/powertoys/Workspaces/settings.json",
+      "Target": "{LOCALAPPDATA}\\Microsoft\\PowerToys\\Workspaces\\settings.json"
+    },
+    {
+      "Compare": "Text",
+      "Id": "wslConfig",
+      "Parser": "Ini",
+      "Source": "files/wsl/.wslconfig",
+      "Target": "{USERPROFILE}\\.wslconfig"
+    },
+    {
+      "Compare": "Text",
+      "Id": "zellij",
+      "Parser": "Kdl",
+      "Source": "files/zellij/config.kdl",
+      "Target": "{APPDATA}\\Zellij\\config\\config.kdl"
+    }
+  ],
+  "Packages": [
+    {
+      "Bootstrap": false,
+      "Detection": "WinGet",
+      "Id": "Microsoft.PowerToys",
+      "Name": "PowerToys"
+    },
+    {
+      "Bootstrap": true,
+      "Command": "pwsh.exe",
+      "Detection": "Command",
+      "Id": "Microsoft.PowerShell",
+      "Name": "PowerShell 7"
+    },
+    {
+      "Bootstrap": false,
+      "Command": "wezterm.exe",
+      "Detection": "Command",
+      "Id": "wez.wezterm",
+      "Name": "WezTerm"
+    },
+    {
+      "AppxName": "Microsoft.WindowsTerminal",
+      "Bootstrap": false,
+      "Detection": "Appx",
+      "Id": "Microsoft.WindowsTerminal",
+      "Name": "Windows Terminal"
+    },
+    {
+      "Bootstrap": false,
+      "Command": "zellij.exe",
+      "Detection": "Command",
+      "Id": "Zellij.Zellij",
+      "Name": "Zellij"
+    }
+  ],
+  "ProjectVersion": "0.2.0",
+  "SchemaVersion": 1,
+  "Terminal": {
+    "DefaultProfileGuid": "{574e775e-4f2a-5b96-ac1e-a2962a402336}",
+    "DelegationConsole": "{2EACA947-7F5F-4CFA-BA87-8F7FBEEFBE69}",
+    "DelegationTerminal": "{E12CFF52-A866-4C77-9A90-F570A7AA2C6B}",
+    "ZellijProfileGuid": "{035bb70e-121b-521e-b4a8-d8bcbbb47434}"
+  }
+}

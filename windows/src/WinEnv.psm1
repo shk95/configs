@@ -1,0 +1,652 @@
+Set-StrictMode -Version Latest
+
+$script:WinGetNoPackageExitCode = -1978335212
+$script:Utf8NoBom = [System.Text.UTF8Encoding]::new($false)
+
+function Get-WinEnvManifest {
+    param([Parameter(Mandatory)][string] $Path)
+
+    $manifest = Get-Content -LiteralPath $Path -Raw -Encoding utf8 |
+        ConvertFrom-Json -AsHashtable -ErrorAction Stop
+    if ($manifest.SchemaVersion -ne 1) { throw "Unsupported manifest schema: $($manifest.SchemaVersion)" }
+    [void][System.Management.Automation.SemanticVersion]$manifest.ProjectVersion
+    return $manifest
+}
+
+function Compare-WinEnvVersion {
+    param(
+        [Parameter(Mandatory)][string] $RepositoryVersion,
+        [Parameter(Mandatory)][string] $AppliedVersion
+    )
+
+    $repository = [System.Management.Automation.SemanticVersion]$RepositoryVersion
+    $applied = [System.Management.Automation.SemanticVersion]$AppliedVersion
+    return $repository.CompareTo($applied)
+}
+
+function Get-WinEnvBundleHash {
+    param([Parameter(Mandatory)][string] $Root)
+
+    $resolvedRoot = [System.IO.Path]::GetFullPath($Root)
+    $entries = foreach ($file in Get-ChildItem -LiteralPath $resolvedRoot -File -Recurse | Sort-Object FullName) {
+        $relative = [System.IO.Path]::GetRelativePath($resolvedRoot, $file.FullName).Replace('\', '/')
+        $hash = (Get-FileHash -LiteralPath $file.FullName -Algorithm SHA256).Hash.ToLowerInvariant()
+        "$relative`0$hash"
+    }
+    $bytes = $script:Utf8NoBom.GetBytes(($entries -join "`n"))
+    return [Convert]::ToHexString([Security.Cryptography.SHA256]::HashData($bytes)).ToLowerInvariant()
+}
+
+function Resolve-WinEnvPath {
+    param([Parameter(Mandatory)][string] $Path)
+
+    return $Path.Replace('{LOCALAPPDATA}', $env:LOCALAPPDATA).Replace('{APPDATA}', $env:APPDATA).Replace('{USERPROFILE}', $env:USERPROFILE)
+}
+
+function Expand-WinEnvTemplate {
+    param([Parameter(Mandatory)][string] $Content)
+
+    $jsonLocalAppData = $env:LOCALAPPDATA.Replace('\', '\\')
+    return $Content.Replace('__LOCALAPPDATA_JSON__', $jsonLocalAppData)
+}
+
+function Get-WinEnvState {
+    param([Parameter(Mandatory)][string] $Path)
+
+    if (-not (Test-Path -LiteralPath $Path -PathType Leaf)) { return $null }
+    try {
+        $state = Get-Content -LiteralPath $Path -Raw -Encoding utf8 | ConvertFrom-Json -ErrorAction Stop
+        if ($state.schemaVersion -ne 1) { throw 'Unsupported state schema.' }
+        [void][System.Management.Automation.SemanticVersion]$state.projectVersion
+        if ([string]::IsNullOrWhiteSpace($state.appliedAtUtc)) { throw 'Missing appliedAtUtc.' }
+        if ([string]::IsNullOrWhiteSpace($state.gitCommit)) { throw 'Missing gitCommit.' }
+        if ($state.PSObject.Properties['fontRegisteredAtUtc'] -and -not [string]::IsNullOrWhiteSpace($state.fontRegisteredAtUtc)) {
+            [void][DateTimeOffset]::Parse($state.fontRegisteredAtUtc)
+        }
+        if ($state.PSObject.Properties['bundleHash'] -and $state.bundleHash -notmatch '^[0-9a-f]{64}$') {
+            throw 'Invalid bundleHash.'
+        }
+        return $state
+    }
+    catch {
+        throw "State file '$Path' is invalid: $($_.Exception.Message)"
+    }
+}
+
+function Write-WinEnvAtomicText {
+    param(
+        [Parameter(Mandatory)][string] $Path,
+        [Parameter(Mandatory)][AllowEmptyString()][string] $Content
+    )
+
+    $directory = Split-Path -Parent $Path
+    if (-not (Test-Path -LiteralPath $directory)) { [void](New-Item -ItemType Directory -Path $directory -Force) }
+    $temporary = Join-Path $directory ('.win-env-{0}.tmp' -f [guid]::NewGuid().ToString('N'))
+    try {
+        [System.IO.File]::WriteAllText($temporary, $Content, $script:Utf8NoBom)
+        if (Test-Path -LiteralPath $Path) {
+            [System.IO.File]::Move($temporary, $Path, $true)
+        }
+        else {
+            [System.IO.File]::Move($temporary, $Path)
+        }
+    }
+    finally {
+        if (Test-Path -LiteralPath $temporary) { Remove-Item -LiteralPath $temporary -Force }
+    }
+}
+
+function Write-WinEnvState {
+    param(
+        [Parameter(Mandatory)][string] $Path,
+        [Parameter(Mandatory)][string] $ProjectVersion,
+        [Parameter(Mandatory)][string] $GitCommit,
+        [Parameter(Mandatory)][string] $BundleHash,
+        [string] $FontRegisteredAtUtc
+    )
+
+    $state = [ordered]@{
+        schemaVersion  = 1
+        projectVersion = $ProjectVersion
+        appliedAtUtc   = [DateTimeOffset]::UtcNow.ToString('o')
+        gitCommit      = $GitCommit
+        bundleHash     = $BundleHash
+    }
+    if (-not [string]::IsNullOrWhiteSpace($FontRegisteredAtUtc)) {
+        $state.fontRegisteredAtUtc = $FontRegisteredAtUtc
+    }
+    Write-WinEnvAtomicText -Path $Path -Content ($state | ConvertTo-Json -Depth 5)
+}
+
+function Get-WinEnvGitCommit {
+    param([Parameter(Mandatory)][string] $RepositoryRoot)
+
+    $gitDirectory = Join-Path $RepositoryRoot '.git'
+    $head = $null
+    if (Test-Path -LiteralPath $gitDirectory -PathType Leaf) {
+        $gitFile = Get-Content -LiteralPath $gitDirectory -Raw
+        if ($gitFile -match '^gitdir:\s*(.+)\s*$') {
+            $candidate = $matches[1]
+            $gitDirectory = if ([System.IO.Path]::IsPathRooted($candidate)) { $candidate } else { Join-Path $RepositoryRoot $candidate }
+        }
+    }
+    if (Test-Path -LiteralPath $gitDirectory -PathType Container) {
+        $head = (Get-Content -LiteralPath (Join-Path $gitDirectory 'HEAD') -Raw).Trim()
+        if ($head -match '^ref:\s+(.+)$') {
+            $reference = $matches[1]
+            $referencePath = Join-Path $gitDirectory ($reference.Replace('/', [System.IO.Path]::DirectorySeparatorChar))
+            if (Test-Path -LiteralPath $referencePath -PathType Leaf) {
+                $head = (Get-Content -LiteralPath $referencePath -Raw).Trim()
+            }
+            else {
+                $packedRefs = Join-Path $gitDirectory 'packed-refs'
+                if (Test-Path -LiteralPath $packedRefs -PathType Leaf) {
+                    $packed = Get-Content -LiteralPath $packedRefs | Where-Object { $_ -match "^([0-9a-fA-F]{40,64})\s+$([regex]::Escape($reference))$" } | Select-Object -First 1
+                    if ($packed -and $packed -match '^([0-9a-fA-F]{40,64})') { $head = $matches[1] }
+                }
+            }
+        }
+        if ($head -match '^[0-9a-fA-F]{40,64}$') { return $head.ToLowerInvariant() }
+    }
+    if ($head -match '^ref:\s+') { return 'unborn' }
+
+    $git = Get-Command git.exe, git -ErrorAction SilentlyContinue | Select-Object -First 1
+    if (-not $git) { throw 'Git is required to record the applied commit.' }
+    $commit = (& $git.Source -C $RepositoryRoot rev-parse HEAD 2>$null | Select-Object -First 1)
+    if ($LASTEXITCODE -ne 0 -or [string]::IsNullOrWhiteSpace($commit)) { throw 'Unable to resolve the repository Git commit.' }
+    return $commit.Trim()
+}
+
+function Enter-WinEnvLock {
+    $sid = [System.Security.Principal.WindowsIdentity]::GetCurrent().User.Value
+    $mutex = [System.Threading.Mutex]::new($false, "Local\win-env-setup-$sid")
+    try {
+        if (-not $mutex.WaitOne(0)) {
+            $mutex.Dispose()
+            throw 'Another win-env setup is already running for this user.'
+        }
+    }
+    catch [System.Threading.AbandonedMutexException] {
+        Write-Warning 'Recovered an abandoned win-env setup lock.'
+    }
+    return $mutex
+}
+
+function Exit-WinEnvLock {
+    param([Parameter(Mandatory)] $Mutex)
+    try { $Mutex.ReleaseMutex() } finally { $Mutex.Dispose() }
+}
+
+function Get-WinGetRegistration {
+    param([Parameter(Mandatory)][string] $Id)
+
+    $null = & winget.exe list --id $Id --exact --source winget --accept-source-agreements --disable-interactivity 2>&1
+    if ($LASTEXITCODE -eq 0) { return $true }
+    if ($LASTEXITCODE -eq $script:WinGetNoPackageExitCode) { return $false }
+    throw "WinGet failed while detecting '$Id' (exit $LASTEXITCODE)."
+}
+
+function Get-WinEnvPackageStatus {
+    param([Parameter(Mandatory)][hashtable] $Package)
+
+    $registered = Get-WinGetRegistration -Id $Package.Id
+    $detected = $registered
+    switch ($Package.Detection) {
+        'Command' { $detected = [bool](Get-Command $Package.Command -ErrorAction SilentlyContinue) }
+        'Appx' { $detected = [bool](Get-AppxPackage -Name $Package.AppxName -ErrorAction SilentlyContinue) }
+        'WinGet' { $detected = $registered }
+        default { throw "Unknown detection method '$($Package.Detection)'." }
+    }
+
+    [pscustomobject]@{
+        Name       = $Package.Name
+        Id         = $Package.Id
+        Registered = $registered
+        Detected   = $detected
+        Conflict   = ($registered -ne $detected)
+        Missing    = (-not $registered -and -not $detected)
+    }
+}
+
+function Install-WinEnvPackage {
+    param([Parameter(Mandatory)][hashtable] $Package)
+
+    & winget.exe install --id $Package.Id --exact --source winget --accept-source-agreements --accept-package-agreements --disable-interactivity
+    if ($LASTEXITCODE -ne 0) { throw "Installation of '$($Package.Id)' failed (exit $LASTEXITCODE)." }
+}
+
+function Update-WinEnvProcessPath {
+    $machinePath = [Environment]::GetEnvironmentVariable('Path', 'Machine')
+    $userPath = [Environment]::GetEnvironmentVariable('Path', 'User')
+    $env:Path = "$machinePath;$userPath"
+}
+
+function Test-WinEnvDirectWriteFont {
+    param([Parameter(Mandatory)][string] $FamilyName)
+
+    if (-not ('WinEnv.DirectWriteFontProbe' -as [type])) {
+        Add-Type -TypeDefinition @'
+using System;
+using System.Runtime.InteropServices;
+
+namespace WinEnv
+{
+    public static class DirectWriteFontProbe
+    {
+        [ComImport]
+        [Guid("B859EE5A-D838-4B5B-A2E8-1ADC7D93DB48")]
+        [InterfaceType(ComInterfaceType.InterfaceIsIUnknown)]
+        private interface IDWriteFactory
+        {
+            void GetSystemFontCollection(out IDWriteFontCollection collection, [MarshalAs(UnmanagedType.Bool)] bool checkForUpdates);
+        }
+
+        [ComImport]
+        [Guid("A84CEE02-3EEA-4EEE-A827-87C1A02A0FCC")]
+        [InterfaceType(ComInterfaceType.InterfaceIsIUnknown)]
+        private interface IDWriteFontCollection
+        {
+            uint GetFontFamilyCount();
+            void GetFontFamily(uint index, out IntPtr family);
+            void FindFamilyName([MarshalAs(UnmanagedType.LPWStr)] string familyName, out uint index, [MarshalAs(UnmanagedType.Bool)] out bool exists);
+        }
+
+        [DllImport("dwrite.dll", PreserveSig = true)]
+        private static extern int DWriteCreateFactory(uint factoryType, ref Guid iid, [MarshalAs(UnmanagedType.IUnknown)] out object factory);
+
+        public static bool Contains(string familyName)
+        {
+            Guid iid = typeof(IDWriteFactory).GUID;
+            object factoryObject;
+            int result = DWriteCreateFactory(0, ref iid, out factoryObject);
+            if (result < 0) Marshal.ThrowExceptionForHR(result);
+
+            IDWriteFactory factory = (IDWriteFactory)factoryObject;
+            IDWriteFontCollection collection = null;
+            try
+            {
+                factory.GetSystemFontCollection(out collection, true);
+                uint index;
+                bool exists;
+                collection.FindFamilyName(familyName, out index, out exists);
+                return exists;
+            }
+            finally
+            {
+                if (collection != null) Marshal.ReleaseComObject(collection);
+                Marshal.ReleaseComObject(factory);
+            }
+        }
+    }
+}
+'@
+    }
+
+    return [WinEnv.DirectWriteFontProbe]::Contains($FamilyName)
+}
+
+function Test-WinEnvWindowsTerminalFontCache {
+    param([string] $FontRegisteredAtUtc)
+
+    if ([string]::IsNullOrWhiteSpace($FontRegisteredAtUtc)) { return $true }
+    $registeredAt = [DateTimeOffset]::Parse($FontRegisteredAtUtc).UtcDateTime
+    foreach ($terminal in @(Get-Process -Name WindowsTerminal -ErrorAction SilentlyContinue)) {
+        try {
+            if ($terminal.StartTime.ToUniversalTime() -lt $registeredAt) { return $false }
+        }
+        catch {
+            return $false
+        }
+    }
+    return $true
+}
+
+function Get-WinEnvFontStatus {
+    param([Parameter(Mandatory)][hashtable] $Font)
+
+    $fontDirectory = Join-Path $env:LOCALAPPDATA 'Microsoft\Windows\Fonts'
+    $registryPath = 'HKCU:\Software\Microsoft\Windows NT\CurrentVersion\Fonts'
+    $registry = if (Test-Path $registryPath) { Get-ItemProperty -Path $registryPath } else { $null }
+    $systemRegistryPath = 'HKLM:\Software\Microsoft\Windows NT\CurrentVersion\Fonts'
+    $systemRegistry = if (Test-Path $systemRegistryPath) { Get-ItemProperty -Path $systemRegistryPath } else { $null }
+    $systemFamilyDetected = [bool]($systemRegistry -and ($systemRegistry.PSObject.Properties.Name | Where-Object { $_ -like "$($Font.Name)*" }))
+    $validFiles = 0
+    $validRegistrations = 0
+    $artifacts = 0
+    foreach ($fontFile in $Font.Files) {
+        $path = Join-Path $fontDirectory $fontFile.FileName
+        $filePresent = Test-Path -LiteralPath $path -PathType Leaf
+        $property = if ($registry) { $registry.PSObject.Properties[$fontFile.RegistryName] } else { $null }
+        if ($filePresent -or $property) { $artifacts++ }
+        if (-not $filePresent) { continue }
+
+        $hash = (Get-FileHash -LiteralPath $path -Algorithm SHA256).Hash.ToLowerInvariant()
+        if ($hash -ne $fontFile.Sha256) { continue }
+        $validFiles++
+        if ($property -and [string]$property.Value -ieq $path) { $validRegistrations++ }
+    }
+
+    $directWriteDetected = Test-WinEnvDirectWriteFont -FamilyName $Font.Name
+    $registered = $systemFamilyDetected -or $validRegistrations -eq $Font.Files.Count
+    $installed = $registered -and $directWriteDetected
+    $registrationRepairable = -not $systemFamilyDetected -and $validFiles -eq $Font.Files.Count -and $validRegistrations -ne $Font.Files.Count
+    $conflict = -not $installed -and -not $registrationRepairable -and ($artifacts -gt 0 -or $systemFamilyDetected)
+    [pscustomobject]@{
+        Installed              = $installed
+        Missing                = (-not $installed -and -not $registrationRepairable -and -not $conflict)
+        Conflict               = $conflict
+        RegistrationRepairable = $registrationRepairable
+        DirectWriteDetected     = $directWriteDetected
+    }
+}
+
+function Register-WinEnvFont {
+    param([Parameter(Mandatory)][hashtable] $Font)
+
+    $fontDirectory = Join-Path $env:LOCALAPPDATA 'Microsoft\Windows\Fonts'
+    $registryPath = 'HKCU:\Software\Microsoft\Windows NT\CurrentVersion\Fonts'
+    if (-not (Test-Path $registryPath)) { [void](New-Item -Path $registryPath -Force) }
+
+    if (-not ('WinEnv.NativeFont' -as [type])) {
+        Add-Type -TypeDefinition @'
+using System;
+using System.Runtime.InteropServices;
+
+namespace WinEnv
+{
+    public static class NativeFont
+    {
+        [DllImport("gdi32.dll", CharSet = CharSet.Unicode, SetLastError = true)]
+        public static extern int AddFontResourceEx(string fileName, uint flags, IntPtr reserved);
+
+        [DllImport("user32.dll", SetLastError = true)]
+        public static extern IntPtr SendMessageTimeout(IntPtr window, uint message, UIntPtr wParam, IntPtr lParam, uint flags, uint timeout, out UIntPtr result);
+    }
+}
+'@
+    }
+
+    foreach ($fontFile in $Font.Files) {
+        $path = Join-Path $fontDirectory $fontFile.FileName
+        if (-not (Test-Path -LiteralPath $path -PathType Leaf)) { throw "Font file is missing: $path" }
+        $hash = (Get-FileHash -LiteralPath $path -Algorithm SHA256).Hash.ToLowerInvariant()
+        if ($hash -ne $fontFile.Sha256) { throw "Font file hash mismatch for $($fontFile.FileName)." }
+        Set-ItemProperty -Path $registryPath -Name $fontFile.RegistryName -Value $path -Type String
+        if ([WinEnv.NativeFont]::AddFontResourceEx($path, 0, [IntPtr]::Zero) -eq 0) {
+            throw "Windows could not load font file '$path'."
+        }
+    }
+
+    $result = [UIntPtr]::Zero
+    [void][WinEnv.NativeFont]::SendMessageTimeout([IntPtr]0xffff, 0x001D, [UIntPtr]::Zero, [IntPtr]::Zero, 0x0002, 5000, [ref]$result)
+}
+
+function Install-WinEnvFont {
+    param([Parameter(Mandatory)][hashtable] $Font)
+
+    $temporaryDirectory = Join-Path ([System.IO.Path]::GetTempPath()) ('win-env-font-' + [guid]::NewGuid().ToString('N'))
+    [void](New-Item -ItemType Directory -Path $temporaryDirectory)
+    try {
+        $archive = Join-Path $temporaryDirectory 'font.zip'
+        Invoke-WebRequest -Uri $Font.Url -OutFile $archive
+        $archiveHash = (Get-FileHash -LiteralPath $archive -Algorithm SHA256).Hash.ToLowerInvariant()
+        if ($archiveHash -ne $Font.Sha256) { throw "Font archive hash mismatch: $archiveHash" }
+        Expand-Archive -LiteralPath $archive -DestinationPath $temporaryDirectory
+
+        $fontDirectory = Join-Path $env:LOCALAPPDATA 'Microsoft\Windows\Fonts'
+        if (-not (Test-Path $fontDirectory)) { [void](New-Item -ItemType Directory -Path $fontDirectory -Force) }
+        foreach ($fontFile in $Font.Files) {
+            $source = Join-Path $temporaryDirectory $fontFile.FileName
+            $sourceHash = (Get-FileHash -LiteralPath $source -Algorithm SHA256).Hash.ToLowerInvariant()
+            if ($sourceHash -ne $fontFile.Sha256) { throw "Font file hash mismatch for $($fontFile.FileName)." }
+            Copy-Item -LiteralPath $source -Destination (Join-Path $fontDirectory $fontFile.FileName)
+        }
+        Register-WinEnvFont -Font $Font
+    }
+    finally {
+        if (Test-Path -LiteralPath $temporaryDirectory) { Remove-Item -LiteralPath $temporaryDirectory -Recurse -Force }
+    }
+}
+
+function Get-WinEnvObjectProperties {
+    param($Value)
+    if ($Value -is [System.Collections.IDictionary]) {
+        return @($Value.Keys | ForEach-Object { [pscustomobject]@{ Name = [string]$_; Value = $Value[$_] } })
+    }
+    return @($Value.PSObject.Properties | Where-Object MemberType -in 'NoteProperty', 'Property')
+}
+
+function Test-WinEnvJsonSubset {
+    param($Expected, $Actual)
+
+    if ($null -eq $Expected) { return $null -eq $Actual }
+    if ($null -eq $Actual) { return $false }
+    if ($Expected -is [string] -or $Expected -is [ValueType]) { return $Expected -eq $Actual }
+    if ($Expected -is [System.Collections.IList]) {
+        if ($Actual -isnot [System.Collections.IList] -or $Expected.Count -ne $Actual.Count) { return $false }
+        for ($i = 0; $i -lt $Expected.Count; $i++) {
+            if (-not (Test-WinEnvJsonSubset -Expected $Expected[$i] -Actual $Actual[$i])) { return $false }
+        }
+        return $true
+    }
+
+    foreach ($property in (Get-WinEnvObjectProperties $Expected)) {
+        $actualProperty = $Actual.PSObject.Properties[$property.Name]
+        if (-not $actualProperty) { return $false }
+        if (-not (Test-WinEnvJsonSubset -Expected $property.Value -Actual $actualProperty.Value)) { return $false }
+    }
+    return $true
+}
+
+function ConvertTo-WinEnvCanonicalJson {
+    param([Parameter(Mandatory)][string] $Content)
+    return (($Content | ConvertFrom-Json -ErrorAction Stop) | ConvertTo-Json -Depth 100 -Compress)
+}
+
+function Test-WinEnvManagedFile {
+    param(
+        [Parameter(Mandatory)][hashtable] $Definition,
+        [Parameter(Mandatory)][string] $RepositoryRoot
+    )
+
+    $sourcePath = Join-Path $RepositoryRoot $Definition.Source
+    $targetPath = Resolve-WinEnvPath $Definition.Target
+    if (-not (Test-Path -LiteralPath $sourcePath -PathType Leaf)) { throw "Managed source is missing: $sourcePath" }
+    if (-not (Test-Path -LiteralPath $targetPath -PathType Leaf)) { return $false }
+    $expectedText = Expand-WinEnvTemplate (Get-Content -LiteralPath $sourcePath -Raw -Encoding utf8)
+    $actualText = Get-Content -LiteralPath $targetPath -Raw -Encoding utf8
+    switch ($Definition.Compare) {
+        'Text' { return $expectedText.Replace("`r`n", "`n") -eq $actualText.Replace("`r`n", "`n") }
+        'ExactJson' { return (ConvertTo-WinEnvCanonicalJson $expectedText) -ceq (ConvertTo-WinEnvCanonicalJson $actualText) }
+        'JsonSubset' {
+            $expected = $expectedText | ConvertFrom-Json -ErrorAction Stop
+            $actual = $actualText | ConvertFrom-Json -ErrorAction Stop
+            return Test-WinEnvJsonSubset -Expected $expected -Actual $actual
+        }
+        default { throw "Unknown comparison mode '$($Definition.Compare)'." }
+    }
+}
+
+function Test-WinEnvSourceFile {
+    param(
+        [Parameter(Mandatory)][hashtable] $Definition,
+        [Parameter(Mandatory)][string] $RepositoryRoot
+    )
+
+    $path = Join-Path $RepositoryRoot $Definition.Source
+    switch ($Definition.Parser) {
+        'Json' { $null = Get-Content -LiteralPath $path -Raw | ConvertFrom-Json -ErrorAction Stop }
+        'Ini' {
+            $section = $null
+            $lineNumber = 0
+            foreach ($line in (Get-Content -LiteralPath $path)) {
+                $lineNumber++
+                $trimmed = $line.Trim()
+                if (-not $trimmed -or $trimmed.StartsWith('#') -or $trimmed.StartsWith(';')) { continue }
+                if ($trimmed -match '^\[([^\[\]]+)\]$') {
+                    $section = $matches[1]
+                    continue
+                }
+                if (-not $section -or $trimmed -notmatch '^[^=\s]+\s*=\s*.+$') {
+                    throw "INI syntax error in '$path' at line $lineNumber."
+                }
+            }
+        }
+        'PowerShell' {
+            $tokens = $null; $errors = $null
+            [void][System.Management.Automation.Language.Parser]::ParseFile($path, [ref]$tokens, [ref]$errors)
+            if ($errors.Count) { throw "PowerShell syntax error in '$path': $($errors[0].Message)" }
+        }
+        'Kdl' {
+            $zellij = Get-Command zellij.exe -ErrorAction SilentlyContinue
+            if ($zellij) {
+                $null = & $zellij.Source --config $path setup --check 2>&1
+                if ($LASTEXITCODE -ne 0) { throw "Zellij rejected '$path'." }
+            }
+        }
+        'Lua' {
+            # Lua syntax is verified while rendering the bundle on Unix-like
+            # development hosts. Windows consumes the committed result.
+        }
+        'Text' {
+            # Existence and content are checked by the managed-file path.
+        }
+    }
+}
+
+function Backup-WinEnvFile {
+    param(
+        [Parameter(Mandatory)][string] $Id,
+        [Parameter(Mandatory)][string] $Target,
+        [Parameter(Mandatory)][string] $BackupRoot
+    )
+
+    if (-not (Test-Path -LiteralPath $Target -PathType Leaf)) { return }
+    if (-not (Test-Path -LiteralPath $BackupRoot)) { [void](New-Item -ItemType Directory -Path $BackupRoot -Force) }
+    $backup = Join-Path $BackupRoot ($Id + '.bak')
+    if (-not (Test-Path -LiteralPath $backup)) { Copy-Item -LiteralPath $Target -Destination $backup }
+}
+
+function Set-WinEnvManagedFile {
+    param(
+        [Parameter(Mandatory)][hashtable] $Definition,
+        [Parameter(Mandatory)][string] $RepositoryRoot
+    )
+
+    $sourcePath = Join-Path $RepositoryRoot $Definition.Source
+    $targetPath = Resolve-WinEnvPath $Definition.Target
+    $content = Expand-WinEnvTemplate (Get-Content -LiteralPath $sourcePath -Raw -Encoding utf8)
+    Write-WinEnvAtomicText -Path $targetPath -Content $content
+}
+
+function Get-WinEnvProfileHook {
+    return @'
+#region win-env
+. (Join-Path $env:LOCALAPPDATA 'win-env\powershell\profile.ps1')
+#endregion win-env
+'@
+}
+
+function Test-WinEnvProfileHook {
+    param([Parameter(Mandatory)][string] $ProfilePath)
+
+    if (-not (Test-Path -LiteralPath $ProfilePath -PathType Leaf)) { return $false }
+    $content = Get-Content -LiteralPath $ProfilePath -Raw
+    $matches = [regex]::Matches($content, '(?ms)^#region win-env\r?\n.*?^#endregion win-env\s*')
+    if ($matches.Count -ne 1) { return $false }
+    return $matches[0].Value.Trim() -eq (Get-WinEnvProfileHook).Trim()
+}
+
+function Set-WinEnvProfileHook {
+    param([Parameter(Mandatory)][string] $ProfilePath)
+
+    $content = if (Test-Path -LiteralPath $ProfilePath) { Get-Content -LiteralPath $ProfilePath -Raw } else { '' }
+    $starts = ([regex]::Matches($content, '(?m)^#region win-env\s*$')).Count
+    $ends = ([regex]::Matches($content, '(?m)^#endregion win-env\s*$')).Count
+    if ($starts -ne $ends) { throw 'The existing PowerShell profile contains an unmatched win-env marker.' }
+    $clean = [regex]::Replace($content, '(?ms)^#region win-env\r?\n.*?^#endregion win-env\s*', '').TrimEnd()
+    $newContent = if ($clean) { $clean + "`r`n`r`n" + (Get-WinEnvProfileHook).Trim() + "`r`n" } else { (Get-WinEnvProfileHook).Trim() + "`r`n" }
+    Write-WinEnvAtomicText -Path $ProfilePath -Content $newContent
+}
+
+function Get-WinEnvPowerShellProfilePath {
+    return $PROFILE.CurrentUserAllHosts
+}
+
+function Test-WinEnvTerminalDelegation {
+    param([Parameter(Mandatory)][hashtable] $Terminal)
+    $key = Get-ItemProperty -Path 'HKCU:\Console\%%Startup' -ErrorAction SilentlyContinue
+    return [bool]($key -and $key.DelegationTerminal -eq $Terminal.DelegationTerminal -and $key.DelegationConsole -eq $Terminal.DelegationConsole)
+}
+
+function Set-WinEnvTerminalDelegation {
+    param([Parameter(Mandatory)][hashtable] $Terminal)
+    $path = 'HKCU:\Console\%%Startup'
+    if (-not (Test-Path $path)) { [void](New-Item -Path $path -Force) }
+    Set-ItemProperty -Path $path -Name DelegationTerminal -Value $Terminal.DelegationTerminal -Type String
+    Set-ItemProperty -Path $path -Name DelegationConsole -Value $Terminal.DelegationConsole -Type String
+}
+
+function Stop-WinEnvPowerToys {
+    $running = [bool](Get-Process -Name PowerToys -ErrorAction SilentlyContinue)
+    if (-not $running) { return $false }
+
+    # PowerToys has multiple hidden message-loop windows. Each non-forced taskkill
+    # closes one of them, so repeat until taskkill can no longer find the process.
+    for ($attempt = 0; $attempt -lt 100; $attempt++) {
+        $null = & taskkill.exe /IM PowerToys.exe 2>&1
+        if ($LASTEXITCODE -ne 0) { break }
+    }
+
+    if (Get-Process -Name PowerToys -ErrorAction SilentlyContinue) {
+        $elevatedScript = @'
+for ($attempt = 0; $attempt -lt 100; $attempt++) {
+    & taskkill.exe /IM PowerToys.exe 2>$null | Out-Null
+    if ($LASTEXITCODE -ne 0) { exit 0 }
+}
+exit 1
+'@
+        $encodedScript = [Convert]::ToBase64String([Text.Encoding]::Unicode.GetBytes($elevatedScript))
+        try {
+            $taskKill = Start-Process -FilePath 'powershell.exe' -ArgumentList '-NoProfile', '-NonInteractive', '-EncodedCommand', $encodedScript -Verb RunAs -Wait -PassThru
+        }
+        catch {
+            throw "PowerToys requires elevation to close, but the elevated close request failed or was cancelled: $($_.Exception.Message)"
+        }
+        if ($taskKill.ExitCode -ne 0 -and (Get-Process -Name PowerToys -ErrorAction SilentlyContinue)) {
+            throw "The elevated PowerToys close request failed with exit code $($taskKill.ExitCode)."
+        }
+    }
+
+    $deadline = [DateTime]::UtcNow.AddSeconds(15)
+    while ((Get-Process -Name PowerToys -ErrorAction SilentlyContinue) -and [DateTime]::UtcNow -lt $deadline) {
+        Start-Sleep -Milliseconds 250
+    }
+    if (Get-Process -Name PowerToys -ErrorAction SilentlyContinue) { throw 'PowerToys did not exit within 15 seconds.' }
+    return $true
+}
+
+function Start-WinEnvPowerToys {
+    if (Get-Process -Name PowerToys -ErrorAction SilentlyContinue) { return }
+    $task = Get-ScheduledTask -TaskPath '\PowerToys\' -TaskName "Autorun for $env:USERNAME" -ErrorAction SilentlyContinue
+    if ($task) {
+        Start-ScheduledTask -InputObject $task
+    }
+    else {
+        $candidates = @(
+            (Join-Path $env:ProgramFiles 'PowerToys\PowerToys.exe'),
+            (Join-Path $env:LOCALAPPDATA 'PowerToys\PowerToys.exe')
+        )
+        $executable = $candidates | Where-Object { Test-Path -LiteralPath $_ } | Select-Object -First 1
+        if (-not $executable) { throw 'PowerToys is installed but PowerToys.exe could not be located.' }
+        Start-Process -FilePath $executable
+    }
+
+    $deadline = [DateTime]::UtcNow.AddSeconds(15)
+    while (-not (Get-Process -Name PowerToys -ErrorAction SilentlyContinue) -and [DateTime]::UtcNow -lt $deadline) {
+        Start-Sleep -Milliseconds 250
+    }
+    if (-not (Get-Process -Name PowerToys -ErrorAction SilentlyContinue)) { throw 'PowerToys did not start within 15 seconds.' }
+}
+
+Export-ModuleMember -Function *-WinEnv*

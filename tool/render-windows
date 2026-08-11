@@ -1,0 +1,24 @@
+#!/bin/sh
+# Materialise the flake-owned Windows bundle into the tracked consumer tree.
+
+set -eu
+
+root=$(CDPATH= cd -- "$(dirname "$0")/.." && pwd)
+target="$root/windows/generated"
+stage=$(mktemp -d)
+trap 'rm -rf "$stage"' EXIT HUP INT TERM
+
+out=$(nix build "path:$root#windows-bundle" --no-link --print-out-paths)
+test -f "$out/manifest.json"
+
+cp -R "$out"/. "$stage/bundle"
+chmod -R u+w "$stage/bundle"
+
+if [ -d "$target" ] && diff -qr "$target" "$stage/bundle" >/dev/null; then
+  printf '%s\n' "Windows bundle is already current."
+  exit 0
+fi
+
+rm -rf "$target"
+mv "$stage/bundle" "$target"
+printf '%s\n' "Updated windows/generated from the flake."

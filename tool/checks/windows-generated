@@ -1,0 +1,23 @@
+#!/bin/sh
+# Refuse a commit whose tracked Windows consumer differs from the flake.
+
+set -eu
+
+root=$(CDPATH= cd -- "$(dirname "$0")/../.." && pwd)
+committed="$root/windows/generated"
+stage=$(mktemp -d)
+trap 'rm -rf "$stage"' EXIT HUP INT TERM
+
+test -f "$committed/manifest.json" || {
+  printf '%s\n' "windows/generated is missing; run tool/render-windows." >&2
+  exit 1
+}
+
+out=$(nix build "path:$root#windows-bundle" --no-link --print-out-paths)
+cp -R "$out"/. "$stage/bundle"
+chmod -R u+w "$stage/bundle"
+
+if ! diff -ru "$committed" "$stage/bundle"; then
+  printf '%s\n' "Windows bundle is stale; run tool/render-windows." >&2
+  exit 1
+fi
