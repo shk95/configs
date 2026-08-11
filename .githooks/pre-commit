@@ -25,7 +25,6 @@ run_check() {
 
 run_check format "Formatting is off. See tool/checks/format for the fix command."
 run_check lint   "Static analysis found problems."
-run_check windows-generated "Committed Windows bundle differs from the flake. Run tool/render-windows."
 
 # The check that cannot be skipped, mirrored in CI — see
 # decisions/002-hooks-are-opt-in-so-ci-must-backstop.md. A credential that

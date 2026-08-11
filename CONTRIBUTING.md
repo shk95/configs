@@ -1,7 +1,8 @@
 # Contributing
 
-This is the shared workflow for people and tools. `AGENTS.md` contains the
-stable judgement and safety contract; `README.md` contains usage.
+This is the workflow for people and tools. `AGENTS.md` contains stable
+judgement and safety rules, `docs/architecture.md` defines domain ownership,
+and `README.md` contains usage.
 
 ## Prepare a clone
 
@@ -11,78 +12,143 @@ tool/setup --fix
 tool/doctor.sh
 ```
 
-`tool/setup` changes only the clone-local hooks setting and only with
-`--fix`. `tool/doctor.sh` is read-only.
+`tool/setup` changes only the clone-local hooks setting and only with `--fix`.
+`tool/doctor.sh` is read-only. A missing foreign-platform capability does not
+block work confined to another domain.
 
-## Branch flow
+## Classify the change
+
+Every change belongs to one of these scopes:
+
+- `unixlike`: Nix, Home Manager, NixOS, WSL guest, or nix-darwin behavior.
+- `windows`: native Windows desired state and reconciliation.
+- `common`: explicitly platform-neutral material with its own contract.
+- `adopt`: an explicit copy or pinned import from one domain into another.
+
+Prefer a single scope per branch and pull request. If a common change and its
+platform adoption are both needed, land them separately so neither release is
+synchronously coupled to the other.
+
+## Branch and commit flow
 
 ```text
-master (released) <- dev (integration) <- feature/<name> or fix/<name>
+master <- dev <- feature/<domain>-<topic> or fix/<domain>-<topic>
 ```
+
+Examples are `feature/unixlike-shell`, `fix/windows-zellij`, and
+`feature/common-terminal-colors`.
 
 Use merge commits for completed work; do not squash or rebase published work.
-Do not commit directly to `master`.
+Do not commit directly to `master`. Scope commits where practical, for example
+`feat(unixlike):`, `fix(windows):`, or `chore(common):`.
 
-`dev` means the repository-level checks pass. `master` means the same state has
-also been exercised on the affected real hosts. Promote `dev` with a release
-pull request only after collecting the platform evidence required by
-`docs/definition-of-done.md`.
+`dev` means the affected domain's repository checks pass. `master` means the
+source change has been accepted; it no longer means every platform at that
+commit has been exercised. Native readiness is represented by domain tags and
+the evidence in `docs/definition-of-done.md`.
 
-Tag validated snapshots on `master` as `vYYYY.MM.DD`; append `.N` when more
-than one snapshot is released on the same day. Keep `flake.lock` refreshes in
-dedicated `chore(deps)` commits so input movement is reviewable on its own.
+Use independent release tags:
 
-## Change configuration
+- `unixlike-vYYYY.MM.DD`, with `.N` for another release that day;
+- `windows-vYYYY.MM.DD`, with `.N` for another release that day;
+- `common-vYYYY.MM.DD`, with `.N` for another release that day.
+
+Keep `flake.lock` refreshes in dedicated `chore(unixlike-deps)` commits. A
+domain tag certifies only the named domain even though the commit may contain
+accepted history from the others.
+
+## Unix-like changes
 
 1. Put feature-oriented declarations under `modules/`.
-2. Put source payloads that are consumed by a module under `assets/`.
+2. Put Unix-like source payloads in their owning Unix-like asset location.
 3. Keep host composition in `modules/flake/configurations.nix`.
-4. Render the Windows consumer after any relevant source change:
+4. Run narrow formatting, lint, evaluation, and native build checks.
+5. Create a Unix-like release tag only after the required matching-host
+   evidence exists.
+6. Activate only when explicitly requested, from the intended Unix-like
+   release.
 
-   ```sh
-   tool/render-windows
-   ```
+Do not add Windows desired state to a Nix module merely because the same tool
+also runs on Windows.
 
-5. Commit the source and `windows/generated/` in the same commit.
+## Windows changes
 
-Never fix a generated diff by editing `windows/generated/` directly.
-When it conflicts, resolve the source declarations and render it again.
+Windows declarations, payloads, checks, and Apply logic live inside `windows/`
+and are validated on native Windows.
 
-## Verify
+1. Edit `windows/desired/manifest.json` for packages and managed-file policy.
+2. Edit owned payloads below `windows/desired/files/`.
+3. Update PowerShell under `windows/src/` when reconciliation semantics change.
+4. Run native Windows tests and read-only host verification.
+5. Create a Windows release tag only after the required native evidence exists.
 
-```sh
-tool/checks/format
-tool/checks/lint
-tool/checks/windows-generated
-tool/checks/test
-```
-
-`tool/checks/test` evaluates every declared Unix-like configuration and builds
-the configurations native to the current host when appropriate. A foreign
-configuration can be evaluated but must be built or activated on a matching
-host before claiming native verification.
-
-For Windows changes, run the Pester suite and the read-only host check from
-native Windows:
+Native read-only verification is:
 
 ```powershell
+.\windows\tools\check-desired-state.ps1
 Invoke-Pester .\windows\tests
 .\windows\bootstrap.ps1 -Check
 ```
 
-Applying configuration is not routine verification. It changes state outside
-the repository and must be separately requested.
+Apply is a deployment, not verification, and requires an explicit request:
+
+```powershell
+.\windows\bootstrap.ps1
+```
+
+## Common changes
+
+Do not create common material by default. First show that independently owned
+Unix-like and Windows implementations have stable, genuinely platform-neutral
+semantics.
+
+When common ownership is justified:
+
+1. Put it under `common/`, not under either platform domain.
+2. Document its contract, supported consumers, and exclusions.
+3. Give it consumer-independent checks.
+4. Release it with a `common-v...` tag. It deploys nowhere.
+5. Adopt it later through a separate Unix-like or Windows change.
+
+Copying is the default adoption mechanism. Record provenance when useful, but
+the destination owns the copy and does not owe future byte equality. A direct
+import requires a pinned common version and an explicit decision explaining
+why the coupling is acceptable.
+
+## Verify
+
+Run checks in proportion to the affected domain.
+
+For Unix-like changes:
+
+```sh
+tool/checks/format
+tool/checks/lint
+tool/checks/test
+```
+
+`tool/checks/test` evaluates every declared Unix-like configuration and builds
+configurations native to the current host when appropriate. Foreign evaluation
+is not native build or activation evidence.
+
+For Windows changes, run the native Windows commands above. Unix-like Nix
+evaluation is not part of Windows verification.
+
+For common changes, run the checks owned by that common component. Do not make
+Unix-like and Windows deployments prerequisites for a common release. Consumer
+adoption validates integration later in the consuming domain.
 
 ## Documentation ownership
 
 | Location | Responsibility |
 | --- | --- |
 | `README.md` | Setup, outputs, and everyday use |
-| `CONTRIBUTING.md` | Shared workflow |
+| `CONTRIBUTING.md` | Domain-scoped workflow and releases |
 | `AGENTS.md` | Stable judgement and safety boundaries |
+| `docs/architecture.md` | Domain authority and dependency policy |
 | `docs/status.md` | Current state and expensive decisions |
 | `docs/troubleshooting.md` | Recurring problems indexed by symptom |
-| `docs/definition-of-done.md` | Platform-specific evidence requirements |
+| `docs/definition-of-done.md` | Domain-specific evidence requirements |
 | `tool/`, hooks, CI | Executable policy |
 
 Repository text is English because the repository is public.

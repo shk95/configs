@@ -10,7 +10,7 @@ param(
 $ErrorActionPreference = 'Stop'
 $windowsRoot = $PSScriptRoot
 $repositoryRoot = Split-Path -Parent $windowsRoot
-$bundleRoot = Join-Path $windowsRoot 'generated'
+$desiredStateRoot = Join-Path $windowsRoot 'desired'
 Import-Module (Join-Path $windowsRoot 'src\WinEnv.psm1') -Force
 
 $stateRoot = Join-Path $env:LOCALAPPDATA 'win-env'
@@ -34,10 +34,10 @@ try {
     if ($PSVersionTable.PSVersion.Major -lt 7) { throw 'setup.ps1 requires PowerShell 7 or newer.' }
     if (-not (Get-Command winget.exe -ErrorAction SilentlyContinue)) { throw 'WinGet is required.' }
 
-    $manifest = Get-WinEnvManifest -Path (Join-Path $bundleRoot 'manifest.json')
-    $bundleHash = Get-WinEnvBundleHash -Root $bundleRoot
+    $manifest = Get-WinEnvManifest -Path (Join-Path $desiredStateRoot 'manifest.json')
+    $desiredStateHash = Get-WinEnvDesiredStateHash -Root $desiredStateRoot
     foreach ($definition in $manifest.ManagedFiles) {
-        Test-WinEnvSourceFile -Definition $definition -RepositoryRoot $bundleRoot
+        Test-WinEnvSourceFile -Definition $definition -RepositoryRoot $desiredStateRoot
     }
 
     $mutex = Enter-WinEnvLock
@@ -52,19 +52,19 @@ try {
         $null
     }
     $appliedVersion = if ($state) { [string]$state.projectVersion } else { '0.0.0' }
-    $appliedBundleHash = if ($state -and $state.PSObject.Properties['bundleHash']) {
+    $appliedDesiredStateHash = if ($state -and $state.PSObject.Properties['bundleHash']) {
         [string]$state.bundleHash
     }
     else {
         ''
     }
     $comparison = Compare-WinEnvVersion -RepositoryVersion $manifest.ProjectVersion -AppliedVersion $appliedVersion
-    $bundleChanged = $appliedBundleHash -ne $bundleHash
-    $shouldApply = -not $Check -and ($Force -or -not $state -or $comparison -gt 0 -or $bundleChanged)
+    $desiredStateChanged = $appliedDesiredStateHash -ne $desiredStateHash
+    $shouldApply = -not $Check -and ($Force -or -not $state -or $comparison -gt 0 -or $desiredStateChanged)
 
     if (-not $state) { $drift.Add('state missing') }
     elseif ($comparison -lt 0) { Write-Warning "Repository version $($manifest.ProjectVersion) is lower than applied version $appliedVersion; downgrade is disabled." }
-    elseif ($bundleChanged) { $drift.Add('generated bundle changed') }
+    elseif ($desiredStateChanged) { $drift.Add('desired state changed') }
 
     $packageStatuses = @()
     foreach ($package in $manifest.Packages) {
@@ -87,7 +87,7 @@ try {
     if (-not $commandPaletteInstalled) { $drift.Add('Microsoft.CommandPalette Appx missing') }
 
     foreach ($definition in $manifest.ManagedFiles) {
-        if (-not (Test-WinEnvManagedFile -Definition $definition -RepositoryRoot $bundleRoot)) {
+        if (-not (Test-WinEnvManagedFile -Definition $definition -RepositoryRoot $desiredStateRoot)) {
             $drift.Add("$($definition.Id) settings")
         }
     }
@@ -130,7 +130,7 @@ try {
     foreach ($definition in $manifest.ManagedFiles) {
         $target = Resolve-WinEnvPath $definition.Target
         Backup-WinEnvFile -Id $definition.Id -Target $target -BackupRoot $backupRoot
-        Set-WinEnvManagedFile -Definition $definition -RepositoryRoot $bundleRoot
+        Set-WinEnvManagedFile -Definition $definition -RepositoryRoot $desiredStateRoot
         $changed.Add($definition.Id)
     }
 
@@ -150,15 +150,15 @@ try {
     $fontStatus = Get-WinEnvFontStatus -Font $manifest.Font
     if (-not $fontStatus.Installed) { $drift.Add('D2Koding font') }
     foreach ($definition in $manifest.ManagedFiles) {
-        Test-WinEnvSourceFile -Definition $definition -RepositoryRoot $bundleRoot
-        if (-not (Test-WinEnvManagedFile -Definition $definition -RepositoryRoot $bundleRoot)) { $drift.Add($definition.Id) }
+        Test-WinEnvSourceFile -Definition $definition -RepositoryRoot $desiredStateRoot
+        if (-not (Test-WinEnvManagedFile -Definition $definition -RepositoryRoot $desiredStateRoot)) { $drift.Add($definition.Id) }
     }
     if (-not (Test-WinEnvProfileHook -ProfilePath $hostProfile)) { $drift.Add('PowerShell profile hook') }
     if (-not (Test-WinEnvTerminalDelegation -Terminal $manifest.Terminal)) { $drift.Add('default terminal delegation') }
     if ($drift.Count) { throw "Post-apply validation failed: $($drift -join ', ')" }
 
     $commit = Get-WinEnvGitCommit -RepositoryRoot $repositoryRoot
-    Write-WinEnvState -Path $statePath -ProjectVersion $manifest.ProjectVersion -GitCommit $commit -BundleHash $bundleHash -FontRegisteredAtUtc $fontRegisteredAtUtc
+    Write-WinEnvState -Path $statePath -ProjectVersion $manifest.ProjectVersion -GitCommit $commit -DesiredStateHash $desiredStateHash -FontRegisteredAtUtc $fontRegisteredAtUtc
     if (-not (Test-WinEnvWindowsTerminalFontCache -FontRegisteredAtUtc $fontRegisteredAtUtc)) {
         Write-Warning 'Close every Windows Terminal window and start it again so its per-process font cache can load D2Koding.'
     }

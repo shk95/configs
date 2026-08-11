@@ -2,39 +2,59 @@
 
 ## Goal and authority
 
-This repository is one personal configuration system. The flake is the
-composition authority for Unix-like hosts and for the desired Windows state.
-Windows does not evaluate Nix: Unix-like development hosts render
-`windows/generated/`, commit it with its source, and Windows only consumes it.
+This repository contains three deliberately separate configuration domains:
 
-Every file below `modules/` is a flake-parts module collected by import-tree.
-Prefer one feature per file. A feature may contribute Home Manager, NixOS,
-nix-darwin, Windows desired state, checks, or several of those at once.
+- `unixlike`: Linux, WSL, NixOS, and macOS configuration evaluated by Nix.
+- `windows`: native Windows desired state evaluated and reconciled on Windows.
+- `common`: explicitly platform-neutral material with no host deployment of its
+  own.
+
+The domains share a repository for discovery and history, not one composition
+authority or one release train. The flake is authoritative only for the
+Unix-like domain. The Windows domain must become independently authorable,
+testable, and deployable without a Unix-like host. `common` is an exceptional
+domain: do not create common material merely because two implementations look
+similar.
+
+Files below `modules/` are flake-parts modules collected by import-tree for the
+Unix-like domain. Prefer one feature per file.
 `modules/flake/configurations.nix` is the only place that decides which
-deferred module classes reach a host.
+deferred module classes reach a Unix-like host.
 
-The source repositories contributed different kinds of authority:
+## Domain boundaries
 
-- `nix-wsl`: dendritic structure, verification boundaries, and WSL findings.
-- `term-config`: shared WezTerm behavior and minimal platform differences.
-- `win-env`: Windows ownership, drift detection, backup, and safe apply.
-- `nix-config`: Darwin setting values only; its prototype wiring is not a
-  pattern to preserve.
+- Classify a change as `unixlike`, `windows`, or `common` before editing.
+- Keep a change inside one domain unless transfer between domains is the
+  explicit purpose of the work.
+- Do not introduce implicit imports, generated dependencies, or shared mutable
+  payloads across domains.
+- Prefer two locally understandable implementations over a cross-platform
+  abstraction.
+- Copying from another domain is allowed and preferred to premature sharing.
+  Once copied, the destination owns the copy and may diverge.
+- Put genuinely common material only under an explicit `common/` boundary.
+  Common material needs its own contract and checks, is versioned independently,
+  and is never deployed directly to a host.
+- A platform adopts common material through an explicit, reviewable import or
+  copy on that platform's schedule. A common change must not silently alter a
+  platform output.
+
+See `docs/architecture.md` for the complete ownership, versioning, and
+deployment model.
 
 ## Durable decisions
 
 - Do not introduce `specialArgs` for repository identity or host inventory;
-  declare typed flake-parts options instead.
-- Do not create plugin or addon boundaries for features that live in this
-  monorepo. Static module composition replaces cross-repository discovery.
-- Do not edit `windows/generated/` by hand. Edit modules or assets, then run
-  `tool/render-windows`.
-- Do not add a second Windows manifest owned by PowerShell. PowerShell observes
-  and reconciles the generated manifest.
+  declare typed flake-parts options inside the Unix-like domain instead.
 - Do not rely on import-tree collection order for order-sensitive list values.
   Use explicit ordering or a keyed attribute model.
-- Keep secrets, usernames outside the declared inventory, absolute home paths,
-  and snapshots of runtime state out of generated Windows content.
+- Do not recreate plugin or addon discovery between repository domains.
+- Do not make `common` the default location for new code. Promotion into
+  `common` requires demonstrated stable semantics on every intended consumer.
+- Keep secrets, undeclared usernames, absolute home paths, and snapshots of
+  runtime state out of every domain's committed desired state.
+- Version and release `unixlike`, `windows`, and `common` independently even
+  when their tags point to commits in the same repository.
 
 ## Host safety
 
@@ -53,15 +73,19 @@ The source repositories contributed different kinds of authority:
 
 ## Working contract
 
-1. Read `CONTRIBUTING.md` and the relevant part of `docs/status.md`.
-2. Use `tool/doctor.sh` before relying on host-local capabilities.
-3. Make the feature change in `modules/` and source payload changes in
-   `assets/`.
-4. Run `tool/render-windows` whenever Windows desired state may have changed.
-5. Run the narrow checks, then `tool/checks/test`.
-6. Report evaluation, build, activation, and native-Windows evidence separately.
+1. Read `CONTRIBUTING.md`, `docs/architecture.md`, and the relevant part of
+   `docs/status.md`.
+2. Classify the task as `unixlike`, `windows`, `common`, or an explicit transfer.
+3. Use `tool/doctor.sh` before relying on host-local capabilities.
+4. Change only the owning domain. Treat a cross-domain copy as a separate,
+   reviewable adoption change.
+5. Run narrow domain checks before broader checks. Do not require an unrelated
+   domain to pass merely to validate the changed domain.
+6. Report evaluation, build, native runtime check, and activation or Apply
+   evidence separately for each affected domain.
 
-User-facing usage belongs in `README.md`, shared workflow in
-`CONTRIBUTING.md`, expensive decisions in `docs/status.md`, recurring
-symptoms in `docs/troubleshooting.md`, and executable policy in `tool/`,
-hooks, and CI. Model-specific context files only point to these sources.
+User-facing usage belongs in `README.md`, workflow in `CONTRIBUTING.md`,
+architecture and ownership in `docs/architecture.md`, expensive decisions and
+current state in `docs/status.md`, recurring symptoms in
+`docs/troubleshooting.md`, and executable policy in `tool/`, hooks, and CI.
+Model-specific context files only point to these sources.

@@ -57,20 +57,6 @@ check:
 fmt:
     nix fmt .
 
-############################################################################
-#
-#  generated Windows consumer
-#
-############################################################################
-
-[group('windows')]
-windows-render:
-    tool/render-windows
-
-[group('windows')]
-windows-check:
-    tool/checks/windows-generated
-
 [group('darwin')]
 darwin-build:
     nix build --no-link .#darwinConfigurations.shk-macbook.config.system.build.toplevel

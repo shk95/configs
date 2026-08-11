@@ -1,66 +1,87 @@
 # configs
 
-A single dendritic configuration repository for WSL, NixOS-WSL, macOS, and
-native Windows.
+A personal configuration monorepo with independent Unix-like, native Windows,
+and explicitly common domains.
 
-The flake is the source of composition truth. Unix-like systems consume its
-Home Manager, NixOS, and nix-darwin configurations directly. Native Windows
-does not run Nix; it consumes the deterministic bundle rendered and committed
-under `windows/generated/`.
+The repository is shared for discovery and history. It is not one
+cross-platform build graph:
+
+- Nix is the composition authority for Linux, WSL, NixOS, and macOS.
+- Native Windows owns its desired state and must be verifiable on Windows.
+- Truly platform-neutral material may live in `common`, but common code is the
+  exception rather than the default.
+
+See `docs/architecture.md` for the domain and release model.
 
 ## Architecture
 
 ```text
-modules/                    feature-oriented flake-parts modules
-modules/flake/              module classes, inventory, host composition
-assets/                     source payloads referenced by modules
-windows/generated/          committed Windows bundle; never hand-edited
-windows/src/                PowerShell reconciliation engine
-tool/                       render and verification entry points
+unixlike
+  flake.nix
+  modules/                    flake-parts and host composition
+  assets/                     Unix-like source payloads
+
+windows
+  windows/desired/            native manifest and owned payloads
+  windows/src/                PowerShell reconciliation engine
+  windows/tests/              native Windows tests
+
+common
+  common/                     explicit, independently versioned material only
+                              (created only when sharing is justified)
 ```
 
-The current outputs are:
+The current Unix-like outputs are:
 
 - `homeConfigurations.user1`: standalone Home Manager for WSL.
-- `nixosConfigurations.wsl`: NixOS-WSL using the same WSL Home Manager
-  fragments.
-- `darwinConfigurations.shk-macbook`: the migrated Darwin configuration.
-- `packages.<system>.windows-bundle`: native-Windows desired state.
+- `nixosConfigurations.wsl`: NixOS-WSL configuration.
+- `darwinConfigurations.shk-macbook`: nix-darwin configuration.
+
+Windows desired state is declared directly in
+`windows/desired/manifest.json`. Its payloads, including the Windows-owned
+WezTerm copy, live below `windows/desired/files/`. Neither requires Nix to
+author, validate, or consume.
 
 ## Develop
 
+Prepare the clone and inspect available host capabilities:
+
 ```sh
-nix develop
+tool/setup
+tool/setup --fix
 tool/doctor.sh
-tool/render-windows
-tool/checks/test
 ```
 
-The Windows render command materialises the flake output into
-`windows/generated/`. The pre-commit hook refuses stale generated content.
+Run checks for the domain you changed. `CONTRIBUTING.md` lists the workflows.
 
 ## Windows
 
-From native Windows, only the committed bundle and PowerShell engine are
-needed:
+From native Windows:
 
 ```powershell
+.\windows\tools\check-desired-state.ps1
+Invoke-Pester .\windows\tests
 .\windows\bootstrap.ps1 -Check
+```
+
+The desired-state check requires `zellij.exe` and a `luac` compiler so KDL and
+Lua are validated by their native tools. `-Check` never installs or changes
+anything. Apply is explicit:
+
+```powershell
 .\windows\bootstrap.ps1
 ```
 
-`-Check` never installs or changes anything. Apply remains idempotent,
-preserves the first original-file backups under
-`%LOCALAPPDATA%\win-env\backups\original`, and records successful state
-under `%LOCALAPPDATA%\win-env\state.json`.
+Apply remains idempotent, preserves first-original-file backups under
+`%LOCALAPPDATA%\win-env\backups\original`, and records successful state under
+`%LOCALAPPDATA%\win-env\state.json`.
 
-The bundle currently covers PowerShell, PowerToys, Windows Terminal, native
-Zellij, the Windows-side WSL configuration, the pinned D2Koding font, and the
-shared WezTerm configuration. WezTerm is composed internally; the former
-cross-repository addon protocol is intentionally absent.
+## Deployment
 
-## Activation
+Unix-like activation and Windows Apply are separate deployments. A common
+release deploys nothing; each platform adopts it later through an explicit
+change. Domain tags and evidence requirements are defined in
+`CONTRIBUTING.md` and `docs/definition-of-done.md`.
 
-Build and evaluation are routine checks. Home Manager, NixOS, nix-darwin, and
-Windows activation change external host state and are performed only
-deliberately. See `CONTRIBUTING.md` for the evidence boundary.
+No activation or Apply is a routine check. Perform either only deliberately on
+the matching host.
