@@ -1,17 +1,12 @@
-{config, ...}: let
-  sshModule = user: {
+_: {
+  modules.homeManager.shared = _: {
     # The alias is declarative; keys and known_hosts remain host-owned.
     programs.ssh = {
       enable = true;
       enableDefaultConfig = false;
-      settings.local = {
-        HostName = "localhost";
-        User = user;
-        IdentityFile = "~/.ssh/id_ed25519";
-      };
+      includes = [
+        "~/.ssh/config.d/*.conf"
+      ];
     };
   };
-in {
-  modules.homeManager.wsl = sshModule config.identity.wsl.user;
-  modules.homeManager.darwin = sshModule config.identity.darwin.user;
 }

@@ -43,6 +43,12 @@ they use a Windows-owned terminal without also building a Linux GUI terminal.
 Ghostty is installed by Homebrew on Darwin while Home Manager owns its shared
 Unix-like configuration.
 
+Portable interactive programs are declared once in `homeManager.shared` and
+reach all three Unix-like outputs. Platform Home Manager classes add only
+platform-specific behavior. Darwin Homebrew declarations are reserved for
+macOS applications, Mac App Store items, and explicit exceptions that the
+locked nixpkgs cannot provide on Darwin.
+
 Windows desired state is declared directly in
 `windows/desired/manifest.json`. Its payloads, including the Windows-owned
 WezTerm and Zellij copies, live below `windows/desired/files/`. Neither requires
@@ -59,6 +65,31 @@ tool/doctor.sh
 ```
 
 Run checks for the domain you changed. `CONTRIBUTING.md` lists the workflows.
+
+The Justfile exposes the same checks and target-specific runners without
+duplicating the configured user or host name:
+
+```sh
+just doctor
+just format-check
+just lint
+just test
+just check
+
+just home-eval
+just home-build
+just darwin-eval
+just darwin-build
+just darwin-check
+```
+
+The `*-eval`, `*-build`, and `*-check` commands do not activate a configuration.
+Activation remains explicit and host-specific:
+
+```sh
+just home-switch       # intended Ubuntu WSL host only
+just darwin-switch     # target Mac only; requires sudo
+```
 
 ## Windows
 

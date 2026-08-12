@@ -31,7 +31,9 @@
 #   homeManager.desktop        graphical Unix-like homes, not WSL
 #   homeManager.wsl            both WSL flavours
 #   homeManager.wslStandalone  standalone only — no system layer underneath
+#   homeManager.darwin         Darwin-only user behavior
 #   nixos.wsl                  the NixOS-WSL flavour only
+#   darwin.system              the nix-darwin system layer only
 {lib, ...}: let
   inherit (lib) mapAttrs mkOption types;
 

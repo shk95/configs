@@ -1,3 +1,6 @@
+# Typed schema only. Concrete, non-secret host inventory lives in
+# `inventory.nix`; keeping the two separate makes it clear which values are
+# machine declarations and which are reusable option contracts.
 {lib, ...}: let
   inherit (lib) mkOption types;
 in {
@@ -32,17 +35,6 @@ in {
         type = types.enum ["aarch64-darwin" "x86_64-darwin"];
         description = "Darwin target platform.";
       };
-    };
-  };
-
-  config.identity = {
-    gitName = "shk";
-    gitEmail = "101378576+shk95@users.noreply.github.com";
-    wsl.user = "user1";
-    darwin = {
-      user = "shk";
-      hostName = "shk-macbook";
-      system = "aarch64-darwin";
     };
   };
 }

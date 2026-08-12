@@ -64,19 +64,20 @@ in {
         };
 
         # customize dock
+        /*
         dock = {
           appswitcher-all-displays = true;
-          autohide = true;
+          # autohide = true;
           show-recents = false; # disable recent apps
           launchanim = true;
           mouse-over-hilite-stack = true;
-          orientation = "left"; # Type: null or one of “bottom”, “left”, “right”
-          tilesize = 36; # The default is 64.
-          mineffect = "suck"; # Set the minimize/maximize window effect. The default is genie.  Type: null or one of “genie”, “suck”, “scale”
+          # orientation = "bottom"; # Type: null or one of “bottom”, “left”, “right”
+          # tilesize = 36; # The default is 64.
+          mineffect = "suck"; # Set the minImize/maximize window effect. The default is genie.  Type: null or one of “genie”, “suck”, “scale”
           autohide-delay = 0.0;
           expose-group-apps = true;
-          largesize = 60;
-          magnification = true;
+          # largesize = 60;
+          # magnification = true;
           minimize-to-application = false;
           mru-spaces = false;
           scroll-to-open = true; # Scroll up on a Dock icon to show all Space’s opened windows for an app, or open stack. The default is false.
@@ -90,7 +91,8 @@ in {
           # Persistent applications, spacers, files, and folders in the dock.
           persistent-apps = [
             "/System/Volumes/Preboot/Cryptexes/App/System/Applications/Safari.app"
-            "/Applications/Chromium.app"
+            "/Applications/Brave Browser.app"
+            "/Applications/Zen.app"
             "/System/Applications/News.app"
             "/System/Applications/Maps.app"
             "/System/Applications/Books.app"
@@ -101,9 +103,10 @@ in {
             "/Applications/Obsidian.app"
             "/Applications/KeePassXC.app"
             "/Applications/ChatGPT.app"
+            "/Applications/Claude.app"
             "/Applications/Visual Studio Code.app"
-            "/Applications/Nix Apps/Alacritty.app"
-            "/Applications/Nix Apps/WezTerm.app"
+            "/Applications/Ghostty.app"
+            "${config.users.users.${user}.home}/Applications/Home Manager Apps/WezTerm.app"
             "/System/Applications/Utilities/Activity Monitor.app"
           ]; # Type: null or (list of (attribute-tagged union or (string or absolute path) convertible to it))
 
@@ -125,6 +128,7 @@ in {
           wvous-bl-corner = 3; # bottom-left
           wvous-br-corner = 4; # bottom-right
         };
+        */
 
         # customize finder
         finder = {
@@ -152,10 +156,10 @@ in {
 
         loginwindow = {
           GuestEnabled = false; # disable guest user
-          SHOWFULLNAME = true; # show full name in login window
-          PowerOffDisabledWhileLoggedIn = true; # If set to true, the Power Off menu item will be disabled when the user is logged in. Default is false.
-          RestartDisabledWhileLoggedIn = true; # Disables the “Restart” option when users are logged in. Default is false.
-          ShutDownDisabledWhileLoggedIn = true; # Disables the “Shutdown” option when users are logged in. Default is false.
+          SHOWFULLNAME = false; # show full name in login window
+          PowerOffDisabledWhileLoggedIn = false; # If set to true, the Power Off menu item will be disabled when the user is logged in. Default is false.
+          RestartDisabledWhileLoggedIn = false; # Disables the “Restart” option when users are logged in. Default is false.
+          ShutDownDisabledWhileLoggedIn = false; # Disables the “Shutdown” option when users are logged in. Default is false.
         };
 
         menuExtraClock = {
@@ -212,7 +216,7 @@ in {
 
         WindowManager = {
           AppWindowGroupingBehavior = true;
-          EnableStandardClickToShowDesktop = true;
+          EnableStandardClickToShowDesktop = false; #Click wallpaper to reveal desktop Clicking your wallpaper will move all windows out of the way to allow access to your desktop items and widgets. Default is true. false means “Only in Stage Manager” true means “Always”
           EnableTiledWindowMargins = false;
           EnableTilingByEdgeDrag = true;
           EnableTilingOptionAccelerator = true;
