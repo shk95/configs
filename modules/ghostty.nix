@@ -15,7 +15,7 @@ _: {
         shell-integration = "detect";
         shell-integration-features = "sudo,ssh-env,ssh-terminfo,path";
 
-        font-family = "D2CodingLigature Nerd Font";
+        font-family = "D2KodingLigature Nerd Font Mono";
         font-size = 14;
         theme = "Catppuccin Mocha";
         minimum-contrast = 1.1;

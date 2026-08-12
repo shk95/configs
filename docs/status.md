@@ -76,7 +76,10 @@ outputs omit. A future graphical Linux configuration can adopt the same class
 without turning WSL into a desktop host by implication.
 
 WezTerm and Ghostty are the desktop terminals. Home Manager installs the
-D2Coding Nerd Font and configures both terminals. Alacritty is fully inactive:
+D2Coding Nerd Font package and configures its internal
+`D2KodingLigature Nerd Font Mono` family for both terminals. On Darwin, WezTerm
+also reads Home Manager's nested font directory explicitly because CoreText
+does not discover that copied hierarchy recursively. Alacritty is fully inactive:
 there is no Alacritty package, Home Manager module, or generated configuration.
 The stale Darwin Dock entry was removed; a future adoption should add its
 package, configuration, and Dock ownership together.
