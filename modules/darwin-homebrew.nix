@@ -69,7 +69,7 @@ _: {
         "chatgpt"
         "dbeaver-community"
         "discord"
-        "font-hack-nerd-font"
+        "ghostty"
         "github"
         "grandperspective"
         "heynote"

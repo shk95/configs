@@ -53,6 +53,7 @@ in {
             useUserPackages = true;
             users.${darwin.user}.imports = [
               home.shared
+              home.desktop
               home.darwin
             ];
           };

@@ -24,6 +24,26 @@ The durable direction is:
 
 The complete model is in `docs/architecture.md`.
 
+## Unix-like desktop boundary
+
+`homeManager.shared` contains portable command-line behavior, not every program
+that happens to run on more than one Unix-like kernel. Graphical terminal
+emulators belong to `homeManager.desktop`, which Darwin consumes and both WSL
+outputs omit. A future graphical Linux configuration can adopt the same class
+without turning WSL into a desktop host by implication.
+
+WezTerm and Ghostty are the desktop terminals; Alacritty was retired during the
+Darwin adoption. Home Manager installs the D2Coding Nerd Font and configures
+both terminals. On Darwin, Homebrew owns the Ghostty application because the
+locked nixpkgs Ghostty package supports Linux only; Home Manager sets
+`programs.ghostty.package = null` and still generates its XDG configuration.
+
+Ghostty keeps its native `xterm-ghostty` terminfo locally. Its shell integration
+tries to install that entry on SSH destinations and falls back to
+`xterm-256color` only when the destination cannot accept it. Globally
+downgrading `TERM` would hide capabilities on every host to accommodate the
+few that need a fallback.
+
 ## Windows authority split
 
 The Windows domain is independent:

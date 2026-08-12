@@ -1,7 +1,9 @@
 # Unix-like WezTerm configuration. Windows owns an independent copy under
 # windows/desired/files/wezterm.
 _: {
-  modules.homeManager.shared = {pkgs, ...}: {
+  # A terminal emulator is a desktop application. WSL sessions use a
+  # Windows-owned terminal and should not build a second Linux GUI terminal.
+  modules.homeManager.desktop = {pkgs, ...}: {
     programs.wezterm = {
       enable = true;
       package = pkgs.wezterm;
