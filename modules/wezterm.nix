@@ -3,10 +3,9 @@
 _: {
   # A terminal emulator is a desktop application. WSL sessions use a
   # Windows-owned terminal and should not build a second Linux GUI terminal.
-  modules.homeManager.desktop = {pkgs, ...}: {
+  modules.homeManager.desktop = _: {
     programs.wezterm = {
       enable = true;
-      package = pkgs.wezterm;
       enableZshIntegration = true;
     };
 
