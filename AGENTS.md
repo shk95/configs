@@ -69,6 +69,40 @@ deployment model.
   stable `Required checks` CI gate, which accepts only the selected domain jobs
   plus the repository-wide secret scan.
 
+## Governance design
+
+When adding a repository rule, separate its concerns before implementation:
+
+- Put durable rationale and invariants in `AGENTS.md` or
+  `docs/architecture.md`. State what must remain true without depending on a
+  particular command, product, or model.
+- Put human-operable prerequisites, ordered steps, recovery, and authorization
+  boundaries in `CONTRIBUTING.md`.
+- Put repeatable agent orchestration in a canonical `.agents/skills/` skill.
+- Put deterministic classification and enforcement in `tool/`, hooks, CI, and
+  remote repository settings.
+- Put current adoption state, migration gaps, and expensive choices in
+  `docs/status.md`; put per-run proof in CI, pull requests, and release evidence.
+
+Each obligation has one authoritative source. Procedures and tools implement
+policy but must not silently create new policy. Model-specific adapters only
+discover canonical skills. Every enforceable invariant needs positive and
+negative fixtures, while non-automated invariants need an explicit evidence
+item and named decision owner.
+
+Extract a method into the sibling `skills` project only when it contains
+no repository decision, path convention, branch name, infrastructure identity,
+or current state. Keep project policy and enforcement here. Adoption of a
+shared skill is explicit; product-specific adapters never become its authority.
+
+For source promotion, only the same repository's `dev` branch may enter
+`master`. Use a pull request and a merge commit; never commit, cherry-pick,
+squash, or rebase directly into `master`. Promotion accepts source history but
+does not certify a domain release or authorize deployment. Do not merge
+`master` back into `dev` merely to carry a promotion merge commit. The
+repository maintainer owns promotion decisions. There is no operational
+bypass; change this policy through the governance workflow before deviating.
+
 ## Host safety
 
 - Never activate Home Manager, NixOS, or nix-darwin without an explicit request.
@@ -102,6 +136,7 @@ User-facing usage belongs in `README.md`, workflow in `CONTRIBUTING.md`,
 architecture and ownership in `docs/architecture.md`, expensive decisions and
 current state in `docs/status.md`, recurring symptoms in
 `docs/troubleshooting.md`, and executable policy in `tool/`, hooks, and CI.
-The canonical reusable agent workflow lives under `.agents/skills/` and
-follows the Agent Skills open standard. Model-specific context and skill files
+Canonical project-specific agent workflows live under `.agents/skills/` and
+follow the Agent Skills open standard. Reusable cross-project methods live in
+the separate sibling `skills` project. Model-specific context and skill files
 only point to canonical sources.

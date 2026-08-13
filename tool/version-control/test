@@ -7,6 +7,9 @@ classify="$root/tool/version-control/classify"
 audit="$root/tool/version-control/audit"
 plan_release="$root/tool/version-control/plan-release"
 required_checks="$root/tool/version-control/required-checks"
+check_promotion="$root/tool/version-control/check-promotion"
+check_promotion_queue="$root/tool/version-control/check-promotion-queue"
+plan_promotion="$root/tool/version-control/plan-promotion"
 
 # Fixture repositories must own their indexes. An alternate parent index is
 # useful to callers such as staged-state tests, but must not leak through
@@ -15,7 +18,7 @@ unset GIT_INDEX_FILE
 
 grep -q '^  required:$' "$root/.github/workflows/ci.yml"
 grep -q '^    name: Required checks$' "$root/.github/workflows/ci.yml"
-grep -q 'needs: \[classify, repository, unix, windows, common, secrets\]' \
+grep -q 'needs: \[classify, repository, unix, windows, common, secrets, promotion\]' \
   "$root/.github/workflows/ci.yml"
 grep -q 'run: tool/version-control/required-checks' \
   "$root/.github/workflows/ci.yml"
@@ -32,6 +35,8 @@ run_gate() {
     COMMON_SCOPE=${COMMON_SCOPE:-false} \
     COMMON_RESULT=${COMMON_RESULT:-skipped} \
     SECRETS_RESULT=${SECRETS_RESULT:-success} \
+    PROMOTION_SCOPE=${PROMOTION_SCOPE:-false} \
+    PROMOTION_RESULT=${PROMOTION_RESULT:-skipped} \
     "$required_checks"
 }
 
@@ -40,12 +45,47 @@ REPOSITORY_SCOPE=true REPOSITORY_RESULT=success run_gate >/dev/null
 UNIXLIKE_SCOPE=true UNIXLIKE_RESULT=success run_gate >/dev/null
 WINDOWS_SCOPE=true WINDOWS_RESULT=success run_gate >/dev/null
 COMMON_SCOPE=true COMMON_RESULT=success run_gate >/dev/null
+PROMOTION_SCOPE=true PROMOTION_RESULT=success run_gate >/dev/null
 if REPOSITORY_SCOPE=true REPOSITORY_RESULT=failure run_gate >/dev/null 2>&1; then
   echo "required-checks accepted a failed selected job" >&2
   exit 1
 fi
 if SECRETS_RESULT=failure run_gate >/dev/null 2>&1; then
   echo "required-checks accepted a failed secret scan" >&2
+  exit 1
+fi
+if PROMOTION_SCOPE=true PROMOTION_RESULT=failure run_gate >/dev/null 2>&1; then
+  echo "required-checks accepted a failed promotion gate" >&2
+  exit 1
+fi
+
+PROMOTION_BASE_REF=master \
+PROMOTION_HEAD_REF=dev \
+PROMOTION_BASE_REPOSITORY=owner/repo \
+PROMOTION_HEAD_REPOSITORY=owner/repo \
+  "$check_promotion" >/dev/null
+if PROMOTION_BASE_REF=master \
+  PROMOTION_HEAD_REF=feature/repository-bypass \
+  PROMOTION_BASE_REPOSITORY=owner/repo \
+  PROMOTION_HEAD_REPOSITORY=owner/repo \
+  "$check_promotion" >/dev/null 2>&1; then
+  echo "promotion gate accepted a non-dev source" >&2
+  exit 1
+fi
+
+printf '3\n' | PROMOTION_REPOSITORY=owner/repo PROMOTION_PULL_NUMBER=3 \
+  "$check_promotion_queue" --stdin >/dev/null
+if printf '3\n4\n' | PROMOTION_REPOSITORY=owner/repo PROMOTION_PULL_NUMBER=3 \
+  "$check_promotion_queue" --stdin >/dev/null 2>&1; then
+  echo "promotion queue accepted multiple open promotions" >&2
+  exit 1
+fi
+if PROMOTION_BASE_REF=master \
+  PROMOTION_HEAD_REF=dev \
+  PROMOTION_BASE_REPOSITORY=owner/repo \
+  PROMOTION_HEAD_REPOSITORY=fork/repo \
+  "$check_promotion" >/dev/null 2>&1; then
+  echo "promotion gate accepted a fork source" >&2
   exit 1
 fi
 
@@ -81,6 +121,16 @@ printf 'fixture\n' >"$test_root/file"
 git -C "$test_root" add file
 git -C "$test_root" commit -q -m 'feat(repository): create fixture'
 git -C "$test_root" branch dev
+
+git -C "$test_root" switch -q dev
+printf 'promotion\n' >>"$test_root/file"
+git -C "$test_root" add file
+git -C "$test_root" commit -q -m 'feat(repository): prepare promotion'
+git -C "$test_root" switch -q master
+promotion_plan=$(cd "$test_root" && "$plan_promotion")
+printf '%s\n' "$promotion_plan" | grep -q '^base: master$'
+printf '%s\n' "$promotion_plan" | grep -q '^head: dev$'
+printf '%s\n' "$promotion_plan" | grep -q '^commits-to-promote: 1$'
 
 first_plan=$(cd "$test_root" && "$plan_release" unixlike master 2030.01.02)
 printf '%s\n' "$first_plan" | grep -q '^tag: unixlike-v2030.01.02$'

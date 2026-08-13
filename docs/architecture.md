@@ -146,6 +146,19 @@ job selected by the classifier. Individual domain jobs remain conditional and
 are not protection contracts, so adding or skipping a domain does not silently
 weaken or deadlock protected branches.
 
+Governance itself has separate authority layers:
+
+```text
+decision and invariant -> human procedure -> agent orchestration
+                                      \-> deterministic enforcement -> evidence
+```
+
+The left side is durable project judgement. The right side is replaceable
+implementation. A procedure may select commands but cannot invent a new
+obligation; an enforcement mechanism must trace back to an invariant; evidence
+records an execution and never becomes desired-state authority. This separation
+keeps context concise while retaining reproducible operations.
+
 ## Version control and releases
 
 The repository keeps shared integration branches so history remains easy to
@@ -168,6 +181,15 @@ releases an earlier accepted state. The annotation is the portable release
 evidence record and distinguishes evaluation, build, and native-runtime checks.
 Activation and Apply remain later deployment events and are never inferred
 from the tag.
+
+Source flows one way from topic branches through `dev` into `master`.
+`master` accepts only a same-repository `dev` pull request and preserves that
+boundary with a merge commit. It does not flow its promotion merge commit back
+to `dev`. Consequently `dev` protection requires the proposed head to include
+its current base, while `master` protection may evaluate the pull request merge
+without requiring `dev` to contain the previous promotion merge commit. The
+single allowed source, one-open-promotion rule, and CI source gate preserve
+serialization.
 
 ## Why the repository remains a monorepo
 

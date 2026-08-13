@@ -51,19 +51,66 @@ for branch in dev master; do
     fail "$branch required contexts are [$(printf '%s' "$contexts" | paste -sd, -)], expected [Required checks]"
   fi
 
+  strict=$(gh api "$endpoint" --jq '.required_status_checks.strict')
+  case "$branch" in
+    dev) expected_strict=true ;;
+    master) expected_strict=false ;;
+  esac
+  if [ "$strict" = "$expected_strict" ]; then
+    ok "$branch strict status-check setting is $expected_strict"
+  else
+    fail "$branch strict status-check setting is $strict, expected $expected_strict"
+  fi
+
   safeguards=$(gh api "$endpoint" --jq '
-    .required_status_checks.strict == true and
     .required_pull_request_reviews != null and
     .enforce_admins.enabled == true and
     .required_conversation_resolution.enabled == true and
     .allow_force_pushes.enabled == false and
     .allow_deletions.enabled == false')
   if [ "$safeguards" = true ]; then
-    ok "$branch enforces reviews, current checks, admin rules, and safe history"
+    ok "$branch enforces reviews, admin rules, and safe history"
   else
     fail "$branch protection safeguards do not match repository policy"
   fi
 done
+
+open_promotion_numbers=$(gh api --paginate \
+  "repos/$repo/pulls?state=open&base=master&per_page=100" \
+  --jq '.[] | select(.head.ref == "dev" and .head.repo.full_name == "'"$repo"'") | .number')
+open_promotions=$(printf '%s\n' "$open_promotion_numbers" \
+  | awk 'NF { count++ } END { print count + 0 }')
+invalid_open=$(gh api --paginate \
+  "repos/$repo/pulls?state=open&base=master&per_page=100" \
+  --jq '.[] | select(.head.ref != "dev" or .head.repo.full_name != "'"$repo"'") | .number' \
+  | paste -sd, -)
+if [ -n "$invalid_open" ]; then
+  fail "open master pull requests have invalid sources: $invalid_open"
+elif [ "$open_promotions" -le 1 ]; then
+  ok "at most one same-repository dev-to-master promotion is open"
+else
+  fail "$open_promotions dev-to-master promotions are open"
+fi
+
+invalid_merged=$(gh api --paginate \
+  "repos/$repo/pulls?state=closed&base=master&per_page=100" \
+  --jq '.[] | select(.merged_at != null) | select(.head.ref != "dev" or .head.repo.full_name != "'"$repo"'") | .number' \
+  | paste -sd, -)
+if [ -n "$invalid_merged" ]; then
+  fail "merged master pull requests have invalid sources: $invalid_merged"
+else
+  ok "merged master pull requests came from same-repository dev"
+fi
+
+merge_settings=$(gh api "repos/$repo" --jq '
+  .allow_merge_commit == true and
+  .allow_squash_merge == false and
+  .allow_rebase_merge == false')
+if [ "$merge_settings" = true ]; then
+  ok "repository permits merge commits and disables squash and rebase merging"
+else
+  fail "repository merge methods do not enforce merge commits only"
+fi
 
 printf 'summary: %s remote failure(s)\n' "$failures"
 [ "$failures" -eq 0 ]

@@ -129,9 +129,29 @@ jobs:
             sudo tar -xz -C /usr/local/bin gitleaks
       - run: gitleaks git --redact --no-banner
 
+  promotion:
+    name: Promotion policy
+    if: github.event_name == 'pull_request' && github.base_ref == 'master'
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v7
+      - name: Require same-repository dev source
+        env:
+          PROMOTION_BASE_REF: ${{ github.base_ref }}
+          PROMOTION_HEAD_REF: ${{ github.head_ref }}
+          PROMOTION_BASE_REPOSITORY: ${{ github.repository }}
+          PROMOTION_HEAD_REPOSITORY: ${{ github.event.pull_request.head.repo.full_name }}
+        run: tool/version-control/check-promotion
+      - name: Require one promotion pull request
+        env:
+          GH_TOKEN: ${{ github.token }}
+          PROMOTION_REPOSITORY: ${{ github.repository }}
+          PROMOTION_PULL_NUMBER: ${{ github.event.pull_request.number }}
+        run: tool/version-control/check-promotion-queue
+
   required:
     name: Required checks
-    needs: [classify, repository, unix, windows, common, secrets]
+    needs: [classify, repository, unix, windows, common, secrets, promotion]
     if: always()
     runs-on: ubuntu-latest
     env:
@@ -145,6 +165,8 @@ jobs:
       COMMON_SCOPE: ${{ needs.classify.outputs.common }}
       COMMON_RESULT: ${{ needs.common.result }}
       SECRETS_RESULT: ${{ needs.secrets.result }}
+      PROMOTION_SCOPE: ${{ github.event_name == 'pull_request' && github.base_ref == 'master' }}
+      PROMOTION_RESULT: ${{ needs.promotion.result }}
     steps:
       - uses: actions/checkout@v7
       - name: Enforce scoped results

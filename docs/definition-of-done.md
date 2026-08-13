@@ -29,6 +29,32 @@ native checks instead of treating them as passed.
 - [ ] Model-specific skill locations only discover the canonical Agent Skills
       workflow and do not duplicate its policy.
 
+## Governance rule design
+
+- [ ] The prevented failure, owning scope, rationale, and decision owner are
+      explicit.
+- [ ] Policy is expressed as tool-independent invariants with one authority.
+- [ ] Procedure contains prerequisites, ordered actions, recovery, and approval
+      boundaries but introduces no new obligation.
+- [ ] Skills orchestrate; deterministic tools and remote settings enforce.
+- [ ] Enforceable invariants have positive and negative fixtures; manual
+      invariants name their required evidence.
+- [ ] Current adoption and migration gaps are recorded separately from policy.
+- [ ] A cross-project skill contains no consuming repository identity, policy,
+      path convention, or current state; adoption remains explicit.
+
+## Dev-to-master promotion
+
+- [ ] The pull request is from this repository's `dev` to `master`, and no
+      other promotion pull request is open.
+- [ ] `tool/version-control/plan-promotion` reports all commits and scopes.
+- [ ] The promotion contains no source fix authored only for the promotion.
+- [ ] `Required checks` passes and conversations are resolved.
+- [ ] The pull request uses a merge commit and explicit merge authorization.
+- [ ] The merge is source acceptance, not domain certification or deployment.
+- [ ] Local and remote audits pass after merge; `master` is not reverse-merged
+      into `dev` merely to carry the promotion merge commit.
+
 ## Unix-like domain
 
 - [ ] The change is owned by the flake, a Unix-like module, or a Unix-like
@@ -92,8 +118,9 @@ native checks instead of treating them as passed.
       `docs/status.md`.
 - [ ] A recurring issue is indexed in `docs/troubleshooting.md` by its literal
       symptom.
-- [ ] Reusable agent procedure lives in `.agents/skills/`; model-specific
-      adapters contain no independent project judgement.
+- [ ] A canonical skill lives in the owning project or an explicitly adopted
+      shared-skill project; model-specific adapters contain no independent
+      project judgement.
 
 ## Release evidence
 

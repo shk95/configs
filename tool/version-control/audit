@@ -88,6 +88,19 @@ if git show-ref --verify --quiet refs/heads/master && git show-ref --verify --qu
   else
     ok "master has no direct non-merge commits outside dev"
   fi
+
+  invalid_promotions=0
+  for merge in $(git rev-list --first-parent --merges master); do
+    parents=$(git show -s --format='%P' "$merge")
+    second_parent=$(printf '%s\n' "$parents" | awk '{print $2}')
+    if [ -z "$second_parent" ] || ! git merge-base --is-ancestor "$second_parent" dev; then
+      fail "master merge does not carry history accepted through dev: $merge"
+      invalid_promotions=$((invalid_promotions + 1))
+    fi
+  done
+  if [ "$invalid_promotions" -eq 0 ]; then
+    ok "master merge history is traceable through dev"
+  fi
 fi
 
 tag_count=0
