@@ -86,9 +86,13 @@ Native read-only verification is:
 
 ```powershell
 .\windows\tools\check-desired-state.ps1
-Invoke-Pester .\windows\tests
+.\windows\tools\test.ps1
 .\windows\bootstrap.ps1 -Check
 ```
+
+The test entrypoint requires Pester 5.7.1 so local Windows and CI use the same
+discovery, scope, and assertion semantics. Install that exact version once with
+`Install-Module Pester -RequiredVersion 5.7.1 -Scope CurrentUser`.
 
 Apply is a deployment, not verification, and requires an explicit request:
 
