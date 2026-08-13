@@ -82,7 +82,7 @@ Describe 'PowerShell profile marker' {
         Set-WinEnvProfileHook -ProfilePath $profile
         Set-WinEnvProfileHook -ProfilePath $profile
         $content = Get-Content -LiteralPath $profile -Raw
-        ([regex]::Matches($content, '(?m)^#region win-env$')).Count | Should Be 1
+        ([regex]::Matches($content, '(?m)^#region win-env\r?$')).Count | Should Be 1
         $content | Should Match '#region sysmon-banner'
         (Test-WinEnvProfileHook -ProfilePath $profile) | Should Be $true
     }
@@ -91,6 +91,16 @@ Describe 'PowerShell profile marker' {
         $profile = Join-Path $TestDrive 'broken-profile.ps1'
         [IO.File]::WriteAllText($profile, "#region win-env`r`n")
         (Test-Throws { Set-WinEnvProfileHook -ProfilePath $profile }) | Should Be $true
+    }
+}
+
+Describe 'managed PowerShell profile' {
+    It 'loads silently in a non-interactive PowerShell process' {
+        $profile = Join-Path $desiredStateRoot 'files\powershell\profile.ps1'
+        $pwsh = (Get-Process -Id $PID).Path
+        $output = @(& $pwsh -NoLogo -NoProfile -NonInteractive -File $profile 2>&1)
+        $LASTEXITCODE | Should Be 0
+        $output.Count | Should Be 0
     }
 }
 
