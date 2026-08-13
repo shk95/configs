@@ -109,6 +109,25 @@ The Windows domain is independent:
 
 No explicit `common/` component has yet been justified or created.
 
+## PowerShell 7 ownership
+
+PowerShell 7 is configured in both deployable domains without a cross-domain
+runtime dependency. The Unix-like Home Manager feature owns the package and
+the CurrentUserAllHosts profile for Linux, WSL, and macOS. Windows continues to
+own its WinGet package declaration, managed profile payload, and profile hook.
+
+The two profiles independently adopt the same small, platform-neutral
+interactive policy: PSReadLine suppresses duplicate history entries, moves the
+cursor to the end of a recalled history match, and uses history prediction when
+the installed PSReadLine supports it. The policy runs only in an interactive,
+non-redirected ConsoleHost and produces no output, because profiles may also be
+loaded by SSH, Git, scp, and other protocols.
+
+This similarity is not yet sufficient evidence for a `common/` component. The
+copies remain locally owned and may diverge. Promotion can be reconsidered only
+after their semantics remain stable across independent platform validation and
+release cycles.
+
 The Unix-like Zellij keymap was adopted by copying the Windows implementation.
 The copies intentionally differ in platform-owned shell and session values and
 have no synchronization dependency. Promotion to `common` remains deferred

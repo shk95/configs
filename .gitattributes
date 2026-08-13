@@ -1,5 +1,6 @@
 * text=auto eol=lf
 *.ps1 text eol=crlf
 *.psm1 text eol=crlf
+assets/powershell/*.ps1 text eol=lf
 *.png binary
 *.woff2 binary
