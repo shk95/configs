@@ -107,13 +107,15 @@ From native Windows:
 
 ```powershell
 .\windows\tools\check-desired-state.ps1
-Invoke-Pester .\windows\tests
+.\windows\tools\test.ps1
 .\windows\bootstrap.ps1 -Check
 ```
 
 The desired-state check requires `zellij.exe` and a `luac` compiler so KDL and
-Lua are validated by their native tools. `-Check` never installs or changes
-anything. Apply is explicit:
+Lua are validated by their native tools. The test entrypoint requires Pester
+5.7.1; install it with
+`Install-Module Pester -RequiredVersion 5.7.1 -Scope CurrentUser`. `-Check`
+never installs or changes anything. Apply is explicit:
 
 ```powershell
 .\windows\bootstrap.ps1
