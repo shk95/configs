@@ -109,6 +109,11 @@ The Windows domain is independent:
 
 No explicit `common/` component has yet been justified or created.
 
+Windows tests target Pester 5.7.1 through `windows/tools/test.ps1`. The exact
+version is shared by local native verification and CI so Pester discovery,
+scope, and assertion behavior cannot silently change with a runner image. Test
+setup runs in `BeforeAll`, and assertions use the parameterized Pester 5 syntax.
+
 ## PowerShell 7 ownership
 
 PowerShell 7 is configured in both deployable domains without a cross-domain
