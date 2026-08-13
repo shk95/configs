@@ -121,6 +121,31 @@ common change   ──> common checks   ──> common release
 - Root-level tooling may dispatch domain checks, but must not turn unrelated
   domain success into a prerequisite for a local change.
 
+## Repository governance plane
+
+Version-control policy, check dispatch, hooks, CI wiring, and reusable agent
+workflows are repository governance rather than configuration desired state.
+They use the `repository` change scope because assigning them to one platform
+would make that platform authoritative for the others.
+
+This scope is deliberately narrow:
+
+- it creates no host configuration, package, payload, or deployment;
+- it does not participate in `unixlike`, `windows`, or `common` release tags;
+- it may classify and dispatch domain checks without owning their semantics;
+- domain behavior discovered during governance work is changed separately in
+  the owning domain.
+
+The canonical agent workflow follows the Agent Skills open standard under
+`.agents/skills/`. Product-specific discovery locations may contain thin
+adapters, but they do not own or duplicate the workflow.
+
+Branch protection consumes one stable CI contract named `Required checks`.
+The gate validates classification, the repository-wide secret scan, and each
+job selected by the classifier. Individual domain jobs remain conditional and
+are not protection contracts, so adding or skipping a domain does not silently
+weaken or deadlock protected branches.
+
 ## Version control and releases
 
 The repository keeps shared integration branches so history remains easy to
@@ -136,6 +161,13 @@ inspect. Readiness and deployment are domain-scoped rather than repository-wide.
 A tag certifies only its named domain. Unrelated files present at the same Git
 commit do not acquire that certification. Evidence is recorded and reported
 per domain.
+
+Release tags are annotated and immutable. A release target must be reachable
+from `master`, but it need not be the newest commit when a domain intentionally
+releases an earlier accepted state. The annotation is the portable release
+evidence record and distinguishes evaluation, build, and native-runtime checks.
+Activation and Apply remain later deployment events and are never inferred
+from the tag.
 
 ## Why the repository remains a monorepo
 

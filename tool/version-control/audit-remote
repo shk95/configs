@@ -1,0 +1,69 @@
+#!/bin/sh
+
+# Audit GitHub protection against the repository's stable CI contract.
+# Read-only; requires an authenticated gh client.
+
+set -eu
+
+root=$(git rev-parse --show-toplevel)
+cd "$root"
+
+failures=0
+
+ok() {
+  printf 'ok: %s\n' "$1"
+}
+
+fail() {
+  printf 'failure: %s\n' "$1" >&2
+  failures=$((failures + 1))
+}
+
+command -v gh >/dev/null 2>&1 || {
+  echo "gh is unavailable" >&2
+  exit 2
+}
+gh auth status --hostname github.com >/dev/null 2>&1 || {
+  echo "gh is not authenticated for github.com" >&2
+  exit 2
+}
+
+repo=$(gh repo view --json nameWithOwner --jq .nameWithOwner)
+default_branch=$(gh repo view --json defaultBranchRef --jq .defaultBranchRef.name)
+if [ "$default_branch" = master ]; then
+  ok "default branch is master ($repo)"
+else
+  fail "default branch is $default_branch, expected master ($repo)"
+fi
+
+for branch in dev master; do
+  endpoint="repos/$repo/branches/$branch/protection"
+  if ! gh api "$endpoint" >/dev/null; then
+    fail "$branch branch protection is unavailable"
+    continue
+  fi
+
+  contexts=$(gh api "$endpoint" \
+    --jq '.required_status_checks.contexts | sort | join("\n")')
+  if [ "$contexts" = "Required checks" ]; then
+    ok "$branch requires only the stable Required checks gate"
+  else
+    fail "$branch required contexts are [$(printf '%s' "$contexts" | paste -sd, -)], expected [Required checks]"
+  fi
+
+  safeguards=$(gh api "$endpoint" --jq '
+    .required_status_checks.strict == true and
+    .required_pull_request_reviews != null and
+    .enforce_admins.enabled == true and
+    .required_conversation_resolution.enabled == true and
+    .allow_force_pushes.enabled == false and
+    .allow_deletions.enabled == false')
+  if [ "$safeguards" = true ]; then
+    ok "$branch enforces reviews, current checks, admin rules, and safe history"
+  else
+    fail "$branch protection safeguards do not match repository policy"
+  fi
+done
+
+printf 'summary: %s remote failure(s)\n' "$failures"
+[ "$failures" -eq 0 ]

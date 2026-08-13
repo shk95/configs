@@ -16,6 +16,11 @@ testable, and deployable without a Unix-like host. `common` is an exceptional
 domain: do not create common material merely because two implementations look
 similar.
 
+Repository-wide version-control policy, hooks, CI dispatch, and reusable agent
+workflows form a `repository` governance scope. This is not a fourth
+configuration domain, has no host output, and receives no domain release tag.
+Use it only when one configuration domain cannot honestly own the change.
+
 Files below `modules/` are flake-parts modules collected by import-tree for the
 Unix-like domain. Prefer one feature per file.
 `modules/flake/configurations.nix` is the only place that decides which
@@ -24,6 +29,8 @@ deferred module classes reach a Unix-like host.
 ## Domain boundaries
 
 - Classify a change as `unixlike`, `windows`, or `common` before editing.
+- Classify root version-control governance as `repository`; do not use that
+  scope for configuration or deployment behavior.
 - Keep a change inside one domain unless transfer between domains is the
   explicit purpose of the work.
 - Do not introduce implicit imports, generated dependencies, or shared mutable
@@ -55,6 +62,12 @@ deployment model.
   runtime state out of every domain's committed desired state.
 - Version and release `unixlike`, `windows`, and `common` independently even
   when their tags point to commits in the same repository.
+- Treat release tags as immutable, annotated domain certifications. Put the
+  required evidence in the tag annotation rather than in model context or a
+  snapshot of host state committed to desired state.
+- Keep branch protection independent of conditional job names. Require the
+  stable `Required checks` CI gate, which accepts only the selected domain jobs
+  plus the repository-wide secret scan.
 
 ## Host safety
 
@@ -75,7 +88,8 @@ deployment model.
 
 1. Read `CONTRIBUTING.md`, `docs/architecture.md`, and the relevant part of
    `docs/status.md`.
-2. Classify the task as `unixlike`, `windows`, `common`, or an explicit transfer.
+2. Classify the task as `unixlike`, `windows`, `common`, `repository`, or an
+   explicit transfer.
 3. Use `tool/doctor.sh` before relying on host-local capabilities.
 4. Change only the owning domain. Treat a cross-domain copy as a separate,
    reviewable adoption change.
@@ -88,4 +102,6 @@ User-facing usage belongs in `README.md`, workflow in `CONTRIBUTING.md`,
 architecture and ownership in `docs/architecture.md`, expensive decisions and
 current state in `docs/status.md`, recurring symptoms in
 `docs/troubleshooting.md`, and executable policy in `tool/`, hooks, and CI.
-Model-specific context files only point to these sources.
+The canonical reusable agent workflow lives under `.agents/skills/` and
+follows the Agent Skills open standard. Model-specific context and skill files
+only point to canonical sources.

@@ -1,0 +1,4 @@
+interface:
+  display_name: "Run Version Control Workflow"
+  short_description: "Audit and run repository version-control workflows"
+  default_prompt: "Use $run-version-control-workflow to audit this repository change and prepare the next authorized version-control step."

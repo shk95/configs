@@ -2,6 +2,6 @@
 description: Orient in the project and prepare a branch using the shared workflow
 ---
 
-Read `AGENTS.md`, then follow the clone, branch, and change workflow in
-`CONTRIBUTING.md`. This command is a Claude Code adapter; do not restate
-project policy here.
+Invoke `/run-version-control-workflow` in start mode with the supplied task.
+The skill reads `AGENTS.md` and the canonical workflow sources. This command is
+a compatibility alias and owns no project policy.
