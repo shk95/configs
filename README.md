@@ -64,6 +64,9 @@ tool/setup --fix
 tool/doctor.sh
 ```
 
+Pass a scope such as `tool/doctor.sh repository` when a foreign-platform
+capability is irrelevant to the current change.
+
 Allow the repository's committed direnv environment once per clone:
 
 ```sh
@@ -75,6 +78,12 @@ machine-local environment additions in `.envrc.local`; it is sourced when
 present and is intentionally ignored by Git.
 
 Run checks for the domain you changed. `CONTRIBUTING.md` lists the workflows.
+
+Codex, Claude Code, and other Agent Skills-compatible tools can use the
+project's `run-version-control-workflow` skill to classify a change, audit Git
+policy, prepare work, or plan a domain release. The canonical model-neutral
+skill lives under `.agents/skills/`; `.claude/skills/` contains only Claude's
+discovery adapter. Audit and release planning are read-only by default.
 
 The Justfile exposes the same checks and target-specific runners without
 duplicating the configured user or host name:

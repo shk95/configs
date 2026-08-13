@@ -13,8 +13,9 @@ tool/doctor.sh
 ```
 
 `tool/setup` changes only the clone-local hooks setting and only with `--fix`.
-`tool/doctor.sh` is read-only. A missing foreign-platform capability does not
-block work confined to another domain.
+`tool/doctor.sh` is read-only. Pass `unixlike`, `windows`, `common`, or
+`repository` to check only that scope; omit the scope for a complete host
+inventory. A missing foreign-platform capability does not block scoped work.
 
 ## Classify the change
 
@@ -24,6 +25,12 @@ Every change belongs to one of these scopes:
 - `windows`: native Windows desired state and reconciliation.
 - `common`: explicitly platform-neutral material with its own contract.
 - `adopt`: an explicit copy or pinned import from one domain into another.
+- `repository`: version-control policy, hooks, CI dispatch, or reusable agent
+  workflow support with no configuration or deployment output.
+
+`repository` is a governance scope, not a fourth configuration domain. It has
+no release tag and must not contain platform behavior that belongs to
+`unixlike`, `windows`, or `common`.
 
 Prefer a single scope per branch and pull request. If a common change and its
 platform adoption are both needed, land them separately so neither release is
@@ -36,11 +43,13 @@ master <- dev <- feature/<domain>-<topic> or fix/<domain>-<topic>
 ```
 
 Examples are `feature/unixlike-shell`, `fix/windows-zellij`, and
-`feature/common-terminal-colors`.
+`feature/common-terminal-colors`. Governance examples are
+`feature/repository-vcs-audit` and `fix/repository-ci-dispatch`.
 
 Use merge commits for completed work; do not squash or rebase published work.
 Do not commit directly to `master`. Scope commits where practical, for example
-`feat(unixlike):`, `fix(windows):`, or `chore(common):`.
+`feat(unixlike):`, `fix(windows):`, `chore(common):`, or
+`refactor(repository):`.
 
 `dev` means the affected domain's repository checks pass. `master` means the
 source change has been accepted; it no longer means every platform at that
@@ -56,6 +65,19 @@ Use independent release tags:
 Keep `flake.lock` refreshes in dedicated `chore(unixlike-deps)` commits. A
 domain tag certifies only the named domain even though the commit may contain
 accepted history from the others.
+
+Domain releases use immutable annotated tags. The target commit must be
+reachable from `master`. The annotation records the domain and reports
+evaluation, build, and native-runtime evidence separately, including explicit
+`unavailable` or `not applicable` values. Create and push a tag only when the
+user explicitly requests those mutations. Activation and Windows Apply happen
+after release and are not implied by a tag.
+
+For agent-assisted work, invoke `run-version-control-workflow`. Its canonical
+Agent Skills implementation is under `.agents/skills/`; model-specific
+discovery files are adapters only. Audit and release planning are read-only by
+default. This document remains the human fallback and the contract the skill
+executes.
 
 ## Unix-like changes
 
@@ -142,6 +164,22 @@ For common changes, run the checks owned by that common component. Do not make
 Unix-like and Windows deployments prerequisites for a common release. Consumer
 adoption validates integration later in the consuming domain.
 
+For repository-governance changes, run the version-control fixture tests and
+only the domain checks whose dispatch or enforcement behavior changed. Secret
+scanning remains repository-wide. A governance change does not receive a
+domain tag.
+
+```sh
+tool/version-control/test
+tool/version-control/audit
+tool/version-control/audit-remote  # when gh is authenticated
+```
+
+Branch protection on `dev` and `master` requires the stable `Required checks`
+job. That job fails unless classification and secret scanning pass and every
+selected domain job succeeds. Conditional domain job names are deliberately
+not branch-protection contexts because unselected domains are skipped.
+
 ## Documentation ownership
 
 | Location | Responsibility |
@@ -153,6 +191,7 @@ adoption validates integration later in the consuming domain.
 | `docs/status.md` | Current state and expensive decisions |
 | `docs/troubleshooting.md` | Recurring problems indexed by symptom |
 | `docs/definition-of-done.md` | Domain-specific evidence requirements |
+| `.agents/skills/` | Model-neutral reusable agent workflows |
 | `tool/`, hooks, CI | Executable policy |
 
 Repository text is English because the repository is public.

@@ -1,25 +1,16 @@
 {
   "$comment": [
-    "Committed, so every clone gets it. Pre-approves the commands a session",
-    "runs constantly, so work is not interrupted by permission prompts.",
-    "",
-    "The line drawn: anything that cannot lose committed work or reach outside",
-    "the machine. Deliberately absent, so they stay a conscious choice —",
-    "git push, git reset --hard, git rebase, gh release, gh repo, and rm.",
-    "",
-    "For Nix specifically, also absent: `nix flake update`, which rewrites",
-    "flake.lock to newer input revisions, and the four commands that mutate",
-    "this machine rather than just reading it — home-manager switch,",
-    "darwin-rebuild switch, nixos-rebuild switch and nix-collect-garbage.",
-    "Everything allowed below inspects, builds or formats."
+    "Claude Code permission adapter; project authority and safety live in AGENTS.md.",
+    "Tool permission never authorizes an unrequested Git or host mutation.",
+    "Publication, history rewrite, release, deletion, and host activation stay absent."
   ],
   "permissions": {
     "allow": [
-      "Bash(tool/doctor.sh)",
+      "Bash(tool/doctor.sh:*)",
       "Bash(tool/setup:*)",
       "Bash(tool/worktree.sh:*)",
       "Bash(tool/checks/:*)",
-      "Bash(tool/render-windows)",
+      "Bash(tool/version-control/:*)",
 
       "Bash(git status:*)",
       "Bash(git diff:*)",

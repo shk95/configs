@@ -154,6 +154,35 @@ releases. A common release deploys nowhere and is adopted later by a separate
 consumer change. A tag certifies only its domain, even when unrelated domain
 history exists at the same commit.
 
+## Version-control workflow ownership
+
+Repository-wide version-control work is a narrow `repository` governance scope
+rather than part of one of the three configuration domains. It owns policy
+dispatch and agent workflow mechanics, creates no host output, and has no
+release tag.
+
+Durable judgement remains in `AGENTS.md` and the architecture documents. The
+repeatable agent procedure is implemented once as an Agent Skills
+open-standard skill under `.agents/skills/`. Model-specific skill locations
+only provide discovery adapters. Neither Codex nor Claude becomes the workflow
+authority.
+
+The initial audit found strong branch and commit adherence but no domain tags,
+so the release path remains unexercised. It also found that the existing hooks
+and CI invoke Unix-like checks for unrelated changes, which conflicts with
+native Windows independence. The governance refactor therefore adds
+domain-aware dispatch and a read-only release planner before any real tag is
+created.
+
+The follow-up remote audit found protection enabled on both `dev` and `master`:
+pull requests and current-branch checks are required, administrators are
+enforced, conversations must be resolved, and force pushes and deletions are
+disabled. Its required contexts still name the former always-on Unix, Windows,
+and secret jobs. The refactored workflow introduces a stable `Required checks`
+gate; after that workflow exists on GitHub, both protected branches must be
+migrated to require only that gate. Until then remote protection is enabled but
+not aligned with domain-aware dispatch.
+
 ## Initial monorepo convergence
 
 The repository originally converged four projects into one flake-composed

@@ -2,7 +2,7 @@
 description: Verify, record gaps and publish using the shared workflow
 ---
 
-Read `AGENTS.md`, then follow the verification and documentation workflow in
-`CONTRIBUTING.md` and the applicable checklist in
-`docs/definition-of-done.md`. This command is a Claude Code adapter; do not
-restate project policy here.
+Invoke `/run-version-control-workflow` in prepare mode with the supplied task.
+If integration or publication was explicitly requested, continue with that
+skill's integrate operation and authorization boundaries. This command is a
+compatibility alias and owns no project policy.

@@ -1,7 +1,7 @@
 #!/bin/sh
 #
-# Checks this machine can build, check and commit the project — and says
-# plainly what is missing when it cannot.
+# Checks this machine can work in a requested scope and says plainly what is
+# missing. Foreign-domain capabilities do not block a scoped change.
 #
 # Run it at the start of a session. The failure it exists to prevent is the
 # quiet one: a clone with no git hooks commits without a secret scan, and a
@@ -10,6 +10,15 @@
 
 cd "$(dirname "$0")/.." || exit 1
 
+scope=${1:-all}
+case "$scope" in
+  all|unixlike|windows|common|repository) ;;
+  *)
+    echo "usage: tool/doctor.sh [unixlike|windows|common|repository]" >&2
+    exit 2
+    ;;
+esac
+
 red='\033[31m'; yellow='\033[33m'; green='\033[32m'; dim='\033[2m'; off='\033[0m'
 failed=0
 
@@ -17,13 +26,14 @@ ok()   { printf "  ${green}✓${off} %s\n" "$1"; }
 warn() { printf "  ${yellow}!${off} %s\n     ${dim}%s${off}\n" "$1" "$2"; }
 bad()  { printf "  ${red}✗${off} %s\n     ${dim}%s${off}\n" "$1" "$2"; failed=1; }
 
-echo "Toolchain"
+echo "Toolchain ($scope)"
 
-if command -v nix >/dev/null 2>&1; then
-  ok "nix $(nix --version | awk '{print $NF}')"
-else
-  bad "nix not on PATH" "Install it: https://docs.determinate.systems (recommended on WSL) or https://nixos.org/download/"
-fi
+if [ "$scope" = all ] || [ "$scope" = unixlike ]; then
+  if command -v nix >/dev/null 2>&1; then
+    ok "nix $(nix --version | awk '{print $NF}')"
+  else
+    bad "nix not on PATH" "Install it: https://docs.determinate.systems (recommended on WSL) or https://nixos.org/download/"
+  fi
 
 # `nix config show` needs nix-command itself to inspect nix-command, so it
 # cannot tell you whether nix-command is enabled. Asking the flake in this
@@ -35,30 +45,43 @@ fi
 # reported as "flakes are not enabled", which sends you to export a variable
 # that cannot help. Not knowing is its own answer, and it stays a ✗ because the
 # question being asked is whether this machine can build.
-if err=$(nix flake metadata --no-write-lock-file 2>&1 >/dev/null); then
-  ok "nix-command and flakes enabled"
+  if command -v nix >/dev/null 2>&1; then
+    if err=$(nix flake metadata --no-write-lock-file 2>&1 >/dev/null); then
+      ok "nix-command and flakes enabled"
+    else
+      case "$err" in
+        *"experimental Nix feature"*)
+          bad "nix-command/flakes not enabled by default" \
+              'export NIX_CONFIG="experimental-features = nix-command flakes" until the first home-manager switch writes it for you (see modules/nix-conf.nix)'
+          ;;
+        *)
+          detail=$(printf '%s\n' "$err" \
+                   | grep -v '^[[:space:]]*$' \
+                   | tail -1 \
+                   | sed 's/^[[:space:]]*//' \
+                   | cut -c1-200)
+          bad "could not ask the flake whether nix-command works" \
+              "Not the experimental-features flag, so exporting NIX_CONFIG will not help. $detail"
+          ;;
+      esac
+    fi
+  fi
+
+  command -v direnv >/dev/null 2>&1 && ok "direnv" \
+    || warn "direnv not installed" "Optional. programs.direnv expects it once you switch; install via your OS package manager."
 else
-  case "$err" in
-    *"experimental Nix feature"*)
-      bad "nix-command/flakes not enabled by default" \
-          'export NIX_CONFIG="experimental-features = nix-command flakes" until the first home-manager switch writes it for you (see modules/nix-conf.nix)'
-      ;;
-    *)
-      # nix prints a chain, opening with a bare "error:" and putting the root
-      # cause last — so the last non-empty line is the one worth showing.
-      detail=$(printf '%s\n' "$err" \
-               | grep -v '^[[:space:]]*$' \
-               | tail -1 \
-               | sed 's/^[[:space:]]*//' \
-               | cut -c1-200)
-      bad "could not ask the flake whether nix-command works" \
-          "Not the experimental-features flag, so exporting NIX_CONFIG will not help. $detail"
-      ;;
-  esac
+  ok "Unix-like toolchain is not required for the $scope scope"
 fi
 
-command -v direnv >/dev/null 2>&1 && ok "direnv" \
-  || warn "direnv not installed" "Optional. programs.direnv expects it once you switch; install via your OS package manager."
+if [ "$scope" = windows ] || [ "$scope" = all ]; then
+  if command -v pwsh >/dev/null 2>&1 || command -v pwsh.exe >/dev/null 2>&1; then
+    ok "PowerShell 7 command available for Windows checks"
+  elif [ "$scope" = windows ]; then
+    bad "PowerShell 7 is unavailable" "Run Windows validation on a native Windows host with PowerShell 7."
+  else
+    warn "PowerShell 7 is unavailable" "Windows evidence requires a native Windows host with PowerShell 7."
+  fi
+fi
 
 echo
 echo "Version control"
@@ -67,8 +90,8 @@ hooks=$(git config core.hooksPath 2>/dev/null)
 if [ "$hooks" = ".githooks" ]; then
   ok "git hooks enabled"
 else
-  # A hard failure, not a warning — see decisions/002 upstream. Without this a
-  # clone commits with no formatting check, no lint and no secret scan.
+  # A hard failure: without this a clone commits with no local policy or secret
+  # scan. CI remains a backstop, not the primary feedback loop.
   bad "git hooks are NOT enabled" "Inspect with 'tool/setup', then enable with 'tool/setup --fix'."
 fi
 
@@ -93,8 +116,9 @@ else
   warn "gh not installed — cannot read or file blocked issues" "Install: https://cli.github.com"
 fi
 
-echo
-echo "Flavours declared by the flake"
+if [ "$scope" = all ] || [ "$scope" = unixlike ]; then
+  echo
+  echo "Flavours declared by the flake"
 # tool/checks/test builds every configuration on the host it runs on, so what
 # matters here is only whether each one can also be *activated* from this
 # machine. Building and activating are different questions: a NixOS closure
@@ -127,8 +151,9 @@ if grep -Rqs --include='*.nix' 'darwinConfigurations' flake.nix modules 2>/dev/n
   fi
 fi
 
-[ "$found" -eq 1 ] || warn "no Unix-like host configurations in the flake sources" \
-     "tool/checks/test has nothing to verify."
+  [ "$found" -eq 1 ] || warn "no Unix-like host configurations in the flake sources" \
+       "tool/checks/test has nothing to verify."
+fi
 
 echo
 if [ "$failed" -eq 1 ]; then

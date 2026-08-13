@@ -6,7 +6,8 @@ native checks instead of treating them as passed.
 
 ## Every change
 
-- [ ] The owning domain is identified as `unixlike`, `windows`, or `common`.
+- [ ] The owning scope is identified as `unixlike`, `windows`, `common`,
+      `repository`, or an explicit `adopt` transfer.
 - [ ] Formatting, lint, and narrow checks relevant to the changed files pass.
 - [ ] User-facing behavior and expensive decisions are documented.
 - [ ] The final diff contains no unrelated changes.
@@ -14,6 +15,19 @@ native checks instead of treating them as passed.
       reported separately where they apply.
 - [ ] No commit, push, tag, branch change, activation, or Apply occurred without
       explicit authorization.
+
+## Repository governance
+
+- [ ] The change affects only version-control policy, check dispatch, hooks,
+      CI wiring, or reusable agent workflow mechanics.
+- [ ] It creates no configuration output and receives no domain release tag.
+- [ ] Version-control fixture tests cover every changed invariant.
+- [ ] A Windows-only change can be prepared and checked without Nix.
+- [ ] An unrelated domain failure is not required to validate a domain change.
+- [ ] CI exposes the stable `Required checks` gate and branch protection
+      requires it instead of conditional domain job names.
+- [ ] Model-specific skill locations only discover the canonical Agent Skills
+      workflow and do not duplicate its policy.
 
 ## Unix-like domain
 
@@ -78,3 +92,17 @@ native checks instead of treating them as passed.
       `docs/status.md`.
 - [ ] A recurring issue is indexed in `docs/troubleshooting.md` by its literal
       symptom.
+- [ ] Reusable agent procedure lives in `.agents/skills/`; model-specific
+      adapters contain no independent project judgement.
+
+## Release evidence
+
+- [ ] The release tag is annotated, matches the domain naming convention, and
+      targets a commit reachable from `master`.
+- [ ] The annotation names the domain and reports evaluation, build, and native
+      runtime evidence separately.
+- [ ] Missing native evidence is recorded as unavailable, never inferred from
+      foreign evaluation.
+- [ ] The tag is new and immutable; an existing tag is never moved or reused.
+- [ ] Tag creation and push each have explicit authorization.
+- [ ] Activation or Apply is reported separately and is not implied by the tag.

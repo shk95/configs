@@ -11,18 +11,73 @@ concurrency:
   cancel-in-progress: true
 
 jobs:
-  unix:
-    name: Flake and Unix-like hosts
+  classify:
+    name: Classify change
+    runs-on: ubuntu-latest
+    outputs:
+      unixlike: ${{ steps.scopes.outputs.unixlike }}
+      windows: ${{ steps.scopes.outputs.windows }}
+      common: ${{ steps.scopes.outputs.common }}
+      repository: ${{ steps.scopes.outputs.repository }}
+    steps:
+      - uses: actions/checkout@v7
+        with:
+          fetch-depth: 0
+      - id: scopes
+        name: Resolve owning scopes
+        shell: bash
+        env:
+          EVENT_NAME: ${{ github.event_name }}
+          PR_BASE: ${{ github.event.pull_request.base.sha }}
+          PUSH_BASE: ${{ github.event.before }}
+        run: |
+          if [[ "$EVENT_NAME" == pull_request ]]; then
+            base=$PR_BASE
+          else
+            base=$PUSH_BASE
+          fi
+          if [[ "$base" =~ ^0+$ ]]; then
+            base=$(git hash-object -t tree /dev/null)
+          fi
+          scopes=$(tool/version-control/classify --range "$base" "$GITHUB_SHA")
+          printf '%s\n' "$scopes"
+          if grep -qx unclassified <<<"$scopes"; then
+            echo "A changed path has no owning scope." >&2
+            exit 1
+          fi
+          for scope in unixlike windows common repository; do
+            if grep -qx "$scope" <<<"$scopes"; then
+              echo "$scope=true" >>"$GITHUB_OUTPUT"
+            else
+              echo "$scope=false" >>"$GITHUB_OUTPUT"
+            fi
+          done
+
+  repository:
+    name: Version-control policy
+    needs: classify
+    if: needs.classify.outputs.repository == 'true'
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v7
-      - uses: DeterminateSystems/nix-installer-action@main
+      - run: tool/version-control/test
+
+  unix:
+    name: Flake and Unix-like hosts
+    needs: classify
+    if: needs.classify.outputs.unixlike == 'true'
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v7
+      - uses: DeterminateSystems/nix-installer-action@v22
       - run: tool/checks/format
       - run: tool/checks/lint
       - run: tool/checks/test
 
   windows:
     name: Windows desired state
+    needs: classify
+    if: needs.classify.outputs.windows == 'true'
     runs-on: windows-latest
     steps:
       - uses: actions/checkout@v7
@@ -48,6 +103,17 @@ jobs:
           .\windows\tools\check-desired-state.ps1
           .\windows\tools\test.ps1
 
+  common:
+    name: Common contract
+    needs: classify
+    if: needs.classify.outputs.common == 'true'
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v7
+      - run: |
+          test -x common/check
+          common/check
+
   secrets:
     name: Secret scan
     runs-on: ubuntu-latest
@@ -62,3 +128,24 @@ jobs:
           curl -sSfL "https://github.com/gitleaks/gitleaks/releases/download/v${GITLEAKS_VERSION}/gitleaks_${GITLEAKS_VERSION}_linux_x64.tar.gz" |
             sudo tar -xz -C /usr/local/bin gitleaks
       - run: gitleaks git --redact --no-banner
+
+  required:
+    name: Required checks
+    needs: [classify, repository, unix, windows, common, secrets]
+    if: always()
+    runs-on: ubuntu-latest
+    env:
+      CLASSIFY_RESULT: ${{ needs.classify.result }}
+      REPOSITORY_SCOPE: ${{ needs.classify.outputs.repository }}
+      REPOSITORY_RESULT: ${{ needs.repository.result }}
+      UNIXLIKE_SCOPE: ${{ needs.classify.outputs.unixlike }}
+      UNIXLIKE_RESULT: ${{ needs.unix.result }}
+      WINDOWS_SCOPE: ${{ needs.classify.outputs.windows }}
+      WINDOWS_RESULT: ${{ needs.windows.result }}
+      COMMON_SCOPE: ${{ needs.classify.outputs.common }}
+      COMMON_RESULT: ${{ needs.common.result }}
+      SECRETS_RESULT: ${{ needs.secrets.result }}
+    steps:
+      - uses: actions/checkout@v7
+      - name: Enforce scoped results
+        run: tool/version-control/required-checks

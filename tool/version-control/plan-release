@@ -1,0 +1,69 @@
+#!/bin/sh
+
+# Produce a release tag candidate and evidence template. Never create a tag.
+
+set -eu
+
+root=$(git rev-parse --show-toplevel)
+cd "$root"
+
+usage() {
+  echo "usage: tool/version-control/plan-release <unixlike|windows|common> [commit] [YYYY.MM.DD]" >&2
+  exit 2
+}
+
+[ "$#" -ge 1 ] && [ "$#" -le 3 ] || usage
+domain=$1
+commit=${2:-master}
+release_date=${3:-$(date +%Y.%m.%d)}
+
+case "$domain" in unixlike|windows|common) ;; *) usage ;; esac
+if ! printf '%s\n' "$release_date" | grep -Eq '^[0-9]{4}\.[0-9]{2}\.[0-9]{2}$'; then
+  usage
+fi
+
+git show-ref --verify --quiet refs/heads/master || {
+  echo "master branch is unavailable" >&2
+  exit 1
+}
+
+target=$(git rev-parse --verify "$commit^{commit}") || {
+  echo "cannot resolve release commit: $commit" >&2
+  exit 1
+}
+
+if ! git merge-base --is-ancestor "$target" master; then
+  echo "release target is not reachable from master: $target" >&2
+  exit 1
+fi
+
+base="$domain-v$release_date"
+max=-1
+for tag in $(git tag --list "$base" "$base.*"); do
+  case "$tag" in
+    "$base") suffix=0 ;;
+    "$base".*) suffix=${tag#"$base".} ;;
+    *) continue ;;
+  esac
+  case "$suffix" in *[!0-9]*|"") continue ;; esac
+  if [ "$suffix" -gt "$max" ]; then
+    max=$suffix
+  fi
+done
+
+if [ "$max" -lt 0 ]; then
+  candidate=$base
+else
+  candidate="$base.$((max + 1))"
+fi
+
+cat <<EOF
+tag: $candidate
+target: $target
+annotation-template:
+  Domain: $domain
+  Evaluation: <passed | unavailable | not applicable; include reference>
+  Build: <passed | unavailable | not applicable; include reference>
+  Native runtime: <passed | unavailable | not applicable; include host/reference>
+  Deployment: not performed by release
+EOF
