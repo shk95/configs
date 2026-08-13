@@ -61,7 +61,6 @@ _: {
         go
         gradle
         nodejs
-        powershell
         R
 
         # documents / media / data
