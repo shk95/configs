@@ -37,6 +37,12 @@ The current Unix-like outputs are:
 - `nixosConfigurations.wsl`: NixOS-WSL configuration.
 - `darwinConfigurations.shk-macbook`: nix-darwin configuration.
 
+Graphical Unix-like applications are a separate Home Manager composition
+class. Darwin currently consumes it; both WSL outputs deliberately do not, so
+they use a Windows-owned terminal without also building a Linux GUI terminal.
+Ghostty is installed by Homebrew on Darwin while Home Manager owns its shared
+Unix-like configuration.
+
 Windows desired state is declared directly in
 `windows/desired/manifest.json`. Its payloads, including the Windows-owned
 WezTerm and Zellij copies, live below `windows/desired/files/`. Neither requires

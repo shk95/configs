@@ -27,9 +27,11 @@
 # `flake/configurations.nix` imports, and that file is the single place deciding
 # which of them reaches which flavour:
 #
-#   homeManager.shared      both flavours
-#   homeManager.standalone  standalone only — no system layer underneath
-#   nixos.wsl               the NixOS flavour only
+#   homeManager.shared         every Unix-like home
+#   homeManager.desktop        graphical Unix-like homes, not WSL
+#   homeManager.wsl            both WSL flavours
+#   homeManager.wslStandalone  standalone only — no system layer underneath
+#   nixos.wsl                  the NixOS-WSL flavour only
 {lib, ...}: let
   inherit (lib) mapAttrs mkOption types;
 

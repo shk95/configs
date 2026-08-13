@@ -422,6 +422,29 @@ explicitly (keeps the old behaviour, silences the warning) or bump
 what else changes with it — pinning is the lower-risk fix in the middle of
 unrelated work.
 
+### `Error opening terminal: xterm-ghostty.`
+
+The remote host does not know Ghostty's terminfo entry. Interactive `ssh`
+started from Ghostty is wrapped by the configured `ssh-terminfo` integration:
+it installs the entry with remote `tic`, keeps `TERM=xterm-ghostty` when that
+works, and falls back to `xterm-256color` when it cannot.
+
+The shell function cannot intercept tools that launch `ssh` themselves, such
+as `scp`, `rsync`, Git, `mosh`, or non-interactive scripts. Install the entry
+once for such a host:
+
+```sh
+infocmp -x xterm-ghostty | ssh example.com -- tic -x -
+```
+
+For a locked-down host with no usable `tic`, use a host-specific SSH stanza,
+not a global terminal downgrade:
+
+```sshconfig
+Host legacy.example.com
+  SetEnv TERM=xterm-256color
+```
+
 ### Korean renders as boxes in the terminal, and declaring a font changes nothing
 
 Because the terminal's font is not a Linux setting. Windows Terminal draws with
