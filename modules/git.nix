@@ -25,7 +25,6 @@ in {
 
         ignores = [
           ".direnv"
-          ".envrc"
           "*.pem"
 
           # Carried over from an unmanaged ~/.config/git/ignore, which

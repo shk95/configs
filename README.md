@@ -64,6 +64,16 @@ tool/setup --fix
 tool/doctor.sh
 ```
 
+Allow the repository's committed direnv environment once per clone:
+
+```sh
+direnv allow
+```
+
+Entering the repository then loads `devShells.default` from the flake. Put
+machine-local environment additions in `.envrc.local`; it is sourced when
+present and is intentionally ignored by Git.
+
 Run checks for the domain you changed. `CONTRIBUTING.md` lists the workflows.
 
 The Justfile exposes the same checks and target-specific runners without
