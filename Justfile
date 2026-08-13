@@ -1,36 +1,99 @@
-user := "user1"
-
 # List all the just commands
 default:
     @just --list
 
+[private]
+_home-target:
+    @nix eval --raw path:.#homeConfigurations --apply 'configs: let names = builtins.attrNames configs; in assert builtins.length names == 1; builtins.head names'
+
+[private]
+_darwin-target:
+    @nix eval --raw path:.#darwinConfigurations --apply 'configs: let names = builtins.attrNames configs; in assert builtins.length names == 1; builtins.head names'
+
 ############################################################################
 #
-#  home-manager
+#  repository checks
 #
 ############################################################################
 
-# First-time activation, before the `home-manager` command exists on PATH
-[group('home-manager')]
-bootstrap:
-    nix run home-manager/master -- switch --flake .#{{ user }}
+[group('repository')]
+doctor:
+    tool/doctor.sh
 
-[group('home-manager')]
-switch:
-    home-manager switch --flake .#{{ user }}
+# Run formatting, lint, and evaluation/native-build coverage.
+[group('repository')]
+check:
+    tool/checks/format
+    tool/checks/lint
+    tool/checks/test
 
-[group('home-manager')]
-build:
-    home-manager build --flake .#{{ user }}
+[group('repository')]
+format-check:
+    tool/checks/format
 
+[group('repository')]
+lint:
+    tool/checks/lint
+
+[group('repository')]
+test:
+    tool/checks/test
+
+############################################################################
+#
+#  standalone home-manager (Ubuntu WSL)
+#
+############################################################################
+
+# Evaluate without building or activating.
 [group('home-manager')]
-news:
-    home-manager news --flake .#{{ user }}
+home-eval:
+    #!/usr/bin/env bash
+    set -euo pipefail
+    target=$(just _home-target)
+    drv=$(nix eval --raw "path:.#homeConfigurations.${target}.activationPackage.drvPath")
+    printf '%s\n' "${drv}"
+
+# Build the standalone Home Manager generation without activating it.
+[group('home-manager')]
+home-build:
+    #!/usr/bin/env bash
+    set -euo pipefail
+    target=$(just _home-target)
+    nix build --no-link --print-out-paths "path:.#homeConfigurations.${target}.activationPackage"
+
+# Activation: run only on the intended Ubuntu WSL host.
+[group('home-manager')]
+home-switch:
+    #!/usr/bin/env bash
+    set -euo pipefail
+    target=$(just _home-target)
+    generation=$(nix build --no-link --print-out-paths "path:.#homeConfigurations.${target}.activationPackage")
+    "${generation}/activate"
+
+# First activation without requiring a pre-existing home-manager command.
+[group('home-manager')]
+home-bootstrap: home-switch
+
+# Show news for the standalone Home Manager configuration.
+[group('home-manager')]
+home-news:
+    #!/usr/bin/env bash
+    set -euo pipefail
+    target=$(just _home-target)
+    home-manager news --flake "path:.#${target}"
 
 # List all home-manager generations
 [group('home-manager')]
-generations:
+home-generations:
     home-manager generations
+
+# Compatibility names for the previous standalone Home Manager commands.
+alias bootstrap := home-bootstrap
+alias build := home-build
+alias switch := home-switch
+alias news := home-news
+alias generations := home-generations
 
 ############################################################################
 #
@@ -48,18 +111,59 @@ up:
 upp input:
     nix flake update {{ input }}
 
-[group('nix')]
-check:
-    tool/checks/test
-
 # Format the nix code in this flake
 [group('nix')]
 fmt:
     nix fmt .
 
+############################################################################
+#
+#  nix-darwin
+#
+############################################################################
+
+# Evaluate the Darwin toplevel without building or activating.
+[group('darwin')]
+darwin-eval:
+    #!/usr/bin/env bash
+    set -euo pipefail
+    target=$(just _darwin-target)
+    drv=$(nix eval --raw "path:.#darwinConfigurations.${target}.config.system.build.toplevel.drvPath")
+    printf '%s\n' "${drv}"
+
+# Build the Darwin system without creating a result symlink or activating it.
 [group('darwin')]
 darwin-build:
-    nix build --no-link .#darwinConfigurations.shk-macbook.config.system.build.toplevel
+    #!/usr/bin/env bash
+    set -euo pipefail
+    target=$(just _darwin-target)
+    nix build --no-link --print-out-paths "path:.#darwinConfigurations.${target}.config.system.build.toplevel"
+
+# Evaluate and natively build the Darwin system without activating it.
+[group('darwin')]
+darwin-check: darwin-eval darwin-build
+
+# First Darwin activation without requiring an installed darwin-rebuild.
+[group('darwin')]
+darwin-bootstrap:
+    #!/usr/bin/env bash
+    set -euo pipefail
+    target=$(just _darwin-target)
+    system=$(nix build --no-link --print-out-paths "path:.#darwinConfigurations.${target}.config.system.build.toplevel")
+    sudo "${system}/sw/bin/darwin-rebuild" switch --flake "path:.#${target}"
+
+# Rebuild and activate the target Mac.
+[group('darwin')]
+darwin-switch:
+    #!/usr/bin/env bash
+    set -euo pipefail
+    target=$(just _darwin-target)
+    sudo darwin-rebuild switch --flake "path:.#${target}"
+
+# List nix-darwin generations on an already configured Mac.
+[group('darwin')]
+darwin-generations:
+    darwin-rebuild --list-generations
 
 # Garbage collect unused nix store entries older than 7 days
 [group('nix')]
@@ -79,7 +183,7 @@ gc:
 # Build the NixOS-WSL closure (~1.9 GiB)
 [group('nixos-wsl')]
 nixos-build:
-    nix build --no-link --print-out-paths .#nixosConfigurations.wsl.config.system.build.toplevel
+    nix build --no-link --print-out-paths path:.#nixosConfigurations.wsl.config.system.build.toplevel
 
 # NixOS-WSL's builder refuses to run unless EUID is 0 — it chowns paths inside
 # the rootfs it assembles — so this needs a password and an agent cannot run
@@ -94,7 +198,7 @@ nixos-build:
 # Produce the rootfs archive that `wsl --import` takes (needs sudo)
 [group('nixos-wsl')]
 nixos-tarball:
-    sudo $(nix build --no-link --print-out-paths .#nixosConfigurations.wsl.config.system.build.tarballBuilder)/bin/nixos-wsl-tarball-builder nixos.wsl
+    sudo $(nix build --no-link --print-out-paths path:.#nixosConfigurations.wsl.config.system.build.tarballBuilder)/bin/nixos-wsl-tarball-builder nixos.wsl
     @echo
     @echo "Wrote ./nixos.wsl (root-owned, gitignored). Now run: just nixos-stage"
 
