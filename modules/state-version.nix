@@ -4,9 +4,10 @@
 # different evaluators and the old layout had them in different directories,
 # where the comment explaining that they are *unrelated* had to be written twice.
 _: {
-  # Tracks home-manager's option defaults. Bump only after reading its release
-  # notes for what else changes with it.
-  modules.homeManager.shared.home.stateVersion = "25.05";
+  # Tracks home-manager's option defaults. The 25.11 migration replaces
+  # symlinked Darwin applications with Spotlight-compatible copied bundles.
+  # Its other state change affects password-store, which is not enabled here.
+  modules.homeManager.shared.home.stateVersion = "25.11";
 
   # Tracks NixOS's, on a different release schedule — this is the release the
   # NixOS flavour was first installed with, not a number copied from above.
