@@ -445,6 +445,30 @@ Host legacy.example.com
   SetEnv TERM=xterm-256color
 ```
 
+### WezTerm cannot load `D2CodingLigature Nerd Font` on Darwin
+
+The archive and Nix package are named D2Coding, but the font's internal family
+name is `D2KodingLigature Nerd Font Mono`. Home Manager also preserves the Nix
+font hierarchy below
+`~/Library/Fonts/HomeManager/truetype/NerdFonts/D2KodingLigature`; macOS font
+discovery does not recursively expose that directory to WezTerm.
+
+The repository therefore uses the internal `D2Koding...` name and sets
+WezTerm's Darwin-only `font_dirs` to the Home Manager-owned directory. Check
+both the installed files and WezTerm's resolved font before changing package
+ownership:
+
+```sh
+find ~/Library/Fonts/HomeManager -iname '*D2Koding*'
+wezterm ls-fonts --list-system | rg 'D2KodingLigature'
+wezterm ls-fonts --text 'ABC 한글 => !='
+```
+
+The last command should name `D2KodingLigature Nerd Font Mono` for Latin,
+Hangul, and the ligature sample. A Darwin or Home Manager rebuild is required
+only when the files themselves are absent; a family-name error is not evidence
+that another Homebrew font package is needed.
+
 ### Korean renders as boxes in the terminal, and declaring a font changes nothing
 
 Because the terminal's font is not a Linux setting. Windows Terminal draws with
