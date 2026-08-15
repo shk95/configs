@@ -181,18 +181,17 @@ disabled. Both branches now require only the stable `Required checks` gate, and
 the repository-governance PR and its post-merge `dev` run demonstrated that
 selected repository checks pass while unrelated domain jobs skip.
 
-The next governance refinement makes source promotion explicitly one-way:
-only same-repository `dev` may open against `master`, and the result is a merge
-commit representing source acceptance rather than release. `dev` remains
-strictly up to date for ordinary integration. `master` must change from strict
-status checks to non-strict status checks so an earlier promotion merge commit
-does not force a meaningless `master`-to-`dev` reverse merge. CI source
-validation, one open promotion at a time, merge commits, and the prohibition on
-direct changes retain the safety boundary. This remote strictness migration is
-pending until the source-gate workflow is merged and observed. The repository
-also still permits squash and rebase merging alongside merge commits; disabling
-those two methods is part of the same pending migration. Current audits report
-both gaps as failures rather than treating documented intent as applied state.
+Source promotion is explicitly one-way: only same-repository `dev` may open
+against `master`, and the result is a merge commit representing source
+acceptance rather than release. `dev` remains strictly up to date for ordinary
+integration. `master` uses non-strict status checks so an earlier promotion
+merge commit does not force a meaningless `master`-to-`dev` reverse merge. CI
+source validation, one open promotion at a time, merge commits, and the
+prohibition on direct changes retain the safety boundary. The source gate was
+observed on `dev` and `master` before the remote migration was completed.
+Repository settings now allow merge commits while disabling squash and rebase
+merging, and the remote audit verifies both settings together with branch
+protection.
 
 Governance rules now follow an explicit decomposition contract: durable
 judgement and invariants, human procedure, agent orchestration, deterministic
