@@ -1,0 +1,25 @@
+#!/bin/sh
+
+# Validate the immutable source boundary for a master promotion pull request.
+
+set -eu
+
+base_ref=${PROMOTION_BASE_REF:?}
+head_ref=${PROMOTION_HEAD_REF:?}
+base_repository=${PROMOTION_BASE_REPOSITORY:?}
+head_repository=${PROMOTION_HEAD_REPOSITORY:?}
+
+[ "$base_ref" = master ] || {
+  echo "promotion base is '$base_ref', expected master" >&2
+  exit 1
+}
+[ "$head_ref" = dev ] || {
+  echo "master accepts only dev, got '$head_ref'" >&2
+  exit 1
+}
+[ "$head_repository" = "$base_repository" ] || {
+  echo "master accepts dev only from $base_repository, got $head_repository" >&2
+  exit 1
+}
+
+echo "promotion source passed"

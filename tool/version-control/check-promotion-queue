@@ -1,0 +1,35 @@
+#!/bin/sh
+
+# Require the current pull request to be the only open dev-to-master promotion.
+
+set -eu
+
+repo=${PROMOTION_REPOSITORY:?}
+pull_number=${PROMOTION_PULL_NUMBER:?}
+
+if [ "${1:-}" = --stdin ]; then
+  numbers=$(sed '/^[[:space:]]*$/d')
+elif [ "$#" -eq 0 ]; then
+  command -v gh >/dev/null 2>&1 || {
+    echo "gh is unavailable" >&2
+    exit 2
+  }
+  numbers=$(gh api --paginate \
+    "repos/$repo/pulls?state=open&base=master&per_page=100" \
+    --jq '.[].number')
+else
+  echo "usage: tool/version-control/check-promotion-queue [--stdin]" >&2
+  exit 2
+fi
+
+count=$(printf '%s\n' "$numbers" | awk 'NF { count++ } END { print count + 0 }')
+[ "$count" -eq 1 ] || {
+  echo "expected the current promotion to be the only open master pull request, found $count" >&2
+  exit 1
+}
+[ "$numbers" = "$pull_number" ] || {
+  echo "open promotion is #$numbers, expected current pull request #$pull_number" >&2
+  exit 1
+}
+
+echo "promotion queue passed"

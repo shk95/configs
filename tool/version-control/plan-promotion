@@ -1,0 +1,55 @@
+#!/bin/sh
+
+# Describe the next dev-to-master source promotion. Read-only.
+
+set -eu
+
+script_dir=$(CDPATH= cd -- "$(dirname "$0")" && pwd)
+classify="$script_dir/classify"
+root=$(git rev-parse --show-toplevel)
+cd "$root"
+
+for branch in dev master; do
+  git show-ref --verify --quiet "refs/heads/$branch" || {
+    echo "$branch branch is unavailable" >&2
+    exit 1
+  }
+done
+
+merge_base=$(git merge-base master dev)
+ahead=$(git rev-list --count master..dev)
+[ "$ahead" -gt 0 ] || {
+  echo "dev has no source history to promote" >&2
+  exit 1
+}
+
+if command -v gh >/dev/null 2>&1 \
+  && gh auth status --hostname github.com >/dev/null 2>&1 \
+  && git remote get-url origin 2>/dev/null | grep -Eq 'github\.com[:/]'; then
+  repo=$(gh repo view --json nameWithOwner --jq .nameWithOwner)
+  open_numbers=$(gh api --paginate \
+    "repos/$repo/pulls?state=open&base=master&per_page=100" \
+    --jq '.[].number')
+  open=$(printf '%s\n' "$open_numbers" \
+    | awk 'NF { count++ } END { print count + 0 }')
+  [ "$open" -eq 0 ] || {
+    echo "a master pull request is already open" >&2
+    exit 1
+  }
+fi
+
+scopes=$("$classify" --range "$merge_base" dev)
+
+cat <<EOF
+base: master
+head: dev
+merge-base: $merge_base
+commits-to-promote: $ahead
+scopes:
+$(printf '%s\n' "$scopes" | sed 's/^/  - /')
+commits:
+$(git log --format='  - %h %s' master..dev)
+pull-request-title: chore(repository): promote dev to master
+release: not implied
+deployment: not authorized
+EOF

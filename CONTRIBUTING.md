@@ -79,6 +79,50 @@ discovery files are adapters only. Audit and release planning are read-only by
 default. This document remains the human fallback and the contract the skill
 executes.
 
+## Promote dev to master
+
+Promotion is a deliberate source-acceptance operation, not a release. The only
+valid promotion pull request has base `master` and head `dev` in this
+repository. Keep at most one such pull request open. The repository maintainer
+owns the promotion decision. There is no operational bypass; a different flow
+requires an accepted policy change first.
+
+1. Fetch `dev` and `master`, then run `tool/version-control/plan-promotion`.
+2. Review every commit and owning scope in `master..dev`. Do not add a fix to
+   the promotion pull request; land the fix through its owning branch into
+   `dev`, then refresh the promotion.
+3. Open a pull request from `dev` to `master` titled
+   `chore(repository): promote dev to master`. Record included pull requests,
+   scopes, check evidence, and known unavailable native evidence.
+4. Require `Required checks`, resolved conversations, and an explicit merge
+   request. Merge with a merge commit only.
+5. Run local and remote version-control audits after the merge. Do not merge
+   the promotion commit back into `dev`.
+6. Plan domain release tags or deployments separately when their own evidence
+   is available.
+
+If promotion is wrong, revert or fix it through `dev` and promote again. Never
+rewrite `master` or move an existing release tag. `dev` requires an up-to-date
+base before merge; `master` does not, because it accepts only `dev` and its
+promotion merge commit intentionally does not flow back into `dev`.
+
+## Add or change governance
+
+Before adding a rule, write a small governance decomposition:
+
+1. Name the failure being prevented, owning scope, and decision owner.
+2. State rationale and tool-independent invariants.
+3. Define human prerequisites, ordered steps, recovery, and authorization
+   boundaries without adding obligations absent from the policy.
+4. Assign repeatable orchestration to a canonical skill and deterministic
+   decisions to tools, hooks, CI, or remote settings.
+5. Define evidence, positive and negative fixtures, current migration state,
+   and the condition for removing superseded implementation.
+
+Use `design-project-governance` from the sibling `skills` project to perform
+this decomposition. The skill owns only the generic method; this repository
+owns the result. A product-specific adapter must not own any part of either.
+
 ## Unix-like changes
 
 1. Put feature-oriented declarations under `modules/`.
@@ -191,7 +235,10 @@ not branch-protection contexts because unselected domains are skipped.
 | `docs/status.md` | Current state and expensive decisions |
 | `docs/troubleshooting.md` | Recurring problems indexed by symptom |
 | `docs/definition-of-done.md` | Domain-specific evidence requirements |
-| `.agents/skills/` | Model-neutral reusable agent workflows |
+| `.agents/skills/` | Model-neutral workflows specific to this repository |
 | `tool/`, hooks, CI | Executable policy |
+
+Cross-project methods are maintained in the separate sibling `skills` project
+and adopted explicitly. They do not become a source of project policy.
 
 Repository text is English because the repository is public.

@@ -1,6 +1,6 @@
 ---
 name: run-version-control-workflow
-description: Audit and execute this repository's version-control workflow. Use when starting or classifying a change, preparing commits, checking branch and history policy, integrating dev into master, planning a domain release tag, or verifying that Git history, hooks, and CI follow the documented unixlike, windows, common, adoption, and repository-governance rules.
+description: Audit and execute this repository's version-control workflow. Use when starting or classifying a change, preparing commits, integrating topic branches, promoting dev into master, planning a domain release tag, or verifying that Git history, hooks, CI, and branch protection follow the documented unixlike, windows, common, adoption, and repository-governance rules.
 ---
 
 # Run Version Control Workflow
@@ -38,9 +38,15 @@ planning read-only unless the user explicitly authorizes a Git mutation.
   relevant checks, and evidence. Keep `flake.lock` refreshes isolated in
   `chore(unixlike-deps)` commits. Never stage or commit without an explicit
   request.
-- **Integrate**: Require relevant checks, preserve merge commits, and refuse
-  squash or rebase of published work. Do not merge, push, or change branches
-  without explicit authorization.
+- **Integrate**: Merge a topic branch into `dev`. Require relevant checks,
+  preserve merge commits, and refuse squash or rebase of published work. Do
+  not merge, push, or change branches without explicit authorization.
+- **Promote**: Run `tool/version-control/plan-promotion`. Permit only a
+  same-repository `dev` to `master` pull request, ensure no competing promotion
+  is open, and introduce no fix in the promotion itself. Require `Required
+  checks`, resolved conversations, and explicit authorization before a merge
+  commit. Run both audits afterward. Do not reverse-merge the promotion commit
+  into `dev`; do not infer release or deployment.
 - **Release**: Run `tool/version-control/plan-release <domain> [commit]` first.
   Require the Definition of Done evidence and an annotated, new, immutable tag
   reachable from `master`. Creating and pushing the tag are separate mutations
