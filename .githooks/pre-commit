@@ -1,11 +1,9 @@
 #!/bin/sh
 #
-# Formatting, static analysis and a secret scan, cheapest first.
+# Domain-aware local checks and a repository-wide secret scan.
 #
-# The checks themselves are not defined here — this hook delegates to
-# tool/checks/format and tool/checks/lint, which the project supplies for its
-# own stack. A check that does not exist is skipped, so this hook works in a
-# repository that has neither.
+# Windows-only commits must not require Nix. The classifier is shared with the
+# pre-push hook, CI, and the version-control skill.
 #
 # Bypass with `git commit --no-verify`.
 
@@ -23,13 +21,25 @@ run_check() {
   "$script" || fail "$2"
 }
 
-run_check format "Formatting is off. See tool/checks/format for the fix command."
-run_check lint   "Static analysis found problems."
+scopes=$(tool/version-control/classify --staged)
 
-# The check that cannot be skipped, mirrored in CI — see
-# decisions/002-hooks-are-opt-in-so-ci-must-backstop.md. A credential that
-# reaches history stays there after the file is deleted, so the cheap moment to
-# catch one is before the commit exists.
+if printf '%s\n' "$scopes" | grep -qx unclassified; then
+  fail "A staged path has no owning scope. Update tool/version-control/classify."
+fi
+
+if printf '%s\n' "$scopes" | grep -qx unixlike; then
+  run_check format "Formatting is off. See tool/checks/format for the fix command."
+  run_check lint   "Static analysis found problems."
+fi
+
+if printf '%s\n' "$scopes" | grep -qx repository; then
+  printf '→ version-control fixtures\n'
+  tool/version-control/test || fail "Version-control policy fixtures failed."
+fi
+
+# Hooks are opt-in, so CI mirrors the secret check. A credential that reaches
+# history stays there after the file is deleted, making the staged state the
+# cheapest place to catch one.
 if command -v gitleaks >/dev/null 2>&1; then
   printf '→ gitleaks\n'
   if gitleaks git --help >/dev/null 2>&1; then

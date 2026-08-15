@@ -3,9 +3,9 @@
 # One working directory per branch, so several sessions can run at once without
 # checking out over each other.
 #
-#   tool/worktree.sh new payment-retry feature
+#   tool/worktree.sh new unixlike-shell feature
 #   tool/worktree.sh list
-#   tool/worktree.sh done payment-retry
+#   tool/worktree.sh done unixlike-shell
 #
 # Worktrees are created as siblings of the repository, never inside it. A copy
 # of the project within the project gets picked up by file watchers and language
@@ -28,11 +28,19 @@ usage() {
   exit 1
 }
 
+validate_name() {
+  if ! printf '%s\n' "$1" | grep -Eq '^(unixlike|windows|common|repository)-[a-z0-9][a-z0-9-]*$'; then
+    echo "name must be <unixlike|windows|common|repository>-<topic>" >&2
+    exit 1
+  fi
+}
+
 case "${1:-}" in
   new)
     name=${2:?"name required"}
     kind=${3:-feature}
     case "$kind" in feature|fix) ;; *) echo "kind must be feature or fix" >&2; exit 1 ;; esac
+    validate_name "$name"
 
     git fetch -q origin "$integration"
     git worktree add -b "$kind/$name" "$wt_root/$kind-$name" "origin/$integration"
@@ -63,12 +71,11 @@ case "${1:-}" in
 
   done)
     name=${2:?"name required"}
+    validate_name "$name"
     # Match on the directory, which is what `git worktree remove` takes, and
     # which is named <kind>-<name> inside the -wt folder. sed rather than awk so
     # a path containing spaces survives.
     #
-    # This is the command that had never been run before it was needed — see
-    # decisions/006-verify-the-clone.md
     dir=$(git worktree list --porcelain \
           | sed -n 's/^worktree //p' \
           | grep -E "/(feature|fix)-${name}\$" \

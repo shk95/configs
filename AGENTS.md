@@ -16,6 +16,11 @@ testable, and deployable without a Unix-like host. `common` is an exceptional
 domain: do not create common material merely because two implementations look
 similar.
 
+Repository-wide version-control policy, hooks, CI dispatch, and reusable agent
+workflows form a `repository` governance scope. This is not a fourth
+configuration domain, has no host output, and receives no domain release tag.
+Use it only when one configuration domain cannot honestly own the change.
+
 Files below `modules/` are flake-parts modules collected by import-tree for the
 Unix-like domain. Prefer one feature per file.
 `modules/flake/configurations.nix` is the only place that decides which
@@ -24,6 +29,8 @@ deferred module classes reach a Unix-like host.
 ## Domain boundaries
 
 - Classify a change as `unixlike`, `windows`, or `common` before editing.
+- Classify root version-control governance as `repository`; do not use that
+  scope for configuration or deployment behavior.
 - Keep a change inside one domain unless transfer between domains is the
   explicit purpose of the work.
 - Do not introduce implicit imports, generated dependencies, or shared mutable
@@ -55,6 +62,46 @@ deployment model.
   runtime state out of every domain's committed desired state.
 - Version and release `unixlike`, `windows`, and `common` independently even
   when their tags point to commits in the same repository.
+- Treat release tags as immutable, annotated domain certifications. Put the
+  required evidence in the tag annotation rather than in model context or a
+  snapshot of host state committed to desired state.
+- Keep branch protection independent of conditional job names. Require the
+  stable `Required checks` CI gate, which accepts only the selected domain jobs
+  plus the repository-wide secret scan.
+
+## Governance design
+
+When adding a repository rule, separate its concerns before implementation:
+
+- Put durable rationale and invariants in `AGENTS.md` or
+  `docs/architecture.md`. State what must remain true without depending on a
+  particular command, product, or model.
+- Put human-operable prerequisites, ordered steps, recovery, and authorization
+  boundaries in `CONTRIBUTING.md`.
+- Put repeatable agent orchestration in a canonical `.agents/skills/` skill.
+- Put deterministic classification and enforcement in `tool/`, hooks, CI, and
+  remote repository settings.
+- Put current adoption state, migration gaps, and expensive choices in
+  `docs/status.md`; put per-run proof in CI, pull requests, and release evidence.
+
+Each obligation has one authoritative source. Procedures and tools implement
+policy but must not silently create new policy. Model-specific adapters only
+discover canonical skills. Every enforceable invariant needs positive and
+negative fixtures, while non-automated invariants need an explicit evidence
+item and named decision owner.
+
+Extract a method into the sibling `skills` project only when it contains
+no repository decision, path convention, branch name, infrastructure identity,
+or current state. Keep project policy and enforcement here. Adoption of a
+shared skill is explicit; product-specific adapters never become its authority.
+
+For source promotion, only the same repository's `dev` branch may enter
+`master`. Use a pull request and a merge commit; never commit, cherry-pick,
+squash, or rebase directly into `master`. Promotion accepts source history but
+does not certify a domain release or authorize deployment. Do not merge
+`master` back into `dev` merely to carry a promotion merge commit. The
+repository maintainer owns promotion decisions. There is no operational
+bypass; change this policy through the governance workflow before deviating.
 
 ## Host safety
 
@@ -75,7 +122,8 @@ deployment model.
 
 1. Read `CONTRIBUTING.md`, `docs/architecture.md`, and the relevant part of
    `docs/status.md`.
-2. Classify the task as `unixlike`, `windows`, `common`, or an explicit transfer.
+2. Classify the task as `unixlike`, `windows`, `common`, `repository`, or an
+   explicit transfer.
 3. Use `tool/doctor.sh` before relying on host-local capabilities.
 4. Change only the owning domain. Treat a cross-domain copy as a separate,
    reviewable adoption change.
@@ -88,4 +136,7 @@ User-facing usage belongs in `README.md`, workflow in `CONTRIBUTING.md`,
 architecture and ownership in `docs/architecture.md`, expensive decisions and
 current state in `docs/status.md`, recurring symptoms in
 `docs/troubleshooting.md`, and executable policy in `tool/`, hooks, and CI.
-Model-specific context files only point to these sources.
+Canonical project-specific agent workflows live under `.agents/skills/` and
+follow the Agent Skills open standard. Reusable cross-project methods live in
+the separate sibling `skills` project. Model-specific context and skill files
+only point to canonical sources.

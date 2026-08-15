@@ -13,8 +13,9 @@ tool/doctor.sh
 ```
 
 `tool/setup` changes only the clone-local hooks setting and only with `--fix`.
-`tool/doctor.sh` is read-only. A missing foreign-platform capability does not
-block work confined to another domain.
+`tool/doctor.sh` is read-only. Pass `unixlike`, `windows`, `common`, or
+`repository` to check only that scope; omit the scope for a complete host
+inventory. A missing foreign-platform capability does not block scoped work.
 
 ## Classify the change
 
@@ -24,6 +25,12 @@ Every change belongs to one of these scopes:
 - `windows`: native Windows desired state and reconciliation.
 - `common`: explicitly platform-neutral material with its own contract.
 - `adopt`: an explicit copy or pinned import from one domain into another.
+- `repository`: version-control policy, hooks, CI dispatch, or reusable agent
+  workflow support with no configuration or deployment output.
+
+`repository` is a governance scope, not a fourth configuration domain. It has
+no release tag and must not contain platform behavior that belongs to
+`unixlike`, `windows`, or `common`.
 
 Prefer a single scope per branch and pull request. If a common change and its
 platform adoption are both needed, land them separately so neither release is
@@ -36,11 +43,13 @@ master <- dev <- feature/<domain>-<topic> or fix/<domain>-<topic>
 ```
 
 Examples are `feature/unixlike-shell`, `fix/windows-zellij`, and
-`feature/common-terminal-colors`.
+`feature/common-terminal-colors`. Governance examples are
+`feature/repository-vcs-audit` and `fix/repository-ci-dispatch`.
 
 Use merge commits for completed work; do not squash or rebase published work.
 Do not commit directly to `master`. Scope commits where practical, for example
-`feat(unixlike):`, `fix(windows):`, or `chore(common):`.
+`feat(unixlike):`, `fix(windows):`, `chore(common):`, or
+`refactor(repository):`.
 
 `dev` means the affected domain's repository checks pass. `master` means the
 source change has been accepted; it no longer means every platform at that
@@ -56,6 +65,63 @@ Use independent release tags:
 Keep `flake.lock` refreshes in dedicated `chore(unixlike-deps)` commits. A
 domain tag certifies only the named domain even though the commit may contain
 accepted history from the others.
+
+Domain releases use immutable annotated tags. The target commit must be
+reachable from `master`. The annotation records the domain and reports
+evaluation, build, and native-runtime evidence separately, including explicit
+`unavailable` or `not applicable` values. Create and push a tag only when the
+user explicitly requests those mutations. Activation and Windows Apply happen
+after release and are not implied by a tag.
+
+For agent-assisted work, invoke `run-version-control-workflow`. Its canonical
+Agent Skills implementation is under `.agents/skills/`; model-specific
+discovery files are adapters only. Audit and release planning are read-only by
+default. This document remains the human fallback and the contract the skill
+executes.
+
+## Promote dev to master
+
+Promotion is a deliberate source-acceptance operation, not a release. The only
+valid promotion pull request has base `master` and head `dev` in this
+repository. Keep at most one such pull request open. The repository maintainer
+owns the promotion decision. There is no operational bypass; a different flow
+requires an accepted policy change first.
+
+1. Fetch `dev` and `master`, then run `tool/version-control/plan-promotion`.
+2. Review every commit and owning scope in `master..dev`. Do not add a fix to
+   the promotion pull request; land the fix through its owning branch into
+   `dev`, then refresh the promotion.
+3. Open a pull request from `dev` to `master` titled
+   `chore(repository): promote dev to master`. Record included pull requests,
+   scopes, check evidence, and known unavailable native evidence.
+4. Require `Required checks`, resolved conversations, and an explicit merge
+   request. Merge with a merge commit only.
+5. Run local and remote version-control audits after the merge. Do not merge
+   the promotion commit back into `dev`.
+6. Plan domain release tags or deployments separately when their own evidence
+   is available.
+
+If promotion is wrong, revert or fix it through `dev` and promote again. Never
+rewrite `master` or move an existing release tag. `dev` requires an up-to-date
+base before merge; `master` does not, because it accepts only `dev` and its
+promotion merge commit intentionally does not flow back into `dev`.
+
+## Add or change governance
+
+Before adding a rule, write a small governance decomposition:
+
+1. Name the failure being prevented, owning scope, and decision owner.
+2. State rationale and tool-independent invariants.
+3. Define human prerequisites, ordered steps, recovery, and authorization
+   boundaries without adding obligations absent from the policy.
+4. Assign repeatable orchestration to a canonical skill and deterministic
+   decisions to tools, hooks, CI, or remote settings.
+5. Define evidence, positive and negative fixtures, current migration state,
+   and the condition for removing superseded implementation.
+
+Use `design-project-governance` from the sibling `skills` project to perform
+this decomposition. The skill owns only the generic method; this repository
+owns the result. A product-specific adapter must not own any part of either.
 
 ## Unix-like changes
 
@@ -142,6 +208,22 @@ For common changes, run the checks owned by that common component. Do not make
 Unix-like and Windows deployments prerequisites for a common release. Consumer
 adoption validates integration later in the consuming domain.
 
+For repository-governance changes, run the version-control fixture tests and
+only the domain checks whose dispatch or enforcement behavior changed. Secret
+scanning remains repository-wide. A governance change does not receive a
+domain tag.
+
+```sh
+tool/version-control/test
+tool/version-control/audit
+tool/version-control/audit-remote  # when gh is authenticated
+```
+
+Branch protection on `dev` and `master` requires the stable `Required checks`
+job. That job fails unless classification and secret scanning pass and every
+selected domain job succeeds. Conditional domain job names are deliberately
+not branch-protection contexts because unselected domains are skipped.
+
 ## Documentation ownership
 
 | Location | Responsibility |
@@ -153,6 +235,10 @@ adoption validates integration later in the consuming domain.
 | `docs/status.md` | Current state and expensive decisions |
 | `docs/troubleshooting.md` | Recurring problems indexed by symptom |
 | `docs/definition-of-done.md` | Domain-specific evidence requirements |
+| `.agents/skills/` | Model-neutral workflows specific to this repository |
 | `tool/`, hooks, CI | Executable policy |
+
+Cross-project methods are maintained in the separate sibling `skills` project
+and adopted explicitly. They do not become a source of project policy.
 
 Repository text is English because the repository is public.

@@ -1,0 +1,152 @@
+#!/bin/sh
+
+# Audit committed history and clone-local version-control policy. Read-only.
+
+set -eu
+
+root=$(git rev-parse --show-toplevel)
+cd "$root"
+
+warnings=0
+failures=0
+
+ok() {
+  printf 'ok: %s\n' "$1"
+}
+
+warn() {
+  printf 'warning: %s\n' "$1"
+  warnings=$((warnings + 1))
+}
+
+fail() {
+  printf 'failure: %s\n' "$1" >&2
+  failures=$((failures + 1))
+}
+
+branch=$(git symbolic-ref --quiet --short HEAD 2>/dev/null || echo detached)
+printf 'branch: %s\n' "$branch"
+
+if [ -n "$(git status --porcelain)" ]; then
+  warn "working tree has uncommitted changes"
+else
+  ok "working tree is clean"
+fi
+
+hooks=$(git config --local --get core.hooksPath 2>/dev/null || true)
+if [ "$hooks" = .githooks ]; then
+  ok "clone uses .githooks"
+else
+  fail "core.hooksPath is '${hooks:-unset}', expected .githooks"
+fi
+
+for required in dev master; do
+  if git show-ref --verify --quiet "refs/heads/$required"; then
+    ok "$required branch exists"
+  else
+    fail "$required branch is unavailable"
+  fi
+done
+
+for local_branch in $(git for-each-ref --format='%(refname:short)' refs/heads); do
+  case "$local_branch" in
+    dev|master) ;;
+    backup/*) warn "local backup branch remains: $local_branch" ;;
+    feature/*|fix/*)
+      if printf '%s\n' "$local_branch" | grep -Eq '^(feature|fix)/(unixlike|windows|common|repository)-[a-z0-9][a-z0-9-]*$'; then
+        ok "branch name follows policy: $local_branch"
+      else
+        fail "branch name does not follow policy: $local_branch"
+      fi
+      ;;
+    *) fail "unexpected local branch name: $local_branch" ;;
+  esac
+done
+
+commits=$(mktemp)
+trap 'rm -f "$commits"' EXIT
+if git show-ref --verify --quiet refs/heads/dev; then
+  git log dev --no-merges --format='%H%x09%s' >"$commits"
+  tab=$(printf '\t')
+  commit_failures=$failures
+  while IFS="$tab" read -r sha subject; do
+    if printf '%s\n' "$subject" | grep -Eq '^(build|chore|ci|docs|feat|fix|perf|refactor|revert|style|test)(\([a-z0-9._/-]+\))?!?: .+$|^Revert .+'; then
+      :
+    else
+      fail "non-conventional commit $sha: $subject"
+    fi
+  done <"$commits"
+  if [ "$failures" -eq "$commit_failures" ]; then
+    ok "non-merge commit subjects on dev follow policy"
+  fi
+fi
+
+if git show-ref --verify --quiet refs/heads/master && git show-ref --verify --quiet refs/heads/dev; then
+  direct=$(git rev-list --no-merges master --not dev)
+  if [ -n "$direct" ]; then
+    fail "master contains non-merge commits not present on dev"
+  else
+    ok "master has no direct non-merge commits outside dev"
+  fi
+
+  invalid_promotions=0
+  for merge in $(git rev-list --first-parent --merges master); do
+    parents=$(git show -s --format='%P' "$merge")
+    second_parent=$(printf '%s\n' "$parents" | awk '{print $2}')
+    if [ -z "$second_parent" ] || ! git merge-base --is-ancestor "$second_parent" dev; then
+      fail "master merge does not carry history accepted through dev: $merge"
+      invalid_promotions=$((invalid_promotions + 1))
+    fi
+  done
+  if [ "$invalid_promotions" -eq 0 ]; then
+    ok "master merge history is traceable through dev"
+  fi
+fi
+
+tag_count=0
+for tag in $(git tag); do
+  tag_count=$((tag_count + 1))
+  if ! printf '%s\n' "$tag" | grep -Eq '^(unixlike|windows|common)-v[0-9]{4}\.[0-9]{2}\.[0-9]{2}(\.[1-9][0-9]*)?$'; then
+    fail "tag name does not follow domain policy: $tag"
+    continue
+  fi
+  if [ "$(git cat-file -t "refs/tags/$tag")" != tag ]; then
+    fail "release tag is lightweight, expected annotated: $tag"
+  elif ! git merge-base --is-ancestor "$tag^{}" master; then
+    fail "release tag target is not reachable from master: $tag"
+  else
+    annotation=$(git for-each-ref --format='%(contents)' "refs/tags/$tag")
+    domain=${tag%%-v*}
+    missing=""
+    for field in "Domain: $domain" "Evaluation:" "Build:" "Native runtime:"; do
+      if ! printf '%s\n' "$annotation" | grep -Fq "$field"; then
+        missing="$missing $field"
+      fi
+    done
+    if [ -n "$missing" ]; then
+      fail "release tag annotation lacks evidence fields:$missing ($tag)"
+    else
+      ok "release tag is annotated, evidenced, and master-reachable: $tag"
+    fi
+  fi
+done
+if [ "$tag_count" -eq 0 ]; then
+  warn "no domain release tags exist; release workflow is unexercised"
+fi
+
+root_commit=$(git rev-list --max-parents=0 HEAD | head -1)
+for sha in $(git log --format='%H' -- flake.lock); do
+  [ "$sha" = "$root_commit" ] && continue
+  subject=$(git show -s --format=%s "$sha")
+  files=$(git diff-tree --no-commit-id --name-only -r "$sha")
+  if ! printf '%s\n' "$subject" | grep -Eq '^chore\(unixlike-deps\): .+'; then
+    fail "flake.lock changed outside chore(unixlike-deps): $sha"
+  elif [ "$files" != flake.lock ]; then
+    fail "flake.lock refresh is mixed with other files: $sha"
+  else
+    ok "isolated flake.lock refresh: $sha"
+  fi
+done
+
+printf 'summary: %s warning(s), %s failure(s)\n' "$warnings" "$failures"
+[ "$failures" -eq 0 ]

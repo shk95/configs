@@ -1,0 +1,72 @@
+#!/bin/sh
+
+# Classify changed paths without running domain checks or mutating Git state.
+
+set -eu
+
+root=$(git rev-parse --show-toplevel)
+cd "$root"
+
+usage() {
+  echo "usage: tool/version-control/classify [--staged | --range <base> <head> | --stdin | --files <path> ...]" >&2
+  exit 2
+}
+
+paths=$(mktemp)
+scopes=$(mktemp)
+trap 'rm -f "$paths" "$scopes"' EXIT
+
+case "${1:-}" in
+  --staged)
+    [ "$#" -eq 1 ] || usage
+    git diff --cached --name-only --relative >"$paths"
+    ;;
+  --range)
+    [ "$#" -eq 3 ] || usage
+    git diff --name-only --relative "$2" "$3" >"$paths"
+    ;;
+  --stdin)
+    [ "$#" -eq 1 ] || usage
+    sort -u >"$paths"
+    ;;
+  --files)
+    shift
+    [ "$#" -gt 0 ] || usage
+    printf '%s\n' "$@" >"$paths"
+    ;;
+  "")
+    {
+      git diff --name-only --relative HEAD
+      git ls-files --others --exclude-standard
+    } | sort -u >"$paths"
+    ;;
+  *) usage ;;
+esac
+
+if [ ! -s "$paths" ]; then
+  echo none
+  exit 0
+fi
+
+while IFS= read -r path; do
+  [ -n "$path" ] || continue
+  case "$path" in
+    windows/*) echo windows ;;
+    common/*) echo common ;;
+    flake.nix|flake.lock|modules/*|assets/*|.envrc|Justfile|tool/checks/*)
+      echo unixlike
+      ;;
+    AGENTS.md|CLAUDE.md|CONTRIBUTING.md|README.md|LICENSE|docs/*|\
+    .agents/*|.claude/*|.github/*|.githooks/*|.editorconfig|.gitattributes|\
+    .gitignore|tool/setup|tool/doctor.sh|tool/worktree.sh|tool/version-control/*)
+      echo repository
+      ;;
+    *) echo unclassified ;;
+  esac
+done <"$paths" | sort -u >"$scopes"
+
+for scope in unixlike windows common repository unclassified; do
+  if grep -qx "$scope" "$scopes"; then
+    echo "$scope"
+  fi
+done

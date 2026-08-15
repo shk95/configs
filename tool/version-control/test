@@ -1,0 +1,168 @@
+#!/bin/sh
+
+set -eu
+
+root=$(CDPATH= cd -- "$(dirname "$0")/../.." && pwd)
+classify="$root/tool/version-control/classify"
+audit="$root/tool/version-control/audit"
+plan_release="$root/tool/version-control/plan-release"
+required_checks="$root/tool/version-control/required-checks"
+check_promotion="$root/tool/version-control/check-promotion"
+check_promotion_queue="$root/tool/version-control/check-promotion-queue"
+plan_promotion="$root/tool/version-control/plan-promotion"
+
+# Fixture repositories must own their indexes. An alternate parent index is
+# useful to callers such as staged-state tests, but must not leak through
+# `git -C` into the temporary repository below.
+unset GIT_INDEX_FILE
+
+grep -q '^  required:$' "$root/.github/workflows/ci.yml"
+grep -q '^    name: Required checks$' "$root/.github/workflows/ci.yml"
+grep -q 'needs: \[classify, repository, unix, windows, common, secrets, promotion\]' \
+  "$root/.github/workflows/ci.yml"
+grep -q 'run: tool/version-control/required-checks' \
+  "$root/.github/workflows/ci.yml"
+
+run_gate() {
+  env \
+    CLASSIFY_RESULT=${CLASSIFY_RESULT:-success} \
+    REPOSITORY_SCOPE=${REPOSITORY_SCOPE:-false} \
+    REPOSITORY_RESULT=${REPOSITORY_RESULT:-skipped} \
+    UNIXLIKE_SCOPE=${UNIXLIKE_SCOPE:-false} \
+    UNIXLIKE_RESULT=${UNIXLIKE_RESULT:-skipped} \
+    WINDOWS_SCOPE=${WINDOWS_SCOPE:-false} \
+    WINDOWS_RESULT=${WINDOWS_RESULT:-skipped} \
+    COMMON_SCOPE=${COMMON_SCOPE:-false} \
+    COMMON_RESULT=${COMMON_RESULT:-skipped} \
+    SECRETS_RESULT=${SECRETS_RESULT:-success} \
+    PROMOTION_SCOPE=${PROMOTION_SCOPE:-false} \
+    PROMOTION_RESULT=${PROMOTION_RESULT:-skipped} \
+    "$required_checks"
+}
+
+run_gate >/dev/null
+REPOSITORY_SCOPE=true REPOSITORY_RESULT=success run_gate >/dev/null
+UNIXLIKE_SCOPE=true UNIXLIKE_RESULT=success run_gate >/dev/null
+WINDOWS_SCOPE=true WINDOWS_RESULT=success run_gate >/dev/null
+COMMON_SCOPE=true COMMON_RESULT=success run_gate >/dev/null
+PROMOTION_SCOPE=true PROMOTION_RESULT=success run_gate >/dev/null
+if REPOSITORY_SCOPE=true REPOSITORY_RESULT=failure run_gate >/dev/null 2>&1; then
+  echo "required-checks accepted a failed selected job" >&2
+  exit 1
+fi
+if SECRETS_RESULT=failure run_gate >/dev/null 2>&1; then
+  echo "required-checks accepted a failed secret scan" >&2
+  exit 1
+fi
+if PROMOTION_SCOPE=true PROMOTION_RESULT=failure run_gate >/dev/null 2>&1; then
+  echo "required-checks accepted a failed promotion gate" >&2
+  exit 1
+fi
+
+PROMOTION_BASE_REF=master \
+PROMOTION_HEAD_REF=dev \
+PROMOTION_BASE_REPOSITORY=owner/repo \
+PROMOTION_HEAD_REPOSITORY=owner/repo \
+  "$check_promotion" >/dev/null
+if PROMOTION_BASE_REF=master \
+  PROMOTION_HEAD_REF=feature/repository-bypass \
+  PROMOTION_BASE_REPOSITORY=owner/repo \
+  PROMOTION_HEAD_REPOSITORY=owner/repo \
+  "$check_promotion" >/dev/null 2>&1; then
+  echo "promotion gate accepted a non-dev source" >&2
+  exit 1
+fi
+
+printf '3\n' | PROMOTION_REPOSITORY=owner/repo PROMOTION_PULL_NUMBER=3 \
+  "$check_promotion_queue" --stdin >/dev/null
+if printf '3\n4\n' | PROMOTION_REPOSITORY=owner/repo PROMOTION_PULL_NUMBER=3 \
+  "$check_promotion_queue" --stdin >/dev/null 2>&1; then
+  echo "promotion queue accepted multiple open promotions" >&2
+  exit 1
+fi
+if PROMOTION_BASE_REF=master \
+  PROMOTION_HEAD_REF=dev \
+  PROMOTION_BASE_REPOSITORY=owner/repo \
+  PROMOTION_HEAD_REPOSITORY=fork/repo \
+  "$check_promotion" >/dev/null 2>&1; then
+  echo "promotion gate accepted a fork source" >&2
+  exit 1
+fi
+
+expect() {
+  expected=$1
+  shift
+  actual=$("$@")
+  if [ "$actual" != "$expected" ]; then
+    printf 'expected <%s>, got <%s> from: %s\n' "$expected" "$actual" "$*" >&2
+    exit 1
+  fi
+}
+
+expect unixlike "$classify" --files modules/git.nix
+expect windows "$classify" --files windows/src/WinEnv.psm1
+expect common "$classify" --files common/example.txt
+expect repository "$classify" --files .agents/skills/example/SKILL.md
+expect unclassified "$classify" --files unexpected.file
+expect 'windows
+repository' "$classify" --files windows/setup.ps1 docs/status.md
+
+test_root=$(mktemp -d)
+cleanup() {
+  case "$test_root" in /tmp/*) rm -rf -- "$test_root" ;; esac
+}
+trap cleanup EXIT
+
+git -C "$test_root" init -q -b master
+git -C "$test_root" config user.name Fixture
+git -C "$test_root" config user.email fixture@example.invalid
+git -C "$test_root" config core.hooksPath .githooks
+printf 'fixture\n' >"$test_root/file"
+git -C "$test_root" add file
+git -C "$test_root" commit -q -m 'feat(repository): create fixture'
+git -C "$test_root" branch dev
+
+git -C "$test_root" switch -q dev
+printf 'promotion\n' >>"$test_root/file"
+git -C "$test_root" add file
+git -C "$test_root" commit -q -m 'feat(repository): prepare promotion'
+git -C "$test_root" switch -q master
+promotion_plan=$(cd "$test_root" && "$plan_promotion")
+printf '%s\n' "$promotion_plan" | grep -q '^base: master$'
+printf '%s\n' "$promotion_plan" | grep -q '^head: dev$'
+printf '%s\n' "$promotion_plan" | grep -q '^commits-to-promote: 1$'
+
+first_plan=$(cd "$test_root" && "$plan_release" unixlike master 2030.01.02)
+printf '%s\n' "$first_plan" | grep -q '^tag: unixlike-v2030.01.02$'
+
+git -C "$test_root" tag -a unixlike-v2030.01.02 \
+  -m 'Domain: unixlike' \
+  -m 'Evaluation: passed; fixture' \
+  -m 'Build: passed; fixture' \
+  -m 'Native runtime: passed; fixture'
+second_plan=$(cd "$test_root" && "$plan_release" unixlike master 2030.01.02)
+printf '%s\n' "$second_plan" | grep -q '^tag: unixlike-v2030.01.02.1$'
+
+(cd "$test_root" && "$audit") >/dev/null
+
+git -C "$test_root" tag bad-v2030.01.02
+if (cd "$test_root" && "$audit") >/dev/null 2>&1; then
+  echo "audit accepted an invalid tag name" >&2
+  exit 1
+fi
+git -C "$test_root" tag -d bad-v2030.01.02 >/dev/null
+
+git -C "$test_root" tag windows-v2030.01.02
+if (cd "$test_root" && "$audit") >/dev/null 2>&1; then
+  echo "audit accepted a lightweight release tag" >&2
+  exit 1
+fi
+git -C "$test_root" tag -d windows-v2030.01.02 >/dev/null
+
+git -C "$test_root" tag -a windows-v2030.01.02 -m 'Domain: windows'
+if (cd "$test_root" && "$audit") >/dev/null 2>&1; then
+  echo "audit accepted a release tag without evidence" >&2
+  exit 1
+fi
+
+echo "version-control fixtures passed"

@@ -1,0 +1,39 @@
+#!/bin/sh
+
+# Enforce the stable branch-protection result from conditional CI jobs.
+
+set -eu
+
+require_result() {
+  name=$1
+  result=$2
+  if [ "$result" != success ]; then
+    echo "$name finished as $result, expected success" >&2
+    exit 1
+  fi
+}
+
+require_scope() {
+  scope=$1
+  selected=$2
+  result=$3
+  if [ "$selected" = true ]; then
+    require_result "$scope" "$result"
+  elif [ "$selected" != false ]; then
+    echo "$scope selection is '$selected', expected true or false" >&2
+    exit 1
+  elif [ "$result" != skipped ]; then
+    echo "$scope was not selected but finished as $result" >&2
+    exit 1
+  fi
+}
+
+require_result classification "${CLASSIFY_RESULT:?}"
+require_result secrets "${SECRETS_RESULT:?}"
+require_scope repository "${REPOSITORY_SCOPE:?}" "${REPOSITORY_RESULT:?}"
+require_scope unixlike "${UNIXLIKE_SCOPE:?}" "${UNIXLIKE_RESULT:?}"
+require_scope windows "${WINDOWS_SCOPE:?}" "${WINDOWS_RESULT:?}"
+require_scope common "${COMMON_SCOPE:?}" "${COMMON_RESULT:?}"
+require_scope promotion "${PROMOTION_SCOPE:?}" "${PROMOTION_RESULT:?}"
+
+echo "required checks passed"

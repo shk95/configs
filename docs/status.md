@@ -154,6 +154,54 @@ releases. A common release deploys nowhere and is adopted later by a separate
 consumer change. A tag certifies only its domain, even when unrelated domain
 history exists at the same commit.
 
+## Version-control workflow ownership
+
+Repository-wide version-control work is a narrow `repository` governance scope
+rather than part of one of the three configuration domains. It owns policy
+dispatch and agent workflow mechanics, creates no host output, and has no
+release tag.
+
+Durable judgement remains in `AGENTS.md` and the architecture documents. The
+repeatable agent procedure is implemented once as an Agent Skills
+open-standard skill under `.agents/skills/`. Model-specific skill locations
+only provide discovery adapters. Neither Codex nor Claude becomes the workflow
+authority.
+
+The initial audit found strong branch and commit adherence but no domain tags,
+so the release path remains unexercised. It also found that the existing hooks
+and CI invoke Unix-like checks for unrelated changes, which conflicts with
+native Windows independence. The governance refactor therefore adds
+domain-aware dispatch and a read-only release planner before any real tag is
+created.
+
+The follow-up remote audit found protection enabled on both `dev` and `master`:
+pull requests and current-branch checks are required, administrators are
+enforced, conversations must be resolved, and force pushes and deletions are
+disabled. Both branches now require only the stable `Required checks` gate, and
+the repository-governance PR and its post-merge `dev` run demonstrated that
+selected repository checks pass while unrelated domain jobs skip.
+
+The next governance refinement makes source promotion explicitly one-way:
+only same-repository `dev` may open against `master`, and the result is a merge
+commit representing source acceptance rather than release. `dev` remains
+strictly up to date for ordinary integration. `master` must change from strict
+status checks to non-strict status checks so an earlier promotion merge commit
+does not force a meaningless `master`-to-`dev` reverse merge. CI source
+validation, one open promotion at a time, merge commits, and the prohibition on
+direct changes retain the safety boundary. This remote strictness migration is
+pending until the source-gate workflow is merged and observed. The repository
+also still permits squash and rebase merging alongside merge commits; disabling
+those two methods is part of the same pending migration. Current audits report
+both gaps as failures rather than treating documented intent as applied state.
+
+Governance rules now follow an explicit decomposition contract: durable
+judgement and invariants, human procedure, agent orchestration, deterministic
+enforcement, and execution evidence have distinct owners. The generic
+`design-project-governance` skill was extracted into the sibling `skills`
+project because it contains no branch names, repository paths, release choices,
+or current state from this repository. This repository retains the resulting
+policy, procedure, enforcement, migrations, and evidence.
+
 ## Initial monorepo convergence
 
 The repository originally converged four projects into one flake-composed
