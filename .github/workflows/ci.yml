@@ -72,6 +72,7 @@ jobs:
       - uses: DeterminateSystems/nix-installer-action@v22
       - run: tool/checks/format
       - run: tool/checks/lint
+      - run: tool/checks/payloads-test
       - run: tool/checks/test
 
   windows:

@@ -1,0 +1,17 @@
+{
+  "schemaVersion": 1,
+  "payloads": [
+    { "source": "powershell/profile.ps1", "format": "powershell" },
+    { "source": "wezterm/config/appearance.lua", "format": "lua" },
+    { "source": "wezterm/config/behavior.lua", "format": "lua" },
+    { "source": "wezterm/config/bindings.lua", "format": "lua" },
+    { "source": "wezterm/config/fonts.lua", "format": "lua" },
+    { "source": "wezterm/fonts.json", "format": "json" },
+    { "source": "wezterm/local.lua.example", "format": "lua" },
+    { "source": "wezterm/platform/darwin.lua", "format": "lua" },
+    { "source": "wezterm/platform/linux.lua", "format": "lua" },
+    { "source": "wezterm/platform/windows.lua", "format": "lua" },
+    { "source": "wezterm/wezterm.lua", "format": "lua" },
+    { "source": "zellij/config.kdl", "format": "kdl" }
+  ]
+}

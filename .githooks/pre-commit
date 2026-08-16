@@ -28,8 +28,9 @@ if printf '%s\n' "$scopes" | grep -qx unclassified; then
 fi
 
 if printf '%s\n' "$scopes" | grep -qx unixlike; then
-  run_check format "Formatting is off. See tool/checks/format for the fix command."
-  run_check lint   "Static analysis found problems."
+  run_check format   "Formatting is off. See tool/checks/format for the fix command."
+  run_check lint     "Static analysis found problems."
+  run_check payloads "A Unix-like source payload did not parse."
 fi
 
 if printf '%s\n' "$scopes" | grep -qx repository; then
