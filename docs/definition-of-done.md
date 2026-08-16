@@ -78,7 +78,8 @@ native checks instead of treating them as passed.
 - [ ] `windows/bootstrap.ps1 -Check` is observed on native Windows when package
       detection, target paths, registry behavior, fonts, configuration parsing,
       or application lifecycle behavior changed.
-- [ ] Missing native tooling is reported as unverified rather than valid.
+- [ ] Missing native tooling is reported as unverified rather than valid, and
+      reaches its caller as exit status 69 rather than as a failure.
 - [ ] Apply is run only when explicitly requested, followed by another
       read-only check.
 - [ ] A `windows-v...` tag is assigned only after required native evidence is

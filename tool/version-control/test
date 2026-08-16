@@ -213,4 +213,62 @@ else
   fi
 fi
 
+# The three-state check protocol. A check that could not run must report and
+# let the push through locally, and must fail under REQUIRE_NATIVE, which is
+# what CI sets. Exercised through a real hook run with a stand-in check, so the
+# assertion covers the hook's own handling rather than a copy of it.
+protocol_root="$test_root/protocol"
+mkdir -p "$protocol_root/tool/checks" "$protocol_root/modules"
+cp -R "$root/.githooks" "$protocol_root/.githooks"
+cp -R "$root/tool/version-control" "$protocol_root/tool/version-control"
+
+git -C "$protocol_root" init -q -b dev
+git -C "$protocol_root" config user.name Fixture
+git -C "$protocol_root" config user.email fixture@example.invalid
+printf 'fixture\n' >"$protocol_root/file"
+git -C "$protocol_root" add file
+git -C "$protocol_root" commit -q -m 'feat(repository): create protocol fixture'
+protocol_base=$(git -C "$protocol_root" rev-parse HEAD)
+printf '_: {}\n' >"$protocol_root/modules/fixture.nix"
+git -C "$protocol_root" add modules/fixture.nix
+git -C "$protocol_root" commit -q -m 'feat(unixlike): change a module'
+protocol_head=$(git -C "$protocol_root" rev-parse HEAD)
+
+stub_check() {
+  printf '#!/bin/sh\nexit %s\n' "$1" >"$protocol_root/tool/checks/test"
+  chmod +x "$protocol_root/tool/checks/test"
+}
+
+run_protocol_pre_push() {
+  printf 'refs/heads/dev %s refs/heads/dev %s\n' "$protocol_head" "$protocol_base" |
+    (cd "$protocol_root" && .githooks/pre-push 2>&1)
+}
+
+stub_check 0
+if ! run_protocol_pre_push >/dev/null; then
+  echo "pre-push rejected a passing check" >&2
+  exit 1
+fi
+
+stub_check 1
+if run_protocol_pre_push >/dev/null 2>&1; then
+  echo "pre-push accepted a failing check" >&2
+  exit 1
+fi
+
+stub_check 69
+if ! unverified_output=$(run_protocol_pre_push); then
+  echo "pre-push blocked a check that reported unverified" >&2
+  exit 1
+fi
+if ! printf '%s\n' "$unverified_output" | grep -q 'unverified'; then
+  echo "pre-push did not report the unverified check" >&2
+  exit 1
+fi
+
+if (REQUIRE_NATIVE=1; export REQUIRE_NATIVE; run_protocol_pre_push) >/dev/null 2>&1; then
+  echo "pre-push accepted an unverified check under REQUIRE_NATIVE" >&2
+  exit 1
+fi
+
 echo "version-control fixtures passed"

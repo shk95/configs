@@ -67,6 +67,10 @@ jobs:
     needs: classify
     if: needs.classify.outputs.unixlike == 'true'
     runs-on: ubuntu-latest
+    # The merge gate is the one place where a check that could not run must not
+    # pass. Locally the same checks report unverified and let the push through.
+    env:
+      REQUIRE_NATIVE: "1"
     steps:
       - uses: actions/checkout@v7
       - uses: DeterminateSystems/nix-installer-action@v22
@@ -80,6 +84,8 @@ jobs:
     needs: classify
     if: needs.classify.outputs.windows == 'true'
     runs-on: windows-latest
+    env:
+      REQUIRE_NATIVE: "1"
     steps:
       - uses: actions/checkout@v7
       - name: Validate desired state and test PowerShell

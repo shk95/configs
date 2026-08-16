@@ -136,6 +136,16 @@ This scope is deliberately narrow:
 - domain behavior discovered during governance work is changed separately in
   the owning domain.
 
+Check dispatch uses three evidence states rather than two. A check reports
+verified with exit status 0, failed with any other status, and unverified with
+69 when the host cannot supply one of its prerequisites. A failure outranks an
+unverified result. `REQUIRE_NATIVE=1` turns unverified into failure; CI sets it
+so the merge gate never accepts an unchecked change, and hooks leave it unset
+so a clone is never blocked from pushing work for a domain it cannot verify.
+The governance plane owns this contract and the hooks that consume it. Each
+domain owns the detection of its own prerequisites and reports through the
+contract rather than deciding what a missing tool means.
+
 The canonical agent workflow follows the Agent Skills open standard under
 `.agents/skills/`. Product-specific discovery locations may contain thin
 adapters, but they do not own or duplicate the workflow.
