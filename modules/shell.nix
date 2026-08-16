@@ -34,7 +34,6 @@ _: {
         # prepend so declarative packages keep precedence when names overlap.
         typeset -U path
         path+=("$HOME/.local/bin")
-        path+=("$HOME/.opencode/bin")
 
         # SDKMAN is an imperative shell-function installer rather than a
         # nixpkgs package. Keep it optional and last because it rewrites PATH.
