@@ -122,6 +122,23 @@ The Windows domain is independent:
 
 No explicit `common/` component has yet been justified or created.
 
+Local hooks are not a Windows evidence source. `modules/powershell.nix` installs
+a Unix-like `pwsh` into every home this repository configures, so a Linux or
+macOS clone always has one. Treating it as the Windows shell ran the Windows
+scripts under foreign tooling, and because `check-desired-state.ps1` requires
+`zellij.exe` and `test.ps1` requires Pester 5.7.1, it also made the hook's own
+"CI must supply evidence" branch unreachable and left Windows work unpushable
+from the hosts where it is most often authored. `pre-push` therefore accepts
+only `pwsh.exe` and otherwise reports the Windows checks as unverified.
+
+The merge gate is CI. The `windows-latest` job installs Pester, Lua, and Zellij,
+then runs the desired-state check and the Pester suite, and `Required checks`
+demands success whenever the change is in Windows scope. A Windows change
+authored on Linux or macOS is therefore verified natively at the pull request
+rather than locally. `bootstrap.ps1 -Check` stays outside CI because a fresh
+runner has no host state to observe; it is host evidence for a `windows-v...`
+tag, not a merge condition.
+
 Windows tests target Pester 5.7.1 through `windows/tools/test.ps1`. The exact
 version is shared by local native verification and CI so Pester discovery,
 scope, and assertion behavior cannot silently change with a runner image. Test

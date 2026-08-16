@@ -165,4 +165,52 @@ if (cd "$test_root" && "$audit") >/dev/null 2>&1; then
   exit 1
 fi
 
+# The pre-push hook must not treat a Unix-like `pwsh` as native Windows
+# tooling. Every home this repository configures installs one, so accepting it
+# would make the CI-supplies-evidence path unreachable and leave Windows work
+# unpushable from the Linux and macOS clones where it is often authored.
+# Skipped where a real `pwsh.exe` is on PATH, because there the hook is
+# supposed to run the Windows scripts for real.
+if command -v pwsh.exe >/dev/null 2>&1; then
+  echo "· native pwsh.exe on PATH, skipping the hook shell-selection fixtures"
+else
+  hook_root="$test_root/pre-push"
+  mkdir -p "$hook_root/foreign" "$hook_root/native" "$hook_root/windows"
+  cp -R "$root/.githooks" "$hook_root/.githooks"
+  mkdir -p "$hook_root/tool"
+  cp -R "$root/tool/version-control" "$hook_root/tool/version-control"
+  printf '#!/bin/sh\nexit 0\n' >"$hook_root/foreign/pwsh"
+  printf '#!/bin/sh\nexit 0\n' >"$hook_root/native/pwsh.exe"
+  chmod +x "$hook_root/foreign/pwsh" "$hook_root/native/pwsh.exe"
+
+  git -C "$hook_root" init -q -b dev
+  git -C "$hook_root" config user.name Fixture
+  git -C "$hook_root" config user.email fixture@example.invalid
+  printf 'fixture\n' >"$hook_root/file"
+  git -C "$hook_root" add file
+  git -C "$hook_root" commit -q -m 'feat(repository): create hook fixture'
+  hook_base=$(git -C "$hook_root" rev-parse HEAD)
+  printf 'param()\n' >"$hook_root/windows/setup.ps1"
+  git -C "$hook_root" add windows/setup.ps1
+  git -C "$hook_root" commit -q -m 'feat(windows): change desired state'
+  hook_head=$(git -C "$hook_root" rev-parse HEAD)
+
+  run_pre_push() {
+    printf 'refs/heads/dev %s refs/heads/dev %s\n' "$hook_head" "$hook_base" |
+      (cd "$hook_root" && PATH="$1:$PATH" .githooks/pre-push 2>&1)
+  }
+
+  foreign_output=$(run_pre_push "$hook_root/foreign")
+  if ! printf '%s\n' "$foreign_output" | grep -q 'CI must supply evidence'; then
+    echo "pre-push accepted a Unix-like pwsh as native Windows tooling" >&2
+    exit 1
+  fi
+
+  native_output=$(run_pre_push "$hook_root/native")
+  if ! printf '%s\n' "$native_output" | grep -q 'Windows desired-state check'; then
+    echo "pre-push skipped the Windows checks despite a native pwsh.exe" >&2
+    exit 1
+  fi
+fi
+
 echo "version-control fixtures passed"
