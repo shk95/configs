@@ -64,6 +64,9 @@ native checks instead of treating them as passed.
 - [ ] A native build is performed on a matching system when sources or packages
       changed.
 - [ ] Foreign evaluation is reported as evaluation, not native build evidence.
+- [ ] Every source payload is declared in `assets/payloads.json` and parsed by
+      the tool that will consume it. Evaluation is not payload evidence: Nix
+      copies these files without reading them.
 - [ ] Activation is performed only when explicitly requested.
 - [ ] Runtime claims name the host on which they were observed.
 - [ ] A `unixlike-v...` tag is assigned only after required native evidence is
@@ -73,7 +76,8 @@ native checks instead of treating them as passed.
 
 - [ ] The change is owned and semantically validated by the Windows domain.
 - [ ] `windows/tools/check-desired-state.ps1` validates the manifest and every
-      PowerShell, JSON, INI, KDL, and Lua source with native tooling.
+      PowerShell, JSON, INI, KDL, and Lua source with native tooling, and names
+      any source it had no parser for instead of failing or skipping it.
 - [ ] Pester passes under native PowerShell when reconciliation behavior changed.
 - [ ] `windows/bootstrap.ps1 -Check` is observed on native Windows when package
       detection, target paths, registry behavior, fonts, configuration parsing,

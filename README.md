@@ -99,6 +99,7 @@ duplicating the configured user or host name:
 just doctor
 just format-check
 just lint
+just payloads
 just test
 just check
 
@@ -122,16 +123,22 @@ just darwin-switch     # target Mac only; requires sudo
 From native Windows:
 
 ```powershell
+.\windows\tools\setup-dev.ps1
 .\windows\tools\check-desired-state.ps1
 .\windows\tools\test.ps1
 .\windows\bootstrap.ps1 -Check
 ```
 
-The desired-state check requires `zellij.exe` and a `luac` compiler so KDL and
-Lua are validated by their native tools. The test entrypoint requires Pester
-5.7.1; install it with
-`Install-Module Pester -RequiredVersion 5.7.1 -Scope CurrentUser`. `-Check`
-never installs or changes anything. Apply is explicit:
+`setup-dev.ps1` installs the contributor toolchain once, from
+`windows/toolchain.json`. CI installs from the same declaration, so local
+verification and the merge gate agree on the versions. Zellij is not part of it
+because the manifest already installs the application itself.
+
+The checks run without that toolchain. A source whose parser is missing is
+reported as unverified rather than failing, and the commands exit 69 to say so,
+which is why a clone without Lua or Pester can still push Windows work. CI
+supplies the missing evidence. `-Check` never installs or changes anything.
+Apply is explicit:
 
 ```powershell
 .\windows\bootstrap.ps1

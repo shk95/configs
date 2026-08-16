@@ -151,14 +151,18 @@ and are validated on native Windows.
 Native read-only verification is:
 
 ```powershell
+.\windows\tools\setup-dev.ps1
 .\windows\tools\check-desired-state.ps1
 .\windows\tools\test.ps1
 .\windows\bootstrap.ps1 -Check
 ```
 
-The test entrypoint requires Pester 5.7.1 so local Windows and CI use the same
-discovery, scope, and assertion semantics. Install that exact version once with
-`Install-Module Pester -RequiredVersion 5.7.1 -Scope CurrentUser`.
+`setup-dev.ps1` installs the contributor toolchain declared in
+`windows/toolchain.json`, which is also what CI installs from, so local Windows
+and CI use the same Pester discovery, scope, and assertion semantics and the
+same Lua compiler. Without it the checks still run: a source whose parser is
+absent is reported as unverified and the command exits 69, so Windows work
+remains pushable from a clone that has not installed anything.
 
 Apply is a deployment, not verification, and requires an explicit request:
 
@@ -194,8 +198,13 @@ For Unix-like changes:
 ```sh
 tool/checks/format
 tool/checks/lint
+tool/checks/payloads
 tool/checks/test
 ```
+
+`tool/checks/payloads` parses every source payload declared in
+`assets/payloads.json` with the tool that consumes it. Evaluation does not
+cover them: Nix copies a payload into the store without reading it.
 
 `tool/checks/test` evaluates every declared Unix-like configuration and builds
 configurations native to the current host when appropriate. Foreign evaluation
