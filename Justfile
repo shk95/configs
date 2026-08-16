@@ -46,6 +46,11 @@ payloads:
 payloads-test:
     tool/checks/payloads-test
 
+# Prove each Unix-like check reports a missing Nix as unverified, not failed.
+[group('repository')]
+prerequisite-test:
+    tool/checks/prerequisite-test
+
 [group('repository')]
 test:
     tool/checks/test
