@@ -145,3 +145,8 @@ Canonical project-specific agent workflows live under `.agents/skills/` and
 follow the Agent Skills open standard. Reusable cross-project methods live in
 the separate sibling `skills` project. Model-specific context and skill files
 only point to canonical sources.
+
+`notes/` is untracked maintainer scratch space. It is free-form by design and
+carries no structure, review, or retention promise, so it states no policy and
+records no decision. It is not project context: do not read, search, summarise,
+or act on anything in it unless the user names a file inside it.
