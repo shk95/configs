@@ -1,10 +1,16 @@
 #!/bin/sh
 
 # Run only the checks owned by content being pushed. Deletion-only pushes skip
-# checks, and missing foreign-native tooling remains visible without making one
-# platform depend on another.
+# checks, and a check this host cannot run stays visible as unverified without
+# making one platform depend on another.
+#
+# .githooks/evidence owns what each outcome means. This hook decides which
+# checks are selected, never whether a missing tool is a failure.
 
 set -eu
+
+hooks_dir=$(CDPATH= cd -- "$(dirname -- "$0")" && pwd)
+. "$hooks_dir/evidence"
 
 fail() {
   printf '\033[31m✗ %s\033[0m\n' "$1" >&2
@@ -51,38 +57,37 @@ if printf '%s\n' "$scopes" | grep -qx unclassified; then
 fi
 
 if printf '%s\n' "$scopes" | grep -qx repository; then
-  printf '→ version-control fixtures\n'
-  tool/version-control/test || fail "Version-control policy fixtures failed."
+  evidence_run "version-control fixtures" tool/version-control/test || exit 1
 fi
 
 if printf '%s\n' "$scopes" | grep -qx unixlike; then
-  printf '→ Unix-like test\n'
-  tool/checks/test || fail "Unix-like tests failed."
+  evidence_run "Unix-like test" tool/checks/test || exit 1
 fi
 
 if printf '%s\n' "$scopes" | grep -qx windows; then
   # Only `pwsh.exe` counts. A Unix-like `pwsh` is not native Windows evidence,
   # and modules/powershell.nix installs one into every home this repository
-  # configures — accepting it would make the branch below unreachable and leave
-  # Windows work unpushable from the Linux and macOS clones where it is often
-  # authored. The merge gate is the windows-latest CI job, not this hook.
+  # configures — accepting it would leave Windows work unpushable from the
+  # Linux and macOS clones where it is often authored. The merge gate is the
+  # windows-latest CI job, not this hook.
   if command -v pwsh.exe >/dev/null 2>&1; then
-    printf '→ Windows desired-state check\n'
-    pwsh.exe -NoProfile -File ./windows/tools/check-desired-state.ps1 \
-      || fail "Windows desired-state validation failed."
-    printf '→ Windows tests\n'
-    pwsh.exe -NoProfile -File ./windows/tools/test.ps1 \
-      || fail "Windows tests failed."
+    evidence_run "Windows desired-state check" \
+      pwsh.exe -NoProfile -File ./windows/tools/check-desired-state.ps1 || exit 1
+    evidence_run "Windows tests" \
+      pwsh.exe -NoProfile -File ./windows/tools/test.ps1 || exit 1
   else
-    echo "· native PowerShell unavailable; Windows checks remain unverified locally and CI must supply evidence"
+    evidence_unavailable "Windows checks" "native PowerShell is unavailable" || exit 1
   fi
 fi
 
 if printf '%s\n' "$scopes" | grep -qx common; then
+  # Not a host capability: common material that arrives without its own check
+  # is an incomplete change, and no runner can supply the missing script.
   if [ -x common/check ]; then
-    printf '→ common check\n'
-    common/check || fail "Common checks failed."
+    evidence_run "common check" common/check || exit 1
   else
     fail "Common content changed but common/check is unavailable."
   fi
 fi
+
+evidence_summary
