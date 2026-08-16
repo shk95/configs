@@ -33,7 +33,12 @@ changes=$(mktemp)
 paths=$(mktemp)
 trap 'rm -f "$changes" "$paths"' EXIT
 
-cat >"$changes"
+# A rename or copy is reported as `R100<TAB>old<TAB>new`, so a line does not
+# always hold one path. Normalise to one `status<TAB>path` row per path before
+# anything reads it: leaving the two joined hid the destination from classify
+# entirely, and a payload moved into assets/ was never selected for the payload
+# check.
+awk -F'\t' '{ for (i = 2; i <= NF; i++) if ($i != "") print $1 "\t" $i }' >"$changes"
 cut -f2- <"$changes" | sort -u >"$paths"
 
 scopes=$("$root/tool/version-control/classify" --stdin <"$paths")

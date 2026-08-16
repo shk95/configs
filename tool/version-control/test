@@ -140,6 +140,16 @@ unixlike:payloads' commit "$kdl_added"
 expect_units 'unixlike:test' push "$kdl_added"
 
 expect_units 'unixlike:test' push "$module_modified"
+
+# A rename carries two paths on one line. Both have to reach classify, or a
+# payload moved into assets/ is never selected for the payload check.
+renamed_into_assets=$(printf 'R100\tdocs/note.md\tassets/moved.lua')
+expect_units 'repository:fixtures
+unixlike:format
+unixlike:lint
+unixlike:payloads' commit "$renamed_into_assets"
+expect_units 'repository:fixtures
+unixlike:test' push "$renamed_into_assets"
 expect_units 'windows:desired-state
 windows:tests' push "$windows_modified"
 expect_units 'repository:fixtures' commit "$docs_modified"
