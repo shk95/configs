@@ -107,8 +107,14 @@ jobs:
             ) | Out-Null
             if ($errors.Count) { throw "$($_.FullName): $($errors[0].Message)" }
           }
+          # These report through their exit status rather than by throwing, so
+          # the status has to be read. Without this the block would run on past
+          # a failed desired-state check and the step would take its result
+          # from whatever ran last.
           .\windows\tools\check-desired-state.ps1
+          if ($LASTEXITCODE -ne 0) { exit $LASTEXITCODE }
           .\windows\tools\test.ps1
+          if ($LASTEXITCODE -ne 0) { exit $LASTEXITCODE }
 
   common:
     name: Common contract
