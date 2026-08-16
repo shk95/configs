@@ -43,6 +43,17 @@ It owns:
 - Unix-like source payloads consumed by those modules;
 - Unix-like evaluation, build, and activation tooling.
 
+A payload is not only a file a domain owns. It has a format, and being well
+formed is a property of that format rather than of the domain holding it, so it
+needs a parser that the domain's own evaluator does not provide. Nix delivers
+payloads with `.source`, which copies without reading, so evaluation and build
+evidence say nothing about payload content. Each deployable domain therefore
+declares its payloads and their formats — `assets/payloads.json` for Unix-like,
+the `Parser` field of `windows/desired/manifest.json` for Windows — and
+validates them with the parser that will consume them. The two declarations are
+independent copies of one idea, not a shared authority, and neither imports the
+other.
+
 Linux and macOS may share Nix modules where the Nix module system can evaluate
 the complete result directly for both. Platform-specific Nix modules remain
 preferable when behavior differs. This internal sharing does not make their

@@ -506,6 +506,42 @@ that flavour has no font of any kind until one is declared.
 
 ---
 
+## Checks
+
+### `· unverified: this host has no nix`
+
+Not a failure. The Unix-like checks cannot run without Nix, and a check that
+could not run is reported rather than treated as one that ran and found a
+problem. The commit or push proceeds and the `unix` CI job supplies the
+evidence. Exit status 69 carries this state everywhere in the repository, and
+`REQUIRE_NATIVE=1` turns it back into a failure — CI sets that, hooks do not.
+
+The same line appears for `zellij.exe`, a `luac` compiler, Pester, and native
+PowerShell. Install the Windows ones with `.\windows\tools\setup-dev.ps1`.
+
+### `Unix-like tests failed` on a machine that has no Nix
+
+An old checkout. `tool/checks/*` used to invoke `nix` unguarded, so the shell's
+"command not found" became the check's own exit status and the hook reported a
+failure for a check that could never have run there. It is why native Windows
+clones could not push a change to a Unix-like payload. Update past the commit
+that added `tool/checks/prerequisite`.
+
+### `zellij.exe is required to validate Windows Zellij KDL.`
+
+Also an old checkout. `check-desired-state.ps1` demanded zellij.exe and a luac
+compiler before it read anything, so a clone without them failed for desired
+state that was never examined — including the JSON, INI and PowerShell sources
+it could have parsed. It now parses everything available and names the rest.
+
+### A broken `assets/` payload was committed and nothing caught it
+
+Fixed, but worth knowing why it was possible. Nix delivers those files with
+`.source`, which copies without reading, so evaluation and build evidence never
+covered their content and no check parsed them. `tool/checks/payloads` does
+now, driven by `assets/payloads.json`. A payload added without a declaration
+fails the check rather than escaping it.
+
 ## The agent sandbox
 
 Everything here has one cause: an agent's shell tool runs inside a mount
