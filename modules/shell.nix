@@ -34,10 +34,13 @@ _: {
         # prepend so declarative packages keep precedence when names overlap.
         typeset -U path
         path+=("$HOME/.local/bin")
-        path+=("$HOME/.opencode/bin")
 
         # SDKMAN is an imperative shell-function installer rather than a
         # nixpkgs package. Keep it optional and last because it rewrites PATH.
+        # It owns JDK distributions and their version switching; `gradle` stays
+        # a declarative package in packages.nix. Adding a Nix JDK would put a
+        # second version authority on the same PATH. See docs/status.md,
+        # "Unix-like Home Manager and package ownership".
         export SDKMAN_DIR="$HOME/.sdkman"
         [ -s "$SDKMAN_DIR/bin/sdkman-init.sh" ] && . "$SDKMAN_DIR/bin/sdkman-init.sh"
       '';

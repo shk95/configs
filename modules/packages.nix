@@ -59,6 +59,8 @@ _: {
 
         # languages / build tools
         go
+        # Build tool only. JDKs are owned by SDKMAN, which shell.nix sources
+        # optionally; do not add one here.
         gradle
         nodejs
         R

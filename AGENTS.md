@@ -68,6 +68,11 @@ deployment model.
 - Keep branch protection independent of conditional job names. Require the
   stable `Required checks` CI gate, which accepts only the selected domain jobs
   plus the repository-wide secret scan.
+- Do not re-declare an imperative version manager as a Nix package or install
+  its managed toolchain declaratively. A Unix-like home may source such an
+  installer optionally and last, after declarative PATH entries, so Nix keeps
+  precedence on name collisions. The native Windows domain does not adopt
+  POSIX-shell version managers at all; their absence there is a decision.
 
 ## Governance design
 
