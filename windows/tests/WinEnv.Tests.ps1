@@ -148,11 +148,24 @@ Describe 'state safety' {
 }
 
 Describe 'managed sources' {
-    It 'parses every source that needs no external parser' {
+    It 'parses every source without throwing for a parser it does not have' {
+        # No Parser is excluded any more. A source whose parser is unavailable
+        # reports a reason instead of throwing, so the suite no longer has to
+        # carry a list of the formats this host might be unable to check.
         $manifest = Get-WinEnvManifest -Path (Join-Path $desiredStateRoot 'manifest.json')
         foreach ($definition in $manifest.ManagedFiles) {
-            if ($definition.Parser -ne 'Kdl') {
-                { Test-WinEnvSourceFile -Definition $definition -RepositoryRoot $desiredStateRoot } | Should -Not -Throw
+            { Test-WinEnvSourceFile -Definition $definition -RepositoryRoot $desiredStateRoot } |
+                Should -Not -Throw
+        }
+    }
+
+    It 'names the missing parser rather than reporting the source as valid' {
+        $manifest = Get-WinEnvManifest -Path (Join-Path $desiredStateRoot 'manifest.json')
+        foreach ($definition in $manifest.ManagedFiles) {
+            $reason = Test-WinEnvSourceFile -Definition $definition -RepositoryRoot $desiredStateRoot
+            if ($null -ne $reason) {
+                $reason | Should -BeOfType [string]
+                $reason | Should -Not -BeNullOrEmpty
             }
         }
     }

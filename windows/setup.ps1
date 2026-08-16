@@ -21,12 +21,27 @@ $powerToysWasRunning = $false
 $powerToysRestarted = $false
 $drift = [System.Collections.Generic.List[string]]::new()
 $changed = [System.Collections.Generic.List[string]]::new()
+# Sources this host has no parser for. Not drift and not a failure: Apply is a
+# deployment, and refusing it because a validator is absent would make the
+# missing tool look like broken desired state.
+$unverified = [System.Collections.Generic.List[string]]::new()
+
+function Test-Sources {
+    param([array] $Definitions)
+    foreach ($definition in $Definitions) {
+        $reason = Test-WinEnvSourceFile -Definition $definition -RepositoryRoot $desiredStateRoot
+        if ($reason -and -not $unverified.Contains("$($definition.Id): $reason")) {
+            $unverified.Add("$($definition.Id): $reason")
+        }
+    }
+}
 
 function Write-Summary {
     param([string] $Mode)
     Write-Host "win-env $Mode summary"
     if ($changed.Count) { Write-Host ('  changed: ' + ($changed -join ', ')) }
     if ($drift.Count) { Write-Warning ('  drift: ' + ($drift -join ', ')) }
+    if ($unverified.Count) { Write-Host ('  unverified: ' + ($unverified -join ', ')) }
     if (-not $changed.Count -and -not $drift.Count) { Write-Host '  no changes or drift detected' }
 }
 
@@ -36,9 +51,7 @@ try {
 
     $manifest = Get-WinEnvManifest -Path (Join-Path $desiredStateRoot 'manifest.json')
     $desiredStateHash = Get-WinEnvDesiredStateHash -Root $desiredStateRoot
-    foreach ($definition in $manifest.ManagedFiles) {
-        Test-WinEnvSourceFile -Definition $definition -RepositoryRoot $desiredStateRoot
-    }
+    Test-Sources -Definitions $manifest.ManagedFiles
 
     $mutex = Enter-WinEnvLock
     $state = Get-WinEnvState -Path $statePath
@@ -149,8 +162,8 @@ try {
     }
     $fontStatus = Get-WinEnvFontStatus -Font $manifest.Font
     if (-not $fontStatus.Installed) { $drift.Add('D2Koding font') }
+    Test-Sources -Definitions $manifest.ManagedFiles
     foreach ($definition in $manifest.ManagedFiles) {
-        Test-WinEnvSourceFile -Definition $definition -RepositoryRoot $desiredStateRoot
         if (-not (Test-WinEnvManagedFile -Definition $definition -RepositoryRoot $desiredStateRoot)) { $drift.Add($definition.Id) }
     }
     if (-not (Test-WinEnvProfileHook -ProfilePath $hostProfile)) { $drift.Add('PowerShell profile hook') }
