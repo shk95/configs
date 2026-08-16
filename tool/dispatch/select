@@ -1,0 +1,94 @@
+#!/bin/sh
+#
+# Decide which checks a change needs. That is a different question from who
+# owns the change, and answering both with one function is why editing
+# assets/zellij/config.kdl ran a whole flake evaluation for a file Nix never
+# parses.
+#
+# tool/version-control/classify answers ownership: which domain may change a
+# path, which release tag covers it, which CI job is selected. It keeps that
+# job. This selects check units for a local gate, where fast feedback is the
+# point. CI deliberately does not use it: a merge gate optimises for
+# completeness and runs a domain's whole suite.
+#
+# Reads `<status><TAB><path>` lines as `git diff --name-status` produces them,
+# and writes one `<domain>:<check>` unit per line.
+#
+# usage: tool/dispatch/select <commit|push>
+
+set -eu
+
+stage=${1:-}
+case "$stage" in
+  commit | push) ;;
+  *)
+    echo "usage: tool/dispatch/select <commit|push>" >&2
+    exit 2
+    ;;
+esac
+
+root=$(CDPATH= cd -- "$(dirname -- "$0")/../.." && pwd)
+
+changes=$(mktemp)
+paths=$(mktemp)
+trap 'rm -f "$changes" "$paths"' EXIT
+
+cat >"$changes"
+cut -f2- <"$changes" | sort -u >"$paths"
+
+scopes=$("$root/tool/version-control/classify" --stdin <"$paths")
+
+has_scope() { printf '%s\n' "$scopes" | grep -qx "$1"; }
+
+# Narrowing is deliberately conservative. A payload that was added or removed
+# can change what a module references, and a rename shows up as both, so only a
+# tree of modified payloads is allowed to skip evaluation.
+narrow=1
+tab=$(printf '\t')
+while IFS="$tab" read -r status path || [ -n "${status:-}" ]; do
+  [ -n "${path:-}" ] || continue
+  case "$path" in
+    assets/*)
+      case "$status" in
+        M*) ;;
+        *) narrow=0 ;;
+      esac
+      ;;
+    flake.nix | flake.lock | modules/* | .envrc | Justfile | tool/checks/*)
+      narrow=0
+      ;;
+  esac
+done <"$changes"
+
+if has_scope unclassified; then
+  echo unclassified
+fi
+
+if has_scope repository; then
+  echo repository:fixtures
+fi
+
+if has_scope unixlike; then
+  if [ "$stage" = commit ]; then
+    if [ "$narrow" -eq 1 ]; then
+      echo unixlike:payloads
+    else
+      echo unixlike:format
+      echo unixlike:lint
+      echo unixlike:payloads
+    fi
+  elif [ "$narrow" -eq 0 ]; then
+    echo unixlike:test
+  fi
+fi
+
+if [ "$stage" = push ]; then
+  if has_scope windows; then
+    echo windows:desired-state
+    echo windows:tests
+  fi
+
+  if has_scope common; then
+    echo common:check
+  fi
+fi

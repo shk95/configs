@@ -32,19 +32,30 @@ run_check() {
   evidence_run "$name" "$script" || abort "$hint"
 }
 
-scopes=$(tool/version-control/classify --staged)
+# Which checks this change needs, which is not the same question as who owns
+# it. tool/dispatch/select answers the first; classify still answers the second
+# for release tags, promotion, and CI job selection.
+units=$(git diff --cached --name-status --relative | tool/dispatch/select commit)
 
-if printf '%s\n' "$scopes" | grep -qx unclassified; then
+selected() { printf '%s\n' "$units" | grep -qx "$1"; }
+
+if selected unclassified; then
   fail "A staged path has no owning scope. Update tool/version-control/classify."
 fi
 
-if printf '%s\n' "$scopes" | grep -qx unixlike; then
-  run_check format   "Formatting is off. See tool/checks/format for the fix command."
-  run_check lint     "Static analysis found problems."
+if selected unixlike:format; then
+  run_check format "Formatting is off. See tool/checks/format for the fix command."
+fi
+
+if selected unixlike:lint; then
+  run_check lint "Static analysis found problems."
+fi
+
+if selected unixlike:payloads; then
   run_check payloads "Fix the payload it rejected, or declare it in assets/payloads.json."
 fi
 
-if printf '%s\n' "$scopes" | grep -qx repository; then
+if selected repository:fixtures; then
   evidence_run "version-control fixtures" tool/version-control/test \
     || abort "Version-control policy fixtures failed."
 fi
