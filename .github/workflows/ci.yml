@@ -92,8 +92,7 @@ jobs:
       - name: Validate desired state and test PowerShell
         shell: pwsh
         run: |
-          Install-Module Pester -RequiredVersion 5.7.1 -Scope CurrentUser -Force
-          winget install --id DEVCOM.Lua --version 5.4.6 --exact --source winget --accept-source-agreements --accept-package-agreements --disable-interactivity
+          .\windows\tools\setup-dev.ps1
           winget install --id Zellij.Zellij --exact --source winget --accept-source-agreements --accept-package-agreements --disable-interactivity
           $machinePath = [Environment]::GetEnvironmentVariable('Path', 'Machine')
           $userPath = [Environment]::GetEnvironmentVariable('Path', 'User')

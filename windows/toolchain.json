@@ -1,0 +1,20 @@
+{
+  "schemaVersion": 1,
+  "toolchain": [
+    {
+      "Id": "DEVCOM.Lua",
+      "Name": "Lua",
+      "Version": "5.4.6",
+      "Provider": "WinGet",
+      "Command": "luac.exe",
+      "Validates": "WezTerm Lua payloads"
+    },
+    {
+      "Id": "Pester",
+      "Name": "Pester",
+      "Version": "5.7.1",
+      "Provider": "PSGallery",
+      "Validates": "the Windows test suite"
+    }
+  ]
+}
