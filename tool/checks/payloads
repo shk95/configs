@@ -1,0 +1,116 @@
+#!/bin/sh
+# Validate every Unix-like source payload with the parser that will consume it.
+#
+# Nix delivers these files with `.source`, which copies them into the store
+# without reading them. A syntax error in a KDL or Lua payload therefore
+# evaluates, builds, activates, and fails for the first time when the
+# application starts. Evaluation says nothing about payload content, so this is
+# the only check that can say anything about it.
+#
+# `assets/payloads.json` is the declaration, and coverage is enforced in both
+# directions. A file that is not declared would silently escape validation,
+# which is the failure this check exists to prevent; a declaration with no file
+# is stale. A declared format with no validator here is also a failure, so
+# adding a payload of a new kind cannot quietly widen the gap again.
+#
+# Validators are fetched with `nix shell` rather than assumed on PATH, matching
+# tool/checks/lint. Nix stays the only prerequisite, which keeps this check's
+# host requirements identical to the rest of the Unix-like suite.
+#
+# Takes an optional root so the fixtures under tool/checks/fixtures/payloads
+# can exercise the failure paths.
+
+set -e
+
+repo=$(CDPATH= cd -- "$(dirname "$0")/../.." && pwd)
+cd "$repo"
+
+root=${1:-assets}
+manifest="$root/payloads.json"
+
+fail() {
+  printf '\033[31m✗ %s\033[0m\n' "$1" >&2
+  exit 1
+}
+
+[ -r "$manifest" ] || fail "no payload declaration at $manifest"
+
+work=$(mktemp -d)
+trap 'rm -rf "$work"' EXIT
+
+# One jq call; everything below is plain text processing.
+nix shell nixpkgs#jq -c jq -r '.payloads[] | "\(.format)\t\(.source)"' "$manifest" \
+  | sort >"$work/declared"
+
+cut -f2 "$work/declared" | sort >"$work/declared-sources"
+find "$root" -type f ! -name payloads.json | sed "s|^$root/||" | sort >"$work/present"
+
+coverage=0
+
+undeclared=$(comm -13 "$work/declared-sources" "$work/present")
+if [ -n "$undeclared" ]; then
+  printf '\033[31m✗ payload is present but not declared in %s:\033[0m\n' "$manifest" >&2
+  printf '    %s\n' $undeclared >&2
+  coverage=1
+fi
+
+stale=$(comm -23 "$work/declared-sources" "$work/present")
+if [ -n "$stale" ]; then
+  printf '\033[31m✗ payload is declared but missing from %s:\033[0m\n' "$root" >&2
+  printf '    %s\n' $stale >&2
+  coverage=1
+fi
+
+[ "$coverage" -eq 0 ] || exit 1
+
+unknown=$(cut -f1 "$work/declared" | sort -u | grep -vxE 'json|kdl|lua|powershell' || true)
+[ -z "$unknown" ] || fail "declared format has no validator here: $(echo $unknown)"
+
+paths_for() {
+  awk -F'\t' -v want="$1" -v root="$root" '$1 == want { print root "/" $2 }' "$work/declared"
+}
+
+lua=$(paths_for lua)
+if [ -n "$lua" ]; then
+  printf '→ lua\n'
+  printf '%s\n' "$lua" | xargs nix shell nixpkgs#lua5_4 -c luac -p
+fi
+
+json=$(paths_for json)
+if [ -n "$json" ]; then
+  printf '→ json\n'
+  printf '%s\n' "$json" | xargs nix shell nixpkgs#jq -c jq empty
+fi
+
+# zellij takes one --config at a time and reports on stdout, which is noise
+# until it fails.
+kdl=$(paths_for kdl)
+if [ -n "$kdl" ]; then
+  printf '→ kdl\n'
+  for file in $kdl; do
+    if ! nix shell nixpkgs#zellij -c zellij --config "$file" setup --check >"$work/kdl" 2>&1; then
+      cat "$work/kdl" >&2
+      fail "zellij rejected '$file'."
+    fi
+  done
+fi
+
+# The Unix-like copy of the profile is deployed to Unix-like homes by
+# modules/powershell.nix, so pwsh here is the native parser for it rather than
+# a foreign syntax check standing in for Windows evidence.
+powershell=$(paths_for powershell)
+if [ -n "$powershell" ]; then
+  printf '→ powershell\n'
+  for file in $powershell; do
+    nix shell nixpkgs#powershell -c pwsh -NoProfile -Command "
+      \$errors = \$null
+      [void][System.Management.Automation.Language.Parser]::ParseFile('$repo/$file', [ref]\$null, [ref]\$errors)
+      if (\$errors.Count) {
+        Write-Error \"PowerShell syntax error in '$file': \$(\$errors[0].Message)\"
+        exit 1
+      }
+    "
+  done
+fi
+
+printf '✓ %s payloads validated\n' "$(wc -l <"$work/declared" | tr -d ' ')"

@@ -1,0 +1,2 @@
+# A declared format with no validator must fail rather than pass unchecked.
+name = "sample"
