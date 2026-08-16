@@ -61,20 +61,17 @@ if printf '%s\n' "$scopes" | grep -qx unixlike; then
 fi
 
 if printf '%s\n' "$scopes" | grep -qx windows; then
-  if command -v pwsh >/dev/null 2>&1; then
-    shell=pwsh
-  elif command -v pwsh.exe >/dev/null 2>&1; then
-    shell=pwsh.exe
-  else
-    shell=
-  fi
-
-  if [ -n "$shell" ]; then
+  # Only `pwsh.exe` counts. A Unix-like `pwsh` is not native Windows evidence,
+  # and modules/powershell.nix installs one into every home this repository
+  # configures — accepting it would make the branch below unreachable and leave
+  # Windows work unpushable from the Linux and macOS clones where it is often
+  # authored. The merge gate is the windows-latest CI job, not this hook.
+  if command -v pwsh.exe >/dev/null 2>&1; then
     printf '→ Windows desired-state check\n'
-    "$shell" -NoProfile -File ./windows/tools/check-desired-state.ps1 \
+    pwsh.exe -NoProfile -File ./windows/tools/check-desired-state.ps1 \
       || fail "Windows desired-state validation failed."
     printf '→ Windows tests\n'
-    "$shell" -NoProfile -File ./windows/tools/test.ps1 \
+    pwsh.exe -NoProfile -File ./windows/tools/test.ps1 \
       || fail "Windows tests failed."
   else
     echo "· native PowerShell unavailable; Windows checks remain unverified locally and CI must supply evidence"
