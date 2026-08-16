@@ -468,7 +468,38 @@ function Test-WinEnvManagedFile {
     }
 }
 
+$script:WinEnvLuaCompiler = $null
+$script:WinEnvLuaCompilerResolved = $false
+
+function Get-WinEnvLuaCompiler {
+    # Resolved once. There is no single spelling of the Lua compiler across the
+    # ways it reaches a Windows PATH, and probing per file made the cost scale
+    # with the number of payloads.
+    if (-not $script:WinEnvLuaCompilerResolved) {
+        $script:WinEnvLuaCompiler =
+            Get-Command luac.exe, luac5.4.exe, luac54.exe, luac5.1.exe, luac51.exe, luac `
+                -ErrorAction SilentlyContinue |
+            Select-Object -First 1
+        $script:WinEnvLuaCompilerResolved = $true
+    }
+
+    return $script:WinEnvLuaCompiler
+}
+
 function Test-WinEnvSourceFile {
+    <#
+        .SYNOPSIS
+        Parse one managed source with the parser that will consume it.
+
+        .DESCRIPTION
+        Returns $null when the file was parsed, or a reason when this host has
+        no parser for it. A syntax error still throws, because a parser that
+        ran and rejected the file is a failure rather than missing evidence.
+
+        Callers decide what an unverified source means. This function must not,
+        which is what it used to do by skipping a missing Zellij in silence and
+        reporting the file as valid.
+    #>
     param(
         [Parameter(Mandatory)][hashtable] $Definition,
         [Parameter(Mandatory)][string] $RepositoryRoot
@@ -500,19 +531,24 @@ function Test-WinEnvSourceFile {
         }
         'Kdl' {
             $zellij = Get-Command zellij.exe -ErrorAction SilentlyContinue
-            if ($zellij) {
-                $null = & $zellij.Source --config $path setup --check 2>&1
-                if ($LASTEXITCODE -ne 0) { throw "Zellij rejected '$path'." }
-            }
+            if (-not $zellij) { return 'zellij.exe is unavailable' }
+            $null = & $zellij.Source --config $path setup --check 2>&1
+            if ($LASTEXITCODE -ne 0) { throw "Zellij rejected '$path'." }
         }
         'Lua' {
-            # WezTerm loads these files on native Windows. Pester verifies the
-            # source inventory and JSON manifest without a Unix-like renderer.
+            # WezTerm loads these files on native Windows, so luac is the
+            # parser that decides whether they are well formed.
+            $luac = Get-WinEnvLuaCompiler
+            if (-not $luac) { return 'no luac compiler is available' }
+            $null = & $luac.Source -p $path 2>&1
+            if ($LASTEXITCODE -ne 0) { throw "Lua rejected '$path'." }
         }
         'Text' {
             # Existence and content are checked by the managed-file path.
         }
     }
+
+    return $null
 }
 
 function Backup-WinEnvFile {
