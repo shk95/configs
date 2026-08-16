@@ -26,6 +26,8 @@
 # remain explicit evaluation-only evidence until a native runner builds them.
 
 set -e
+. "$(CDPATH= cd -- "$(dirname -- "$0")" && pwd)/prerequisite"
+require_command nix
 
 root=$(CDPATH= cd -- "$(dirname "$0")/../.." && pwd)
 flake="path:$root"

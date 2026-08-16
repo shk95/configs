@@ -77,6 +77,7 @@ jobs:
       - run: tool/checks/format
       - run: tool/checks/lint
       - run: tool/checks/payloads-test
+      - run: tool/checks/prerequisite-test
       - run: tool/checks/test
 
   windows:

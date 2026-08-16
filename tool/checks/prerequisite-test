@@ -1,0 +1,42 @@
+#!/bin/sh
+# Every Unix-like check must report a missing Nix as unverified rather than as
+# a failure, and must still fail where the merge gate demands real evidence.
+#
+# Reproduced the way the problem was found: an environment holding nothing but
+# the ordinary system utilities. `env -i` also keeps this host's REQUIRE_NATIVE
+# out of the child, which matters because CI sets it for the whole job.
+
+set -e
+
+repo=$(CDPATH= cd -- "$(dirname -- "$0")/../.." && pwd)
+cd "$repo"
+
+bare='PATH=/usr/bin:/bin'
+
+if env -i $bare sh -c 'command -v nix' >/dev/null 2>&1; then
+  echo "· nix is reachable from the minimal PATH here, skipping"
+  exit 0
+fi
+
+for check in format lint payloads test; do
+  printf '→ %s without nix\n' "$check"
+
+  status=0
+  env -i $bare HOME="$HOME" "tool/checks/$check" >/dev/null 2>&1 || status=$?
+  if [ "$status" -ne 69 ]; then
+    printf '\033[31m✗ tool/checks/%s exited %s without nix, expected 69\033[0m\n' \
+      "$check" "$status" >&2
+    exit 1
+  fi
+
+  status=0
+  env -i $bare HOME="$HOME" REQUIRE_NATIVE=1 "tool/checks/$check" >/dev/null 2>&1 \
+    || status=$?
+  if [ "$status" -ne 1 ]; then
+    printf '\033[31m✗ tool/checks/%s exited %s under REQUIRE_NATIVE, expected 1\033[0m\n' \
+      "$check" "$status" >&2
+    exit 1
+  fi
+done
+
+echo "✓ Unix-like checks report a missing prerequisite as unverified"

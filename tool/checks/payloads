@@ -21,6 +21,8 @@
 # can exercise the failure paths.
 
 set -e
+. "$(CDPATH= cd -- "$(dirname -- "$0")" && pwd)/prerequisite"
+require_command nix
 
 repo=$(CDPATH= cd -- "$(dirname "$0")/../.." && pwd)
 cd "$repo"
