@@ -17,8 +17,8 @@ fail() {
   exit 1
 }
 
-paths=$(mktemp)
-trap 'rm -f "$paths"' EXIT
+changes=$(mktemp)
+trap 'rm -f "$changes"' EXIT
 saw_ref=0
 pushing_content=0
 
@@ -37,7 +37,7 @@ while read -r _local_ref local_sha _remote_ref remote_sha; do
   else
     base=$remote_sha
   fi
-  git diff --name-only "$base" "$local_sha" >>"$paths"
+  git diff --name-status "$base" "$local_sha" >>"$changes"
 done
 
 if [ "$saw_ref" -eq 1 ] && [ "$pushing_content" -eq 0 ]; then
@@ -46,41 +46,47 @@ if [ "$saw_ref" -eq 1 ] && [ "$pushing_content" -eq 0 ]; then
 fi
 
 if [ "$saw_ref" -eq 0 ]; then
-  git diff-tree --no-commit-id --name-only -r HEAD >>"$paths"
+  git diff-tree --no-commit-id --name-status -r HEAD >>"$changes"
 fi
 
-scopes=$(sort -u "$paths" | tool/version-control/classify --stdin)
-printf '→ scopes\n%s\n' "$scopes"
+units=$(sort -u "$changes" | tool/dispatch/select push)
+printf '→ selected checks\n%s\n' "${units:-none}"
 
-if printf '%s\n' "$scopes" | grep -qx unclassified; then
+selected() { printf '%s\n' "$units" | grep -qx "$1"; }
+
+if selected unclassified; then
   fail "A pushed path has no owning scope."
 fi
 
-if printf '%s\n' "$scopes" | grep -qx repository; then
+if selected repository:fixtures; then
   evidence_run "version-control fixtures" tool/version-control/test || exit 1
 fi
 
-if printf '%s\n' "$scopes" | grep -qx unixlike; then
+if selected unixlike:test; then
   evidence_run "Unix-like test" tool/checks/test || exit 1
 fi
 
-if printf '%s\n' "$scopes" | grep -qx windows; then
+if selected windows:desired-state || selected windows:tests; then
   # Only `pwsh.exe` counts. A Unix-like `pwsh` is not native Windows evidence,
   # and modules/powershell.nix installs one into every home this repository
   # configures — accepting it would leave Windows work unpushable from the
   # Linux and macOS clones where it is often authored. The merge gate is the
   # windows-latest CI job, not this hook.
   if command -v pwsh.exe >/dev/null 2>&1; then
-    evidence_run "Windows desired-state check" \
-      pwsh.exe -NoProfile -File ./windows/tools/check-desired-state.ps1 || exit 1
-    evidence_run "Windows tests" \
-      pwsh.exe -NoProfile -File ./windows/tools/test.ps1 || exit 1
+    if selected windows:desired-state; then
+      evidence_run "Windows desired-state check" \
+        pwsh.exe -NoProfile -File ./windows/tools/check-desired-state.ps1 || exit 1
+    fi
+    if selected windows:tests; then
+      evidence_run "Windows tests" \
+        pwsh.exe -NoProfile -File ./windows/tools/test.ps1 || exit 1
+    fi
   else
     evidence_unavailable "Windows checks" "native PowerShell is unavailable" || exit 1
   fi
 fi
 
-if printf '%s\n' "$scopes" | grep -qx common; then
+if selected common:check; then
   # Not a host capability: common material that arrives without its own check
   # is an incomplete change, and no runner can supply the missing script.
   if [ -x common/check ]; then

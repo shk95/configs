@@ -107,6 +107,54 @@ expect unclassified "$classify" --files unexpected.file
 expect 'windows
 repository' "$classify" --files windows/setup.ps1 docs/status.md
 
+# Ownership and check selection are different questions and both are fixtured.
+# classify keeps answering the first, for release tags, promotion and CI job
+# selection. tool/dispatch/select answers the second for the local gate, where
+# running a whole flake evaluation for a file Nix never parses was the cost.
+expect_units() {
+  expected=$1
+  actual=$(printf '%s\n' "$3" | "$root/tool/dispatch/select" "$2")
+  if [ "$actual" != "$expected" ]; then
+    printf 'select %s expected <%s>, got <%s>\n' "$2" "$expected" "$actual" >&2
+    exit 1
+  fi
+}
+
+kdl_modified=$(printf 'M\tassets/zellij/config.kdl')
+kdl_added=$(printf 'A\tassets/zellij/extra.kdl')
+module_modified=$(printf 'M\tmodules/git.nix')
+windows_modified=$(printf 'M\twindows/setup.ps1')
+docs_modified=$(printf 'M\tdocs/status.md')
+unknown_modified=$(printf 'M\tunexpected.file')
+
+# Nix copies a payload without reading it, so evaluating the flake says nothing
+# about a modified one either way.
+expect_units 'unixlike:payloads' commit "$kdl_modified"
+expect_units '' push "$kdl_modified"
+
+# An added or removed payload can change what a module references, and a rename
+# appears as both, so the full suite comes back.
+expect_units 'unixlike:format
+unixlike:lint
+unixlike:payloads' commit "$kdl_added"
+expect_units 'unixlike:test' push "$kdl_added"
+
+expect_units 'unixlike:test' push "$module_modified"
+
+# A rename carries two paths on one line. Both have to reach classify, or a
+# payload moved into assets/ is never selected for the payload check.
+renamed_into_assets=$(printf 'R100\tdocs/note.md\tassets/moved.lua')
+expect_units 'repository:fixtures
+unixlike:format
+unixlike:lint
+unixlike:payloads' commit "$renamed_into_assets"
+expect_units 'repository:fixtures
+unixlike:test' push "$renamed_into_assets"
+expect_units 'windows:desired-state
+windows:tests' push "$windows_modified"
+expect_units 'repository:fixtures' commit "$docs_modified"
+expect_units 'unclassified' commit "$unknown_modified"
+
 test_root=$(mktemp -d)
 cleanup() {
   case "$test_root" in /tmp/*) rm -rf -- "$test_root" ;; esac
@@ -179,6 +227,7 @@ else
   cp -R "$root/.githooks" "$hook_root/.githooks"
   mkdir -p "$hook_root/tool"
   cp -R "$root/tool/version-control" "$hook_root/tool/version-control"
+  cp -R "$root/tool/dispatch" "$hook_root/tool/dispatch"
   printf '#!/bin/sh\nexit 0\n' >"$hook_root/foreign/pwsh"
   printf '#!/bin/sh\nexit 0\n' >"$hook_root/native/pwsh.exe"
   chmod +x "$hook_root/foreign/pwsh" "$hook_root/native/pwsh.exe"
@@ -221,6 +270,7 @@ protocol_root="$test_root/protocol"
 mkdir -p "$protocol_root/tool/checks" "$protocol_root/modules"
 cp -R "$root/.githooks" "$protocol_root/.githooks"
 cp -R "$root/tool/version-control" "$protocol_root/tool/version-control"
+cp -R "$root/tool/dispatch" "$protocol_root/tool/dispatch"
 
 git -C "$protocol_root" init -q -b dev
 git -C "$protocol_root" config user.name Fixture
