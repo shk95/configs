@@ -108,6 +108,17 @@ does not certify a domain release or authorize deployment. Do not merge
 repository maintainer owns promotion decisions. There is no operational
 bypass; change this policy through the governance workflow before deviating.
 
+GitHub milestones are the repository's planning surface, not a source of
+configuration, architecture, release, or deployment authority. Each milestone
+owns exactly one of `unixlike`, `windows`, `common`, or `repository`, uses the
+title `<scope>: <outcome>`, and contains only issues in that scope. Cross-scope
+dependencies are linked instead of being assigned to the same milestone. A
+closed milestone means its planned source work is complete; it does not certify
+a domain release or authorize activation or Apply. Repository documents remain
+authoritative for durable decisions and current support boundaries. The
+repository maintainer owns milestone scope and closure decisions, with the
+milestone description and final evidence issue providing the manual evidence.
+
 ## Host safety
 
 - Never activate Home Manager, NixOS, or nix-darwin without an explicit request.
