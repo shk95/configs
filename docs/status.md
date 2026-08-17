@@ -191,6 +191,15 @@ rather than part of one of the three configuration domains. It owns policy
 dispatch and agent workflow mechanics, creates no host output, and has no
 release tag.
 
+GitHub milestones are now the planning surface for scoped outcomes. They remain
+metadata over independently reviewable issues: repository documents own
+architecture and current support decisions, domain tags own release
+certification, and explicit commands own deployment. The first adoption is the
+`unixlike: NixOS GUI host foundation` roadmap. Milestone naming, required
+description sections, issue membership, and closure are reviewed manually by
+the repository maintainer; automated remote enforcement is deferred until the
+manual workflow demonstrates a recurring failure that justifies it.
+
 Durable judgement remains in `AGENTS.md` and the architecture documents. The
 repeatable agent procedure is implemented once as an Agent Skills
 open-standard skill under `.agents/skills/`. Model-specific skill locations

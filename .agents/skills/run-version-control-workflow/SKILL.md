@@ -1,6 +1,6 @@
 ---
 name: run-version-control-workflow
-description: Audit and execute this repository's version-control workflow. Use when starting or classifying a change, preparing commits, integrating topic branches, promoting dev into master, planning a domain release tag, or verifying that Git history, hooks, CI, and branch protection follow the documented unixlike, windows, common, adoption, and repository-governance rules.
+description: Audit and execute this repository's version-control workflow. Use when starting or classifying a change, planning GitHub milestones, preparing commits, integrating topic branches, promoting dev into master, planning a domain release tag, or verifying that Git history, hooks, CI, and branch protection follow the documented unixlike, windows, common, adoption, and repository-governance rules.
 ---
 
 # Run Version Control Workflow
@@ -34,6 +34,12 @@ planning read-only unless the user explicitly authorizes a Git mutation.
 - **Start**: Propose `feature/<scope>-<topic>` or `fix/<scope>-<topic>` from
   `dev`. Fetch, create a branch, or add a worktree only after the user
   explicitly requests that mutation.
+- **Milestone**: Search open and closed GitHub milestones before creating one.
+  Confirm one owning scope, the `<scope>: <outcome>` title, the required
+  description sections, no due date unless the maintainer supplied one, and
+  same-scope issue membership. Restate the exact milestone and issue targets
+  before remote writes. Keep a final evidence issue, report every created URL,
+  and never present milestone closure as release or deployment evidence.
 - **Prepare**: Review the complete diff, classification, commit boundaries,
   relevant checks, and evidence. Keep `flake.lock` refreshes isolated in
   `chore(unixlike-deps)` commits. Never stage or commit without an explicit

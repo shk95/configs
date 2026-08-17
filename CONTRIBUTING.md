@@ -123,6 +123,32 @@ Use `design-project-governance` from the sibling `skills` project to perform
 this decomposition. The skill owns only the generic method; this repository
 owns the result. A product-specific adapter must not own any part of either.
 
+## Plan work with GitHub milestones
+
+GitHub milestones group planned work after its owning scope and outcome are
+known. They coordinate issues; they do not replace repository policy, domain
+release evidence, or deployment authorization.
+
+1. Search open and closed milestones for the same outcome before creating one.
+2. Choose exactly one scope and title the milestone `<scope>: <outcome>`.
+3. Write `Outcome`, `Included`, `Excluded`, `Completion criteria`, and
+   `Authority` sections in the description. Link the repository documents that
+   own durable decisions and current support boundaries.
+4. Set a due date only when the maintainer has chosen a real schedule. Leave it
+   unset for an unordered roadmap.
+5. Create independently closable issues with the same scope prefix and assign
+   only those issues to the milestone. Link cross-scope prerequisites without
+   assigning them.
+6. Keep one final evidence issue open until the milestone's evaluation, build,
+   native runtime, and activation or Apply evidence is reported as applicable.
+7. Close the milestone only after every assigned issue is closed and the
+   maintainer confirms the completion criteria.
+
+If the scope or outcome was wrong, edit the milestone and its issue membership;
+do not reinterpret a closed milestone as a release or move work between domains
+silently. The milestone description and final evidence issue are the review
+record for this intentionally manual policy.
+
 ## Unix-like changes
 
 1. Put feature-oriented declarations under `modules/`.
