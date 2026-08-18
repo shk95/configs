@@ -81,6 +81,16 @@ The source manifest and every owned payload live below `windows/desired/`.
 PowerShell reads that source directly; there is no Nix-rendered Windows
 consumer tree.
 
+The manifest declares features, and every package, managed file, font, and
+registry delegation is owned by exactly one of them. A feature may declare that
+it requires another when its payload cannot be honest without it. Which
+features a host deploys is host state recorded in that host's `state.json`, not
+desired state: the repository declares what exists and a host records how much
+of it it took. A minimal deployment is therefore a supported outcome rather
+than an incomplete one, and drift is only ever computed against the selected
+set. Deselection stops management; it never uninstalls or deletes what an
+earlier Apply deployed.
+
 ## Common domain
 
 The common domain is an explicit exception for material whose semantics are

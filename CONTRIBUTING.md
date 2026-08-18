@@ -168,7 +168,10 @@ also runs on Windows.
 Windows declarations, payloads, checks, and Apply logic live inside `windows/`
 and are validated on native Windows.
 
-1. Edit `windows/desired/manifest.json` for packages and managed-file policy.
+1. Edit `windows/desired/manifest.json` for features, packages, and
+   managed-file policy. Every package, managed file, the font, and the terminal
+   delegation names exactly one declared feature; a new payload without one is
+   rejected when the manifest loads.
 2. Edit owned payloads below `windows/desired/files/`.
 3. Update PowerShell under `windows/src/` when reconciliation semantics change.
 4. Run native Windows tests and read-only host verification.
@@ -195,6 +198,13 @@ Apply is a deployment, not verification, and requires an explicit request:
 ```powershell
 .\windows\bootstrap.ps1
 ```
+
+A host may deploy part of the manifest with `-Minimal`, `-Feature`, `-Add`, or
+`-All`; `README.md` describes the selection model. Selection is host state and
+is recorded in `state.json`, so a change to the feature model is a Windows
+desired-state change while a host's chosen set is not. Report which selection
+produced any `-Check` or Apply evidence, because a check that passed under a
+minimal selection says nothing about the features it excluded.
 
 ## Common changes
 

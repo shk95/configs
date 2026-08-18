@@ -148,6 +148,42 @@ Apply remains idempotent, preserves first-original-file backups under
 `%LOCALAPPDATA%\win-env\backups\original`, and records successful state under
 `%LOCALAPPDATA%\win-env\state.json`.
 
+### Feature selection
+
+A host does not have to take the whole manifest. `windows/desired/manifest.json`
+declares features, every package and managed file belongs to exactly one of
+them, and a host picks how many it deploys:
+
+```powershell
+.\windows\bootstrap.ps1 -Minimal              # core only: PowerShell 7 and the managed profile
+.\windows\bootstrap.ps1 -Feature terminal     # exactly this set, plus what it declares it needs
+.\windows\bootstrap.ps1 -Add powertoys        # union with what this host already applied
+.\windows\bootstrap.ps1 -All                  # everything the manifest declares
+.\windows\bootstrap.ps1 -Check                # verify the selection this host recorded
+```
+
+The features are `core` (required), `font`, `zellij`, `terminal`, `wezterm`,
+`powertoys`, and `wsl`. `terminal` requires `font` and `zellij` because it owns
+`files/terminal/settings.json` whole, and that file pins the D2Koding face and
+launches `zellij.exe` from a profile. Dependencies are resolved and reported
+rather than refused:
+
+```text
+win-env check summary
+  selected: core, font, zellij, terminal
+  added by dependency: font, zellij
+  not selected: wezterm, powertoys, wsl
+```
+
+With no selection argument an applied host keeps the selection it recorded and a
+host that has never applied takes everything, so an existing deployment does not
+change because selection exists. The selection lives in `state.json`, not in the
+repository: the manifest declares what exists, the host records how much of it
+it took.
+
+Deselecting stops management. It does not uninstall a package or delete a file
+that a previous Apply deployed; removing those is a separate manual decision.
+
 ## Deployment
 
 Unix-like activation and Windows Apply are separate deployments. A common

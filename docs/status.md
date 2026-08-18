@@ -120,6 +120,29 @@ The Windows domain is independent:
   may diverge.
 - Hooks and CI no longer make a Windows artifact depend on Unix-like evaluation.
 
+Windows desired state is selectable. Manifest schema 2 declares seven features
+(`core`, `font`, `zellij`, `terminal`, `wezterm`, `powertoys`, `wsl`) and every
+package, managed file, the font, and the terminal delegation is owned by exactly
+one of them. `bootstrap.ps1 -Minimal` deploys `core` alone, which installs
+PowerShell 7 and the managed profile and touches no font, registry value, or
+application setting. State schema 2 records the selection; a schema 1 state is
+read as a full deployment, so a host that applied before this change keeps
+exactly what it has.
+
+Two boundaries are decisions rather than accidents. `terminal` requires `zellij`
+because `files/terminal/settings.json` is owned whole under `ExactJson` and
+carries a profile that launches `zellij.exe`; splitting that payload or adding a
+merge comparison mode was rejected as more expensive than installing one small
+package. `wezterm` requires no font feature because `files/wezterm/fonts.json`
+asks for JetBrainsMono, which this manifest does not install, and never for
+D2Koding. PowerToys stays one feature because
+`files/powertoys/settings.json` already owns the per-module enable map; a
+second selection axis over the same modules would have two sources.
+
+The desired-state hash is scoped to the selected features plus `manifest.json`.
+A whole-tree hash reported drift for payloads a host never deploys and forced an
+Apply that could not change anything on it.
+
 No explicit `common/` component has yet been justified or created.
 
 Local hooks are not a Windows evidence source. `modules/powershell.nix` installs

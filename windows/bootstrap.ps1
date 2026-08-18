@@ -4,7 +4,14 @@ param(
     [switch] $Check,
 
     [Parameter(ParameterSetName = 'Force')]
-    [switch] $Force
+    [switch] $Force,
+
+    # Feature selection is resolved by setup.ps1; this entry point only forwards
+    # it, so a host cannot be told one thing here and another there.
+    [string[]] $Feature,
+    [string[]] $Add,
+    [switch] $Minimal,
+    [switch] $All
 )
 
 $ErrorActionPreference = 'Stop'
@@ -43,12 +50,18 @@ if (-not $pwsh) {
     exit 1
 }
 
-$forward = @{}
-if ($Check) { $forward.Check = $true }
-if ($Force) { $forward.Force = $true }
-if ($VerbosePreference -ne 'SilentlyContinue') { $forward.Verbose = $true }
+# pwsh -File takes literal strings, so the list values are joined here and split
+# again in setup.ps1 rather than relying on how -File binds an array parameter.
+$arguments = @('-NoLogo', '-NoProfile', '-ExecutionPolicy', 'Bypass', '-File', $setupPath)
+if ($Check) { $arguments += '-Check' }
+if ($Force) { $arguments += '-Force' }
+if ($Minimal) { $arguments += '-Minimal' }
+if ($All) { $arguments += '-All' }
+if ($PSBoundParameters.ContainsKey('Feature')) { $arguments += @('-Feature', ($Feature -join ',')) }
+if ($PSBoundParameters.ContainsKey('Add')) { $arguments += @('-Add', ($Add -join ',')) }
+if ($VerbosePreference -ne 'SilentlyContinue') { $arguments += '-Verbose' }
 
 $pwshPath = if ($pwsh.PSObject.Properties['Source']) { $pwsh.Source } else { $pwsh.FullName }
-& $pwshPath -NoLogo -NoProfile -ExecutionPolicy Bypass -File $setupPath @forward
+& $pwshPath @arguments
 $setupExitCode = $LASTEXITCODE
 exit $setupExitCode

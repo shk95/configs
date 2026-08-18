@@ -8,9 +8,219 @@ function Get-WinEnvManifest {
 
     $manifest = Get-Content -LiteralPath $Path -Raw -Encoding utf8 |
         ConvertFrom-Json -AsHashtable -ErrorAction Stop
-    if ($manifest.SchemaVersion -ne 1) { throw "Unsupported manifest schema: $($manifest.SchemaVersion)" }
+    if ($manifest.SchemaVersion -ne 2) { throw "Unsupported manifest schema: $($manifest.SchemaVersion)" }
     [void][System.Management.Automation.SemanticVersion]$manifest.ProjectVersion
+    # Every consumer reads the manifest through here, so the feature model is
+    # validated once instead of separately in setup, the check tool, and tests.
+    Assert-WinEnvFeatureModel -Manifest $manifest
     return $manifest
+}
+
+function Get-WinEnvFeatureRequires {
+    param([Parameter(Mandatory)][hashtable] $Feature)
+
+    if (-not $Feature.ContainsKey('Requires')) { return @() }
+    return @($Feature.Requires | ForEach-Object { [string]$_ })
+}
+
+function Get-WinEnvFeatureId {
+    param([Parameter(Mandatory)][hashtable] $Manifest)
+
+    return @($Manifest.Features | ForEach-Object { [string]$_.Id })
+}
+
+function Get-WinEnvRequiredFeatureId {
+    param([Parameter(Mandatory)][hashtable] $Manifest)
+
+    return @(
+        $Manifest.Features |
+            Where-Object { $_.ContainsKey('Required') -and $_.Required } |
+            ForEach-Object { [string]$_.Id })
+}
+
+function Assert-WinEnvFeatureModel {
+    param([Parameter(Mandatory)][hashtable] $Manifest)
+
+    if (-not $Manifest.ContainsKey('Features')) { throw 'The manifest declares no features.' }
+
+    $declared = [System.Collections.Generic.List[string]]::new()
+    foreach ($feature in $Manifest.Features) {
+        if (-not $feature.ContainsKey('Id')) { throw 'A feature is declared without an Id.' }
+        $id = [string]$feature.Id
+        if ($declared.Contains($id)) { throw "Feature '$id' is declared more than once." }
+        $declared.Add($id)
+    }
+
+    if (-not (Get-WinEnvRequiredFeatureId -Manifest $Manifest)) {
+        throw 'No feature is declared Required; every selection would deploy nothing.'
+    }
+
+    foreach ($feature in $Manifest.Features) {
+        foreach ($required in (Get-WinEnvFeatureRequires -Feature $feature)) {
+            if (-not $declared.Contains($required)) {
+                throw "Feature '$($feature.Id)' requires undeclared feature '$required'."
+            }
+        }
+    }
+
+    # A cycle would make the closure order arbitrary and let a selection report
+    # a feature it never resolved.
+    foreach ($feature in $Manifest.Features) {
+        $start = [string]$feature.Id
+        $seen = [System.Collections.Generic.HashSet[string]]::new([System.StringComparer]::Ordinal)
+        $queue = [System.Collections.Generic.Queue[string]]::new()
+        foreach ($required in (Get-WinEnvFeatureRequires -Feature $feature)) { $queue.Enqueue($required) }
+        while ($queue.Count) {
+            $id = $queue.Dequeue()
+            if ($id -eq $start) { throw "Feature '$start' takes part in a Requires cycle." }
+            if (-not $seen.Add($id)) { continue }
+            $next = $Manifest.Features | Where-Object { [string]$_.Id -eq $id } | Select-Object -First 1
+            foreach ($required in (Get-WinEnvFeatureRequires -Feature $next)) { $queue.Enqueue($required) }
+        }
+    }
+
+    # Nothing deployable may be unowned: an item without a feature could never
+    # be selected, and one naming an undeclared feature would be dropped from
+    # every plan without saying so.
+    $owned = @()
+    foreach ($package in $Manifest.Packages) { $owned += , @('package', [string]$package.Id, $package) }
+    foreach ($definition in $Manifest.ManagedFiles) { $owned += , @('managed file', [string]$definition.Id, $definition) }
+    $owned += , @('font', [string]$Manifest.Font.Name, $Manifest.Font)
+    $owned += , @('terminal delegation', 'Terminal', $Manifest.Terminal)
+
+    foreach ($entry in $owned) {
+        $kind, $name, $item = $entry
+        if (-not $item.ContainsKey('Feature')) { throw "The $kind '$name' declares no Feature." }
+        $feature = [string]$item.Feature
+        if (-not $declared.Contains($feature)) {
+            throw "The $kind '$name' names undeclared feature '$feature'."
+        }
+    }
+
+    foreach ($feature in $Manifest.Features) {
+        if ($feature.ContainsKey('Lifecycle') -and [string]$feature.Lifecycle -ne 'PowerToys') {
+            throw "Feature '$($feature.Id)' declares unknown lifecycle '$($feature.Lifecycle)'."
+        }
+    }
+
+    foreach ($package in $Manifest.Packages) {
+        if ($package.ContainsKey('Bootstrap') -and $package.Bootstrap -and
+            (Get-WinEnvRequiredFeatureId -Manifest $Manifest) -notcontains [string]$package.Feature) {
+            throw "Package '$($package.Id)' bootstraps this host but is not owned by a required feature."
+        }
+    }
+}
+
+function Get-WinEnvFeatureSelection {
+    param(
+        [Parameter(Mandatory)][hashtable] $Manifest,
+        [AllowEmptyCollection()][string[]] $Requested = @()
+    )
+
+    $declared = Get-WinEnvFeatureId -Manifest $Manifest
+    $required = Get-WinEnvRequiredFeatureId -Manifest $Manifest
+    $asked = @($Requested | Where-Object { $_ } | ForEach-Object { [string]$_ })
+    foreach ($id in $asked) {
+        if ($declared -notcontains $id) {
+            throw "Unknown feature '$id'. The manifest declares: $($declared -join ', ')."
+        }
+    }
+
+    $resolved = [System.Collections.Generic.HashSet[string]]::new([System.StringComparer]::Ordinal)
+    $queue = [System.Collections.Generic.Queue[string]]::new()
+    # Both operands are wrapped: PowerShell unrolls a single-element array on
+    # return, and 'core' + @('terminal') concatenates into one string.
+    foreach ($id in (@($required) + @($asked))) { $queue.Enqueue($id) }
+    while ($queue.Count) {
+        $id = $queue.Dequeue()
+        if (-not $resolved.Add($id)) { continue }
+        $feature = $Manifest.Features | Where-Object { [string]$_.Id -eq $id } | Select-Object -First 1
+        foreach ($next in (Get-WinEnvFeatureRequires -Feature $feature)) { $queue.Enqueue($next) }
+    }
+
+    # Manifest order, not resolution order, so a plan, its summary, and the
+    # recorded state read the same on every host.
+    $selected = @($declared | Where-Object { $resolved.Contains($_) })
+
+    return [pscustomobject]@{
+        Selected  = $selected
+        Requested = $asked
+        Implied   = @($selected | Where-Object { $asked -notcontains $_ -and $required -notcontains $_ })
+        Excluded  = @($declared | Where-Object { -not $resolved.Contains($_) })
+    }
+}
+
+function Expand-WinEnvFeatureArgument {
+    # bootstrap.ps1 hands its arguments to pwsh with -File, where every value
+    # arrives as one literal string. Splitting here lets 'a,b' from that entry
+    # point and -Feature a,b from a direct call mean the same thing.
+    param([AllowEmptyCollection()][string[]] $Value)
+
+    if ($null -eq $Value) { return @() }
+    return @($Value | ForEach-Object { $_ -split ',' } | ForEach-Object { $_.Trim() } | Where-Object { $_ })
+}
+
+function Get-WinEnvRequestedFeature {
+    param(
+        [Parameter(Mandatory)][hashtable] $Manifest,
+        [AllowEmptyCollection()][string[]] $Applied = @(),
+        [bool] $HasState = $false,
+        [string[]] $Feature,
+        [string[]] $Add,
+        [switch] $Minimal,
+        [switch] $All
+    )
+
+    $selectors = @()
+    if ($null -ne $Feature) { $selectors += '-Feature' }
+    if ($null -ne $Add) { $selectors += '-Add' }
+    if ($Minimal) { $selectors += '-Minimal' }
+    if ($All) { $selectors += '-All' }
+    if ($selectors.Count -gt 1) {
+        throw "Supply one selection at a time; $($selectors -join ' and ') describe different selections."
+    }
+
+    if ($Minimal) { return @() }
+    if ($All) { return (Get-WinEnvFeatureId -Manifest $Manifest) }
+    if ($null -ne $Feature) { return (Expand-WinEnvFeatureArgument -Value $Feature) }
+    if ($null -ne $Add) { return (@($Applied) + @(Expand-WinEnvFeatureArgument -Value $Add)) }
+    # No selection given: an applied host keeps what it recorded, and a host
+    # that has never applied takes everything, which is what this repository
+    # deployed before selection existed.
+    if ($HasState) { return @($Applied) }
+    return (Get-WinEnvFeatureId -Manifest $Manifest)
+}
+
+function Get-WinEnvAppliedFeature {
+    param(
+        [Parameter(Mandatory)][hashtable] $Manifest,
+        $State
+    )
+
+    if (-not $State) { return @() }
+    # A schema 1 state predates selection and was therefore written by a full
+    # deployment. Reading it as the complete feature set keeps an already
+    # applied host on exactly what it already has.
+    if (-not $State.PSObject.Properties['features']) { return (Get-WinEnvFeatureId -Manifest $Manifest) }
+    return @($State.features | ForEach-Object { [string]$_ })
+}
+
+function Test-WinEnvFeaturePrecondition {
+    param([Parameter(Mandatory)][hashtable] $Feature)
+
+    if (-not $Feature.ContainsKey('Preconditions')) { return @() }
+    $failures = [System.Collections.Generic.List[string]]::new()
+    foreach ($precondition in $Feature.Preconditions) {
+        switch ([string]$precondition.Type) {
+            'Appx' {
+                if (-not (Get-AppxPackage -Name $precondition.Name -ErrorAction SilentlyContinue)) {
+                    $failures.Add("$($precondition.Name) Appx is missing; $($precondition.Message)")
+                }
+            }
+            default { throw "Unknown precondition type '$($precondition.Type)'." }
+        }
+    }
+    return $failures.ToArray()
 }
 
 function Compare-WinEnvVersion {
@@ -25,12 +235,28 @@ function Compare-WinEnvVersion {
 }
 
 function Get-WinEnvDesiredStateHash {
-    param([Parameter(Mandatory)][string] $Root)
+    param(
+        [Parameter(Mandatory)][string] $Root,
+        [Parameter(Mandatory)][hashtable] $Manifest,
+        [Parameter(Mandatory)][AllowEmptyCollection()][string[]] $Feature
+    )
 
+    # Scoped to what this host deploys. Hashing the whole tree made an edit to
+    # a payload the host never selected look like drift and forced an Apply
+    # that could not change anything. The manifest is always included: it
+    # carries the font hashes, the terminal GUIDs, and the feature model, none
+    # of which have a payload file of their own.
     $resolvedRoot = [System.IO.Path]::GetFullPath($Root)
-    $entries = foreach ($file in Get-ChildItem -LiteralPath $resolvedRoot -File -Recurse | Sort-Object FullName) {
-        $relative = [System.IO.Path]::GetRelativePath($resolvedRoot, $file.FullName).Replace('\', '/')
-        $hash = (Get-FileHash -LiteralPath $file.FullName -Algorithm SHA256).Hash.ToLowerInvariant()
+    $relatives = [System.Collections.Generic.SortedSet[string]]::new([System.StringComparer]::Ordinal)
+    [void]$relatives.Add('manifest.json')
+    foreach ($definition in $Manifest.ManagedFiles) {
+        if ($Feature -notcontains [string]$definition.Feature) { continue }
+        [void]$relatives.Add(([string]$definition.Source).Replace('\', '/'))
+    }
+
+    $entries = foreach ($relative in $relatives) {
+        $path = Join-Path $resolvedRoot $relative
+        $hash = (Get-FileHash -LiteralPath $path -Algorithm SHA256).Hash.ToLowerInvariant()
         "$relative`0$hash"
     }
     $bytes = $script:Utf8NoBom.GetBytes(($entries -join "`n"))
@@ -56,7 +282,13 @@ function Get-WinEnvState {
     if (-not (Test-Path -LiteralPath $Path -PathType Leaf)) { return $null }
     try {
         $state = Get-Content -LiteralPath $Path -Raw -Encoding utf8 | ConvertFrom-Json -ErrorAction Stop
-        if ($state.schemaVersion -ne 1) { throw 'Unsupported state schema.' }
+        if ($state.schemaVersion -ne 1 -and $state.schemaVersion -ne 2) { throw 'Unsupported state schema.' }
+        # Schema 1 recorded no selection because none existed; it is read as a
+        # full deployment rather than rejected.
+        if ($state.schemaVersion -eq 2) {
+            if (-not $state.PSObject.Properties['features']) { throw 'Missing features.' }
+            if (-not @($state.features).Count) { throw 'Empty features.' }
+        }
         [void][System.Management.Automation.SemanticVersion]$state.projectVersion
         if ([string]::IsNullOrWhiteSpace($state.appliedAtUtc)) { throw 'Missing appliedAtUtc.' }
         if ([string]::IsNullOrWhiteSpace($state.gitCommit)) { throw 'Missing gitCommit.' }
@@ -102,12 +334,17 @@ function Write-WinEnvState {
         [Parameter(Mandatory)][string] $ProjectVersion,
         [Parameter(Mandatory)][string] $GitCommit,
         [Parameter(Mandatory)][string] $DesiredStateHash,
+        [Parameter(Mandatory)][AllowEmptyCollection()][string[]] $Feature,
         [string] $FontRegisteredAtUtc
     )
 
     $state = [ordered]@{
-        schemaVersion  = 1
+        schemaVersion  = 2
         projectVersion = $ProjectVersion
+        # The selected feature set is host state, not desired state: the
+        # manifest declares what exists, this file records how much of it this
+        # host deployed.
+        features       = @($Feature)
         appliedAtUtc   = [DateTimeOffset]::UtcNow.ToString('o')
         gitCommit      = $GitCommit
         # Retain the state key for compatibility with already-applied state.

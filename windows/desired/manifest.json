@@ -1,5 +1,49 @@
 {
+  "Features": [
+    {
+      "Id": "core",
+      "Name": "PowerShell 7 and the managed profile",
+      "Required": true
+    },
+    {
+      "Id": "font",
+      "Name": "D2Koding Nerd Font"
+    },
+    {
+      "Id": "zellij",
+      "Name": "Zellij"
+    },
+    {
+      "Id": "terminal",
+      "Name": "Windows Terminal",
+      "Requires": [
+        "font",
+        "zellij"
+      ]
+    },
+    {
+      "Id": "wezterm",
+      "Name": "WezTerm"
+    },
+    {
+      "Id": "powertoys",
+      "Lifecycle": "PowerToys",
+      "Name": "PowerToys",
+      "Preconditions": [
+        {
+          "Message": "update or repair PowerToys before applying",
+          "Name": "Microsoft.CommandPalette",
+          "Type": "Appx"
+        }
+      ]
+    },
+    {
+      "Id": "wsl",
+      "Name": "WSL 2 host configuration"
+    }
+  ],
   "Font": {
+    "Feature": "font",
     "Files": [
       {
         "FileName": "D2KodingLigatureNerdFontMono-Regular.ttf",
@@ -22,7 +66,7 @@
   "ManagedFiles": [
     {
       "Compare": "JsonSubset",
-      "Group": "PowerToys",
+      "Feature": "powertoys",
       "Id": "advancedPaste",
       "Parser": "Json",
       "Source": "files/powertoys/AdvancedPaste/settings.json",
@@ -30,7 +74,7 @@
     },
     {
       "Compare": "JsonSubset",
-      "Group": "PowerToys",
+      "Feature": "powertoys",
       "Id": "awake",
       "Parser": "Json",
       "Source": "files/powertoys/Awake/settings.json",
@@ -38,7 +82,7 @@
     },
     {
       "Compare": "JsonSubset",
-      "Group": "PowerToys",
+      "Feature": "powertoys",
       "Id": "commandPalette",
       "Parser": "Json",
       "Source": "files/powertoys/CmdPal/settings.json",
@@ -46,7 +90,7 @@
     },
     {
       "Compare": "JsonSubset",
-      "Group": "PowerToys",
+      "Feature": "powertoys",
       "Id": "fancyZones",
       "Parser": "Json",
       "Source": "files/powertoys/FancyZones/settings.json",
@@ -54,7 +98,7 @@
     },
     {
       "Compare": "ExactJson",
-      "Group": "PowerToys",
+      "Feature": "powertoys",
       "Id": "fancyZonesCustomLayouts",
       "Parser": "Json",
       "Source": "files/powertoys/FancyZones/custom-layouts.json",
@@ -62,7 +106,7 @@
     },
     {
       "Compare": "ExactJson",
-      "Group": "PowerToys",
+      "Feature": "powertoys",
       "Id": "fancyZonesDefaultLayouts",
       "Parser": "Json",
       "Source": "files/powertoys/FancyZones/default-layouts.json",
@@ -70,7 +114,7 @@
     },
     {
       "Compare": "ExactJson",
-      "Group": "PowerToys",
+      "Feature": "powertoys",
       "Id": "fancyZonesLayoutHotkeys",
       "Parser": "Json",
       "Source": "files/powertoys/FancyZones/layout-hotkeys.json",
@@ -78,7 +122,7 @@
     },
     {
       "Compare": "JsonSubset",
-      "Group": "PowerToys",
+      "Feature": "powertoys",
       "Id": "fileExplorer",
       "Parser": "Json",
       "Source": "files/powertoys/File Explorer/settings.json",
@@ -86,7 +130,7 @@
     },
     {
       "Compare": "ExactJson",
-      "Group": "PowerToys",
+      "Feature": "powertoys",
       "Id": "fileLocksmith",
       "Parser": "Json",
       "Source": "files/powertoys/File Locksmith/file-locksmith-settings.json",
@@ -94,7 +138,7 @@
     },
     {
       "Compare": "JsonSubset",
-      "Group": "PowerToys",
+      "Feature": "powertoys",
       "Id": "findMyMouse",
       "Parser": "Json",
       "Source": "files/powertoys/FindMyMouse/settings.json",
@@ -102,7 +146,7 @@
     },
     {
       "Compare": "JsonSubset",
-      "Group": "PowerToys",
+      "Feature": "powertoys",
       "Id": "keyboardManager",
       "Parser": "Json",
       "Source": "files/powertoys/Keyboard Manager/settings.json",
@@ -110,7 +154,7 @@
     },
     {
       "Compare": "ExactJson",
-      "Group": "PowerToys",
+      "Feature": "powertoys",
       "Id": "keyboardManagerMapping",
       "Parser": "Json",
       "Source": "files/powertoys/Keyboard Manager/default.json",
@@ -118,7 +162,7 @@
     },
     {
       "Compare": "JsonSubset",
-      "Group": "PowerToys",
+      "Feature": "powertoys",
       "Id": "newPlus",
       "Parser": "Json",
       "Source": "files/powertoys/NewPlus/settings.json",
@@ -126,7 +170,7 @@
     },
     {
       "Compare": "JsonSubset",
-      "Group": "PowerToys",
+      "Feature": "powertoys",
       "Id": "peek",
       "Parser": "Json",
       "Source": "files/powertoys/Peek/settings.json",
@@ -134,7 +178,7 @@
     },
     {
       "Compare": "ExactJson",
-      "Group": "PowerToys",
+      "Feature": "powertoys",
       "Id": "peekPreview",
       "Parser": "Json",
       "Source": "files/powertoys/Peek/preview-settings.json",
@@ -142,7 +186,7 @@
     },
     {
       "Compare": "ExactJson",
-      "Group": "PowerToys",
+      "Feature": "powertoys",
       "Id": "powerRename",
       "Parser": "Json",
       "Source": "files/powertoys/PowerRename/power-rename-settings.json",
@@ -150,7 +194,7 @@
     },
     {
       "Compare": "JsonSubset",
-      "Group": "PowerToys",
+      "Feature": "powertoys",
       "Id": "powerToysRoot",
       "Parser": "Json",
       "Source": "files/powertoys/settings.json",
@@ -158,6 +202,7 @@
     },
     {
       "Compare": "Text",
+      "Feature": "core",
       "Id": "powershellProfile",
       "Parser": "PowerShell",
       "Source": "files/powershell/profile.ps1",
@@ -165,6 +210,7 @@
     },
     {
       "Compare": "Text",
+      "Feature": "wezterm",
       "Id": "weztermAppearance",
       "Parser": "Lua",
       "Source": "files/wezterm/config/appearance.lua",
@@ -172,6 +218,7 @@
     },
     {
       "Compare": "Text",
+      "Feature": "wezterm",
       "Id": "weztermBehavior",
       "Parser": "Lua",
       "Source": "files/wezterm/config/behavior.lua",
@@ -179,6 +226,7 @@
     },
     {
       "Compare": "Text",
+      "Feature": "wezterm",
       "Id": "weztermBindings",
       "Parser": "Lua",
       "Source": "files/wezterm/config/bindings.lua",
@@ -186,6 +234,7 @@
     },
     {
       "Compare": "Text",
+      "Feature": "wezterm",
       "Id": "weztermDarwin",
       "Parser": "Lua",
       "Source": "files/wezterm/platform/darwin.lua",
@@ -193,6 +242,7 @@
     },
     {
       "Compare": "ExactJson",
+      "Feature": "wezterm",
       "Id": "weztermFontManifest",
       "Parser": "Json",
       "Source": "files/wezterm/fonts.json",
@@ -200,6 +250,7 @@
     },
     {
       "Compare": "Text",
+      "Feature": "wezterm",
       "Id": "weztermFonts",
       "Parser": "Lua",
       "Source": "files/wezterm/config/fonts.lua",
@@ -207,6 +258,7 @@
     },
     {
       "Compare": "Text",
+      "Feature": "wezterm",
       "Id": "weztermLinux",
       "Parser": "Lua",
       "Source": "files/wezterm/platform/linux.lua",
@@ -214,6 +266,7 @@
     },
     {
       "Compare": "Text",
+      "Feature": "wezterm",
       "Id": "weztermRoot",
       "Parser": "Lua",
       "Source": "files/wezterm/wezterm.lua",
@@ -221,6 +274,7 @@
     },
     {
       "Compare": "Text",
+      "Feature": "wezterm",
       "Id": "weztermWindows",
       "Parser": "Lua",
       "Source": "files/wezterm/platform/windows.lua",
@@ -228,6 +282,7 @@
     },
     {
       "Compare": "ExactJson",
+      "Feature": "terminal",
       "Id": "windowsTerminal",
       "Parser": "Json",
       "Source": "files/terminal/settings.json",
@@ -235,7 +290,7 @@
     },
     {
       "Compare": "JsonSubset",
-      "Group": "PowerToys",
+      "Feature": "powertoys",
       "Id": "workspaces",
       "Parser": "Json",
       "Source": "files/powertoys/Workspaces/settings.json",
@@ -243,6 +298,7 @@
     },
     {
       "Compare": "Text",
+      "Feature": "wsl",
       "Id": "wslConfig",
       "Parser": "Ini",
       "Source": "files/wsl/.wslconfig",
@@ -250,6 +306,7 @@
     },
     {
       "Compare": "Text",
+      "Feature": "zellij",
       "Id": "zellij",
       "Parser": "Kdl",
       "Source": "files/zellij/config.kdl",
@@ -260,6 +317,7 @@
     {
       "Bootstrap": false,
       "Detection": "WinGet",
+      "Feature": "powertoys",
       "Id": "Microsoft.PowerToys",
       "Name": "PowerToys"
     },
@@ -267,6 +325,7 @@
       "Bootstrap": true,
       "Command": "pwsh.exe",
       "Detection": "Command",
+      "Feature": "core",
       "Id": "Microsoft.PowerShell",
       "Name": "PowerShell 7"
     },
@@ -274,6 +333,7 @@
       "Bootstrap": false,
       "Command": "wezterm.exe",
       "Detection": "Command",
+      "Feature": "wezterm",
       "Id": "wez.wezterm",
       "Name": "WezTerm"
     },
@@ -281,6 +341,7 @@
       "AppxName": "Microsoft.WindowsTerminal",
       "Bootstrap": false,
       "Detection": "Appx",
+      "Feature": "terminal",
       "Id": "Microsoft.WindowsTerminal",
       "Name": "Windows Terminal"
     },
@@ -288,16 +349,18 @@
       "Bootstrap": false,
       "Command": "zellij.exe",
       "Detection": "Command",
+      "Feature": "zellij",
       "Id": "Zellij.Zellij",
       "Name": "Zellij"
     }
   ],
-  "ProjectVersion": "0.2.0",
-  "SchemaVersion": 1,
+  "ProjectVersion": "0.3.0",
+  "SchemaVersion": 2,
   "Terminal": {
     "DefaultProfileGuid": "{574e775e-4f2a-5b96-ac1e-a2962a402336}",
     "DelegationConsole": "{2EACA947-7F5F-4CFA-BA87-8F7FBEEFBE69}",
     "DelegationTerminal": "{E12CFF52-A866-4C77-9A90-F570A7AA2C6B}",
+    "Feature": "terminal",
     "ZellijProfileGuid": "{035bb70e-121b-521e-b4a8-d8bcbbb47434}"
   }
 }

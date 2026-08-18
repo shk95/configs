@@ -82,6 +82,9 @@ native checks instead of treating them as passed.
 - [ ] `windows/bootstrap.ps1 -Check` is observed on native Windows when package
       detection, target paths, registry behavior, fonts, configuration parsing,
       or application lifecycle behavior changed.
+- [ ] The feature selection that produced the observed evidence is named. A
+      check that ran under a partial selection is evidence for that selection
+      only and reports the rest as not selected, never as verified.
 - [ ] Missing native tooling is reported as unverified rather than valid, and
       reaches its caller as exit status 69 rather than as a failure.
 - [ ] Apply is run only when explicitly requested, followed by another
