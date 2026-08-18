@@ -9,13 +9,41 @@ BeforeAll {
         param([scriptblock] $ScriptBlock)
         try { & $ScriptBlock; return $false } catch { return $true }
     }
+
+    # A synthetic manifest keeps the feature-model rules testable without
+    # asserting them against the repository's own current selection, which is
+    # allowed to change without changing the rules.
+    function New-FeatureManifest {
+        param([hashtable] $Override = @{})
+        $manifest = @{
+            SchemaVersion  = 2
+            ProjectVersion = '1.0.0'
+            Features       = @(
+                @{ Id = 'core'; Name = 'Core'; Required = $true },
+                @{ Id = 'font'; Name = 'Font' },
+                @{ Id = 'zellij'; Name = 'Zellij' },
+                @{ Id = 'terminal'; Name = 'Terminal'; Requires = @('font', 'zellij') }
+            )
+            Packages       = @(
+                @{ Id = 'Vendor.Shell'; Feature = 'core'; Bootstrap = $true; Detection = 'Command'; Command = 'pwsh.exe' }
+            )
+            ManagedFiles   = @(
+                @{ Id = 'profile'; Feature = 'core'; Source = 'files/profile.ps1'; Target = 'profile'; Compare = 'Text'; Parser = 'PowerShell' },
+                @{ Id = 'terminalSettings'; Feature = 'terminal'; Source = 'files/settings.json'; Target = 'settings'; Compare = 'ExactJson'; Parser = 'Json' }
+            )
+            Font           = @{ Feature = 'font'; Name = 'Test Font' }
+            Terminal       = @{ Feature = 'terminal' }
+        }
+        foreach ($key in $Override.Keys) { $manifest[$key] = $Override[$key] }
+        return $manifest
+    }
 }
 
 Describe 'win-env manifest' {
-    It 'loads schema 1 and the desired-state compatibility version' {
+    It 'loads schema 2 and the desired-state compatibility version' {
         $manifest = Get-WinEnvManifest -Path (Join-Path $desiredStateRoot 'manifest.json')
-        $manifest.SchemaVersion | Should -Be 1
-        $manifest.ProjectVersion | Should -Be '0.2.0'
+        $manifest.SchemaVersion | Should -Be 2
+        $manifest.ProjectVersion | Should -Be '0.3.0'
     }
 
     It 'pins the v3.5.0 D2Koding asset and hashes' {
@@ -126,24 +154,68 @@ Describe 'state safety' {
         $path = Join-Path $TestDrive 'state\state.json'
         $fontRegisteredAtUtc = '2026-08-10T07:42:46.5260930+00:00'
         $desiredStateHash = '0123456789abcdef0123456789abcdef0123456789abcdef0123456789abcdef'
-        Write-WinEnvState -Path $path -ProjectVersion '0.1.0' -GitCommit '0123456789abcdef' -DesiredStateHash $desiredStateHash -FontRegisteredAtUtc $fontRegisteredAtUtc
+        Write-WinEnvState -Path $path -ProjectVersion '0.1.0' -GitCommit '0123456789abcdef' -DesiredStateHash $desiredStateHash -Feature @('core', 'font') -FontRegisteredAtUtc $fontRegisteredAtUtc
         $state = Get-WinEnvState -Path $path
+        $state.schemaVersion | Should -Be 2
         $state.projectVersion | Should -Be '0.1.0'
         $state.gitCommit | Should -Be '0123456789abcdef'
         $state.bundleHash | Should -Be $desiredStateHash
+        (@($state.features) -join ',') | Should -Be 'core,font'
         ([DateTimeOffset]$state.fontRegisteredAtUtc).UtcTicks | Should -Be ([DateTimeOffset]$fontRegisteredAtUtc).UtcTicks
     }
 
+    It 'refuses a schema 2 state that records no selection' {
+        $path = Join-Path $TestDrive 'selectionless.json'
+        [IO.File]::WriteAllText($path, '{"schemaVersion":2,"projectVersion":"0.1.0","appliedAtUtc":"2026-01-01T00:00:00+00:00","gitCommit":"0123456789abcdef"}')
+        (Test-Throws { Get-WinEnvState -Path $path }) | Should -Be $true
+    }
+
     It 'changes the desired-state hash when content changes' {
+        $manifest = New-FeatureManifest
         $root = Join-Path $TestDrive 'desired'
-        [void](New-Item -ItemType Directory -Path $root)
+        [void](New-Item -ItemType Directory -Path (Join-Path $root 'files') -Force)
         [IO.File]::WriteAllText((Join-Path $root 'manifest.json'), '{}')
-        $before = Get-WinEnvDesiredStateHash -Root $root
-        [IO.File]::WriteAllText((Join-Path $root 'manifest.json'), '{"changed":true}')
-        $after = Get-WinEnvDesiredStateHash -Root $root
+        [IO.File]::WriteAllText((Join-Path $root 'files\profile.ps1'), 'core')
+        $before = Get-WinEnvDesiredStateHash -Root $root -Manifest $manifest -Feature @('core')
+        [IO.File]::WriteAllText((Join-Path $root 'files\profile.ps1'), 'changed')
+        $after = Get-WinEnvDesiredStateHash -Root $root -Manifest $manifest -Feature @('core')
         $before | Should -Match '^[0-9a-f]{64}$'
         $after | Should -Match '^[0-9a-f]{64}$'
         $after | Should -Not -Be $before
+    }
+
+    It 'ignores a payload the selection excludes' {
+        # A whole-tree hash reported drift for material this host never
+        # deploys, and every such edit forced an Apply that could not change
+        # anything on it.
+        $manifest = New-FeatureManifest
+        $root = Join-Path $TestDrive 'scoped'
+        [void](New-Item -ItemType Directory -Path (Join-Path $root 'files') -Force)
+        [IO.File]::WriteAllText((Join-Path $root 'manifest.json'), '{}')
+        [IO.File]::WriteAllText((Join-Path $root 'files\profile.ps1'), 'core')
+        [IO.File]::WriteAllText((Join-Path $root 'files\settings.json'), '{}')
+        $before = Get-WinEnvDesiredStateHash -Root $root -Manifest $manifest -Feature @('core')
+        [IO.File]::WriteAllText((Join-Path $root 'files\settings.json'), '{"changed":true}')
+        (Get-WinEnvDesiredStateHash -Root $root -Manifest $manifest -Feature @('core')) | Should -Be $before
+        (Get-WinEnvDesiredStateHash -Root $root -Manifest $manifest -Feature @('core', 'terminal')) | Should -Not -Be $before
+    }
+
+    It 'reads a schema 1 state as the full feature set' {
+        # Schema 1 predates selection and could only have been written by a
+        # full deployment, so an already applied host keeps what it has.
+        $manifest = New-FeatureManifest
+        $state = [pscustomobject]@{ schemaVersion = 1; projectVersion = '1.0.0' }
+        ((Get-WinEnvAppliedFeature -Manifest $manifest -State $state) -join ',') | Should -Be 'core,font,zellij,terminal'
+    }
+
+    It 'reads a recorded selection back unchanged' {
+        $manifest = New-FeatureManifest
+        $state = [pscustomobject]@{ schemaVersion = 2; projectVersion = '1.0.0'; features = @('core', 'zellij') }
+        ((Get-WinEnvAppliedFeature -Manifest $manifest -State $state) -join ',') | Should -Be 'core,zellij'
+    }
+
+    It 'treats an uninitialized host as having applied nothing' {
+        (Get-WinEnvAppliedFeature -Manifest (New-FeatureManifest) -State $null).Count | Should -Be 0
     }
 }
 
@@ -185,6 +257,174 @@ Describe 'managed sources' {
             'files/' + [IO.Path]::GetRelativePath($filesRoot, $_.FullName).Replace('\', '/')
         } | Sort-Object)
         ($declared -join "`n") | Should -Be ($actual -join "`n")
+    }
+}
+
+Describe 'feature model' {
+    It 'owns every deployable item with a declared feature' {
+        $manifest = Get-WinEnvManifest -Path (Join-Path $desiredStateRoot 'manifest.json')
+        $declared = Get-WinEnvFeatureId -Manifest $manifest
+        foreach ($package in $manifest.Packages) { $declared | Should -Contain $package.Feature }
+        foreach ($definition in $manifest.ManagedFiles) { $declared | Should -Contain $definition.Feature }
+        $declared | Should -Contain $manifest.Font.Feature
+        $declared | Should -Contain $manifest.Terminal.Feature
+    }
+
+    It 'rejects a deployable item that names no feature' {
+        $manifest = New-FeatureManifest -Override @{
+            ManagedFiles = @(@{ Id = 'orphan'; Source = 'files/orphan.txt'; Target = 'orphan'; Compare = 'Text'; Parser = 'Text' })
+        }
+        (Test-Throws { Assert-WinEnvFeatureModel -Manifest $manifest }) | Should -Be $true
+    }
+
+    It 'rejects an item that names an undeclared feature' {
+        $manifest = New-FeatureManifest -Override @{
+            Packages = @(@{ Id = 'Vendor.Ghost'; Feature = 'ghost'; Detection = 'WinGet' })
+        }
+        (Test-Throws { Assert-WinEnvFeatureModel -Manifest $manifest }) | Should -Be $true
+    }
+
+    It 'rejects a dependency on an undeclared feature' {
+        $manifest = New-FeatureManifest -Override @{
+            Features = @(
+                @{ Id = 'core'; Name = 'Core'; Required = $true },
+                @{ Id = 'font'; Name = 'Font' },
+                @{ Id = 'zellij'; Name = 'Zellij' },
+                @{ Id = 'terminal'; Name = 'Terminal'; Requires = @('font', 'zellij', 'ghost') }
+            )
+        }
+        (Test-Throws { Assert-WinEnvFeatureModel -Manifest $manifest }) | Should -Be $true
+    }
+
+    It 'rejects a Requires cycle' {
+        $manifest = New-FeatureManifest -Override @{
+            Features = @(
+                @{ Id = 'core'; Name = 'Core'; Required = $true },
+                @{ Id = 'font'; Name = 'Font'; Requires = @('terminal') },
+                @{ Id = 'zellij'; Name = 'Zellij' },
+                @{ Id = 'terminal'; Name = 'Terminal'; Requires = @('font', 'zellij') }
+            )
+        }
+        (Test-Throws { Assert-WinEnvFeatureModel -Manifest $manifest }) | Should -Be $true
+    }
+
+    It 'rejects a manifest in which nothing is required' {
+        $manifest = New-FeatureManifest -Override @{
+            Features = @(
+                @{ Id = 'core'; Name = 'Core' },
+                @{ Id = 'font'; Name = 'Font' },
+                @{ Id = 'zellij'; Name = 'Zellij' },
+                @{ Id = 'terminal'; Name = 'Terminal'; Requires = @('font', 'zellij') }
+            )
+        }
+        (Test-Throws { Assert-WinEnvFeatureModel -Manifest $manifest }) | Should -Be $true
+    }
+
+    It 'refuses to let a bootstrap package become optional' {
+        # bootstrap.ps1 installs it before setup.ps1 can run at all, so a
+        # selection that excluded it would describe a host that cannot exist.
+        $manifest = New-FeatureManifest -Override @{
+            Packages = @(@{ Id = 'Vendor.Shell'; Feature = 'font'; Bootstrap = $true; Detection = 'Command'; Command = 'pwsh.exe' })
+        }
+        (Test-Throws { Assert-WinEnvFeatureModel -Manifest $manifest }) | Should -Be $true
+    }
+
+    It 'declares the PowerToys lifecycle on the feature that owns those files' {
+        $manifest = Get-WinEnvManifest -Path (Join-Path $desiredStateRoot 'manifest.json')
+        $owner = @($manifest.Features | Where-Object { $_.ContainsKey('Lifecycle') })
+        $owner.Count | Should -Be 1
+        $owner[0].Id | Should -Be 'powertoys'
+        @($manifest.ManagedFiles | Where-Object Feature -eq 'powertoys').Count | Should -Be 18
+    }
+}
+
+Describe 'feature selection' {
+    It 'reduces a bare selection to the required features' {
+        $selection = Get-WinEnvFeatureSelection -Manifest (New-FeatureManifest)
+        ($selection.Selected -join ',') | Should -Be 'core'
+        $selection.Excluded | Should -Contain 'terminal'
+    }
+
+    It 'closes over declared dependencies and reports what it added' {
+        $selection = Get-WinEnvFeatureSelection -Manifest (New-FeatureManifest) -Requested @('terminal')
+        ($selection.Selected -join ',') | Should -Be 'core,font,zellij,terminal'
+        (($selection.Implied | Sort-Object) -join ',') | Should -Be 'font,zellij'
+        $selection.Excluded.Count | Should -Be 0
+    }
+
+    It 'keeps a dependency selectable on its own' {
+        $selection = Get-WinEnvFeatureSelection -Manifest (New-FeatureManifest) -Requested @('zellij')
+        ($selection.Selected -join ',') | Should -Be 'core,zellij'
+        $selection.Excluded | Should -Contain 'terminal'
+    }
+
+    It 'rejects an unknown feature instead of silently ignoring it' {
+        (Test-Throws { Get-WinEnvFeatureSelection -Manifest (New-FeatureManifest) -Requested @('ghost') }) | Should -Be $true
+    }
+
+    It 'leaves the host untouched beyond PowerShell in a minimal selection' {
+        # The point of a minimal bootstrap: no font, no registry delegation,
+        # no application settings, no Appx precondition.
+        $manifest = Get-WinEnvManifest -Path (Join-Path $desiredStateRoot 'manifest.json')
+        $selection = Get-WinEnvFeatureSelection -Manifest $manifest
+        ($selection.Selected -join ',') | Should -Be 'core'
+        (@($manifest.Packages | Where-Object { $selection.Selected -contains $_.Feature }).Id -join ',') |
+            Should -Be 'Microsoft.PowerShell'
+        (@($manifest.ManagedFiles | Where-Object { $selection.Selected -contains $_.Feature }).Id -join ',') |
+            Should -Be 'powershellProfile'
+        $selection.Selected | Should -Not -Contain $manifest.Font.Feature
+        $selection.Selected | Should -Not -Contain $manifest.Terminal.Feature
+        @($manifest.Features | Where-Object { $selection.Selected -contains $_.Id -and $_.ContainsKey('Preconditions') }).Count |
+            Should -Be 0
+    }
+
+    It 'binds the Windows Terminal payload to the zellij profile it declares' {
+        # files/terminal/settings.json is owned whole, and it launches
+        # zellij.exe from a profile, so terminal cannot be selected without it.
+        $manifest = Get-WinEnvManifest -Path (Join-Path $desiredStateRoot 'manifest.json')
+        $selection = Get-WinEnvFeatureSelection -Manifest $manifest -Requested @('terminal')
+        $selection.Selected | Should -Contain 'zellij'
+        $selection.Selected | Should -Contain 'font'
+        (($selection.Implied | Sort-Object) -join ',') | Should -Be 'font,zellij'
+    }
+
+    It 'keeps a fresh host on the full set and an applied host on its record' {
+        # Selection is new; the deployment this repository already performed is
+        # not. A host that applied before must not silently gain or lose
+        # anything because the mechanism arrived.
+        $manifest = New-FeatureManifest
+        ((Get-WinEnvRequestedFeature -Manifest $manifest) -join ',') | Should -Be 'core,font,zellij,terminal'
+        ((Get-WinEnvRequestedFeature -Manifest $manifest -Applied @('core', 'zellij') -HasState $true) -join ',') |
+            Should -Be 'core,zellij'
+    }
+
+    It 'reads -Minimal, -All, -Feature and -Add as selections' {
+        $manifest = New-FeatureManifest
+        (Get-WinEnvRequestedFeature -Manifest $manifest -Minimal).Count | Should -Be 0
+        ((Get-WinEnvRequestedFeature -Manifest $manifest -All) -join ',') | Should -Be 'core,font,zellij,terminal'
+        ((Get-WinEnvRequestedFeature -Manifest $manifest -Feature @('terminal')) -join ',') | Should -Be 'terminal'
+        ((Get-WinEnvRequestedFeature -Manifest $manifest -Applied @('core') -HasState $true -Add @('zellij')) -join ',') |
+            Should -Be 'core,zellij'
+    }
+
+    It 'splits a comma-joined argument from bootstrap.ps1' {
+        # pwsh -File passes every value as one literal string.
+        ((Expand-WinEnvFeatureArgument -Value @('wezterm, wsl')) -join ',') | Should -Be 'wezterm,wsl'
+        (Expand-WinEnvFeatureArgument -Value $null).Count | Should -Be 0
+    }
+
+    It 'refuses two selections at once rather than guessing' {
+        $manifest = New-FeatureManifest
+        (Test-Throws { Get-WinEnvRequestedFeature -Manifest $manifest -Minimal -All }) | Should -Be $true
+        (Test-Throws { Get-WinEnvRequestedFeature -Manifest $manifest -Feature @('font') -Add @('font') }) | Should -Be $true
+    }
+
+    It 'does not pull Windows Terminal into a WezTerm selection' {
+        $manifest = Get-WinEnvManifest -Path (Join-Path $desiredStateRoot 'manifest.json')
+        $selection = Get-WinEnvFeatureSelection -Manifest $manifest -Requested @('wezterm')
+        ($selection.Selected -join ',') | Should -Be 'core,wezterm'
+        $selection.Excluded | Should -Contain 'font'
+        $selection.Excluded | Should -Contain 'terminal'
     }
 }
 
