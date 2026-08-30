@@ -1561,6 +1561,372 @@ Describe 'Windows build condition' {
     }
 }
 
+Describe 'capture' {
+    BeforeAll {
+        # A host no machine running this suite has to be. Every value is
+        # assembled from separate literals for the reason the payload scan
+        # earlier in this file gives: written contiguously, an absolute account
+        # path in this committed source is itself what
+        # tool/version-control/hygiene refuses, and a fixture must not teach
+        # either scanner to ignore one.
+        $Account = 'alice'
+        $CaptureUserProfile = 'C' + ':' + '\' + 'Users' + '\' + $Account
+        $CaptureLocalAppData = $CaptureUserProfile + '\' + 'AppData' + '\' + 'Local'
+        $CaptureAppData = $CaptureUserProfile + '\' + 'AppData' + '\' + 'Roaming'
+        $CaptureHost = @{
+            UserProfile  = $CaptureUserProfile
+            LocalAppData = $CaptureLocalAppData
+            AppData      = $CaptureAppData
+            UserName     = $Account
+        }
+        # The spelling a JSON payload carries: one separator written as two.
+        $JsonLocalAppData = $CaptureLocalAppData.Replace('\', '\\')
+        $JsonAppData = $CaptureAppData.Replace('\', '\\')
+        $JsonUserProfile = $CaptureUserProfile.Replace('\', '\\')
+
+        # A throwaway desired-state root. Capture writes payloads, so no
+        # fixture here may point it at windows/desired.
+        $CaptureRoot = Join-Path $TestDrive 'capture-desired'
+        $CaptureFiles = Join-Path $CaptureRoot 'files'
+        $CaptureTargets = Join-Path $TestDrive 'capture-host'
+        [void](New-Item -ItemType Directory -Path $CaptureFiles -Force)
+        [void](New-Item -ItemType Directory -Path $CaptureTargets -Force)
+
+        function New-CapturePayload {
+            param([string] $Name, [string] $Content)
+            [IO.File]::WriteAllText((Join-Path $CaptureFiles $Name), $Content)
+            return "files/$Name"
+        }
+
+        function New-CaptureTarget {
+            param([string] $Name, [string] $Content)
+            $path = Join-Path $CaptureTargets $Name
+            [IO.File]::WriteAllText($path, $Content)
+            return $path
+        }
+
+        function New-CaptureDefinition {
+            param(
+                [string] $Id = 'sample',
+                [string] $Feature = 'core',
+                [string] $Compare = 'ExactJson',
+                [string] $Parser = 'Json',
+                [string] $Source,
+                [string] $Target
+            )
+            return @{
+                Id      = $Id
+                Feature = $Feature
+                Compare = $Compare
+                Parser  = $Parser
+                Source  = $Source
+                Target  = $Target
+            }
+        }
+    }
+
+    It 'restores the one placeholder the deploy direction expands' {
+        $content = '{"template":"' + $JsonLocalAppData + '\\NewPlus"}'
+        $result = ConvertFrom-WinEnvTemplate -Content $content -HostPath $CaptureHost
+
+        $result.Content | Should -Be '{"template":"__LOCALAPPDATA_JSON__\\NewPlus"}'
+        # Nothing is reported as unrepresentable, and that is the longest-first
+        # rule under test rather than a detail: USERPROFILE is a prefix of
+        # LOCALAPPDATA, so a shortest-first pass would have matched the head of
+        # this occurrence and reported a leak that is not there.
+        @($result.Unrepresented).Count | Should -Be 0
+        # The round trip is exact: Apply expands what capture restored.
+        (Expand-WinEnvTemplate -Content $result.Content -HostPath $CaptureHost) | Should -Be $content
+    }
+
+    It 'reports a spelling it cannot represent instead of inventing a placeholder' {
+        # Apply expands one token, to the JSON-escaped spelling of
+        # LOCALAPPDATA. Writing `{USERPROFILE}` into a payload would deploy that
+        # text literally to the host, so every other spelling is reported and
+        # refused rather than rewritten.
+        $raw = 'Set-Location "' + $CaptureLocalAppData + '"'
+        $rawResult = ConvertFrom-WinEnvTemplate -Content $raw -HostPath $CaptureHost
+        $rawResult.Content | Should -Be $raw
+        @($rawResult.Unrepresented) | Should -Contain 'LOCALAPPDATA (raw)'
+
+        $roaming = '{"config":"' + $JsonAppData + '\\Zellij"}'
+        $roamingResult = ConvertFrom-WinEnvTemplate -Content $roaming -HostPath $CaptureHost
+        $roamingResult.Content | Should -Be $roaming
+        @($roamingResult.Unrepresented) | Should -Contain 'APPDATA (JSON-escaped)'
+
+        $profileText = '{"home":"' + $JsonUserProfile + '"}'
+        $profileResult = ConvertFrom-WinEnvTemplate -Content $profileText -HostPath $CaptureHost
+        @($profileResult.Unrepresented) | Should -Contain 'USERPROFILE (JSON-escaped)'
+    }
+
+    It 'captures an ExactJson payload and converges the check that reported the drift' {
+        $source = New-CapturePayload 'exact.json' "{`n  `"template`": `"__LOCALAPPDATA_JSON__\\Old`"`n}`n"
+        $target = New-CaptureTarget 'exact.json' ('{"template":"' + $JsonLocalAppData + '\\New"}')
+        $definition = New-CaptureDefinition -Id 'exact' -Source $source -Target $target
+
+        $plan = Get-WinEnvCapturePlan -Definition $definition -RepositoryRoot $CaptureRoot `
+            -Build 22631 -HostPath $CaptureHost
+        $plan.Status | Should -Be 'Captured'
+        $plan.Content | Should -Be '{"template":"__LOCALAPPDATA_JSON__\\New"}'
+        $plan.Content | Should -Not -Match 'Users'
+
+        [void](Save-WinEnvCapturedPayload -Plan $plan -RepositoryRoot $CaptureRoot)
+        # The point of the whole tool: the file the check called drift now
+        # matches the payload, through the same comparison the check uses.
+        (Test-WinEnvManagedFile -Definition $definition -RepositoryRoot $CaptureRoot -HostPath $CaptureHost) |
+            Should -Be $true
+    }
+
+    It 'drops a generated Windows Terminal profile and keeps the declared ones' {
+        $payloadText = Get-Content -LiteralPath (Join-Path $desiredStateRoot 'files/terminal/settings.json') `
+            -Raw -Encoding utf8
+        $source = New-CapturePayload 'terminal.json' $payloadText
+
+        # The maintainer's host: the two declared profiles, a change made in
+        # the application's own settings UI, and the Git for Windows fragment
+        # profile Windows Terminal materialises into the file it co-owns. The
+        # guid is a short opaque key rather than a UUID, because a UUID in
+        # tracked desired state is what hygiene exists to catch.
+        $document = $payloadText | ConvertFrom-Json
+        $document.copyOnSelect = $false
+        $document.profiles.list = @($document.profiles.list) + [pscustomobject]@{
+            guid   = '{generated-git-bash}'
+            hidden = $false
+            name   = 'Git Bash'
+            source = 'Git'
+        }
+        $target = New-CaptureTarget 'terminal.json' ($document | ConvertTo-Json -Depth 100)
+
+        $definition = New-CaptureDefinition -Id 'windowsTerminal' -Feature 'terminal' `
+            -Compare 'ExactJsonWithGeneratedProfiles' -Source $source -Target $target
+        $plan = Get-WinEnvCapturePlan -Definition $definition -RepositoryRoot $CaptureRoot `
+            -Build 22631 -HostPath $CaptureHost
+
+        $plan.Status | Should -Be 'Captured'
+        $captured = $plan.Content | ConvertFrom-Json
+        @($captured.profiles.list).Count | Should -Be 2
+        @($captured.profiles.list | Where-Object { $_.PSObject.Properties['source'] -and $_.source -eq 'Git' }) |
+            Should -BeNullOrEmpty
+        # A declared profile that carries a source of its own stays: the rule
+        # keys on the guid the payload declares, not on the member's presence.
+        @($captured.profiles.list | ForEach-Object { $_.name }) | Should -Be @('PowerShell 7', 'Zellij Workspace')
+        $captured.copyOnSelect | Should -Be $false
+
+        [void](Save-WinEnvCapturedPayload -Plan $plan -RepositoryRoot $CaptureRoot)
+        (Test-WinEnvManagedFile -Definition $definition -RepositoryRoot $CaptureRoot -HostPath $CaptureHost) |
+            Should -Be $true
+    }
+
+    It 'refuses a file the suite already names as runtime state' {
+        # Both spellings the deny list is matched against: the payload this
+        # repository would hold, and the target on the host. Neither file has
+        # to exist, because the refusal is decided before either is read, and
+        # the target below is deliberately in a directory PowerToys would not
+        # use: the name is what these two guards and hygiene all decide on.
+        $bySource = New-CaptureDefinition -Id 'workspaces' -Feature 'powertoys' `
+            -Source 'files/powertoys/Workspaces/workspaces.json' `
+            -Target (Join-Path $CaptureTargets 'unrelated.json')
+        $plan = Get-WinEnvCapturePlan -Definition $bySource -RepositoryRoot $CaptureRoot `
+            -Build 22631 -HostPath $CaptureHost
+        $plan.Status | Should -Be 'Refused'
+        $plan.Reason | Should -Match 'runtime state'
+
+        $byTarget = New-CaptureDefinition -Id 'appliedLayouts' -Feature 'powertoys' `
+            -Source 'files/exact.json' `
+            -Target (Join-Path (Join-Path $CaptureTargets 'FancyZones') 'applied-layouts.json')
+        $targetPlan = Get-WinEnvCapturePlan -Definition $byTarget -RepositoryRoot $CaptureRoot `
+            -Build 22631 -HostPath $CaptureHost
+        $targetPlan.Status | Should -Be 'Refused'
+        $targetPlan.Reason | Should -Match 'runtime state'
+    }
+
+    It 'refuses a JsonSubset payload, which cannot be derived from the host file' {
+        $source = New-CapturePayload 'subset.json' '{"declared":true}'
+        $target = New-CaptureTarget 'subset.json' '{"declared":false,"untracked":1}'
+        $definition = New-CaptureDefinition -Id 'subset' -Compare 'JsonSubset' -Source $source -Target $target
+
+        $plan = Get-WinEnvCapturePlan -Definition $definition -RepositoryRoot $CaptureRoot `
+            -Build 22631 -HostPath $CaptureHost
+        $plan.Status | Should -Be 'Refused'
+        $plan.Reason | Should -Match 'subset'
+    }
+
+    It 'refuses a target this host does not have' {
+        $source = New-CapturePayload 'absent.json' '{"a":1}'
+        $definition = New-CaptureDefinition -Id 'absent' -Source $source `
+            -Target (Join-Path $CaptureTargets 'never-written.json')
+
+        $plan = Get-WinEnvCapturePlan -Definition $definition -RepositoryRoot $CaptureRoot `
+            -Build 22631 -HostPath $CaptureHost
+        $plan.Status | Should -Be 'Refused'
+        $plan.Reason | Should -Match 'does not exist'
+    }
+
+    It 'refuses a build-conditional entry on a host whose build is undetermined' {
+        $upper = New-CapturePayload 'upper.wslconfig' "[wsl2]`nnetworkingMode=Mirrored`n"
+        $lower = New-CapturePayload 'lower.wslconfig' "[wsl2]`nmemory=4GB`n"
+        $target = New-CaptureTarget 'undetermined.wslconfig' "[wsl2]`nmemory=8GB`n"
+        $definition = @{
+            Id      = 'wslConfig'
+            Feature = 'wsl'
+            Compare = 'Text'
+            Parser  = 'Ini'
+            Target  = $target
+            Sources = @(@{ MinimumBuild = 22621; Source = $upper }, @{ Source = $lower })
+        }
+
+        # Apply reads a null build as the variant every supported build
+        # honours, which is safe because it deploys the lower payload. Capture
+        # is stricter in the other direction: writing host content into a
+        # payload no host selected would put one machine's state into a file
+        # another machine deploys.
+        $plan = Get-WinEnvCapturePlan -Definition $definition -RepositoryRoot $CaptureRoot `
+            -Build $null -HostPath $CaptureHost
+        $plan.Status | Should -Be 'Refused'
+        $plan.Reason | Should -Match 'build'
+    }
+
+    It 'captures into the payload variant the host build selects' {
+        $upper = New-CapturePayload 'selected-upper.wslconfig' "[wsl2]`nnetworkingMode=Mirrored`n"
+        $lower = New-CapturePayload 'selected-lower.wslconfig' "[wsl2]`nmemory=4GB`n"
+        $target = New-CaptureTarget 'selected.wslconfig' "[wsl2]`nmemory=8GB`n"
+        $definition = @{
+            Id      = 'wslConfig'
+            Feature = 'wsl'
+            Compare = 'Text'
+            Parser  = 'Ini'
+            Target  = $target
+            Sources = @(@{ MinimumBuild = 22621; Source = $upper }, @{ Source = $lower })
+        }
+
+        (Get-WinEnvCapturePlan -Definition $definition -RepositoryRoot $CaptureRoot `
+                -Build 22631 -HostPath $CaptureHost).Source | Should -Be $upper
+        $below = Get-WinEnvCapturePlan -Definition $definition -RepositoryRoot $CaptureRoot `
+            -Build 19045 -HostPath $CaptureHost
+        $below.Source | Should -Be $lower
+        $below.Status | Should -Be 'Captured'
+        $below.Content | Should -Be "[wsl2]`nmemory=8GB`n"
+    }
+
+    It 'refuses content that still holds an absolute account path' {
+        # Another account's path: no host value of this run rewrites it, and
+        # every payload assertion in this suite would reject it.
+        $other = 'C' + ':' + '\' + 'Users' + '\' + 'bob' + '\' + 'Desktop'
+        $source = New-CapturePayload 'leaky.json' '{"path":""}'
+        $target = New-CaptureTarget 'leaky.json' ('{"path":"' + $other.Replace('\', '\\') + '"}')
+        $definition = New-CaptureDefinition -Id 'leaky' -Source $source -Target $target
+
+        $plan = Get-WinEnvCapturePlan -Definition $definition -RepositoryRoot $CaptureRoot `
+            -Build 22631 -HostPath $CaptureHost
+        $plan.Status | Should -Be 'Refused'
+        $plan.Reason | Should -Match 'absolute account path'
+    }
+
+    It 'refuses content that names this host account outside a path' {
+        $source = New-CapturePayload 'named.json' '{"greeting":""}'
+        $target = New-CaptureTarget 'named.json' ('{"greeting":"hello ' + $Account + '"}')
+        $definition = New-CaptureDefinition -Id 'named' -Source $source -Target $target
+
+        $plan = Get-WinEnvCapturePlan -Definition $definition -RepositoryRoot $CaptureRoot `
+            -Build 22631 -HostPath $CaptureHost
+        $plan.Status | Should -Be 'Refused'
+        $plan.Reason | Should -Match 'account'
+
+        # Bounded by the characters a name is spelled with, so a short account
+        # name inside an unrelated word is not a leak.
+        $innocent = New-CaptureTarget 'innocent.json' ('{"greeting":"hello ' + $Account + 'bury"}')
+        $innocentDefinition = New-CaptureDefinition -Id 'innocent' `
+            -Source (New-CapturePayload 'innocent.json' '{"greeting":""}') -Target $innocent
+        (Get-WinEnvCapturePlan -Definition $innocentDefinition -RepositoryRoot $CaptureRoot `
+                -Build 22631 -HostPath $CaptureHost).Status | Should -Be 'Captured'
+    }
+
+    It 'refuses a .wslconfig firewall key, which AGENTS.md adds only on direction' {
+        $source = New-CapturePayload 'guarded.wslconfig' "[wsl2]`nmemory=4GB`n"
+        $target = New-CaptureTarget 'guarded.wslconfig' "[wsl2]`nmemory=8GB`nfirewall=true`n"
+        $definition = New-CaptureDefinition -Id 'wslConfig' -Feature 'wsl' -Compare 'Text' -Parser 'Ini' `
+            -Source $source -Target $target
+
+        $plan = Get-WinEnvCapturePlan -Definition $definition -RepositoryRoot $CaptureRoot `
+            -Build 22631 -HostPath $CaptureHost
+        $plan.Status | Should -Be 'Refused'
+        $plan.Reason | Should -Match 'firewall'
+    }
+
+    It 'leaves a file that matches its payload untouched' {
+        $text = "{`n  `"a`": 1`n}`n"
+        $source = New-CapturePayload 'unchanged.json' $text
+        $target = New-CaptureTarget 'unchanged.json' '{"a":1}'
+        $definition = New-CaptureDefinition -Id 'unchanged' -Source $source -Target $target
+        $payloadPath = Join-Path $CaptureRoot $source
+        $before = (Get-FileHash -LiteralPath $payloadPath -Algorithm SHA256).Hash
+
+        $plan = Get-WinEnvCapturePlan -Definition $definition -RepositoryRoot $CaptureRoot `
+            -Build 22631 -HostPath $CaptureHost
+        $plan.Status | Should -Be 'Unchanged'
+        $plan.Content | Should -BeNullOrEmpty
+        { Save-WinEnvCapturedPayload -Plan $plan -RepositoryRoot $CaptureRoot } | Should -Throw
+        (Get-FileHash -LiteralPath $payloadPath -Algorithm SHA256).Hash | Should -Be $before
+    }
+
+    It 'writes nothing under -WhatIf' {
+        $source = New-CapturePayload 'whatif.json' "{`n  `"a`": 1`n}`n"
+        $target = New-CaptureTarget 'whatif.json' '{"a":2}'
+        $definition = New-CaptureDefinition -Id 'whatif' -Source $source -Target $target
+        $payloadPath = Join-Path $CaptureRoot $source
+        $before = (Get-FileHash -LiteralPath $payloadPath -Algorithm SHA256).Hash
+
+        $plan = Get-WinEnvCapturePlan -Definition $definition -RepositoryRoot $CaptureRoot `
+            -Build 22631 -HostPath $CaptureHost
+        $plan.Status | Should -Be 'Captured'
+        (Save-WinEnvCapturedPayload -Plan $plan -RepositoryRoot $CaptureRoot -WhatIf) | Should -Be $payloadPath
+        (Get-FileHash -LiteralPath $payloadPath -Algorithm SHA256).Hash | Should -Be $before
+
+        [void](Save-WinEnvCapturedPayload -Plan $plan -RepositoryRoot $CaptureRoot)
+        (Get-FileHash -LiteralPath $payloadPath -Algorithm SHA256).Hash | Should -Not -Be $before
+    }
+
+    It 'keeps the line-ending and final-newline convention the payload already uses' {
+        # A host file and its payload may disagree about line endings without
+        # disagreeing about anything a comparison mode reads, so writing the
+        # host's convention would turn a one-key change into a whole-file diff.
+        $crlfPath = Join-Path $CaptureFiles 'endings-crlf.ini'
+        [IO.File]::WriteAllText($crlfPath, "[wsl2]`r`nmemory=4GB`r`n")
+        (ConvertTo-WinEnvPayloadText -Content "[wsl2]`nmemory=8GB`n" -PayloadPath $crlfPath) |
+            Should -Be "[wsl2]`r`nmemory=8GB`r`n"
+
+        $lfPath = Join-Path $CaptureFiles 'endings-lf.ini'
+        [IO.File]::WriteAllText($lfPath, "[wsl2]`nmemory=4GB")
+        # No final newline in the payload, and none added.
+        (ConvertTo-WinEnvPayloadText -Content "[wsl2]`r`nmemory=8GB`r`n" -PayloadPath $lfPath) |
+            Should -Be "[wsl2]`nmemory=8GB"
+    }
+
+    It 'offers the documented selection and no unattended mode' {
+        # The script is the part of capture that needs a terminal and a Git
+        # repository, so this suite holds it to its interface rather than
+        # running it. Its rules are fixtured above, through the functions it
+        # calls; the guards it restates from tool/version-control/commit are
+        # exercised on the host, and docs/status.md records that boundary.
+        $capturePath = Join-Path $repositoryRoot 'tools\capture.ps1'
+        (Test-Path -LiteralPath $capturePath -PathType Leaf) | Should -Be $true
+
+        $tokens = $null; $errors = $null
+        $ast = [System.Management.Automation.Language.Parser]::ParseFile($capturePath, [ref]$tokens, [ref]$errors)
+        $errors.Count | Should -Be 0
+
+        $parameters = @($ast.ParamBlock.Parameters | ForEach-Object { $_.Name.VariablePath.UserPath })
+        $parameters | Should -Contain 'Feature'
+        $parameters | Should -Contain 'Id'
+        # -WhatIf comes from SupportsShouldProcess rather than from a parameter
+        # of its own, and there is deliberately no -Yes, -Force or override.
+        ($ast.ParamBlock.Attributes | ForEach-Object { $_.Extent.Text }) -join ' ' |
+            Should -Match 'SupportsShouldProcess'
+        $parameters | Should -Not -Contain 'Force'
+        $parameters | Should -Not -Contain 'Yes'
+    }
+}
+
 Describe 'script syntax' {
     It 'parses all repository PowerShell files' {
         foreach ($file in Get-ChildItem $repositoryRoot -Filter '*.ps1' -File -Recurse) {

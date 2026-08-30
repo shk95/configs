@@ -628,17 +628,118 @@ function Get-WinEnvDesiredStateHash {
     return [Convert]::ToHexString([Security.Cryptography.SHA256]::HashData($bytes)).ToLowerInvariant()
 }
 
-function Resolve-WinEnvPath {
-    param([Parameter(Mandatory)][string] $Path)
+function Get-WinEnvHostPath {
+    <#
+        .SYNOPSIS
+        The host values a managed target and a payload template are written in
+        terms of, plus this host's account name.
 
-    return $Path.Replace('{LOCALAPPDATA}', $env:LOCALAPPDATA).Replace('{APPDATA}', $env:APPDATA).Replace('{USERPROFILE}', $env:USERPROFILE)
+        .DESCRIPTION
+        One seam for the three directories and the account name, so the deploy
+        direction and the capture direction read the same host in the same way,
+        and so a fixture can hand both directions a host that no test machine
+        has to be. The default is this process's environment, which is what
+        every caller that predates capture used directly.
+    #>
+
+    return @{
+        UserProfile  = [string]$env:USERPROFILE
+        LocalAppData = [string]$env:LOCALAPPDATA
+        AppData      = [string]$env:APPDATA
+        # [Environment]::UserName rather than the account-name environment
+        # variable, which is absent on the Unix-like hosts this module's
+        # fixtures run on. The two agree on Windows.
+        UserName     = [string][Environment]::UserName
+    }
+}
+
+function Resolve-WinEnvPath {
+    param(
+        [Parameter(Mandatory)][string] $Path,
+        [hashtable] $HostPath = (Get-WinEnvHostPath)
+    )
+
+    return $Path.Replace('{LOCALAPPDATA}', [string]$HostPath.LocalAppData).
+        Replace('{APPDATA}', [string]$HostPath.AppData).
+        Replace('{USERPROFILE}', [string]$HostPath.UserProfile)
 }
 
 function Expand-WinEnvTemplate {
-    param([Parameter(Mandatory)][string] $Content)
+    param(
+        [Parameter(Mandatory)][string] $Content,
+        [hashtable] $HostPath = (Get-WinEnvHostPath)
+    )
 
-    $jsonLocalAppData = $env:LOCALAPPDATA.Replace('\', '\\')
+    $jsonLocalAppData = ([string]$HostPath.LocalAppData).Replace('\', '\\')
     return $Content.Replace('__LOCALAPPDATA_JSON__', $jsonLocalAppData)
+}
+
+function ConvertFrom-WinEnvTemplate {
+    <#
+        .SYNOPSIS
+        The inverse of Expand-WinEnvTemplate: host content with this host's own
+        directories put back as the placeholder the deploy direction expands,
+        plus the list of the ones it has no placeholder for.
+
+        .DESCRIPTION
+        This domain has exactly one content placeholder, and Apply expands it
+        to the JSON-escaped spelling of LOCALAPPDATA. That asymmetry is the
+        design of this function rather than an oversight of it: a capture that
+        wrote `{USERPROFILE}` into a payload would produce desired state Apply
+        deploys literally, the host would then hold the placeholder text, and
+        every later check would report drift no Apply could clear. Every
+        spelling this direction cannot represent is therefore reported instead
+        of rewritten, and Get-WinEnvCapturePlan refuses that file rather than
+        committing a leak.
+
+        Longest value first. USERPROFILE is a prefix of both of the others, so
+        a shortest-first pass would rewrite the head of a LOCALAPPDATA
+        occurrence and leave behind a path that is neither a placeholder nor a
+        host path. Both spellings of each value are searched, because a JSON
+        payload carries its separators doubled and a text payload carries them
+        once. The match is case-insensitive because Windows accepts more than
+        one spelling of the same directory while this repository's comparisons
+        are ordinal, so a captured occurrence is normalised to the spelling
+        Apply will write back.
+    #>
+    param(
+        [Parameter(Mandatory)][AllowEmptyString()][string] $Content,
+        [hashtable] $HostPath = (Get-WinEnvHostPath)
+    )
+
+    $variables = @(
+        @{ Name = 'LOCALAPPDATA'; Value = [string]$HostPath.LocalAppData; JsonToken = '__LOCALAPPDATA_JSON__' },
+        @{ Name = 'APPDATA'; Value = [string]$HostPath.AppData; JsonToken = $null },
+        @{ Name = 'USERPROFILE'; Value = [string]$HostPath.UserProfile; JsonToken = $null }
+    )
+    $ordered = @($variables |
+            Where-Object { $_.Value } |
+            Sort-Object -Property @{ Expression = { ([string]$_.Value).Length } } -Descending)
+
+    $text = $Content
+    $unrepresented = [System.Collections.Generic.List[string]]::new()
+    foreach ($variable in $ordered) {
+        $raw = [string]$variable.Value
+        $escaped = $raw.Replace('\', '\\')
+        $spellings = @(
+            @{ Label = 'JSON-escaped'; Text = $escaped; Token = $variable.JsonToken },
+            @{ Label = 'raw'; Text = $raw; Token = $null }
+        )
+        foreach ($spelling in $spellings) {
+            # A value with no separator has one spelling, not two. Searching for
+            # it twice would report the same occurrence under both labels.
+            if ($spelling.Label -eq 'raw' -and $escaped -ceq $raw) { continue }
+            $pattern = '(?i)' + [regex]::Escape([string]$spelling.Text)
+            if (-not [regex]::IsMatch($text, $pattern)) { continue }
+            if ($spelling.Token) {
+                $text = [regex]::Replace($text, $pattern, [string]$spelling.Token)
+                continue
+            }
+            $unrepresented.Add("$($variable.Name) ($($spelling.Label))")
+        }
+    }
+
+    return @{ Content = $text; Unrepresented = @($unrepresented) }
 }
 
 function Get-WinEnvState {
@@ -1276,14 +1377,19 @@ function Test-WinEnvJsonWithGeneratedProfiles {
 function Test-WinEnvManagedFile {
     param(
         [Parameter(Mandatory)][hashtable] $Definition,
-        [Parameter(Mandatory)][string] $RepositoryRoot
+        [Parameter(Mandatory)][string] $RepositoryRoot,
+        # Additive and defaulted to this process's environment, so every caller
+        # that predates capture reads the same host it always did. Capture
+        # passes its own so that one run cannot resolve the target against one
+        # host and restore the placeholders against another.
+        [hashtable] $HostPath = (Get-WinEnvHostPath)
     )
 
     $sourcePath = Join-Path $RepositoryRoot $Definition.Source
-    $targetPath = Resolve-WinEnvPath $Definition.Target
+    $targetPath = Resolve-WinEnvPath -Path $Definition.Target -HostPath $HostPath
     if (-not (Test-Path -LiteralPath $sourcePath -PathType Leaf)) { throw "Managed source is missing: $sourcePath" }
     if (-not (Test-Path -LiteralPath $targetPath -PathType Leaf)) { return $false }
-    $expectedText = Expand-WinEnvTemplate (Get-Content -LiteralPath $sourcePath -Raw -Encoding utf8)
+    $expectedText = Expand-WinEnvTemplate -Content (Get-Content -LiteralPath $sourcePath -Raw -Encoding utf8) -HostPath $HostPath
     $actualText = Get-Content -LiteralPath $targetPath -Raw -Encoding utf8
     switch ($Definition.Compare) {
         'Text' { return $expectedText.Replace("`r`n", "`n") -eq $actualText.Replace("`r`n", "`n") }
@@ -1406,6 +1512,319 @@ function Set-WinEnvManagedFile {
     $targetPath = Resolve-WinEnvPath $Definition.Target
     $content = Expand-WinEnvTemplate (Get-Content -LiteralPath $sourcePath -Raw -Encoding utf8)
     Write-WinEnvAtomicText -Path $targetPath -Content $content
+}
+
+# Files a host writes at runtime, matched by file name against both the payload
+# this repository would hold and the target on the host. PowerToys rewrites
+# both while it runs, they describe one machine's session rather than desired
+# state, and AGENTS.md keeps snapshots of runtime state out of every domain.
+#
+# By name rather than by directory, because that is how the two guards that
+# already exist decide it: the Pester suite asserts neither file is tracked,
+# and tool/version-control/hygiene refuses either name anywhere in the tree. A
+# capture that wrote one into a directory those two do not expect would be
+# refused at the commit anyway, so agreeing with them here is what makes this
+# tool's refusal the same rule stated earlier rather than a third opinion.
+$script:WinEnvRuntimeStateName = @(
+    'workspaces.json',
+    'applied-layouts.json'
+)
+
+# An absolute account path, in the one-backslash spelling a text payload
+# carries and the two-backslash spelling a JSON payload carries. The drive is a
+# character class rather than a letter on purpose: written as a letter this
+# source would itself hold the text it hunts, and
+# tool/version-control/hygiene scans the whole tracked tree for exactly that.
+# The pattern is otherwise the one windows/tests/WinEnv.Tests.ps1 asserts the
+# payload tree against, so a capture cannot write a payload that suite refuses.
+$script:WinEnvAccountPathPattern = '(?i)[A-Za-z]:\\{1,2}Users\\{1,2}[A-Za-z0-9._-]+'
+
+# AGENTS.md, Host safety: a .wslconfig firewall value is never added without
+# explicit direction, and a capture is not direction.
+$script:WinEnvWslFirewallPattern = '(?im)^[ \t]*firewall[ \t]*='
+
+# Private, like Get-WinGetRegistration: the capture outcome's shape is this
+# module's contract, but the two helpers that build it are not.
+function Test-RuntimeStatePath {
+    param([AllowNull()][string] $Path)
+
+    if ([string]::IsNullOrWhiteSpace($Path)) { return $false }
+    # Split on both separators: a target is spelled the Windows way and a
+    # payload source the manifest way, and this must decide either.
+    $name = @($Path.Replace('\', '/') -split '/')[-1].ToLowerInvariant()
+    return $script:WinEnvRuntimeStateName -contains $name
+}
+
+function New-CaptureOutcome {
+    param(
+        [Parameter(Mandatory)][hashtable] $Definition,
+        [Parameter(Mandatory)][string] $Status,
+        [AllowNull()][string] $Source = $null,
+        [AllowNull()][string] $Target = $null,
+        [AllowNull()][string] $Reason = $null,
+        [AllowNull()][string] $Content = $null
+    )
+
+    return [pscustomobject]@{
+        Id      = [string]$Definition.Id
+        Feature = [string]$Definition.Feature
+        Source  = $Source
+        Target  = $Target
+        Status  = $Status
+        Reason  = $Reason
+        Content = $Content
+    }
+}
+
+function Remove-WinEnvGeneratedProfile {
+    <#
+        .SYNOPSIS
+        One Windows Terminal settings document with the profiles the
+        application generated removed, as text.
+
+        .DESCRIPTION
+        The capture side of ExactJsonWithGeneratedProfiles. The read side
+        tolerates an entry Windows Terminal's fragments and generators
+        materialised into the file it co-owns; this side must not write one
+        back into desired state, or the next Apply would deploy a fragment
+        profile to a host whose Git for Windows, or whose WSL distribution, is
+        not the one that produced it.
+
+        An entry whose guid the payload declares is kept as the host holds it,
+        which is the point of capturing: a declared profile the maintainer
+        edited in the application is exactly the change being moved into
+        desired state. An undeclared entry carrying a non-empty string `source`
+        is dropped, because that member is how Windows Terminal records that it
+        generated the entry itself. An undeclared entry without one was written
+        by a person or another tool, is drift rather than generated content
+        under the read side's own rule, and is captured so that the two
+        directions agree about what the payload owns.
+    #>
+    param(
+        [Parameter(Mandatory)][string] $DeclaredContent,
+        [Parameter(Mandatory)][string] $HostContent
+    )
+
+    $declaredDocument = $DeclaredContent | ConvertFrom-Json -ErrorAction Stop
+    $declaredList = Get-WinEnvJsonMember -Value (Get-WinEnvJsonMember -Value $declaredDocument -Name 'profiles') -Name 'list'
+    if ($declaredList -isnot [System.Collections.IList]) {
+        throw 'A payload compared as ExactJsonWithGeneratedProfiles declares no profiles.list array.'
+    }
+
+    $declared = [System.Collections.Generic.HashSet[string]]::new([System.StringComparer]::Ordinal)
+    foreach ($entry in $declaredList) {
+        $guid = [string](Get-WinEnvJsonMember -Value $entry -Name 'guid')
+        if ([string]::IsNullOrWhiteSpace($guid)) {
+            throw 'A declared Windows Terminal profile has no guid; this mode matches declared profiles by guid.'
+        }
+        [void]$declared.Add($guid)
+    }
+
+    $document = $HostContent | ConvertFrom-Json -ErrorAction Stop
+    $profiles = Get-WinEnvJsonMember -Value $document -Name 'profiles'
+    $list = Get-WinEnvJsonMember -Value $profiles -Name 'list'
+    if ($list -isnot [System.Collections.IList]) {
+        throw 'The host Windows Terminal settings file holds no profiles.list array.'
+    }
+
+    $kept = @(
+        foreach ($entry in $list) {
+            $guid = Get-WinEnvJsonMember -Value $entry -Name 'guid'
+            if ($guid -is [string] -and $declared.Contains($guid)) {
+                $entry
+                continue
+            }
+            # Tested as a string rather than coerced to one, exactly as the
+            # read side tests it: a `source` of 0 or false is not a
+            # generator's name.
+            $source = Get-WinEnvJsonMember -Value $entry -Name 'source'
+            if ($source -is [string] -and -not [string]::IsNullOrWhiteSpace($source)) { continue }
+            $entry
+        })
+
+    $profiles.list = $kept
+    return ($document | ConvertTo-Json -Depth 100)
+}
+
+function Get-WinEnvCapturePlan {
+    <#
+        .SYNOPSIS
+        What capturing one managed file from this host would do: nothing, a
+        payload, or a refusal with its reason.
+
+        .DESCRIPTION
+        Decides everything and writes nothing, so the tool that does write can
+        show the whole run before its single confirmation, and so every rule
+        below has a fixture that needs no Windows host and no repository
+        working tree.
+
+        Drift is decided by Test-WinEnvManagedFile, the same function
+        `-Check` uses, rather than by a comparison of this direction's own. Two
+        comparison implementations would eventually disagree, and the failure
+        would be a capture that reports a file as changed which the check
+        reports as clean, or worse the reverse.
+
+        The refusals are ordered so that the cheapest and most categorical come
+        first and every one of them is decided before the host file is read:
+
+          1. a build-conditional entry on a host whose build is undetermined,
+             because no variant was selected by this host rather than guessed;
+          2. runtime state, which no branch of this tool may ever write;
+          3. a target this host does not have.
+
+        Then drift, and a file that matches its payload is untouched. Only a
+        file that drifted can be refused for what it holds, which is why
+        JsonSubset is ranked after the comparison rather than before it: that
+        mode is most of the PowerToys inventory, and refusing all of it up
+        front would bury the one file a run has something to say about under a
+        list of files that agree with their payloads. Its payload is a subset
+        of the host file by design and cannot be derived from it, so a
+        JsonSubset file that really did drift is reported and left to the
+        operator.
+
+        The content is read last, because the final three refusals — an
+        unrepresentable host directory, a leaked account path or account name,
+        and a .wslconfig firewall key — are properties of the content rather
+        than of the declaration.
+    #>
+    param(
+        [Parameter(Mandatory)][hashtable] $Definition,
+        [Parameter(Mandatory)][string] $RepositoryRoot,
+        [AllowNull()][object] $Build = (Get-WinEnvWindowsBuild),
+        [hashtable] $HostPath = (Get-WinEnvHostPath)
+    )
+
+    if ($Definition.ContainsKey('Sources') -and $null -eq $Build) {
+        return New-CaptureOutcome -Definition $Definition -Status 'Refused' `
+            -Reason 'this host''s Windows build is undetermined, so no source variant is selected by it'
+    }
+
+    $resolved = Resolve-WinEnvManagedFile -Definition $Definition -Build $Build
+    $source = [string]$resolved.Source
+    $target = Resolve-WinEnvPath -Path ([string]$resolved.Target) -HostPath $HostPath
+
+    if ((Test-RuntimeStatePath -Path $source) -or (Test-RuntimeStatePath -Path $target)) {
+        return New-CaptureOutcome -Definition $Definition -Status 'Refused' -Source $source -Target $target `
+            -Reason 'the file is runtime state; AGENTS.md keeps snapshots of it out of every domain'
+    }
+
+    if (-not (Test-Path -LiteralPath $target -PathType Leaf)) {
+        return New-CaptureOutcome -Definition $Definition -Status 'Refused' -Source $source -Target $target `
+            -Reason 'the managed target does not exist on this host'
+    }
+
+    if (Test-WinEnvManagedFile -Definition $resolved -RepositoryRoot $RepositoryRoot -HostPath $HostPath) {
+        return New-CaptureOutcome -Definition $Definition -Status 'Unchanged' -Source $source -Target $target
+    }
+
+    if ([string]$resolved.Compare -eq 'JsonSubset') {
+        return New-CaptureOutcome -Definition $Definition -Status 'Refused' -Source $source -Target $target `
+            -Reason 'the payload is a subset of the host file by design and cannot be derived from it'
+    }
+
+    $hostText = Get-Content -LiteralPath $target -Raw -Encoding utf8
+    if ([string]$resolved.Compare -eq 'ExactJsonWithGeneratedProfiles') {
+        $declaredText = Get-Content -LiteralPath (Join-Path $RepositoryRoot $source) -Raw -Encoding utf8
+        $hostText = Remove-WinEnvGeneratedProfile -DeclaredContent $declaredText -HostContent $hostText
+    }
+
+    $restored = ConvertFrom-WinEnvTemplate -Content $hostText -HostPath $HostPath
+    $content = [string]$restored.Content
+
+    if (@($restored.Unrepresented).Count) {
+        return New-CaptureOutcome -Definition $Definition -Status 'Refused' -Source $source -Target $target `
+            -Reason ("the content holds this host's " + (@($restored.Unrepresented) -join ', ') +
+                ' directory, and desired state has no placeholder Apply expands there; edit the payload by hand')
+    }
+
+    if ([regex]::IsMatch($content, $script:WinEnvAccountPathPattern)) {
+        return New-CaptureOutcome -Definition $Definition -Status 'Refused' -Source $source -Target $target `
+            -Reason 'the content still holds an absolute account path after placeholder restoration'
+    }
+
+    $account = [string]$HostPath.UserName
+    if (-not [string]::IsNullOrWhiteSpace($account)) {
+        # Bounded by the characters an account name is spelled with, so a short
+        # name is not matched inside an unrelated word.
+        $accountPattern = '(?i)(?<![A-Za-z0-9])' + [regex]::Escape($account) + '(?![A-Za-z0-9])'
+        if ([regex]::IsMatch($content, $accountPattern)) {
+            return New-CaptureOutcome -Definition $Definition -Status 'Refused' -Source $source -Target $target `
+                -Reason "the content names this host's account"
+        }
+    }
+
+    if ($target.ToLowerInvariant().EndsWith('.wslconfig') -and
+        [regex]::IsMatch($content, $script:WinEnvWslFirewallPattern)) {
+        return New-CaptureOutcome -Definition $Definition -Status 'Refused' -Source $source -Target $target `
+            -Reason 'the content declares a .wslconfig firewall key, which AGENTS.md adds only on explicit direction'
+    }
+
+    return New-CaptureOutcome -Definition $Definition -Status 'Captured' -Source $source -Target $target -Content $content
+}
+
+function ConvertTo-WinEnvPayloadText {
+    <#
+        .SYNOPSIS
+        Captured content in the line endings and final-newline convention the
+        payload already on disk uses.
+
+        .DESCRIPTION
+        A host file and its payload may disagree about line endings without
+        disagreeing about anything a comparison mode reads: Text normalises
+        CRLF, and both JSON modes compare parsed documents. Writing the host's
+        convention would therefore turn a one-key change into a whole-file
+        diff and hide the change being reviewed. A payload that does not exist
+        yet cannot happen on this path, because a managed file's source is
+        required to exist before drift is decided at all; the LF default is
+        there so this function is total rather than because it is reachable.
+    #>
+    param(
+        [Parameter(Mandatory)][AllowEmptyString()][string] $Content,
+        [Parameter(Mandatory)][string] $PayloadPath
+    )
+
+    $crlf = $false
+    $finalNewline = $true
+    if (Test-Path -LiteralPath $PayloadPath -PathType Leaf) {
+        $existing = Get-Content -LiteralPath $PayloadPath -Raw -Encoding utf8
+        if ($null -ne $existing) {
+            $crlf = $existing.Contains("`r`n")
+            $finalNewline = $existing.EndsWith("`n")
+        }
+    }
+
+    $text = $Content.Replace("`r`n", "`n").TrimEnd("`n")
+    if ($finalNewline) { $text += "`n" }
+    if ($crlf) { $text = $text.Replace("`n", "`r`n") }
+    return $text
+}
+
+function Save-WinEnvCapturedPayload {
+    <#
+        .SYNOPSIS
+        Write one captured payload into this repository's desired state.
+
+        .DESCRIPTION
+        The only function in this module that writes to the repository rather
+        than to a host. It supports ShouldProcess, so -WhatIf reports the path
+        it would write and leaves the payload byte for byte as it was.
+    #>
+    [CmdletBinding(SupportsShouldProcess)]
+    param(
+        [Parameter(Mandatory)] $Plan,
+        [Parameter(Mandatory)][string] $RepositoryRoot
+    )
+
+    if ([string]$Plan.Status -ne 'Captured') {
+        throw "The capture plan for '$($Plan.Id)' is $($Plan.Status), not Captured."
+    }
+
+    $path = Join-Path $RepositoryRoot ([string]$Plan.Source)
+    $text = ConvertTo-WinEnvPayloadText -Content ([string]$Plan.Content) -PayloadPath $path
+    if ($PSCmdlet.ShouldProcess($path, 'Write the captured payload')) {
+        Write-WinEnvAtomicText -Path $path -Content $text
+    }
+    return $path
 }
 
 function Get-WinEnvProfileHook {
