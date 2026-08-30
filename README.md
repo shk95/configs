@@ -79,6 +79,21 @@ present and is intentionally ignored by Git.
 
 Run checks for the domain you changed. `CONTRIBUTING.md` lists the workflows.
 
+A routine desired-state edit whose commit message is a template — a Homebrew
+formula or cask, a `flake.lock` refresh — reaches `dev` in one command:
+
+```sh
+tool/version-control/commit --dry-run --publish brew add <formula>
+tool/version-control/commit --publish brew add <formula>
+```
+
+The first shows the edit, the branch, the selected checks, the commit message,
+the pull-request body and every command it would run, and writes nothing. The
+second asks once, then branches from `origin/dev`, commits with the hooks
+enabled, pushes, opens the pull request against `dev` and arms auto-merge, so
+the merge happens when `Required checks` pass. There is no unattended mode and
+no hook bypass. Drop `--publish` to stop at the commit.
+
 Codex, Claude Code, and other Agent Skills-compatible tools can use the
 project's `run-version-control-workflow` skill to classify a change, audit Git
 policy, prepare work, or plan a domain release. The canonical model-neutral

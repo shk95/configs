@@ -454,6 +454,12 @@ commit_git commit -q -m 'feat(repository): create commit fixture'
 commit_git config core.hooksPath .githooks
 commit_git branch master
 
+# The cases below assert what the helper does where it is told to commit, so
+# they run on a feature branch. On dev the helper branches from origin/dev
+# instead, which the publish block further down owns; leaving these on dev
+# would make every one of them exercise that path too.
+commit_git switch -q -c feature/unixlike-fixture
+
 commit_stub_path="$commit_root/stub"
 
 run_commit() {
@@ -463,6 +469,19 @@ run_commit() {
     unset GIT_DIR GIT_WORK_TREE GIT_INDEX_FILE
     cd "$commit_root" || exit 1
     PATH="$commit_stub_path:$PATH" tool/version-control/commit "$@" 2>&1
+  )
+}
+
+# The same run with the streams left apart. --publish copies the hook's output
+# into the pull-request body and merges its stderr into stdout to do it; a run
+# without --publish must not, so this is how the two are told apart.
+run_commit_stdout() {
+  commit_answer=$1
+  shift
+  printf '%s\n' "$commit_answer" | (
+    unset GIT_DIR GIT_WORK_TREE GIT_INDEX_FILE
+    cd "$commit_root" || exit 1
+    PATH="$commit_stub_path:$PATH" tool/version-control/commit "$@" 2>/dev/null
   )
 }
 
@@ -598,7 +617,7 @@ if [ -n "$(commit_git status --porcelain --untracked-files=no)" ]; then
   echo "commit helper changed the tree while refusing on master" >&2
   exit 1
 fi
-commit_git switch -q dev
+commit_git switch -q feature/unixlike-fixture
 
 # AGENTS.md line 93: a tool that takes the hook's bypass silently creates the
 # policy a human was trusted to decide.
@@ -666,6 +685,30 @@ printf '%s\n' "$unverified_commit" | grep -q '^→ format$'
 printf '%s\n' "$unverified_commit" | grep -q '^· format unverified'
 printf '%s\n' "$unverified_commit" \
   | grep -q 'Some checks could not run on this host and remain unverified\.'
+
+# #31's guarantee is that without --publish nothing stands between the hook and
+# the terminal. Git gives a hook the commit's stderr, and the publish path
+# copies that stream into the pull-request body by folding it into stdout, so
+# the two paths are told apart here: without --publish the helper's own plan is
+# on stdout and not one line of the hook's is.
+commit_before=$(commit_count)
+stub_commit_check 1
+if plain_stdout=$(run_commit_stdout y cask add qqq); then
+  echo "commit helper survived a failing pre-commit hook" >&2
+  exit 1
+fi
+printf '%s\n' "$plain_stdout" \
+  | grep -q '^message: feat(unixlike): add homebrew cask qqq$'
+if printf '%s\n' "$plain_stdout" | grep -q '^→ '; then
+  echo "the commit helper captured the hook's stream without --publish" >&2
+  exit 1
+fi
+if [ "$(commit_count)" != "$commit_before" ]; then
+  echo "commit helper committed despite a failing pre-commit hook" >&2
+  exit 1
+fi
+commit_git reset -q --hard HEAD
+stub_commit_check 69
 
 commit_before=$(commit_count)
 if (
@@ -749,9 +792,18 @@ commit_git config core.hooksPath .githooks
 
 # The helper refuses a bypass; it must also never take one. Its own refusal
 # names those flags, so this asserts an invocation rather than a mention.
-if grep -Eq 'git commit.*--no-verify|core\.hooksPath=|HUSKY=|GIT_DIR=' \
+if grep -Eq 'git commit.*--no-verify|git push.*(--no-verify|--force|-f )|core\.hooksPath=|HUSKY=|GIT_DIR=' \
   "$root/tool/version-control/commit"; then
   echo "the commit helper carries a hook bypass" >&2
+  exit 1
+fi
+# Arming auto-merge is the whole point of --publish; merging past Required
+# checks is the whole point of not doing it that way. The flag that would is
+# assembled from printf arguments so this file's own text cannot satisfy the
+# grep, and only a merge invocation carrying it is a finding.
+if grep 'gh pr merge' "$root/tool/version-control/commit" \
+  | grep -Fq -- "$(printf -- '--%s' admin)"; then
+  echo "the commit helper can merge past Required checks" >&2
   exit 1
 fi
 # It reads core.hooksPath in order to report an unhooked clone. Reading is not
@@ -767,6 +819,494 @@ fi
   unset GIT_DIR GIT_WORK_TREE GIT_INDEX_FILE
   cd "$commit_root" && "$audit"
 ) >/dev/null
+# ---------------------------------------------------------------------------
+# tool/version-control/commit --publish
+# ---------------------------------------------------------------------------
+
+# --publish carries the same commit through to a pull request, so this needs a
+# remote and a gh. Both are throwaway. `origin` is a bare repository under
+# $test_root and `gh` is a stub on PATH that records its argv and answers from
+# the environment, so nothing here can reach github.com or this repository's
+# real remote, and the authenticated gh on the developer's machine is shadowed
+# rather than trusted to be absent.
+publish_root="$test_root/publish"
+publish_remote="$test_root/publish-remote.git"
+publish_log="$test_root/publish-gh.log"
+publish_body="$test_root/publish-pr-body"
+
+(
+  unset GIT_DIR GIT_WORK_TREE GIT_INDEX_FILE
+  git init -q --bare -b dev "$publish_remote"
+)
+
+mkdir -p "$publish_root/tool/checks" "$publish_root/modules/flake" \
+  "$publish_root/stub" "$publish_root/nogh"
+cp -R "$root/.githooks" "$publish_root/.githooks"
+cp -R "$root/tool/version-control" "$publish_root/tool/version-control"
+cp -R "$root/tool/dispatch" "$publish_root/tool/dispatch"
+printf '_: {\n  identity = { %s = "%s"; };\n}\n' gitName Fixture \
+  >"$publish_root/modules/flake/inventory.nix"
+: >"$publish_root/tool/version-control/hygiene.allow"
+cat >"$publish_root/modules/darwin-homebrew.nix" <<'FIXTURE'
+_: {
+  modules.darwin.system = _: {
+    homebrew = {
+      brews = [
+        "mas"
+      ];
+
+      casks = [
+        "anki"
+        "zen"
+      ];
+    };
+  };
+}
+FIXTURE
+printf '{ "nodes": {}, "root": "root", "version": 7 }\n' >"$publish_root/flake.lock"
+
+# The pre-commit hook selects unixlike:format, lint and payloads for the module
+# and the pre-push hook selects unixlike:test for it. All four exist here so
+# the assertions below are about the helper rather than about a host's Nix.
+for publish_check in format lint payloads test; do
+  printf '#!/bin/sh\nexit 0\n' >"$publish_root/tool/checks/$publish_check"
+  chmod +x "$publish_root/tool/checks/$publish_check"
+done
+printf '#!/bin/sh\nexit 0\n' >"$publish_root/stub/gitleaks"
+chmod +x "$publish_root/stub/gitleaks"
+
+cat >"$publish_root/stub/gh" <<STUB
+#!/bin/sh
+printf '%s\n' "\$*" >>"$publish_log"
+case "\$1 \$2" in
+  'auth status') exit "\${STUB_GH_AUTH_STATUS:-0}" ;;
+  'api repos/'*) printf '%s\n' "\${STUB_GH_AUTO_MERGE:-true}" ;;
+  'pr list') printf '%s' "\${STUB_GH_OPEN_PULLS:-}" ;;
+  'pr create')
+    while [ "\$#" -gt 0 ]; do
+      if [ "\$1" = --body-file ] && [ "\$#" -gt 1 ]; then
+        cat "\$2" >"$publish_body"
+      fi
+      shift
+    done
+    printf 'https://github.com/owner/repo/pull/7\n'
+    ;;
+  'pr merge') exit "\${STUB_GH_MERGE_STATUS:-0}" ;;
+  *) exit 1 ;;
+esac
+STUB
+chmod +x "$publish_root/stub/gh"
+
+# A PATH with no gh at all. Removing one command from PATH is impossible, so
+# this is a PATH of exactly the commands the helper reaches before its gh
+# preflight, and the fixture asserts gh is genuinely unreachable through it.
+for publish_tool in git awk sed tr sort grep cut cat rm mktemp dirname; do
+  publish_tool_path=$(command -v "$publish_tool" 2>/dev/null) || continue
+  ln -sf "$publish_tool_path" "$publish_root/nogh/$publish_tool"
+done
+if PATH="$publish_root/nogh" command -v gh >/dev/null 2>&1; then
+  echo "the no-gh fixture PATH still resolves gh" >&2
+  exit 1
+fi
+
+publish_git() {
+  (
+    unset GIT_DIR GIT_WORK_TREE GIT_INDEX_FILE
+    git -C "$publish_root" "$@"
+  )
+}
+
+publish_remote_git() {
+  (
+    unset GIT_DIR GIT_WORK_TREE GIT_INDEX_FILE
+    git -C "$publish_remote" "$@"
+  )
+}
+
+publish_git init -q -b dev
+publish_git config user.name Fixture
+publish_git config user.email fixture@example.invalid
+publish_git remote add origin "$publish_remote"
+publish_git add .
+publish_git commit -q -m 'feat(repository): create publish fixture'
+# The seed push is made before hooks are enabled: it carries tool/ and
+# .githooks/, which select reports as repository:fixtures, and this runner is
+# that unit.
+publish_git push -q --set-upstream origin dev
+publish_git config core.hooksPath .githooks
+publish_git branch master
+
+publish_path="$publish_root/stub:$PATH"
+
+run_publish() {
+  publish_answer=$1
+  shift
+  printf '%s\n' "$publish_answer" | (
+    unset GIT_DIR GIT_WORK_TREE GIT_INDEX_FILE
+    cd "$publish_root" || exit 1
+    PATH="$publish_path" tool/version-control/commit "$@" 2>&1
+  )
+}
+
+publish_branches() { publish_git for-each-ref --format='%(refname)' refs/heads; }
+publish_remote_branches() {
+  publish_remote_git for-each-ref --format='%(refname)'
+}
+
+publish_wrote_nothing() {
+  if [ "$(publish_branches)" != "$publish_branches_before" ]; then
+    echo "commit --publish created a branch while $1" >&2
+    exit 1
+  fi
+  if [ "$(publish_remote_branches)" != "$publish_remote_before" ]; then
+    echo "commit --publish wrote to the remote while $1" >&2
+    exit 1
+  fi
+  if [ -n "$(publish_git status --porcelain --untracked-files=no)" ]; then
+    echo "commit --publish changed the tree while $1" >&2
+    exit 1
+  fi
+  if grep -Eq '^pr (create|merge)' "$publish_log"; then
+    echo "commit --publish called a writing gh subcommand while $1" >&2
+    exit 1
+  fi
+}
+
+publish_snapshot() {
+  publish_branches_before=$(publish_branches)
+  publish_remote_before=$(publish_remote_branches)
+  : >"$publish_log"
+}
+
+# A dry run names the branch, the pull request and every command, and writes
+# nothing anywhere. The gh calls it does make are the read-only preflight.
+publish_snapshot
+publish_dry=$(run_publish n --dry-run --publish cask add af)
+printf '%s\n' "$publish_dry" \
+  | grep -q '^branch: feature/unixlike-cask-add-af (new, from origin/dev)$'
+printf '%s\n' "$publish_dry" \
+  | grep -q '^pull request title: feat(unixlike): add homebrew cask af$'
+printf '%s\n' "$publish_dry" | grep -q '^  Scope: unixlike$'
+printf '%s\n' "$publish_dry" \
+  | grep -q '^  Selected checks: unixlike:format, unixlike:lint, unixlike:payloads$'
+printf '%s\n' "$publish_dry" \
+  | grep -q '^  Command: tool/version-control/commit --dry-run --publish cask add af$'
+printf '%s\n' "$publish_dry" \
+  | grep -q '^  git push --set-upstream origin feature/unixlike-cask-add-af$'
+printf '%s\n' "$publish_dry" \
+  | grep -q '^  gh pr create --base dev --head feature/unixlike-cask-add-af '
+printf '%s\n' "$publish_dry" | grep -q '^  gh pr merge --auto --merge '
+grep -q '^auth status ' "$publish_log"
+grep -Fq -- 'api repos/{owner}/{repo} --jq .allow_auto_merge' "$publish_log"
+# gh filters --head by branch name alone, so a fork's branch of the same name
+# lands in the listing. The invocation has to ask which repository each row
+# came from, or the helper cannot drop the ones that are not this branch.
+grep -Fq -- '--json baseRefName,isCrossRepository,url' "$publish_log"
+publish_wrote_nothing "planning a dry run"
+
+# The confirmation still gates everything. An answer that is not y publishes
+# nothing, not even the branch.
+publish_snapshot
+if run_publish n --publish cask add af >/dev/null; then
+  echo "commit --publish acted without a confirmation" >&2
+  exit 1
+fi
+publish_wrote_nothing "the answer was not y"
+
+# The happy path: one y, and the change is on a branch of its own, pushed,
+# proposed against dev, and armed to merge when Required checks pass.
+publish_snapshot
+: >"$publish_body"
+if ! publish_out=$(run_publish y --publish cask add af); then
+  printf '%s\n' "$publish_out" >&2
+  echo "commit --publish refused a valid publish" >&2
+  exit 1
+fi
+if [ "$(publish_git branch --show-current)" != feature/unixlike-cask-add-af ]; then
+  echo "commit --publish did not create the branch it named" >&2
+  exit 1
+fi
+if [ "$(publish_git rev-parse HEAD^)" \
+  != "$(publish_git rev-parse refs/remotes/origin/dev)" ]; then
+  echo "commit --publish did not branch from origin/dev" >&2
+  exit 1
+fi
+if [ "$(publish_git show -s --format=%s HEAD)" \
+  != 'feat(unixlike): add homebrew cask af' ]; then
+  echo "commit --publish used an unexpected message" >&2
+  exit 1
+fi
+if [ "$(publish_remote_git rev-parse refs/heads/feature/unixlike-cask-add-af)" \
+  != "$(publish_git rev-parse HEAD)" ]; then
+  echo "commit --publish did not push the commit it made" >&2
+  exit 1
+fi
+# The pull request opens against dev, and auto-merge is armed once, on the
+# pull request that was just opened.
+if [ "$(grep -c '^pr create --base dev --head feature/unixlike-cask-add-af ' \
+  "$publish_log")" != 1 ]; then
+  echo "commit --publish did not open exactly one pull request against dev" >&2
+  exit 1
+fi
+if [ "$(grep -c '^pr merge --auto --merge https://github.com/owner/repo/pull/7$' \
+  "$publish_log")" != 1 ]; then
+  echo "commit --publish did not arm auto-merge exactly once" >&2
+  exit 1
+fi
+printf '%s\n' "$publish_out" | grep -q '^https://github.com/owner/repo/pull/7$'
+# The body carries what the diff cannot: the owning scope, the checks the local
+# gate selected, the command, and the hook's own evidence lines.
+grep -q '^Scope: unixlike$' "$publish_body"
+grep -q '^Selected checks: unixlike:format, unixlike:lint, unixlike:payloads$' \
+  "$publish_body"
+grep -q '^Command: tool/version-control/commit --publish cask add af$' "$publish_body"
+grep -q '^→ format$' "$publish_body"
+grep -q '^→ hygiene$' "$publish_body"
+grep -q 'Required checks' "$publish_body"
+# Copying those lines into the body must not take them away from the terminal.
+printf '%s\n' "$publish_out" | grep -q '^→ format$'
+
+# A pull request already open from this branch against dev is the one to arm,
+# not a reason to open a second.
+publish_snapshot
+STUB_GH_OPEN_PULLS='dev https://github.com/owner/repo/pull/7'
+export STUB_GH_OPEN_PULLS
+if ! reuse_out=$(run_publish y --publish cask add kf); then
+  printf '%s\n' "$reuse_out" >&2
+  echo "commit --publish refused a branch that already has a pull request" >&2
+  exit 1
+fi
+unset STUB_GH_OPEN_PULLS
+if [ "$(publish_git branch --show-current)" != feature/unixlike-cask-add-af ]; then
+  echo "commit --publish left the branch it was invoked on" >&2
+  exit 1
+fi
+# git pushes a branch, not a commit. The commit already on this branch is
+# published and merged by the same run, so the plan has to name it.
+printf '%s\n' "$reuse_out" \
+  | grep -q '^this branch also carries, and will publish and merge:$'
+printf '%s\n' "$reuse_out" | grep -q 'add homebrew cask af$'
+# Nothing rewrites an existing pull request, so nothing may promise a body for
+# one.
+printf '%s\n' "$reuse_out" \
+  | grep -q '^pull request: https://github.com/owner/repo/pull/7 (existing; title and body unchanged)$'
+if printf '%s\n' "$reuse_out" | grep -q '^pull request body:$'; then
+  echo "commit --publish showed a body it was never going to apply" >&2
+  exit 1
+fi
+if grep -q '^pr create' "$publish_log"; then
+  echo "commit --publish opened a second pull request for one branch" >&2
+  exit 1
+fi
+if [ "$(grep -c '^pr merge --auto --merge https://github.com/owner/repo/pull/7$' \
+  "$publish_log")" != 1 ]; then
+  echo "commit --publish did not arm the pull request that was already open" >&2
+  exit 1
+fi
+publish_git switch -q dev
+
+# An open pull request with a different base would be retargeted or duplicated
+# by gh pr create. Neither is this helper's call, so it refuses before writing.
+publish_snapshot
+STUB_GH_OPEN_PULLS='master https://github.com/owner/repo/pull/9'
+export STUB_GH_OPEN_PULLS
+if base_out=$(run_publish y --publish cask add bf); then
+  echo "commit --publish acted on a branch proposed against another base" >&2
+  exit 1
+fi
+unset STUB_GH_OPEN_PULLS
+printf '%s\n' "$base_out" | grep -q 'different base'
+publish_wrote_nothing "a pull request with another base was open"
+
+# AGENTS.md: master is entered by promotion only. The refusal precedes the
+# publish preflight, so gh is never consulted at all.
+publish_git switch -q master
+publish_snapshot
+if master_publish=$(run_publish y --publish cask add cf); then
+  echo "commit --publish committed on master" >&2
+  exit 1
+fi
+printf '%s\n' "$master_publish" | grep -q master
+if [ -s "$publish_log" ]; then
+  echo "commit --publish consulted gh before refusing on master" >&2
+  exit 1
+fi
+publish_wrote_nothing "refusing on master"
+publish_git switch -q dev
+
+# --publish without gh refuses before any write. Without --publish the same
+# clone still commits, so this is a prerequisite of publishing rather than of
+# the helper.
+publish_snapshot
+publish_path="$publish_root/nogh"
+if nogh_out=$(run_publish y --publish cask add df); then
+  echo "commit --publish acted without gh" >&2
+  exit 1
+fi
+publish_path="$publish_root/stub:$PATH"
+printf '%s\n' "$nogh_out" | grep -q 'gh is unavailable'
+publish_wrote_nothing "gh was unavailable"
+
+# Arming auto-merge is the last thing --publish does, so a repository that does
+# not allow it is a refusal before the push rather than a failure after it.
+publish_snapshot
+STUB_GH_AUTO_MERGE=false
+export STUB_GH_AUTO_MERGE
+if automerge_out=$(run_publish y --publish cask add ef); then
+  echo "commit --publish pushed to a repository that cannot auto-merge" >&2
+  exit 1
+fi
+unset STUB_GH_AUTO_MERGE
+printf '%s\n' "$automerge_out" | grep -q 'does not allow auto-merge'
+publish_wrote_nothing "auto-merge was not allowed"
+
+# gh present but not authenticated is the same shape of refusal: this helper
+# opens the pull request as the operator and holds no credential of its own.
+publish_snapshot
+STUB_GH_AUTH_STATUS=1
+export STUB_GH_AUTH_STATUS
+if unauth_out=$(run_publish y --publish cask add if); then
+  echo "commit --publish acted with an unauthenticated gh" >&2
+  exit 1
+fi
+unset STUB_GH_AUTH_STATUS
+printf '%s\n' "$unauth_out" | grep -q 'not authenticated'
+publish_wrote_nothing "gh was not authenticated"
+
+# The most consequential ordering the change has: a pre-commit hook that fails
+# under --publish must stop before the push, so nothing reaches the remote and
+# no pull request is proposed for a commit that was never made.
+publish_snapshot
+printf '#!/bin/sh\nexit 1\n' >"$publish_root/tool/checks/format"
+if precommit_out=$(run_publish y --publish cask add nf); then
+  echo "commit --publish survived a failing pre-commit hook" >&2
+  exit 1
+fi
+printf '#!/bin/sh\nexit 0\n' >"$publish_root/tool/checks/format"
+printf '%s\n' "$precommit_out" | grep -q 'The commit was rejected'
+# It names the branch it put the operator on, which is not where they started.
+printf '%s\n' "$precommit_out" \
+  | grep -q 'You are now on feature/unixlike-cask-add-nf, which this run created\.'
+if [ "$(publish_git rev-parse HEAD)" \
+  != "$(publish_git rev-parse refs/remotes/origin/dev)" ]; then
+  echo "commit --publish committed despite a failing pre-commit hook" >&2
+  exit 1
+fi
+if [ "$(publish_remote_branches)" != "$publish_remote_before" ]; then
+  echo "commit --publish pushed a commit the hook rejected" >&2
+  exit 1
+fi
+if grep -Eq '^pr (create|merge)' "$publish_log"; then
+  echo "commit --publish proposed a commit the hook rejected" >&2
+  exit 1
+fi
+publish_git reset -q --hard HEAD
+publish_git switch -q dev
+publish_git branch -q -D feature/unixlike-cask-add-nf
+
+# The pull request opens and arming it then fails: the helper says so, names
+# the pull request, and does not pretend the merge is armed.
+publish_snapshot
+STUB_GH_MERGE_STATUS=1
+export STUB_GH_MERGE_STATUS
+if arm_out=$(run_publish y --publish cask add mf); then
+  echo "commit --publish reported success when auto-merge was not armed" >&2
+  exit 1
+fi
+unset STUB_GH_MERGE_STATUS
+printf '%s\n' "$arm_out" | grep -q 'Auto-merge could not be armed'
+printf '%s\n' "$arm_out" | grep -q 'https://github.com/owner/repo/pull/7'
+# The commit and the pull request are real and are left in place; only the last
+# step failed.
+if [ "$(publish_remote_git rev-parse refs/heads/feature/unixlike-cask-add-mf)" \
+  != "$(publish_git rev-parse refs/heads/feature/unixlike-cask-add-mf)" ]; then
+  echo "commit --publish lost the commit it had already pushed" >&2
+  exit 1
+fi
+if [ "$(grep -c '^pr create ' "$publish_log")" != 1 ]; then
+  echo "commit --publish did not open the pull request before arming it" >&2
+  exit 1
+fi
+publish_git switch -q dev
+
+# On dev the branch is created with or without --publish, and without it
+# nothing reaches gh or the remote.
+publish_snapshot
+if ! run_publish y cask add hf >/dev/null; then
+  echo "the commit helper refused to branch from dev" >&2
+  exit 1
+fi
+if [ "$(publish_git branch --show-current)" != feature/unixlike-cask-add-hf ]; then
+  echo "the commit helper did not branch from dev" >&2
+  exit 1
+fi
+if [ -s "$publish_log" ]; then
+  echo "the commit helper called gh without --publish" >&2
+  exit 1
+fi
+if [ "$(publish_remote_branches)" != "$publish_remote_before" ]; then
+  echo "the commit helper pushed without --publish" >&2
+  exit 1
+fi
+publish_git switch -q dev
+
+# The branch it would create already exists: that edit is in flight and this
+# helper does not add a second commit to it behind the operator's back.
+publish_snapshot
+if exists_out=$(run_publish y cask add hf); then
+  echo "the commit helper reused a branch that already exists" >&2
+  exit 1
+fi
+printf '%s\n' "$exists_out" \
+  | grep -q '✗ feature/unixlike-cask-add-hf already exists\.'
+publish_wrote_nothing "the branch already existed"
+
+# The edit is computed against the tree of local dev, so a dev that is not
+# origin/dev is refused rather than branched from.
+publish_snapshot
+publish_git update-ref refs/remotes/origin/dev \
+  "$(publish_git rev-parse refs/heads/feature/unixlike-cask-add-hf)"
+if behind_out=$(run_publish y cask add jf); then
+  echo "the commit helper branched from an origin/dev it was not built on" >&2
+  exit 1
+fi
+printf '%s\n' "$behind_out" | grep -q 'dev is not at origin/dev'
+publish_git update-ref refs/remotes/origin/dev "$(publish_git rev-parse refs/heads/dev)"
+publish_wrote_nothing "dev was behind origin/dev"
+
+# A push the pre-push hook rejects leaves the commit local and says so. Nothing
+# is retried, and no pull request is opened for a commit the remote never got.
+publish_snapshot
+printf '#!/bin/sh\nexit 1\n' >"$publish_root/tool/checks/test"
+if push_out=$(run_publish y --publish cask add gf); then
+  echo "commit --publish survived a rejected push" >&2
+  exit 1
+fi
+printf '#!/bin/sh\nexit 0\n' >"$publish_root/tool/checks/test"
+printf '%s\n' "$push_out" | grep -q 'push was rejected'
+if [ "$(publish_git show -s --format=%s refs/heads/feature/unixlike-cask-add-gf)" \
+  != 'feat(unixlike): add homebrew cask gf' ]; then
+  echo "commit --publish lost the commit a rejected push left local" >&2
+  exit 1
+fi
+if publish_remote_git show-ref --verify --quiet \
+  refs/heads/feature/unixlike-cask-add-gf; then
+  echo "commit --publish pushed past a rejecting pre-push hook" >&2
+  exit 1
+fi
+if grep -Eq '^pr (create|merge)' "$publish_log"; then
+  echo "commit --publish proposed a commit the remote never received" >&2
+  exit 1
+fi
+publish_git switch -q dev
+
+# Everything it produced must satisfy the audit the repository already runs,
+# branch names included.
+(
+  unset GIT_DIR GIT_WORK_TREE GIT_INDEX_FILE
+  cd "$publish_root" && "$audit"
+) >/dev/null
+
 # ---------------------------------------------------------------------------
 # Desired-state hygiene
 # ---------------------------------------------------------------------------

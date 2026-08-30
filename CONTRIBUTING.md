@@ -72,6 +72,23 @@ the edit, the classification, the selected checks, and the message, then
 applies it and commits on your confirmation. It refuses on `master` and never
 bypasses a hook.
 
+Add `--publish` and that one confirmation carries the change the rest of the
+way. On `dev` the helper branches to `feature/<scope>-<topic>` from
+`origin/dev`; on any other branch it commits where it is. It then pushes,
+opens a pull request against `dev`, arms auto-merge, and prints the
+pull-request URL. It never waits on CI and never merges: `Required checks` and
+an up-to-date base still decide that, and a push the pre-push hook or the
+remote rejects leaves the commit local. `--dry-run --publish` prints the
+branch, the pull-request title and body, and every command, and writes
+nothing.
+
+`--publish` requires `Allow auto-merge` to be on in the repository settings and
+`gh` to be authenticated for github.com; it refuses before writing anything if
+either is missing. It pushes the branch rather than the one commit, so it lists
+everything on the branch that is not yet on `dev` before you confirm. Where a
+pull request from the branch is already open against `dev` it arms that one and
+leaves its title and body alone.
+
 Domain releases use immutable annotated tags. The target commit must be
 reachable from `master`. The annotation records the domain and reports
 evaluation, build, and native-runtime evidence separately, including explicit

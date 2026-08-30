@@ -12,9 +12,12 @@
 # The commit is a plain `git commit`, so .githooks/pre-commit runs and its
 # output reaches the terminal unaltered. That is the point rather than an
 # accident: exit 69 means unverified, not failed, and an unverified check is
-# only meaningful if the operator reads it. There is no --no-verify here and no
-# other hook bypass. The hook header offers that bypass to a human deciding to
-# skip a gate; a tool that took it silently would create new policy.
+# only meaningful if the operator reads it. Publishing gives that stream a
+# second reader and copies it into the pull-request body with tee, which is a
+# copy rather than an interception: every line still reaches this terminal, in
+# order. There is no --no-verify here and no other hook bypass. The hook header
+# offers that bypass to a human deciding to skip a gate; a tool that took it
+# silently would create new policy.
 #
 # The scope is edits whose commit message is a template. It is not a general
 # Nix editor: it inserts and deletes whole lines and never re-serialises a
@@ -22,10 +25,17 @@
 # selected automatically, because modules/* classifies unixlike, so a host
 # without Nix reports it unverified rather than skipping the question.
 #
-# Every run ends at an interactive confirmation. There is deliberately no
+# --publish carries the same commit the rest of the way: a branch from
+# origin/dev, a push, a pull request against dev, and auto-merge. It removes
+# ceremony rather than a gate. The pre-push hook still runs, branch protection
+# still requires `Required checks` and an up-to-date base, and the merge still
+# happens on GitHub's side once those pass. This helper prints the pull-request
+# URL and stops; it never waits on CI and never merges anything itself.
+#
+# Every run ends at one interactive confirmation. There is deliberately no
 # unattended mode: no --yes, no --force, no environment override.
 #
-# usage: tool/version-control/commit [--dry-run] <command>
+# usage: tool/version-control/commit [--dry-run] [--publish] <command>
 
 set -eu
 
@@ -46,9 +56,39 @@ hooks_path=$(git config --get core.hooksPath 2>/dev/null || true)
 
 homebrew_module=modules/darwin-homebrew.nix
 
+# One scratch directory for the candidate edit, the pull-request body and the
+# copy of the hook's output. Trapped on the signals a prompt is interrupted
+# with as well as on EXIT, because a helper that stops at a question is exactly
+# the one an operator interrupts.
+work=$(mktemp -d)
+trap 'rm -rf "$work"' EXIT
+# POSIX sh resumes after a trap handler, so an interrupt handler that only
+# cleans up would leave the run going with its scratch files gone.
+trap 'rm -rf "$work"; exit 130' INT HUP TERM
+
+# What the operator typed, recorded for the pull-request body. Every argument
+# that reaches it has already passed valid_name or the subcommand table.
+invocation="tool/version-control/commit $*"
+
+publish=0
+dry_run=0
+create_branch=0
+publish_branch=
+existing_pr_url=
+pr_url=
+pr_body_file="$work/pull-request-body"
+commit_log=
+commit_status="$work/commit.status"
+plan_units_line=
+
 usage_text() {
   cat <<'EOF'
-usage: tool/version-control/commit [--dry-run] <command>
+usage: tool/version-control/commit [--dry-run] [--publish] <command>
+
+options:
+  --dry-run                show everything that would happen and write nothing
+  --publish                after committing, push, open a pull request against
+                           dev, and arm auto-merge
 
 commands:
   brew add <formula>       declare a Homebrew formula in modules/darwin-homebrew.nix
@@ -57,8 +97,10 @@ commands:
   cask remove <cask>       remove a Homebrew cask
   flake refresh [<input>]  refresh flake.lock, every input or one
 
-The change is always confirmed interactively before anything is written. There
-is no unattended mode and no hook bypass.
+On dev the helper first creates feature/<scope>-<topic> from origin/dev; on any
+other branch it commits where it is. The change is always confirmed
+interactively before anything is written. There is no unattended mode and no
+hook bypass.
 EOF
 }
 
@@ -73,11 +115,14 @@ refuse() {
   exit 1
 }
 
-dry_run=0
 while [ "$#" -gt 0 ]; do
   case $1 in
     --dry-run)
       dry_run=1
+      shift
+      ;;
+    --publish)
+      publish=1
       shift
       ;;
     -h | --help)
@@ -137,12 +182,59 @@ valid_name() {
   return 0
 }
 
+# A branch topic is the name reduced to what a ref and the audit's branch
+# pattern both accept: lower case, letters, digits and single hyphens.
+# "nikitabobko/tap/aerospace" becomes "nikitabobko-tap-aerospace".
+slugify() {
+  printf '%s' "$1" | tr 'A-Z' 'a-z' | tr -c 'a-z0-9' '-' \
+    | sed -e 's/--*/-/g' -e 's/^-//' -e 's/-$//'
+}
+
 [ -z "$item" ] || valid_name "$item" \
   || refuse "Not a usable package name: $item" \
     "Use the name as Homebrew spells it, for example 'displayplacer' or 'nikitabobko/tap/aerospace'."
 [ -z "$input" ] || valid_name "$input" \
   || refuse "Not a usable flake input name: $input" \
     "Use the input name as flake.nix declares it, for example 'nixpkgs'."
+
+# The file each command edits, and the branch topic that describes the edit.
+# CONTRIBUTING.md spells a branch feature/<scope>-<topic>, and
+# tool/version-control/audit enforces that spelling; both halves are read from
+# the tools that own them rather than restated here.
+case $group in
+  brew | cask)
+    target=$homebrew_module
+    topic="$group-$action-$(slugify "$item")"
+    ;;
+  flake)
+    target=flake.lock
+    if [ -n "$input" ]; then
+      topic="deps-refresh-$(slugify "$input")"
+    else
+      topic=deps-refresh
+    fi
+    ;;
+esac
+
+# A name of nothing but punctuation slugifies to nothing and would spell
+# feature/unixlike-brew-add-, which the audit's branch pattern rejects.
+case $topic in
+  *-)
+    refuse "No branch topic can be derived from that name." \
+      "A branch topic is the name reduced to letters, digits and hyphens, and that leaves nothing here."
+    ;;
+esac
+
+# classify still owns ownership. A path it cannot place, or places in more than
+# one scope, has no single branch to be published from.
+scope=$("$classify" --files "$target")
+case $scope in
+  unixlike | windows | common | repository) ;;
+  *)
+    refuse "$target has no owning scope: $(printf '%s' "$scope" | tr '\n' ' ')" \
+      "Update tool/version-control/classify before committing it. Both gates reject an unclassified path, and a path owned by more than one scope has no single branch to publish from."
+    ;;
+esac
 
 # Refusals that hold for every command. Checked before any work so that a
 # refusal leaves the clone exactly as it was found.
@@ -157,6 +249,89 @@ if [ -n "$(git diff --cached --name-only)" ]; then
     "This helper commits only the edit it makes. Commit or unstage the rest first."
 fi
 
+# On dev the helper works on a branch of its own; anywhere else it commits
+# where it is. The branch is created after the confirmation, not here, so this
+# only decides the name and refuses what cannot work.
+if [ "$branch" = dev ]; then
+  create_branch=1
+  publish_branch="feature/$scope-$topic"
+
+  if ! git rev-parse --verify --quiet refs/remotes/origin/dev >/dev/null; then
+    refuse "origin/dev is unavailable." \
+      "This helper branches from origin/dev. Run 'git fetch origin dev' first."
+  fi
+  # The edit below is computed against the tree of local dev. Branching from a
+  # different origin/dev would carry it onto a tree it was never computed
+  # against, so the two have to be the same commit. dev's protection already
+  # requires an up-to-date base; this asks for nothing new.
+  if [ "$(git rev-parse refs/heads/dev)" != "$(git rev-parse refs/remotes/origin/dev)" ]; then
+    refuse "dev is not at origin/dev." \
+      "Fast-forward first: git fetch origin dev && git merge --ff-only origin/dev."
+  fi
+  if git show-ref --verify --quiet "refs/heads/$publish_branch"; then
+    refuse "$publish_branch already exists." \
+      "That edit already has a branch. Finish or delete it before starting it again."
+  fi
+else
+  publish_branch=$branch
+fi
+
+if [ "$publish" -eq 1 ] && [ "$branch" = detached ]; then
+  refuse "HEAD is detached, so there is no branch to publish." \
+    "Switch to dev or to the feature branch this change belongs on."
+fi
+
+# gh and the remote are consulted only when --publish asks for them, and only
+# ever read here. Nothing below writes.
+publish_preflight() {
+  if ! command -v gh >/dev/null 2>&1; then
+    refuse "gh is unavailable and --publish needs it." \
+      "Install the GitHub CLI (https://cli.github.com), or drop --publish and open the pull request yourself."
+  fi
+  if ! gh auth status --hostname github.com >/dev/null 2>&1; then
+    refuse "gh is not authenticated for github.com." \
+      "Run 'gh auth login' first. This helper opens the pull request as you and holds no credential of its own."
+  fi
+
+  # Auto-merge is a repository setting, and arming it is the last thing this
+  # helper does. Reading it here turns "the push and the pull request happened
+  # and then the last step failed" into a refusal that costs nothing.
+  # Read through the REST API, the way tool/version-control/audit-remote reads
+  # this repository's other settings; `gh repo view --json` has no field for it.
+  if [ "$(gh api 'repos/{owner}/{repo}' --jq .allow_auto_merge)" != true ]; then
+    refuse "This repository does not allow auto-merge." \
+      "Turn on 'Allow auto-merge' in the repository settings, or drop --publish. Arming a merge that waits for Required checks is what --publish exists to do."
+  fi
+
+  # One listing answers both questions: a pull request from this head against
+  # anything but dev is a refusal, and one against dev is the pull request to
+  # arm rather than a second one to open. gh filters --head by branch name
+  # alone, so a fork's branch of the same name arrives in this list too and is
+  # dropped here: it is not this branch and it is not this helper's to touch.
+  open_pulls=$(gh pr list --head "$publish_branch" --state open \
+    --json baseRefName,isCrossRepository,url \
+    --jq '.[] | select(.isCrossRepository | not) | .baseRefName + " " + .url')
+  foreign=$(printf '%s\n' "$open_pulls" | awk '$1 != "dev" && NF { print $2 }')
+  if [ -n "$foreign" ]; then
+    refuse "$publish_branch already has an open pull request with a different base." \
+      "Close or retarget it first: $(printf '%s' "$foreign" | tr '\n' ' ')"
+  fi
+  existing_pr_url=$(printf '%s\n' "$open_pulls" | awk '$1 == "dev" { print $2; exit }')
+
+  # A branch this helper is about to create must not already exist on the
+  # remote: publishing onto it would have to force or merge, and neither is
+  # this helper's decision to make.
+  if [ "$create_branch" -eq 1 ] \
+    && git ls-remote --exit-code --heads origin "$publish_branch" >/dev/null 2>&1; then
+    refuse "origin already has $publish_branch." \
+      "Finish or delete that branch first; this helper neither forces nor merges onto an existing one."
+  fi
+}
+
+if [ "$publish" -eq 1 ]; then
+  publish_preflight
+fi
+
 require_untouched() {
   if [ -n "$(git status --porcelain -- "$1")" ]; then
     refuse "$1 already has uncommitted changes." \
@@ -169,16 +344,19 @@ report_plan() {
   plan_path=$1
   plan_message=$2
 
-  printf '\nclassification: %s\n' "$("$classify" --files "$plan_path")"
+  printf '\nclassification: %s\n' "$scope"
   printf 'checks:\n'
   if [ "$hooks_path" = .githooks ]; then
-    printf 'M\t%s\n' "$plan_path" | "$select_checks" commit | sed 's/^/  /'
+    plan_units=$(selected_units "$plan_path")
+    printf '%s\n' "$plan_units" | sed 's/^/  /'
+    plan_units_line=$(printf '%s' "$plan_units" | tr '\n' ',' | sed 's/,/, /g')
   else
     # Listing units nothing will run is worse than saying so: the commit would
     # look gated when no check ran at all.
     evidence_unavailable "pre-commit checks" \
       "core.hooksPath is ${hooks_path:-unset}, not .githooks; fix with tool/setup --fix" \
       || exit 1
+    plan_units_line="unavailable; this clone runs no hooks"
   fi
   printf 'message: %s\n' "$plan_message"
   evidence_summary
@@ -193,6 +371,166 @@ require_classified() {
     refuse "$1 has no owning scope." \
       "Update tool/version-control/classify before committing it. Both gates reject an unclassified path."
   fi
+}
+
+# The pull-request body carries what a reviewer cannot get from the diff: who
+# owns the change, which checks the local gate selected, the exact command that
+# produced it, and what the pre-commit hook reported on the machine it was made
+# on. Nothing here is re-derived; every line comes from a tool that already
+# answered the question.
+build_pr_body() {
+  body_evidence=$1
+  {
+    printf 'Scope: %s\n' "$scope"
+    printf 'Selected checks: %s\n' "$plan_units_line"
+    printf 'Command: %s\n' "$invocation"
+
+    commit_body=$(printf '%s\n' "$message" | sed -n '2,$p')
+    if [ -n "$commit_body" ]; then
+      printf '\n%s\n' "$commit_body"
+    fi
+
+    printf '\nLocal pre-commit evidence:\n\n'
+    printf '```text\n'
+    if [ -n "$body_evidence" ] && [ -s "$body_evidence" ]; then
+      # The hook colours its failures; a pull request renders the escape bytes
+      # rather than the colour.
+      sed "s/$(printf '\033')\[[0-9;]*m//g" "$body_evidence"
+    else
+      printf '(the pre-commit hook output, once the commit runs)\n'
+    fi
+    printf '```\n'
+
+    printf '\nOpened by tool/version-control/commit. Auto-merge is armed, so the\n'
+    printf 'merge commit happens when `Required checks` pass and not before.\n'
+  } >"$pr_body_file"
+}
+
+report_publish_plan() {
+  [ "$create_branch" -eq 1 ] || [ "$publish" -eq 1 ] || return 0
+
+  printf '\n'
+  if [ "$create_branch" -eq 1 ]; then
+    printf 'branch: %s (new, from origin/dev)\n' "$publish_branch"
+  else
+    printf 'branch: %s (current)\n' "$publish_branch"
+  fi
+  [ "$publish" -eq 1 ] || return 0
+
+  # git pushes a branch, not a commit. Anything already on this branch and not
+  # yet on dev is published by the same push and merged by the same auto-merge,
+  # so it is named here rather than left for the operator to discover in the
+  # pull request.
+  if git rev-parse --verify --quiet refs/remotes/origin/dev >/dev/null; then
+    carried=$(git log --oneline origin/dev..HEAD)
+    if [ -n "$carried" ]; then
+      printf 'this branch also carries, and will publish and merge:\n'
+      printf '%s\n' "$carried" | sed 's/^/  /'
+    fi
+  fi
+
+  if [ -n "$existing_pr_url" ]; then
+    # The pull request already exists and this helper does not rewrite it.
+    # Printing the body it would have written would promise a reviewer
+    # something nobody is going to read.
+    printf 'pull request: %s (existing; title and body unchanged)\n' "$existing_pr_url"
+  else
+    build_pr_body ""
+    printf 'pull request title: %s\n' "$message"
+    printf 'pull request body:\n'
+    sed 's/^/  /' "$pr_body_file"
+  fi
+  printf 'commands:\n'
+  if [ "$create_branch" -eq 1 ]; then
+    printf '  git fetch --quiet origin dev\n'
+    printf '  git switch --quiet --create %s origin/dev\n' "$publish_branch"
+  fi
+  printf '  git push --set-upstream origin %s\n' "$publish_branch"
+  if [ -n "$existing_pr_url" ]; then
+    printf '  gh pr merge --auto --merge %s\n' "$existing_pr_url"
+    printf '  (that pull request is already open against dev; no second one is opened)\n'
+  else
+    printf '  gh pr create --base dev --head %s --title %s --body-file <body>\n' \
+      "$publish_branch" "'$message'"
+    printf '  gh pr merge --auto --merge <the pull request that opens>\n'
+  fi
+}
+
+# Undo the one write that precedes the commit, so an abort after it does not
+# leave a branch behind for the next run to refuse over.
+remove_created_branch() {
+  [ "$create_branch" -eq 1 ] || return 0
+
+  git switch --quiet dev
+  git branch --quiet --delete "$publish_branch"
+  printf 'branch: removed %s\n' "$publish_branch"
+}
+
+# The first write of the run, and only after the confirmation.
+create_publish_branch() {
+  [ "$create_branch" -eq 1 ] || return 0
+
+  if ! git fetch --quiet origin dev; then
+    refuse "git fetch origin dev failed." \
+      "Nothing was written. Fix the remote or the network and run this again."
+  fi
+  if [ "$(git rev-parse refs/heads/dev)" != "$(git rev-parse refs/remotes/origin/dev)" ]; then
+    refuse "origin/dev moved while this was waiting for an answer." \
+      "Nothing was written. Fast-forward dev and run this again."
+  fi
+  git switch --quiet --create "$publish_branch" origin/dev
+  printf 'branch: created %s from origin/dev\n' "$publish_branch"
+}
+
+publish_commit() {
+  [ "$publish" -eq 1 ] || return 0
+
+  printf '\n→ pushing %s\n' "$publish_branch"
+  # A plain push, so .githooks/pre-push selects and runs the checks the pushed
+  # content owns. A rejection stops here with the commit local; nothing is
+  # retried and nothing is bypassed.
+  if ! git push --set-upstream origin "$publish_branch"; then
+    printf '\033[31m✗ The push was rejected.\033[0m\n' >&2
+    printf '  The commit is local on %s and nothing was published. Fix what the hook\n' \
+      "$publish_branch" >&2
+    printf '  or the remote reported and push again; nothing here retries with a bypass.\n' >&2
+    exit 1
+  fi
+
+  if [ -n "$existing_pr_url" ]; then
+    pr_url=$existing_pr_url
+    printf '→ reusing the pull request already open against dev\n'
+  else
+    printf '→ opening a pull request against dev\n'
+    build_pr_body "$commit_log"
+    if ! pr_created=$(gh pr create --base dev --head "$publish_branch" \
+      --title "$message" --body-file "$pr_body_file"); then
+      printf '\033[31m✗ The pull request could not be opened.\033[0m\n' >&2
+      printf '  The commit is pushed to %s. Open the pull request against dev yourself.\n' \
+        "$publish_branch" >&2
+      exit 1
+    fi
+    pr_url=$(printf '%s\n' "$pr_created" | sed -n 's|^\(https://[^ ]*\)$|\1|p' | tail -1)
+  fi
+
+  if [ -z "$pr_url" ]; then
+    printf '\033[31m✗ No pull-request URL came back.\033[0m\n' >&2
+    printf '  The commit is pushed to %s. Check the pull request on GitHub.\n' \
+      "$publish_branch" >&2
+    exit 1
+  fi
+
+  # --merge, never --admin: auto-merge waits for Required checks, and that
+  # wait is the whole gate this flag exists to keep.
+  printf '→ arming auto-merge\n'
+  if ! gh pr merge --auto --merge "$pr_url"; then
+    printf '\033[31m✗ Auto-merge could not be armed.\033[0m\n' >&2
+    printf '  The pull request is open: %s\n' "$pr_url" >&2
+    printf '  Arm it there, or merge it once Required checks pass.\n' >&2
+    exit 1
+  fi
+
+  printf '\n%s\n' "$pr_url"
 }
 
 confirm() {
@@ -212,19 +550,45 @@ confirm() {
   exit 1
 }
 
+commit_rejected() {
+  printf '\033[31m✗ The commit was rejected.\033[0m\n' >&2
+  if [ "$create_branch" -eq 1 ]; then
+    printf '  You are now on %s, which this run created.\n' "$publish_branch" >&2
+  fi
+  printf '  The edit is left staged. Fix what the hook reported, or discard it with:\n' >&2
+  printf '    git restore --staged --worktree -- %s\n' "$1" >&2
+  exit 1
+}
+
 commit_staged() {
   commit_path=$1
   commit_message=$2
 
-  # No capture, no pipe, no redirection: the hook's evidence lines and its
-  # closing unverified summary are the operator's to read.
-  if git commit -m "$commit_message"; then
+  if [ "$publish" -eq 0 ]; then
+    # No capture, no pipe, no redirection: the hook's evidence lines and its
+    # closing unverified summary are the operator's to read.
+    if git commit -m "$commit_message"; then
+      return 0
+    fi
+    commit_rejected "$commit_path"
+  fi
+
+  # Publishing gives those lines a second reader, and nobody reviews a pull
+  # request by scrolling somebody else's terminal. tee copies rather than
+  # intercepts, so every line still reaches this terminal in order; git's own
+  # status leaves the pipeline through a file, because tee's would always be 0.
+  commit_log="$work/commit.log"
+  {
+    if git commit -m "$commit_message" 2>&1; then
+      printf '0\n' >"$commit_status"
+    else
+      printf '%s\n' "$?" >"$commit_status"
+    fi
+  } | tee "$commit_log"
+  if [ "$(cat "$commit_status")" = 0 ]; then
     return 0
   fi
-  printf '\033[31m✗ The commit was rejected.\033[0m\n' >&2
-  printf '  The edit is left staged. Fix what the hook reported, or discard it with:\n' >&2
-  printf '    git restore --staged --worktree -- %s\n' "$commit_path" >&2
-  exit 1
+  commit_rejected "$commit_path"
 }
 
 # The entries of one Nix string list, in file order. The pattern is strict, and
@@ -382,8 +746,7 @@ homebrew_command() {
 
   require_classified "$homebrew_module"
 
-  candidate=$(mktemp)
-  trap 'rm -f "$candidate"' EXIT
+  candidate="$work/candidate"
   edit_list "$list" "$action" "$item" "$(list_indent "$list")" >"$candidate"
 
   if cmp -s "$homebrew_module" "$candidate"; then
@@ -395,15 +758,25 @@ homebrew_command() {
   git --no-pager diff --no-index --no-color -- "$homebrew_module" "$candidate" \
     | sed -n '/^@@/,$p'
   report_plan "$homebrew_module" "$message"
+  report_publish_plan
 
   [ "$dry_run" -eq 0 ] || exit 0
 
-  confirm "Apply this edit and commit?"
+  if [ "$publish" -eq 1 ]; then
+    confirm "Commit and publish this change?"
+  else
+    confirm "Apply this edit and commit?"
+  fi
+
+  # The branch comes first, while the tree still matches HEAD, so switching
+  # cannot disturb an edit that has not been made yet.
+  create_publish_branch
 
   # Written in place so the file keeps its mode and identity.
   cat "$candidate" >"$homebrew_module"
   git add -- "$homebrew_module"
   commit_staged "$homebrew_module" "$message"
+  publish_commit
 }
 
 flake_command() {
@@ -425,6 +798,7 @@ flake_command() {
   printf 'edit: flake.lock\n'
   printf 'action: %s\n' "$action_line"
   report_plan flake.lock "$message"
+  report_publish_plan
 
   [ "$dry_run" -eq 0 ] || exit 0
 
@@ -434,18 +808,38 @@ flake_command() {
     exit 69
   fi
 
-  confirm "Run this update and commit the result?"
+  # Named rather than folded into the publish wording: an update writes, and
+  # the prompt that authorises it has to say so.
+  if [ "$publish" -eq 1 ]; then
+    confirm "Run this update, then commit and publish?"
+  else
+    confirm "Run this update and commit the result?"
+  fi
+
+  create_publish_branch
 
   before=$(git hash-object flake.lock)
+  update_status=0
   if [ -n "$input" ]; then
-    nix flake update "$input"
+    nix flake update "$input" || update_status=$?
   else
-    nix flake update
+    nix flake update || update_status=$?
+  fi
+  if [ "$update_status" != 0 ]; then
+    # Restore first: a failed update may still have written a partial lock, and
+    # the branch cannot be left behind for the next run to refuse over.
+    git checkout --quiet -- flake.lock
+    remove_created_branch
+    refuse "$action_line exited $update_status." \
+      "Nothing was committed. Read what nix reported and run this again."
   fi
   after=$(git hash-object flake.lock)
 
   if [ "$before" = "$after" ]; then
     printf '\nflake.lock is unchanged; nothing to commit.\n'
+    # Leaving an empty branch behind would be a write with nothing to show for
+    # it, and the next run would then refuse because that branch exists.
+    remove_created_branch
     exit 0
   fi
 
@@ -453,6 +847,7 @@ flake_command() {
   # commits, so nothing else may join this one.
   git add -- flake.lock
   commit_staged flake.lock "$message"
+  publish_commit
 }
 
 case $group in
