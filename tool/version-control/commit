@@ -61,7 +61,10 @@ homebrew_module=modules/darwin-homebrew.nix
 # with as well as on EXIT, because a helper that stops at a question is exactly
 # the one an operator interrupts.
 work=$(mktemp -d)
-trap 'rm -rf "$work"' EXIT INT HUP TERM
+trap 'rm -rf "$work"' EXIT
+# POSIX sh resumes after a trap handler, so an interrupt handler that only
+# cleans up would leave the run going with its scratch files gone.
+trap 'rm -rf "$work"; exit 130' INT HUP TERM
 
 # What the operator typed, recorded for the pull-request body. Every argument
 # that reaches it has already passed valid_name or the subcommand table.
@@ -290,11 +293,24 @@ publish_preflight() {
       "Run 'gh auth login' first. This helper opens the pull request as you and holds no credential of its own."
   fi
 
+  # Auto-merge is a repository setting, and arming it is the last thing this
+  # helper does. Reading it here turns "the push and the pull request happened
+  # and then the last step failed" into a refusal that costs nothing.
+  # Read through the REST API, the way tool/version-control/audit-remote reads
+  # this repository's other settings; `gh repo view --json` has no field for it.
+  if [ "$(gh api 'repos/{owner}/{repo}' --jq .allow_auto_merge)" != true ]; then
+    refuse "This repository does not allow auto-merge." \
+      "Turn on 'Allow auto-merge' in the repository settings, or drop --publish. Arming a merge that waits for Required checks is what --publish exists to do."
+  fi
+
   # One listing answers both questions: a pull request from this head against
   # anything but dev is a refusal, and one against dev is the pull request to
-  # arm rather than a second one to open.
+  # arm rather than a second one to open. gh filters --head by branch name
+  # alone, so a fork's branch of the same name arrives in this list too and is
+  # dropped here: it is not this branch and it is not this helper's to touch.
   open_pulls=$(gh pr list --head "$publish_branch" --state open \
-    --json baseRefName,url --jq '.[] | .baseRefName + " " + .url')
+    --json baseRefName,isCrossRepository,url \
+    --jq '.[] | select(.isCrossRepository | not) | .baseRefName + " " + .url')
   foreign=$(printf '%s\n' "$open_pulls" | awk '$1 != "dev" && NF { print $2 }')
   if [ -n "$foreign" ]; then
     refuse "$publish_branch already has an open pull request with a different base." \
@@ -401,10 +417,29 @@ report_publish_plan() {
   fi
   [ "$publish" -eq 1 ] || return 0
 
-  build_pr_body ""
-  printf 'pull request title: %s\n' "$message"
-  printf 'pull request body:\n'
-  sed 's/^/  /' "$pr_body_file"
+  # git pushes a branch, not a commit. Anything already on this branch and not
+  # yet on dev is published by the same push and merged by the same auto-merge,
+  # so it is named here rather than left for the operator to discover in the
+  # pull request.
+  if git rev-parse --verify --quiet refs/remotes/origin/dev >/dev/null; then
+    carried=$(git log --oneline origin/dev..HEAD)
+    if [ -n "$carried" ]; then
+      printf 'this branch also carries, and will publish and merge:\n'
+      printf '%s\n' "$carried" | sed 's/^/  /'
+    fi
+  fi
+
+  if [ -n "$existing_pr_url" ]; then
+    # The pull request already exists and this helper does not rewrite it.
+    # Printing the body it would have written would promise a reviewer
+    # something nobody is going to read.
+    printf 'pull request: %s (existing; title and body unchanged)\n' "$existing_pr_url"
+  else
+    build_pr_body ""
+    printf 'pull request title: %s\n' "$message"
+    printf 'pull request body:\n'
+    sed 's/^/  /' "$pr_body_file"
+  fi
   printf 'commands:\n'
   if [ "$create_branch" -eq 1 ]; then
     printf '  git fetch --quiet origin dev\n'
@@ -421,11 +456,24 @@ report_publish_plan() {
   fi
 }
 
+# Undo the one write that precedes the commit, so an abort after it does not
+# leave a branch behind for the next run to refuse over.
+remove_created_branch() {
+  [ "$create_branch" -eq 1 ] || return 0
+
+  git switch --quiet dev
+  git branch --quiet --delete "$publish_branch"
+  printf 'branch: removed %s\n' "$publish_branch"
+}
+
 # The first write of the run, and only after the confirmation.
 create_publish_branch() {
   [ "$create_branch" -eq 1 ] || return 0
 
-  git fetch --quiet origin dev
+  if ! git fetch --quiet origin dev; then
+    refuse "git fetch origin dev failed." \
+      "Nothing was written. Fix the remote or the network and run this again."
+  fi
   if [ "$(git rev-parse refs/heads/dev)" != "$(git rev-parse refs/remotes/origin/dev)" ]; then
     refuse "origin/dev moved while this was waiting for an answer." \
       "Nothing was written. Fast-forward dev and run this again."
@@ -436,8 +484,6 @@ create_publish_branch() {
 
 publish_commit() {
   [ "$publish" -eq 1 ] || return 0
-
-  build_pr_body "$commit_log"
 
   printf '\n→ pushing %s\n' "$publish_branch"
   # A plain push, so .githooks/pre-push selects and runs the checks the pushed
@@ -456,6 +502,7 @@ publish_commit() {
     printf '→ reusing the pull request already open against dev\n'
   else
     printf '→ opening a pull request against dev\n'
+    build_pr_body "$commit_log"
     if ! pr_created=$(gh pr create --base dev --head "$publish_branch" \
       --title "$message" --body-file "$pr_body_file"); then
       printf '\033[31m✗ The pull request could not be opened.\033[0m\n' >&2
@@ -505,6 +552,9 @@ confirm() {
 
 commit_rejected() {
   printf '\033[31m✗ The commit was rejected.\033[0m\n' >&2
+  if [ "$create_branch" -eq 1 ]; then
+    printf '  You are now on %s, which this run created.\n' "$publish_branch" >&2
+  fi
   printf '  The edit is left staged. Fix what the hook reported, or discard it with:\n' >&2
   printf '    git restore --staged --worktree -- %s\n' "$1" >&2
   exit 1
@@ -769,10 +819,19 @@ flake_command() {
   create_publish_branch
 
   before=$(git hash-object flake.lock)
+  update_status=0
   if [ -n "$input" ]; then
-    nix flake update "$input"
+    nix flake update "$input" || update_status=$?
   else
-    nix flake update
+    nix flake update || update_status=$?
+  fi
+  if [ "$update_status" != 0 ]; then
+    # Restore first: a failed update may still have written a partial lock, and
+    # the branch cannot be left behind for the next run to refuse over.
+    git checkout --quiet -- flake.lock
+    remove_created_branch
+    refuse "$action_line exited $update_status." \
+      "Nothing was committed. Read what nix reported and run this again."
   fi
   after=$(git hash-object flake.lock)
 
@@ -780,11 +839,7 @@ flake_command() {
     printf '\nflake.lock is unchanged; nothing to commit.\n'
     # Leaving an empty branch behind would be a write with nothing to show for
     # it, and the next run would then refuse because that branch exists.
-    if [ "$create_branch" -eq 1 ]; then
-      git switch --quiet dev
-      git branch --quiet --delete "$publish_branch"
-      printf 'branch: removed the empty %s\n' "$publish_branch"
-    fi
+    remove_created_branch
     exit 0
   fi
 
