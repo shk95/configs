@@ -145,12 +145,23 @@ sid='S-1-5-21(-[0-9]+){4}'
 # this file holds every pattern above, and the allow file holds every literal
 # it forgives. Neither can be excluded by an allow entry without the entry
 # becoming the thing it excludes.
+#
+# git grep exits 1 for "nothing matched" and more than 1 for "the scan did not
+# run". Collapsing the two would let a broken pattern retire an axis in
+# silence, which is the failure this whole check exists to prevent, so the
+# second is a hard error.
 grep_tracked() {
   git -c color.grep=never grep --cached -I -n -E -e "$1" -- \
     ':(exclude)tool/version-control/hygiene' \
     ':(exclude)tool/version-control/hygiene.allow' \
-    ':(exclude)notes/' ||
-    :
+    ':(exclude)notes/' >"$work/scan" && return 0
+
+  grep_status=$?
+  [ "$grep_status" -eq 1 ] || {
+    printf '\033[31m✗ scan did not run (git grep exited %s) for: %s\033[0m\n' \
+      "$grep_status" "$1" >&2
+    exit 1
+  }
 }
 
 : >"$work/allow"
@@ -205,8 +216,12 @@ suppress() {
   '
 }
 
+# Deliberately not a pipeline: grep_tracked exits the script when the scan
+# itself failed, and inside a pipeline that exit would only end a subshell and
+# read back as an empty result.
 scan() {
-  grep_tracked "$1" | suppress
+  grep_tracked "$1"
+  suppress <"$work/scan"
 }
 
 # ---------------------------------------------------------------------------
