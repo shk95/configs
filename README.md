@@ -210,6 +210,36 @@ it took.
 Deselecting stops management. It does not uninstall a package or delete a file
 that a previous Apply deployed; removing those is a separate manual decision.
 
+### `.wslconfig` follows the host's Windows build
+
+Selection is on or off, but `%USERPROFILE%\.wslconfig` has to exist on every
+host that selects `wsl` with *different content*, because the options WSL
+honours depend on the Windows build. `networkingMode=Mirrored` and two
+`[experimental]` keys beside it require Windows 11 22H2, build 22621; a host
+below that bound — Windows 10, and equally a Windows 11 21H2 host — ignores
+them in silence. The manifest therefore declares two payloads for that one
+file, and the run picks between them by build:
+
+```text
+win-env check summary
+  selected: core, wsl
+  Windows build 22631: wslConfig from files/wsl/mirrored-networking.wslconfig
+```
+
+A host whose build cannot be determined gets the lower payload, which every
+supported build honours. The build is the discriminator throughout; the major
+version is `10` on Windows 10 and Windows 11 alike and is never compared.
+
+A host that crosses the bound later, because Windows Update moved it, is not
+redeployed on its own: the desired state did not change, only the host did.
+`-Check` reports it as `wslConfig settings` drift and exits 2, and
+`.\windows\bootstrap.ps1 -Force` writes the payload the new build honours.
+
+`.wslconfig` is read by the WSL VM only when it starts, and these commands never
+restart it, so a passing check means the file on disk matches the payload this
+host's build should have. It is not evidence that mirrored networking is
+running. `docs/status.md` records the per-key gate table behind the split.
+
 ## Deployment
 
 Unix-like activation and Windows Apply are separate deployments. A common

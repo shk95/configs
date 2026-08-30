@@ -48,6 +48,13 @@ $requireNative = ($env:REQUIRE_NATIVE -eq '1')
 $selection = $null
 $selected = @()
 $unmanaged = @()
+# A managed file may declare alternative sources chosen by the host's Windows
+# build. The build is resolved once, reported in the summary, and never
+# compared by major version: OSVersion.Version.Major is 10 on Windows 10 and
+# Windows 11 alike. $null means the build could not be determined, which
+# selects the variant every supported build honours.
+$hostBuild = $null
+$conditionalFiles = @()
 
 function Test-Sources {
     param([array] $Definitions)
@@ -80,6 +87,11 @@ function Write-Summary {
         Write-Host ('  unverified detection: ' + ($unverifiedDetection -join ', ') +
             ' (not decided on this host; neither present nor missing was concluded)')
     }
+    if ($conditionalFiles.Count) {
+        $build = if ($null -ne $hostBuild) { [string]$hostBuild } else { 'undetermined' }
+        Write-Host ('  Windows build ' + $build + ': ' +
+            (($conditionalFiles | ForEach-Object { "$($_.Id) from $($_.Source)" }) -join ', '))
+    }
     # An undecided item is not a clean run, so it suppresses the clean line.
     if (-not $changed.Count -and -not $drift.Count -and -not $unverifiedDetection.Count) {
         Write-Host '  no changes or drift detected'
@@ -107,7 +119,17 @@ try {
     $unmanaged = @($appliedFeatures | Where-Object { $selected -notcontains $_ })
 
     $packages = @($manifest.Packages | Where-Object { $selected -contains [string]$_.Feature })
-    $managedFiles = @($manifest.ManagedFiles | Where-Object { $selected -contains [string]$_.Feature })
+    # Resolved once, here and nowhere else: everything downstream keeps taking a
+    # definition with a scalar Source, exactly as it did before a managed file
+    # could declare alternatives.
+    $hostBuild = Get-WinEnvWindowsBuild
+    $conditionalIds = @($manifest.ManagedFiles |
+            Where-Object { $_.ContainsKey('Sources') } |
+            ForEach-Object { [string]$_.Id })
+    $managedFiles = @($manifest.ManagedFiles |
+            Where-Object { $selected -contains [string]$_.Feature } |
+            ForEach-Object { Resolve-WinEnvManagedFile -Definition $_ -Build $hostBuild })
+    $conditionalFiles = @($managedFiles | Where-Object { $conditionalIds -contains [string]$_.Id })
     $fontSelected = $selected -contains [string]$manifest.Font.Feature
     $terminalSelected = $selected -contains [string]$manifest.Terminal.Feature
     # PowerToys rewrites its own settings when it exits, so its files can only

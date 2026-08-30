@@ -29,13 +29,20 @@ $unverified = [System.Collections.Generic.List[string]]::new()
 $manifest = Get-WinEnvManifest -Path $manifestPath
 
 foreach ($definition in $manifest.ManagedFiles) {
-    $sourcePath = Join-Path $desiredStateRoot $definition.Source
-    if (-not (Test-Path -LiteralPath $sourcePath -PathType Leaf)) {
-        throw "Managed source is missing: $sourcePath"
-    }
+    # Every declared variant, not only the one this host would deploy. A
+    # managed file whose source depends on the Windows build has a payload that
+    # is never the local answer, and the merge gate must not accept a payload
+    # nobody parsed.
+    foreach ($variant in (Get-WinEnvManagedFileVariant -Definition $definition)) {
+        $sourcePath = Join-Path $desiredStateRoot $variant.Source
+        if (-not (Test-Path -LiteralPath $sourcePath -PathType Leaf)) {
+            throw "Managed source is missing: $sourcePath"
+        }
 
-    $reason = Test-WinEnvSourceFile -Definition $definition -RepositoryRoot $desiredStateRoot
-    if ($reason) { $unverified.Add("$($definition.Id) [$($definition.Parser)]: $reason") }
+        $reason = Test-WinEnvSourceFile -Definition $variant -RepositoryRoot $desiredStateRoot
+        $message = "$($definition.Id) [$($definition.Parser)]: $reason"
+        if ($reason -and -not $unverified.Contains($message)) { $unverified.Add($message) }
+    }
 }
 
 # Templates are not managed files, but a broken one is still a broken payload.

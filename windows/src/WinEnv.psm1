@@ -19,11 +19,12 @@ function Get-WinEnvManifest {
 
     $manifest = Get-Content -LiteralPath $Path -Raw -Encoding utf8 |
         ConvertFrom-Json -AsHashtable -ErrorAction Stop
-    if ($manifest.SchemaVersion -ne 2) { throw "Unsupported manifest schema: $($manifest.SchemaVersion)" }
+    if ($manifest.SchemaVersion -ne 3) { throw "Unsupported manifest schema: $($manifest.SchemaVersion)" }
     [void][System.Management.Automation.SemanticVersion]$manifest.ProjectVersion
     # Every consumer reads the manifest through here, so the feature model is
     # validated once instead of separately in setup, the check tool, and tests.
     Assert-WinEnvFeatureModel -Manifest $manifest
+    Assert-WinEnvManagedFileModel -Manifest $manifest
     return $manifest
 }
 
@@ -118,6 +119,95 @@ function Assert-WinEnvFeatureModel {
         if ($package.ContainsKey('Bootstrap') -and $package.Bootstrap -and
             (Get-WinEnvRequiredFeatureId -Manifest $Manifest) -notcontains [string]$package.Feature) {
             throw "Package '$($package.Id)' bootstraps this host but is not owned by a required feature."
+        }
+    }
+}
+
+function Assert-WinEnvManagedFileModel {
+    <#
+        .SYNOPSIS
+        Validate the source shape of every managed file.
+
+        .DESCRIPTION
+        Schema 3 lets one managed file declare alternative sources selected by
+        the host's Windows build. One entry was chosen over two mutually
+        exclusive entries because it keeps one Id, one Target, one Compare mode
+        and one owning feature, so drift, backup and deselection continue to
+        reason about one logical file.
+
+        Two entries would have needed an invariant nothing here enforces:
+        exactly one of them must select on any host. Conditions that overlapped
+        would deploy twice, conditions that all failed would deploy nothing,
+        and neither failure is visible in the file the manifest declares. This
+        shape makes that invariant structural instead. An ordered list whose
+        bounds descend strictly and whose last variant carries no condition
+        makes resolution a total function, and this assertion is what keeps the
+        list in that shape.
+    #>
+    param([Parameter(Mandatory)][hashtable] $Manifest)
+
+    foreach ($definition in $Manifest.ManagedFiles) {
+        $id = [string]$definition.Id
+        $hasSource = $definition.ContainsKey('Source')
+        $hasSources = $definition.ContainsKey('Sources')
+        if ($hasSource -and $hasSources) {
+            throw "The managed file '$id' declares both Source and Sources."
+        }
+        if (-not $hasSource -and -not $hasSources) {
+            throw "The managed file '$id' declares no Source."
+        }
+        if (-not $hasSources) { continue }
+
+        $variants = @($definition.Sources)
+        if ($variants.Count -lt 2) {
+            throw "The managed file '$id' declares fewer than two source variants; use a scalar Source."
+        }
+
+        $previousBound = $null
+        for ($index = 0; $index -lt $variants.Count; $index++) {
+            $variant = $variants[$index]
+            # A variant chooses a payload and nothing else. Every other field
+            # -- Compare, Parser, Feature, Target -- stays on the entry, which
+            # is what keeps two payloads one logical file. Accepting an unknown
+            # key would let a per-variant Compare or Feature read as meaningful
+            # and do nothing, because New-ResolvedManagedFile copies those from
+            # the entry alone.
+            foreach ($key in $variant.Keys) {
+                if (@('Source', 'MinimumBuild') -notcontains [string]$key) {
+                    throw "A source variant of the managed file '$id' declares unknown key '$key'."
+                }
+            }
+            if (-not $variant.ContainsKey('Source')) {
+                throw "A source variant of the managed file '$id' declares no Source."
+            }
+            # Caught here rather than as 'Managed source is missing: <root>' from
+            # check-desired-state.ps1, which names a path that is really the
+            # desired-state root and says nothing about the entry at fault.
+            if ([string]::IsNullOrWhiteSpace([string]$variant.Source)) {
+                throw "A source variant of the managed file '$id' declares an empty Source."
+            }
+
+            $isLast = $index -eq $variants.Count - 1
+            $hasBound = $variant.ContainsKey('MinimumBuild')
+            if ($isLast -and $hasBound) {
+                throw ("The last source variant of the managed file '$id' declares MinimumBuild; " +
+                    'it must be unconditional so every host resolves to exactly one variant.')
+            }
+            if (-not $isLast -and -not $hasBound) {
+                throw ("A source variant of the managed file '$id' declares no MinimumBuild and is not last; " +
+                    'only the last variant may be unconditional.')
+            }
+            if (-not $hasBound) { continue }
+
+            $bound = 0
+            if (-not [int]::TryParse([string]$variant.MinimumBuild, [ref]$bound) -or $bound -le 0) {
+                throw "The managed file '$id' declares a MinimumBuild that is not a positive Windows build number."
+            }
+            if ($null -ne $previousBound -and $bound -ge $previousBound) {
+                throw ("The managed file '$id' declares MinimumBuild values that do not descend; " +
+                    'the first variant a host satisfies must be the highest bound it meets.')
+            }
+            $previousBound = $bound
         }
     }
 }
@@ -341,6 +431,123 @@ function Compare-WinEnvVersion {
     return $repository.CompareTo($applied)
 }
 
+function Get-WinEnvWindowsBuild {
+    <#
+        .SYNOPSIS
+        This host's Windows build number, or $null when it cannot be
+        determined.
+
+        .DESCRIPTION
+        The build is the discriminator and the major version is never used:
+        [Environment]::OSVersion.Version.Major is 10 on Windows 10 and on
+        Windows 11 alike, so a major-version comparison silently classifies
+        every Windows 11 host as Windows 10. Windows 11 begins at build 22000.
+
+        The build is read in process rather than from WMI or the registry,
+        either of which can be unavailable on a host that is otherwise fine.
+        PowerShell 7 runs on .NET 5 or newer, where OSVersion comes from
+        RtlGetVersion and is not capped by the Win32 compatibility-manifest
+        shim, so the number returned is the host's real build.
+
+        Only the build is returned. A revision (UBR) is a servicing level
+        rather than an OS version, this source carries none, and comparing one
+        would classify a host that is merely behind on cumulative updates as
+        below a bound its Windows version meets.
+    #>
+
+    $os = [Environment]::OSVersion
+    if ($os.Platform -ne [System.PlatformID]::Win32NT) { return $null }
+    $build = $os.Version.Build
+    if ($build -le 0) { return $null }
+    return [int]$build
+}
+
+# Private, like Get-WinGetRegistration: a definition copy carrying a scalar
+# Source is an implementation detail of the two resolvers below, not part of
+# this module's contract.
+function New-ResolvedManagedFile {
+    param(
+        [Parameter(Mandatory, Position = 0)][hashtable] $Definition,
+        [Parameter(Mandatory)][string] $Source
+    )
+
+    $resolved = @{}
+    foreach ($key in $Definition.Keys) { $resolved[$key] = $Definition[$key] }
+    [void]$resolved.Remove('Sources')
+    $resolved['Source'] = $Source
+    return $resolved
+}
+
+function Get-WinEnvManagedFileVariant {
+    <#
+        .SYNOPSIS
+        Every declared source variant of one managed file, in declaration
+        order, each as a definition carrying a scalar Source.
+
+        .DESCRIPTION
+        For the consumers that must see all of a file's payloads rather than
+        the one this host deploys: the desired-state hash, so the hash never
+        depends on the build of the host that computed it, and
+        check-desired-state.ps1, so the merge gate parses a payload that is
+        never the local answer.
+    #>
+    param([Parameter(Mandatory, Position = 0)][hashtable] $Definition)
+
+    if (-not $Definition.ContainsKey('Sources')) { return , @($Definition) }
+    return @(
+        foreach ($variant in $Definition.Sources) {
+            New-ResolvedManagedFile -Definition $Definition -Source ([string]$variant.Source)
+        })
+}
+
+function Resolve-WinEnvManagedFile {
+    <#
+        .SYNOPSIS
+        The single source variant this host deploys, as a definition carrying a
+        scalar Source.
+
+        .DESCRIPTION
+        The conditional shape is collapsed here and nowhere else, so parsing,
+        drift comparison, backup and the write itself keep taking a definition
+        with a scalar Source exactly as they did under schema 2.
+
+        Build arrives as data. This is deliberately not the capability seam the
+        Appx probe uses: whether the Appx module loads is a question a probe can
+        put to the host directly, while no probe can ask whether the WSL VM
+        honours a .wslconfig key, because the file is read only after a restart
+        this domain does not perform and an unhonoured key is ignored in
+        silence. Two mechanisms, one motivation, and neither routes through the
+        other.
+
+        A $null build selects the unconditional last variant. That is the
+        documented behaviour rather than an arbitrary default: it is the only
+        variant every supported build honours, so a key is never deployed to a
+        host that was not shown to honour it.
+    #>
+    param(
+        [Parameter(Mandatory, Position = 0)][hashtable] $Definition,
+        [AllowNull()][object] $Build = (Get-WinEnvWindowsBuild)
+    )
+
+    if (-not $Definition.ContainsKey('Sources')) { return $Definition }
+
+    $chosen = $null
+    foreach ($variant in $Definition.Sources) {
+        if (-not $variant.ContainsKey('MinimumBuild')) { $chosen = $variant; break }
+        if ($null -ne $Build -and [int]$Build -ge [int]$variant.MinimumBuild) { $chosen = $variant; break }
+    }
+
+    # Unreachable for a manifest that loaded, because
+    # Assert-WinEnvManagedFileModel requires the last variant to be
+    # unconditional. Kept so a synthetic definition that never reached the
+    # loader fails loudly instead of deploying nothing.
+    if (-not $chosen) {
+        throw "No source variant of the managed file '$($Definition.Id)' applies to this host."
+    }
+
+    return New-ResolvedManagedFile -Definition $Definition -Source ([string]$chosen.Source)
+}
+
 function Get-WinEnvDesiredStateHash {
     param(
         [Parameter(Mandatory)][string] $Root,
@@ -358,7 +565,13 @@ function Get-WinEnvDesiredStateHash {
     [void]$relatives.Add('manifest.json')
     foreach ($definition in $Manifest.ManagedFiles) {
         if ($Feature -notcontains [string]$definition.Feature) { continue }
-        [void]$relatives.Add(([string]$definition.Source).Replace('\', '/'))
+        # Every declared variant, not the one this host resolved. A
+        # host-dependent hash would make two hosts of different build classes
+        # disagree about the same desired state, and a host that crossed a
+        # build bound would report drift no Apply could clear.
+        foreach ($variant in (Get-WinEnvManagedFileVariant -Definition $definition)) {
+            [void]$relatives.Add(([string]$variant.Source).Replace('\', '/'))
+        }
     }
 
     $entries = foreach ($relative in $relatives) {
