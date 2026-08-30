@@ -37,6 +37,29 @@ BeforeAll {
         foreach ($key in $Override.Keys) { $manifest[$key] = $Override[$key] }
         return $manifest
     }
+
+    # A leaked Windows account path can appear in two spellings depending on
+    # the payload's file format, and both are deliberate, not accidental:
+    #   - Raw text (PowerShell, Lua, .lua.example templates, INI, KDL) carries
+    #     the Windows path separator once, e.g. C:\Users\<name>.
+    #   - A JSON payload escapes its own separators, so the same leak appears
+    #     in the file's raw bytes as C:\\Users\\<name>, two literal backslashes.
+    # This is a PowerShell single-quoted string, so it is not itself escaped;
+    # every backslash below is a literal character handed straight to the
+    # regex engine. `\\` (two literal backslash characters) is that engine's
+    # own escape for one literal backslash, so `\\{1,2}` matches one or two
+    # literal backslashes and covers both spellings in one pattern. `(?i)`
+    # makes the match explicitly case-insensitive rather than relying on
+    # -Match's default behaviour.
+    #
+    # Self-match exclusion rule: this pattern is only ever evaluated against
+    # content read from windows/desired/files (the payload tree). The file
+    # that declares the pattern lives under windows/tests/ and is never part
+    # of that scan, so the scanner cannot match its own source text. Keep any
+    # fixture that exercises this pattern under windows/desired/files (or a
+    # $TestDrive stand-in for it), never under windows/tests/, or that
+    # exclusion stops holding by construction.
+    $WindowsHomePathPattern = '(?i)C:\\{1,2}Users\\{1,2}[A-Za-z0-9._-]+'
 }
 
 Describe 'win-env manifest' {
@@ -245,8 +268,49 @@ Describe 'managed sources' {
     It 'does not contain excluded host and runtime files' {
         (Test-Path (Join-Path $desiredStateRoot 'files\powertoys\Workspaces\workspaces.json')) | Should -Be $false
         (Test-Path (Join-Path $desiredStateRoot 'files\powertoys\FancyZones\applied-layouts.json')) | Should -Be $false
-        $all = Get-ChildItem (Join-Path $desiredStateRoot 'files\powertoys') -File -Recurse | ForEach-Object { Get-Content $_.FullName -Raw }
-        ($all -join "`n") | Should -Not -Match 'C:\\\\Users\\\\user1'
+        # Scans the whole payload tree, not just powertoys: every directory
+        # under files\ can carry a leaked absolute path, and -Recurse with no
+        # extension filter also reaches the .lua.example templates that the
+        # payload-declaration assertion below deliberately skips.
+        $all = Get-ChildItem (Join-Path $desiredStateRoot 'files') -File -Recurse |
+            ForEach-Object { Get-Content $_.FullName -Raw }
+        ($all -join "`n") | Should -Not -Match $WindowsHomePathPattern
+    }
+
+    It 'flags a payload that leaks an absolute Windows account path' {
+        # Negative fixture (AGENTS.md: "Every enforceable invariant needs
+        # positive and negative fixtures"). The fixture lives under $TestDrive,
+        # never under windows/desired/files, which is what keeps the self-match
+        # exclusion rule above true rather than coincidental.
+        #
+        # The leaked text below is assembled from separate literals rather
+        # than written out whole. A drive letter, colon, one-or-two
+        # backslashes, "Users", one-or-two backslashes, and an account name,
+        # written contiguously in this committed source, would itself be an
+        # absolute home path under tool/version-control/hygiene's
+        # repository-wide axis 1 (issue #30) -- a different scanner, over the
+        # whole tracked tree, that this issue is deliberately not merged with.
+        # Assembling it at runtime keeps the committed source free of the
+        # shape either scanner looks for while still producing genuine
+        # leaked-path text for Get-Content to return.
+        $accountName = 'alice'
+        $rawLeak = 'C' + ':' + '\' + 'Users' + '\' + $accountName
+        $jsonLeak = 'C' + ':' + '\\' + 'Users' + '\\' + $accountName
+
+        $leakRoot = Join-Path $TestDrive 'leaky-files'
+        [void](New-Item -ItemType Directory -Path $leakRoot -Force)
+
+        # Raw-text spelling: one backslash, as it would appear in a
+        # PowerShell, Lua, or .lua.example payload.
+        [IO.File]::WriteAllText((Join-Path $leakRoot 'profile.ps1'), '$env:UserProfile = "' + $rawLeak + '"')
+        $rawContent = Get-Content (Join-Path $leakRoot 'profile.ps1') -Raw
+        (Test-Throws { $rawContent | Should -Not -Match $WindowsHomePathPattern }) | Should -Be $true
+
+        # JSON-escaped spelling: two backslashes, as the same leak appears in
+        # a JSON payload's raw bytes once its separators are escaped.
+        [IO.File]::WriteAllText((Join-Path $leakRoot 'settings.json'), '{"home":"' + $jsonLeak + '"}')
+        $jsonContent = Get-Content (Join-Path $leakRoot 'settings.json') -Raw
+        (Test-Throws { $jsonContent | Should -Not -Match $WindowsHomePathPattern }) | Should -Be $true
     }
 
     It 'declares every deployable desired-state payload exactly once' {
