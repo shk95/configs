@@ -23,7 +23,10 @@
     },
     {
       "Id": "wezterm",
-      "Name": "WezTerm"
+      "Name": "WezTerm",
+      "Requires": [
+        "font"
+      ]
     },
     {
       "Id": "powertoys",

@@ -2,7 +2,8 @@
   "families": [
     "JetBrainsMono Nerd Font Mono",
     "JetBrains Mono",
-    "Symbols Nerd Font Mono"
+    "Symbols Nerd Font Mono",
+    "D2KodingLigature Nerd Font Mono"
   ],
   "windowsChecks": [
     {
@@ -14,6 +15,11 @@
       "family": "Symbols Nerd Font Mono",
       "importance": "optional",
       "hint": "Install Symbols Nerd Font Mono for broader icon coverage."
+    },
+    {
+      "family": "D2KodingLigature Nerd Font Mono",
+      "importance": "recommended",
+      "hint": "Install D2KodingLigature Nerd Font Mono if Korean text does not render."
     }
   ]
 }
