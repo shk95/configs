@@ -1041,8 +1041,10 @@ Describe 'Appx detection capability' {
         # The seams exist so the three outcomes have fixtures. Declaring a
         # position on the primary parameter is what stops a caller binding a
         # scriptblock into one by accident.
-        foreach ($command in 'Get-WinEnvAppxPresence', 'Test-WinEnvFeaturePrecondition', 'Get-WinEnvPackageStatus') {
-            foreach ($seam in 'Query', 'AppxQuery', 'RegistrationQuery') {
+        foreach ($command in 'Get-WinEnvAppxPresence', 'Test-WinEnvFeaturePrecondition',
+            'Get-WinEnvPackageStatus', 'Get-WinEnvFontStatus') {
+            foreach ($seam in 'Query', 'AppxQuery', 'RegistrationQuery',
+                'FontDirectoryQuery', 'FontRegistryQuery', 'DirectWriteQuery') {
                 $parameter = (Get-Command $command).Parameters[$seam]
                 if (-not $parameter) { continue }
                 $attribute = @($parameter.Attributes |
@@ -1060,6 +1062,241 @@ Describe 'Appx detection capability' {
         # It promotes nothing that was decided.
         (Get-WinEnvCheckStatus -DriftCount 0 -UnverifiedCount 0 -RequireNative) | Should -Be 0
         (Get-WinEnvCheckStatus -DriftCount 1 -UnverifiedCount 0 -RequireNative) | Should -Be 2
+    }
+}
+
+Describe 'font installation state' {
+    BeforeAll {
+        # The four faces of a font whose manifest entry has already grown once:
+        # the two Mono faces a host may have installed before the entry listed
+        # the other two.
+        $FontFaces = @(
+            @{ FileName = 'TestFontMono-Regular.ttf'; RegistryName = 'Test Font Mono (TrueType)' },
+            @{ FileName = 'TestFontMono-Bold.ttf'; RegistryName = 'Test Font Mono Bold (TrueType)' },
+            @{ FileName = 'TestFont-Regular.ttf'; RegistryName = 'Test Font (TrueType)' },
+            @{ FileName = 'TestFont-Bold.ttf'; RegistryName = 'Test Font Bold (TrueType)' }
+        )
+
+        # A fixture is a directory standing in for the per-user font directory
+        # and two hashtables standing in for the two registry keys. It never
+        # reads or writes this machine's fonts or its registry: the states that
+        # have to be covered include ones no host can be put into on request,
+        # and the one that caused the regression is among them.
+        function New-FontFixture {
+            param(
+                [Parameter(Mandatory)][string] $Root,
+                [string[]] $Present = @(),
+                [string[]] $Corrupt = @(),
+                [string[]] $Registered = @(),
+                [hashtable] $ForeignRegistration = @{},
+                [string[]] $SystemFamilyValue = @(),
+                [bool] $DirectWrite = $false
+            )
+
+            $case = Join-Path $Root ([guid]::NewGuid().ToString('N'))
+            $pinnedDirectory = Join-Path $case 'pinned'
+            $fontDirectory = Join-Path $case 'fonts'
+            [void](New-Item -ItemType Directory -Path $pinnedDirectory -Force)
+            [void](New-Item -ItemType Directory -Path $fontDirectory -Force)
+
+            $files = @()
+            $userRegistry = @{}
+            foreach ($face in $FontFaces) {
+                # The pinned bytes exist for every listed face, whether or not
+                # this host has installed it, because the manifest pins a hash
+                # for every face it lists.
+                $pinned = Join-Path $pinnedDirectory $face.FileName
+                Set-Content -LiteralPath $pinned -Value "pinned $($face.FileName)" -NoNewline
+                $files += @{
+                    FileName     = $face.FileName
+                    RegistryName = $face.RegistryName
+                    Sha256       = (Get-FileHash -LiteralPath $pinned -Algorithm SHA256).Hash.ToLowerInvariant()
+                }
+
+                $path = Join-Path $fontDirectory $face.FileName
+                if ($Present -contains $face.FileName) { Copy-Item -LiteralPath $pinned -Destination $path }
+                elseif ($Corrupt -contains $face.FileName) {
+                    Set-Content -LiteralPath $path -Value 'a different font entirely' -NoNewline
+                }
+                if ($Registered -contains $face.FileName) { $userRegistry[$face.RegistryName] = $path }
+                if ($ForeignRegistration.ContainsKey($face.FileName)) {
+                    $userRegistry[$face.RegistryName] = $ForeignRegistration[$face.FileName]
+                }
+            }
+
+            $systemRegistry = @{}
+            foreach ($value in $SystemFamilyValue) { $systemRegistry[$value] = "C:\Windows\Fonts\$value" }
+
+            # Get-ItemProperty returns the provider's own members beside the
+            # key's values, so the stand-in carries them too: a family scan that
+            # matched one of those would report a font nobody installed.
+            foreach ($key in @($userRegistry, $systemRegistry)) {
+                $key['PSPath'] = 'Microsoft.PowerShell.Core\Registry::HKEY_CURRENT_USER\Software'
+                $key['PSChildName'] = 'Fonts'
+                $key['PSProvider'] = 'Microsoft.PowerShell.Core\Registry'
+            }
+            $userKey = [pscustomobject]$userRegistry
+            $systemKey = [pscustomobject]$systemRegistry
+            return [pscustomobject]@{
+                Font             = @{ Name = 'Test Font Mono'; Files = $files }
+                FontDirectory    = $fontDirectory
+                DirectoryQuery   = { $fontDirectory }.GetNewClosure()
+                RegistryQuery    = {
+                    param([string] $Path)
+                    if ($Path -like 'HKCU:*') { return $userKey }
+                    return $systemKey
+                }.GetNewClosure()
+                DirectWriteQuery = { param([string] $FamilyName) $DirectWrite }.GetNewClosure()
+            }
+        }
+
+        function Get-FontFixtureStatus {
+            param([Parameter(Mandatory)] $Fixture)
+
+            return Get-WinEnvFontStatus -Font $Fixture.Font `
+                -FontDirectoryQuery $Fixture.DirectoryQuery `
+                -FontRegistryQuery $Fixture.RegistryQuery `
+                -DirectWriteQuery $Fixture.DirectWriteQuery
+        }
+
+        $MonoFaces = @('TestFontMono-Regular.ttf', 'TestFontMono-Bold.ttf')
+        $AllFaces = @(
+            'TestFontMono-Regular.ttf', 'TestFontMono-Bold.ttf',
+            'TestFont-Regular.ttf', 'TestFont-Bold.ttf')
+    }
+
+    It 'calls a valid registered subset of a grown manifest incomplete, not a conflict' {
+        # The reported regression: raising the manifest from two faces to four
+        # turned every host that already had the two into a refused Apply. The
+        # two files here are the manifest's own, byte for byte, and registered
+        # to their own paths. Nothing has to be overwritten to finish this.
+        $fixture = New-FontFixture -Root $TestDrive -Present $MonoFaces -Registered $MonoFaces -DirectWrite $true
+        $status = Get-FontFixtureStatus -Fixture $fixture
+
+        $status.Incomplete | Should -Be $true
+        $status.Conflict | Should -Be $false
+        $status.Missing | Should -Be $false
+        $status.RegistrationRepairable | Should -Be $false
+        $status.Installed | Should -Be $false
+        # The two counts the check's wording reads.
+        $status.InstalledFaceCount | Should -Be 2
+        $status.FaceCount | Should -Be 4
+    }
+
+    It 'calls a registration whose file is gone incomplete, because writing that file back finishes it' {
+        $fixture = New-FontFixture -Root $TestDrive -Present $MonoFaces `
+            -Registered ($MonoFaces + 'TestFont-Regular.ttf') -DirectWrite $true
+        $status = Get-FontFixtureStatus -Fixture $fixture
+
+        $status.Incomplete | Should -Be $true
+        $status.Conflict | Should -Be $false
+        $status.InstalledFaceCount | Should -Be 2
+    }
+
+    It 'still calls a file that is not the one the manifest pins a conflict' {
+        $fixture = New-FontFixture -Root $TestDrive `
+            -Present @('TestFontMono-Regular.ttf', 'TestFont-Regular.ttf', 'TestFont-Bold.ttf') `
+            -Corrupt @('TestFontMono-Bold.ttf') -Registered $AllFaces -DirectWrite $true
+        $status = Get-FontFixtureStatus -Fixture $fixture
+
+        $status.Conflict | Should -Be $true
+        $status.Incomplete | Should -Be $false
+        $status.Installed | Should -Be $false
+    }
+
+    It 'still calls a registration naming another path a conflict' {
+        $fixture = New-FontFixture -Root $TestDrive -Present $MonoFaces -Registered $MonoFaces `
+            -ForeignRegistration @{ 'TestFont-Regular.ttf' = 'C:\ProgramData\Other Vendor\TestFont-Regular.ttf' } `
+            -DirectWrite $true
+        $status = Get-FontFixtureStatus -Fixture $fixture
+
+        $status.Conflict | Should -Be $true
+        $status.Incomplete | Should -Be $false
+    }
+
+    It 'still calls a system-wide install of the same family a conflict' {
+        # A machine-wide registration of this family is not something a
+        # per-user Apply may overwrite. DirectWrite is asked about the family
+        # the machine-wide entry installs, so this fixture pins the half of the
+        # case where it does not resolve: when it does, the registration
+        # shortcut in $registered already reports the host as Installed and
+        # nothing reaches a state this describes. That shortcut predates this
+        # change and is not what it decides.
+        $fixture = New-FontFixture -Root $TestDrive -Present $MonoFaces -Registered $MonoFaces `
+            -SystemFamilyValue @('Test Font Mono (TrueType)') -DirectWrite $false
+        $status = Get-FontFixtureStatus -Fixture $fixture
+
+        $status.Conflict | Should -Be $true
+        $status.Incomplete | Should -Be $false
+        $status.Installed | Should -Be $false
+    }
+
+    It 'refuses a foreign registration even on a host holding every file' {
+        # Every listed file is valid and only one registration is wrong, which
+        # is the shape closest to a repair. Repairing it would overwrite a value
+        # this repository did not write, so it is a conflict rather than the
+        # narrower registration repair beside it.
+        $fixture = New-FontFixture -Root $TestDrive -Present $AllFaces -Registered $AllFaces `
+            -ForeignRegistration @{ 'TestFont-Bold.ttf' = 'C:\ProgramData\Other Vendor\TestFont-Bold.ttf' } `
+            -DirectWrite $true
+        $status = Get-FontFixtureStatus -Fixture $fixture
+
+        $status.Conflict | Should -Be $true
+        $status.RegistrationRepairable | Should -Be $false
+        $status.Incomplete | Should -Be $false
+        $status.Installed | Should -Be $false
+    }
+
+    It 'still calls a host holding every file with no registration registration-repairable' {
+        $fixture = New-FontFixture -Root $TestDrive -Present $AllFaces -DirectWrite $false
+        $status = Get-FontFixtureStatus -Fixture $fixture
+
+        $status.RegistrationRepairable | Should -Be $true
+        $status.Incomplete | Should -Be $false
+        $status.Conflict | Should -Be $false
+        $status.Missing | Should -Be $false
+    }
+
+    It 'still calls a host with no artifact at all missing' {
+        $fixture = New-FontFixture -Root $TestDrive -DirectWrite $false
+        $status = Get-FontFixtureStatus -Fixture $fixture
+
+        $status.Missing | Should -Be $true
+        $status.Incomplete | Should -Be $false
+        $status.Conflict | Should -Be $false
+        $status.InstalledFaceCount | Should -Be 0
+    }
+
+    It 'still calls a fully installed and resolvable font installed' {
+        $fixture = New-FontFixture -Root $TestDrive -Present $AllFaces -Registered $AllFaces -DirectWrite $true
+        $status = Get-FontFixtureStatus -Fixture $fixture
+
+        $status.Installed | Should -Be $true
+        $status.Incomplete | Should -Be $false
+        $status.Conflict | Should -Be $false
+        $status.Missing | Should -Be $false
+        $status.InstalledFaceCount | Should -Be 4
+    }
+
+    It 'reports exactly one state for every fixture' {
+        # The four states are a partition, which is what lets the check and
+        # Apply branch on them in any order.
+        $fixtures = @(
+            (New-FontFixture -Root $TestDrive -Present $MonoFaces -Registered $MonoFaces -DirectWrite $true),
+            (New-FontFixture -Root $TestDrive -Present $AllFaces -Registered $AllFaces -DirectWrite $true),
+            (New-FontFixture -Root $TestDrive -Present $AllFaces -DirectWrite $false),
+            (New-FontFixture -Root $TestDrive -Present $AllFaces -Registered $AllFaces `
+                    -ForeignRegistration @{ 'TestFont-Bold.ttf' = 'C:\ProgramData\Other Vendor\TestFont-Bold.ttf' } `
+                    -DirectWrite $true),
+            (New-FontFixture -Root $TestDrive -DirectWrite $false),
+            (New-FontFixture -Root $TestDrive -Present $MonoFaces -Registered $MonoFaces `
+                    -SystemFamilyValue @('Test Font Mono (TrueType)') -DirectWrite $false)
+        )
+        foreach ($fixture in $fixtures) {
+            $status = Get-FontFixtureStatus -Fixture $fixture
+            @($status.Installed, $status.Incomplete, $status.RegistrationRepairable,
+                $status.Conflict, $status.Missing | Where-Object { $_ }).Count | Should -Be 1
+        }
     }
 }
 
