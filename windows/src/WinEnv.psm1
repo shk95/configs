@@ -1594,6 +1594,10 @@ function New-CaptureOutcome {
     return [pscustomobject]@{
         Id      = [string]$Definition.Id
         Feature = [string]$Definition.Feature
+        # Carried through so the write side can decide how to render Content
+        # -- pretty-printing a Json parser's payload -- without re-deriving a
+        # decision Get-WinEnvCapturePlan already made.
+        Parser  = [string]$Definition.Parser
         Source  = $Source
         Target  = $Target
         Status  = $Status
@@ -1825,11 +1829,104 @@ function Get-WinEnvCapturePlan {
     return New-CaptureOutcome -Definition $Definition -Status 'Captured' -Source $source -Target $target -Content $content
 }
 
+function Get-WinEnvJsonLineBracketBalance {
+    <#
+        .SYNOPSIS
+        The net structural depth change of one line of already-serialised
+        JSON: how many braces and brackets it opens minus how many it closes.
+
+        .DESCRIPTION
+        A brace or bracket written inside a string literal is not structural,
+        so it is never counted; the scan tracks whether it is inside a string
+        and honours a backslash escape immediately before a quote, exactly as
+        JSON itself does. This is the primitive ConvertTo-WinEnvPrettyJson
+        recomputes indentation from, and it is total: every character either
+        toggles string state or, outside a string, is or is not one of the
+        four bracket characters.
+    #>
+    param([Parameter(Mandatory)][AllowEmptyString()][string] $Line)
+
+    $balance = 0
+    $inString = $false
+    $escaped = $false
+    foreach ($ch in $Line.ToCharArray()) {
+        if ($inString) {
+            if ($escaped) { $escaped = $false }
+            elseif ($ch -eq '\') { $escaped = $true }
+            elseif ($ch -eq '"') { $inString = $false }
+            continue
+        }
+        switch ($ch) {
+            '"' { $inString = $true }
+            '{' { $balance++ }
+            '[' { $balance++ }
+            '}' { $balance-- }
+            ']' { $balance-- }
+        }
+    }
+    return $balance
+}
+
+function ConvertTo-WinEnvPrettyJson {
+    <#
+        .SYNOPSIS
+        One JSON document, reformatted to this repository's two-space,
+        readable style.
+
+        .DESCRIPTION
+        ConvertTo-Json's own indentation is not trusted, even though it
+        already happens to be two spaces on the PowerShell 7 this repository
+        requires: nothing pins that to a version number, and a Windows host is
+        exactly where an older Windows PowerShell could still be first on
+        PATH. Every line ConvertTo-Json produced is stripped of its own
+        leading whitespace and re-indented from a depth this function
+        recomputes from the structural braces and brackets on that line, so
+        the result never depends on what ConvertTo-Json happened to emit.
+
+        The recomputation relies on one invariant every JSON pretty printer
+        honours: a line's structural depth never goes negative mid-line, so a
+        line either opens (net positive), closes (net negative), or is
+        balanced (net zero, an empty `{}`/`[]` or a scalar member on its own
+        line). A closing line dedents before it is printed; an opening line
+        indents at its depth before the open and only increases depth for
+        what follows.
+
+        The content must already be valid JSON. Every caller captures from a
+        managed file whose comparison mode is ExactJson or
+        ExactJsonWithGeneratedProfiles, and Test-WinEnvManagedFile already
+        parses both sides under that mode before a capture plan is ever
+        reached, so an unparsable document here would already have thrown
+        there; this function does not add a new place capture can fail.
+
+        Reformatting is pure whitespace, never content: ConvertTo-WinEnvCanonicalJson
+        parses both sides of a comparison rather than comparing text, so this
+        can never turn an Unchanged file into a false Captured one, or the
+        reverse.
+    #>
+    param([Parameter(Mandatory)][string] $Content)
+
+    $parsed = $Content | ConvertFrom-Json -Depth 100 -ErrorAction Stop
+    $raw = $parsed | ConvertTo-Json -Depth 100
+
+    $depth = 0
+    $lines = @($raw -split "`r?`n" | Where-Object { $_.Trim() -ne '' })
+    $indented = foreach ($line in $lines) {
+        $trimmed = $line.Trim()
+        $balance = Get-WinEnvJsonLineBracketBalance -Line $trimmed
+        $lineDepth = $depth + [Math]::Min($balance, 0)
+        if ($lineDepth -lt 0) { $lineDepth = 0 }
+        ('  ' * $lineDepth) + $trimmed
+        $depth += $balance
+    }
+    return ($indented -join "`n")
+}
+
 function ConvertTo-WinEnvPayloadText {
     <#
         .SYNOPSIS
         Captured content in the line endings and final-newline convention the
-        payload already on disk uses.
+        payload already on disk uses, pretty-printed first when the parser is
+        Json.
 
         .DESCRIPTION
         A host file and its payload may disagree about line endings without
@@ -1840,11 +1937,24 @@ function ConvertTo-WinEnvPayloadText {
         yet cannot happen on this path, because a managed file's source is
         required to exist before drift is decided at all; the LF default is
         there so this function is total rather than because it is reachable.
+
+        A Json payload is reformatted through ConvertTo-WinEnvPrettyJson
+        before that convention is applied, so the diff the operator confirms
+        at the [y/N] prompt is the diff a reviewer reads afterwards rather
+        than whatever the host application's own writer produced -- often one
+        compact line. Every other parser keeps the host's bytes untouched,
+        because desired state for those formats has never claimed to
+        normalise them, and $Parser defaults to empty so a caller that does
+        not pass it -- every non-Json payload -- gets exactly today's
+        behaviour.
     #>
     param(
         [Parameter(Mandatory)][AllowEmptyString()][string] $Content,
-        [Parameter(Mandatory)][string] $PayloadPath
+        [Parameter(Mandatory)][string] $PayloadPath,
+        [string] $Parser = ''
     )
+
+    $normalized = if ($Parser -ceq 'Json') { ConvertTo-WinEnvPrettyJson -Content $Content } else { $Content }
 
     $crlf = $false
     $finalNewline = $true
@@ -1856,7 +1966,7 @@ function ConvertTo-WinEnvPayloadText {
         }
     }
 
-    $text = $Content.Replace("`r`n", "`n").TrimEnd("`n")
+    $text = $normalized.Replace("`r`n", "`n").TrimEnd("`n")
     if ($finalNewline) { $text += "`n" }
     if ($crlf) { $text = $text.Replace("`n", "`r`n") }
     return $text
@@ -1883,11 +1993,151 @@ function Save-WinEnvCapturedPayload {
     }
 
     $path = Join-Path $RepositoryRoot ([string]$Plan.Source)
-    $text = ConvertTo-WinEnvPayloadText -Content ([string]$Plan.Content) -PayloadPath $path
+    $text = ConvertTo-WinEnvPayloadText -Content ([string]$Plan.Content) -PayloadPath $path -Parser ([string]$Plan.Parser)
     if ($PSCmdlet.ShouldProcess($path, 'Write the captured payload')) {
         Write-WinEnvAtomicText -Path $path -Content $text
     }
     return $path
+}
+
+function Get-WinEnvCaptureBranchPlan {
+    <#
+        .SYNOPSIS
+        Decide which branch a capture commit belongs on, without touching the
+        repository.
+
+        .DESCRIPTION
+        A copy of the branch rule `tool/version-control/commit` applies (#72),
+        restated here because capture.ps1 is a copy of that helper's shape
+        rather than a caller of it: the Windows domain must stay authorable
+        and deployable without a Unix-like host, and the maintainer's two
+        clones are separate checkouts.
+
+        On `master`, refuse: only this repository's `dev` may enter `master`,
+        by pull request and merge commit, and there is no operational bypass.
+        On `dev`, this capture gets a branch of its own, `$BranchName`,
+        created from `origin/dev`; that requires a fetched `origin/dev` to
+        exist at all, requires local `dev` to already be it -- the branch
+        would otherwise be cut from a tree the capture was never computed
+        against -- and requires `$BranchName` to be unused. On any other
+        branch, the commit stays there.
+
+        Every check here is a read, so this is safe to call while deciding
+        what to report before the `[y/N]` confirmation and under -WhatIf.
+        Only New-WinEnvCaptureBranch writes, and only after that confirmation.
+    #>
+    param(
+        [Parameter(Mandatory)][string] $RepositoryRoot,
+        [Parameter(Mandatory)][string] $BranchName
+    )
+
+    $branch = & git -C $RepositoryRoot symbolic-ref --quiet --short HEAD 2>$null
+    $currentBranch = if ($LASTEXITCODE -eq 0 -and $branch) { [string]$branch } else { 'detached' }
+
+    if ($currentBranch -eq 'master') {
+        return [pscustomobject]@{
+            Status  = 'Refused'
+            Branch  = $null
+            Message = 'Refusing to commit on master.'
+            Detail  = "AGENTS.md: only this repository's dev may enter master, by pull request and merge commit. There is no operational bypass."
+        }
+    }
+
+    if ($currentBranch -ne 'dev') {
+        return [pscustomobject]@{ Status = 'Current'; Branch = $currentBranch; Message = $null; Detail = $null }
+    }
+
+    & git -C $RepositoryRoot rev-parse --verify --quiet refs/remotes/origin/dev *>$null
+    if ($LASTEXITCODE -ne 0) {
+        return [pscustomobject]@{
+            Status  = 'Refused'
+            Branch  = $null
+            Message = 'origin/dev is unavailable.'
+            Detail  = "This tool branches from origin/dev. Run 'git fetch origin dev' first."
+        }
+    }
+
+    $devSha = ([string](& git -C $RepositoryRoot rev-parse refs/heads/dev 2>$null)).Trim()
+    $originDevSha = ([string](& git -C $RepositoryRoot rev-parse refs/remotes/origin/dev 2>$null)).Trim()
+    if ($devSha -cne $originDevSha) {
+        return [pscustomobject]@{
+            Status  = 'Refused'
+            Branch  = $null
+            Message = 'dev is not at origin/dev.'
+            Detail  = 'Fast-forward first: git fetch origin dev && git merge --ff-only origin/dev.'
+        }
+    }
+
+    & git -C $RepositoryRoot show-ref --verify --quiet "refs/heads/$BranchName" *>$null
+    if ($LASTEXITCODE -eq 0) {
+        return [pscustomobject]@{
+            Status  = 'Refused'
+            Branch  = $null
+            Message = "$BranchName already exists."
+            Detail  = 'That capture already has a branch. Finish or delete it before starting it again.'
+        }
+    }
+
+    return [pscustomobject]@{ Status = 'Create'; Branch = $BranchName; Message = $null; Detail = $null }
+}
+
+function New-WinEnvCaptureBranch {
+    <#
+        .SYNOPSIS
+        Create and switch to the branch Get-WinEnvCaptureBranchPlan named,
+        from a freshly fetched origin/dev.
+
+        .DESCRIPTION
+        The one write the branch rule makes, so the caller invokes it only
+        after the operator's [y/N] confirmation and never under -WhatIf.
+        origin/dev is fetched again here rather than trusted from the plan:
+        time passes while the operator reads the diff, and a dev that moved
+        during that wait must not be branched from silently. A failed fetch
+        refuses by name and creates nothing; the same is true if origin/dev
+        moved while this was waiting for an answer. Every refusal is
+        returned rather than thrown, so the caller reports it exactly like
+        every other capture refusal.
+
+        Wrapped in ShouldProcess for the same reason Save-WinEnvCapturedPayload
+        is: a -WhatIf caller gets back what this would have done and the
+        repository is left exactly as it was found.
+    #>
+    [CmdletBinding(SupportsShouldProcess)]
+    param(
+        [Parameter(Mandatory)][string] $RepositoryRoot,
+        [Parameter(Mandatory)][string] $Branch
+    )
+
+    & git -C $RepositoryRoot fetch --quiet origin dev 2>$null
+    if ($LASTEXITCODE -ne 0) {
+        return [pscustomobject]@{
+            Status  = 'Refused'
+            Message = 'git fetch origin dev failed.'
+            Detail  = 'Nothing was written. Fix the remote or the network and run this again.'
+        }
+    }
+
+    $devSha = ([string](& git -C $RepositoryRoot rev-parse refs/heads/dev 2>$null)).Trim()
+    $originDevSha = ([string](& git -C $RepositoryRoot rev-parse refs/remotes/origin/dev 2>$null)).Trim()
+    if ($devSha -cne $originDevSha) {
+        return [pscustomobject]@{
+            Status  = 'Refused'
+            Message = 'origin/dev moved while this was waiting for an answer.'
+            Detail  = 'Nothing was written. Fast-forward dev and run this again.'
+        }
+    }
+
+    if ($PSCmdlet.ShouldProcess($Branch, 'Create and switch to this branch from origin/dev')) {
+        & git -C $RepositoryRoot switch --quiet --create $Branch refs/remotes/origin/dev 2>$null
+        if ($LASTEXITCODE -ne 0) {
+            return [pscustomobject]@{
+                Status  = 'Refused'
+                Message = "git switch --create $Branch failed."
+                Detail  = 'Nothing was committed. Resolve what git reported and run this again.'
+            }
+        }
+    }
+    return [pscustomobject]@{ Status = 'Created'; Message = $null; Detail = $null }
 }
 
 function Get-WinEnvProfileHook {

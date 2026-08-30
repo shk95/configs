@@ -6,7 +6,10 @@ param(
     # With neither, the run considers what this host recorded as applied, and
     # everything the manifest declares when it has applied nothing.
     [string[]] $Feature,
-    [string[]] $Id
+    [string[]] $Id,
+    # Overrides the branch this run creates from origin/dev when invoked on
+    # dev. Ignored on any other branch, where the commit stays where it is.
+    [string] $Branch
 )
 
 # Move a change made in an application's own UI into desired state.
@@ -24,8 +27,12 @@ param(
 # host, and the maintainer's Windows clone is a separate checkout, so a POSIX
 # shell helper is not available to it. The guards are therefore restated here:
 # it refuses on master, refuses a dirty index, refuses to touch a payload that
-# already has uncommitted changes, and never bypasses a hook. There is no
-# unattended mode: no -Yes, no -Force, no environment override.
+# already has uncommitted changes, and never bypasses a hook. The branch rule
+# is restated too, in Get-WinEnvCaptureBranchPlan and New-WinEnvCaptureBranch:
+# on dev this run gets feature/windows-capture-<feature> of its own, cut from
+# a freshly fetched origin/dev, so a commit here is never left stranded on
+# dev's own protected branch. There is no unattended mode: no -Yes, no -Force,
+# no environment override.
 #
 # Nothing on the host is written. The managed targets are read and nothing
 # else; every write goes to this repository's desired state, and only after
@@ -166,7 +173,7 @@ $captured = @()
 $inexpressible = @()
 foreach ($plan in $planned) {
     $payloadPath = Join-Path $desiredStateRoot $plan.Source
-    $text = ConvertTo-WinEnvPayloadText -Content ([string]$plan.Content) -PayloadPath $payloadPath
+    $text = ConvertTo-WinEnvPayloadText -Content ([string]$plan.Content) -PayloadPath $payloadPath -Parser ([string]$plan.Parser)
     $current = if (Test-Path -LiteralPath $payloadPath -PathType Leaf) {
         Get-Content -LiteralPath $payloadPath -Raw -Encoding utf8
     }
@@ -196,13 +203,23 @@ if (-not $captured.Count) {
     exit 0
 }
 
+# One commit per feature: a feature is the unit this manifest already owns
+# packages, payloads and selection by, and a capture of two of them is two
+# reviewable changes rather than one. Computed here, ahead of the Git
+# refusals below, because the default branch name is derived from it.
+$capturedFeature = @($captured | ForEach-Object { [string]$_.Feature })
+$features = @($declaredFeature | Where-Object { $capturedFeature -contains $_ })
+
 # Git refusals, all of them before anything is written, so a refused run leaves
-# the clone exactly as it was found.
-$branch = @(Invoke-GitCommand -Argument @('symbolic-ref', '--quiet', '--short', 'HEAD') -AllowFailure)
-$branchName = if ($branch.Count) { $branch[0] } else { 'detached' }
-if ($branchName -eq 'master') {
-    Stop-Capture -Message 'Refusing to commit on master.' `
-        -Detail 'AGENTS.md: only this repository''s dev may enter master, by pull request and merge commit. There is no operational bypass.'
+# the clone exactly as it was found. The branch rule is Get-WinEnvCaptureBranchPlan
+# (#72's copy): master refuses outright, dev gets a branch of its own cut from
+# origin/dev, and any other branch commits where it is. Every check it makes is
+# a read, so this is safe here, before the diff and the confirmation.
+$defaultBranchName = 'feature/windows-capture-' + ($features -join '-')
+$candidateBranchName = if ($Branch) { $Branch } else { $defaultBranchName }
+$branchPlan = Get-WinEnvCaptureBranchPlan -RepositoryRoot $repositoryRoot -BranchName $candidateBranchName
+if ($branchPlan.Status -eq 'Refused') {
+    Stop-Capture -Message $branchPlan.Message -Detail $branchPlan.Detail
 }
 
 if (@(Invoke-GitCommand -Argument @('diff', '--cached', '--name-only')).Count) {
@@ -218,6 +235,17 @@ foreach ($plan in $captured) {
         Stop-Capture -Message "$relative already has uncommitted changes." `
             -Detail 'This tool commits only the payloads it captures. Commit or restore that file first.'
     }
+}
+
+# The branch this run will land on, reported before the diff so the operator
+# reads it as part of the plan rather than discovering it from `git branch`
+# afterwards.
+Write-Host ''
+if ($branchPlan.Status -eq 'Create') {
+    Write-Host "  branch: $($branchPlan.Branch) (new, from origin/dev)"
+}
+else {
+    Write-Host "  branch: $($branchPlan.Branch) (current)"
 }
 
 # What will and will not gate the commit, said plainly. The repository's hooks
@@ -275,11 +303,17 @@ finally {
     if ([IO.Directory]::Exists($stagingRoot)) { [IO.Directory]::Delete($stagingRoot, $true) }
 }
 
-# One commit per feature: a feature is the unit this manifest already owns
-# packages, payloads and selection by, and a capture of two of them is two
-# reviewable changes rather than one.
-$capturedFeature = @($captured | ForEach-Object { [string]$_.Feature })
-$features = @($declaredFeature | Where-Object { $capturedFeature -contains $_ })
+# The branch comes first, while the tree still matches HEAD, so switching
+# cannot disturb a payload that has not been written yet. Local dev is
+# already known to equal origin/dev (Get-WinEnvCaptureBranchPlan refused
+# otherwise), so this switch changes no file the checks above already read.
+if ($branchPlan.Status -eq 'Create') {
+    $created = New-WinEnvCaptureBranch -RepositoryRoot $repositoryRoot -Branch $branchPlan.Branch
+    if ($created.Status -ne 'Created') {
+        Stop-Capture -Message $created.Message -Detail $created.Detail
+    }
+}
+
 foreach ($featureId in $features) {
     $group = @($captured | Where-Object { [string]$_.Feature -eq $featureId })
     $paths = @()
