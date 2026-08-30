@@ -308,15 +308,27 @@ $invocation = $invocationPart -join ' '
 $carriedCommit = @()
 $pullRequestTitle = $null
 $pullRequestPreview = $null
+$bodyParameter = @{}
 if ($Publish) {
     # Read before the branch is created and before any commit, so this lists
     # what the branch already carried and nothing this run adds. A run that is
     # about to cut its branch from origin/dev carries nothing.
     $carriedCommit = @(Get-WinEnvPublishCarriedCommit -RepositoryRoot $repositoryRoot)
     $pullRequestTitle = Get-WinEnvPullRequestTitle -Commit $commitSubjectLine
-    $pullRequestPreview = New-WinEnvPullRequestBody -Branch $publishBranch -Feature $features `
-        -ManagedFile @($captured | ForEach-Object { "$($_.Id) ($($relativePath[[string]$_.Id]))" }) `
-        -Commit $commitSubjectLine -Command $invocation -Build $buildText -Carried $carriedCommit
+    # Everything the body says that is already known before the run writes
+    # anything. The plan renders it with both evidence blocks still empty;
+    # Publish-WinEnvCapture renders it again after the push, which is the only
+    # moment the pre-push hook's output exists.
+    $bodyParameter = @{
+        Branch      = $publishBranch
+        Feature     = $features
+        ManagedFile = @($captured | ForEach-Object { "$($_.Id) ($($relativePath[[string]$_.Id]))" })
+        Commit      = $commitSubjectLine
+        Command     = $invocation
+        Build       = $buildText
+        Carried     = $carriedCommit
+    }
+    $pullRequestPreview = New-WinEnvPullRequestBody @bodyParameter
 }
 
 # The branch this run will land on, reported before the diff so the operator
@@ -331,9 +343,10 @@ else {
 }
 
 # What will and will not gate the commit, said plainly. The repository's hooks
-# are POSIX shell scripts; whether Git for Windows runs them on this host is
-# not something this script can decide for the operator, so it does not claim
-# they ran. docs/status.md records that as an open question.
+# are POSIX shell scripts and Git for Windows runs them natively on the
+# maintainer's host, but a clone with core.hooksPath unset runs none of them
+# and a host without sh runs none either, so this reports what it can decide
+# rather than claiming a gate ran.
 $hooksPath = @(Invoke-GitCommand -Argument @('config', '--get', 'core.hooksPath') -AllowFailure)
 $hooksConfigured = $hooksPath.Count -and $hooksPath[0] -eq '.githooks'
 Write-Host ''
@@ -441,6 +454,10 @@ if ($branchPlan.Status -eq 'Create') {
 # nobody reviews a pull request by scrolling somebody else's terminal.
 $commitEvidence = [System.Collections.Generic.List[string]]::new()
 
+# The features whose commit this run has already made, so a rejection part way
+# through a multi-feature capture can name what it left behind.
+$committedFeature = @()
+
 foreach ($featureId in $features) {
     $group = @($captured | Where-Object { [string]$_.Feature -eq $featureId })
     $paths = @()
@@ -476,20 +493,26 @@ foreach ($featureId in $features) {
         Write-Refusal -Message 'The commit was rejected.' `
             -Detail 'The captured payloads are left staged. Fix what the hook reported, or discard them with:'
         Write-Host ("    git restore --staged --worktree -- " + ($paths -join ' '))
+        # One commit per feature means a rejection can arrive with earlier
+        # features already committed. An operator who followed the recovery
+        # above without being told would be left holding commits this run made
+        # and never named.
+        if ($committedFeature.Count) {
+            Write-Host '  This run already committed, and these commits remain on the branch:'
+            foreach ($done in $committedFeature) { Write-Host "    $($commitSubject[$done])" }
+        }
         if ($branchPlan.Status -eq 'Create') {
             Write-Host "  You are now on $publishBranch, which this run created."
         }
         exit 1
     }
+    $committedFeature += $featureId
 }
 
 if ($Publish) {
+    $bodyParameter['Evidence'] = @($commitEvidence)
     $published = Publish-WinEnvCapture -RepositoryRoot $repositoryRoot -Branch $publishBranch `
-        -Title $pullRequestTitle -PullRequest $existingPullRequest `
-        -Body (New-WinEnvPullRequestBody -Branch $publishBranch -Feature $features `
-            -ManagedFile @($captured | ForEach-Object { "$($_.Id) ($($relativePath[[string]$_.Id]))" }) `
-            -Commit $commitSubjectLine -Command $invocation -Build $buildText `
-            -Carried $carriedCommit -Evidence @($commitEvidence))
+        -Title $pullRequestTitle -PullRequest $existingPullRequest -BodyParameter $bodyParameter
     if ($published.Status -ne 'Published') {
         Write-Refusal -Message $published.Message -Detail $published.Detail
         exit 1

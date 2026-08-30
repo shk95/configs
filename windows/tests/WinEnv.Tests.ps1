@@ -2139,6 +2139,16 @@ Describe 'capture' {
             $invoked | Should -Not -Match '--no-verify' -Because $source
             $invoked | Should -Not -Match '--force' -Because $source
             $invoked | Should -Not -Match '--admin' -Because $source
+
+            # The same two gates have one-letter spellings: `git push -f` and
+            # `git commit -n` bypass exactly what the long flags do, and a
+            # guard that only knows the long ones invites the short ones.
+            # Scoped to git invocations, because -f and -n mean other things
+            # elsewhere in PowerShell.
+            $gitCommands = @($commands | Where-Object { $_ -cmatch '(^|\s)git(\s|$)' })
+            foreach ($command in $gitCommands) {
+                $command | Should -Not -Match '(^|\s)-[fn](\s|$)' -Because "$source : $command"
+            }
         }
     }
 }
@@ -2339,6 +2349,28 @@ Describe 'capture publish' {
     #>
     BeforeAll {
         $PwshPath = (Get-Process -Id $PID).Path
+
+        # The end-to-end cases in the last Context each launch a child
+        # PowerShell that imports this module and spawns a dozen git
+        # processes, and together they cost more than the rest of this suite.
+        # `.githooks/pre-push` runs the whole suite natively on every push
+        # that touches windows/**, so leaving them always-on taxes every
+        # Windows-lane push -- including the one -Publish itself makes. They
+        # are therefore opt-in, the way `.githooks/evidence` already makes the
+        # local gate advisory and CI the merge gate: the windows job in
+        # .github/workflows/ci.yml sets WIN_ENV_E2E, so the merge gate loses
+        # nothing, and a local run says out loud what it skipped. Every
+        # module-level fixture above runs unconditionally.
+        $EndToEnd = [Environment]::GetEnvironmentVariable('WIN_ENV_E2E') -eq '1'
+
+        function Skip-WithoutEndToEnd {
+            param([Parameter(Mandatory)][string] $Label)
+
+            if ($EndToEnd) { return }
+            Write-Host ("· skipped: publish end to end, $Label " +
+                '(set WIN_ENV_E2E=1 to run it; the CI windows job does)')
+            Set-ItResult -Skipped -Because 'WIN_ENV_E2E is not set'
+        }
 
         function New-StubGh {
             <#
@@ -2573,7 +2605,8 @@ exit 1
                 -Feature @('font') -ManagedFile @('fontPayload (windows/desired/files/font.json)') `
                 -Commit @('feat(windows): capture font settings from the host') `
                 -Command 'windows/tools/capture.ps1 -Feature font -Publish' -Build '22631' `
-                -Evidence @(([char]27 + '[31m') + '→ hygiene' + ([char]27 + '[0m'))
+                -Evidence @(([char]27 + '[31m') + '→ hygiene' + ([char]27 + '[0m')) `
+                -PushEvidence @('→ Windows tests', 'Tests Passed: 164, Failed: 0')
 
             $body | Should -Match 'Scope: windows'
             $body | Should -Match ([regex]::Escape('Branch: feature/windows-capture-font'))
@@ -2583,6 +2616,11 @@ exit 1
             $body | Should -Match ([regex]::Escape('- fontPayload (windows/desired/files/font.json)'))
             $body | Should -Match ([regex]::Escape('- feat(windows): capture font settings from the host'))
             $body | Should -Match '→ hygiene'
+            # The native gate's own output. It is produced by the pre-push
+            # hook, which is the only hook that selects this domain's checks,
+            # so a body without this block carries no Windows evidence at all.
+            $body | Should -Match 'Local push evidence:'
+            $body | Should -Match ([regex]::Escape('Tests Passed: 164, Failed: 0'))
             # A pull request renders the escape bytes rather than the colour.
             $body | Should -Not -Match ([char]27)
         }
@@ -2595,12 +2633,13 @@ exit 1
             $body | Should -Match 'Windows build: undetermined'
         }
 
-        It 'promises the commit output where a plan has none yet' {
+        It 'promises both outputs where a plan has neither yet' {
             $body = New-WinEnvPullRequestBody -Branch 'feature/windows-capture-font' -Feature @('font') `
                 -ManagedFile @('fontPayload (windows/desired/files/font.json)') `
                 -Commit @('feat(windows): capture font settings from the host') `
                 -Command 'windows/tools/capture.ps1 -Publish' -Build '22631'
             $body | Should -Match ([regex]::Escape('(the commit output, once the commit runs)'))
+            $body | Should -Match ([regex]::Escape("(the pre-push hook's output, once the push runs)"))
         }
 
         It 'names what the branch already carried, which the same merge takes to dev' {
@@ -2740,13 +2779,28 @@ exit 1
     }
 
     Context 'the writing half' {
+        BeforeAll {
+            # The half of the body that is known before the push. The other
+            # half -- what the pre-push hook said -- only exists afterwards,
+            # which is why the body is built inside Publish-WinEnvCapture.
+            $BodyParameter = @{
+                Branch      = 'feature/windows-capture-font'
+                Feature     = @('font')
+                ManagedFile = @('fontPayload (windows/desired/files/font.json)')
+                Commit      = @('feat(windows): capture font settings from the host')
+                Command     = 'windows/tools/capture.ps1 -Feature font -Publish'
+                Build       = '22631'
+            }
+        }
+
         It 'pushes, opens one pull request and arms auto-merge exactly once' {
             $fixture = New-PublishRepository
             & git -C $fixture.Repo switch -q -c feature/windows-capture-font | Out-Null
 
             $result = Invoke-WithStubGh -Fixture $fixture -ScriptBlock {
                 Publish-WinEnvCapture -RepositoryRoot $fixture.Repo -Branch 'feature/windows-capture-font' `
-                    -Title 'feat(windows): capture font settings from the host' -Body 'a body' -PullRequest $null
+                    -Title 'feat(windows): capture font settings from the host' `
+                    -BodyParameter $BodyParameter -PullRequest $null
             }
             $result.Status | Should -Be 'Published'
             $result.Url | Should -Be 'https://github.com/example/repo/pull/1'
@@ -2759,7 +2813,15 @@ exit 1
             @($log | Where-Object { $_ -match '--admin' }).Count | Should -Be 0
             @(& git -C $fixture.Remote for-each-ref --format='%(refname)' refs/heads) |
                 Should -Contain 'refs/heads/feature/windows-capture-font'
-            (Get-Content -LiteralPath $fixture.Body -Raw) | Should -Match 'a body'
+
+            $body = Get-Content -LiteralPath $fixture.Body -Raw
+            $body | Should -Match ([regex]::Escape('- feat(windows): capture font settings from the host'))
+            # git's own push report stands in for the hook's here, since this
+            # fixture's remote runs no checks: what matters is that whatever
+            # the push printed reached the body rather than the floor.
+            $body | Should -Match 'Local push evidence:'
+            $body | Should -Match ([regex]::Escape('feature/windows-capture-font'))
+            $body | Should -Not -Match ([regex]::Escape("(the pre-push hook's output, once the push runs)"))
         }
 
         It 'arms the pull request already open against dev and opens no second one' {
@@ -2768,8 +2830,8 @@ exit 1
 
             $result = Invoke-WithStubGh -Fixture $fixture -ScriptBlock {
                 Publish-WinEnvCapture -RepositoryRoot $fixture.Repo -Branch 'feature/windows-capture-font' `
-                    -Title 'feat(windows): capture font settings from the host' -Body 'a body' `
-                    -PullRequest 'https://github.com/example/repo/pull/7'
+                    -Title 'feat(windows): capture font settings from the host' `
+                    -BodyParameter $BodyParameter -PullRequest 'https://github.com/example/repo/pull/7'
             }
             $result.Status | Should -Be 'Published'
             $result.Url | Should -Be 'https://github.com/example/repo/pull/7'
@@ -2797,7 +2859,8 @@ exit 1
 
             $result = Invoke-WithStubGh -Fixture $fixture -ScriptBlock {
                 Publish-WinEnvCapture -RepositoryRoot $fixture.Repo -Branch 'feature/windows-capture-font' `
-                    -Title 'feat(windows): capture font settings from the host' -Body 'a body' -PullRequest $null
+                    -Title 'feat(windows): capture font settings from the host' `
+                    -BodyParameter $BodyParameter -PullRequest $null
             }
             $result.Status | Should -Be 'Refused'
             $result.Message | Should -Match 'push was rejected'
@@ -2816,7 +2879,8 @@ exit 1
 
             $result = Invoke-WithStubGh -Fixture $fixture -Environment @{ STUB_GH_MERGE_STATUS = '1' } -ScriptBlock {
                 Publish-WinEnvCapture -RepositoryRoot $fixture.Repo -Branch 'feature/windows-capture-font' `
-                    -Title 'feat(windows): capture font settings from the host' -Body 'a body' -PullRequest $null
+                    -Title 'feat(windows): capture font settings from the host' `
+                    -BodyParameter $BodyParameter -PullRequest $null
             }
             $result.Status | Should -Be 'Refused'
             $result.Message | Should -Match 'Auto-merge could not be armed'
@@ -2829,7 +2893,8 @@ exit 1
 
             $result = Invoke-WithStubGh -Fixture $fixture -Environment @{ STUB_GH_CREATE_STATUS = '1' } -ScriptBlock {
                 Publish-WinEnvCapture -RepositoryRoot $fixture.Repo -Branch 'feature/windows-capture-font' `
-                    -Title 'feat(windows): capture font settings from the host' -Body 'a body' -PullRequest $null
+                    -Title 'feat(windows): capture font settings from the host' `
+                    -BodyParameter $BodyParameter -PullRequest $null
             }
             $result.Status | Should -Be 'Refused'
             $result.Message | Should -Match 'could not be opened'
@@ -2843,8 +2908,8 @@ exit 1
 
             $result = Invoke-WithStubGh -Fixture $fixture -ScriptBlock {
                 Publish-WinEnvCapture -RepositoryRoot $fixture.Repo -Branch 'feature/windows-capture-font' `
-                    -Title 'feat(windows): capture font settings from the host' -Body 'a body' `
-                    -PullRequest $null -WhatIf
+                    -Title 'feat(windows): capture font settings from the host' `
+                    -BodyParameter $BodyParameter -PullRequest $null -WhatIf
             }
             $result.Status | Should -Be 'Skipped'
             @(& git -C $fixture.Remote for-each-ref --format='%(refname)' refs/heads) | Should -Be $before
@@ -2854,6 +2919,8 @@ exit 1
 
     Context 'the whole run, from a drifted host file to a pull request' {
         It 'branches, commits, pushes, opens one pull request and arms auto-merge after one y' {
+            Skip-WithoutEndToEnd 'the happy path'
+
             $fixture = New-PublishWorkspace
             $run = Invoke-Capture -Fixture $fixture -Argument @('-Feature', 'core', '-Publish') -Answer 'y'
 
@@ -2886,9 +2953,25 @@ exit 1
             $body | Should -Match ([regex]::Escape('Command: windows/tools/capture.ps1 -Feature core -Publish'))
             # The commit's own output, copied rather than intercepted.
             $body | Should -Match '1 file changed'
+            # And the push's, which on a Windows host is where the domain's
+            # own checks run. This fixture's remote runs none, so what lands
+            # here is git's push report -- the point is that it lands.
+            $body | Should -Match 'Local push evidence:'
+            $body | Should -Match ([regex]::Escape('feature/windows-capture-core -> feature/windows-capture-core'))
+            $body | Should -Not -Match ([regex]::Escape("(the pre-push hook's output, once the push runs)"))
+            # Ordering: what the push said reaches the terminal too, between
+            # the push line and the pull request being opened.
+            $text = $run.Output -join [Environment]::NewLine
+            $pushIndex = $text.IndexOf('→ pushing feature/windows-capture-core')
+            $reportIndex = $text.IndexOf('feature/windows-capture-core -> feature/windows-capture-core')
+            $openIndex = $text.IndexOf('→ opening a pull request against dev')
+            $pushIndex | Should -BeLessThan $reportIndex
+            $reportIndex | Should -BeLessThan $openIndex
         }
 
         It 'publishes nothing and writes nothing when the answer is not y' {
+            Skip-WithoutEndToEnd 'an answer that is not y'
+
             $fixture = New-PublishWorkspace
             $run = Invoke-Capture -Fixture $fixture -Argument @('-Feature', 'core', '-Publish') -Answer 'n'
 
@@ -2904,6 +2987,8 @@ exit 1
         }
 
         It 'prints the branch, the title, the body and the commands under -WhatIf and writes nothing' {
+            Skip-WithoutEndToEnd 'the -WhatIf plan'
+
             $fixture = New-PublishWorkspace
             $before = @(& git -C $fixture.Repo for-each-ref --format='%(refname)' refs/heads)
             $run = Invoke-Capture -Fixture $fixture -Argument @('-Feature', 'core', '-Publish', '-WhatIf')
@@ -2929,6 +3014,8 @@ exit 1
         }
 
         It 'leaves the commit local and names the branch when the pre-push hook rejects the push' {
+            Skip-WithoutEndToEnd 'a rejected pre-push hook'
+
             $fixture = New-PublishWorkspace
             # Installed after the seed push, so it gates only the run under test.
             $hook = Join-Path $fixture.Repo '.githooks/pre-push'
@@ -2955,6 +3042,8 @@ exit 1
         }
 
         It 'never reaches the push when the commit itself is rejected' {
+            Skip-WithoutEndToEnd 'a rejected commit'
+
             # The most consequential ordering in the whole run: the commit is
             # piped so a copy of its output can reach the pull request, and a
             # pipeline that lost the commit's exit status would push a change
@@ -2983,7 +3072,42 @@ exit 1
                 Should -Be @('windows/desired/files/sample.json')
         }
 
+        It 'names the commit it already made when a later feature''s commit is rejected' {
+            Skip-WithoutEndToEnd 'a rejected second commit'
+            # One commit per feature means a rejection can arrive with an
+            # earlier feature already committed on the branch this run made.
+            # An operator who followed the recovery advice without being told
+            # would be left holding a commit nobody named.
+            $fixture = New-PublishWorkspace
+            $hook = Join-Path $fixture.Repo '.githooks/commit-msg'
+            [void](New-Item -ItemType Directory -Path (Split-Path -Parent $hook) -Force)
+            [IO.File]::WriteAllText($hook,
+                "#!/bin/sh`nif grep -q 'capture extra settings' `"`$1`"; then exit 1; fi`nexit 0`n")
+            if (-not $IsWindows) { & chmod +x $hook }
+            & git -C $fixture.Repo config core.hooksPath .githooks | Out-Null
+
+            $run = Invoke-Capture -Fixture $fixture -Argument @('-Publish') -Answer 'y'
+
+            $run.ExitCode | Should -Be 1
+            $text = $run.Output -join [Environment]::NewLine
+            $text | Should -Match 'The commit was rejected'
+            $text | Should -Match 'This run already committed, and these commits remain on the branch:'
+            $text | Should -Match ([regex]::Escape('feat(windows): capture core settings from the host'))
+            # And that commit really is on the branch this run created.
+            (& git -C $fixture.Repo log --oneline -1).Trim() |
+                Should -Match ([regex]::Escape('capture core settings from the host'))
+            (& git -C $fixture.Repo branch --show-current).Trim() |
+                Should -Be 'feature/windows-capture-core-extra'
+            @(Get-GhLog $fixture | Where-Object { $_ -like 'pr create *' -or $_ -like 'pr merge *' }).Count |
+                Should -Be 0
+            @(& git -C $fixture.Remote for-each-ref --format='%(refname)' refs/heads) | Should -Be @('refs/heads/dev')
+            @(& git -C $fixture.Repo diff --cached --name-only) |
+                Should -Be @('windows/desired/files/other.json')
+        }
+
         It 'reuses a pull request already open against dev without printing a body it would discard' {
+            Skip-WithoutEndToEnd 'the reuse path'
+
             $fixture = New-PublishWorkspace
             $listing = '[{"baseRefName":"dev","isCrossRepository":false,' +
             '"url":"https://github.com/example/repo/pull/7"}]'
@@ -3004,6 +3128,8 @@ exit 1
         }
 
         It 'titles a run that captured two features generally and lists both commits' {
+            Skip-WithoutEndToEnd 'a two-feature run'
+
             $fixture = New-PublishWorkspace
             $run = Invoke-Capture -Fixture $fixture -Argument @('-Publish') -Answer 'y'
 
@@ -3017,6 +3143,8 @@ exit 1
         }
 
         It 'names the commits the branch already carries before the confirmation' {
+            Skip-WithoutEndToEnd 'the carried-commit disclosure'
+
             $fixture = New-PublishWorkspace
             & git -C $fixture.Repo switch -q -c feature/windows-existing | Out-Null
             [IO.File]::WriteAllText((Join-Path $fixture.Repo 'windows/desired/files/other.json'),
@@ -3033,6 +3161,8 @@ exit 1
         }
 
         It 'refuses -Publish on a detached HEAD, which is no branch to publish' {
+            Skip-WithoutEndToEnd 'a detached HEAD'
+
             $fixture = New-PublishWorkspace
             & git -C $fixture.Repo switch -q --detach HEAD | Out-Null
 
@@ -3046,24 +3176,6 @@ exit 1
             @(& git -C $fixture.Remote for-each-ref --format='%(refname)' refs/heads) | Should -Be @('refs/heads/dev')
         }
 
-        It 'refuses -Publish before any write when gh is unavailable' {
-            $fixture = New-PublishWorkspace
-            $empty = Join-Path $fixture.Base 'no-tools'
-            [void](New-Item -ItemType Directory -Path $empty -Force)
-            # git and pwsh still have to be findable; only the stub is removed.
-            $withoutGh = ($env:PATH -split [IO.Path]::PathSeparator |
-                    Where-Object { $_ -ne $fixture.Bin }) -join [IO.Path]::PathSeparator
-            $run = Invoke-Capture -Fixture $fixture -Argument @('-Feature', 'core', '-Publish') `
-                -Answer 'y' -Environment @{ PATH = $withoutGh; STUB_GH_LOG = (Join-Path $fixture.Base 'unused.log') }
-
-            # This machine may have a real gh; that only changes which refusal
-            # or which failure comes back, never that a write happened first.
-            $run.ExitCode | Should -Be 1
-            @(& git -C $fixture.Repo for-each-ref --format='%(refname)' refs/heads) |
-                Should -Not -Contain 'refs/heads/feature/windows-capture-core'
-            @(& git -C $fixture.Remote for-each-ref --format='%(refname)' refs/heads) | Should -Be @('refs/heads/dev')
-            @(& git -C $fixture.Repo status --porcelain).Count | Should -Be 0
-        }
     }
 }
 

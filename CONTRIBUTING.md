@@ -241,9 +241,9 @@ has uncommitted changes, and never bypasses a hook. On `dev` it branches to
 name given with `-Branch`) before it commits, reported in the plan before the
 `[y/N]`, so a capture run on `dev` never leaves a commit on that protected
 branch; on any other branch the commit stays there. Read its refusals rather
-than working around them, and read the hook output under its commit rather
-than assuming a hook ran: whether the POSIX hooks execute under Git for
-Windows is recorded in `docs/status.md` as an open question.
+than working around them, and read the hook output under its commit: Git for
+Windows runs the POSIX hooks natively, but a clone that has not set
+`core.hooksPath` runs none of them.
 
 Add `-Publish` and that same confirmation pushes the branch, opens one pull
 request against `dev`, arms auto-merge and prints the pull-request URL. It is
@@ -258,6 +258,11 @@ branch is armed unchanged. It pushes a branch rather than a commit, so it
 lists whatever the branch already carries beyond `dev` before the `[y/N]`.
 `-WhatIf -Publish` prints the branch, the title, the body and every command
 and writes nothing. Promotion to `master` and release remain the flows above.
+
+`windows/tools/test.ps1` leaves out the Pester cases that run `capture.ps1`
+end to end in a child PowerShell, and says which ones it skipped. Set
+`WIN_ENV_E2E=1` to run them; the `windows-latest` CI job does, so the merge
+gate covers them and a local push stays quick.
 
 ## Common changes
 

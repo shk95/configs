@@ -2397,9 +2397,20 @@ function New-WinEnvPullRequestBody {
         value is passed in by the caller that already answered the question.
 
         The evidence block is a copy of the terminal's, not an interception of
-        it: capture.ps1 writes every line to the terminal as it arrives and
-        keeps a second copy for this. Colour escapes are stripped, because a
-        pull request renders those bytes instead of the colour.
+        it: the run writes every line to the terminal as it arrives and keeps a
+        second copy for this. Colour escapes are stripped, because a pull
+        request renders those bytes instead of the colour.
+
+        Two evidence blocks, because this repository's two local gates check
+        different things and only one of them is the Windows one. A capture
+        commit touches windows/desired/**, for which `tool/dispatch/select
+        commit` names no unit at all, so the pre-commit hook contributes the
+        repository-wide hygiene and secret scans and nothing more. The
+        domain's own checks -- check-desired-state.ps1 and test.ps1, run
+        natively through pwsh.exe -- belong to `.githooks/pre-push`, and that
+        output is the evidence a reviewer of this pull request cannot get any
+        other way. Publishing from a Windows host and then discarding it would
+        throw away the one thing that host can prove.
     #>
     param(
         [Parameter(Mandatory)][string] $Branch,
@@ -2409,7 +2420,8 @@ function New-WinEnvPullRequestBody {
         [Parameter(Mandatory)][string] $Command,
         [Parameter(Mandatory)][AllowEmptyString()][string] $Build,
         [AllowEmptyCollection()][string[]] $Carried = @(),
-        [AllowEmptyCollection()][string[]] $Evidence = @()
+        [AllowEmptyCollection()][string[]] $Evidence = @(),
+        [AllowEmptyCollection()][string[]] $PushEvidence = @()
     )
 
     $lines = [System.Collections.Generic.List[string]]::new()
@@ -2449,6 +2461,18 @@ function New-WinEnvPullRequestBody {
     [void]$lines.Add('```')
 
     [void]$lines.Add('')
+    [void]$lines.Add('Local push evidence:')
+    [void]$lines.Add('')
+    [void]$lines.Add('```text')
+    if (@($PushEvidence).Count) {
+        foreach ($line in @($PushEvidence)) { [void]$lines.Add(($line -replace $script:WinEnvAnsiPattern, '')) }
+    }
+    else {
+        [void]$lines.Add('(the pre-push hook''s output, once the push runs)')
+    }
+    [void]$lines.Add('```')
+
+    [void]$lines.Add('')
     [void]$lines.Add('Opened by windows/tools/capture.ps1 -Publish. Auto-merge is armed, so the')
     [void]$lines.Add('merge commit happens when `Required checks` pass and not before.')
 
@@ -2471,17 +2495,29 @@ function Publish-WinEnvCapture {
         other bypass.
 
         The push is a plain `git push`, so .githooks/pre-push selects and runs
-        the checks the pushed content owns and its output reaches the terminal
-        unaltered. `gh pr merge --auto --merge` arms the merge rather than
-        performing it: the wait for `Required checks` is the whole gate the
-        flag exists to keep, and `--admin` would remove it.
+        the checks the pushed content owns -- on a Windows host, the domain's
+        own check-desired-state.ps1 and test.ps1 through pwsh.exe. Its output
+        is copied on the way past rather than intercepted: every line still
+        reaches this terminal, in order, and a second copy becomes the pull
+        request's push-evidence block, which is the only place a reviewer can
+        read what that host's native run reported. `gh pr merge --auto
+        --merge` arms the merge rather than performing it: the wait for
+        `Required checks` is the whole gate the flag exists to keep, and
+        `--admin` would remove it.
+
+        The body is therefore built here rather than passed in finished: the
+        push evidence does not exist until the push has run, and on the reuse
+        arm no body is built at all, because that pull request's own is left
+        exactly as it is.
     #>
     [CmdletBinding(SupportsShouldProcess)]
     param(
         [Parameter(Mandatory)][string] $RepositoryRoot,
         [Parameter(Mandatory)][string] $Branch,
         [Parameter(Mandatory)][string] $Title,
-        [Parameter(Mandatory)][string] $Body,
+        # Everything New-WinEnvPullRequestBody needs except -PushEvidence,
+        # splatted into it below once the push has produced that evidence.
+        [Parameter(Mandatory)][hashtable] $BodyParameter,
         # The pull request Get-WinEnvPublishPreflight found already open
         # against dev from this head, if there was one. Its title and body are
         # left exactly as they are: this tool did not write them and does not
@@ -2498,7 +2534,17 @@ function Publish-WinEnvCapture {
 
     Write-Host ''
     Write-Host "→ pushing $Branch"
-    & git -C $RepositoryRoot push --set-upstream origin $Branch
+    # Copied the way the commit is copied in capture.ps1, and for the same
+    # reason: nobody reviews a pull request by scrolling somebody else's
+    # terminal. Every line is re-emitted as it arrives, so the operator reads
+    # the hook exactly when it speaks.
+    $pushEvidence = [System.Collections.Generic.List[string]]::new()
+    & git -C $RepositoryRoot push --set-upstream origin $Branch 2>&1 |
+        ForEach-Object {
+            $line = [string]$_
+            [void]$pushEvidence.Add($line)
+            Write-Host $line
+        }
     if ($LASTEXITCODE -ne 0) {
         return [pscustomobject]@{
             Status  = 'Refused'
@@ -2518,7 +2564,8 @@ function Publish-WinEnvCapture {
         $bodyPath = Join-Path ([IO.Path]::GetTempPath()) `
         ('win-env-pull-request-' + [guid]::NewGuid().ToString('N') + '.md')
         try {
-            Write-WinEnvAtomicText -Path $bodyPath -Content $Body
+            $body = New-WinEnvPullRequestBody @BodyParameter -PushEvidence @($pushEvidence)
+            Write-WinEnvAtomicText -Path $bodyPath -Content $body
             $created = Invoke-WinEnvGh -RepositoryRoot $RepositoryRoot -Argument @(
                 'pr', 'create', '--base', $script:WinEnvPublishBase, '--head', $Branch,
                 '--title', $Title, '--body-file', $bodyPath)

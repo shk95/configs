@@ -87,6 +87,10 @@ jobs:
     runs-on: windows-latest
     env:
       REQUIRE_NATIVE: "1"
+      # The Pester suite's end-to-end capture cases each launch a child
+      # PowerShell, so .githooks/pre-push leaves them out to keep a local push
+      # quick. This is the merge gate, where nothing is left out.
+      WIN_ENV_E2E: "1"
     steps:
       - uses: actions/checkout@v7
       - name: Validate desired state and test PowerShell
