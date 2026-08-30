@@ -371,4 +371,304 @@ if (REQUIRE_NATIVE=1; export REQUIRE_NATIVE; run_protocol_pre_push) >/dev/null 2
   exit 1
 fi
 
+# tool/version-control/commit is a composition rather than a new authority:
+# classify answers ownership, dispatch/select answers check selection,
+# .githooks/evidence decides what an exit status means, and the hook runs
+# because core.hooksPath points at it. Only a real repository with real hooks
+# can assert that, so this block builds one the way the fixtures above do.
+#
+# Every git call here runs with the ambient git environment unset. A hook that
+# invoked this runner exports an absolute GIT_DIR for the real clone, and
+# `git -C` does not override it, so a fixture that trusted the environment
+# would commit into the repository it is meant to be testing.
+commit_root="$test_root/commit"
+mkdir -p "$commit_root/tool/checks" "$commit_root/modules" "$commit_root/stub" \
+  "$commit_root/stub-nix"
+cp -R "$root/.githooks" "$commit_root/.githooks"
+cp -R "$root/tool/version-control" "$commit_root/tool/version-control"
+cp -R "$root/tool/dispatch" "$commit_root/tool/dispatch"
+
+# The two shapes that break a naive list editor: a comment attached to one
+# entry, and a tapped cask whose sort key is its last path segment rather than
+# the whole string.
+cat >"$commit_root/modules/darwin-homebrew.nix" <<'FIXTURE'
+_: {
+  modules.darwin.system = _: {
+    homebrew = {
+      # Portable command-line tools belong to homeManager.shared.
+      brews = [
+        # Broken on Darwin in the locked nixpkgs.
+        "bettercap"
+        "displayplacer"
+        "mas"
+      ];
+
+      # `brew install --cask`
+      casks = [
+        "nikitabobko/tap/aerospace"
+        "anki"
+        "zen"
+      ];
+    };
+  };
+}
+FIXTURE
+printf '{ "nodes": {}, "root": "root", "version": 7 }\n' >"$commit_root/flake.lock"
+
+# gitleaks is stubbed so the hook's secret scan behaves the same on every host.
+# Otherwise a clone without it reports unverified for its own reason and the
+# assertions below would stop proving anything about the stubbed check.
+printf '#!/bin/sh\nexit 0\n' >"$commit_root/stub/gitleaks"
+cat >"$commit_root/stub-nix/nix" <<'STUB'
+#!/bin/sh
+[ "$1" = flake ] && [ "$2" = update ] || exit 1
+printf '{ "nodes": {}, "root": "root", "version": 7, "refreshed": "%s" }\n' \
+  "${3:-all}" >flake.lock
+STUB
+chmod +x "$commit_root/stub/gitleaks" "$commit_root/stub-nix/nix"
+
+commit_git() {
+  (
+    unset GIT_DIR GIT_WORK_TREE GIT_INDEX_FILE
+    git -C "$commit_root" "$@"
+  )
+}
+
+commit_git init -q -b dev
+commit_git config user.name Fixture
+commit_git config user.email fixture@example.invalid
+commit_git add .
+commit_git commit -q -m 'feat(repository): create commit fixture'
+# Hooks come after the seed commit: that commit stages tool/ and .githooks/,
+# which select reports as repository:fixtures, and this runner is that unit.
+commit_git config core.hooksPath .githooks
+commit_git branch master
+
+commit_stub_path="$commit_root/stub"
+
+run_commit() {
+  commit_answer=$1
+  shift
+  printf '%s\n' "$commit_answer" | (
+    unset GIT_DIR GIT_WORK_TREE GIT_INDEX_FILE
+    cd "$commit_root" || exit 1
+    PATH="$commit_stub_path:$PATH" tool/version-control/commit "$@" 2>&1
+  )
+}
+
+commit_count() { commit_git rev-list --count HEAD; }
+
+stub_commit_check() {
+  printf '#!/bin/sh\nexit %s\n' "$1" >"$commit_root/tool/checks/format"
+  chmod +x "$commit_root/tool/checks/format"
+}
+
+casks_now() {
+  sed -n '/casks = \[/,/\];/p' "$commit_root/modules/darwin-homebrew.nix" \
+    | sed -n 's/^ *"\(.*\)"$/\1/p' | tr '\n' ' '
+}
+
+# A dry run answers the four questions and writes nothing.
+commit_before=$(commit_count)
+dry_output=$(run_commit n --dry-run cask add af)
+printf '%s\n' "$dry_output" | grep -q '^+        "af"$'
+printf '%s\n' "$dry_output" | grep -q '^classification: unixlike$'
+printf '%s\n' "$dry_output" | grep -q '^  unixlike:format$'
+printf '%s\n' "$dry_output" | grep -q '^message: feat(unixlike): add homebrew cask af$'
+if [ -n "$(commit_git status --porcelain --untracked-files=no)" ] \
+  || [ "$(commit_count)" != "$commit_before" ]; then
+  echo "commit --dry-run wrote something" >&2
+  exit 1
+fi
+
+if ! run_commit y cask add af >/dev/null; then
+  echo "the commit helper refused a valid cask addition" >&2
+  exit 1
+fi
+if [ "$(commit_git show -s --format=%s HEAD)" \
+  != 'feat(unixlike): add homebrew cask af' ]; then
+  echo "commit helper used an unexpected message for a cask addition" >&2
+  exit 1
+fi
+if [ "$(commit_git diff-tree --no-commit-id --name-only -r HEAD)" \
+  != modules/darwin-homebrew.nix ]; then
+  echo "commit helper touched more than the homebrew module" >&2
+  exit 1
+fi
+# Sorting on the raw string would file "af" before "nikitabobko/tap/aerospace";
+# the key is the last path segment, so the tapped cask sorts under aerospace.
+if [ "$(casks_now)" != 'nikitabobko/tap/aerospace af anki zen ' ]; then
+  echo "commit helper ignored the tap-aware sort order: $(casks_now)" >&2
+  exit 1
+fi
+
+# A removed entry takes the comment block attached to it. Leaving that behind
+# would silently re-attach it to the next entry.
+if ! run_commit y brew remove bettercap >/dev/null; then
+  echo "the commit helper refused a valid formula removal" >&2
+  exit 1
+fi
+if [ "$(commit_git show -s --format=%s HEAD)" \
+  != 'chore(unixlike): remove homebrew formula bettercap' ]; then
+  echo "commit helper used an unexpected message for a formula removal" >&2
+  exit 1
+fi
+if grep -q 'Broken on Darwin' "$commit_root/modules/darwin-homebrew.nix"; then
+  echo "commit helper left a removed entry's comment behind" >&2
+  exit 1
+fi
+grep -q 'Portable command-line tools' "$commit_root/modules/darwin-homebrew.nix"
+grep -q '"displayplacer"' "$commit_root/modules/darwin-homebrew.nix"
+
+# AGENTS.md: only dev enters master, and there is no operational bypass.
+commit_git switch -q master
+if master_output=$(run_commit y cask add zzz); then
+  echo "commit helper committed on master" >&2
+  exit 1
+fi
+printf '%s\n' "$master_output" | grep -q master
+if [ -n "$(commit_git status --porcelain --untracked-files=no)" ]; then
+  echo "commit helper changed the tree while refusing on master" >&2
+  exit 1
+fi
+commit_git switch -q dev
+
+# AGENTS.md line 93: a tool that takes the hook's bypass silently creates the
+# policy a human was trusted to decide.
+if bypass_output=$(run_commit y --no-verify cask add zzz); then
+  echo "commit helper honoured a hook bypass" >&2
+  exit 1
+fi
+printf '%s\n' "$bypass_output" | grep -q 'hook bypass'
+
+# The helper commits only the edit it makes.
+printf 'scratch\n' >"$commit_root/unrelated"
+commit_git add unrelated
+if run_commit y cask add zzz >/dev/null; then
+  echo "commit helper acted with unrelated staged changes" >&2
+  exit 1
+fi
+commit_git reset -q -- unrelated
+rm -f "$commit_root/unrelated"
+
+printf '\n' >>"$commit_root/modules/darwin-homebrew.nix"
+if run_commit y cask add zzz >/dev/null; then
+  echo "commit helper acted on a file with uncommitted changes" >&2
+  exit 1
+fi
+commit_git checkout -q -- modules/darwin-homebrew.nix
+
+# An unclassified path is fatal at both gates, so the helper refuses before it
+# writes rather than after the hook rejects it.
+cp "$commit_root/tool/version-control/classify" "$test_root/classify.real"
+printf '#!/bin/sh\necho unclassified\n' >"$commit_root/tool/version-control/classify"
+chmod +x "$commit_root/tool/version-control/classify"
+if unclassified_output=$(run_commit y cask add zzz); then
+  echo "commit helper acted on an unclassified path" >&2
+  exit 1
+fi
+printf '%s\n' "$unclassified_output" | grep -q 'no owning scope'
+cp "$test_root/classify.real" "$commit_root/tool/version-control/classify"
+
+# The hook decides. A failing check stops the helper, an unverified one does
+# not, and REQUIRE_NATIVE turns the second into the first the way CI does.
+commit_before=$(commit_count)
+stub_commit_check 1
+if run_commit y cask add zzz >/dev/null; then
+  echo "commit helper survived a failing pre-commit hook" >&2
+  exit 1
+fi
+if [ "$(commit_count)" != "$commit_before" ]; then
+  echo "commit helper committed despite a failing pre-commit hook" >&2
+  exit 1
+fi
+commit_git reset -q --hard HEAD
+
+stub_commit_check 69
+if ! unverified_commit=$(run_commit y cask add zzz); then
+  echo "commit helper blocked a check that reported unverified" >&2
+  exit 1
+fi
+if [ "$(commit_count)" = "$commit_before" ]; then
+  echo "commit helper treated an unverified check as a failure" >&2
+  exit 1
+fi
+# Verbatim, on the operator's terminal: the unverified state is only
+# meaningful if it is read.
+printf '%s\n' "$unverified_commit" | grep -q '^→ format$'
+printf '%s\n' "$unverified_commit" | grep -q '^· format unverified'
+printf '%s\n' "$unverified_commit" \
+  | grep -q 'Some checks could not run on this host and remain unverified\.'
+
+commit_before=$(commit_count)
+if (
+  REQUIRE_NATIVE=1
+  export REQUIRE_NATIVE
+  run_commit y cask add yyy
+) >/dev/null 2>&1; then
+  echo "commit helper committed an unverified check under REQUIRE_NATIVE" >&2
+  exit 1
+fi
+if [ "$(commit_count)" != "$commit_before" ]; then
+  echo "commit helper committed under REQUIRE_NATIVE despite an unverified check" >&2
+  exit 1
+fi
+commit_git reset -q --hard HEAD
+stub_commit_check 0
+
+# A flake refresh is its own command, never a side effect of another one, and
+# CONTRIBUTING.md keeps it in a dedicated chore(unixlike-deps) commit. The
+# homebrew assertions above already show it does not ride along with an edit.
+flake_dry=$(run_commit n --dry-run flake refresh)
+printf '%s\n' "$flake_dry" | grep -q '^action: nix flake update$'
+printf '%s\n' "$flake_dry" | grep -q '^message: chore(unixlike-deps): refresh flake.lock$'
+
+commit_stub_path="$commit_root/stub-nix:$commit_root/stub"
+if ! run_commit y flake refresh nixpkgs >/dev/null; then
+  echo "commit helper did not commit a flake refresh" >&2
+  exit 1
+fi
+commit_stub_path="$commit_root/stub"
+if [ "$(commit_git show -s --format=%s HEAD)" \
+  != 'chore(unixlike-deps): refresh nixpkgs in flake.lock' ]; then
+  echo "commit helper used an unexpected message for a flake refresh" >&2
+  exit 1
+fi
+if [ "$(commit_git diff-tree --no-commit-id --name-only -r HEAD)" != flake.lock ]; then
+  echo "a flake refresh commit carried more than flake.lock" >&2
+  exit 1
+fi
+
+# Without nix the refresh is unverified, not failed: exit 69, no commit.
+# Skipped where a real nix is on PATH, because there the update runs for real.
+if command -v nix >/dev/null 2>&1; then
+  echo "· nix on PATH, skipping the unavailable-nix fixture"
+else
+  commit_before=$(commit_count)
+  no_nix_status=0
+  run_commit y flake refresh >/dev/null 2>&1 || no_nix_status=$?
+  if [ "$no_nix_status" != 69 ]; then
+    echo "commit helper did not report a missing nix as unverified" >&2
+    exit 1
+  fi
+  if [ "$(commit_count)" != "$commit_before" ]; then
+    echo "commit helper committed a flake refresh without nix" >&2
+    exit 1
+  fi
+fi
+
+# The helper refuses a bypass; it must also never take one. Its own refusal
+# names those flags, so this asserts an invocation rather than a mention.
+if grep -Eq 'git commit.*--no-verify|core\.hooksPath|HUSKY|GIT_DIR' \
+  "$root/tool/version-control/commit"; then
+  echo "the commit helper carries a hook bypass" >&2
+  exit 1
+fi
+
+# What it produced must satisfy the audit the repository already runs.
+(
+  unset GIT_DIR GIT_WORK_TREE GIT_INDEX_FILE
+  cd "$commit_root" && "$audit"
+) >/dev/null
+
 echo "version-control fixtures passed"
