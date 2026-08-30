@@ -263,11 +263,11 @@ PowerShell profile, `.wslconfig` or Zellij becomes desired state with one
 command and one confirmation:
 
 ```powershell
-.\windows\tools\capture.ps1                     # every feature this host applied
-.\windows\tools\capture.ps1 -Feature powertoys  # one feature
-.\windows\tools\capture.ps1 -Id windowsTerminal # one managed file
-.\windows\tools\capture.ps1 -Branch fix/font    # override the branch name below
-.\windows\tools\capture.ps1 -WhatIf             # decide and diff, write nothing
+.\windows\tools\capture.ps1                          # every feature this host applied
+.\windows\tools\capture.ps1 -Feature powertoys       # one feature
+.\windows\tools\capture.ps1 -Id windowsTerminal      # one managed file
+.\windows\tools\capture.ps1 -Branch fix/windows-font # override the branch name below
+.\windows\tools\capture.ps1 -WhatIf                  # decide and diff, write nothing
 ```
 
 Drift is decided by the comparison `-Check` already uses. Each drifted managed

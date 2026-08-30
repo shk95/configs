@@ -2212,6 +2212,36 @@ Describe 'capture branch' {
         $plan.Message | Should -Match 'already exists'
     }
 
+    It 'refuses a -Branch override that fails this repository''s naming policy' {
+        # The exact regression a review caught live: README's own example was
+        # -Branch fix/font, which tool/version-control/audit rejects for
+        # missing the windows- scope prefix. This must refuse before any read
+        # of the remote at all, the same as the master refusal does.
+        $fixture = New-BranchFixture
+        & git -C $fixture.Repo update-ref -d refs/remotes/origin/dev | Out-Null
+
+        $plan = Get-WinEnvCaptureBranchPlan -RepositoryRoot $fixture.Repo -BranchName 'fix/font'
+        $plan.Status | Should -Be 'Refused'
+        $plan.Branch | Should -BeNullOrEmpty
+        $plan.Message | Should -Match 'naming policy'
+        # Naming the pattern, not just the symptom, is the point: the operator
+        # can fix the name without having to go read tool/version-control/audit.
+        $plan.Detail | Should -Match ([regex]::Escape('(feature|fix)/(unixlike|windows|common|repository)-[a-z0-9][a-z0-9-]*'))
+    }
+
+    It 'accepts a -Branch override that follows the naming policy' {
+        $fixture = New-BranchFixture
+        $plan = Get-WinEnvCaptureBranchPlan -RepositoryRoot $fixture.Repo -BranchName 'fix/windows-font'
+        $plan.Status | Should -Be 'Create'
+        $plan.Branch | Should -Be 'fix/windows-font'
+
+        $originDev = (& git -C $fixture.Repo rev-parse refs/remotes/origin/dev).Trim()
+        $result = New-WinEnvCaptureBranch -RepositoryRoot $fixture.Repo -Branch $plan.Branch
+        $result.Status | Should -Be 'Created'
+        (Get-FixtureCurrentBranch -Repo $fixture.Repo) | Should -Be 'fix/windows-font'
+        (& git -C $fixture.Repo rev-parse HEAD).Trim() | Should -Be $originDev
+    }
+
     It 'creates the named branch from origin/dev and leaves dev untouched' {
         $fixture = New-BranchFixture
         $plan = Get-WinEnvCaptureBranchPlan -RepositoryRoot $fixture.Repo -BranchName 'feature/windows-capture-font'

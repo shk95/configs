@@ -1,3 +1,11 @@
+# ConvertTo-Json formats differently on Windows PowerShell 5 -- four-space
+# indentation and HTML/Unicode escaping the pretty-printer below does not
+# account for -- which would silently change what a captured JSON payload
+# looks like depending on which PowerShell happened to be first on PATH.
+# setup.ps1 already requires 7; this asks PowerShell itself to refuse to
+# start rather than run under the one version this script was not verified
+# against.
+#Requires -Version 7.0
 [CmdletBinding(SupportsShouldProcess)]
 param(
     # Which managed files to consider. Neither switch is a deployment

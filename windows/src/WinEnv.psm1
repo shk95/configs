@@ -2000,6 +2000,16 @@ function Save-WinEnvCapturedPayload {
     return $path
 }
 
+# The exact branch-naming policy tool/version-control/audit enforces
+# (`^(feature|fix)/(unixlike|windows|common|repository)-[a-z0-9][a-z0-9-]*$`),
+# copied rather than shared because this module has no POSIX shell to call
+# into. A default branch name always satisfies it, because manifest feature
+# ids are already lower-case alnum slugs; only an explicit -Branch override
+# can fail it, and unlike the Unix-like commit helper -- whose branch name
+# always comes from its own slugify(), never from free-form operator input --
+# capture.ps1 takes that override as a literal string.
+$script:WinEnvCaptureBranchNamePattern = '^(feature|fix)/(unixlike|windows|common|repository)-[a-z0-9][a-z0-9-]*$'
+
 function Get-WinEnvCaptureBranchPlan {
     <#
         .SYNOPSIS
@@ -2016,11 +2026,16 @@ function Get-WinEnvCaptureBranchPlan {
         On `master`, refuse: only this repository's `dev` may enter `master`,
         by pull request and merge commit, and there is no operational bypass.
         On `dev`, this capture gets a branch of its own, `$BranchName`,
-        created from `origin/dev`; that requires a fetched `origin/dev` to
-        exist at all, requires local `dev` to already be it -- the branch
-        would otherwise be cut from a tree the capture was never computed
-        against -- and requires `$BranchName` to be unused. On any other
-        branch, the commit stays there.
+        created from `origin/dev`; that requires `$BranchName` itself to
+        follow this repository's branch-naming policy -- checked here rather
+        than left to `tool/version-control/audit` to catch afterwards, since
+        an operator-supplied `-Branch` has no other guarantee of that shape --
+        requires a fetched `origin/dev` to exist at all, requires local `dev`
+        to already be it -- the branch would otherwise be cut from a tree the
+        capture was never computed against -- and requires `$BranchName` to be
+        unused. On any other branch, the commit stays there and `$BranchName`
+        is not even read: an override is documented as ignored there, so it is
+        never validated there either.
 
         Every check here is a read, so this is safe to call while deciding
         what to report before the `[y/N]` confirmation and under -WhatIf.
@@ -2045,6 +2060,15 @@ function Get-WinEnvCaptureBranchPlan {
 
     if ($currentBranch -ne 'dev') {
         return [pscustomobject]@{ Status = 'Current'; Branch = $currentBranch; Message = $null; Detail = $null }
+    }
+
+    if ($BranchName -cnotmatch $script:WinEnvCaptureBranchNamePattern) {
+        return [pscustomobject]@{
+            Status  = 'Refused'
+            Branch  = $null
+            Message = "'$BranchName' does not follow this repository's branch naming policy."
+            Detail  = "tool/version-control/audit requires: $script:WinEnvCaptureBranchNamePattern"
+        }
     }
 
     & git -C $RepositoryRoot rev-parse --verify --quiet refs/remotes/origin/dev *>$null
