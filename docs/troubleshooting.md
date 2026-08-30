@@ -363,9 +363,9 @@ It does not work, and the interesting part is that the path is fine. `dir` reads
 it through both spellings:
 
 ```
-> dir \\wsl.localhost\Ubuntu-26.04\home\user1\github_prj\configs\nixos.wsl
+> dir \\wsl.localhost\Ubuntu-26.04\home\<user>\...\configs\nixos.wsl
        603,474,420 nixos.wsl
-> dir \\wsl$\Ubuntu-26.04\home\user1\github_prj\configs\nixos.wsl
+> dir \\wsl$\Ubuntu-26.04\home\<user>\...\configs\nixos.wsl
        603,474,420 nixos.wsl
 ```
 
