@@ -801,9 +801,16 @@ must stay authorable and deployable without a Unix-like host and the
 maintainer's two clones are separate checkouts, so the guards are restated in
 PowerShell: refuse on `master`, refuse a dirty index, refuse a payload that
 already has uncommitted changes, never bypass a hook, and end every run at one
-interactive confirmation with no unattended mode. The decisions live in
-`windows/src/WinEnv.psm1` where they have fixtures; the script owns only what
-needs a terminal and a Git repository.
+interactive confirmation with no unattended mode. The branch rule is restated
+too (#77, after the maintainer's first real capture landed a commit on `dev`,
+which is protected and had to be moved by hand): on `dev`, fetch `origin/dev`
+and branch to `feature/windows-capture-<feature>` from it before committing;
+on any other branch, commit where it is. A captured JSON payload is also
+pretty-printed to this repository's two-space style before it is written,
+regardless of how the host application wrote it, so the diff the operator
+confirms at the `[y/N]` prompt is the diff a reviewer reads. The decisions
+live in `windows/src/WinEnv.psm1` where they have fixtures; the script owns
+only what needs a terminal and a Git repository.
 
 Drift is decided by `Test-WinEnvManagedFile`, the function `-Check` uses, and
 the payload variant by `Resolve-WinEnvManagedFile`. A second comparison
@@ -861,7 +868,8 @@ host drifted in a way desired state cannot express, and saying that is the whole
 answer.
 
 Evidence is split accordingly. The Unix-like Pester run covers every rule
-above and is not Windows evidence: the fixtures hand the module a host no
+above, including the branch rule against a throwaway repository and bare
+remote, and is not Windows evidence: the fixtures hand the module a host no
 machine has to be. What is owed from the maintainer's host is one real capture
-after a change made in an application's own UI, the resulting payload diff, and
-the hooks' behaviour on that host.
+after a change made in an application's own UI, showing the branch line in the
+plan and a readable diff, and the hooks' behaviour on that host.

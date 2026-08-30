@@ -266,16 +266,18 @@ command and one confirmation:
 .\windows\tools\capture.ps1                     # every feature this host applied
 .\windows\tools\capture.ps1 -Feature powertoys  # one feature
 .\windows\tools\capture.ps1 -Id windowsTerminal # one managed file
+.\windows\tools\capture.ps1 -Branch fix/font    # override the branch name below
 .\windows\tools\capture.ps1 -WhatIf             # decide and diff, write nothing
 ```
 
 Drift is decided by the comparison `-Check` already uses. Each drifted managed
 file is copied into the payload this host resolves — the build-selected variant
-for a conditional file — with the placeholder Apply expands restored, the diff
-is shown, and one `[y/N]` commits it: one `feat(windows):` commit per feature,
-through the repository's hooks. Push and open a pull request as usual; the tool
-stops at the commit. The round trip closes, so the check that reported the
-drift passes afterwards.
+for a conditional file — with the placeholder Apply expands restored, a JSON
+payload pretty-printed to this repository's two-space style regardless of how
+the host application wrote it, the diff is shown, and one `[y/N]` commits it:
+one `feat(windows):` commit per feature, through the repository's hooks. Push
+and open a pull request as usual; the tool stops at the commit. The round trip
+closes, so the check that reported the drift passes afterwards.
 
 It refuses instead of guessing, and says which rule it refused under:
 a file the suite already names as runtime state; a `JsonSubset` payload, which
@@ -285,10 +287,13 @@ that still holds an absolute account path, this host's account name, or a
 Windows build is undetermined. Windows Terminal profiles the application
 generated are dropped rather than captured, so a fragment profile from one
 host's Git for Windows never reaches another host. Like the Unix-like commit
-helper it refuses on `master`, refuses when the index already holds staged
-changes or a payload it would write has uncommitted changes, and never bypasses
-a hook. Nothing on the host is written: the managed targets are read and
-nothing else.
+helper it refuses when the index already holds staged changes or a payload it
+would write has uncommitted changes, and never bypasses a hook. Its branch rule
+is the same helper's, too: on `master` it refuses outright; on `dev` it
+branches to `feature/windows-capture-<feature>` from a freshly fetched
+`origin/dev` (or `-Branch <name>`), reported before the `[y/N]`, so `dev` never
+carries the commit; on any other branch it commits where it is. Nothing on the
+host is written: the managed targets are read and nothing else.
 
 ## Deployment
 

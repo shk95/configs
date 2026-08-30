@@ -231,15 +231,20 @@ minimal selection says nothing about the features it excluded.
 
 A change made in an application's own UI moves back into desired state with
 `.\windows\tools\capture.ps1`, which reads the managed targets, writes only
-this repository's payloads, and ends at one confirmation before committing.
+this repository's payloads — a JSON payload pretty-printed to this
+repository's two-space style — and ends at one confirmation before committing.
 Preview it with `-WhatIf` first. It restates the guards of
-`tool/version-control/commit` rather than calling it: it refuses on `master`,
-on a dirty index, on a payload that already has uncommitted changes, and never
-bypasses a hook. It pushes nothing and opens no pull request, so promotion and
-release remain the flows above. Read its refusals rather than working around
-them, and read the hook output under its commit rather than assuming a hook
-ran: whether the POSIX hooks execute under Git for Windows is recorded in
-`docs/status.md` as an open question.
+`tool/version-control/commit` rather than calling it, including its branch
+rule: it refuses on `master`, on a dirty index, and on a payload that already
+has uncommitted changes, and never bypasses a hook. On `dev` it branches to
+`feature/windows-capture-<feature>` from a freshly fetched `origin/dev` (or a
+name given with `-Branch`) before it commits, reported in the plan before the
+`[y/N]`, so a capture run on `dev` never leaves a commit on that protected
+branch; on any other branch the commit stays there. It pushes nothing and
+opens no pull request, so promotion and release remain the flows above. Read
+its refusals rather than working around them, and read the hook output under
+its commit rather than assuming a hook ran: whether the POSIX hooks execute
+under Git for Windows is recorded in `docs/status.md` as an open question.
 
 ## Common changes
 
