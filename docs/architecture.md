@@ -177,6 +177,48 @@ job selected by the classifier. Individual domain jobs remain conditional and
 are not protection contracts, so adding or skipping a domain does not silently
 weaken or deadlock protected branches.
 
+### Desired-state hygiene
+
+Committed desired state carries no secret, no undeclared user or host name, no
+absolute home path, and no snapshot of runtime state. `AGENTS.md` states this
+under "Durable decisions". The invariant is repository-wide because every
+domain publishes its desired state from one history, and it belongs to the
+`repository` governance scope because assigning it to one platform would make
+that platform authoritative for the others. The repository maintainer owns the
+decision.
+
+The failure it prevents is not hypothetical. A host path that reaches history
+stays there after the file is edited, the way a credential does, and it turns a
+public description of intended state into a description of one machine. Two
+absolute home paths reached `docs/troubleshooting.md` and stayed for the
+document's whole history, because the sentence had a policy owner and no
+enforcement owner, which "Governance design" says must not happen.
+
+The invariants, stated without reference to any command:
+
+- An account or host name appears in committed desired state only when it is
+  declared. `modules/flake/inventory.nix` is the declaration of record, and a
+  declaration that cannot be read is a failure rather than a permission.
+- An absolute path into a home directory is never desired state, in any
+  spelling a supported host writes. A declared value interpolated into a path
+  is not an absolute path.
+- Runtime state is observed, never committed. A tracked path that an ignore
+  rule covers is runtime state that escaped the ignore file rather than an
+  exception to it.
+- A machine-unique identifier is host identity. A constant that names an
+  interface, or is derived from a name, is not.
+- Whatever forgives a violation is declared, reviewable, and enforced in both
+  directions: an exclusion that no longer excludes anything is removed rather
+  than kept.
+- Secret detection stays with the secret scan, which already owns it and must
+  not be duplicated.
+
+One half of the first invariant is decidable by no scanner: a bare account name
+in free prose has no naming context to recognise it by. It remains a manual
+invariant, its evidence is the reviewer's reading of prose in the diff as
+required by `docs/definition-of-done.md`, and the repository maintainer is its
+decision owner. Nothing in the enforcement plane covers it.
+
 Governance itself has separate authority layers:
 
 ```text
