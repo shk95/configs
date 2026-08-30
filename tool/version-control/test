@@ -917,6 +917,27 @@ hygiene_new
 printf '  %s = config.identity.wsl.%s;\n' username user >"$hygiene_repo/module.nix"
 hygiene_expect_pass 'axis 2, a bare expression is not a name'
 
+# The declarations are read from the index, like the scan itself. Reading the
+# working tree would let an unstaged edit change the result of a scan of the
+# index, so the pre-commit hook and CI could disagree about the same commit.
+hygiene_new
+printf '{ %s = "%s"; }\n' user eve >"$hygiene_repo/module.nix"
+hygiene_expect_fail 'axis 2, a leak against the staged inventory' "undeclared name 'eve'"
+{
+  printf '_: {\n  identity = {\n'
+  printf '    %s = "%s";\n' gitName declared-name
+  printf '    %s = "%s";\n' hostName declared-host
+  printf '    %s = "%s";\n' leak eve
+  printf '  };\n}\n'
+} >"$hygiene_repo/modules/flake/inventory.nix"
+if (cd "$hygiene_repo" && "$hygiene") >/dev/null 2>&1; then
+  echo "hygiene widened the declared set from an unstaged inventory" >&2
+  exit 1
+fi
+# Staged, the same edit does take effect: the index is the authority, not the
+# file's absence or presence on disk.
+hygiene_expect_pass 'axis 2, a name declared by the staged inventory'
+
 # The extraction must fail closed. An inventory whose literals move out of
 # reach cannot silently retire the axis, which is what #18 makes a live
 # possibility.
@@ -979,6 +1000,20 @@ printf 'error: path %s»/%s/programs/x.nix%s does not exist\n' "'" home "'" \
 printf 'doc.md\t/%s/programs/\n' home \
   >"$hygiene_repo/tool/version-control/hygiene.allow"
 hygiene_expect_pass 'exclusion, a live entry the scanner would not have flagged'
+
+# The allow file is read from the index for the same reason the inventory is.
+# An unstaged entry forgives nothing: an exclusion is a committed, reviewable
+# artefact, not a local override.
+hygiene_new
+printf 'see /%s/%s for the layout\n' home eve >"$hygiene_repo/doc.md"
+hygiene_expect_fail 'exclusion, a leak with no entry yet' 'absolute home path'
+printf 'doc.md\t/%s/%s\n' home eve \
+  >"$hygiene_repo/tool/version-control/hygiene.allow"
+if (cd "$hygiene_repo" && "$hygiene") >/dev/null 2>&1; then
+  echo "hygiene honoured an unstaged allow entry" >&2
+  exit 1
+fi
+hygiene_expect_pass 'exclusion, the same entry once staged'
 
 hygiene_new
 printf 'nothing to see here\n' >"$hygiene_repo/doc.md"

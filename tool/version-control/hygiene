@@ -168,10 +168,15 @@ grep_tracked() {
   }
 }
 
+# Read from the index, like everything else here. Reading the working tree
+# instead would let an unstaged edit change the result of a scan of the index,
+# so the hook and CI could disagree about the same commit, and it would fail
+# closed in a sparse checkout where the file is in the index but not on disk.
+# Comments are whole lines; there is no trailing-comment form, because a `#`
+# is a legal character inside a forgiven literal.
 : >"$work/allow"
-if [ -r "$allow_file" ]; then
-  sed -e 's/^#.*//' -e '/^[[:space:]]*$/d' "$allow_file" >"$work/allow"
-fi
+git show ":$allow_file" 2>/dev/null |
+  sed -e 's/^#.*//' -e '/^[[:space:]]*$/d' >"$work/allow"
 
 # A stale exclusion is a failure: without this the allow file becomes the place
 # violations go to be forgotten. "Matches" means the literal still occurs at
@@ -237,11 +242,11 @@ scan() {
 # at a POSIX shell and Git, and it is layout-independent by construction: when
 # the inventory grows host fields, their values join the allowed set with no
 # change here. It over-accepts -- `aarch64-darwin` is not a name -- and an
-# over-broad allowlist is the safe direction for an allowlist.
+# over-broad allowlist is the safe direction for an allowlist. Read from the
+# index for the same reason the allow file is.
 : >"$work/declared"
-if [ -r "$inventory" ]; then
-  sed -n 's/.*"\([^"]*\)".*/\1/p' "$inventory" | sort -u >"$work/declared"
-fi
+git show ":$inventory" 2>/dev/null |
+  sed -n 's/.*"\([^"]*\)".*/\1/p' | sort -u >"$work/declared"
 
 # An empty extraction must fail rather than accept everything, so a reformat of
 # the inventory cannot silently retire this axis.
