@@ -186,18 +186,19 @@ The default terminal delegation is a read-back, not a behavior check.
 `DelegationConsole` under `HKCU:\Console\%%Startup`, and
 `Test-WinEnvTerminalDelegation` reads those two values back from the same key
 and compares them to `manifest.Terminal`. Microsoft states the condition under
-which Windows honours them: the default terminal application is supported on
-Windows 11 22H2, or on Windows 10 22H2 at OS build 19045.3031 with KB5026435,
-and with Windows Terminal 1.17 or later. The same document names this key,
-these two value names, and the two GUIDs this manifest carries for Windows
-Terminal, so the values written here are the documented ones. The boundary is
-therefore an OS build plus an application version, not a Windows release name.
-Below either half of it the host accepts the write, the read-back passes, and
-the setting is ignored: `-Check` exits 0 and never reports drift for a setting
-that does nothing. That false pass is the one outcome the evidence contract has
-no room for. Above the boundary the read-back still observes no handoff. No
-Windows 10 host at build 19045.3031 was available, so the item is recorded
-unverified against its documentary source rather than closed as works.
+which the setting is supported: the default terminal application requires
+Windows 11 22H2, or Windows 10 22H2 at OS build 19045.3031 with KB5026435, and
+Windows Terminal 1.17 or later. The same document names this key, these two
+value names, and the two GUIDs this manifest carries for Windows Terminal, so
+the values written here are the documented ones. The boundary is therefore an
+OS build plus an application version, not a Windows release name. Below either
+half of it the host accepts the write, the read-back passes, and the setting is
+ignored: `-Check` exits 0 and never reports drift for a setting that does
+nothing. That false pass is the one outcome the evidence contract has no room
+for, and deciding the item against the documented condition rather than against
+the write (#53) is the fix. Above the boundary the read-back still observes no
+handoff. No Windows 10 host at build 19045.3031 was available, so the item is
+recorded unverified against its documentary source rather than closed as works.
 
 The two `Appx` items are supported on Windows 10 and undetectable there by the
 route this domain uses. Those are different statements and the record keeps
@@ -208,17 +209,17 @@ Windows 10 host, and neither item is absent or unsupported there. What does not
 work is the question. `Get-AppxPackage` backs both the `powertoys` feature's
 `Microsoft.CommandPalette` precondition and the `Microsoft.WindowsTerminal`
 package's `Appx` detection, and Microsoft's Windows module compatibility table
-marks `Appx` as requiring the Windows PowerShell compatibility layer from
-PowerShell 7.1 onwards. This domain runs PowerShell 7 and both call sites pass
+footnotes `Appx` with "Must use Compatibility Layer with PowerShell 7.1". This
+domain runs PowerShell 7 and both call sites pass
 `-ErrorAction SilentlyContinue`, so a route that cannot answer returns nothing
 and is read as absence. The precondition then reports the package missing and
 Apply refuses the feature; the package either reports missing, so Apply
 reinstalls an installed Windows Terminal, or disagrees with the WinGet
-registration and reports a detection conflict that blocks Apply. An unavailable
-route must report unverified, never absence. The open Appx-detection change
-(#37) owns that fix and moves both items to unverified; Windows version
-detection (#38) owns the mechanism the delegation condition needs, and this
-record builds none of its own.
+registration and reports a detection conflict that blocks Apply. An
+unavailable route must report unverified, never absence. The open
+Appx-detection change (#37) owns that fix and moves both items to unverified;
+Windows version detection (#38) owns the mechanism the delegation condition
+needs, and this record builds none of its own.
 
 Declining `terminal` and `powertoys` at selection time removes all three items
 from a host's check: `setup.ps1` evaluates the delegation only when `terminal`
@@ -236,8 +237,9 @@ not known to be safe on Windows 10; they are unexamined.
 
 The repository maintainer owns this boundary. It is a manual invariant: no
 check can produce the record, and `-Check` has no way to express its conclusion
-today, because it exits 0 or 2 and reports its `unverified` list without
-letting it affect the status.
+today — the Windows half of the staged migration declared in "Check evidence
+states" below — because it exits 0 or 2 and reports its `unverified` list
+without letting it affect the status. #54 owns that conversion.
 
 Sources for the claims above:
 
