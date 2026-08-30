@@ -784,3 +784,84 @@ typed declaration rather than from text. The condition for removing it is the
 one the payload declaration already sets: coverage enforced in both directions,
 positive and negative fixtures for every axis, and no host prerequisite beyond
 those the governance plane already has.
+
+## Capture moves a host change into desired state
+
+Every direction between this repository and a Windows host ran one way until
+now. `bootstrap.ps1 -Check` reported `<id> settings` drift and Apply overwrote
+the host from the payload; moving a change the other way was manual, which
+meant finding the target, copying it under `windows/desired/files/`, restoring
+placeholders by hand, remembering which files are runtime state, and writing a
+commit. `tool/version-control/hygiene` and the payload assertions in the Pester
+suite catch the mistakes that work invites; neither does the work.
+
+`windows/tools/capture.ps1` does it, and it is a copy of the shape of
+`tool/version-control/commit` rather than a caller of it. The Windows domain
+must stay authorable and deployable without a Unix-like host and the
+maintainer's two clones are separate checkouts, so the guards are restated in
+PowerShell: refuse on `master`, refuse a dirty index, refuse a payload that
+already has uncommitted changes, never bypass a hook, and end every run at one
+interactive confirmation with no unattended mode. The decisions live in
+`windows/src/WinEnv.psm1` where they have fixtures; the script owns only what
+needs a terminal and a Git repository.
+
+Drift is decided by `Test-WinEnvManagedFile`, the function `-Check` uses, and
+the payload variant by `Resolve-WinEnvManagedFile`. A second comparison
+implementation would eventually disagree with the first, and the failure would
+be a capture that reports as changed what the check reports as clean.
+
+The placeholder direction is deliberately asymmetric. Apply expands exactly one
+content placeholder, `__LOCALAPPDATA_JSON__`, to the JSON-escaped spelling of
+that directory. Capture therefore restores that one spelling and reports every
+other one — the raw spelling of the same directory, and either spelling of the
+profile and roaming directories — as unrepresentable, and refuses the file.
+Writing `{USERPROFILE}` into a payload instead would look like a capture and
+deploy as literal text, leaving the host holding the placeholder and every
+later check reporting drift no Apply could clear. Extending the deploy side to
+expand more placeholders is a change to what a payload means on a host, so it
+belongs to its own issue with its own evidence rather than to the tool that
+would benefit from it. Until then a payload needing another host directory is
+edited by hand, and the refusal says so.
+
+Two ranking decisions are worth recording. `JsonSubset` is refused after the
+comparison rather than before it, because that mode is most of the PowerToys
+inventory and refusing all of it up front buried the one file a run had
+something to say about. A build-conditional entry on a host whose build is
+undetermined is refused outright, which is stricter than Apply: Apply reads a
+null build as the variant every supported build honours, and that is safe
+because it deploys the lower payload, while capture writing host content into a
+payload no host selected would put one machine's state into a file another
+machine deploys.
+
+One thing this repository does not yet know: whether the POSIX shell hooks
+under `.githooks` run under Git for Windows on the maintainer's host. The
+Unix-like side has never had to ask. `capture.ps1` therefore reports what it
+can decide — whether `core.hooksPath` is `.githooks` — and asks the operator to
+read the hook output under the commit rather than claiming a gate ran. When the
+host answers the question, record the answer here; if the hooks do not run
+there, a Windows commit is ungated locally and the merge gate is the only gate
+it passes through, which is a fact for CI to carry rather than for the tool to
+paper over.
+
+Three rules earned their shape from review rather than from design. The
+account-path refusal carries the same three axes `tool/version-control/hygiene`
+enforces repository-wide -- a drive-letter path in either separator, the POSIX
+form, and the WSL UNC form -- because a Windows Terminal starting directory or a
+WezTerm setting routinely holds a WSL path, and the account-name refusal only
+backstops a leak that names this host's own account. Capture does not lean on
+the commit hook for that check, since whether the hook runs is the open question
+above. The generated-profile rule drops a host profile with no usable guid and
+refuses a capture whose kept profiles repeat one, because either shape written
+into a payload makes every later `-Check` and Apply throw instead of reporting
+drift, and a payload that cannot be compared is worse than the drift it came
+from. And a capture whose payload text equals the one already committed is
+reported as nothing to commit rather than carried into the commit path, where an
+empty `git add` would make `git commit` fail and read as a hook rejection: the
+host drifted in a way desired state cannot express, and saying that is the whole
+answer.
+
+Evidence is split accordingly. The Unix-like Pester run covers every rule
+above and is not Windows evidence: the fixtures hand the module a host no
+machine has to be. What is owed from the maintainer's host is one real capture
+after a change made in an application's own UI, the resulting payload diff, and
+the hooks' behaviour on that host.

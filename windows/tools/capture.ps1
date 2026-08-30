@@ -1,0 +1,313 @@
+[CmdletBinding(SupportsShouldProcess)]
+param(
+    # Which managed files to consider. Neither switch is a deployment
+    # selection: -Feature narrows this run to the files a feature owns and
+    # -Id to named managed files, and the two intersect when both are given.
+    # With neither, the run considers what this host recorded as applied, and
+    # everything the manifest declares when it has applied nothing.
+    [string[]] $Feature,
+    [string[]] $Id
+)
+
+# Move a change made in an application's own UI into desired state.
+#
+# The reverse of Apply, and deliberately not a second implementation of it.
+# Drift is decided by Test-WinEnvManagedFile, the same function bootstrap.ps1
+# -Check uses; which payload a build-conditional entry has is decided by
+# Resolve-WinEnvManagedFile; what a capture would write, and every refusal, is
+# decided by Get-WinEnvCapturePlan in windows/src/WinEnv.psm1, where the rules
+# have fixtures. This script owns the parts that need a terminal and a Git
+# repository: selection, the diff, one confirmation, and the commit.
+#
+# It is a copy of the shape of tool/version-control/commit, not a caller of it.
+# The Windows domain must stay authorable and deployable without a Unix-like
+# host, and the maintainer's Windows clone is a separate checkout, so a POSIX
+# shell helper is not available to it. The guards are therefore restated here:
+# it refuses on master, refuses a dirty index, refuses to touch a payload that
+# already has uncommitted changes, and never bypasses a hook. There is no
+# unattended mode: no -Yes, no -Force, no environment override.
+#
+# Nothing on the host is written. The managed targets are read and nothing
+# else; every write goes to this repository's desired state, and only after
+# the confirmation.
+#
+#   .\windows\tools\capture.ps1                     # every applied feature
+#   .\windows\tools\capture.ps1 -Feature powertoys  # one feature
+#   .\windows\tools\capture.ps1 -Id windowsTerminal # one managed file
+#   .\windows\tools\capture.ps1 -WhatIf             # decide and diff, write nothing
+
+$ErrorActionPreference = 'Stop'
+# PowerShell 7.4 and newer turn a non-zero native exit status into a
+# terminating error while $ErrorActionPreference is Stop. Several questions
+# below are put to Git precisely because a non-zero status is one of their
+# answers: an unset core.hooksPath, a detached HEAD, and a diff that found a
+# difference all exit 1 and none of them is a failure. The status is read
+# explicitly at every call site instead.
+$PSNativeCommandUseErrorActionPreference = $false
+$windowsRoot = Split-Path -Parent $PSScriptRoot
+$repositoryRoot = Split-Path -Parent $windowsRoot
+$desiredStateRoot = Join-Path $windowsRoot 'desired'
+Import-Module (Join-Path $windowsRoot 'src\WinEnv.psm1') -Force
+
+function Write-Refusal {
+    param(
+        [Parameter(Mandatory)][string] $Message,
+        [Parameter(Mandatory)][string] $Detail
+    )
+
+    Write-Host "✗ $Message" -ForegroundColor Red
+    Write-Host "  $Detail"
+}
+
+function Stop-Capture {
+    param(
+        [Parameter(Mandatory)][string] $Message,
+        [Parameter(Mandatory)][string] $Detail
+    )
+
+    Write-Refusal -Message $Message -Detail $Detail
+    exit 1
+}
+
+function Invoke-GitCommand {
+    # Captured output, for the questions this script asks Git. The commit
+    # itself deliberately does not go through here: a hook's evidence lines and
+    # its closing unverified summary are the operator's to read, and capturing
+    # them would decide for the operator that they do not matter.
+    param(
+        [Parameter(Mandatory)][string[]] $Argument,
+        [switch] $AllowFailure
+    )
+
+    $output = & git -C $repositoryRoot @Argument 2>&1
+    $status = $LASTEXITCODE
+    if ($status -ne 0 -and -not $AllowFailure) {
+        throw "git $($Argument -join ' ') failed: $($output -join [Environment]::NewLine)"
+    }
+    if ($status -ne 0) { return @() }
+    return @($output | ForEach-Object { [string]$_ } | Where-Object { $_ })
+}
+
+function Get-RepositoryRelativePath {
+    param([Parameter(Mandatory)][string] $Source)
+
+    return 'windows/desired/' + $Source.Replace('\', '/')
+}
+
+$manifest = Get-WinEnvManifest -Path (Join-Path $desiredStateRoot 'manifest.json')
+$hostPath = Get-WinEnvHostPath
+$hostBuild = Get-WinEnvWindowsBuild
+# A host with no LOCALAPPDATA has no recorded selection to read, and asking
+# for one would fail on the path join rather than on the question.
+$state = if ([string]::IsNullOrWhiteSpace([string]$hostPath.LocalAppData)) {
+    $null
+}
+else {
+    Get-WinEnvState -Path (Join-Path ([string]$hostPath.LocalAppData) 'win-env\state.json')
+}
+$appliedFeature = Get-WinEnvAppliedFeature -Manifest $manifest -State $state
+
+$declaredFeature = Get-WinEnvFeatureId -Manifest $manifest
+$requestedFeature = @(Expand-WinEnvFeatureArgument -Value $Feature)
+$requestedId = @(Expand-WinEnvFeatureArgument -Value $Id)
+
+foreach ($name in $requestedFeature) {
+    if ($declaredFeature -notcontains $name) {
+        Stop-Capture -Message "Unknown feature '$name'." -Detail "The manifest declares: $($declaredFeature -join ', ')."
+    }
+}
+$declaredId = @($manifest.ManagedFiles | ForEach-Object { [string]$_.Id })
+foreach ($name in $requestedId) {
+    if ($declaredId -notcontains $name) {
+        Stop-Capture -Message "Unknown managed file '$name'." -Detail "The manifest declares: $($declaredId -join ', ')."
+    }
+}
+
+# Feature dependencies are not resolved here, and that is the difference
+# between a selection and a filter. terminal requires font and zellij so that a
+# deployment of it is coherent; capturing the files terminal owns needs neither
+# of the other two, and widening the filter would put a file the operator did
+# not ask about into the diff.
+if ($requestedFeature.Count -or $requestedId.Count) {
+    $considered = @($manifest.ManagedFiles | Where-Object {
+            ($requestedFeature.Count -eq 0 -or $requestedFeature -contains [string]$_.Feature) -and
+            ($requestedId.Count -eq 0 -or $requestedId -contains [string]$_.Id)
+        })
+    $consideredFeature = @($considered | ForEach-Object { [string]$_.Feature })
+    $selected = @($declaredFeature | Where-Object { $consideredFeature -contains $_ })
+}
+else {
+    $selected = if ($state) { @($appliedFeature) } else { $declaredFeature }
+    $considered = @($manifest.ManagedFiles | Where-Object { $selected -contains [string]$_.Feature })
+}
+
+Write-Host 'win-env capture summary'
+Write-Host ('  selected: ' + (@($selected) -join ', '))
+$buildText = if ($null -ne $hostBuild) { [string]$hostBuild } else { 'undetermined' }
+Write-Host "  Windows build: $buildText"
+
+$plans = @($considered | ForEach-Object {
+        Get-WinEnvCapturePlan -Definition $_ -RepositoryRoot $desiredStateRoot -Build $hostBuild -HostPath $hostPath
+    })
+
+$planned = @($plans | Where-Object Status -eq 'Captured')
+$unchanged = @($plans | Where-Object Status -eq 'Unchanged')
+$refused = @($plans | Where-Object Status -eq 'Refused')
+
+# The payload text each captured plan would produce, rendered once and reused
+# for the diff and for the write. A plan whose text equals the payload already
+# on disk is not a commit: the file drifted under its comparison mode but the
+# difference is one desired state does not express -- a directory spelled in
+# another case, most plainly -- so there is nothing to stage. Saying so here is
+# what keeps the run out of the commit path, where an empty `git add` makes
+# `git commit` exit 1 and the failure reads as a hook rejecting the change.
+$rendered = @{}
+$captured = @()
+$inexpressible = @()
+foreach ($plan in $planned) {
+    $payloadPath = Join-Path $desiredStateRoot $plan.Source
+    $text = ConvertTo-WinEnvPayloadText -Content ([string]$plan.Content) -PayloadPath $payloadPath
+    $current = if (Test-Path -LiteralPath $payloadPath -PathType Leaf) {
+        Get-Content -LiteralPath $payloadPath -Raw -Encoding utf8
+    }
+    else {
+        $null
+    }
+    if ($null -ne $current -and $current -ceq $text) {
+        $inexpressible += $plan
+        continue
+    }
+    $rendered[[string]$plan.Id] = $text
+    $captured += $plan
+}
+
+foreach ($plan in $captured) { Write-Host "  captured: $($plan.Id) -> $($plan.Source)" }
+if ($unchanged.Count) { Write-Host ('  unchanged: ' + (@($unchanged | ForEach-Object { $_.Id }) -join ', ')) }
+foreach ($plan in $inexpressible) {
+    Write-Refusal -Message "no change to commit: $($plan.Id)" `
+        -Detail ('the host file drifted, but the payload this capture produces is the one already ' +
+            'committed, so desired state cannot express the difference; reconcile it in the application or by hand')
+}
+foreach ($plan in $refused) { Write-Refusal -Message "refused: $($plan.Id)" -Detail $plan.Reason }
+
+if (-not $captured.Count) {
+    Write-Host ''
+    Write-Host 'Nothing to capture. No payload was written and no commit was made.'
+    exit 0
+}
+
+# Git refusals, all of them before anything is written, so a refused run leaves
+# the clone exactly as it was found.
+$branch = @(Invoke-GitCommand -Argument @('symbolic-ref', '--quiet', '--short', 'HEAD') -AllowFailure)
+$branchName = if ($branch.Count) { $branch[0] } else { 'detached' }
+if ($branchName -eq 'master') {
+    Stop-Capture -Message 'Refusing to commit on master.' `
+        -Detail 'AGENTS.md: only this repository''s dev may enter master, by pull request and merge commit. There is no operational bypass.'
+}
+
+if (@(Invoke-GitCommand -Argument @('diff', '--cached', '--name-only')).Count) {
+    Stop-Capture -Message 'The index already holds staged changes.' `
+        -Detail 'This tool commits only the payloads it captures. Commit or unstage the rest first.'
+}
+
+$relativePath = @{}
+foreach ($plan in $captured) {
+    $relative = Get-RepositoryRelativePath -Source $plan.Source
+    $relativePath[[string]$plan.Id] = $relative
+    if (@(Invoke-GitCommand -Argument @('status', '--porcelain', '--', $relative)).Count) {
+        Stop-Capture -Message "$relative already has uncommitted changes." `
+            -Detail 'This tool commits only the payloads it captures. Commit or restore that file first.'
+    }
+}
+
+# What will and will not gate the commit, said plainly. The repository's hooks
+# are POSIX shell scripts; whether Git for Windows runs them on this host is
+# not something this script can decide for the operator, so it does not claim
+# they ran. docs/status.md records that as an open question.
+$hooksPath = @(Invoke-GitCommand -Argument @('config', '--get', 'core.hooksPath') -AllowFailure)
+$hooksConfigured = $hooksPath.Count -and $hooksPath[0] -eq '.githooks'
+Write-Host ''
+if ($hooksConfigured) {
+    Write-Host '  pre-commit checks: core.hooksPath is .githooks, so Git will try to run them.'
+    Write-Host '    They are POSIX shell scripts. Read the hook output under the commit below'
+    Write-Host '    rather than assuming it ran; a host with no sh runs no check.'
+}
+else {
+    $current = if ($hooksPath.Count) { $hooksPath[0] } else { 'unset' }
+    Write-Host "  pre-commit checks: none. core.hooksPath is $current, not .githooks."
+    Write-Host '    Nothing will check this commit locally. Set the hooks up first if you want that gate.'
+}
+
+# The diff comes from a candidate outside the working tree, so refusing at the
+# confirmation leaves nothing behind to clean up.
+#
+# Created and removed through .NET rather than New-Item and Remove-Item: those
+# two honour -WhatIf, so under -WhatIf the run would announce a temporary
+# directory as if it were part of the change, then fail to make one, then leave
+# what it did make behind. The staging directory is this script's own
+# scaffolding and is never the operation the operator is being asked about.
+$stagingRoot = Join-Path ([IO.Path]::GetTempPath()) ('win-env-capture-' + [guid]::NewGuid().ToString('N'))
+try {
+    [void][IO.Directory]::CreateDirectory($stagingRoot)
+    foreach ($plan in $captured) {
+        $payloadPath = Join-Path $desiredStateRoot $plan.Source
+        $candidate = Join-Path $stagingRoot ([string]$plan.Id)
+        Write-WinEnvAtomicText -Path $candidate -Content $rendered[[string]$plan.Id]
+        Write-Host ''
+        Write-Host "--- $($relativePath[[string]$plan.Id])"
+        & git -C $repositoryRoot --no-pager diff --no-index --no-color -- $payloadPath $candidate
+    }
+
+    if ($WhatIfPreference) {
+        Write-Host ''
+        Write-Host 'What if: nothing was written and no commit was made.'
+        exit 0
+    }
+
+    Write-Host ''
+    $answer = Read-Host 'Write these payloads and commit? [y/N]'
+    if ($answer -cne 'y' -and $answer -cne 'Y') {
+        Write-Host 'Aborted. Nothing was written.'
+        exit 1
+    }
+}
+finally {
+    if ([IO.Directory]::Exists($stagingRoot)) { [IO.Directory]::Delete($stagingRoot, $true) }
+}
+
+# One commit per feature: a feature is the unit this manifest already owns
+# packages, payloads and selection by, and a capture of two of them is two
+# reviewable changes rather than one.
+$capturedFeature = @($captured | ForEach-Object { [string]$_.Feature })
+$features = @($declaredFeature | Where-Object { $capturedFeature -contains $_ })
+foreach ($featureId in $features) {
+    $group = @($captured | Where-Object { [string]$_.Feature -eq $featureId })
+    $paths = @()
+    foreach ($plan in $group) {
+        [void](Save-WinEnvCapturedPayload -Plan $plan -RepositoryRoot $desiredStateRoot)
+        $paths += $relativePath[[string]$plan.Id]
+    }
+
+    [void](Invoke-GitCommand -Argument (@('add', '--') + $paths))
+
+    $subject = "feat(windows): capture $featureId settings from the host"
+    $body = @(
+        'Captured from this host''s managed targets by windows/tools/capture.ps1,',
+        'with placeholders restored. Managed files:',
+        ''
+    ) + @($group | ForEach-Object { "- $($_.Id) ($($_.Source))" })
+
+    Write-Host ''
+    & git -C $repositoryRoot commit -m $subject -m ($body -join [Environment]::NewLine)
+    if ($LASTEXITCODE -ne 0) {
+        Write-Refusal -Message 'The commit was rejected.' `
+            -Detail 'The captured payloads are left staged. Fix what the hook reported, or discard them with:'
+        Write-Host ("    git restore --staged --worktree -- " + ($paths -join ' '))
+        exit 1
+    }
+}
+
+Write-Host ''
+Write-Host ("Captured $($captured.Count) managed file(s) in $($features.Count) commit(s). " +
+    'Nothing was pushed.')
+exit 0

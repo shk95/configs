@@ -229,6 +229,18 @@ desired-state change while a host's chosen set is not. Report which selection
 produced any `-Check` or Apply evidence, because a check that passed under a
 minimal selection says nothing about the features it excluded.
 
+A change made in an application's own UI moves back into desired state with
+`.\windows\tools\capture.ps1`, which reads the managed targets, writes only
+this repository's payloads, and ends at one confirmation before committing.
+Preview it with `-WhatIf` first. It restates the guards of
+`tool/version-control/commit` rather than calling it: it refuses on `master`,
+on a dirty index, on a payload that already has uncommitted changes, and never
+bypasses a hook. It pushes nothing and opens no pull request, so promotion and
+release remain the flows above. Read its refusals rather than working around
+them, and read the hook output under its commit rather than assuming a hook
+ran: whether the POSIX hooks execute under Git for Windows is recorded in
+`docs/status.md` as an open question.
+
 ## Common changes
 
 Do not create common material by default. First show that independently owned
