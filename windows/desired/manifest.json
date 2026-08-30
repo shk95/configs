@@ -296,7 +296,7 @@
       "Target": "{USERPROFILE}\\.config\\wezterm\\platform\\windows.lua"
     },
     {
-      "Compare": "ExactJson",
+      "Compare": "ExactJsonWithGeneratedProfiles",
       "Feature": "terminal",
       "Id": "windowsTerminal",
       "Parser": "Json",
@@ -377,8 +377,8 @@
       "Name": "Zellij"
     }
   ],
-  "ProjectVersion": "0.4.0",
-  "SchemaVersion": 3,
+  "ProjectVersion": "0.5.0",
+  "SchemaVersion": 4,
   "Terminal": {
     "DefaultProfileGuid": "{574e775e-4f2a-5b96-ac1e-a2962a402336}",
     "DelegationConsole": "{2EACA947-7F5F-4CFA-BA87-8F7FBEEFBE69}",

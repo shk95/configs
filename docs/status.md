@@ -138,7 +138,7 @@ unpredictable blend. `windows/desired/files/terminal/settings.json` is plain
 JSON and carries no comment syntax, so this reasoning is recorded here rather
 than beside the setting.
 
-Windows desired state is selectable. Manifest schema 3 declares seven features
+Windows desired state is selectable. Manifest schema 4 declares seven features
 (`core`, `font`, `zellij`, `terminal`, `wezterm`, `powertoys`, `wsl`) and every
 package, managed file, the font, and the terminal delegation is owned by exactly
 one of them. `bootstrap.ps1 -Minimal` deploys `core` alone, which installs
@@ -148,8 +148,8 @@ read as a full deployment, so a host that applied before this change keeps
 exactly what it has.
 
 Three boundaries are decisions rather than accidents. `terminal` requires
-`zellij` because `files/terminal/settings.json` is owned whole under
-`ExactJson` and carries a profile that launches `zellij.exe`; splitting that
+`zellij` because `files/terminal/settings.json` is owned whole on
+write and carries a profile that launches `zellij.exe`; splitting that
 payload or adding a merge comparison mode was rejected as more expensive than
 installing one small package. `wezterm` requires `font` because
 `files/wezterm/fonts.json` leads with `D2KodingLigature Nerd Font Mono` for
@@ -161,6 +161,34 @@ than that misalignment; a host selecting `wezterm` alone now installs `font`
 too, reported as `added by dependency`. PowerToys stays one feature because
 `files/powertoys/settings.json` already owns the per-module enable map; a
 second selection axis over the same modules would have two sources.
+
+The read side of that one file carries a tolerance the write side does not.
+Windows Terminal materialises the profiles its fragment extensions and dynamic
+generators discover back into `settings.json` so they can be edited: on the
+maintainer's host it added a `Git Bash` profile carrying `"source": "Git"`
+beside the two the payload declares, seconds after Apply had overwritten the
+file. Under `ExactJson` that reserialisation was drift, so post-apply
+validation threw before `Write-WinEnvState` ran and left a fully deployed host
+unrecorded, and every later `-Check` reported the same drift on any host that
+actually runs Windows Terminal. The entry now declares
+`ExactJsonWithGeneratedProfiles`: everything outside `profiles.list` is still
+compared exactly, each declared profile is matched by `guid` and must be equal,
+and an undeclared entry is accepted only when it carries a non-empty `source`,
+which is how Windows Terminal records that a generator produced it. An
+undeclared profile without a `source` remains drift, because a person or
+another tool wrote it. This does not reopen the merge decision above. Apply
+still writes the whole payload, the payload still declares neither `Git Bash`
+nor `disabledProfileSources`, and nothing merges the host's file on write; the
+tolerance is a read-side statement about one application co-owning one file,
+which is why it is a declared comparison mode on a single manifest entry that
+the loader refuses on an entry whose parser is not `Json`. Declaring a mode no
+earlier loader can honour is a manifest shape change, so this is a
+`SchemaVersion` bump, 3 to 4, with `ProjectVersion` moving 0.4.0 to 0.5.0 the
+way the schema 2 to 3 bump moved 0.3.0 to 0.4.0. Without it a manifest paired
+with an older module would load as schema 3 and then fail at comparison time
+as an unknown mode, rather than saying the schema is unsupported. **No
+`state.json` schema changes**: an applied host keeps its recorded selection,
+sees a changed desired-state hash and a higher project version, and redeploys.
 
 The desired-state hash is scoped to the selected features plus `manifest.json`.
 A whole-tree hash reported drift for payloads a host never deploys and forced an
