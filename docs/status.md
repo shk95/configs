@@ -367,6 +367,16 @@ longer the payload this repository declares for it — so the next `-Check`
 reports `desired state changed` and the next Apply redeploys the file its build
 actually honours.
 
+A host that later **crosses the bound** — Windows Update carrying it from 22000
+to 22621 — is a different case and is deliberately left where every other
+content change already sits. Nothing the Apply trigger reads has changed: the
+hash covers both variants by design, and the project version and feature set are
+untouched, so `$shouldApply` stays false and the host keeps the payload it has.
+`-Check` does report it, as `wslConfig settings` drift with exit status 2, and
+`bootstrap.ps1 -Force` is what redeploys the payload the new build honours.
+Making drift itself trigger an Apply would change the exit contract, which is
+#54's to decide, not this record's.
+
 This mechanism is deliberately not the one #37 uses for Appx detection, and the
 two must not be merged. Whether the `Appx` module loads is a question a probe
 can ask the host directly, so a build comparison there would be a worse proxy

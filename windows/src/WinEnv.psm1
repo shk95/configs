@@ -166,8 +166,25 @@ function Assert-WinEnvManagedFileModel {
         $previousBound = $null
         for ($index = 0; $index -lt $variants.Count; $index++) {
             $variant = $variants[$index]
+            # A variant chooses a payload and nothing else. Every other field
+            # -- Compare, Parser, Feature, Target -- stays on the entry, which
+            # is what keeps two payloads one logical file. Accepting an unknown
+            # key would let a per-variant Compare or Feature read as meaningful
+            # and do nothing, because New-ResolvedManagedFile copies those from
+            # the entry alone.
+            foreach ($key in $variant.Keys) {
+                if (@('Source', 'MinimumBuild') -notcontains [string]$key) {
+                    throw "A source variant of the managed file '$id' declares unknown key '$key'."
+                }
+            }
             if (-not $variant.ContainsKey('Source')) {
                 throw "A source variant of the managed file '$id' declares no Source."
+            }
+            # Caught here rather than as 'Managed source is missing: <root>' from
+            # check-desired-state.ps1, which names a path that is really the
+            # desired-state root and says nothing about the entry at fault.
+            if ([string]::IsNullOrWhiteSpace([string]$variant.Source)) {
+                throw "A source variant of the managed file '$id' declares an empty Source."
             }
 
             $isLast = $index -eq $variants.Count - 1

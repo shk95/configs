@@ -310,7 +310,11 @@ Describe 'managed sources' {
         # under files\ can carry a leaked absolute path, and -Recurse with no
         # extension filter also reaches the .lua.example templates that the
         # payload-declaration assertion below deliberately skips.
-        $all = Get-ChildItem (Join-Path $desiredStateRoot 'files') -File -Recurse |
+        # -Force for the same reason the declaration assertion below uses it:
+        # the two scanners walk the same tree and must not disagree about what
+        # they can see. A payload whose name begins with a dot would otherwise
+        # be declared and never scanned for a leaked path.
+        $all = Get-ChildItem (Join-Path $desiredStateRoot 'files') -File -Recurse -Force |
             ForEach-Object { Get-Content $_.FullName -Raw }
         ($all -join "`n") | Should -Not -Match $WindowsHomePathPattern
     }
@@ -926,6 +930,50 @@ Describe 'Windows build condition' {
                     @{ Source = 'files/lower.ini' }))
         }
         (Test-Throws { Assert-WinEnvManagedFileModel -Manifest $bogus }) | Should -Be $true
+    }
+
+    It 'refuses a variant declaring any key but Source and MinimumBuild' {
+        # A per-variant Compare, Parser, Feature or Target would load, read as
+        # meaningful, and do nothing: New-ResolvedManagedFile copies those from
+        # the entry alone. Silently dropping it is the exact class of error the
+        # loader exists to catch.
+        foreach ($key in @('Compare', 'Parser', 'Feature', 'Target', 'MinimumBuidl')) {
+            $upper = @{ MinimumBuild = 22621; Source = 'files/upper.ini' }
+            $upper[$key] = 'value'
+            $manifest = New-FeatureManifest -Override @{
+                ManagedFiles = @(New-ConditionalFile -Sources @($upper, @{ Source = 'files/lower.ini' }))
+            }
+            (Test-Throws { Assert-WinEnvManagedFileModel -Manifest $manifest }) | Should -Be $true
+        }
+
+        # The unconditional last variant is held to the same rule.
+        $manifest = New-FeatureManifest -Override @{
+            ManagedFiles = @(New-ConditionalFile -Sources @(
+                    @{ MinimumBuild = 22621; Source = 'files/upper.ini' },
+                    @{ Source = 'files/lower.ini'; Compare = 'Binary' }))
+        }
+        (Test-Throws { Assert-WinEnvManagedFileModel -Manifest $manifest }) | Should -Be $true
+    }
+
+    It 'refuses a variant whose Source is empty or blank' {
+        # Caught at load, naming the entry, rather than later from
+        # check-desired-state.ps1 as a missing path that is really the
+        # desired-state root.
+        foreach ($empty in @('', '   ')) {
+            $manifest = New-FeatureManifest -Override @{
+                ManagedFiles = @(New-ConditionalFile -Sources @(
+                        @{ MinimumBuild = 22621; Source = $empty },
+                        @{ Source = 'files/lower.ini' }))
+            }
+            (Test-Throws { Assert-WinEnvManagedFileModel -Manifest $manifest }) | Should -Be $true
+        }
+
+        $manifest = New-FeatureManifest -Override @{
+            ManagedFiles = @(New-ConditionalFile -Sources @(
+                    @{ MinimumBuild = 22621; Source = 'files/upper.ini' },
+                    @{ Source = '' }))
+        }
+        (Test-Throws { Assert-WinEnvManagedFileModel -Manifest $manifest }) | Should -Be $true
     }
 
     It 'accepts the shape the repository manifest uses' {

@@ -230,6 +230,11 @@ A host whose build cannot be determined gets the lower payload, which every
 supported build honours. The build is the discriminator throughout; the major
 version is `10` on Windows 10 and Windows 11 alike and is never compared.
 
+A host that crosses the bound later, because Windows Update moved it, is not
+redeployed on its own: the desired state did not change, only the host did.
+`-Check` reports it as `wslConfig settings` drift and exits 2, and
+`.\windows\bootstrap.ps1 -Force` writes the payload the new build honours.
+
 `.wslconfig` is read by the WSL VM only when it starts, and these commands never
 restart it, so a passing check means the file on disk matches the payload this
 host's build should have. It is not evidence that mirrored networking is
