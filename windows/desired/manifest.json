@@ -59,6 +59,18 @@
         "FullName": "D2KodingLigature Nerd Font Mono Bold",
         "RegistryName": "D2KodingLigature Nerd Font Mono Bold (TrueType)",
         "Sha256": "6bf59e7bf1df834c2acfd2139b9e10e5dcec747ba602f1a33ae9195daa202909"
+      },
+      {
+        "FileName": "D2KodingLigatureNerdFont-Regular.ttf",
+        "FullName": "D2KodingLigature Nerd Font",
+        "RegistryName": "D2KodingLigature Nerd Font (TrueType)",
+        "Sha256": "2816f03799107164c6cdc10d315177677dea5509b4a6cae567f54bbd577ca89d"
+      },
+      {
+        "FileName": "D2KodingLigatureNerdFont-Bold.ttf",
+        "FullName": "D2KodingLigature Nerd Font Bold",
+        "RegistryName": "D2KodingLigature Nerd Font Bold (TrueType)",
+        "Sha256": "ea669a688dde5e5b0a5eb9137c2d4ae3bbb614c46b22659cbf5b7846b33ad52e"
       }
     ],
     "Name": "D2KodingLigature Nerd Font Mono",

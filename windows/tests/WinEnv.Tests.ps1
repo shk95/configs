@@ -74,7 +74,37 @@ Describe 'win-env manifest' {
         $manifest.Font.Version | Should -Be '3.5.0'
         $manifest.Font.Name | Should -Be 'D2KodingLigature Nerd Font Mono'
         $manifest.Font.Sha256 | Should -Match '^[0-9a-f]{64}$'
-        $manifest.Font.Files.Count | Should -Be 2
+        # Four files: the Mono set WezTerm's first font-list entry names plus
+        # the non-Mono set its second entry names, all from the one pinned
+        # D2Coding.zip archive above.
+        $manifest.Font.Files.Count | Should -Be 4
+        (($manifest.Font.Files.FileName | Sort-Object) -join ',') | Should -Be (
+            'D2KodingLigatureNerdFont-Bold.ttf,D2KodingLigatureNerdFont-Regular.ttf,' +
+            'D2KodingLigatureNerdFontMono-Bold.ttf,D2KodingLigatureNerdFontMono-Regular.ttf'
+        )
+        foreach ($fontFile in $manifest.Font.Files) {
+            $fontFile.Sha256 | Should -Match '^[0-9a-f]{64}$'
+        }
+    }
+
+    It 'installs a registered face for every family WezTerm''s font list names' {
+        # #67: the font list on Windows equals the Unix-like list, which names
+        # a Mono and a non-Mono D2Koding family. A fixture must fail if either
+        # family has no registered face, or the two copies could drift again
+        # without either domain's own checks noticing.
+        $manifest = Get-WinEnvManifest -Path (Join-Path $desiredStateRoot 'manifest.json')
+        $fonts = Get-Content (Join-Path $desiredStateRoot 'files\wezterm\fonts.json') -Raw | ConvertFrom-Json
+        $registeredFamilies = @($manifest.Font.Files | ForEach-Object { $_.FullName -replace ' Bold$', '' }) |
+            Sort-Object -Unique
+        foreach ($family in $fonts.families) {
+            $registeredFamilies | Should -Contain $family
+        }
+    }
+
+    It 'copies the Unix-like WezTerm font list without a Windows-only windowsChecks addendum' {
+        $unixFontsPath = Join-Path $monorepoRoot 'assets\wezterm\fonts.json'
+        $windowsFontsPath = Join-Path $desiredStateRoot 'files\wezterm\fonts.json'
+        (Get-Content $unixFontsPath -Raw) | Should -Be (Get-Content $windowsFontsPath -Raw)
     }
 
     It 'uses exact expected WinGet IDs' {
@@ -561,7 +591,7 @@ Describe 'feature selection' {
     }
 
     It 'does not pull Windows Terminal into a WezTerm selection, but does pull the font' {
-        # wezterm's fonts.json falls back to D2KodingLigature Nerd Font Mono
+        # wezterm's fonts.json leads with D2KodingLigature Nerd Font Mono
         # for Hangul, which only the font feature installs, so wezterm
         # requires font the same way terminal requires zellij.
         $manifest = Get-WinEnvManifest -Path (Join-Path $desiredStateRoot 'manifest.json')

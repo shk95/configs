@@ -152,10 +152,10 @@ Three boundaries are decisions rather than accidents. `terminal` requires
 `ExactJson` and carries a profile that launches `zellij.exe`; splitting that
 payload or adding a merge comparison mode was rejected as more expensive than
 installing one small package. `wezterm` requires `font` because
-`files/wezterm/fonts.json` falls back to `D2KodingLigature Nerd Font Mono` for
-Hangul coverage: JetBrainsMono and Symbols Nerd Font Mono have none, and the
-concrete alternative already on a default Windows install, Malgun Gothic, is
-not fixed-pitch and would misalign any line mixing Korean and Latin.
+`files/wezterm/fonts.json` leads with `D2KodingLigature Nerd Font Mono` for
+Hangul coverage: the list names only D2Koding families, and the concrete
+alternative already on a default Windows install, Malgun Gothic, is not
+fixed-pitch and would misalign any line mixing Korean and Latin.
 Declaring the dependency, the same way `terminal` already does, was cheaper
 than that misalignment; a host selecting `wezterm` alone now installs `font`
 too, reported as `added by dependency`. PowerToys stays one feature because
