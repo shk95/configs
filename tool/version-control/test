@@ -41,7 +41,7 @@ export MSYS_NO_PATHCONV MSYS2_ARG_CONV_EXCL
 # affected script's source, not that MSYS would leave it alone.
 for msys_guarded in tool/version-control/hygiene .githooks/commit-msg \
   tool/version-control/check-promotion-queue tool/version-control/commit \
-  tool/version-control/test; do
+  tool/version-control/test tool/worktree.sh; do
   if ! grep -q '^MSYS_NO_PATHCONV=1$' "$root/$msys_guarded"; then
     echo "$msys_guarded does not set MSYS_NO_PATHCONV=1 (#79)" >&2
     exit 1
