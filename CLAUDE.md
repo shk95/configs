@@ -1,6 +1,12 @@
-# Claude Code compatibility
+<!--
+Claude Code compatibility entry point. This file exists only because Claude
+Code reads CLAUDE.md and not AGENTS.md; the import below loads the canonical
+guidance verbatim, so no policy is stated or paraphrased here.
 
-Read and follow [`AGENTS.md`](AGENTS.md), the model-independent source of
-repository guidance. Use [`CONTRIBUTING.md`](CONTRIBUTING.md) for the repository
-workflow. This file is only a compatibility entry point; project policy does
-not live here.
+Not a symlink: this repository is cloned on native Windows, where a symlink
+needs Developer Mode or Administrator rights and otherwise checks out as a
+text file containing the target path. The import is the documented
+cross-platform equivalent.
+-->
+
+@AGENTS.md
