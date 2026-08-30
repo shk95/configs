@@ -155,8 +155,12 @@ because the manifest already installs the application itself.
 The checks run without that toolchain. A source whose parser is missing is
 reported as unverified rather than failing, and the commands exit 69 to say so,
 which is why a clone without Lua or Pester can still push Windows work. CI
-supplies the missing evidence. `-Check` never installs or changes anything.
-Apply is explicit:
+supplies the missing evidence. `-Check` answers the same way for a detection
+the host cannot decide, such as an Appx package whose module will not load: the
+item is named as unverified rather than read as missing, and the check exits 69
+when nothing else drifted. Drift outranks it, so a host with both exits 2 and
+still names the undecided items, and `REQUIRE_NATIVE=1` turns unverified into a
+failure. `-Check` never installs or changes anything. Apply is explicit:
 
 ```powershell
 .\windows\bootstrap.ps1
