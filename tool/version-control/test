@@ -885,6 +885,32 @@ hygiene_new
 printf '%s: "%s"\n' hostname mystery-box >"$hygiene_repo/host.yml"
 hygiene_expect_fail 'axis 2, an undeclared host name' 'undeclared name'
 
+# The key may carry a closing quote. Every payload under windows/desired/files/
+# is JSON, so this is the spelling a leak arrives in there; a Nix attribute may
+# be quoted too. Unquoted keys alone would have left that whole tree unscanned.
+hygiene_new
+printf '{"%s": "%s"}\n' hostname pc-042 >"$hygiene_repo/settings.json"
+hygiene_expect_fail 'axis 2, a quoted JSON key' "undeclared name 'pc-042'"
+
+hygiene_new
+printf '{"%s": "%s"}\n' username eve >"$hygiene_repo/settings.json"
+hygiene_expect_fail 'axis 2, a quoted JSON user key' "undeclared name 'eve'"
+
+hygiene_new
+printf '{ "%s" = "%s"; }\n' hostName eve >"$hygiene_repo/host.nix"
+hygiene_expect_fail 'axis 2, a quoted Nix attribute' "undeclared name 'eve'"
+
+# The two separator forms the bare and quoted branches exist for: a shell
+# environment assignment, and the Nix quoted form -- the likeliest real leak in
+# modules/, and the one the spaced ` = ` exclusion must not swallow.
+hygiene_new
+printf '%s=%s\n' USER eve >"$hygiene_repo/profile.sh"
+hygiene_expect_fail 'axis 2, a bare shell assignment' "undeclared name 'eve'"
+
+hygiene_new
+printf '  %s = "%s";\n' user eve >"$hygiene_repo/module.nix"
+hygiene_expect_fail 'axis 2, a quoted Nix assignment' "undeclared name 'eve'"
+
 # A bare right-hand side after the spaced ` = ` form is an expression, not a
 # name; modules/home-account.nix assigns one on every evaluation.
 hygiene_new

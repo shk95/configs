@@ -123,13 +123,17 @@ unc_home="$anchor$bs"'wsl(\.localhost|\$)'"$bs$name$bs"'home'"$bs$name"
 absolute_home="($posix_home)|($windows_home)|($unc_home)"
 
 # Axis 2. The naming context: an assignment whose left-hand side is one of
-# these keys. A quoted right-hand side is a literal in every language here. A
-# bare one is only a literal where the separator is not the spaced ` = ` form;
-# after ` = ` a bare token is an expression -- `user = config.identity.wsl.user`
-# in modules/home-account.nix names no account.
+# these keys. The key may carry a closing quote, which is not decoration: every
+# payload under windows/desired/files/ is JSON, so `{"hostname": "..."}` is the
+# spelling a leak arrives in there, and a Nix attribute may be quoted too.
+#
+# A quoted right-hand side is a literal in every language here. A bare one is
+# only a literal where the separator is not the spaced ` = ` form; after ` = ` a
+# bare token is an expression -- `user = config.identity.wsl.user` in
+# modules/home-account.nix names no account.
 keys='(user|username|hostName|hostname|USER|USERNAME|HOSTNAME|COMPUTERNAME)'
 key_start='(^|[^A-Za-z0-9_])'
-assignment=$(printf '%s%s([ \t]*[=:][ \t]*("%s"|'\''%s'\'')|(=|[ \t]*:)[ \t]*%s)' \
+assignment=$(printf '%s%s"?([ \t]*[=:][ \t]*("%s"|'\''%s'\'')|(=|[ \t]*:)[ \t]*%s)' \
   "$key_start" "$keys" "$name" "$name" "$name")
 
 # Axis 4.
