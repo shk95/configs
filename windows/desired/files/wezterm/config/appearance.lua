@@ -1,7 +1,7 @@
 local module = {}
 
 function module.apply_to_config(config)
-  config.color_scheme = "Catppuccin Mocha"
+  config.color_scheme = "Catppuccin Latte"
   config.font_size = 13.0
   config.line_height = 1.05
 
