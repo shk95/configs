@@ -1,7 +1,18 @@
 Set-StrictMode -Version Latest
 
+# WinGet's documented statuses, as signed 32-bit values because that is what
+# $LASTEXITCODE carries: 0x8A150014 APPINSTALLER_CLI_ERROR_NO_APPLICATIONS_FOUND
+# and 0x8A15002B APPINSTALLER_CLI_ERROR_UPDATE_NOT_APPLICABLE.
 $script:WinGetNoPackageExitCode = -1978335212
+$script:WinGetNoApplicableUpdateExitCode = -1978335189
 $script:Utf8NoBom = [System.Text.UTF8Encoding]::new($false)
+
+# The two host queries this domain's detection depends on. They are script-
+# scope defaults rather than inline calls so that every outcome, including the
+# one a given host cannot produce, has a fixture. Nothing but a test passes
+# anything else.
+$script:DefaultAppxQuery = { param([string] $PackageName) Get-AppxPackage -Name $PackageName -ErrorAction SilentlyContinue }
+$script:DefaultRegistrationQuery = { param([string] $PackageId) Get-WinGetRegistration -Id $PackageId }
 
 function Get-WinEnvManifest {
     param([Parameter(Mandatory)][string] $Path)
@@ -205,22 +216,118 @@ function Get-WinEnvAppliedFeature {
     return @($State.features | ForEach-Object { [string]$_ })
 }
 
-function Test-WinEnvFeaturePrecondition {
-    param([Parameter(Mandatory)][hashtable] $Feature)
+function Get-WinEnvAppxPresence {
+    # One capability probe for every Appx question this domain asks. It has
+    # three answers: the module answered and the package is there, the module
+    # answered and it is not, or the module could not be loaded and presence is
+    # not knowable by this route.
+    #
+    # The third answer is why this exists. PowerShell 7 fails while autoloading
+    # the Appx module on hosts whose Windows build only offers it through the
+    # compatibility layer, so the error is raised during command discovery,
+    # before Get-AppxPackage runs; -ErrorAction cannot suppress what was never
+    # bound, and only a try/catch sees it. That is a prerequisite the host
+    # cannot supply, which docs/architecture.md calls unverified. It is not
+    # evidence of absence, and reporting it as absence is wrong in both
+    # directions. Read Usable before Present: Present is $null when the module
+    # did not answer, so absence is not representable in that case.
+    #
+    # This asks whether Appx works, never which Windows this is. A capability
+    # question keeps its meaning when Microsoft changes which builds ship the
+    # module; a build comparison does not.
+    # Position is declared so the query seam cannot be bound positionally by
+    # accident; once one parameter has an explicit position the rest are
+    # name-only.
+    param(
+        [Parameter(Mandatory, Position = 0)][string] $Name,
+        [scriptblock] $Query = $script:DefaultAppxQuery
+    )
 
-    if (-not $Feature.ContainsKey('Preconditions')) { return @() }
-    $failures = [System.Collections.Generic.List[string]]::new()
-    foreach ($precondition in $Feature.Preconditions) {
-        switch ([string]$precondition.Type) {
-            'Appx' {
-                if (-not (Get-AppxPackage -Name $precondition.Name -ErrorAction SilentlyContinue)) {
-                    $failures.Add("$($precondition.Name) Appx is missing; $($precondition.Message)")
-                }
-            }
-            default { throw "Unknown precondition type '$($precondition.Type)'." }
+    try {
+        $package = & $Query $Name
+        return [pscustomobject]@{
+            Name    = $Name
+            Usable  = $true
+            Present = [bool]$package
+            Reason  = $null
         }
     }
-    return $failures.ToArray()
+    catch {
+        return [pscustomobject]@{
+            Name    = $Name
+            Usable  = $false
+            Present = $null
+            Reason  = $_.Exception.Message
+        }
+    }
+}
+
+function Test-WinEnvFeaturePrecondition {
+    # Returns the two answers separately, because they rank differently: a
+    # failure blocks an Apply, an unverified precondition only says this host
+    # could not decide it. An unknown precondition type still throws, since an
+    # undeclared type is a broken manifest rather than an undecidable host.
+    param(
+        [Parameter(Mandatory, Position = 0)][hashtable] $Feature,
+        [scriptblock] $AppxQuery = $script:DefaultAppxQuery
+    )
+
+    $failures = [System.Collections.Generic.List[string]]::new()
+    $unverified = [System.Collections.Generic.List[string]]::new()
+    if ($Feature.ContainsKey('Preconditions')) {
+        foreach ($precondition in $Feature.Preconditions) {
+            switch ([string]$precondition.Type) {
+                'Appx' {
+                    $probe = Get-WinEnvAppxPresence -Name $precondition.Name -Query $AppxQuery
+                    if (-not $probe.Usable) {
+                        $unverified.Add("$($precondition.Name) Appx presence is undecidable on this host: $($probe.Reason)")
+                    }
+                    elseif (-not $probe.Present) {
+                        $failures.Add("$($precondition.Name) Appx is missing; $($precondition.Message)")
+                    }
+                }
+                default { throw "Unknown precondition type '$($precondition.Type)'." }
+            }
+        }
+    }
+
+    return [pscustomobject]@{
+        Failures   = $failures.ToArray()
+        Unverified = $unverified.ToArray()
+    }
+}
+
+function Get-WinEnvCheckStatus {
+    # The run's status contract, in one place so the ranking is stated rather
+    # than implied by the order of a few exits.
+    #
+    #   0   nothing drifted and everything was decided
+    #   1   something could not be decided and native evidence was required
+    #   2   something drifted
+    #   69  nothing drifted and something could not be decided here
+    #
+    # Ranking: a failure outranks everything, per docs/architecture.md, which
+    # is the whole effect of RequireNative; then drift outranks unverified.
+    # -Check exists to answer whether an Apply is needed, and drift is a
+    # positive answer to that question while an undecidable item is not, so a
+    # known 2 is never collapsed into a 69, and 69 is reserved for a run whose
+    # only open item could not be decided here. The cost is written down
+    # because it is real: on a host with both, the status alone does not say
+    # the check was also incomplete, which is why the caller always names the
+    # undecided items in its summary.
+    param(
+        [Parameter(Mandatory)][int] $DriftCount,
+        [Parameter(Mandatory)][int] $UnverifiedCount,
+        # CI sets REQUIRE_NATIVE so the merge gate never accepts an item nobody
+        # could decide; hosts and hooks leave it unset so a host that cannot
+        # decide one is not blocked.
+        [switch] $RequireNative
+    )
+
+    if ($RequireNative -and $UnverifiedCount -gt 0) { return 1 }
+    if ($DriftCount -gt 0) { return 2 }
+    if ($UnverifiedCount -gt 0) { return 69 }
+    return 0
 }
 
 function Compare-WinEnvVersion {
@@ -425,13 +532,29 @@ function Get-WinGetRegistration {
 }
 
 function Get-WinEnvPackageStatus {
-    param([Parameter(Mandatory)][hashtable] $Package)
+    param(
+        [Parameter(Mandatory, Position = 0)][hashtable] $Package,
+        [scriptblock] $AppxQuery = $script:DefaultAppxQuery,
+        [scriptblock] $RegistrationQuery = $script:DefaultRegistrationQuery
+    )
 
-    $registered = Get-WinGetRegistration -Id $Package.Id
+    $registered = & $RegistrationQuery $Package.Id
     $detected = $registered
+    $unverified = $null
     switch ($Package.Detection) {
         'Command' { $detected = [bool](Get-Command $Package.Command -ErrorAction SilentlyContinue) }
-        'Appx' { $detected = [bool](Get-AppxPackage -Name $Package.AppxName -ErrorAction SilentlyContinue) }
+        'Appx' {
+            # When the module cannot answer, $detected keeps the registration
+            # this host could establish. Two consequences are deliberate. There
+            # is no conflict, because a comparison needs two answers and only
+            # one arrived. And the package is reported missing only when WinGet
+            # itself says so, which is the claim a WinGet-detected package
+            # already makes; the silent second source is reported as unverified
+            # instead of being read as absence.
+            $probe = Get-WinEnvAppxPresence -Name $Package.AppxName -Query $AppxQuery
+            if ($probe.Usable) { $detected = $probe.Present }
+            else { $unverified = "$($Package.AppxName) Appx presence is undecidable on this host: $($probe.Reason)" }
+        }
         'WinGet' { $detected = $registered }
         default { throw "Unknown detection method '$($Package.Detection)'." }
     }
@@ -443,14 +566,27 @@ function Get-WinEnvPackageStatus {
         Detected   = $detected
         Conflict   = ($registered -ne $detected)
         Missing    = (-not $registered -and -not $detected)
+        Unverified = $unverified
     }
 }
 
 function Install-WinEnvPackage {
-    param([Parameter(Mandatory)][hashtable] $Package)
+    param([Parameter(Mandatory, Position = 0)][hashtable] $Package)
 
     & winget.exe install --id $Package.Id --exact --source winget --accept-source-agreements --accept-package-agreements --disable-interactivity
-    if ($LASTEXITCODE -ne 0) { throw "Installation of '$($Package.Id)' failed (exit $LASTEXITCODE)." }
+    if ($LASTEXITCODE -eq 0) { return }
+    # WinGet answering "already installed, no applicable update" is the install
+    # succeeding at what it was for, not a failed one. It happens when the host
+    # has the package by a route this domain's registration query does not see,
+    # which a Store-installed application on a host whose Appx module will not
+    # load can reach: detection could not decide, WinGet's own source reported
+    # nothing, and the item was recorded missing. Aborting the whole Apply
+    # there would stop a run mid-deployment over a package that is present.
+    if ($LASTEXITCODE -eq $script:WinGetNoApplicableUpdateExitCode) {
+        Write-Warning "'$($Package.Id)' is already installed by a route WinGet's configured source does not report; nothing was installed."
+        return
+    }
+    throw "Installation of '$($Package.Id)' failed (exit $LASTEXITCODE)."
 }
 
 function Update-WinEnvProcessPath {

@@ -495,6 +495,160 @@ Describe 'feature selection' {
     }
 }
 
+Describe 'Appx detection capability' {
+    BeforeAll {
+        # The three answers the Appx module can give, as fixtures. No single
+        # host can produce all three: a host whose module loads cannot produce
+        # the third, and a host whose module does not load cannot produce the
+        # first two.
+        $PresentQuery = { param([string] $PackageName) [pscustomobject]@{ Name = $PackageName } }
+        $AbsentQuery = { param([string] $PackageName) }
+        # Reproduces the reported Windows 10 text. PowerShell 7 raises this
+        # while autoloading the module, before Get-AppxPackage is bound, which
+        # is why -ErrorAction cannot suppress it and only a try/catch sees it.
+        $UnusableQuery = {
+            param([string] $PackageName)
+            throw ("The 'Get-AppxPackage' command was found in the module 'Appx', but the module " +
+                'could not be loaded due to the following error: ' +
+                '[Operation is not supported on this platform. (0x80131539)]')
+        }
+        $Registered = { param([string] $PackageId) $true }
+        $Unregistered = { param([string] $PackageId) $false }
+
+        $AppxFeature = @{
+            Id            = 'appxFeature'
+            Name          = 'Appx Feature'
+            Preconditions = @(
+                @{ Type = 'Appx'; Name = 'Vendor.Palette'; Message = 'repair the vendor suite before applying' }
+            )
+        }
+        $AppxPackage = @{
+            Id        = 'Vendor.Terminal'
+            Name      = 'Vendor Terminal'
+            Detection = 'Appx'
+            AppxName  = 'Vendor.Terminal'
+        }
+    }
+
+    It 'distinguishes present, absent and an unusable module' {
+        $present = Get-WinEnvAppxPresence -Name 'Vendor.Terminal' -Query $PresentQuery
+        $present.Usable | Should -Be $true
+        $present.Present | Should -Be $true
+        ($null -eq $present.Reason) | Should -Be $true
+
+        $absent = Get-WinEnvAppxPresence -Name 'Vendor.Terminal' -Query $AbsentQuery
+        $absent.Usable | Should -Be $true
+        $absent.Present | Should -Be $false
+
+        # Presence is unknowable here, so it is not representable either.
+        $unusable = Get-WinEnvAppxPresence -Name 'Vendor.Terminal' -Query $UnusableQuery
+        $unusable.Usable | Should -Be $false
+        ($null -eq $unusable.Present) | Should -Be $true
+        $unusable.Reason | Should -Match 'could not be loaded'
+    }
+
+    It 'reports a precondition it could not decide as unverified, not as a failure' {
+        $satisfied = Test-WinEnvFeaturePrecondition -Feature $AppxFeature -AppxQuery $PresentQuery
+        $satisfied.Failures.Count | Should -Be 0
+        $satisfied.Unverified.Count | Should -Be 0
+
+        $failed = Test-WinEnvFeaturePrecondition -Feature $AppxFeature -AppxQuery $AbsentQuery
+        $failed.Failures.Count | Should -Be 1
+        $failed.Failures[0] | Should -Match 'Appx is missing'
+        $failed.Unverified.Count | Should -Be 0
+
+        $undecided = Test-WinEnvFeaturePrecondition -Feature $AppxFeature -AppxQuery $UnusableQuery
+        $undecided.Failures.Count | Should -Be 0
+        $undecided.Unverified.Count | Should -Be 1
+        $undecided.Unverified[0] | Should -Match 'undecidable on this host'
+        $undecided.Unverified[0] | Should -Not -Match 'is missing'
+    }
+
+    It 'keeps a feature without preconditions and an undeclared type as they were' {
+        $none = Test-WinEnvFeaturePrecondition -Feature @{ Id = 'core'; Name = 'Core' } -AppxQuery $UnusableQuery
+        $none.Failures.Count | Should -Be 0
+        $none.Unverified.Count | Should -Be 0
+
+        # An undeclared type is a broken manifest, not an undecidable host, so
+        # the evaluator stays strict about it.
+        $unknown = @{
+            Id            = 'unknown'
+            Name          = 'Unknown'
+            Preconditions = @(@{ Type = 'Ouija'; Name = 'Vendor.Palette'; Message = 'ask again later' })
+        }
+        (Test-Throws { Test-WinEnvFeaturePrecondition -Feature $unknown }) | Should -Be $true
+    }
+
+    It 'leaves Appx package detection unchanged while the module answers' {
+        $present = Get-WinEnvPackageStatus -Package $AppxPackage -AppxQuery $PresentQuery -RegistrationQuery $Registered
+        $present.Detected | Should -Be $true
+        $present.Conflict | Should -Be $false
+        $present.Missing | Should -Be $false
+        ($null -eq $present.Unverified) | Should -Be $true
+
+        $absent = Get-WinEnvPackageStatus -Package $AppxPackage -AppxQuery $AbsentQuery -RegistrationQuery $Registered
+        $absent.Detected | Should -Be $false
+        $absent.Conflict | Should -Be $true
+        ($null -eq $absent.Unverified) | Should -Be $true
+
+        $uninstalled = Get-WinEnvPackageStatus -Package $AppxPackage -AppxQuery $AbsentQuery -RegistrationQuery $Unregistered
+        $uninstalled.Missing | Should -Be $true
+        $uninstalled.Conflict | Should -Be $false
+    }
+
+    It 'reports an unusable module as unverified instead of a missing package' {
+        # The reported failure: an installed Windows Terminal read as missing,
+        # or as a detection conflict, because the module could not be loaded.
+        $status = Get-WinEnvPackageStatus -Package $AppxPackage -AppxQuery $UnusableQuery -RegistrationQuery $Registered
+        $status.Missing | Should -Be $false
+        $status.Conflict | Should -Be $false
+        $status.Unverified | Should -Match 'undecidable on this host'
+    }
+
+    It 'still reports a package WinGet does not know as missing when Appx cannot answer' {
+        # Only the Appx half is unverified. WinGet answered, and its answer is
+        # the same claim a WinGet-detected package already makes, so Apply can
+        # still install a package that is genuinely absent.
+        $status = Get-WinEnvPackageStatus -Package $AppxPackage -AppxQuery $UnusableQuery -RegistrationQuery $Unregistered
+        $status.Missing | Should -Be $true
+        $status.Conflict | Should -Be $false
+        $status.Unverified | Should -Match 'undecidable on this host'
+    }
+
+    It 'ranks drift above an undecidable item in the check exit contract' {
+        (Get-WinEnvCheckStatus -DriftCount 0 -UnverifiedCount 0) | Should -Be 0
+        (Get-WinEnvCheckStatus -DriftCount 1 -UnverifiedCount 0) | Should -Be 2
+        (Get-WinEnvCheckStatus -DriftCount 0 -UnverifiedCount 1) | Should -Be 69
+        # A host with both answers the actionable question first.
+        (Get-WinEnvCheckStatus -DriftCount 1 -UnverifiedCount 1) | Should -Be 2
+    }
+
+    It 'keeps the injected query seams name-only' {
+        # The seams exist so the three outcomes have fixtures. Declaring a
+        # position on the primary parameter is what stops a caller binding a
+        # scriptblock into one by accident.
+        foreach ($command in 'Get-WinEnvAppxPresence', 'Test-WinEnvFeaturePrecondition', 'Get-WinEnvPackageStatus') {
+            foreach ($seam in 'Query', 'AppxQuery', 'RegistrationQuery') {
+                $parameter = (Get-Command $command).Parameters[$seam]
+                if (-not $parameter) { continue }
+                $attribute = @($parameter.Attributes |
+                        Where-Object { $_ -is [System.Management.Automation.ParameterAttribute] })[0]
+                $attribute.Position | Should -Be ([int]::MinValue)
+            }
+        }
+    }
+
+    It 'turns an undecidable item into a failure when native evidence is required' {
+        # REQUIRE_NATIVE is the flag that says incompleteness must not pass,
+        # and a failure outranks both drift and an unverified result.
+        (Get-WinEnvCheckStatus -DriftCount 0 -UnverifiedCount 1 -RequireNative) | Should -Be 1
+        (Get-WinEnvCheckStatus -DriftCount 1 -UnverifiedCount 1 -RequireNative) | Should -Be 1
+        # It promotes nothing that was decided.
+        (Get-WinEnvCheckStatus -DriftCount 0 -UnverifiedCount 0 -RequireNative) | Should -Be 0
+        (Get-WinEnvCheckStatus -DriftCount 1 -UnverifiedCount 0 -RequireNative) | Should -Be 2
+    }
+}
+
 Describe 'script syntax' {
     It 'parses all repository PowerShell files' {
         foreach ($file in Get-ChildItem $repositoryRoot -Filter '*.ps1' -File -Recurse) {

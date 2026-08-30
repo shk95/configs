@@ -33,8 +33,18 @@ $drift = [System.Collections.Generic.List[string]]::new()
 $changed = [System.Collections.Generic.List[string]]::new()
 # Sources this host has no parser for. Not drift and not a failure: Apply is a
 # deployment, and refusing it because a validator is absent would make the
-# missing tool look like broken desired state.
+# missing tool look like broken desired state. This list is reported and does
+# not rank; widening the exit contract to cover every undecidable item is
+# tracked separately.
 $unverified = [System.Collections.Generic.List[string]]::new()
+# Detections this host could not decide, as opposed to sources it could not
+# parse. Today this is the Appx module failing to load, which says nothing
+# about whether the package is installed. These do rank: with no drift they
+# make the check unverified rather than verified.
+$unverifiedDetection = [System.Collections.Generic.List[string]]::new()
+# CI sets this so the merge gate never accepts an undecided item; hooks and
+# hosts leave it unset so a host that cannot decide one is not blocked.
+$requireNative = ($env:REQUIRE_NATIVE -eq '1')
 $selection = $null
 $selected = @()
 $unmanaged = @()
@@ -66,7 +76,14 @@ function Write-Summary {
     if ($changed.Count) { Write-Host ('  changed: ' + ($changed -join ', ')) }
     if ($drift.Count) { Write-Warning ('  drift: ' + ($drift -join ', ')) }
     if ($unverified.Count) { Write-Host ('  unverified: ' + ($unverified -join ', ')) }
-    if (-not $changed.Count -and -not $drift.Count) { Write-Host '  no changes or drift detected' }
+    if ($unverifiedDetection.Count) {
+        Write-Host ('  unverified detection: ' + ($unverifiedDetection -join ', ') +
+            ' (not decided on this host; neither present nor missing was concluded)')
+    }
+    # An undecided item is not a clean run, so it suppresses the clean line.
+    if (-not $changed.Count -and -not $drift.Count -and -not $unverifiedDetection.Count) {
+        Write-Host '  no changes or drift detected'
+    }
 }
 
 try {
@@ -137,6 +154,7 @@ try {
         $status = Get-WinEnvPackageStatus -Package $package
         $packageStatuses += $status
         Write-Verbose "$($status.Id): registered=$($status.Registered), detected=$($status.Detected)"
+        if ($status.Unverified) { $unverifiedDetection.Add("$($status.Id): $($status.Unverified)") }
         if ($status.Conflict) { $drift.Add("$($status.Id) detection conflict") }
         elseif ($status.Missing) { $drift.Add("$($status.Id) missing") }
     }
@@ -157,9 +175,16 @@ try {
     $preconditionFailures = [System.Collections.Generic.List[string]]::new()
     foreach ($feature in $manifest.Features) {
         if ($selected -notcontains [string]$feature.Id) { continue }
-        foreach ($failure in (Test-WinEnvFeaturePrecondition -Feature $feature)) {
+        $preconditionResult = Test-WinEnvFeaturePrecondition -Feature $feature
+        foreach ($failure in $preconditionResult.Failures) {
             $preconditionFailures.Add("$($feature.Id): $failure")
             $drift.Add("$($feature.Id) precondition: $failure")
+        }
+        # An undecidable precondition is not a failed one. Blocking Apply on it
+        # would make a host that cannot ask the question look like a host that
+        # answered no.
+        foreach ($item in $preconditionResult.Unverified) {
+            $unverifiedDetection.Add("$($feature.Id) precondition: $item")
         }
     }
 
@@ -174,11 +199,22 @@ try {
         $drift.Add('default terminal delegation')
     }
 
-    if (-not $shouldApply) {
-        $mode = if ($Check) { 'check' } else { 'verification' }
+    # One place decides what this run's status is, so Apply and the check rank
+    # drift, undecided items, and REQUIRE_NATIVE the same way. Everything that
+    # can drift or go undecided has been collected by here.
+    $runStatus = Get-WinEnvCheckStatus -DriftCount $drift.Count -UnverifiedCount $unverifiedDetection.Count -RequireNative:$requireNative
+    $mode = if ($Check) { 'check' } else { 'verification' }
+    if ($runStatus -eq 1) {
+        # The summary comes first on the one path where completeness is the
+        # point: the operator loses the selection and the drift list otherwise.
         Write-Summary -Mode $mode
-        if ($drift.Count) { exit 2 }
-        exit 0
+        throw ('Detection could not be completed on this host and REQUIRE_NATIVE is set: ' +
+            ($unverifiedDetection -join '; ') + '.')
+    }
+
+    if (-not $shouldApply) {
+        Write-Summary -Mode $mode
+        exit $runStatus
     }
 
     if ($packageStatuses.Conflict -contains $true) { throw 'Package detection conflicts must be resolved before applying.' }
