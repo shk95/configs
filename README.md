@@ -118,6 +118,24 @@ just home-switch       # intended Ubuntu WSL host only
 just darwin-switch     # target Mac only; requires sudo
 ```
 
+### Git commands that get no alias
+
+`modules/git.nix` declares this repository's `programs.git.settings.alias`
+set and, beside it, a comment naming the Git commands that deliberately stay
+unaliased because knowing them is more useful than shortening them:
+
+- `git show` for the last commit with its patch, `git show --stat` for just
+  the summary, and `git show <ref>` for any other commit.
+- `git diff` (unstaged) versus `git diff --cached` (staged, aliased `dc`)
+  versus `git diff HEAD` (both at once) — the three-way distinction behind
+  most "the diff looks wrong" confusion.
+- `git log -p -1`, and `git log -p -- <path>` to follow one file.
+- `git show HEAD@{1}` with `git reflog` to recover a previous position.
+- `git range-diff` to compare two versions of a series.
+
+See the comment in `modules/git.nix` for the reasoning; this list only
+repeats the names so a maintainer can find them without opening a Nix module.
+
 ## Windows
 
 From native Windows:
