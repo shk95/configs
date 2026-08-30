@@ -67,9 +67,9 @@ domain tag certifies only the named domain even though the commit may contain
 accepted history from the others.
 
 For a routine desired-state edit whose message is a template — a Homebrew
-formula or cask, a `flake.lock` refresh — `tool/version-control/commit` applies
-the edit, then shows the classification, the selected checks, and the message
-before it commits on your confirmation. It refuses on `master` and never
+formula or cask, a `flake.lock` refresh — `tool/version-control/commit` shows
+the edit, the classification, the selected checks, and the message, then
+applies it and commits on your confirmation. It refuses on `master` and never
 bypasses a hook.
 
 Domain releases use immutable annotated tags. The target commit must be

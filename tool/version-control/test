@@ -520,6 +520,63 @@ fi
 grep -q 'Portable command-line tools' "$commit_root/modules/darwin-homebrew.nix"
 grep -q '"displayplacer"' "$commit_root/modules/darwin-homebrew.nix"
 
+# The add and remove guards. A name already declared, a name that is not there,
+# and a name the module could not hold are refusals, not edits.
+if already_output=$(run_commit y cask add anki); then
+  echo "commit helper added a cask that was already declared" >&2
+  exit 1
+fi
+printf '%s\n' "$already_output" | grep -q 'already declared'
+if missing_output=$(run_commit y brew remove nowhere); then
+  echo "commit helper removed a formula that was not declared" >&2
+  exit 1
+fi
+printf '%s\n' "$missing_output" | grep -q 'is not declared'
+if name_output=$(run_commit y cask add 'bad name'); then
+  echo "commit helper accepted an unusable package name" >&2
+  exit 1
+fi
+printf '%s\n' "$name_output" | grep -q 'Not a usable package name'
+
+# An entry line carrying a trailing comment matches neither the reader nor the
+# editor. Skipping it would report "displayplacer" as absent and add a second
+# copy of it, so the whole edit is refused instead. Committed by hand first, so
+# the refusal is the readability guard and not the uncommitted-changes one.
+sed 's/^\( *\)"displayplacer"$/\1"displayplacer" # broken/' \
+  "$commit_root/modules/darwin-homebrew.nix" >"$test_root/trailing.nix"
+cp "$test_root/trailing.nix" "$commit_root/modules/darwin-homebrew.nix"
+commit_git add -- modules/darwin-homebrew.nix
+if ! annotate_output=$(
+  unset GIT_DIR GIT_WORK_TREE GIT_INDEX_FILE
+  cd "$commit_root" || exit 1
+  PATH="$commit_stub_path:$PATH" \
+    git commit -q -m 'chore(unixlike): annotate an entry by hand' 2>&1
+); then
+  printf '%s\n' "$annotate_output" >&2
+  echo "the fixture could not commit an annotated entry" >&2
+  exit 1
+fi
+commit_before=$(commit_count)
+if trailing_output=$(run_commit y brew add displayplacer); then
+  echo "commit helper edited a list holding an entry it cannot read" >&2
+  exit 1
+fi
+printf '%s\n' "$trailing_output" | grep -q 'bare quoted name'
+if [ "$(grep -c '"displayplacer"' "$commit_root/modules/darwin-homebrew.nix")" != 1 ]; then
+  echo "commit helper duplicated an entry it could not read" >&2
+  exit 1
+fi
+if run_commit y brew remove displayplacer >/dev/null; then
+  echo "commit helper removed from a list holding an entry it cannot read" >&2
+  exit 1
+fi
+if [ "$(commit_count)" != "$commit_before" ]; then
+  echo "commit helper committed over an unreadable entry line" >&2
+  exit 1
+fi
+# The guard is per list: casks is still readable and still editable.
+run_commit n --dry-run cask add readable >/dev/null
+
 # AGENTS.md: only dev enters master, and there is no operational bypass.
 commit_git switch -q master
 if master_output=$(run_commit y cask add zzz); then
@@ -657,11 +714,41 @@ else
   fi
 fi
 
+# Hooks are opt-in: tool/setup --fix sets core.hooksPath, the clone does not.
+# Naming check units in a clone that runs no hooks would report a gate that
+# never applied, so the helper reports them unavailable instead, and refuses
+# under the REQUIRE_NATIVE that CI sets.
+commit_git config --unset core.hooksPath
+nohooks_output=$(run_commit n --dry-run cask add unhooked)
+if printf '%s\n' "$nohooks_output" | grep -q 'unixlike:format'; then
+  echo "commit helper named check units in a clone that runs no hooks" >&2
+  exit 1
+fi
+printf '%s\n' "$nohooks_output" | grep -q '^· pre-commit checks unverified'
+printf '%s\n' "$nohooks_output" \
+  | grep -q 'Some checks could not run on this host and remain unverified\.'
+if (
+  REQUIRE_NATIVE=1
+  export REQUIRE_NATIVE
+  run_commit n --dry-run cask add unhooked
+) >/dev/null 2>&1; then
+  echo "commit helper planned a commit without hooks under REQUIRE_NATIVE" >&2
+  exit 1
+fi
+commit_git config core.hooksPath .githooks
+
 # The helper refuses a bypass; it must also never take one. Its own refusal
 # names those flags, so this asserts an invocation rather than a mention.
-if grep -Eq 'git commit.*--no-verify|core\.hooksPath|HUSKY|GIT_DIR' \
+if grep -Eq 'git commit.*--no-verify|core\.hooksPath=|HUSKY=|GIT_DIR=' \
   "$root/tool/version-control/commit"; then
   echo "the commit helper carries a hook bypass" >&2
+  exit 1
+fi
+# It reads core.hooksPath in order to report an unhooked clone. Reading is not
+# a bypass; writing it is, so every git config that touches it must be a --get.
+if grep 'git config' "$root/tool/version-control/commit" \
+  | grep 'core\.hooksPath' | grep -qv -- '--get'; then
+  echo "the commit helper writes core.hooksPath" >&2
   exit 1
 fi
 

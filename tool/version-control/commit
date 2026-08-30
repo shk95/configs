@@ -39,6 +39,11 @@ select_checks="$root/tool/dispatch/select"
 hooks_dir="$root/.githooks"
 . "$hooks_dir/evidence"
 
+# Hooks are opt-in: tool/setup --fix sets core.hooksPath, a fresh clone does
+# not. Naming the units a commit needs would otherwise report a gate that never
+# applied.
+hooks_path=$(git config --get core.hooksPath 2>/dev/null || true)
+
 homebrew_module=modules/darwin-homebrew.nix
 
 usage_text() {
@@ -166,8 +171,17 @@ report_plan() {
 
   printf '\nclassification: %s\n' "$("$classify" --files "$plan_path")"
   printf 'checks:\n'
-  printf 'M\t%s\n' "$plan_path" | "$select_checks" commit | sed 's/^/  /'
+  if [ "$hooks_path" = .githooks ]; then
+    printf 'M\t%s\n' "$plan_path" | "$select_checks" commit | sed 's/^/  /'
+  else
+    # Listing units nothing will run is worse than saying so: the commit would
+    # look gated when no check ran at all.
+    evidence_unavailable "pre-commit checks" \
+      "core.hooksPath is ${hooks_path:-unset}, not .githooks; fix with tool/setup --fix" \
+      || exit 1
+  fi
   printf 'message: %s\n' "$plan_message"
+  evidence_summary
 }
 
 selected_units() {
@@ -213,9 +227,11 @@ commit_staged() {
   exit 1
 }
 
-# The entries of one Nix string list, in file order. The pattern is strict on
-# purpose: a line this cannot read is also a line the editor below refuses to
-# rewrite, so both agree on what an entry is.
+# The entries of one Nix string list, in file order. The pattern is strict, and
+# the strictness is only safe because require_readable_list refuses the whole
+# edit when the list holds a line neither this nor the editor can read. A reader
+# that quietly skipped `"displayplacer" # broken` would report that entry as
+# absent, and the editor would then add a second copy of it.
 list_entries() {
   awk -v list="$1" '
     $0 ~ "^[[:space:]]*" list " = \\[$" { inside = 1; next }
@@ -225,6 +241,28 @@ list_entries() {
       print substr($0, RSTART + 1, RLENGTH - 2)
     }
   ' "$homebrew_module"
+}
+
+# Everything between the opener and `];` must be a blank line, a comment line,
+# or a bare quoted entry. Anything else is refused rather than skipped, because
+# skipping it is what turns an add into a silent duplicate.
+require_readable_list() {
+  unreadable=$(awk -v list="$1" '
+    $0 ~ "^[[:space:]]*" list " = \\[$" { inside = 1; next }
+    inside && /^[[:space:]]*\];[[:space:]]*$/ { inside = 0; next }
+    inside {
+      if ($0 ~ /^[[:space:]]*$/) next
+      if ($0 ~ /^[[:space:]]*#/) next
+      if ($0 ~ /^[[:space:]]*"[^"]*"$/) next
+      sub(/^[[:space:]]+/, "")
+      printf "%d: %s", NR, $0
+      exit
+    }
+  ' "$homebrew_module")
+
+  [ -z "$unreadable" ] || refuse \
+    "$homebrew_module line $unreadable" \
+    "An entry in $list must be a bare quoted name on its own line. Edit that line by hand; this helper refuses rather than skip it, because skipping it would duplicate an entry."
 }
 
 list_indent() {
@@ -321,6 +359,7 @@ homebrew_command() {
   grep -Eq "^[[:space:]]*$list = \[$" "$homebrew_module" \
     || refuse "$homebrew_module declares no $list list." \
       "Update the module or this helper; they disagree about the file's shape."
+  require_readable_list "$list"
 
   require_untouched "$homebrew_module"
 
