@@ -1530,14 +1530,40 @@ $script:WinEnvRuntimeStateName = @(
     'applied-layouts.json'
 )
 
-# An absolute account path, in the one-backslash spelling a text payload
-# carries and the two-backslash spelling a JSON payload carries. The drive is a
-# character class rather than a letter on purpose: written as a letter this
-# source would itself hold the text it hunts, and
-# tool/version-control/hygiene scans the whole tracked tree for exactly that.
-# The pattern is otherwise the one windows/tests/WinEnv.Tests.ps1 asserts the
-# payload tree against, so a capture cannot write a payload that suite refuses.
-$script:WinEnvAccountPathPattern = '(?i)[A-Za-z]:\\{1,2}Users\\{1,2}[A-Za-z0-9._-]+'
+# An absolute account path, in every spelling this domain can meet. The axes
+# are the same three tool/version-control/hygiene enforces repository-wide, so
+# a capture cannot write a payload that the commit's own hygiene scan then
+# refuses, and the tool does not depend on that scan running: whether the POSIX
+# hooks execute under Git for Windows is recorded in docs/status.md as unknown.
+#
+#   - a drive-letter path, with either separator, singled or doubled: a text
+#     payload carries one backslash, a JSON payload doubles it, and WSL and
+#     several applications write the same path with forward slashes;
+#   - the POSIX form, which reaches a Windows payload through WezTerm, Zellij
+#     and anything else that stores a WSL path;
+#   - the WSL UNC form a Windows Terminal startingDirectory carries.
+#
+# Every character class is written as a class rather than as an example: spelt
+# out, this source would itself hold the text it hunts, and hygiene scans the
+# whole tracked tree for exactly that.
+$script:WinEnvAccountName = '[A-Za-z0-9._-]+'
+$script:WinEnvPathSeparator = '[\\/]{1,2}'
+# The UNC form opens with two separators, and a JSON payload doubles each of
+# them, so the leading run is one to four rather than one to two. Anchoring the
+# alternative and then admitting only two would miss every JSON spelling of it,
+# because the character before the third backslash is a backslash and no anchor
+# accepts one.
+$script:WinEnvUncPrefix = '[\\/]{1,4}'
+# hygiene's anchoring rule, restated: a match counts only where the path opens
+# at a line start or after a character a path is introduced by. Without it a
+# URL path or a flake store path reads as an account directory.
+$script:WinEnvPathAnchor = '(^|[ \t''"`=(,:])'
+$script:WinEnvAccountPathPattern = '(?im)' +
+    '([A-Za-z]:' + $script:WinEnvPathSeparator + 'Users' + $script:WinEnvPathSeparator + $script:WinEnvAccountName + ')' +
+    '|(' + $script:WinEnvPathAnchor + '/(home|Users)/' + $script:WinEnvAccountName + ')' +
+    '|(' + $script:WinEnvPathAnchor + $script:WinEnvUncPrefix + 'wsl(\.localhost|\$)' +
+        $script:WinEnvPathSeparator + $script:WinEnvAccountName +
+        $script:WinEnvPathSeparator + 'home' + $script:WinEnvPathSeparator + $script:WinEnvAccountName + ')'
 
 # AGENTS.md, Host safety: a .wslconfig firewall value is never added without
 # explicit direction, and a capture is not direction.
@@ -1599,6 +1625,13 @@ function Remove-WinEnvGeneratedProfile {
         by a person or another tool, is drift rather than generated content
         under the read side's own rule, and is captured so that the two
         directions agree about what the payload owns.
+
+        Two host shapes are refused rather than captured, because a payload
+        holding either makes every later comparison throw instead of reporting
+        drift: an entry with no usable `guid`, which is dropped, and a guid
+        kept more than once, which fails the whole capture and names the guid.
+        Both are shapes the read side already calls drift, so nothing it
+        tolerated is lost.
     #>
     param(
         [Parameter(Mandatory)][string] $DeclaredContent,
@@ -1630,7 +1663,14 @@ function Remove-WinEnvGeneratedProfile {
     $kept = @(
         foreach ($entry in $list) {
             $guid = Get-WinEnvJsonMember -Value $entry -Name 'guid'
-            if ($guid -is [string] -and $declared.Contains($guid)) {
+            # An entry with no usable guid is dropped before anything else is
+            # asked of it. The read side matches declared profiles by guid and
+            # throws when a declared one has none, so capturing such an entry
+            # would write a payload that makes every later -Check and Apply
+            # throw instead of reporting drift. Nothing is lost that the read
+            # side accepted: it already counts a guidless entry as drift.
+            if ($guid -isnot [string] -or [string]::IsNullOrWhiteSpace($guid)) { continue }
+            if ($declared.Contains($guid)) {
                 $entry
                 continue
             }
@@ -1641,6 +1681,19 @@ function Remove-WinEnvGeneratedProfile {
             if ($source -is [string] -and -not [string]::IsNullOrWhiteSpace($source)) { continue }
             $entry
         })
+
+    # A guid kept twice would be written into desired state as a duplicate
+    # declaration, and the read side throws on one rather than reporting drift.
+    # Which of the two the operator meant is not this tool's question, so the
+    # capture is refused and the guid is named.
+    $seen = [System.Collections.Generic.HashSet[string]]::new([System.StringComparer]::Ordinal)
+    foreach ($entry in $kept) {
+        $guid = [string](Get-WinEnvJsonMember -Value $entry -Name 'guid')
+        if (-not $seen.Add($guid)) {
+            throw ("The host Windows Terminal profiles use the guid '$guid' more than once; " +
+                'resolve the duplicate in the application before capturing.')
+        }
+    }
 
     $profiles.list = $kept
     return ($document | ConvertTo-Json -Depth 100)
@@ -1725,7 +1778,17 @@ function Get-WinEnvCapturePlan {
     $hostText = Get-Content -LiteralPath $target -Raw -Encoding utf8
     if ([string]$resolved.Compare -eq 'ExactJsonWithGeneratedProfiles') {
         $declaredText = Get-Content -LiteralPath (Join-Path $RepositoryRoot $source) -Raw -Encoding utf8
-        $hostText = Remove-WinEnvGeneratedProfile -DeclaredContent $declaredText -HostContent $hostText
+        # A host file this rule cannot reduce to desired state is a refusal
+        # with its reason, not a crash: the run continues and reports every
+        # other selected file, and the operator is told what to fix in the
+        # application.
+        try {
+            $hostText = Remove-WinEnvGeneratedProfile -DeclaredContent $declaredText -HostContent $hostText
+        }
+        catch {
+            return New-CaptureOutcome -Definition $Definition -Status 'Refused' -Source $source -Target $target `
+                -Reason $_.Exception.Message
+        }
     }
 
     $restored = ConvertFrom-WinEnvTemplate -Content $hostText -HostPath $HostPath

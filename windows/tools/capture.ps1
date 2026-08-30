@@ -150,12 +150,44 @@ $plans = @($considered | ForEach-Object {
         Get-WinEnvCapturePlan -Definition $_ -RepositoryRoot $desiredStateRoot -Build $hostBuild -HostPath $hostPath
     })
 
-$captured = @($plans | Where-Object Status -eq 'Captured')
+$planned = @($plans | Where-Object Status -eq 'Captured')
 $unchanged = @($plans | Where-Object Status -eq 'Unchanged')
 $refused = @($plans | Where-Object Status -eq 'Refused')
 
+# The payload text each captured plan would produce, rendered once and reused
+# for the diff and for the write. A plan whose text equals the payload already
+# on disk is not a commit: the file drifted under its comparison mode but the
+# difference is one desired state does not express -- a directory spelled in
+# another case, most plainly -- so there is nothing to stage. Saying so here is
+# what keeps the run out of the commit path, where an empty `git add` makes
+# `git commit` exit 1 and the failure reads as a hook rejecting the change.
+$rendered = @{}
+$captured = @()
+$inexpressible = @()
+foreach ($plan in $planned) {
+    $payloadPath = Join-Path $desiredStateRoot $plan.Source
+    $text = ConvertTo-WinEnvPayloadText -Content ([string]$plan.Content) -PayloadPath $payloadPath
+    $current = if (Test-Path -LiteralPath $payloadPath -PathType Leaf) {
+        Get-Content -LiteralPath $payloadPath -Raw -Encoding utf8
+    }
+    else {
+        $null
+    }
+    if ($null -ne $current -and $current -ceq $text) {
+        $inexpressible += $plan
+        continue
+    }
+    $rendered[[string]$plan.Id] = $text
+    $captured += $plan
+}
+
 foreach ($plan in $captured) { Write-Host "  captured: $($plan.Id) -> $($plan.Source)" }
 if ($unchanged.Count) { Write-Host ('  unchanged: ' + (@($unchanged | ForEach-Object { $_.Id }) -join ', ')) }
+foreach ($plan in $inexpressible) {
+    Write-Refusal -Message "no change to commit: $($plan.Id)" `
+        -Detail ('the host file drifted, but the payload this capture produces is the one already ' +
+            'committed, so desired state cannot express the difference; reconcile it in the application or by hand')
+}
 foreach ($plan in $refused) { Write-Refusal -Message "refused: $($plan.Id)" -Detail $plan.Reason }
 
 if (-not $captured.Count) {
@@ -220,8 +252,7 @@ try {
     foreach ($plan in $captured) {
         $payloadPath = Join-Path $desiredStateRoot $plan.Source
         $candidate = Join-Path $stagingRoot ([string]$plan.Id)
-        Write-WinEnvAtomicText -Path $candidate -Content (
-            ConvertTo-WinEnvPayloadText -Content ([string]$plan.Content) -PayloadPath $payloadPath)
+        Write-WinEnvAtomicText -Path $candidate -Content $rendered[[string]$plan.Id]
         Write-Host ''
         Write-Host "--- $($relativePath[[string]$plan.Id])"
         & git -C $repositoryRoot --no-pager diff --no-index --no-color -- $payloadPath $candidate

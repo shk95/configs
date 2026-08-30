@@ -1687,8 +1687,15 @@ Describe 'capture' {
         # profile Windows Terminal materialises into the file it co-owns. The
         # guid is a short opaque key rather than a UUID, because a UUID in
         # tracked desired state is what hygiene exists to catch.
+        #
+        # The changed key is derived from the payload rather than written as a
+        # literal. Capturing this very key on a host is the tool's headline
+        # use case, and a fixture asserting the value the payload happens to
+        # hold today would stop being drift the moment someone captures it,
+        # turning a legitimate capture into a failing suite.
         $document = $payloadText | ConvertFrom-Json
-        $document.copyOnSelect = $false
+        $flipped = -not $document.copyOnSelect
+        $document.copyOnSelect = $flipped
         $document.profiles.list = @($document.profiles.list) + [pscustomobject]@{
             guid   = '{generated-git-bash}'
             hidden = $false
@@ -1710,7 +1717,7 @@ Describe 'capture' {
         # A declared profile that carries a source of its own stays: the rule
         # keys on the guid the payload declares, not on the member's presence.
         @($captured.profiles.list | ForEach-Object { $_.name }) | Should -Be @('PowerShell 7', 'Zellij Workspace')
-        $captured.copyOnSelect | Should -Be $false
+        $captured.copyOnSelect | Should -Be $flipped
 
         [void](Save-WinEnvCapturedPayload -Plan $plan -RepositoryRoot $CaptureRoot)
         (Test-WinEnvManagedFile -Definition $definition -RepositoryRoot $CaptureRoot -HostPath $CaptureHost) |
@@ -1900,6 +1907,118 @@ Describe 'capture' {
         # No final newline in the payload, and none added.
         (ConvertTo-WinEnvPayloadText -Content "[wsl2]`r`nmemory=8GB`r`n" -PayloadPath $lfPath) |
             Should -Be "[wsl2]`nmemory=8GB"
+    }
+
+    It 'restores a host directory the file spells in another case' {
+        # Windows accepts more than one spelling of the same directory while
+        # every comparison here is ordinal, so the restore matches
+        # case-insensitively and normalises the occurrence to the spelling
+        # Apply writes back.
+        $shouted = $JsonLocalAppData.ToUpperInvariant()
+        # -BeExactly, because Should -Be is itself case-insensitive and would
+        # call the two spellings equal.
+        $shouted | Should -Not -BeExactly $JsonLocalAppData
+
+        $result = ConvertFrom-WinEnvTemplate -Content ('{"template":"' + $shouted + '\\NewPlus"}') `
+            -HostPath $CaptureHost
+        $result.Content | Should -Be '{"template":"__LOCALAPPDATA_JSON__\\NewPlus"}'
+        @($result.Unrepresented).Count | Should -Be 0
+    }
+
+    It 'keeps an undeclared profile no generator claims and drops one with no guid' {
+        # Three undeclared shapes beside the declared profile. The read side
+        # tolerates only the one carrying a source, so the other two are drift
+        # under its own rule -- but they are not the same kind of drift. An
+        # entry with a guid can become a declared profile, while an entry
+        # without one cannot: writing it into the payload makes every later
+        # comparison throw "A declared Windows Terminal profile has no guid"
+        # instead of reporting drift, which is the regression this fixture
+        # exists for.
+        $declared = @{ profiles = @{ list = @(@{ guid = '{declared-profile}'; name = 'Declared' }) } } |
+            ConvertTo-Json -Depth 100
+        $source = New-CapturePayload 'profile-shapes.json' $declared
+
+        $hostText = @{
+            profiles = @{
+                list = @(
+                    @{ guid = '{declared-profile}'; name = 'Declared' },
+                    @{ guid = '{hand-written}'; name = 'Hand written' },
+                    @{ name = 'No guid at all' },
+                    @{ guid = '{generated}'; name = 'Generated'; source = 'Git' }
+                )
+            }
+        } | ConvertTo-Json -Depth 100
+        $target = New-CaptureTarget 'profile-shapes.json' $hostText
+
+        $definition = New-CaptureDefinition -Id 'profileShapes' -Feature 'terminal' `
+            -Compare 'ExactJsonWithGeneratedProfiles' -Source $source -Target $target
+        $plan = Get-WinEnvCapturePlan -Definition $definition -RepositoryRoot $CaptureRoot `
+            -Build 22631 -HostPath $CaptureHost
+
+        $plan.Status | Should -Be 'Captured'
+        $result = $plan.Content | ConvertFrom-Json
+        @($result.profiles.list | ForEach-Object { $_.name }) | Should -Be @('Declared', 'Hand written')
+
+        [void](Save-WinEnvCapturedPayload -Plan $plan -RepositoryRoot $CaptureRoot)
+        # Still drift, because the host holds a profile no payload can own.
+        # Drift is the honest answer; a thrown exception is not, and before the
+        # guidless entry was dropped this is where the suite blew up.
+        { Test-WinEnvManagedFile -Definition $definition -RepositoryRoot $CaptureRoot -HostPath $CaptureHost } |
+            Should -Not -Throw
+    }
+
+    It 'refuses a host file that uses one profile guid twice' {
+        # The read side reports a repeated declared guid as drift, so capture
+        # is reached; writing both copies would make the payload itself throw
+        # on every later comparison. Which copy the operator meant is not this
+        # tool's question, so the run refuses and names the guid.
+        $declared = @{ profiles = @{ list = @(@{ guid = '{twice}'; name = 'Declared' }) } } |
+            ConvertTo-Json -Depth 100
+        $source = New-CapturePayload 'duplicate-guid.json' $declared
+
+        $hostText = @{
+            profiles = @{
+                list = @(
+                    @{ guid = '{twice}'; name = 'Declared' },
+                    @{ guid = '{twice}'; name = 'Declared again' }
+                )
+            }
+        } | ConvertTo-Json -Depth 100
+        $target = New-CaptureTarget 'duplicate-guid.json' $hostText
+
+        $definition = New-CaptureDefinition -Id 'duplicateGuid' -Feature 'terminal' `
+            -Compare 'ExactJsonWithGeneratedProfiles' -Source $source -Target $target
+        $plan = Get-WinEnvCapturePlan -Definition $definition -RepositoryRoot $CaptureRoot `
+            -Build 22631 -HostPath $CaptureHost
+
+        $plan.Status | Should -Be 'Refused'
+        $plan.Reason | Should -Match 'more than once'
+        $plan.Reason | Should -Match 'twice'
+    }
+
+    It 'refuses every spelling of an absolute account path, not only the backslash one' {
+        # The three axes tool/version-control/hygiene enforces repository-wide.
+        # Each is assembled from separate literals, for the reason the payload
+        # scan earlier in this file gives, and each is written into the host
+        # file as a JSON string, which is how a Windows Terminal
+        # startingDirectory or a PowerToys path setting would carry it.
+        $forwardSlashDrive = 'C' + ':' + '/' + 'Users' + '/' + 'bob'
+        $posix = '/' + 'home' + '/' + 'bob'
+        $unc = '\' + '\' + 'wsl.localhost' + '\' + 'Ubuntu' + '\' + 'home' + '\' + 'bob'
+
+        $index = 0
+        foreach ($leak in @($forwardSlashDrive, $posix, $unc)) {
+            $index++
+            $name = "spelling-$index.json"
+            $definition = New-CaptureDefinition -Id "spelling$index" `
+                -Source (New-CapturePayload $name '{"path":""}') `
+                -Target (New-CaptureTarget $name ('{"path":"' + $leak.Replace('\', '\\') + '"}'))
+
+            $plan = Get-WinEnvCapturePlan -Definition $definition -RepositoryRoot $CaptureRoot `
+                -Build 22631 -HostPath $CaptureHost
+            $plan.Status | Should -Be 'Refused' -Because $leak
+            $plan.Reason | Should -Match 'absolute account path'
+        }
     }
 
     It 'offers the documented selection and no unattended mode' {
