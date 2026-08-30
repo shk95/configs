@@ -246,6 +246,14 @@ registered font DirectWrite still cannot resolve. There is no `-Force` for
 fonts, deliberately. Nothing on this path overwrites a file this repository did
 not put there.
 
+That last sentence is now true of registrations too. `RegistrationRepairable`
+used to be decided from the file count alone, so a host holding every listed
+file whose registrations were valid except for one pointing elsewhere was read
+as a repair and Apply rewrote that value. A registration naming another path is
+not a missing registration, and repairing it means overwriting something this
+repository did not write, so it now leaves that state the same way it leaves
+`Incomplete`, and both of the states that write are bounded by the same rule.
+
 `Get-WinEnvFontStatus` decides the state from three injected host observations —
 the per-user font directory, the two registry keys, and the DirectWrite family
 probe — for the same reason package detection injects its two: the states a font

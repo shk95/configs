@@ -270,7 +270,7 @@ try {
             # registers the rest.
             Install-WinEnvFont -Font $manifest.Font
             $fontRegisteredAtUtc = [DateTimeOffset]::UtcNow.ToString('o')
-            $changed.Add('D2Koding font missing faces')
+            $changed.Add('D2Koding font (missing faces)')
         }
         elseif ($fontStatus.RegistrationRepairable) {
             Register-WinEnvFont -Font $manifest.Font

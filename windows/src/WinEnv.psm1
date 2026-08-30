@@ -987,7 +987,13 @@ function Get-WinEnvFontStatus {
     $directWriteDetected = [bool](& $DirectWriteQuery $Font.Name)
     $registered = $systemFamilyDetected -or $validRegistrations -eq $Font.Files.Count
     $installed = $registered -and $directWriteDetected
-    $registrationRepairable = -not $systemFamilyDetected -and $validFiles -eq $Font.Files.Count -and $validRegistrations -ne $Font.Files.Count
+    # A host holding every listed file whose registrations are only missing.
+    # A registration under one of these names pointing at another path is not a
+    # missing registration and is not repaired by overwriting it, so it leaves
+    # this state as well as Incomplete: both of them write, and neither may
+    # write over a value this repository did not put there.
+    $registrationRepairable = -not $systemFamilyDetected -and $foreignRegistrations -eq 0 -and
+        $validFiles -eq $Font.Files.Count -and $validRegistrations -ne $Font.Files.Count
     # Every artifact this host holds is one of ours and valid, at least one is
     # there, and at least one listed face is not fully installed yet. Nothing
     # has to be overwritten to finish that, so nothing is refused. Registration
@@ -1013,8 +1019,8 @@ function Get-WinEnvFontStatus {
 function Register-WinEnvFont {
     param([Parameter(Mandatory)][hashtable] $Font)
 
-    $fontDirectory = Join-Path $env:LOCALAPPDATA 'Microsoft\Windows\Fonts'
-    $registryPath = 'HKCU:\Software\Microsoft\Windows NT\CurrentVersion\Fonts'
+    $fontDirectory = & $script:DefaultFontDirectoryQuery
+    $registryPath = $script:UserFontRegistryPath
     if (-not (Test-Path $registryPath)) { [void](New-Item -Path $registryPath -Force) }
 
     if (-not ('WinEnv.NativeFont' -as [type])) {
@@ -1074,7 +1080,7 @@ function Install-WinEnvFont {
         if ($archiveHash -ne $Font.Sha256) { throw "Font archive hash mismatch: $archiveHash" }
         Expand-Archive -LiteralPath $archive -DestinationPath $temporaryDirectory
 
-        $fontDirectory = Join-Path $env:LOCALAPPDATA 'Microsoft\Windows\Fonts'
+        $fontDirectory = & $script:DefaultFontDirectoryQuery
         if (-not (Test-Path $fontDirectory)) { [void](New-Item -ItemType Directory -Path $fontDirectory -Force) }
         # This also runs for a host that is only missing some of the faces, so
         # a face that is already there byte for byte is left alone rather than

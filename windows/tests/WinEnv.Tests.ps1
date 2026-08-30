@@ -1216,13 +1216,33 @@ Describe 'font installation state' {
 
     It 'still calls a system-wide install of the same family a conflict' {
         # A machine-wide registration of this family is not something a
-        # per-user Apply may overwrite, and the family it resolves is not the
-        # one this manifest owns, so DirectWrite does not answer for it.
+        # per-user Apply may overwrite. DirectWrite is asked about the family
+        # the machine-wide entry installs, so this fixture pins the half of the
+        # case where it does not resolve: when it does, the registration
+        # shortcut in $registered already reports the host as Installed and
+        # nothing reaches a state this describes. That shortcut predates this
+        # change and is not what it decides.
         $fixture = New-FontFixture -Root $TestDrive -Present $MonoFaces -Registered $MonoFaces `
             -SystemFamilyValue @('Test Font Mono (TrueType)') -DirectWrite $false
         $status = Get-FontFixtureStatus -Fixture $fixture
 
         $status.Conflict | Should -Be $true
+        $status.Incomplete | Should -Be $false
+        $status.Installed | Should -Be $false
+    }
+
+    It 'refuses a foreign registration even on a host holding every file' {
+        # Every listed file is valid and only one registration is wrong, which
+        # is the shape closest to a repair. Repairing it would overwrite a value
+        # this repository did not write, so it is a conflict rather than the
+        # narrower registration repair beside it.
+        $fixture = New-FontFixture -Root $TestDrive -Present $AllFaces -Registered $AllFaces `
+            -ForeignRegistration @{ 'TestFont-Bold.ttf' = 'C:\ProgramData\Other Vendor\TestFont-Bold.ttf' } `
+            -DirectWrite $true
+        $status = Get-FontFixtureStatus -Fixture $fixture
+
+        $status.Conflict | Should -Be $true
+        $status.RegistrationRepairable | Should -Be $false
         $status.Incomplete | Should -Be $false
         $status.Installed | Should -Be $false
     }
@@ -1265,6 +1285,9 @@ Describe 'font installation state' {
             (New-FontFixture -Root $TestDrive -Present $MonoFaces -Registered $MonoFaces -DirectWrite $true),
             (New-FontFixture -Root $TestDrive -Present $AllFaces -Registered $AllFaces -DirectWrite $true),
             (New-FontFixture -Root $TestDrive -Present $AllFaces -DirectWrite $false),
+            (New-FontFixture -Root $TestDrive -Present $AllFaces -Registered $AllFaces `
+                    -ForeignRegistration @{ 'TestFont-Bold.ttf' = 'C:\ProgramData\Other Vendor\TestFont-Bold.ttf' } `
+                    -DirectWrite $true),
             (New-FontFixture -Root $TestDrive -DirectWrite $false),
             (New-FontFixture -Root $TestDrive -Present $MonoFaces -Registered $MonoFaces `
                     -SystemFamilyValue @('Test Font Mono (TrueType)') -DirectWrite $false)
