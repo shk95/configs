@@ -6,6 +6,7 @@
     { "source": "wezterm/config/behavior.lua", "format": "lua" },
     { "source": "wezterm/config/bindings.lua", "format": "lua" },
     { "source": "wezterm/config/fonts.lua", "format": "lua" },
+    { "source": "wezterm/config/startup.lua", "format": "lua" },
     { "source": "wezterm/fonts.json", "format": "json" },
     { "source": "wezterm/local.lua.example", "format": "lua" },
     { "source": "wezterm/platform/darwin.lua", "format": "lua" },

@@ -2,7 +2,7 @@ local module = {}
 
 function module.apply_to_config(config)
   config.color_scheme = "Catppuccin Mocha"
-  config.font_size = 13.0
+  config.font_size = 15.0
   config.line_height = 1.05
 
   config.window_padding = {
@@ -23,7 +23,7 @@ function module.apply_to_config(config)
   }
 
   config.window_frame = {
-    font_size = 12.0,
+    font_size = 13.0,
   }
 end
 

@@ -3,7 +3,7 @@ local module = {}
 function module.apply_to_config(config)
   -- Host-specific settings belong here. This file is not loaded automatically;
   -- copy it to local.lua, which is ignored by Git.
-  config.font_size = 13.0
+  config.font_size = 15.0
 end
 
 return module
