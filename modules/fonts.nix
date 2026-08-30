@@ -11,7 +11,7 @@
 #   nixosConfigurations.wsl.config.fonts.packages               [ ]
 #
 # Zero fonts, so Korean has nothing to resolve to at all and every CJK glyph is
-# a box. Contributed to `homeManager.shared` rather than to `nixos.wsl` deliberately: it
+# a box. Contributed to `homeManager.wsl` rather than to `nixos.wsl` deliberately: it
 # is the flavour with the problem that gains, and the flavour without one loses
 # nothing.
 #
