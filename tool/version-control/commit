@@ -39,6 +39,14 @@
 
 set -eu
 
+# Guards the `sed -n '/^@@/,$p'` call below from Git for Windows' MSYS
+# argument conversion, which rewrites a leading-`/` argv element into a
+# Windows path before sed sees it. See tool/version-control/hygiene for the
+# full explanation and the observed failure (#79). Inert everywhere else.
+MSYS_NO_PATHCONV=1
+MSYS2_ARG_CONV_EXCL='*'
+export MSYS_NO_PATHCONV MSYS2_ARG_CONV_EXCL
+
 root=$(git rev-parse --show-toplevel)
 cd "$root"
 

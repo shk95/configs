@@ -840,15 +840,22 @@ because it deploys the lower payload, while capture writing host content into a
 payload no host selected would put one machine's state into a file another
 machine deploys.
 
-One thing this repository does not yet know: whether the POSIX shell hooks
-under `.githooks` run under Git for Windows on the maintainer's host. The
-Unix-like side has never had to ask. `capture.ps1` therefore reports what it
-can decide — whether `core.hooksPath` is `.githooks` — and asks the operator to
-read the hook output under the commit rather than claiming a gate ran. When the
-host answers the question, record the answer here; if the hooks do not run
-there, a Windows commit is ungated locally and the merge gate is the only gate
-it passes through, which is a fact for CI to carry rather than for the tool to
-paper over.
+One thing this repository did not know until the maintainer's host answered it:
+whether the POSIX shell hooks under `.githooks` run under Git for Windows. They
+do. The maintainer's first hook-gated commit there (#77, `capture.ps1`, git
+2.50.1.windows.1) exercised `core.hooksPath` and ran `.githooks/pre-commit`
+under Git for Windows' `sh`, which found and ran
+`tool/version-control/hygiene` and the rest of the local check chain the same
+way a Unix-like clone does. The one incompatibility that surfaced was not
+missing hook support: MSYS argument conversion silently rewrote a leading-`/`
+argv element before a native binary saw it, which made the stale-entry check
+in `tool/version-control/hygiene` search for a mangled string and reject a
+clean commit (#79). Every governance script that passes such an argument to a
+native binary now disables that conversion (`MSYS_NO_PATHCONV` and
+`MSYS2_ARG_CONV_EXCL`, both inert on every other platform), so a Windows
+commit through the hooks reaches the same verdict a Unix-like one does.
+`capture.ps1` still reports whether `core.hooksPath` is `.githooks` rather than
+assuming it, because hooks stay opt-in per clone regardless of platform.
 
 Three rules earned their shape from review rather than from design. The
 account-path refusal carries the same three axes `tool/version-control/hygiene`
@@ -856,8 +863,9 @@ enforces repository-wide -- a drive-letter path in either separator, the POSIX
 form, and the WSL UNC form -- because a Windows Terminal starting directory or a
 WezTerm setting routinely holds a WSL path, and the account-name refusal only
 backstops a leak that names this host's own account. Capture does not lean on
-the commit hook for that check, since whether the hook runs is the open question
-above. The generated-profile rule drops a host profile with no usable guid and
+the commit hook for that check, because hooks stay opt-in per clone: a fresh
+clone with `core.hooksPath` unset must refuse the same leak the hook would have
+caught. The generated-profile rule drops a host profile with no usable guid and
 refuses a capture whose kept profiles repeat one, because either shape written
 into a payload makes every later `-Check` and Apply throw instead of reporting
 drift, and a payload that cannot be compared is worse than the drift it came

@@ -25,6 +25,37 @@ unset GIT_INDEX_FILE
 unset GIT_DIR GIT_WORK_TREE GIT_COMMON_DIR GIT_OBJECT_DIRECTORY \
   GIT_ALTERNATE_OBJECT_DIRECTORIES GIT_NAMESPACE GIT_CEILING_DIRECTORIES
 
+# Guards this suite's own `sed -n '/casks = \[/,/\];/p'` call (casks_now,
+# below) from Git for Windows' MSYS argument conversion, the same mechanism
+# tool/version-control/hygiene guards against. See that file for the full
+# explanation and the observed failure (#79). Inert everywhere else.
+MSYS_NO_PATHCONV=1
+MSYS2_ARG_CONV_EXCL='*'
+export MSYS_NO_PATHCONV MSYS2_ARG_CONV_EXCL
+
+# Static fixture for #79: every governance script that passes a leading-`/`
+# argv element to a native binary must disable MSYS argument conversion, or a
+# hook-gated Windows commit can be rejected by a mangled argument instead of
+# the real check result. MSYS itself cannot run on this host, so this checks
+# the one thing a Unix host can: that the guard is actually declared in each
+# affected script's source, not that MSYS would leave it alone.
+for msys_guarded in tool/version-control/hygiene .githooks/commit-msg \
+  tool/version-control/check-promotion-queue tool/version-control/commit \
+  tool/version-control/test tool/worktree.sh; do
+  if ! grep -q '^MSYS_NO_PATHCONV=1$' "$root/$msys_guarded"; then
+    echo "$msys_guarded does not set MSYS_NO_PATHCONV=1 (#79)" >&2
+    exit 1
+  fi
+  if ! grep -q "^MSYS2_ARG_CONV_EXCL='\\*'\$" "$root/$msys_guarded"; then
+    echo "$msys_guarded does not set MSYS2_ARG_CONV_EXCL='*' (#79)" >&2
+    exit 1
+  fi
+  if ! grep -q '^export MSYS_NO_PATHCONV MSYS2_ARG_CONV_EXCL$' "$root/$msys_guarded"; then
+    echo "$msys_guarded does not export both MSYS guard variables (#79)" >&2
+    exit 1
+  fi
+done
+
 grep -q '^  required:$' "$root/.github/workflows/ci.yml"
 grep -q '^    name: Required checks$' "$root/.github/workflows/ci.yml"
 grep -q 'needs: \[classify, repository, unix, windows, common, secrets, promotion\]' \
