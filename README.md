@@ -266,6 +266,7 @@ command and one confirmation:
 .\windows\tools\capture.ps1                          # every feature this host applied
 .\windows\tools\capture.ps1 -Feature powertoys       # one feature
 .\windows\tools\capture.ps1 -Id windowsTerminal      # one managed file
+.\windows\tools\capture.ps1 -Publish                  # commit it and take it to dev
 .\windows\tools\capture.ps1 -Branch fix/windows-font # override the branch name below
 .\windows\tools\capture.ps1 -WhatIf                  # decide and diff, write nothing
 ```
@@ -275,9 +276,29 @@ file is copied into the payload this host resolves — the build-selected varian
 for a conditional file — with the placeholder Apply expands restored, a JSON
 payload pretty-printed to this repository's two-space style regardless of how
 the host application wrote it, the diff is shown, and one `[y/N]` commits it:
-one `feat(windows):` commit per feature, through the repository's hooks. Push
-and open a pull request as usual; the tool stops at the commit. The round trip
-closes, so the check that reported the drift passes afterwards.
+one `feat(windows):` commit per feature, through the repository's hooks. The
+round trip closes, so the check that reported the drift passes afterwards.
+
+`-Publish` carries that same confirmation the rest of the way: change the
+setting in the application, run `capture.ps1 -Feature <feature> -Publish`,
+answer `y`, and the run branches, commits, pushes, opens one pull request
+against `dev`, arms auto-merge and prints the pull-request URL. Nothing else is
+needed unless CI fails. The pull request's title is the commit's own subject —
+a run that captured several features titles it `feat(windows): capture settings
+from the host` and lists them — and its body carries the captured managed-file
+ids, the feature selection, this host's Windows build and the commit output the
+hooks produced here. It never waits on CI and never merges: `Required checks`
+and an up-to-date base still decide that, and a push the pre-push hook or the
+remote rejects leaves every commit local on the named branch, with no retry and
+no bypass. `-Publish` needs `gh` authenticated for github.com (`winget install
+GitHub.cli`) and `Allow auto-merge` on in the repository settings; it refuses
+before writing anything if either is missing, if an open pull request from the
+same branch targets a base other than `dev`, or if the remote already has the
+branch this run would create. A pull request already open against `dev` from
+this branch is armed as it is, title and body untouched. Because a push carries
+a branch rather than a commit, anything the branch already holds beyond `dev`
+is listed before the `[y/N]`. `-WhatIf -Publish` prints the branch, the title,
+the body and every command, and writes nothing.
 
 It refuses instead of guessing, and says which rule it refused under:
 a file the suite already names as runtime state; a `JsonSubset` payload, which

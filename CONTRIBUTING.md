@@ -240,11 +240,24 @@ has uncommitted changes, and never bypasses a hook. On `dev` it branches to
 `feature/windows-capture-<feature>` from a freshly fetched `origin/dev` (or a
 name given with `-Branch`) before it commits, reported in the plan before the
 `[y/N]`, so a capture run on `dev` never leaves a commit on that protected
-branch; on any other branch the commit stays there. It pushes nothing and
-opens no pull request, so promotion and release remain the flows above. Read
-its refusals rather than working around them, and read the hook output under
-its commit rather than assuming a hook ran: whether the POSIX hooks execute
-under Git for Windows is recorded in `docs/status.md` as an open question.
+branch; on any other branch the commit stays there. Read its refusals rather
+than working around them, and read the hook output under its commit rather
+than assuming a hook ran: whether the POSIX hooks execute under Git for
+Windows is recorded in `docs/status.md` as an open question.
+
+Add `-Publish` and that same confirmation pushes the branch, opens one pull
+request against `dev`, arms auto-merge and prints the pull-request URL. It is
+the Windows copy of `--publish` above and behaves the same way: it never waits
+on CI and never merges, a rejected push leaves every commit local on the named
+branch, and nothing retries with a bypass. It requires `gh` authenticated for
+github.com and `Allow auto-merge` on in the repository settings, and refuses
+before writing anything if either is missing, if a pull request from the same
+branch is open against another base, or if the remote already has the branch
+the run would create; a pull request already open against `dev` from that
+branch is armed unchanged. It pushes a branch rather than a commit, so it
+lists whatever the branch already carries beyond `dev` before the `[y/N]`.
+`-WhatIf -Publish` prints the branch, the title, the body and every command
+and writes nothing. Promotion to `master` and release remain the flows above.
 
 ## Common changes
 
