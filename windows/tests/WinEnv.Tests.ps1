@@ -1909,6 +1909,74 @@ Describe 'capture' {
             Should -Be "[wsl2]`nmemory=8GB"
     }
 
+    It 'pretty-prints a Json payload to two-space indentation and leaves every other parser as host bytes' {
+        # Compact, the shape most host applications actually write, and not
+        # already two-space, so a passing assertion cannot be an accident of
+        # ConvertTo-Json's own current default.
+        $compact = '{"a":1,"nested":{"b":[1,2],"empty":{},"list":[]},"str":"a{b}[c]\"d\\e"}'
+        $jsonPath = Join-Path $CaptureFiles 'pretty-direct.json'
+        [IO.File]::WriteAllText($jsonPath, "{`n}`n")
+
+        $pretty = ConvertTo-WinEnvPayloadText -Content $compact -PayloadPath $jsonPath -Parser 'Json'
+        $expected = "{`n" +
+        "  `"a`": 1,`n" +
+        "  `"nested`": {`n" +
+        "    `"b`": [`n" +
+        "      1,`n" +
+        "      2`n" +
+        "    ],`n" +
+        "    `"empty`": {},`n" +
+        "    `"list`": []`n" +
+        "  },`n" +
+        "  `"str`": `"a{b}[c]\`"d\\e`"`n" +
+        '}' + "`n"
+        $pretty | Should -Be $expected
+
+        # The point of ConvertTo-WinEnvCanonicalJson: reformatting is pure
+        # whitespace, so the pretty text and the compact host text it came
+        # from parse to the identical value.
+        (ConvertTo-WinEnvCanonicalJson $pretty) | Should -Be (ConvertTo-WinEnvCanonicalJson $compact)
+
+        # No Parser given at all -- every non-Json call site -- keeps today's
+        # behaviour: host bytes, untouched.
+        $iniPath = Join-Path $CaptureFiles 'pretty-direct.ini'
+        [IO.File]::WriteAllText($iniPath, "memory=4GB`n")
+        (ConvertTo-WinEnvPayloadText -Content 'memory=8GB' -PayloadPath $iniPath -Parser 'Ini') |
+            Should -Be "memory=8GB`n"
+        (ConvertTo-WinEnvPayloadText -Content 'memory=8GB' -PayloadPath $iniPath) |
+            Should -Be "memory=8GB`n"
+    }
+
+    It 'writes a captured Json payload pretty-printed and reports the next run unchanged' {
+        # The regression this issue exists for: a host application's own
+        # compact writer must not become the payload's diff.
+        $source = New-CapturePayload 'pretty.json' "{`n  `"a`": 1`n}`n"
+        $target = New-CaptureTarget 'pretty.json' '{"a":2,"b":{"c":[1,2,3]},"d":[]}'
+        $definition = New-CaptureDefinition -Id 'pretty' -Source $source -Target $target
+
+        $plan = Get-WinEnvCapturePlan -Definition $definition -RepositoryRoot $CaptureRoot `
+            -Build 22631 -HostPath $CaptureHost
+        $plan.Status | Should -Be 'Captured'
+        # Get-WinEnvCapturePlan's own Content stays the raw host text: only the
+        # write side pretty-prints, so a caller inspecting the plan still sees
+        # exactly what the host held.
+        $plan.Content | Should -Be '{"a":2,"b":{"c":[1,2,3]},"d":[]}'
+
+        [void](Save-WinEnvCapturedPayload -Plan $plan -RepositoryRoot $CaptureRoot)
+        $payloadPath = Join-Path $CaptureRoot $source
+        $written = Get-Content -LiteralPath $payloadPath -Raw -Encoding utf8
+        $written | Should -Be (
+            "{`n  `"a`": 2,`n  `"b`": {`n    `"c`": [`n      1,`n      2,`n      3`n    ]`n  },`n  `"d`": []`n}`n"
+        )
+
+        # Byte-stable across two runs: capturing again from the same,
+        # unchanged host reports nothing left to do, through the same
+        # canonical comparison -Check uses.
+        $second = Get-WinEnvCapturePlan -Definition $definition -RepositoryRoot $CaptureRoot `
+            -Build 22631 -HostPath $CaptureHost
+        $second.Status | Should -Be 'Unchanged'
+    }
+
     It 'restores a host directory the file spells in another case' {
         # Windows accepts more than one spelling of the same directory while
         # every comparison here is ordinal, so the restore matches
@@ -2024,9 +2092,12 @@ Describe 'capture' {
     It 'offers the documented selection and no unattended mode' {
         # The script is the part of capture that needs a terminal and a Git
         # repository, so this suite holds it to its interface rather than
-        # running it. Its rules are fixtured above, through the functions it
-        # calls; the guards it restates from tool/version-control/commit are
-        # exercised on the host, and docs/status.md records that boundary.
+        # running it end to end. Its selection and payload rules are fixtured
+        # above through the functions it calls, and so is its branch rule now
+        # (Describe 'capture branch', below) -- both against a throwaway
+        # repository, never this one. What remains genuinely host-only is
+        # whether the commit's pre-commit hook actually ran, which is what
+        # docs/status.md records as an open question.
         $capturePath = Join-Path $repositoryRoot 'tools\capture.ps1'
         (Test-Path -LiteralPath $capturePath -PathType Leaf) | Should -Be $true
 
@@ -2037,12 +2108,197 @@ Describe 'capture' {
         $parameters = @($ast.ParamBlock.Parameters | ForEach-Object { $_.Name.VariablePath.UserPath })
         $parameters | Should -Contain 'Feature'
         $parameters | Should -Contain 'Id'
+        $parameters | Should -Contain 'Branch'
         # -WhatIf comes from SupportsShouldProcess rather than from a parameter
         # of its own, and there is deliberately no -Yes, -Force or override.
         ($ast.ParamBlock.Attributes | ForEach-Object { $_.Extent.Text }) -join ' ' |
             Should -Match 'SupportsShouldProcess'
         $parameters | Should -Not -Contain 'Force'
         $parameters | Should -Not -Contain 'Yes'
+    }
+}
+
+Describe 'capture branch' {
+    <#
+        The branch rule tool/version-control/commit applies (#72), copied into
+        Get-WinEnvCaptureBranchPlan and New-WinEnvCaptureBranch (#77) because
+        capture.ps1 restates that helper's shape rather than calling it. Every
+        fixture below runs against a throwaway working copy and a throwaway
+        bare remote under $TestDrive, the way tool/version-control/test builds
+        one for the same rule in #72 -- never this repository's own dev.
+    #>
+    BeforeAll {
+        function New-BranchFixture {
+            # A repository with one commit on dev, pushed to a bare remote and
+            # fetched back, plus a master branch: exactly the shape
+            # Get-WinEnvCaptureBranchPlan and New-WinEnvCaptureBranch read.
+            $token = [guid]::NewGuid().ToString('N')
+            $remote = Join-Path $TestDrive "branch-remote-$token.git"
+            $repo = Join-Path $TestDrive "branch-repo-$token"
+            [void](New-Item -ItemType Directory -Path $repo -Force)
+
+            & git init -q --bare -b dev $remote | Out-Null
+            & git -C $repo init -q -b dev | Out-Null
+            & git -C $repo config user.name Fixture | Out-Null
+            & git -C $repo config user.email fixture@example.invalid | Out-Null
+            & git -C $repo remote add origin $remote | Out-Null
+            [IO.File]::WriteAllText((Join-Path $repo 'seed.txt'), 'seed')
+            & git -C $repo add -- seed.txt | Out-Null
+            & git -C $repo commit -q -m 'seed' | Out-Null
+            & git -C $repo push -q --set-upstream origin dev | Out-Null
+            & git -C $repo branch -q master | Out-Null
+
+            return [pscustomobject]@{ Repo = $repo; Remote = $remote }
+        }
+
+        function Get-FixtureBranches {
+            param([Parameter(Mandatory)][string] $Repo)
+            return @(& git -C $Repo for-each-ref --format='%(refname)' refs/heads)
+        }
+
+        function Get-FixtureCurrentBranch {
+            param([Parameter(Mandatory)][string] $Repo)
+            return (& git -C $Repo branch --show-current).Trim()
+        }
+    }
+
+    It 'refuses on master without reading the remote at all' {
+        $fixture = New-BranchFixture
+        & git -C $fixture.Repo switch -q master | Out-Null
+        # No origin/dev ref at all would make a remote-reading refusal true by
+        # accident; deleting it proves master is decided first.
+        & git -C $fixture.Repo update-ref -d refs/remotes/origin/dev | Out-Null
+
+        $plan = Get-WinEnvCaptureBranchPlan -RepositoryRoot $fixture.Repo -BranchName 'feature/windows-capture-font'
+        $plan.Status | Should -Be 'Refused'
+        $plan.Branch | Should -BeNullOrEmpty
+        $plan.Message | Should -Match 'master'
+    }
+
+    It 'commits where it is on a branch that is not dev or master' {
+        $fixture = New-BranchFixture
+        & git -C $fixture.Repo switch -q -c feature/windows-existing | Out-Null
+
+        $plan = Get-WinEnvCaptureBranchPlan -RepositoryRoot $fixture.Repo -BranchName 'feature/windows-capture-font'
+        $plan.Status | Should -Be 'Current'
+        $plan.Branch | Should -Be 'feature/windows-existing'
+    }
+
+    It 'refuses when origin/dev has never been fetched' {
+        $fixture = New-BranchFixture
+        & git -C $fixture.Repo update-ref -d refs/remotes/origin/dev | Out-Null
+
+        $plan = Get-WinEnvCaptureBranchPlan -RepositoryRoot $fixture.Repo -BranchName 'feature/windows-capture-font'
+        $plan.Status | Should -Be 'Refused'
+        $plan.Message | Should -Match 'origin/dev is unavailable'
+    }
+
+    It 'refuses when local dev has moved past a stale origin/dev' {
+        $fixture = New-BranchFixture
+        [IO.File]::WriteAllText((Join-Path $fixture.Repo 'seed.txt'), 'changed locally')
+        & git -C $fixture.Repo commit -q -a -m 'advance dev locally' | Out-Null
+
+        $plan = Get-WinEnvCaptureBranchPlan -RepositoryRoot $fixture.Repo -BranchName 'feature/windows-capture-font'
+        $plan.Status | Should -Be 'Refused'
+        $plan.Message | Should -Match 'dev is not at origin/dev'
+    }
+
+    It 'refuses a branch name that already exists' {
+        $fixture = New-BranchFixture
+        & git -C $fixture.Repo branch -q feature/windows-capture-font | Out-Null
+
+        $plan = Get-WinEnvCaptureBranchPlan -RepositoryRoot $fixture.Repo -BranchName 'feature/windows-capture-font'
+        $plan.Status | Should -Be 'Refused'
+        $plan.Message | Should -Match 'already exists'
+    }
+
+    It 'refuses a -Branch override that fails this repository''s naming policy' {
+        # The exact regression a review caught live: README's own example was
+        # -Branch fix/font, which tool/version-control/audit rejects for
+        # missing the windows- scope prefix. This must refuse before any read
+        # of the remote at all, the same as the master refusal does.
+        $fixture = New-BranchFixture
+        & git -C $fixture.Repo update-ref -d refs/remotes/origin/dev | Out-Null
+
+        $plan = Get-WinEnvCaptureBranchPlan -RepositoryRoot $fixture.Repo -BranchName 'fix/font'
+        $plan.Status | Should -Be 'Refused'
+        $plan.Branch | Should -BeNullOrEmpty
+        $plan.Message | Should -Match 'naming policy'
+        # Naming the pattern, not just the symptom, is the point: the operator
+        # can fix the name without having to go read tool/version-control/audit.
+        $plan.Detail | Should -Match ([regex]::Escape('(feature|fix)/(unixlike|windows|common|repository)-[a-z0-9][a-z0-9-]*'))
+    }
+
+    It 'accepts a -Branch override that follows the naming policy' {
+        $fixture = New-BranchFixture
+        $plan = Get-WinEnvCaptureBranchPlan -RepositoryRoot $fixture.Repo -BranchName 'fix/windows-font'
+        $plan.Status | Should -Be 'Create'
+        $plan.Branch | Should -Be 'fix/windows-font'
+
+        $originDev = (& git -C $fixture.Repo rev-parse refs/remotes/origin/dev).Trim()
+        $result = New-WinEnvCaptureBranch -RepositoryRoot $fixture.Repo -Branch $plan.Branch
+        $result.Status | Should -Be 'Created'
+        (Get-FixtureCurrentBranch -Repo $fixture.Repo) | Should -Be 'fix/windows-font'
+        (& git -C $fixture.Repo rev-parse HEAD).Trim() | Should -Be $originDev
+    }
+
+    It 'creates the named branch from origin/dev and leaves dev untouched' {
+        $fixture = New-BranchFixture
+        $plan = Get-WinEnvCaptureBranchPlan -RepositoryRoot $fixture.Repo -BranchName 'feature/windows-capture-font'
+        $plan.Status | Should -Be 'Create'
+
+        $devBefore = (& git -C $fixture.Repo rev-parse dev).Trim()
+        $originDev = (& git -C $fixture.Repo rev-parse refs/remotes/origin/dev).Trim()
+
+        $result = New-WinEnvCaptureBranch -RepositoryRoot $fixture.Repo -Branch $plan.Branch
+        $result.Status | Should -Be 'Created'
+        (Get-FixtureCurrentBranch -Repo $fixture.Repo) | Should -Be 'feature/windows-capture-font'
+        (& git -C $fixture.Repo rev-parse HEAD).Trim() | Should -Be $originDev
+        # dev itself never moved: this run's branch is a sibling of dev, not a
+        # fast-forward of it.
+        (& git -C $fixture.Repo rev-parse dev).Trim() | Should -Be $devBefore
+    }
+
+    It 'creates nothing when the fetch fails' {
+        $fixture = New-BranchFixture
+        & git -C $fixture.Repo remote set-url origin (Join-Path $TestDrive 'no-such-remote.git') | Out-Null
+        $before = Get-FixtureBranches -Repo $fixture.Repo
+
+        $result = New-WinEnvCaptureBranch -RepositoryRoot $fixture.Repo -Branch 'feature/windows-capture-font'
+        $result.Status | Should -Be 'Refused'
+        $result.Message | Should -Match 'fetch'
+        (Get-FixtureBranches -Repo $fixture.Repo) | Should -Be $before
+        (Get-FixtureCurrentBranch -Repo $fixture.Repo) | Should -Be 'dev'
+    }
+
+    It 'refuses and creates nothing when origin/dev moves while waiting for an answer' {
+        $fixture = New-BranchFixture
+        # A second clone pushes past the origin/dev this repo already fetched,
+        # standing in for another change landing while the operator reads the
+        # diff between the plan and the confirmation.
+        $other = Join-Path $TestDrive ('branch-race-' + [guid]::NewGuid().ToString('N'))
+        & git clone -q $fixture.Remote $other | Out-Null
+        & git -C $other config user.name Fixture | Out-Null
+        & git -C $other config user.email fixture@example.invalid | Out-Null
+        [IO.File]::WriteAllText((Join-Path $other 'seed.txt'), 'raced')
+        & git -C $other commit -q -a -m 'a change that landed during the wait' | Out-Null
+        & git -C $other push -q origin dev | Out-Null
+
+        $before = Get-FixtureBranches -Repo $fixture.Repo
+        $result = New-WinEnvCaptureBranch -RepositoryRoot $fixture.Repo -Branch 'feature/windows-capture-font'
+        $result.Status | Should -Be 'Refused'
+        $result.Message | Should -Match 'moved'
+        (Get-FixtureBranches -Repo $fixture.Repo) | Should -Be $before
+        (Get-FixtureCurrentBranch -Repo $fixture.Repo) | Should -Be 'dev'
+    }
+
+    It 'writes nothing under -WhatIf' {
+        $fixture = New-BranchFixture
+        $before = Get-FixtureBranches -Repo $fixture.Repo
+
+        [void](New-WinEnvCaptureBranch -RepositoryRoot $fixture.Repo -Branch 'feature/windows-capture-font' -WhatIf)
+        (Get-FixtureBranches -Repo $fixture.Repo) | Should -Be $before
+        (Get-FixtureCurrentBranch -Repo $fixture.Repo) | Should -Be 'dev'
     }
 }
 
