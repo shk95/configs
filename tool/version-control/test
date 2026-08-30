@@ -1055,6 +1055,27 @@ printf 'see /%s/%s\n' home eve >"$hygiene_repo/doc.md"
 printf 'doc.md\t/\n' >"$hygiene_repo/tool/version-control/hygiene.allow"
 hygiene_expect_pass 'exclusion, a broad literal that forgives one line'
 
+# A scan that could not run is a failure, not an empty result. git grep exits 1
+# for "nothing matched" and more than 1 for "the scan did not run", and
+# collapsing the two would retire an axis inside a green run. Corrupting the
+# fixture's own index reaches that path without a test-only hook in the check:
+# `git rev-parse --show-toplevel` still resolves, so the check starts and then
+# cannot read what it is meant to scan.
+hygiene_new
+printf 'clean\n' >"$hygiene_repo/file"
+git -C "$hygiene_repo" add -A
+printf 'GARBAGE-NOT-AN-INDEX' >"$hygiene_repo/.git/index"
+if hygiene_output=$( (cd "$hygiene_repo" && "$hygiene" 2>&1) ); then
+  printf '%s\n' "$hygiene_output" >&2
+  echo "hygiene reported verified after a scan that could not run" >&2
+  exit 1
+fi
+if ! printf '%s\n' "$hygiene_output" | grep -qF 'scan did not run'; then
+  printf '%s\n' "$hygiene_output" >&2
+  echo "hygiene did not distinguish a failed scan from an empty one" >&2
+  exit 1
+fi
+
 # The three evidence states. Nothing beyond a POSIX shell and Git is needed, so
 # 69 should never occur on this design; it is implemented and fixtured anyway,
 # because a future prerequisite must report through the contract rather than
