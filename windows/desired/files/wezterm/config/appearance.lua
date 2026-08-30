@@ -17,9 +17,11 @@ function module.apply_to_config(config)
   config.show_new_tab_button_in_tab_bar = false
   config.tab_max_width = 28
 
+  -- Copied from #35's Unix-like Catppuccin Latte tuning
+  -- (assets/wezterm/config/appearance.lua); this domain owns the copy from here.
   config.inactive_pane_hsb = {
-    saturation = 0.8,
-    brightness = 0.65,
+    saturation = 0.7,
+    brightness = 1.25,
   }
 
   config.window_frame = {
