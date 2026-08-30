@@ -129,13 +129,18 @@ application setting. State schema 2 records the selection; a schema 1 state is
 read as a full deployment, so a host that applied before this change keeps
 exactly what it has.
 
-Two boundaries are decisions rather than accidents. `terminal` requires `zellij`
-because `files/terminal/settings.json` is owned whole under `ExactJson` and
-carries a profile that launches `zellij.exe`; splitting that payload or adding a
-merge comparison mode was rejected as more expensive than installing one small
-package. `wezterm` requires no font feature because `files/wezterm/fonts.json`
-asks for JetBrainsMono, which this manifest does not install, and never for
-D2Koding. PowerToys stays one feature because
+Three boundaries are decisions rather than accidents. `terminal` requires
+`zellij` because `files/terminal/settings.json` is owned whole under
+`ExactJson` and carries a profile that launches `zellij.exe`; splitting that
+payload or adding a merge comparison mode was rejected as more expensive than
+installing one small package. `wezterm` requires `font` because
+`files/wezterm/fonts.json` falls back to `D2KodingLigature Nerd Font Mono` for
+Hangul coverage: JetBrainsMono and Symbols Nerd Font Mono have none, and the
+concrete alternative already on a default Windows install, Malgun Gothic, is
+not fixed-pitch and would misalign any line mixing Korean and Latin.
+Declaring the dependency, the same way `terminal` already does, was cheaper
+than that misalignment; a host selecting `wezterm` alone now installs `font`
+too, reported as `added by dependency`. PowerToys stays one feature because
 `files/powertoys/settings.json` already owns the per-module enable map; a
 second selection axis over the same modules would have two sources.
 
@@ -166,6 +171,87 @@ Windows tests target Pester 5.7.1 through `windows/tools/test.ps1`. The exact
 version is shared by local native verification and CI so Pester discovery,
 scope, and assertion behavior cannot silently change with a runner image. Test
 setup runs in `BeforeAll`, and assertions use the parameterized Pester 5 syntax.
+
+## Windows 10 support boundary
+
+Windows 10 was two reported symptoms rather than a recorded boundary. A sweep
+over three items of the manifest surface — the default terminal delegation and
+the two `Appx` items — assigns each exactly one of the evidence states defined
+in `docs/architecture.md`. All three are unverified on Windows 10, for two
+different reasons, and `bootstrap.ps1 -Check` reports none of them that way
+today.
+
+The default terminal delegation is a read-back, not a behavior check.
+`Set-WinEnvTerminalDelegation` writes `DelegationTerminal` and
+`DelegationConsole` under `HKCU:\Console\%%Startup`, and
+`Test-WinEnvTerminalDelegation` reads those two values back from the same key
+and compares them to `manifest.Terminal`. Microsoft states the condition under
+which the setting is supported: the default terminal application requires
+Windows 11 22H2, or Windows 10 22H2 at OS build 19045.3031 with KB5026435, and
+Windows Terminal 1.17 or later. The same document names this key, these two
+value names, and the two GUIDs this manifest carries for Windows Terminal, so
+the values written here are the documented ones. The boundary is therefore an
+OS build plus an application version, not a Windows release name. Below either
+half of it the host accepts the write, the read-back passes, and the setting is
+ignored: `-Check` exits 0 and never reports drift for a setting that does
+nothing. That false pass is the one outcome the evidence contract has no room
+for, and deciding the item against the documented condition rather than against
+the write (#53) is the fix. Above the boundary the read-back still observes no
+handoff. No Windows 10 host at build 19045.3031 was available, so the item is
+recorded unverified against its documentary source rather than closed as works.
+
+The two `Appx` items are supported on Windows 10 and undetectable there by the
+route this domain uses. Those are different statements and the record keeps
+them apart. PowerToys, which contains Command Palette, requires Windows 11 or
+Windows 10 version 2004 (20H1, build 19041) or newer; Windows Terminal requires
+Windows 10 2004 (build 19041) or later. Both therefore run on a supported
+Windows 10 host, and neither item is absent or unsupported there. What does not
+work is the question. `Get-AppxPackage` backs both the `powertoys` feature's
+`Microsoft.CommandPalette` precondition and the `Microsoft.WindowsTerminal`
+package's `Appx` detection, and Microsoft's Windows module compatibility table
+footnotes `Appx` with "Must use Compatibility Layer with PowerShell 7.1". This
+domain runs PowerShell 7 and both call sites pass
+`-ErrorAction SilentlyContinue`, so a route that cannot answer returns nothing
+and is read as absence. The precondition then reports the package missing and
+Apply refuses the feature; the package either reports missing, so Apply
+reinstalls an installed Windows Terminal, or disagrees with the WinGet
+registration and reports a detection conflict that blocks Apply. An
+unavailable route must report unverified, never absence. The open
+Appx-detection change (#37) owns that fix and moves both items to unverified;
+Windows version detection (#38) owns the mechanism the delegation condition
+needs, and this record builds none of its own.
+
+Declining `terminal` and `powertoys` at selection time removes all three items
+from a host's check: `setup.ps1` evaluates the delegation only when `terminal`
+is selected and a feature's preconditions only when that feature is selected,
+so `-Minimal` reaches none of them. That is a mitigation available today rather
+than a fix, and a `-Minimal` run is evidence for none of these three items.
+
+The sweep is deliberately narrow and its edge is part of the record. It did not
+examine the `WinGet` and `Command` detections, the font download and its
+registry registration, the PowerToys lifecycle, the managed-file targets and
+their packaged `LocalState` paths, an unpackaged Windows Terminal installation,
+or PowerShell 7 itself; `.wslconfig` belongs to #38. Windows releases older
+than 10, Windows Server, and non-x64 hosts stay out of scope. Those items are
+not known to be safe on Windows 10; they are unexamined.
+
+The repository maintainer owns this boundary. It is a manual invariant: no
+check can produce the record, and `-Check` has no way to express its conclusion
+today — the Windows half of the staged migration declared in "Check evidence
+states" below — because it exits 0 or 2 and reports its `unverified` list
+without letting it affect the status. #54 owns that conversion.
+
+Sources for the claims above:
+
+- Group Policy for Windows Terminal —
+  https://learn.microsoft.com/en-us/windows/terminal/group-policy
+- Windows Terminal installation —
+  https://learn.microsoft.com/en-us/windows/terminal/install
+- How to Install PowerToys on Windows 11 and Windows 10 —
+  https://learn.microsoft.com/en-us/windows/powertoys/install
+- PowerShell 7 module compatibility (Windows) —
+  https://learn.microsoft.com/en-us/powershell/windows/module-compatibility
+- Windows Terminal product repository — https://github.com/microsoft/terminal
 
 ## PowerShell 7 ownership
 
