@@ -185,6 +185,12 @@ try {
     if ($fontSelected) {
         $fontStatus = Get-WinEnvFontStatus -Font $manifest.Font
         if ($fontStatus.Conflict) { $drift.Add('D2Koding font partial/conflicting installation') }
+        elseif ($fontStatus.Incomplete) {
+            # Named apart from a conflict on purpose: this host has nothing
+            # wrong on it, the manifest simply lists faces it has not installed
+            # yet, and Apply installs them.
+            $drift.Add("D2Koding font incomplete: $($fontStatus.InstalledFaceCount) of $($fontStatus.FaceCount) faces installed")
+        }
         elseif ($fontStatus.RegistrationRepairable) { $drift.Add('D2Koding font registration') }
         elseif ($fontStatus.Missing) { $drift.Add('D2Koding font missing') }
         elseif (-not (Test-WinEnvWindowsTerminalFontCache -FontRegisteredAtUtc $fontRegisteredAtUtc)) {
@@ -257,6 +263,14 @@ try {
             Install-WinEnvFont -Font $manifest.Font
             $fontRegisteredAtUtc = [DateTimeOffset]::UtcNow.ToString('o')
             $changed.Add('D2Koding font')
+        }
+        elseif ($fontStatus.Incomplete) {
+            # The same installer: it fetches the pinned archive, leaves every
+            # face this host already holds byte for byte alone, and writes and
+            # registers the rest.
+            Install-WinEnvFont -Font $manifest.Font
+            $fontRegisteredAtUtc = [DateTimeOffset]::UtcNow.ToString('o')
+            $changed.Add('D2Koding font missing faces')
         }
         elseif ($fontStatus.RegistrationRepairable) {
             Register-WinEnvFont -Font $manifest.Font

@@ -20,6 +20,19 @@ $script:WinEnvComparisonMode = @('Text', 'ExactJson', 'JsonSubset', 'ExactJsonWi
 $script:DefaultAppxQuery = { param([string] $PackageName) Get-AppxPackage -Name $PackageName -ErrorAction SilentlyContinue }
 $script:DefaultRegistrationQuery = { param([string] $PackageId) Get-WinGetRegistration -Id $PackageId }
 
+# The three host observations the font state is derived from, as seams for the
+# same reason as the two above: the states a font can be in outnumber the ones
+# any single host can be put into, and the one this repository got wrong is a
+# state no developer machine reproduces on demand.
+$script:UserFontRegistryPath = 'HKCU:\Software\Microsoft\Windows NT\CurrentVersion\Fonts'
+$script:SystemFontRegistryPath = 'HKLM:\Software\Microsoft\Windows NT\CurrentVersion\Fonts'
+$script:DefaultFontDirectoryQuery = { Join-Path $env:LOCALAPPDATA 'Microsoft\Windows\Fonts' }
+$script:DefaultFontRegistryQuery = {
+    param([string] $Path)
+    if (Test-Path $Path) { Get-ItemProperty -Path $Path } else { $null }
+}
+$script:DefaultDirectWriteQuery = { param([string] $FamilyName) Test-WinEnvDirectWriteFont -FamilyName $FamilyName }
+
 function Get-WinEnvManifest {
     param([Parameter(Mandatory)][string] $Path)
 
@@ -921,41 +934,79 @@ function Test-WinEnvWindowsTerminalFontCache {
 }
 
 function Get-WinEnvFontStatus {
-    param([Parameter(Mandatory)][hashtable] $Font)
+    # Five states, because "this host has some of the faces the manifest lists"
+    # and "something foreign is sitting under the manifest's names" are
+    # different claims and only the second is a reason to refuse an Apply. The
+    # manifest's file list grows whenever a face is added to it, and every host
+    # that installed the font before that edit then holds a valid strict subset
+    # of it. That is Incomplete: install the rest. A file with a different
+    # hash, a registration pointing somewhere else, or a system-wide install of
+    # the same family stays Conflict, which nothing here overwrites.
+    #
+    # Position is declared so the query seams cannot be bound positionally by
+    # accident; once one parameter has an explicit position the rest are
+    # name-only.
+    param(
+        [Parameter(Mandatory, Position = 0)][hashtable] $Font,
+        [scriptblock] $FontDirectoryQuery = $script:DefaultFontDirectoryQuery,
+        [scriptblock] $FontRegistryQuery = $script:DefaultFontRegistryQuery,
+        [scriptblock] $DirectWriteQuery = $script:DefaultDirectWriteQuery
+    )
 
-    $fontDirectory = Join-Path $env:LOCALAPPDATA 'Microsoft\Windows\Fonts'
-    $registryPath = 'HKCU:\Software\Microsoft\Windows NT\CurrentVersion\Fonts'
-    $registry = if (Test-Path $registryPath) { Get-ItemProperty -Path $registryPath } else { $null }
-    $systemRegistryPath = 'HKLM:\Software\Microsoft\Windows NT\CurrentVersion\Fonts'
-    $systemRegistry = if (Test-Path $systemRegistryPath) { Get-ItemProperty -Path $systemRegistryPath } else { $null }
-    $systemFamilyDetected = [bool]($systemRegistry -and ($systemRegistry.PSObject.Properties.Name | Where-Object { $_ -like "$($Font.Name)*" }))
+    $fontDirectory = & $FontDirectoryQuery
+    $registry = & $FontRegistryQuery $script:UserFontRegistryPath
+    $systemRegistry = & $FontRegistryQuery $script:SystemFontRegistryPath
+    # Enumerated as a collection rather than through a member-access
+    # projection: a key that carries no value at all is a real state on a host
+    # that has never installed a font, and the projection cannot describe it.
+    $systemFamilyDetected = [bool]($systemRegistry -and (@($systemRegistry.PSObject.Properties) |
+                Where-Object { $_.Name -like "$($Font.Name)*" }))
     $validFiles = 0
     $validRegistrations = 0
+    $invalidFiles = 0
+    $foreignRegistrations = 0
     $artifacts = 0
     foreach ($fontFile in $Font.Files) {
         $path = Join-Path $fontDirectory $fontFile.FileName
         $filePresent = Test-Path -LiteralPath $path -PathType Leaf
         $property = if ($registry) { $registry.PSObject.Properties[$fontFile.RegistryName] } else { $null }
         if ($filePresent -or $property) { $artifacts++ }
+        # A registration under this manifest's own name that names any other
+        # path is the case the refusal exists for, whether or not the file it
+        # names exists. A registration naming our own path whose file is gone
+        # is not: writing that file back is exactly what Apply does.
+        if ($property -and [string]$property.Value -ine $path) { $foreignRegistrations++ }
         if (-not $filePresent) { continue }
 
         $hash = (Get-FileHash -LiteralPath $path -Algorithm SHA256).Hash.ToLowerInvariant()
-        if ($hash -ne $fontFile.Sha256) { continue }
+        if ($hash -ne $fontFile.Sha256) { $invalidFiles++; continue }
         $validFiles++
         if ($property -and [string]$property.Value -ieq $path) { $validRegistrations++ }
     }
 
-    $directWriteDetected = Test-WinEnvDirectWriteFont -FamilyName $Font.Name
+    $directWriteDetected = [bool](& $DirectWriteQuery $Font.Name)
     $registered = $systemFamilyDetected -or $validRegistrations -eq $Font.Files.Count
     $installed = $registered -and $directWriteDetected
     $registrationRepairable = -not $systemFamilyDetected -and $validFiles -eq $Font.Files.Count -and $validRegistrations -ne $Font.Files.Count
-    $conflict = -not $installed -and -not $registrationRepairable -and ($artifacts -gt 0 -or $systemFamilyDetected)
+    # Every artifact this host holds is one of ours and valid, at least one is
+    # there, and at least one listed face is not fully installed yet. Nothing
+    # has to be overwritten to finish that, so nothing is refused. Registration
+    # repair is decided first: a host holding every file is that narrower case,
+    # not this one.
+    $incomplete = -not $installed -and -not $registrationRepairable -and -not $systemFamilyDetected -and
+        $invalidFiles -eq 0 -and $foreignRegistrations -eq 0 -and
+        $artifacts -gt 0 -and $validRegistrations -lt $Font.Files.Count
+    $conflict = -not $installed -and -not $registrationRepairable -and -not $incomplete -and
+        ($artifacts -gt 0 -or $systemFamilyDetected)
     [pscustomobject]@{
         Installed              = $installed
-        Missing                = (-not $installed -and -not $registrationRepairable -and -not $conflict)
+        Missing                = (-not $installed -and -not $registrationRepairable -and -not $incomplete -and -not $conflict)
         Conflict               = $conflict
+        Incomplete             = $incomplete
         RegistrationRepairable = $registrationRepairable
-        DirectWriteDetected     = $directWriteDetected
+        DirectWriteDetected    = $directWriteDetected
+        InstalledFaceCount     = $validRegistrations
+        FaceCount              = $Font.Files.Count
     }
 }
 
@@ -985,12 +1036,23 @@ namespace WinEnv
 '@
     }
 
+    # Every listed file is validated, because a file that is not the one the
+    # manifest pins must stop the run whether or not it is registered. Only a
+    # registration that is not already this exact path is written: this runs
+    # over faces a previous Apply already registered, and desired state that is
+    # already met is not rewritten. Loading the resource is not a registration
+    # and is repeated for every face, so the running session resolves the whole
+    # family rather than only the part of it this Apply added.
+    $registry = if (Test-Path $registryPath) { Get-ItemProperty -Path $registryPath } else { $null }
     foreach ($fontFile in $Font.Files) {
         $path = Join-Path $fontDirectory $fontFile.FileName
         if (-not (Test-Path -LiteralPath $path -PathType Leaf)) { throw "Font file is missing: $path" }
         $hash = (Get-FileHash -LiteralPath $path -Algorithm SHA256).Hash.ToLowerInvariant()
         if ($hash -ne $fontFile.Sha256) { throw "Font file hash mismatch for $($fontFile.FileName)." }
-        Set-ItemProperty -Path $registryPath -Name $fontFile.RegistryName -Value $path -Type String
+        $property = if ($registry) { $registry.PSObject.Properties[$fontFile.RegistryName] } else { $null }
+        if (-not ($property -and [string]$property.Value -ieq $path)) {
+            Set-ItemProperty -Path $registryPath -Name $fontFile.RegistryName -Value $path -Type String
+        }
         if ([WinEnv.NativeFont]::AddFontResourceEx($path, 0, [IntPtr]::Zero) -eq 0) {
             throw "Windows could not load font file '$path'."
         }
@@ -1014,11 +1076,20 @@ function Install-WinEnvFont {
 
         $fontDirectory = Join-Path $env:LOCALAPPDATA 'Microsoft\Windows\Fonts'
         if (-not (Test-Path $fontDirectory)) { [void](New-Item -ItemType Directory -Path $fontDirectory -Force) }
+        # This also runs for a host that is only missing some of the faces, so
+        # a face that is already there byte for byte is left alone rather than
+        # rewritten: Windows holds an installed font file open, and a copy over
+        # it can fail for a file that needed no change at all.
         foreach ($fontFile in $Font.Files) {
+            $destination = Join-Path $fontDirectory $fontFile.FileName
+            if (Test-Path -LiteralPath $destination -PathType Leaf) {
+                $currentHash = (Get-FileHash -LiteralPath $destination -Algorithm SHA256).Hash.ToLowerInvariant()
+                if ($currentHash -eq $fontFile.Sha256) { continue }
+            }
             $source = Join-Path $temporaryDirectory $fontFile.FileName
             $sourceHash = (Get-FileHash -LiteralPath $source -Algorithm SHA256).Hash.ToLowerInvariant()
             if ($sourceHash -ne $fontFile.Sha256) { throw "Font file hash mismatch for $($fontFile.FileName)." }
-            Copy-Item -LiteralPath $source -Destination (Join-Path $fontDirectory $fontFile.FileName)
+            Copy-Item -LiteralPath $source -Destination $destination
         }
         Register-WinEnvFont -Font $Font
     }
