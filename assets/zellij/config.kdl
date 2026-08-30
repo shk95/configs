@@ -143,3 +143,28 @@ attach_to_session true
 on_force_close "detach"
 show_startup_tips false
 show_release_notes false
+
+// Colours follow the host terminal rather than being fixed here. Zellij's
+// built-in fallback palette is dark — `default_palette()` in zellij-utils is
+// literally `theme_hue: ThemeHue::Dark` — so declaring nothing keeps the pane
+// frames, tab bar and status line dark inside a light terminal. Naming one
+// light theme instead is not right either: modules/zellij.nix copies this file
+// into every Unix-like home, and the WSL homes render inside Windows Terminal,
+// whose scheme is declared in the Windows domain and is still dark.
+//
+// Setting both `theme_dark` and `theme_light` is the answer. With the pair
+// configured, zellij swaps palettes from the host terminal's own colour-scheme
+// report (CSI 2031 / DSR 997); with only one of them it ignores both. WezTerm
+// and Ghostty report, so a graphical host gets `catppuccin-latte`, the light
+// member of the family those two terminals are set to. A terminal that never
+// reports leaves zellij on its dark fallback, which is the correct answer for
+// the terminal that is still dark — `catppuccin-mocha` is named here as that
+// branch of a terminal-driven pair, not as a theme this repository selects.
+// Both names resolve against zellij's built-in themes, so neither needs a
+// `themes` block.
+//
+// One consequence worth knowing when the Windows terminal turns light: this
+// only tracks it if Windows Terminal reports its palette. If it does not, a
+// static `theme` will have to be added here at that point.
+theme_dark "catppuccin-mocha"
+theme_light "catppuccin-latte"

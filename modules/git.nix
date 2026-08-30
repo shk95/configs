@@ -60,7 +60,13 @@ in {
             br = "branch";
             co = "checkout";
             st = "status";
-            ls = ''log --pretty=format:"%C(yellow)%h%Cred%d\\ %Creset%s%Cblue\\ [%cn]" --decorate'';
+            # The hash is `%C(bold cyan)` rather than `%C(yellow)`. A yellow
+            # legible on a dark terminal is by construction a pale tint, and
+            # this format string now has to survive a light one as well —
+            # Catppuccin Latte's yellow is #df8e1d on a #eff1f5 page. Cyan is a
+            # mid-tone in both directions and stays distinct from the `%Cred`
+            # refs and the `%Cblue` author beside it.
+            ls = ''log --pretty=format:"%C(bold cyan)%h%Cred%d\\ %Creset%s%Cblue\\ [%cn]" --decorate'';
             cm = "commit -m";
             ca = "commit -am";
             dc = "diff --cached";
@@ -108,9 +114,48 @@ in {
         enableGitIntegration = true;
         options = {
           line-numbers = true;
+
+          # Kept, and now a decision rather than an inherited line. delta
+          # paints the added and removed backgrounds itself instead of
+          # deferring to the terminal's sixteen colours, because no ANSI colour
+          # is faint enough to sit behind a whole diff line; `true-color` is
+          # what lets it choose one. That is the opposite bargain from
+          # modules/bat.nix, and the difference is deliberate: bat can defer
+          # because syntax highlighting is foreground-only, delta cannot
+          # because its subject is a background.
           true-color = "always";
+
+          # Deliberately no `light` and no `syntax-theme` in this class.
+          # `programs.delta` is in `homeManager.shared`, which also reaches the
+          # WSL homes, and those render inside Windows Terminal — a scheme
+          # declared in the Windows domain, unreadable from here, and still
+          # dark. delta's own defaults are tuned for a dark background, so they
+          # remain the honest choice for this class. The light half is declared
+          # in `homeManager.desktop` below, where the terminal is one this
+          # repository sets.
         };
       };
+    };
+  };
+
+  # The graphical Unix-like homes. Here the background is a value this flake
+  # declares — WezTerm and Ghostty are both set to Catppuccin Latte — rather
+  # than one it has to guess, which is what makes a light-tuned pager legal
+  # here and not in `shared`.
+  modules.homeManager.desktop = {
+    programs.delta.options = {
+      # Not cosmetic: `light` is how delta picks the backgrounds it paints for
+      # added and removed lines. Left unset it assumes dark and lays dark green
+      # and dark red bands across a pale page, which is the highest-traffic
+      # coloured output in this repository getting it wrong on every `git
+      # diff`, `git show` and `git log -p`.
+      light = true;
+
+      # The syntax colours that sit on top of those bands, from the same family
+      # as the two terminals. delta bundles bat's themes; `delta
+      # --list-syntax-themes` on the pinned delta 0.19.2 lists "Catppuccin
+      # Latte" among the light ones.
+      syntax-theme = "Catppuccin Latte";
     };
   };
 }

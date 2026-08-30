@@ -55,7 +55,13 @@ _: {
           stashed = "\\$$count";
         };
 
-        cmd_duration.style = "bold magenta";
+        # Default is `bold yellow`. Magenta was legible but thin once the
+        # background went light — Catppuccin Latte's is #ea76cb on a #eff1f5
+        # page — and yellow is worse, because a yellow that reads on black is
+        # by construction a pale tint. Cyan is a mid-tone in both directions:
+        # #179299 on Latte, and bright enough on the dark Windows Terminal the
+        # WSL homes still render in, which this class also reaches.
+        cmd_duration.style = "bold cyan";
 
         # This module was configured, dead, *and* wrong — two independent defects
         # that hid each other. `disabled = true` is its default, so nothing here
@@ -64,11 +70,24 @@ _: {
         # and nothing else, so once enabled that format resolved to a bare `:`.
         # The clock shape belongs in `time_format`, which is strftime — `%R` is
         # `%H:%M`.
+        #
+        # A third defect, and the one this repository's light default exposes:
+        # the style was a bold `white`, which is invisible on a light
+        # background — Latte's ANSI white is #acb0be on a #eff1f5 page — and
+        # starship's own default here, `bold yellow`, is barely better. `bold`
+        # with no colour is the fix rather than a half-written style: it uses
+        # the terminal's own foreground, which is the one colour guaranteed to
+        # contrast with the terminal's own background, whichever background
+        # that turns out to be. That is the same deference `modules/bat.nix`
+        # makes with its `ansi` theme, and the only kind this class can
+        # honestly make while it also reaches the WSL homes. `format`,
+        # `time_format` and `disabled` are untouched; only the colour was
+        # wrong.
         time = {
           disabled = false;
           format = "[$time]($style) ";
           time_format = "%R";
-          style = "bold white";
+          style = "bold";
         };
 
         # By default this module reads IN_NIX_SHELL and nothing else, and the two
