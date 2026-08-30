@@ -16,7 +16,7 @@ BeforeAll {
     function New-FeatureManifest {
         param([hashtable] $Override = @{})
         $manifest = @{
-            SchemaVersion  = 2
+            SchemaVersion  = 3
             ProjectVersion = '1.0.0'
             Features       = @(
                 @{ Id = 'core'; Name = 'Core'; Required = $true },
@@ -63,10 +63,10 @@ BeforeAll {
 }
 
 Describe 'win-env manifest' {
-    It 'loads schema 2 and the desired-state compatibility version' {
+    It 'loads schema 3 and the desired-state compatibility version' {
         $manifest = Get-WinEnvManifest -Path (Join-Path $desiredStateRoot 'manifest.json')
-        $manifest.SchemaVersion | Should -Be 2
-        $manifest.ProjectVersion | Should -Be '0.3.0'
+        $manifest.SchemaVersion | Should -Be 3
+        $manifest.ProjectVersion | Should -Be '0.4.0'
     }
 
     It 'pins the v3.5.0 D2Koding asset and hashes' {
@@ -90,16 +90,47 @@ Describe 'win-env manifest' {
         ($terminal.profiles.list | Where-Object name -eq 'Zellij Workspace').guid | Should -Be $manifest.Terminal.ZellijProfileGuid
     }
 
-    It 'manages the current Windows-side WSL configuration' {
+    It 'splits the Windows-side WSL configuration by the build each key needs' {
+        # Reworked from the single-payload assertion this replaces. The four
+        # keys did not all move together, so asserting them against one source
+        # would now pin the wrong thing: three carry Microsoft's "require
+        # Windows 11 version 22H2 or higher" footnote and one carries no
+        # footnote at all. Every assertion below traces to a row of the per-key
+        # gate table in docs/status.md.
         $manifest = Get-WinEnvManifest -Path (Join-Path $desiredStateRoot 'manifest.json')
-        $wsl = $manifest.ManagedFiles | Where-Object Id -eq 'WslConfig'
+        $wsl = $manifest.ManagedFiles | Where-Object Id -eq 'wslConfig'
         $wsl.Target | Should -Be '{USERPROFILE}\.wslconfig'
-        $content = Get-Content (Join-Path $desiredStateRoot $wsl.Source) -Raw
-        $content | Should -Match '(?m)^networkingMode=Mirrored$'
-        $content | Should -Not -Match '(?m)^firewall\s*='
-        $content | Should -Match '(?m)^hostAddressLoopback=true$'
-        $content | Should -Match '(?m)^autoMemoryReclaim=Gradual$'
-        $content | Should -Match '(?m)^bestEffortDnsParsing=true$'
+        $wsl.Feature | Should -Be 'wsl'
+        $wsl.Parser | Should -Be 'Ini'
+        # One entry with alternative sources, not two entries competing for one
+        # Target, so drift, backup and deselection still see one logical file.
+        $wsl.ContainsKey('Source') | Should -Be $false
+        $wsl.Sources.Count | Should -Be 2
+
+        $mirrored = Get-Content (Join-Path $desiredStateRoot 'files/wsl/mirrored-networking.wslconfig') -Raw
+        $nat = Get-Content (Join-Path $desiredStateRoot 'files/wsl/nat-networking.wslconfig') -Raw
+
+        # At or above the bound: every key, and this is the content this
+        # repository already deployed.
+        $mirrored | Should -Match '(?m)^networkingMode=Mirrored$'
+        $mirrored | Should -Match '(?m)^hostAddressLoopback=true$'
+        $mirrored | Should -Match '(?m)^bestEffortDnsParsing=true$'
+        $mirrored | Should -Match '(?m)^autoMemoryReclaim=Gradual$'
+
+        # Below the bound: no key gated on Windows 11 22H2 survives, including
+        # networkingMode in any spelling, because the host would ignore it in
+        # silence rather than report it.
+        $nat | Should -Not -Match '(?m)^networkingMode='
+        $nat | Should -Not -Match '(?m)^hostAddressLoopback='
+        $nat | Should -Not -Match '(?m)^bestEffortDnsParsing='
+        # autoMemoryReclaim carries no Windows footnote: it is gated by the
+        # installed WSL application, so it stays. Dropping it here would remove
+        # a setting the host honours, a regression dressed as a version fix.
+        $nat | Should -Match '(?m)^autoMemoryReclaim=Gradual$'
+
+        # AGENTS.md: no .wslconfig firewall value without explicit direction.
+        $mirrored | Should -Not -Match '(?m)^firewall\s*='
+        $nat | Should -Not -Match '(?m)^firewall\s*='
     }
 }
 
@@ -247,20 +278,27 @@ Describe 'managed sources' {
         # No Parser is excluded any more. A source whose parser is unavailable
         # reports a reason instead of throwing, so the suite no longer has to
         # carry a list of the formats this host might be unable to check.
+        # Every declared variant, matching check-desired-state.ps1: a managed
+        # file whose source depends on the Windows build has a payload that is
+        # never this host's answer, and it must still be parsed here.
         $manifest = Get-WinEnvManifest -Path (Join-Path $desiredStateRoot 'manifest.json')
         foreach ($definition in $manifest.ManagedFiles) {
-            { Test-WinEnvSourceFile -Definition $definition -RepositoryRoot $desiredStateRoot } |
-                Should -Not -Throw
+            foreach ($variant in (Get-WinEnvManagedFileVariant -Definition $definition)) {
+                { Test-WinEnvSourceFile -Definition $variant -RepositoryRoot $desiredStateRoot } |
+                    Should -Not -Throw
+            }
         }
     }
 
     It 'names the missing parser rather than reporting the source as valid' {
         $manifest = Get-WinEnvManifest -Path (Join-Path $desiredStateRoot 'manifest.json')
         foreach ($definition in $manifest.ManagedFiles) {
-            $reason = Test-WinEnvSourceFile -Definition $definition -RepositoryRoot $desiredStateRoot
-            if ($null -ne $reason) {
-                $reason | Should -BeOfType [string]
-                $reason | Should -Not -BeNullOrEmpty
+            foreach ($variant in (Get-WinEnvManagedFileVariant -Definition $definition)) {
+                $reason = Test-WinEnvSourceFile -Definition $variant -RepositoryRoot $desiredStateRoot
+                if ($null -ne $reason) {
+                    $reason | Should -BeOfType [string]
+                    $reason | Should -Not -BeNullOrEmpty
+                }
             }
         }
     }
@@ -314,13 +352,48 @@ Describe 'managed sources' {
     }
 
     It 'declares every deployable desired-state payload exactly once' {
+        # Reworked for schema 3, not loosened. A managed file may now declare
+        # alternative sources selected by the host's Windows build, so the
+        # declared set is every variant of every entry rather than one scalar
+        # Source per entry. Reading $manifest.ManagedFiles.Source instead would
+        # have returned nothing for a conditional entry and silently stopped
+        # seeing both of its payloads. The match is still exact in both
+        # directions, so an undeclared payload and a declared-but-absent one
+        # each still fail.
         $manifest = Get-WinEnvManifest -Path (Join-Path $desiredStateRoot 'manifest.json')
-        $declared = @($manifest.ManagedFiles.Source | ForEach-Object { $_.Replace('\', '/') } | Sort-Object)
+
+        # Payload -> owning feature. Building the map rather than a flat list
+        # is what keeps the "exactly once" and the "exactly one owning feature"
+        # halves of this assertion enforced together: a second declaration of
+        # the same payload, by the same entry or by another one, collides here
+        # before the tree comparison below ever runs.
+        $declaredFeature = @{}
+        foreach ($definition in $manifest.ManagedFiles) {
+            foreach ($variant in (Get-WinEnvManagedFileVariant -Definition $definition)) {
+                $source = ([string]$variant.Source).Replace('\', '/')
+                $declaredFeature.ContainsKey($source) | Should -Be $false
+                ([string]$variant.Feature) | Should -Not -BeNullOrEmpty
+                $declaredFeature[$source] = [string]$variant.Feature
+            }
+        }
+        $declared = @($declaredFeature.Keys | Sort-Object)
+
         $filesRoot = Join-Path $desiredStateRoot 'files'
-        $actual = @(Get-ChildItem $filesRoot -File -Recurse | Where-Object Extension -ne '.example' | ForEach-Object {
+        # -Force so a payload whose name begins with a dot is scanned. Without
+        # it Get-ChildItem skips a hidden file on Windows and a dotfile on
+        # Linux alike, which is why files/wsl/.wslconfig was the one payload
+        # this assertion never saw. Nothing under files/ is hidden today; the
+        # switch keeps that from being load-bearing.
+        $actual = @(Get-ChildItem $filesRoot -File -Recurse -Force | Where-Object Extension -ne '.example' | ForEach-Object {
             'files/' + [IO.Path]::GetRelativePath($filesRoot, $_.FullName).Replace('\', '/')
         } | Sort-Object)
         ($declared -join "`n") | Should -Be ($actual -join "`n")
+
+        # Both .wslconfig variants belong to one entry, so they share one
+        # Feature by construction rather than by agreement between two entries
+        # that could drift apart.
+        $declaredFeature['files/wsl/mirrored-networking.wslconfig'] | Should -Be 'wsl'
+        $declaredFeature['files/wsl/nat-networking.wslconfig'] | Should -Be 'wsl'
     }
 }
 
@@ -646,6 +719,223 @@ Describe 'Appx detection capability' {
         # It promotes nothing that was decided.
         (Get-WinEnvCheckStatus -DriftCount 0 -UnverifiedCount 0 -RequireNative) | Should -Be 0
         (Get-WinEnvCheckStatus -DriftCount 1 -UnverifiedCount 0 -RequireNative) | Should -Be 2
+    }
+}
+
+Describe 'Windows build condition' {
+    BeforeAll {
+        # The bound for this payload's option set is Windows 11 22H2, build
+        # 22621. Every build below it is one payload and every build at or
+        # above it is the other.
+        #
+        # All four builds below report OSVersion.Version.Major = 10, which is
+        # precisely why the major version is never compared: no major-version
+        # test can tell 19045 from 22000 from 22631, and the cases here demand
+        # two different answers from builds that share a major version. A
+        # Windows 11 21H2 host is unmistakably Windows 11 and still belongs on
+        # the lower side, so a Windows 10 versus Windows 11 test would be wrong
+        # in the same way.
+        $Windows10_22H2 = 19045
+        $Windows11_21H2 = 22000
+        $Windows11_22H2 = 22621
+        $Windows11_23H2 = 22631
+
+        $Upper = 'files/wsl/mirrored-networking.wslconfig'
+        $Lower = 'files/wsl/nat-networking.wslconfig'
+
+        function New-ConditionalFile {
+            param([array] $Sources)
+            return @{
+                Id      = 'conditional'
+                Feature = 'core'
+                Compare = 'Text'
+                Parser  = 'Ini'
+                Target  = 'target'
+                Sources = $Sources
+            }
+        }
+
+        function New-WslFile {
+            $definition = New-ConditionalFile -Sources @(
+                @{ MinimumBuild = 22621; Source = 'files/wsl/mirrored-networking.wslconfig' },
+                @{ Source = 'files/wsl/nat-networking.wslconfig' })
+            $definition.Id = 'wslConfig'
+            $definition.Feature = 'wsl'
+            return $definition
+        }
+    }
+
+    It 'resolves a host at or above the 22H2 bound to the mirrored payload' {
+        $definition = New-WslFile
+        (Resolve-WinEnvManagedFile -Definition $definition -Build $Windows11_23H2).Source | Should -Be $Upper
+        # The bound itself is inclusive: 22H2 "or higher".
+        (Resolve-WinEnvManagedFile -Definition $definition -Build $Windows11_22H2).Source | Should -Be $Upper
+    }
+
+    It 'resolves a host below the bound, Windows 10 or Windows 11 21H2, to the NAT payload' {
+        $definition = New-WslFile
+        (Resolve-WinEnvManagedFile -Definition $definition -Build $Windows10_22H2).Source | Should -Be $Lower
+        # Windows 11, and still below the bound. This is the case that makes a
+        # release-name split wrong rather than merely imprecise.
+        (Resolve-WinEnvManagedFile -Definition $definition -Build $Windows11_21H2).Source | Should -Be $Lower
+    }
+
+    It 'resolves an undetectable build to the payload every supported build honours' {
+        # Not an arbitrary default: the last variant is the only one whose
+        # every key is honoured on every supported build, so a key is never
+        # deployed to a host that was not shown to honour it.
+        (Resolve-WinEnvManagedFile -Definition (New-WslFile) -Build $null).Source | Should -Be $Lower
+    }
+
+    It 'answers with a build number or an honest null, never a major version' {
+        $build = Get-WinEnvWindowsBuild
+        if ([Environment]::OSVersion.Platform -eq [System.PlatformID]::Win32NT) {
+            $build | Should -Be ([Environment]::OSVersion.Version.Build)
+            $build | Should -BeGreaterThan 0
+        }
+        else {
+            # Off Windows the honest answer is that the build is unknown, not a
+            # guess and not a foreign kernel's build number. This is also what
+            # makes the undetectable branch reachable from a Unix-like clone.
+            ($null -eq $build) | Should -Be $true
+        }
+    }
+
+    It 'leaves an unconditional managed file exactly as declared' {
+        $definition = @{ Id = 'plain'; Feature = 'core'; Source = 'files/plain.ini'; Target = 'target'; Compare = 'Text'; Parser = 'Ini' }
+        (Resolve-WinEnvManagedFile -Definition $definition -Build $Windows10_22H2).Source | Should -Be 'files/plain.ini'
+        (Resolve-WinEnvManagedFile -Definition $definition -Build $null).Source | Should -Be 'files/plain.ini'
+        @(Get-WinEnvManagedFileVariant -Definition $definition).Count | Should -Be 1
+    }
+
+    It 'exposes every declared variant, in declaration order, with a scalar Source' {
+        $variants = @(Get-WinEnvManagedFileVariant -Definition (New-WslFile))
+        $variants.Count | Should -Be 2
+        $variants[0].Source | Should -Be $Upper
+        $variants[1].Source | Should -Be $Lower
+        # Each variant is a definition the unchanged consumers can take.
+        foreach ($variant in $variants) {
+            $variant.ContainsKey('Sources') | Should -Be $false
+            $variant.Id | Should -Be 'wslConfig'
+            $variant.Target | Should -Be 'target'
+            $variant.Feature | Should -Be 'wsl'
+        }
+    }
+
+    It 'hashes every declared variant so the desired state cannot depend on the host' {
+        $manifest = New-FeatureManifest -Override @{
+            ManagedFiles = @(New-ConditionalFile -Sources @(
+                    @{ MinimumBuild = 22621; Source = 'files/upper.ini' },
+                    @{ Source = 'files/lower.ini' }))
+        }
+        $root = Join-Path $TestDrive 'conditional'
+        [void](New-Item -ItemType Directory -Path (Join-Path $root 'files') -Force)
+        [IO.File]::WriteAllText((Join-Path $root 'manifest.json'), '{}')
+        [IO.File]::WriteAllText((Join-Path $root 'files\upper.ini'), 'upper')
+        [IO.File]::WriteAllText((Join-Path $root 'files\lower.ini'), 'lower')
+
+        $before = Get-WinEnvDesiredStateHash -Root $root -Manifest $manifest -Feature @('core')
+        # Editing the variant this Linux host would never deploy still changes
+        # the hash. Were only the resolved variant hashed, two hosts of
+        # different build classes would disagree about the same desired state
+        # and a host that crossed the bound would report drift no Apply could
+        # clear.
+        [IO.File]::WriteAllText((Join-Path $root 'files\upper.ini'), 'upper changed')
+        $after = Get-WinEnvDesiredStateHash -Root $root -Manifest $manifest -Feature @('core')
+        $after | Should -Not -Be $before
+        [IO.File]::WriteAllText((Join-Path $root 'files\lower.ini'), 'lower changed')
+        (Get-WinEnvDesiredStateHash -Root $root -Manifest $manifest -Feature @('core')) | Should -Not -Be $after
+    }
+
+    It 'accepts the repository manifest and keeps the 22H2 payload byte-identical' {
+        $manifest = Get-WinEnvManifest -Path (Join-Path $desiredStateRoot 'manifest.json')
+        $wsl = $manifest.ManagedFiles | Where-Object Id -eq 'wslConfig'
+        (Resolve-WinEnvManagedFile -Definition $wsl -Build $Windows11_23H2).Source | Should -Be $Upper
+        (Resolve-WinEnvManagedFile -Definition $wsl -Build $Windows11_22H2).Source | Should -Be $Upper
+        (Resolve-WinEnvManagedFile -Definition $wsl -Build $Windows11_21H2).Source | Should -Be $Lower
+        (Resolve-WinEnvManagedFile -Definition $wsl -Build $Windows10_22H2).Source | Should -Be $Lower
+        (Resolve-WinEnvManagedFile -Definition $wsl -Build $null).Source | Should -Be $Lower
+
+        # A host at or above the bound receives what it already had. Pinned as
+        # a literal rather than against the old file, which no longer exists.
+        $expected = "[wsl2]`nnetworkingMode=Mirrored`n`n[experimental]`nhostAddressLoopback=true`nautoMemoryReclaim=Gradual`nbestEffortDnsParsing=true`n"
+        $actual = (Get-Content (Join-Path $desiredStateRoot $Upper) -Raw).Replace("`r`n", "`n")
+        $actual | Should -Be $expected
+    }
+
+    It 'parses both payloads with the parser the entry declares' {
+        # The merge gate must not accept a payload nobody parsed, and one of
+        # these is never the local answer on any single host.
+        $manifest = Get-WinEnvManifest -Path (Join-Path $desiredStateRoot 'manifest.json')
+        $wsl = $manifest.ManagedFiles | Where-Object Id -eq 'wslConfig'
+        foreach ($variant in (Get-WinEnvManagedFileVariant -Definition $wsl)) {
+            (Test-WinEnvSourceFile -Definition $variant -RepositoryRoot $desiredStateRoot) | Should -BeNullOrEmpty
+        }
+    }
+
+    It 'refuses a variant list whose last entry is conditional' {
+        # Negative fixture for the invariant the two-entry shape would have
+        # needed and could not have enforced: on a host below every bound this
+        # file would deploy nothing at all, silently.
+        $manifest = New-FeatureManifest -Override @{
+            ManagedFiles = @(New-ConditionalFile -Sources @(
+                    @{ MinimumBuild = 22621; Source = 'files/upper.ini' },
+                    @{ MinimumBuild = 19041; Source = 'files/lower.ini' }))
+        }
+        (Test-Throws { Assert-WinEnvManagedFileModel -Manifest $manifest }) | Should -Be $true
+    }
+
+    It 'refuses bounds that do not descend' {
+        # An ascending list would let a 22631 host match the 19041 variant
+        # first, so the highest bound a host meets would stop being the one it
+        # resolves to.
+        $manifest = New-FeatureManifest -Override @{
+            ManagedFiles = @(New-ConditionalFile -Sources @(
+                    @{ MinimumBuild = 19041; Source = 'files/lower.ini' },
+                    @{ MinimumBuild = 22621; Source = 'files/upper.ini' },
+                    @{ Source = 'files/base.ini' }))
+        }
+        (Test-Throws { Assert-WinEnvManagedFileModel -Manifest $manifest }) | Should -Be $true
+    }
+
+    It 'refuses an entry declaring both a scalar Source and alternatives' {
+        $definition = New-ConditionalFile -Sources @(
+            @{ MinimumBuild = 22621; Source = 'files/upper.ini' },
+            @{ Source = 'files/lower.ini' })
+        $definition.Source = 'files/plain.ini'
+        $manifest = New-FeatureManifest -Override @{ ManagedFiles = @($definition) }
+        (Test-Throws { Assert-WinEnvManagedFileModel -Manifest $manifest }) | Should -Be $true
+    }
+
+    It 'refuses an entry that declares no source at all' {
+        $manifest = New-FeatureManifest -Override @{
+            ManagedFiles = @(@{ Id = 'orphan'; Feature = 'core'; Target = 'target'; Compare = 'Text'; Parser = 'Ini' })
+        }
+        (Test-Throws { Assert-WinEnvManagedFileModel -Manifest $manifest }) | Should -Be $true
+    }
+
+    It 'refuses a single-variant list and a non-positive bound' {
+        $single = New-FeatureManifest -Override @{
+            ManagedFiles = @(New-ConditionalFile -Sources @(@{ Source = 'files/only.ini' }))
+        }
+        (Test-Throws { Assert-WinEnvManagedFileModel -Manifest $single }) | Should -Be $true
+
+        $bogus = New-FeatureManifest -Override @{
+            ManagedFiles = @(New-ConditionalFile -Sources @(
+                    @{ MinimumBuild = 0; Source = 'files/upper.ini' },
+                    @{ Source = 'files/lower.ini' }))
+        }
+        (Test-Throws { Assert-WinEnvManagedFileModel -Manifest $bogus }) | Should -Be $true
+    }
+
+    It 'accepts the shape the repository manifest uses' {
+        # Positive fixture beside the four negative ones above.
+        $manifest = New-FeatureManifest -Override @{
+            ManagedFiles = @(New-ConditionalFile -Sources @(
+                    @{ MinimumBuild = 22621; Source = 'files/upper.ini' },
+                    @{ Source = 'files/lower.ini' }))
+        }
+        { Assert-WinEnvManagedFileModel -Manifest $manifest } | Should -Not -Throw
     }
 }
 
