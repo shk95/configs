@@ -388,6 +388,16 @@ cp -R "$root/.githooks" "$commit_root/.githooks"
 cp -R "$root/tool/version-control" "$commit_root/tool/version-control"
 cp -R "$root/tool/dispatch" "$commit_root/tool/dispatch"
 
+# The pre-commit hook this fixture enables also runs
+# tool/version-control/hygiene, which fails closed when it cannot read a
+# declaration of record and rejects an allow entry naming a document this
+# repository does not have. Supply both, through printf arguments so the
+# naming context lives in the fixture rather than in this file.
+mkdir -p "$commit_root/modules/flake"
+printf '_: {\n  identity = { %s = "%s"; };\n}\n' gitName Fixture \
+  >"$commit_root/modules/flake/inventory.nix"
+: >"$commit_root/tool/version-control/hygiene.allow"
+
 # The two shapes that break a naive list editor: a comment attached to one
 # entry, and a tapped cask whose sort key is its last path segment rather than
 # the whole string.
@@ -757,5 +767,306 @@ fi
   unset GIT_DIR GIT_WORK_TREE GIT_INDEX_FILE
   cd "$commit_root" && "$audit"
 ) >/dev/null
+# ---------------------------------------------------------------------------
+# Desired-state hygiene
+# ---------------------------------------------------------------------------
+#
+# AGENTS.md requires positive and negative fixtures for every enforceable
+# invariant, and this file is the only thing that runs them: the
+# repository:fixtures dispatch unit and the CI repository job both invoke
+# exactly tool/version-control/test.
+#
+# tool/version-control/hygiene resolves its root with `git rev-parse
+# --show-toplevel`, so each case below runs the real script -- not a copy of it
+# -- against a throwaway repository. Every violating literal is assembled from
+# printf arguments rather than written out, so this tracked file never contains
+# one of the strings the check hunts and the scan of this repository stays
+# green without excluding this file from it.
+
+hygiene="$root/tool/version-control/hygiene"
+
+grep -q 'evidence_run hygiene tool/version-control/hygiene' "$root/.githooks/pre-commit"
+grep -q '^  secrets:$' "$root/.github/workflows/ci.yml"
+grep -q 'run: tool/version-control/hygiene' "$root/.github/workflows/ci.yml"
+
+backslash='\'
+backslashes='\\'
+hygiene_seq=0
+
+hygiene_new() {
+  hygiene_seq=$((hygiene_seq + 1))
+  hygiene_repo="$test_root/hygiene-$hygiene_seq"
+  mkdir -p "$hygiene_repo/tool/version-control" "$hygiene_repo/modules/flake"
+  git -C "$hygiene_repo" init -q -b dev
+  git -C "$hygiene_repo" config user.name Fixture
+  git -C "$hygiene_repo" config user.email fixture@example.invalid
+  # The declaration of record for axis 2, written through printf arguments so
+  # that the naming context lives in the fixture rather than in this file.
+  {
+    printf '_: {\n  identity = {\n'
+    printf '    %s = "%s";\n' gitName declared-name
+    printf '    %s = "%s";\n' hostName declared-host
+    printf '  };\n}\n'
+  } >"$hygiene_repo/modules/flake/inventory.nix"
+  : >"$hygiene_repo/tool/version-control/hygiene.allow"
+}
+
+hygiene_run() {
+  git -C "$hygiene_repo" add -A
+  (cd "$hygiene_repo" && "$hygiene" 2>&1)
+}
+
+hygiene_expect_pass() {
+  if ! hygiene_output=$(hygiene_run); then
+    printf '%s\n' "$hygiene_output" >&2
+    echo "hygiene rejected a clean fixture: $1" >&2
+    exit 1
+  fi
+}
+
+hygiene_expect_fail() {
+  if hygiene_output=$(hygiene_run); then
+    printf '%s\n' "$hygiene_output" >&2
+    echo "hygiene accepted a violation: $1" >&2
+    exit 1
+  fi
+  if ! printf '%s\n' "$hygiene_output" | grep -qF "$2"; then
+    printf '%s\n' "$hygiene_output" >&2
+    echo "hygiene did not name the violation: $1" >&2
+    exit 1
+  fi
+}
+
+# Axis 1, positive: the anchoring rule. A guillemet does not open a path, which
+# is why the Nix error message docs/troubleshooting.md quotes is not one.
+hygiene_new
+printf 'error: path %s»/%s/programs/x.nix%s does not exist\n' "'" home "'" \
+  >"$hygiene_repo/doc.md"
+hygiene_expect_pass 'axis 1, an unanchored slash is not a home path'
+
+# Axis 1, negative: POSIX, macOS, the JSON-escaped Windows spelling every
+# payload under windows/desired/files/ would carry, and both WSL UNC forms.
+hygiene_new
+printf 'HOME=/%s/%s\n' home eve >"$hygiene_repo/profile.sh"
+hygiene_expect_fail 'axis 1, a POSIX absolute home path' 'absolute home path'
+
+hygiene_new
+printf 'path = "/%s/%s/notes"\n' Users eve >"$hygiene_repo/config.toml"
+hygiene_expect_fail 'axis 1, a macOS absolute home path' 'absolute home path'
+
+hygiene_new
+printf '{"%s": "C:%sUsers%s%s"}\n' startingDirectory "$backslashes" \
+  "$backslashes" eve >"$hygiene_repo/settings.json"
+hygiene_expect_fail 'axis 1, a JSON-escaped Windows home path' 'absolute home path'
+
+hygiene_new
+printf '%swsl.localhost%sUbuntu%shome%s%s\n' "$backslashes" "$backslash" \
+  "$backslash" "$backslash" eve >"$hygiene_repo/unc-localhost.md"
+printf '%swsl$%sUbuntu%shome%s%s\n' "$backslashes" "$backslash" \
+  "$backslash" "$backslash" eve >"$hygiene_repo/unc-dollar.md"
+hygiene_expect_fail 'axis 1, the wsl.localhost UNC form' 'unc-localhost.md'
+hygiene_expect_fail 'axis 1, the wsl$ UNC form' 'unc-dollar.md'
+
+# The name inside an axis-1 match is also an axis-2 candidate, so a leaked path
+# reports both the path and the account in it.
+if ! printf '%s\n' "$hygiene_output" | grep -qF "undeclared name 'eve'"; then
+  printf '%s\n' "$hygiene_output" >&2
+  echo "hygiene did not report the name captured from an axis 1 match" >&2
+  exit 1
+fi
+
+# Axis 2, positive and negative: a name is only decidable inside a naming
+# context, and the allowed set is every literal the inventory declares.
+hygiene_new
+printf '%s: %s\n' hostname declared-host >"$hygiene_repo/host.yml"
+hygiene_expect_pass 'axis 2, a declared host name'
+
+hygiene_new
+printf '%s: "%s"\n' hostname mystery-box >"$hygiene_repo/host.yml"
+hygiene_expect_fail 'axis 2, an undeclared host name' 'undeclared name'
+
+# A bare right-hand side after the spaced ` = ` form is an expression, not a
+# name; modules/home-account.nix assigns one on every evaluation.
+hygiene_new
+printf '  %s = config.identity.wsl.%s;\n' username user >"$hygiene_repo/module.nix"
+hygiene_expect_pass 'axis 2, a bare expression is not a name'
+
+# The extraction must fail closed. An inventory whose literals move out of
+# reach cannot silently retire the axis, which is what #18 makes a live
+# possibility.
+hygiene_new
+printf '_: {\n  identity = {};\n}\n' >"$hygiene_repo/modules/flake/inventory.nix"
+printf 'clean\n' >"$hygiene_repo/file"
+hygiene_expect_fail 'axis 2, an empty declared-name extraction' 'no declared name'
+
+# Axis 3, positive: a near-miss basename the denylist must not claim.
+hygiene_new
+printf 'result\n' >"$hygiene_repo/.gitignore"
+printf '{}\n' >"$hygiene_repo/results.json"
+hygiene_expect_pass 'axis 3, a near-miss basename'
+
+# Axis 3, negative: a tracked path an ignore rule already covers, which is
+# exactly the machine-local artefact .gitignore cannot protect against once it
+# has been committed.
+hygiene_new
+printf '*.tmp\n' >"$hygiene_repo/.gitignore"
+printf 'state\n' >"$hygiene_repo/host.tmp"
+git -C "$hygiene_repo" add -f host.tmp
+hygiene_expect_fail 'axis 3, a tracked ignored path' 'matches an ignore rule'
+
+# Axis 3, negative: an artefact no ignore rule covers. PowerToys writes this
+# one at runtime, and the Windows suite already asserts on it.
+hygiene_new
+mkdir -p "$hygiene_repo/files/powertoys"
+printf '{}\n' >"$hygiene_repo/files/powertoys/workspaces.json"
+hygiene_expect_fail 'axis 3, a tracked runtime artefact' 'runtime-state artefact'
+
+# Axis 4, positive: a well-known constant. A UUIDv5 is derived from a name and
+# a CLSID names an interface, so neither is host identity.
+hygiene_new
+printf '{"%s": "{%s}"}\n' defaultProfile 574e775e-4f2a-5b96-ac1e-a2962a402336 \
+  >"$hygiene_repo/settings.json"
+hygiene_expect_pass 'axis 4, a well-known GUID'
+
+# Axis 4, negative: GUID, MAC address, and Windows SID.
+hygiene_new
+printf '{"%s": "{%s-%s}"}\n' machineId 11111111-2222-3333-4444 555555555555 \
+  >"$hygiene_repo/settings.json"
+hygiene_expect_fail 'axis 4, a machine GUID' 'machine-unique identifier'
+
+hygiene_new
+printf 'adapter %s:%s\n' aa:bb:cc:dd:ee ff >"$hygiene_repo/net.txt"
+hygiene_expect_fail 'axis 4, a MAC address' 'MAC address'
+
+hygiene_new
+printf 'owner=%s-%s\n' S-1-5-21-1001-1002-1003 4 >"$hygiene_repo/acl.txt"
+hygiene_expect_fail 'axis 4, a Windows SID' 'Windows SID'
+
+# The exclusion rule, in both directions. An entry is live while its literal
+# still occurs at its path -- deliberately not "while the scanner would flag
+# it", because the anchoring rule already excludes the seeded line, and that
+# reading would make the seed entry in tool/version-control/hygiene.allow stale
+# the moment it was written.
+hygiene_new
+printf 'error: path %s»/%s/programs/x.nix%s does not exist\n' "'" home "'" \
+  >"$hygiene_repo/doc.md"
+printf 'doc.md\t/%s/programs/\n' home \
+  >"$hygiene_repo/tool/version-control/hygiene.allow"
+hygiene_expect_pass 'exclusion, a live entry the scanner would not have flagged'
+
+hygiene_new
+printf 'nothing to see here\n' >"$hygiene_repo/doc.md"
+printf 'doc.md\t/%s/programs/\n' home \
+  >"$hygiene_repo/tool/version-control/hygiene.allow"
+hygiene_expect_fail 'exclusion, a stale entry' 'stale entry'
+
+# An entry forgives its literal at its own path and nowhere else. Without the
+# second half the allow file would be a file-granularity exclusion in disguise.
+hygiene_new
+printf 'see /%s/%s for the layout\n' home eve >"$hygiene_repo/doc.md"
+printf 'see /%s/%s for the layout\n' home eve >"$hygiene_repo/other.md"
+printf 'doc.md\t/%s/%s\n' home eve \
+  >"$hygiene_repo/tool/version-control/hygiene.allow"
+hygiene_expect_fail 'exclusion, a literal forgiven at one path only' 'other.md'
+if printf '%s\n' "$hygiene_output" | grep -qF 'doc.md:'; then
+  printf '%s\n' "$hygiene_output" >&2
+  echo "hygiene ignored an allow entry at the path it was declared for" >&2
+  exit 1
+fi
+
+# The three evidence states. Nothing beyond a POSIX shell and Git is needed, so
+# 69 should never occur on this design; it is implemented and fixtured anyway,
+# because a future prerequisite must report through the contract rather than
+# invent a fourth answer, and because CI's REQUIRE_NATIVE is what turns it back
+# into a failure.
+hygiene_new
+printf 'clean\n' >"$hygiene_repo/file"
+hygiene_expect_pass 'the three-state base case'
+
+hygiene_no_git="$test_root/hygiene-no-git"
+mkdir -p "$hygiene_no_git"
+hygiene_status=0
+(cd "$hygiene_repo" && PATH="$hygiene_no_git" "$hygiene") >/dev/null 2>&1 \
+  || hygiene_status=$?
+if [ "$hygiene_status" -ne 69 ]; then
+  echo "hygiene exited $hygiene_status without git, expected the unverified 69" >&2
+  exit 1
+fi
+
+hygiene_status=0
+(cd "$hygiene_repo" && REQUIRE_NATIVE=1 PATH="$hygiene_no_git" "$hygiene") \
+  >/dev/null 2>&1 || hygiene_status=$?
+if [ "$hygiene_status" -eq 0 ] || [ "$hygiene_status" -eq 69 ]; then
+  echo "hygiene did not fail an unverified run under REQUIRE_NATIVE" >&2
+  exit 1
+fi
+
+# The pre-commit wiring. The hook's run_check helper resolves tool/checks/<name>
+# and cannot reach a repository-scope check, so the hook calls evidence_run
+# directly; these cases exercise that call through a real hook run with a
+# stand-in check, in the style of the pre-push protocol fixture above.
+hygiene_hook_root="$test_root/hygiene-hook"
+mkdir -p "$hygiene_hook_root/tool" "$hygiene_hook_root/modules"
+cp -R "$root/.githooks" "$hygiene_hook_root/.githooks"
+cp -R "$root/tool/version-control" "$hygiene_hook_root/tool/version-control"
+cp -R "$root/tool/dispatch" "$hygiene_hook_root/tool/dispatch"
+
+git -C "$hygiene_hook_root" init -q -b dev
+git -C "$hygiene_hook_root" config user.name Fixture
+git -C "$hygiene_hook_root" config user.email fixture@example.invalid
+printf 'fixture\n' >"$hygiene_hook_root/file"
+git -C "$hygiene_hook_root" add file
+git -C "$hygiene_hook_root" commit -q -m 'feat(repository): create hygiene hook fixture'
+# A Unix-like path, so the hook does not select repository:fixtures and re-enter
+# this script. tool/checks/ is absent, so the domain checks it does select are
+# skipped by the hook's own [ -x ] guard.
+printf '_: {}\n' >"$hygiene_hook_root/modules/fixture.nix"
+git -C "$hygiene_hook_root" add modules/fixture.nix
+
+stub_hygiene() {
+  printf '#!/bin/sh\nexit %s\n' "$1" \
+    >"$hygiene_hook_root/tool/version-control/hygiene"
+  chmod +x "$hygiene_hook_root/tool/version-control/hygiene"
+}
+
+run_hygiene_pre_commit() {
+  (cd "$hygiene_hook_root" && .githooks/pre-commit 2>&1)
+}
+
+stub_hygiene 0
+if ! run_hygiene_pre_commit >/dev/null; then
+  echo "pre-commit rejected a passing hygiene check" >&2
+  exit 1
+fi
+
+stub_hygiene 1
+if run_hygiene_pre_commit >/dev/null 2>&1; then
+  echo "pre-commit accepted a failing hygiene check" >&2
+  exit 1
+fi
+
+stub_hygiene 69
+if ! hygiene_hook_output=$(run_hygiene_pre_commit); then
+  printf '%s\n' "$hygiene_hook_output" >&2
+  echo "pre-commit blocked a hygiene check that reported unverified" >&2
+  exit 1
+fi
+if ! printf '%s\n' "$hygiene_hook_output" | grep -q 'hygiene unverified'; then
+  printf '%s\n' "$hygiene_hook_output" >&2
+  echo "pre-commit did not report the unverified hygiene check" >&2
+  exit 1
+fi
+
+if hygiene_hook_output=$(REQUIRE_NATIVE=1; export REQUIRE_NATIVE;
+  run_hygiene_pre_commit); then
+  printf '%s\n' "$hygiene_hook_output" >&2
+  echo "pre-commit accepted an unverified hygiene check under REQUIRE_NATIVE" >&2
+  exit 1
+fi
+if ! printf '%s\n' "$hygiene_hook_output" | grep -q 'hygiene is unverified'; then
+  printf '%s\n' "$hygiene_hook_output" >&2
+  echo "pre-commit did not fail the unverified hygiene check under REQUIRE_NATIVE" >&2
+  exit 1
+fi
 
 echo "version-control fixtures passed"

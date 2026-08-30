@@ -24,9 +24,12 @@ planning read-only unless the user explicitly authorizes a Git mutation.
 
 ## Select one operation
 
-- **Audit**: Run `tool/version-control/audit`. When `gh` is authenticated, also
-  run `tool/version-control/audit-remote`. Explain every warning or failure with
-  the governing context file. Do not mutate local or remote Git state.
+- **Audit**: Run `tool/version-control/audit` and
+  `tool/version-control/hygiene`. When `gh` is authenticated, also run
+  `tool/version-control/audit-remote`. Explain every warning or failure with
+  the governing context file. A hygiene finding is fixed by removing or
+  declaring the value, never by widening the check; `CONTRIBUTING.md` owns that
+  procedure. Do not mutate local or remote Git state.
 - **Classify**: Run `tool/version-control/classify` for the requested diff.
   Confirm one owning scope. Multiple configuration scopes require an explicit
   adoption or split; `repository` may accompany a domain only for supporting
