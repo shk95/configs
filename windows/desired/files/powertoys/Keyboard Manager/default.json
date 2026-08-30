@@ -10,6 +10,10 @@
         "newRemapKeys": "162"
       },
       {
+        "originalKeys": "92",
+        "newRemapKeys": "21"
+      },
+      {
         "originalKeys": "91",
         "newRemapKeys": "164"
       },
@@ -20,6 +24,10 @@
       {
         "originalKeys": "162",
         "newRemapKeys": "91"
+      },
+      {
+        "originalKeys": "21",
+        "newRemapKeys": "92"
       }
     ]
   },
