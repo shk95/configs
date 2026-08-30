@@ -255,6 +255,41 @@ restart it, so a passing check means the file on disk matches the payload this
 host's build should have. It is not evidence that mirrored networking is
 running. `docs/status.md` records the per-key gate table behind the split.
 
+### Capture a change made in the application
+
+Apply writes a payload to the host. The other direction has a tool of its own,
+so a setting changed through PowerToys, Windows Terminal, WezTerm, the managed
+PowerShell profile, `.wslconfig` or Zellij becomes desired state with one
+command and one confirmation:
+
+```powershell
+.\windows\tools\capture.ps1                     # every feature this host applied
+.\windows\tools\capture.ps1 -Feature powertoys  # one feature
+.\windows\tools\capture.ps1 -Id windowsTerminal # one managed file
+.\windows\tools\capture.ps1 -WhatIf             # decide and diff, write nothing
+```
+
+Drift is decided by the comparison `-Check` already uses. Each drifted managed
+file is copied into the payload this host resolves — the build-selected variant
+for a conditional file — with the placeholder Apply expands restored, the diff
+is shown, and one `[y/N]` commits it: one `feat(windows):` commit per feature,
+through the repository's hooks. Push and open a pull request as usual; the tool
+stops at the commit. The round trip closes, so the check that reported the
+drift passes afterwards.
+
+It refuses instead of guessing, and says which rule it refused under:
+a file the suite already names as runtime state; a `JsonSubset` payload, which
+is a subset of the host file by design and cannot be derived from it; content
+that still holds an absolute account path, this host's account name, or a
+`.wslconfig` `firewall` key; and a build-conditional file on a host whose
+Windows build is undetermined. Windows Terminal profiles the application
+generated are dropped rather than captured, so a fragment profile from one
+host's Git for Windows never reaches another host. Like the Unix-like commit
+helper it refuses on `master`, refuses when the index already holds staged
+changes or a payload it would write has uncommitted changes, and never bypasses
+a hook. Nothing on the host is written: the managed targets are read and
+nothing else.
+
 ## Deployment
 
 Unix-like activation and Windows Apply are separate deployments. A common
