@@ -28,6 +28,11 @@ native checks instead of treating them as passed.
       requires it instead of conditional domain job names.
 - [ ] Model-specific skill locations only discover the canonical Agent Skills
       workflow and do not duplicate its policy.
+- [ ] Committed desired state carries no undeclared user or host name, no
+      absolute home path, no tracked runtime state, and no machine-unique
+      identifier, and every exclusion is declared with its reason.
+- [ ] Prose in the diff was read for a bare account name, which no scanner
+      decides, and that reading is reported as the manual evidence.
 
 ## Governance rule design
 

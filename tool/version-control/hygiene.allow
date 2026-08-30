@@ -1,0 +1,18 @@
+# Declared string exclusions for tool/version-control/hygiene.
+#
+# One `<path><TAB><literal string>` row per line, each preceded by a comment
+# giving its reason. File-granularity exclusion is refused deliberately:
+# docs/troubleshooting.md is the one file that has already drifted through
+# this invariant, so blinding all of it would retire the check on its only
+# real target.
+#
+# Enforced in both directions. A stale entry -- one whose literal no longer
+# occurs at its path -- fails the check and names itself, so this file cannot
+# become the place violations go to be forgotten.
+
+# A Nix error message quoting a store path, where `programs` is a directory
+# inside a flake rather than an account. The anchoring rule already excludes
+# the line, because the character before the slash is a guillemet. The entry
+# is declared so that widening the anchoring rule later cannot silently admit
+# it unreviewed.
+docs/troubleshooting.md	/home/programs/

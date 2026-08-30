@@ -270,6 +270,43 @@ tool/version-control/audit
 tool/version-control/audit-remote  # when gh is authenticated
 ```
 
+### Desired-state hygiene
+
+`tool/version-control/hygiene` scans the tracked tree for undeclared user and
+host names, absolute home paths, tracked runtime state, and machine-unique
+identifiers. It runs on every commit from `.githooks/pre-commit` beside the
+secret scan and outside domain dispatch, and again in CI, because the invariant
+is repository-wide rather than scoped to the domain being changed.
+
+```sh
+tool/version-control/hygiene
+```
+
+When it reports something, in order of preference:
+
+1. Remove the value. A leaked value is desired state that names one machine.
+2. If it is a user or host name that genuinely belongs in desired state,
+   declare it in `modules/flake/inventory.nix` first. That is a `unixlike`
+   change and lands as its own change.
+3. If it is a runtime artefact, delete it and add an ignore rule. The ignore
+   rule alone changes nothing once the file is tracked; it has to leave the
+   index too.
+4. Only when the reported text is genuinely not what it looks like, add one
+   `<path>`, tab, `<literal string>` row to `tool/version-control/hygiene.allow`
+   with a comment giving the reason. Both halves of "one string at one path"
+   are enforced, not conventions: an entry whose literal no longer occurs at
+   its path fails the check and is removed together with the text it forgave,
+   and an entry that forgives more than one line fails as the whole-file
+   exclusion it is. Write a literal specific enough to name the occurrence.
+
+Adding an allow entry is a governance change and is reviewed as one. There is
+no operational bypass: `git commit --no-verify` skips every hook and leaves CI
+to reject the same content.
+
+A bare account name written into prose is not detectable and is not covered.
+Reading prose in the diff for one is a manual obligation recorded in
+`docs/definition-of-done.md`.
+
 Branch protection on `dev` and `master` requires the stable `Required checks`
 job. That job fails unless classification and secret scanning pass and every
 selected domain job succeeds. Conditional domain job names are deliberately

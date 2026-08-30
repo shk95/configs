@@ -127,9 +127,18 @@ jobs:
           test -x common/check
           common/check
 
+  # The job key stays `secrets`: the required-checks gate, its SECRETS_RESULT
+  # input, and the `needs:` list below all key off it. Only the display name
+  # widens, because the job now carries both repository-wide scans.
   secrets:
-    name: Secret scan
+    name: Secret and hygiene scan
     runs-on: ubuntu-latest
+    # The merge gate is the one place where a check that could not run must not
+    # pass. tool/version-control/hygiene needs nothing but a POSIX shell and
+    # Git today; this is what keeps a future prerequisite from passing through
+    # the gate unverified.
+    env:
+      REQUIRE_NATIVE: "1"
     steps:
       - uses: actions/checkout@v7
         with:
@@ -141,6 +150,7 @@ jobs:
           curl -sSfL "https://github.com/gitleaks/gitleaks/releases/download/v${GITLEAKS_VERSION}/gitleaks_${GITLEAKS_VERSION}_linux_x64.tar.gz" |
             sudo tar -xz -C /usr/local/bin gitleaks
       - run: gitleaks git --redact --no-banner
+      - run: tool/version-control/hygiene
 
   promotion:
     name: Promotion policy

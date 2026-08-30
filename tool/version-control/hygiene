@@ -1,0 +1,416 @@
+#!/bin/sh
+#
+# Enforce the desired-state hygiene invariant. `AGENTS.md`, "Durable
+# decisions", states it: keep secrets, undeclared usernames, absolute home
+# paths, and snapshots of runtime state out of every domain's committed desired
+# state. Secrets already have an enforcement owner in gitleaks and are
+# deliberately not duplicated here. The other three had no enforcement owner at
+# all, which is how two absolute home paths reached docs/troubleshooting.md and
+# stayed there for the document's whole history.
+#
+# The subject is the index rather than the working tree. The invariant is about
+# committed desired state, so `git grep --cached` is the authority, and `-I`
+# keeps binary payloads out of a text scan. Untracked and ignored paths are out
+# of scope by construction; `notes/` is excluded explicitly anyway, because
+# AGENTS.md forbids reading it whether or not the ignore file happens to cover
+# it.
+#
+# Four axes, each with a literal pattern below:
+#
+#   1. absolute home paths -- POSIX, Windows, and WSL UNC -- including the
+#      JSON-escaped spelling a windows/desired/files payload would carry;
+#   2. undeclared user and host names, which are only decidable inside a naming
+#      context, so the axis is defined as one;
+#   3. snapshots of runtime state, as tracked-but-ignored paths plus a basename
+#      denylist for artefacts no ignore rule covers;
+#   4. machine-unique identifiers: GUID, MAC address, and Windows SID.
+#
+# A bare account name in free prose is not decidable lexically. It is a manual
+# invariant instead, and docs/architecture.md names its evidence and its owner
+# rather than letting this scanner imply coverage it does not have.
+#
+# A scanner that stores the strings it hunts matches itself, so its exclusions
+# are declared rather than incidental and are enforced in both directions, the
+# way tool/checks/payloads enforces assets/payloads.json: a declaration with no
+# file is stale. This file and its allow file are excluded by path because they
+# are the check's own machinery. Everything else is excluded one literal string
+# at a time in tool/version-control/hygiene.allow, because file-granularity
+# exclusion would retire the check on the one file that has already drifted.
+#
+# Exit 0 verified, 69 unverified, any other status failed. See
+# docs/architecture.md, "Check dispatch uses three evidence states", and
+# .githooks/evidence, which is the one place that decides what each means.
+
+set -eu
+
+# The three-state prerequisite contract, restated rather than sourced from
+# tool/checks/prerequisite: that file is `unixlike` scope, and a `repository`
+# check must not take a dependency on a configuration domain's plane. Nothing
+# beyond a POSIX shell and Git is needed, so 69 should never occur here, but
+# the state exists so a future prerequisite reports it instead of inventing a
+# fourth answer.
+require_command() {
+  require_missing=
+  for require_name in "$@"; do
+    command -v "$require_name" >/dev/null 2>&1 ||
+      require_missing="$require_missing $require_name"
+  done
+  [ -n "$require_missing" ] || return 0
+
+  if [ "${REQUIRE_NATIVE:-0}" = 1 ]; then
+    printf '\033[31m✗ required tooling is missing:%s\033[0m\n' \
+      "$require_missing" >&2
+    exit 1
+  fi
+
+  printf '· unverified: this host has no%s\n' "$require_missing" >&2
+  exit 69
+}
+
+require_command git
+
+# The repository being committed, not the one this file happens to live in.
+# tool/version-control/classify resolves its root the same way, and it is what
+# lets the fixtures in tool/version-control/test run this exact script against
+# a throwaway repository instead of a copy of it.
+root=$(git rev-parse --show-toplevel)
+cd "$root"
+
+allow_file=tool/version-control/hygiene.allow
+inventory=modules/flake/inventory.nix
+
+work=$(mktemp -d)
+trap 'rm -rf "$work"' EXIT
+
+status=0
+
+violation() {
+  printf '\033[31m✗ %s\033[0m\n' "$1" >&2
+  status=1
+}
+
+# ---------------------------------------------------------------------------
+# Patterns
+# ---------------------------------------------------------------------------
+
+# A name, in the sense of an account or host label. `$` and `{` are outside the
+# class on purpose: `/home/${user}` in modules/home-account.nix and
+# `/Users/${user}` in modules/darwin-host.nix are interpolations of a declared
+# value, not names, and do not match at all.
+name='[A-Za-z0-9._-]+'
+
+# One or two backslashes. Every windows/desired/files payload is JSON, where a
+# leaked Windows path appears with its separators doubled.
+bs='\\{1,2}'
+
+# Anchoring rule. A match counts only when the character that opens the path is
+# at start-of-line or follows one of space, tab, ' " ` = ( , or :. This is not
+# cosmetic. docs/troubleshooting.md carries
+#
+#   error: path '«git+file://...»/home/programs/<file>.nix' does not exist
+#
+# where `programs` is a directory inside a flake, not an account. `»` is not a
+# path-opening character, so the rule excludes that line mechanically instead
+# of by special case.
+anchor=$(printf '(^|[ \t'\''"`=(,:])')
+
+# Axis 1. `C:\Users\<name>` needs no separate anchor: the backslash that opens
+# it is always preceded by the drive colon, which the anchor class allows. Any
+# drive letter counts -- a leaked path on D: is the same violation.
+posix_home="$anchor"'/(home|Users)/'"$name"
+windows_home='[A-Za-z]:'"$bs"'Users'"$bs$name"
+unc_home="$anchor$bs"'wsl(\.localhost|\$)'"$bs$name$bs"'home'"$bs$name"
+absolute_home="($posix_home)|($windows_home)|($unc_home)"
+
+# Axis 2. The naming context: an assignment whose left-hand side is one of
+# these keys. The key may carry a closing quote, which is not decoration: every
+# payload under windows/desired/files/ is JSON, so `{"hostname": "..."}` is the
+# spelling a leak arrives in there, and a Nix attribute may be quoted too.
+#
+# A quoted right-hand side is a literal in every language here. A bare one is
+# only a literal where the separator is not the spaced ` = ` form; after ` = ` a
+# bare token is an expression -- `user = config.identity.wsl.user` in
+# modules/home-account.nix names no account.
+keys='(user|username|hostName|hostname|USER|USERNAME|HOSTNAME|COMPUTERNAME)'
+key_start='(^|[^A-Za-z0-9_])'
+assignment=$(printf '%s%s"?([ \t]*[=:][ \t]*("%s"|'\''%s'\'')|(=|[ \t]*:)[ \t]*%s)' \
+  "$key_start" "$keys" "$name" "$name" "$name")
+
+# Axis 4.
+guid='[{]?[0-9a-fA-F]{8}(-[0-9a-fA-F]{4}){3}-[0-9a-fA-F]{12}[}]?'
+mac='([0-9a-fA-F]{2}:){5}[0-9a-fA-F]{2}'
+sid='S-1-5-21(-[0-9]+){4}'
+
+# ---------------------------------------------------------------------------
+# Declared exclusions
+# ---------------------------------------------------------------------------
+
+# Path exclusions are hard-coded because they are the check's own machinery:
+# this file holds every pattern above, and the allow file holds every literal
+# it forgives. Neither can be excluded by an allow entry without the entry
+# becoming the thing it excludes.
+#
+# git grep exits 1 for "nothing matched" and more than 1 for "the scan did not
+# run". Collapsing the two would let a broken pattern retire an axis in
+# silence, which is the failure this whole check exists to prevent, so the
+# second is a hard error.
+grep_tracked() {
+  git -c color.grep=never grep --cached -I -n -E -e "$1" -- \
+    ':(exclude)tool/version-control/hygiene' \
+    ':(exclude)tool/version-control/hygiene.allow' \
+    ':(exclude)notes/' >"$work/scan" && return 0
+
+  grep_status=$?
+  [ "$grep_status" -eq 1 ] || {
+    printf '\033[31m✗ scan did not run (git grep exited %s) for: %s\033[0m\n' \
+      "$grep_status" "$1" >&2
+    exit 1
+  }
+}
+
+# Read from the index, like everything else here. Reading the working tree
+# instead would let an unstaged edit change the result of a scan of the index,
+# so the hook and CI could disagree about the same commit, and it would fail
+# closed in a sparse checkout where the file is in the index but not on disk.
+# Comments are whole lines; there is no trailing-comment form, because a `#`
+# is a legal character inside a forgiven literal.
+: >"$work/allow"
+git show ":$allow_file" 2>/dev/null |
+  sed -e 's/^#.*//' -e '/^[[:space:]]*$/d' >"$work/allow"
+
+# A stale exclusion is a failure: without this the allow file becomes the place
+# violations go to be forgotten. "Matches" means the literal still occurs at
+# that path, not that the scanner would have flagged it. The two readings are
+# not equivalent, and only this one is usable: the anchoring rule above already
+# excludes docs/troubleshooting.md on its own, so under a would-have-flagged
+# reading the seed entry would be stale the moment it was written. Under the
+# occurrence reading it stays valid while the text is there and goes stale
+# exactly when the line is edited away, which is the forgetting this rule
+# exists to catch.
+tab=$(printf '\t')
+while IFS="$tab" read -r allow_path allow_literal; do
+  [ -n "${allow_path:-}" ] || continue
+  if [ -z "${allow_literal:-}" ]; then
+    violation "$allow_file: entry for '$allow_path' has no tab-separated literal"
+    continue
+  fi
+  if ! git -c color.grep=never grep --cached -q -F -e "$allow_literal" \
+    -- "$allow_path" 2>/dev/null; then
+    violation "$allow_file: stale entry, '$allow_literal' no longer occurs in $allow_path"
+  fi
+done <"$work/allow"
+
+# Drop every hit an allow entry forgives. A hit is `<path>:<line>:<text>`, so
+# an entry applies when the hit is at that path and the forgiven literal occurs
+# in the hit. The entries are read in BEGIN rather than as awk's first input
+# file, because an empty allow file would otherwise make the usual NR == FNR
+# idiom read the hits themselves as entries and suppress all of them.
+#
+# Every suppression is recorded, because the path half of an entry is anchored
+# but the literal half is an unanchored substring with no minimum specificity.
+# Nothing in the format stops `docs/x.md<TAB>/` from forgiving every line in
+# that file, which is the file-granularity exclusion the design refuses. The
+# breadth is checked after the scans instead: one entry, one line.
+: >"$work/suppressed"
+suppress() {
+  awk -v allow="$work/allow" -v suppressed="$work/suppressed" '
+    BEGIN {
+      entries = 0
+      while ((getline line < allow) > 0) {
+        cut = index(line, "\t")
+        if (cut == 0) continue
+        entries++
+        path[entries] = substr(line, 1, cut - 1)
+        literal[entries] = substr(line, cut + 1)
+      }
+    }
+    {
+      for (i = 1; i <= entries; i++)
+        if (index($0, path[i] ":") == 1 && index($0, literal[i]) > 0) {
+          print path[i] "\t" literal[i] "\t" $0 >>suppressed
+          next
+        }
+      print
+    }
+  '
+}
+
+# Deliberately not a pipeline: grep_tracked exits the script when the scan
+# itself failed, and inside a pipeline that exit would only end a subshell and
+# read back as an empty result.
+scan() {
+  grep_tracked "$1"
+  suppress <"$work/scan"
+}
+
+# ---------------------------------------------------------------------------
+# Declared names
+# ---------------------------------------------------------------------------
+
+# Every double-quoted string literal in the inventory. Extracting literals
+# rather than reading the attribute set is what keeps this check's requirements
+# at a POSIX shell and Git, and it is layout-independent by construction: when
+# the inventory grows host fields, their values join the allowed set with no
+# change here. It over-accepts -- `aarch64-darwin` is not a name -- and an
+# over-broad allowlist is the safe direction for an allowlist. Read from the
+# index for the same reason the allow file is.
+: >"$work/declared"
+git show ":$inventory" 2>/dev/null |
+  sed -n 's/.*"\([^"]*\)".*/\1/p' | sort -u >"$work/declared"
+
+# An empty extraction must fail rather than accept everything, so a reformat of
+# the inventory cannot silently retire this axis.
+if [ ! -s "$work/declared" ]; then
+  violation "no declared name could be extracted from $inventory; axis 2 cannot be decided"
+fi
+
+declared() { grep -qxF -- "$1" "$work/declared"; }
+
+# ---------------------------------------------------------------------------
+# Axis 1: absolute home paths
+# ---------------------------------------------------------------------------
+
+scan "$absolute_home" >"$work/home-hits"
+while IFS= read -r hit; do
+  [ -n "$hit" ] || continue
+  violation "absolute home path: $hit"
+
+  # Axis 2's first half: the <name> capture of an axis-1 match. The path is
+  # already a violation; an undeclared name in it is a second one, and saying
+  # so is what makes the two axes independently reviewable.
+  printf '%s\n' "$hit" | grep -oE "$absolute_home" |
+    sed -e 's|.*[/\\]||' | sort -u >"$work/hit-names"
+  while IFS= read -r found; do
+    [ -n "$found" ] || continue
+    declared "$found" ||
+      violation "undeclared name '$found' in: $hit"
+  done <"$work/hit-names"
+done <"$work/home-hits"
+
+# ---------------------------------------------------------------------------
+# Axis 2: undeclared user and host names
+# ---------------------------------------------------------------------------
+
+scan "$assignment" >"$work/name-hits"
+while IFS= read -r hit; do
+  [ -n "$hit" ] || continue
+  printf '%s\n' "$hit" | grep -oE "$assignment" |
+    sed -e 's/["'\'']$//' -e 's/.*["'\''=:[:space:]]//' |
+    sort -u >"$work/hit-values"
+  while IFS= read -r value; do
+    [ -n "$value" ] || continue
+    declared "$value" ||
+      violation "undeclared name '$value' assigned in: $hit"
+  done <"$work/hit-values"
+done <"$work/name-hits"
+
+# ---------------------------------------------------------------------------
+# Axis 3: snapshots of runtime state
+# ---------------------------------------------------------------------------
+
+# A tracked path that matches an ignore rule is exactly a machine-local or
+# runtime artefact that escaped .gitignore, which .gitignore itself names as
+# the failure mode: it only protects files that were never committed.
+git ls-files --cached --ignored --exclude-standard -- ':(exclude)notes/' \
+  >"$work/ignored"
+while IFS= read -r path; do
+  [ -n "$path" ] || continue
+  violation "tracked path matches an ignore rule: $path"
+done <"$work/ignored"
+
+# Artefacts no ignore rule covers, seeded from the precedent the Windows suite
+# already asserts on: PowerToys writes workspaces.json and applied-layouts.json
+# at runtime. `:(glob)` is what makes these basename patterns rather than
+# substring ones -- without it `*known_hosts` would also match `myknown_hosts`.
+git ls-files -- \
+  ':(glob)workspaces.json' ':(glob)**/workspaces.json' \
+  ':(glob)applied-layouts.json' ':(glob)**/applied-layouts.json' \
+  ':(glob)*.log' ':(glob)**/*.log' \
+  ':(glob)*_history' ':(glob)**/*_history' \
+  ':(glob).*_history' ':(glob)**/.*_history' \
+  ':(glob)known_hosts' ':(glob)**/known_hosts' \
+  ':(glob)result' ':(glob)**/result' \
+  ':(glob)result-*' ':(glob)**/result-*' \
+  ':(exclude)notes/' >"$work/artefacts"
+while IFS= read -r path; do
+  [ -n "$path" ] || continue
+  violation "tracked runtime-state artefact: $path"
+done <"$work/artefacts"
+
+# ---------------------------------------------------------------------------
+# Axis 4: machine-unique identifiers
+# ---------------------------------------------------------------------------
+
+# Well-known constants, not host identity: a UUIDv5 is derived from a name, and
+# a CLSID or IID names an interface. Hard-coded rather than declared in the
+# allow file because they are part of the pattern's definition -- the allow
+# file forgives a literal at one path, while these are the same constant
+# wherever it appears.
+#
+#   574e775e-4f2a-5b96-ac1e-a2962a402336  Windows Terminal dynamic profile
+#   035bb70e-121b-521e-b4a8-d8bcbbb47434  Windows Terminal dynamic profile
+#   2eaca947-7f5f-4cfa-ba87-8f7fbeefbe69  DelegationConsole CLSID
+#   e12cff52-a866-4c77-9a90-f570a7aa2c6b  DelegationTerminal CLSID
+#   b859ee5a-d838-4b5b-a2e8-1adc7d93db48  IDWriteFactory IID
+#   a84cee02-3eea-4eee-a827-87c1a02a0fcc  IDWriteFontCollection IID
+cat >"$work/well-known" <<'GUIDS'
+574e775e-4f2a-5b96-ac1e-a2962a402336
+035bb70e-121b-521e-b4a8-d8bcbbb47434
+2eaca947-7f5f-4cfa-ba87-8f7fbeefbe69
+e12cff52-a866-4c77-9a90-f570a7aa2c6b
+b859ee5a-d838-4b5b-a2e8-1adc7d93db48
+a84cee02-3eea-4eee-a827-87c1a02a0fcc
+GUIDS
+
+scan "$guid" >"$work/guid-hits"
+while IFS= read -r hit; do
+  [ -n "$hit" ] || continue
+  printf '%s\n' "$hit" | grep -oE "$guid" | tr -d '{}' |
+    tr 'ABCDEF' 'abcdef' | sort -u >"$work/hit-guids"
+  while IFS= read -r found; do
+    [ -n "$found" ] || continue
+    grep -qxF -- "$found" "$work/well-known" ||
+      violation "machine-unique identifier '$found' in: $hit"
+  done <"$work/hit-guids"
+done <"$work/guid-hits"
+
+scan "$mac" >"$work/mac-hits"
+while IFS= read -r hit; do
+  [ -n "$hit" ] || continue
+  violation "MAC address in: $hit"
+done <"$work/mac-hits"
+
+scan "$sid" >"$work/sid-hits"
+while IFS= read -r hit; do
+  [ -n "$hit" ] || continue
+  violation "Windows SID in: $hit"
+done <"$work/sid-hits"
+
+# ---------------------------------------------------------------------------
+# The breadth of each exclusion
+# ---------------------------------------------------------------------------
+
+# An entry excludes one string in one place. An entry that forgave several
+# lines would be a whole-file exclusion written one row at a time, and the
+# stale-entry rule cannot catch it: that rule only asks whether the literal
+# still occurs somewhere at the path. Distinct hits are counted per entry, so
+# one line matched by two axes still counts once.
+awk -F'\t' '
+  { if (!seen[$0]++) forgiven[$1 "\t" $2]++ }
+  END { for (entry in forgiven) if (forgiven[entry] > 1) print forgiven[entry] "\t" entry }
+' "$work/suppressed" >"$work/over-broad"
+
+while IFS="$tab" read -r forgiven entry_path entry_literal; do
+  [ -n "${forgiven:-}" ] || continue
+  violation "$allow_file: entry '$entry_literal' forgives $forgiven lines in $entry_path; an entry excludes one string in one place, not a file"
+done <"$work/over-broad"
+
+# ---------------------------------------------------------------------------
+
+if [ "$status" -ne 0 ]; then
+  printf '\033[31m✗ desired-state hygiene failed\033[0m\n' >&2
+  exit 1
+fi
+
+printf '✓ desired-state hygiene: %s tracked paths scanned\n' \
+  "$(git ls-files -- ':(exclude)notes/' | wc -l | tr -d ' ')"

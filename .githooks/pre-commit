@@ -1,6 +1,7 @@
 #!/bin/sh
 #
-# Domain-aware local checks and a repository-wide secret scan.
+# Domain-aware local checks plus the two repository-wide scans: desired-state
+# hygiene and secrets.
 #
 # Windows-only commits must not require Nix. The classifier is shared with the
 # pre-push hook, CI, and the version-control skill. What a check that could not
@@ -59,6 +60,14 @@ if selected repository:fixtures; then
   evidence_run "version-control fixtures" tool/version-control/test \
     || abort "Version-control policy fixtures failed."
 fi
+
+# Desired-state hygiene is repository-wide, domain-agnostic and cheap, the same
+# shape as the secret scan below, so it runs unconditionally rather than
+# through tool/dispatch/select. The run_check helper above resolves
+# tool/checks/<name> and cannot reach a repository-scope check, so this calls
+# evidence_run directly.
+evidence_run hygiene tool/version-control/hygiene \
+  || abort "See AGENTS.md, Durable decisions, and tool/version-control/hygiene.allow."
 
 # Hooks are opt-in, so CI mirrors the secret check. A credential that reaches
 # history stays there after the file is deleted, making the staged state the
