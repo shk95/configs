@@ -16,6 +16,15 @@ plan_promotion="$root/tool/version-control/plan-promotion"
 # `git -C` into the temporary repository below.
 unset GIT_INDEX_FILE
 
+# Git exports an absolute GIT_DIR (and, for some invocations, GIT_WORK_TREE)
+# to hooks it runs from a linked worktree. Left set, every `git -C "$fixture"`
+# below would resolve against the worktree's real git-dir instead of the
+# fixture, silently reinitializing and committing onto the real repository.
+# The rest of git's repo-local override set is scrubbed too, as defence in
+# depth: GIT_COMMON_DIR alone is enough to redirect `git init` the same way.
+unset GIT_DIR GIT_WORK_TREE GIT_COMMON_DIR GIT_OBJECT_DIRECTORY \
+  GIT_ALTERNATE_OBJECT_DIRECTORIES GIT_NAMESPACE GIT_CEILING_DIRECTORIES
+
 grep -q '^  required:$' "$root/.github/workflows/ci.yml"
 grep -q '^    name: Required checks$' "$root/.github/workflows/ci.yml"
 grep -q 'needs: \[classify, repository, unix, windows, common, secrets, promotion\]' \
@@ -169,6 +178,47 @@ printf 'fixture\n' >"$test_root/file"
 git -C "$test_root" add file
 git -C "$test_root" commit -q -m 'feat(repository): create fixture'
 git -C "$test_root" branch dev
+
+# When re-invoked as the regression fixture's child (below), stop here: the
+# gate/classify fixtures above and the fixture-repo setup just above are the
+# exact code the bug corrupted, and re-running everything past this point
+# would double this script's cost on every repository-scope commit and push
+# for no additional coverage.
+if [ -n "${VC_TEST_GIT_DIR_REGRESSION_CHILD:-}" ]; then
+  exit 0
+fi
+
+# Regression fixture for #45: git exports an absolute GIT_DIR (and, for some
+# hooks, GIT_WORK_TREE) when it invokes a hook from a linked worktree. Prove
+# the unset above protects fixture setup by naming a throwaway repository with
+# GIT_DIR, re-running this suite in that environment, and confirming the named
+# repository's refs and config come back untouched.
+worktree_target="$test_root/worktree-target"
+mkdir -p "$worktree_target"
+git -C "$worktree_target" init -q -b master
+git -C "$worktree_target" config user.name Fixture
+git -C "$worktree_target" config user.email fixture@example.invalid
+printf 'fixture\n' >"$worktree_target/file"
+git -C "$worktree_target" add file
+git -C "$worktree_target" commit -q -m 'feat(repository): create worktree-target fixture'
+worktree_target_refs=$(git -C "$worktree_target" for-each-ref)
+worktree_target_config=$(git -C "$worktree_target" config --local --list)
+
+if ! child_output=$(GIT_DIR="$worktree_target/.git" GIT_WORK_TREE="$worktree_target" \
+    VC_TEST_GIT_DIR_REGRESSION_CHILD=1 "$0" 2>&1); then
+  printf '%s\n' "$child_output" >&2
+  echo "version-control test suite failed with GIT_DIR exported" >&2
+  exit 1
+fi
+
+if [ "$(git -C "$worktree_target" for-each-ref)" != "$worktree_target_refs" ]; then
+  echo "GIT_DIR export let the fixture suite write refs into the named repository" >&2
+  exit 1
+fi
+if [ "$(git -C "$worktree_target" config --local --list)" != "$worktree_target_config" ]; then
+  echo "GIT_DIR export let the fixture suite write config into the named repository" >&2
+  exit 1
+fi
 
 git -C "$test_root" switch -q dev
 printf 'promotion\n' >>"$test_root/file"
