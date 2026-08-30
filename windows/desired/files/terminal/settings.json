@@ -16,13 +16,13 @@
   "newTabPosition": "afterCurrentTab",
   "profiles": {
     "defaults": {
-      "colorScheme": "CyberPunk2077",
+      "colorScheme": "Catppuccin Latte",
       "experimental.retroTerminalEffect": false,
       "font": {
         "face": "D2KodingLigature Nerd Font Mono",
         "size": 13
       },
-      "useAcrylic": true
+      "useAcrylic": false
     },
     "list": [
       {
@@ -41,31 +41,31 @@
   },
   "schemes": [
     {
-      "background": "#272932",
-      "black": "#272932",
-      "blue": "#9381FF",
-      "brightBlack": "#7B8097",
-      "brightBlue": "#37EBF3",
-      "brightCyan": "#37EBF3",
-      "brightGreen": "#40FFE9",
-      "brightPurple": "#CB1DCD",
-      "brightRed": "#C71515",
-      "brightWhite": "#C1DEFF",
-      "brightYellow": "#FFF955",
-      "cursorColor": "#FDF500",
-      "cyan": "#00D0DB",
-      "foreground": "#E455AE",
-      "green": "#1AC5B0",
-      "name": "CyberPunk2077",
-      "purple": "#742D8B",
-      "red": "#710000",
-      "selectionBackground": "#742D8B",
-      "white": "#D1C5C0",
-      "yellow": "#FDF500"
+      "background": "#EFF1F5",
+      "black": "#5C5F77",
+      "blue": "#1E66F5",
+      "brightBlack": "#ACB0BE",
+      "brightBlue": "#1E66F5",
+      "brightCyan": "#179299",
+      "brightGreen": "#40A02B",
+      "brightPurple": "#EA76CB",
+      "brightRed": "#D20F39",
+      "brightWhite": "#BCC0CC",
+      "brightYellow": "#DF8E1D",
+      "cursorColor": "#DC8A78",
+      "cyan": "#179299",
+      "foreground": "#4C4F69",
+      "green": "#40A02B",
+      "name": "Catppuccin Latte",
+      "purple": "#EA76CB",
+      "red": "#D20F39",
+      "selectionBackground": "#ACB0BE",
+      "white": "#ACB0BE",
+      "yellow": "#DF8E1D"
     }
   ],
   "theme": "light",
   "themes": [],
-  "useAcrylicInTabRow": true,
+  "useAcrylicInTabRow": false,
   "warning.multiLinePaste": "automatic"
 }
