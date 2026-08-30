@@ -153,14 +153,18 @@ verification and the merge gate agree on the versions. Zellij is not part of it
 because the manifest already installs the application itself.
 
 The checks run without that toolchain. A source whose parser is missing is
-reported as unverified rather than failing, and the commands exit 69 to say so,
-which is why a clone without Lua or Pester can still push Windows work. CI
-supplies the missing evidence. `-Check` answers the same way for a detection
-the host cannot decide, such as an Appx package whose module will not load: the
-item is named as unverified rather than read as missing, and the check exits 69
-when nothing else drifted. Drift outranks it, so a host with both exits 2 and
-still names the undecided items, and `REQUIRE_NATIVE=1` turns unverified into a
-failure. `-Check` never installs or changes anything. Apply is explicit:
+reported as unverified rather than failing, and `check-desired-state.ps1` and
+`test.ps1` exit 69 to say so, which is why a clone without Lua or Pester can
+still push Windows work. CI supplies the missing evidence.
+
+`bootstrap.ps1 -Check` has a 69 of its own, and it means something else: a
+detection this host could not decide, such as an Appx package whose module will
+not load, which is named as unverified instead of read as missing. An unparsed
+source only appears in its summary and does not change what it returns. It
+exits 69 only when nothing else drifted, because drift outranks an undecided
+item, so a host with both exits 2 and still names the undecided items.
+`REQUIRE_NATIVE=1` turns an undecided item into a failure. `-Check` never
+installs or changes anything. Apply is explicit:
 
 ```powershell
 .\windows\bootstrap.ps1

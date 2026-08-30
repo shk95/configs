@@ -80,7 +80,10 @@ function Write-Summary {
         Write-Host ('  unverified detection: ' + ($unverifiedDetection -join ', ') +
             ' (not decided on this host; neither present nor missing was concluded)')
     }
-    if (-not $changed.Count -and -not $drift.Count) { Write-Host '  no changes or drift detected' }
+    # An undecided item is not a clean run, so it suppresses the clean line.
+    if (-not $changed.Count -and -not $drift.Count -and -not $unverifiedDetection.Count) {
+        Write-Host '  no changes or drift detected'
+    }
 }
 
 try {
@@ -200,13 +203,16 @@ try {
     # drift, undecided items, and REQUIRE_NATIVE the same way. Everything that
     # can drift or go undecided has been collected by here.
     $runStatus = Get-WinEnvCheckStatus -DriftCount $drift.Count -UnverifiedCount $unverifiedDetection.Count -RequireNative:$requireNative
+    $mode = if ($Check) { 'check' } else { 'verification' }
     if ($runStatus -eq 1) {
+        # The summary comes first on the one path where completeness is the
+        # point: the operator loses the selection and the drift list otherwise.
+        Write-Summary -Mode $mode
         throw ('Detection could not be completed on this host and REQUIRE_NATIVE is set: ' +
             ($unverifiedDetection -join '; ') + '.')
     }
 
     if (-not $shouldApply) {
-        $mode = if ($Check) { 'check' } else { 'verification' }
         Write-Summary -Mode $mode
         exit $runStatus
     }

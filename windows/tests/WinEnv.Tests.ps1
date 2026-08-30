@@ -623,6 +623,21 @@ Describe 'Appx detection capability' {
         (Get-WinEnvCheckStatus -DriftCount 1 -UnverifiedCount 1) | Should -Be 2
     }
 
+    It 'keeps the injected query seams name-only' {
+        # The seams exist so the three outcomes have fixtures. Declaring a
+        # position on the primary parameter is what stops a caller binding a
+        # scriptblock into one by accident.
+        foreach ($command in 'Get-WinEnvAppxPresence', 'Test-WinEnvFeaturePrecondition', 'Get-WinEnvPackageStatus') {
+            foreach ($seam in 'Query', 'AppxQuery', 'RegistrationQuery') {
+                $parameter = (Get-Command $command).Parameters[$seam]
+                if (-not $parameter) { continue }
+                $attribute = @($parameter.Attributes |
+                        Where-Object { $_ -is [System.Management.Automation.ParameterAttribute] })[0]
+                $attribute.Position | Should -Be ([int]::MinValue)
+            }
+        }
+    }
+
     It 'turns an undecidable item into a failure when native evidence is required' {
         # REQUIRE_NATIVE is the flag that says incompleteness must not pass,
         # and a failure outranks both drift and an unverified result.

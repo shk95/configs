@@ -438,6 +438,39 @@ protocol first, then the Unix-like and Windows checks are converted to emit it.
 The superseded behaviour can be removed once no check reports a missing
 prerequisite through `throw` or an unguarded command.
 
+The Windows check now carries the third state itself, and its ranking is a
+decision rather than a derivation. `windows/setup.ps1` reports a detection its
+host could not decide — today an Appx package whose module will not load — as
+unverified instead of as absence, and `Get-WinEnvCheckStatus` is the one place
+that ranks the run. The architecture settles only half the question: a failure
+outranks an unverified result, and it says nothing about drift, which is
+neither. The recorded answer is that drift outranks unverified.
+`bootstrap.ps1 -Check` returns 2 whenever anything drifted, 69 only when the
+sole open question could not be decided on that host, and 1 under
+`REQUIRE_NATIVE=1`, which promotes an undecided item into the failure that
+outranks both. The reason is what the command is for: it answers whether an
+Apply is needed, drift is the actionable half of that answer, and a known 2
+must not collapse into a 69. The cost, which the decision accepts, is that 69
+is observable only on a host that has already converged — a host that has never
+applied reports `state missing` drift and returns 2, naming the undecided items
+in its summary but not in its status. The repository maintainer owns the
+decision and it is recorded on the issue that introduced it; the evidence is
+the Pester fixture over the whole ranking plus a native `-Check` on an
+already-applied Windows 10 host.
+
+One Windows 10 sub-case survives that, and it is not Appx silence read as
+absence. When the module cannot answer, package detection keeps the WinGet
+registration as its answer, so a package WinGet's configured source does not
+report is still recorded missing — the same claim a `WinGet`-detected package
+already makes, drawn from a route that did answer. A Store-installed Windows
+Terminal reaches it. Apply then attempts an install, and
+`Install-WinEnvPackage` accepts WinGet's documented "no applicable update"
+status as success so a run is not aborted mid-deployment over a package that is
+present; post-apply validation still asks the same undecidable question and
+refuses to record state. Deciding that item needs detection independent of the
+registration query, which belongs with the general unverified state rather than
+with the Appx route.
+
 ## Initial monorepo convergence
 
 The repository originally converged four projects into one flake-composed

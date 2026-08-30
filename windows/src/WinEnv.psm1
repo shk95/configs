@@ -1,6 +1,10 @@
 Set-StrictMode -Version Latest
 
+# WinGet's documented statuses, as signed 32-bit values because that is what
+# $LASTEXITCODE carries: 0x8A150014 APPINSTALLER_CLI_ERROR_NO_APPLICATIONS_FOUND
+# and 0x8A15002B APPINSTALLER_CLI_ERROR_UPDATE_NOT_APPLICABLE.
 $script:WinGetNoPackageExitCode = -1978335212
+$script:WinGetNoApplicableUpdateExitCode = -1978335189
 $script:Utf8NoBom = [System.Text.UTF8Encoding]::new($false)
 
 # The two host queries this domain's detection depends on. They are script-
@@ -231,8 +235,11 @@ function Get-WinEnvAppxPresence {
     # This asks whether Appx works, never which Windows this is. A capability
     # question keeps its meaning when Microsoft changes which builds ship the
     # module; a build comparison does not.
+    # Position is declared so the query seam cannot be bound positionally by
+    # accident; once one parameter has an explicit position the rest are
+    # name-only.
     param(
-        [Parameter(Mandatory)][string] $Name,
+        [Parameter(Mandatory, Position = 0)][string] $Name,
         [scriptblock] $Query = $script:DefaultAppxQuery
     )
 
@@ -261,7 +268,7 @@ function Test-WinEnvFeaturePrecondition {
     # could not decide it. An unknown precondition type still throws, since an
     # undeclared type is a broken manifest rather than an undecidable host.
     param(
-        [Parameter(Mandatory)][hashtable] $Feature,
+        [Parameter(Mandatory, Position = 0)][hashtable] $Feature,
         [scriptblock] $AppxQuery = $script:DefaultAppxQuery
     )
 
@@ -526,7 +533,7 @@ function Get-WinGetRegistration {
 
 function Get-WinEnvPackageStatus {
     param(
-        [Parameter(Mandatory)][hashtable] $Package,
+        [Parameter(Mandatory, Position = 0)][hashtable] $Package,
         [scriptblock] $AppxQuery = $script:DefaultAppxQuery,
         [scriptblock] $RegistrationQuery = $script:DefaultRegistrationQuery
     )
@@ -564,10 +571,22 @@ function Get-WinEnvPackageStatus {
 }
 
 function Install-WinEnvPackage {
-    param([Parameter(Mandatory)][hashtable] $Package)
+    param([Parameter(Mandatory, Position = 0)][hashtable] $Package)
 
     & winget.exe install --id $Package.Id --exact --source winget --accept-source-agreements --accept-package-agreements --disable-interactivity
-    if ($LASTEXITCODE -ne 0) { throw "Installation of '$($Package.Id)' failed (exit $LASTEXITCODE)." }
+    if ($LASTEXITCODE -eq 0) { return }
+    # WinGet answering "already installed, no applicable update" is the install
+    # succeeding at what it was for, not a failed one. It happens when the host
+    # has the package by a route this domain's registration query does not see,
+    # which a Store-installed application on a host whose Appx module will not
+    # load can reach: detection could not decide, WinGet's own source reported
+    # nothing, and the item was recorded missing. Aborting the whole Apply
+    # there would stop a run mid-deployment over a package that is present.
+    if ($LASTEXITCODE -eq $script:WinGetNoApplicableUpdateExitCode) {
+        Write-Warning "'$($Package.Id)' is already installed by a route WinGet's configured source does not report; nothing was installed."
+        return
+    }
+    throw "Installation of '$($Package.Id)' failed (exit $LASTEXITCODE)."
 }
 
 function Update-WinEnvProcessPath {
