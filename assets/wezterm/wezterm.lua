@@ -7,6 +7,7 @@ local modules = {
   "config.appearance",
   "config.fonts",
   "config.bindings",
+  "config.startup",
 }
 
 for _, name in ipairs(modules) do
