@@ -483,11 +483,14 @@ Describe 'feature selection' {
         (Test-Throws { Get-WinEnvRequestedFeature -Manifest $manifest -Feature @('font') -Add @('font') }) | Should -Be $true
     }
 
-    It 'does not pull Windows Terminal into a WezTerm selection' {
+    It 'does not pull Windows Terminal into a WezTerm selection, but does pull the font' {
+        # wezterm's fonts.json falls back to D2KodingLigature Nerd Font Mono
+        # for Hangul, which only the font feature installs, so wezterm
+        # requires font the same way terminal requires zellij.
         $manifest = Get-WinEnvManifest -Path (Join-Path $desiredStateRoot 'manifest.json')
         $selection = Get-WinEnvFeatureSelection -Manifest $manifest -Requested @('wezterm')
-        ($selection.Selected -join ',') | Should -Be 'core,wezterm'
-        $selection.Excluded | Should -Contain 'font'
+        ($selection.Selected -join ',') | Should -Be 'core,font,wezterm'
+        ($selection.Implied -join ',') | Should -Be 'font'
         $selection.Excluded | Should -Contain 'terminal'
     }
 }

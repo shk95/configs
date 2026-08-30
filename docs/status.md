@@ -129,13 +129,18 @@ application setting. State schema 2 records the selection; a schema 1 state is
 read as a full deployment, so a host that applied before this change keeps
 exactly what it has.
 
-Two boundaries are decisions rather than accidents. `terminal` requires `zellij`
-because `files/terminal/settings.json` is owned whole under `ExactJson` and
-carries a profile that launches `zellij.exe`; splitting that payload or adding a
-merge comparison mode was rejected as more expensive than installing one small
-package. `wezterm` requires no font feature because `files/wezterm/fonts.json`
-asks for JetBrainsMono, which this manifest does not install, and never for
-D2Koding. PowerToys stays one feature because
+Three boundaries are decisions rather than accidents. `terminal` requires
+`zellij` because `files/terminal/settings.json` is owned whole under
+`ExactJson` and carries a profile that launches `zellij.exe`; splitting that
+payload or adding a merge comparison mode was rejected as more expensive than
+installing one small package. `wezterm` requires `font` because
+`files/wezterm/fonts.json` falls back to `D2KodingLigature Nerd Font Mono` for
+Hangul coverage: JetBrainsMono and Symbols Nerd Font Mono have none, and the
+concrete alternative already on a default Windows install, Malgun Gothic, is
+not fixed-pitch and would misalign any line mixing Korean and Latin.
+Declaring the dependency, the same way `terminal` already does, was cheaper
+than that misalignment; a host selecting `wezterm` alone now installs `font`
+too, reported as `added by dependency`. PowerToys stays one feature because
 `files/powertoys/settings.json` already owns the per-module enable map; a
 second selection axis over the same modules would have two sources.
 
