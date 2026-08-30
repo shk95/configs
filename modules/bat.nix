@@ -14,6 +14,20 @@ _: {
         # else, and it is wrong in exactly the case that hurts — a light scheme
         # under a theme built for a dark one. `ansi` cannot disagree with the
         # terminal because it has no opinion of its own.
+        #
+        # That premise survived this repository adopting a light default; it was
+        # not removed by it. `programs.bat` is in `homeManager.shared`, so it
+        # reaches both WSL homes, and their shells render inside Windows
+        # Terminal — `windows/desired/files/terminal/settings.json`, owned by
+        # the Windows domain and still selecting a dark scheme. Setting WezTerm
+        # and Ghostty to Catppuccin Latte says nothing about those hosts, so a
+        # named light theme here would be the same guess it always was. If one
+        # is ever wanted it belongs in a class that excludes the WSL homes, not
+        # in this one.
+        #
+        # It is also still the right answer on the terminals this change does
+        # fix: `ansi` resolves to whatever palette the terminal declares, which
+        # on Latte is Latte. Deferring costs nothing here.
         theme = "ansi";
 
         # Default is `full`, which adds a grid, a file header and a line-number

@@ -143,3 +143,41 @@ attach_to_session true
 on_force_close "detach"
 show_startup_tips false
 show_release_notes false
+
+// Colours follow the host terminal rather than being fixed here. Zellij's
+// built-in fallback palette is dark — `default_palette()` in zellij-utils is
+// literally `theme_hue: ThemeHue::Dark` — so declaring nothing keeps the pane
+// frames, tab bar and status line dark inside a light terminal. Naming one
+// light theme instead is not right either: modules/zellij.nix copies this file
+// into every Unix-like home, and the WSL homes render inside Windows Terminal,
+// whose scheme is declared in the Windows domain and is still dark.
+//
+// Setting both `theme_dark` and `theme_light` is what this file can do. With
+// the pair configured, zellij swaps palettes from the host terminal's own
+// colour-scheme report (CSI 2031 / DSR 997); with only one of them it ignores
+// both. `catppuccin-latte` is the light member of the family the graphical
+// terminals are set to, and `catppuccin-mocha` is named here as the other
+// branch of a terminal-driven pair, not as a theme this repository selects.
+// Both resolve against zellij's built-in themes, so neither needs a `themes`
+// block.
+//
+// Which terminals actually answer that query is the part to be exact about,
+// because the pair is inert without an answer:
+//
+//   Ghostty            answers — its binary carries the `[?996` / `[?997`
+//                      sequences and a `color_scheme_updates` mode.
+//   WezTerm            does not. The pinned build has no colour-scheme private
+//                      mode in its `DecPrivateModeCode` list at all, so the
+//                      query goes unanswered.
+//   Windows Terminal   unverified from here. If it answers, the WSL homes
+//                      follow it for free once #39 turns that scheme light.
+//
+// An unanswered query leaves zellij on its dark fallback, which is the right
+// outcome for a terminal that is still dark and the wrong one inside the light
+// WezTerm this repository now declares. That is why modules/zellij.nix pins a
+// static `theme` for `homeManager.desktop` on top of this file rather than
+// relying on the pair there. A static `theme` is authoritative only until a
+// report arrives, so the two settings do not fight: Ghostty still drives its
+// own palette, and WezTerm gets a light one without having to ask.
+theme_dark "catppuccin-mocha"
+theme_light "catppuccin-latte"

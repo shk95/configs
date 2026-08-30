@@ -17,7 +17,12 @@ _: {
 
         font-family = "D2KodingLigature Nerd Font Mono";
         font-size = 14;
-        theme = "Catppuccin Mocha";
+        # The light member of the same family WezTerm selects in
+        # assets/wezterm/config/appearance.lua. Ghostty resolves the name from
+        # its built-in list, so this needs no extra file either, and keeping
+        # both terminals in one family is what stops a graphical host from
+        # looking like two different machines.
+        theme = "Catppuccin Latte";
         minimum-contrast = 1.1;
 
         cursor-style = "block";
