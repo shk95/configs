@@ -2118,6 +2118,30 @@ Describe 'capture' {
         $parameters | Should -Not -Contain 'Yes'
     }
 
+    It 'asks the documented question once, and only that question' {
+        # The prompt's wording is asserted here rather than in the end-to-end
+        # transcript. Windows PowerShell's console host writes a Read-Host
+        # prompt to the console device instead of to stdout, so a captured
+        # child process never carries it and a transcript assertion would only
+        # ever be testing which console the suite ran on. The source is the
+        # same on every platform, and one Read-Host is itself the invariant:
+        # a second question would be a second confirmation.
+        $capturePath = Join-Path $repositoryRoot 'tools\capture.ps1'
+        $tokens = $null; $errors = $null
+        $tree = [System.Management.Automation.Language.Parser]::ParseFile($capturePath, [ref]$tokens, [ref]$errors)
+
+        $prompts = @($tree.FindAll(
+                { $args[0] -is [System.Management.Automation.Language.CommandAst] }, $true) |
+                Where-Object { $_.GetCommandName() -eq 'Read-Host' })
+        $prompts.Count | Should -Be 1
+
+        $literals = @($tree.FindAll(
+                { $args[0] -is [System.Management.Automation.Language.StringConstantExpressionAst] }, $true) |
+                ForEach-Object { $_.Value })
+        $literals | Should -Contain 'Write these payloads, commit and publish? [y/N]'
+        $literals | Should -Contain 'Write these payloads and commit? [y/N]'
+    }
+
     It 'never spells a hook bypass or an administrative merge' {
         # -Publish adds a push and a merge to this tool's reach, and each has a
         # flag that would turn a gate off. Neither may appear in the source at
@@ -2925,10 +2949,21 @@ exit 1
             $run = Invoke-Capture -Fixture $fixture -Argument @('-Feature', 'core', '-Publish') -Answer 'y'
 
             $run.ExitCode | Should -Be 0
-            $run.Output | Should -Contain 'Write these payloads, commit and publish? [y/N]: y'
+            # What the confirmation asked is asserted against the script's
+            # source below ('asks the documented question…'), not against this
+            # transcript. Windows PowerShell's console host writes a
+            # Read-Host prompt to the console device rather than to stdout, so
+            # a child process whose output is captured never carries it, while
+            # Unix-like pwsh happens to put it in the pipe. That difference is
+            # the console's, not the tool's; what this fixture is for is the
+            # behaviour the answer produced, which is everything below.
+            #
             # The last line is the pull-request URL and nothing after it: this
             # run never waits on CI and never merges.
             $run.Output[-1] | Should -Be 'https://github.com/example/repo/pull/1'
+            # The run really did stop for the question and act on the answer:
+            # the plan was printed, and the payload was written only after it.
+            $run.Output | Should -Contain '  publish: one pull request against dev, auto-merge armed'
 
             $log = @(Get-GhLog $fixture)
             @($log | Where-Object { $_ -like 'pr create *' }).Count | Should -Be 1
@@ -2960,11 +2995,17 @@ exit 1
             $body | Should -Match ([regex]::Escape('feature/windows-capture-core -> feature/windows-capture-core'))
             $body | Should -Not -Match ([regex]::Escape("(the pre-push hook's output, once the push runs)"))
             # Ordering: what the push said reaches the terminal too, between
-            # the push line and the pull request being opened.
+            # the push line and the pull request being opened. Anchored on the
+            # ASCII part of each line, because how a captured child's `→`
+            # survives depends on the console encoding of the host running the
+            # suite, and this fixture is about order rather than about bytes.
             $text = $run.Output -join [Environment]::NewLine
-            $pushIndex = $text.IndexOf('→ pushing feature/windows-capture-core')
+            $pushIndex = $text.IndexOf('pushing feature/windows-capture-core')
             $reportIndex = $text.IndexOf('feature/windows-capture-core -> feature/windows-capture-core')
-            $openIndex = $text.IndexOf('→ opening a pull request against dev')
+            $openIndex = $text.IndexOf('opening a pull request against dev')
+            $pushIndex | Should -BeGreaterThan -1
+            $reportIndex | Should -BeGreaterThan -1
+            $openIndex | Should -BeGreaterThan -1
             $pushIndex | Should -BeLessThan $reportIndex
             $reportIndex | Should -BeLessThan $openIndex
         }
