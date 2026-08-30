@@ -209,7 +209,8 @@ The invariants, stated without reference to any command:
   interface, or is derived from a name, is not.
 - Whatever forgives a violation is declared, reviewable, and enforced in both
   directions: an exclusion that no longer excludes anything is removed rather
-  than kept.
+  than kept, and one that forgives more than the single occurrence it was
+  written for is a whole-file exemption wearing an exclusion's clothes.
 - Secret detection stays with the secret scan, which already owns it and must
   not be duplicated.
 

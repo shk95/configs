@@ -293,9 +293,11 @@ When it reports something, in order of preference:
    index too.
 4. Only when the reported text is genuinely not what it looks like, add one
    `<path>`, tab, `<literal string>` row to `tool/version-control/hygiene.allow`
-   with a comment giving the reason. Exclude one string at one path, never a
-   whole file. An entry whose literal no longer occurs at its path fails the
-   check and is removed together with the text it forgave.
+   with a comment giving the reason. Both halves of "one string at one path"
+   are enforced, not conventions: an entry whose literal no longer occurs at
+   its path fails the check and is removed together with the text it forgave,
+   and an entry that forgives more than one line fails as the whole-file
+   exclusion it is. Write a literal specific enough to name the occurrence.
 
 Adding an allow entry is a governance change and is reviewed as one. There is
 no operational bypass: `git commit --no-verify` skips every hook and leaves CI

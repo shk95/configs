@@ -1035,6 +1035,26 @@ if printf '%s\n' "$hygiene_output" | grep -qF 'doc.md:'; then
   exit 1
 fi
 
+# One entry, one line. The path half of an entry is anchored but the literal
+# half is an unanchored substring, so nothing in the format stops `doc.md<TAB>/`
+# from forgiving every line in that file -- and the stale-entry rule cannot
+# catch it, because the literal does still occur there. This is the rule that
+# keeps the allow file from becoming the whole-file exclusion the design
+# refuses.
+hygiene_new
+printf 'see /%s/%s\n' home eve >"$hygiene_repo/doc.md"
+printf 'and /%s/%s\n' home mallory >>"$hygiene_repo/doc.md"
+printf 'doc.md\t/\n' >"$hygiene_repo/tool/version-control/hygiene.allow"
+hygiene_expect_fail 'exclusion, one entry blinding a whole file' 'forgives 2 lines'
+
+# A near-miss for the same rule: the same broad literal forgiving exactly one
+# line is still a legitimate entry, so the rule counts rather than guesses at
+# specificity.
+hygiene_new
+printf 'see /%s/%s\n' home eve >"$hygiene_repo/doc.md"
+printf 'doc.md\t/\n' >"$hygiene_repo/tool/version-control/hygiene.allow"
+hygiene_expect_pass 'exclusion, a broad literal that forgives one line'
+
 # The three evidence states. Nothing beyond a POSIX shell and Git is needed, so
 # 69 should never occur on this design; it is implemented and fixtured anyway,
 # because a future prerequisite must report through the contract rather than

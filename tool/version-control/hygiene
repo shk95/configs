@@ -205,8 +205,15 @@ done <"$work/allow"
 # in the hit. The entries are read in BEGIN rather than as awk's first input
 # file, because an empty allow file would otherwise make the usual NR == FNR
 # idiom read the hits themselves as entries and suppress all of them.
+#
+# Every suppression is recorded, because the path half of an entry is anchored
+# but the literal half is an unanchored substring with no minimum specificity.
+# Nothing in the format stops `docs/x.md<TAB>/` from forgiving every line in
+# that file, which is the file-granularity exclusion the design refuses. The
+# breadth is checked after the scans instead: one entry, one line.
+: >"$work/suppressed"
 suppress() {
-  awk -v allow="$work/allow" '
+  awk -v allow="$work/allow" -v suppressed="$work/suppressed" '
     BEGIN {
       entries = 0
       while ((getline line < allow) > 0) {
@@ -219,7 +226,10 @@ suppress() {
     }
     {
       for (i = 1; i <= entries; i++)
-        if (index($0, path[i] ":") == 1 && index($0, literal[i]) > 0) next
+        if (index($0, path[i] ":") == 1 && index($0, literal[i]) > 0) {
+          print path[i] "\t" literal[i] "\t" $0 >>suppressed
+          next
+        }
       print
     }
   '
@@ -375,6 +385,25 @@ while IFS= read -r hit; do
   [ -n "$hit" ] || continue
   violation "Windows SID in: $hit"
 done <"$work/sid-hits"
+
+# ---------------------------------------------------------------------------
+# The breadth of each exclusion
+# ---------------------------------------------------------------------------
+
+# An entry excludes one string in one place. An entry that forgave several
+# lines would be a whole-file exclusion written one row at a time, and the
+# stale-entry rule cannot catch it: that rule only asks whether the literal
+# still occurs somewhere at the path. Distinct hits are counted per entry, so
+# one line matched by two axes still counts once.
+awk -F'\t' '
+  { if (!seen[$0]++) forgiven[$1 "\t" $2]++ }
+  END { for (entry in forgiven) if (forgiven[entry] > 1) print forgiven[entry] "\t" entry }
+' "$work/suppressed" >"$work/over-broad"
+
+while IFS="$tab" read -r forgiven entry_path entry_literal; do
+  [ -n "${forgiven:-}" ] || continue
+  violation "$allow_file: entry '$entry_literal' forgives $forgiven lines in $entry_path; an entry excludes one string in one place, not a file"
+done <"$work/over-broad"
 
 # ---------------------------------------------------------------------------
 
