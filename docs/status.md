@@ -843,6 +843,23 @@ there, a Windows commit is ungated locally and the merge gate is the only gate
 it passes through, which is a fact for CI to carry rather than for the tool to
 paper over.
 
+Three rules earned their shape from review rather than from design. The
+account-path refusal carries the same three axes `tool/version-control/hygiene`
+enforces repository-wide -- a drive-letter path in either separator, the POSIX
+form, and the WSL UNC form -- because a Windows Terminal starting directory or a
+WezTerm setting routinely holds a WSL path, and the account-name refusal only
+backstops a leak that names this host's own account. Capture does not lean on
+the commit hook for that check, since whether the hook runs is the open question
+above. The generated-profile rule drops a host profile with no usable guid and
+refuses a capture whose kept profiles repeat one, because either shape written
+into a payload makes every later `-Check` and Apply throw instead of reporting
+drift, and a payload that cannot be compared is worse than the drift it came
+from. And a capture whose payload text equals the one already committed is
+reported as nothing to commit rather than carried into the commit path, where an
+empty `git add` would make `git commit` fail and read as a hook rejection: the
+host drifted in a way desired state cannot express, and saying that is the whole
+answer.
+
 Evidence is split accordingly. The Unix-like Pester run covers every rule
 above and is not Windows evidence: the fixtures hand the module a host no
 machine has to be. What is owed from the maintainer's host is one real capture
