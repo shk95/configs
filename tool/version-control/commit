@@ -1,0 +1,461 @@
+#!/bin/sh
+#
+# Interactive helper for routine desired-state commits: one command that
+# applies a templated edit, shows exactly what it will do, and commits it.
+#
+# It composes the tools that already exist instead of becoming a second source
+# of policy, which AGENTS.md line 93 forbids. tool/version-control/classify
+# still answers who owns the change, tool/dispatch/select still answers which
+# checks it needs, and .githooks/evidence still decides what a check's exit
+# status means. Nothing here re-derives any of the three.
+#
+# The commit is a plain `git commit`, so .githooks/pre-commit runs and its
+# output reaches the terminal unaltered. That is the point rather than an
+# accident: exit 69 means unverified, not failed, and an unverified check is
+# only meaningful if the operator reads it. There is no --no-verify here and no
+# other hook bypass. The hook header offers that bypass to a human deciding to
+# skip a gate; a tool that took it silently would create new policy.
+#
+# The scope is edits whose commit message is a template. It is not a general
+# Nix editor: it inserts and deletes whole lines and never re-serialises a
+# file, leaving tool/checks/format as the arbiter of layout. That check is
+# selected automatically, because modules/* classifies unixlike, so a host
+# without Nix reports it unverified rather than skipping the question.
+#
+# Every run ends at an interactive confirmation. There is deliberately no
+# unattended mode: no --yes, no --force, no environment override.
+#
+# usage: tool/version-control/commit [--dry-run] <command>
+
+set -eu
+
+root=$(git rev-parse --show-toplevel)
+cd "$root"
+
+script_dir=$(CDPATH= cd -- "$(dirname -- "$0")" && pwd)
+classify="$script_dir/classify"
+select_checks="$root/tool/dispatch/select"
+
+hooks_dir="$root/.githooks"
+. "$hooks_dir/evidence"
+
+# Hooks are opt-in: tool/setup --fix sets core.hooksPath, a fresh clone does
+# not. Naming the units a commit needs would otherwise report a gate that never
+# applied.
+hooks_path=$(git config --get core.hooksPath 2>/dev/null || true)
+
+homebrew_module=modules/darwin-homebrew.nix
+
+usage_text() {
+  cat <<'EOF'
+usage: tool/version-control/commit [--dry-run] <command>
+
+commands:
+  brew add <formula>       declare a Homebrew formula in modules/darwin-homebrew.nix
+  brew remove <formula>    remove a Homebrew formula
+  cask add <cask>          declare a Homebrew cask
+  cask remove <cask>       remove a Homebrew cask
+  flake refresh [<input>]  refresh flake.lock, every input or one
+
+The change is always confirmed interactively before anything is written. There
+is no unattended mode and no hook bypass.
+EOF
+}
+
+usage() {
+  usage_text >&2
+  exit 2
+}
+
+refuse() {
+  printf '\033[31m✗ %s\033[0m\n' "$1" >&2
+  printf '  %s\n' "$2" >&2
+  exit 1
+}
+
+dry_run=0
+while [ "$#" -gt 0 ]; do
+  case $1 in
+    --dry-run)
+      dry_run=1
+      shift
+      ;;
+    -h | --help)
+      usage_text
+      exit 0
+      ;;
+    -n | --no-verify | --no-hooks | -f | --force)
+      refuse "Refusing a hook bypass: $1" \
+        "AGENTS.md line 93: procedures and tools implement policy but must not silently create new policy. Skipping a gate is a human decision, not this tool's."
+      ;;
+    --)
+      shift
+      break
+      ;;
+    -*)
+      usage
+      ;;
+    *)
+      break
+      ;;
+  esac
+done
+
+[ "$#" -gt 0 ] || usage
+group=$1
+shift
+
+item=
+input=
+case $group in
+  brew | cask)
+    [ "$#" -eq 2 ] || usage
+    action=$1
+    item=$2
+    case $action in
+      add | remove) ;;
+      *) usage ;;
+    esac
+    ;;
+  flake)
+    [ "$#" -ge 1 ] || usage
+    [ "$#" -le 2 ] || usage
+    action=$1
+    shift
+    [ "$action" = refresh ] || usage
+    input=${1:-}
+    ;;
+  *) usage ;;
+esac
+
+# A name reaches a Nix string literal and a shell argument list. Keep it to what
+# Homebrew and flake inputs actually spell.
+valid_name() {
+  case $1 in
+    '' | *[!A-Za-z0-9._/+-]*) return 1 ;;
+  esac
+  return 0
+}
+
+[ -z "$item" ] || valid_name "$item" \
+  || refuse "Not a usable package name: $item" \
+    "Use the name as Homebrew spells it, for example 'displayplacer' or 'nikitabobko/tap/aerospace'."
+[ -z "$input" ] || valid_name "$input" \
+  || refuse "Not a usable flake input name: $input" \
+    "Use the input name as flake.nix declares it, for example 'nixpkgs'."
+
+# Refusals that hold for every command. Checked before any work so that a
+# refusal leaves the clone exactly as it was found.
+branch=$(git symbolic-ref --quiet --short HEAD || echo detached)
+if [ "$branch" = master ]; then
+  refuse "Refusing to commit on master." \
+    "AGENTS.md: only this repository's dev may enter master, by pull request and merge commit. There is no operational bypass."
+fi
+
+if [ -n "$(git diff --cached --name-only)" ]; then
+  refuse "The index already holds staged changes." \
+    "This helper commits only the edit it makes. Commit or unstage the rest first."
+fi
+
+require_untouched() {
+  if [ -n "$(git status --porcelain -- "$1")" ]; then
+    refuse "$1 already has uncommitted changes." \
+      "This helper commits only the edit it makes. Commit or restore that file first."
+  fi
+}
+
+# Ownership and check selection come from the tools that own those questions.
+report_plan() {
+  plan_path=$1
+  plan_message=$2
+
+  printf '\nclassification: %s\n' "$("$classify" --files "$plan_path")"
+  printf 'checks:\n'
+  if [ "$hooks_path" = .githooks ]; then
+    printf 'M\t%s\n' "$plan_path" | "$select_checks" commit | sed 's/^/  /'
+  else
+    # Listing units nothing will run is worse than saying so: the commit would
+    # look gated when no check ran at all.
+    evidence_unavailable "pre-commit checks" \
+      "core.hooksPath is ${hooks_path:-unset}, not .githooks; fix with tool/setup --fix" \
+      || exit 1
+  fi
+  printf 'message: %s\n' "$plan_message"
+  evidence_summary
+}
+
+selected_units() {
+  printf 'M\t%s\n' "$1" | "$select_checks" commit
+}
+
+require_classified() {
+  if selected_units "$1" | grep -qx unclassified; then
+    refuse "$1 has no owning scope." \
+      "Update tool/version-control/classify before committing it. Both gates reject an unclassified path."
+  fi
+}
+
+confirm() {
+  printf '\n%s [y/N] ' "$1"
+  if ! IFS= read -r answer; then
+    answer=
+  fi
+  case $answer in
+    y | Y)
+      # Stdin may be a pipe, which echoes no newline of its own. Start the
+      # hook's output on a line of its own either way.
+      printf '\n'
+      return 0
+      ;;
+  esac
+  printf 'Aborted. Nothing was written.\n'
+  exit 1
+}
+
+commit_staged() {
+  commit_path=$1
+  commit_message=$2
+
+  # No capture, no pipe, no redirection: the hook's evidence lines and its
+  # closing unverified summary are the operator's to read.
+  if git commit -m "$commit_message"; then
+    return 0
+  fi
+  printf '\033[31m✗ The commit was rejected.\033[0m\n' >&2
+  printf '  The edit is left staged. Fix what the hook reported, or discard it with:\n' >&2
+  printf '    git restore --staged --worktree -- %s\n' "$commit_path" >&2
+  exit 1
+}
+
+# The entries of one Nix string list, in file order. The pattern is strict, and
+# the strictness is only safe because require_readable_list refuses the whole
+# edit when the list holds a line neither this nor the editor can read. A reader
+# that quietly skipped `"displayplacer" # broken` would report that entry as
+# absent, and the editor would then add a second copy of it.
+list_entries() {
+  awk -v list="$1" '
+    $0 ~ "^[[:space:]]*" list " = \\[$" { inside = 1; next }
+    inside && /^[[:space:]]*\];[[:space:]]*$/ { inside = 0 }
+    inside && /^[[:space:]]*"[^"]*"$/ {
+      match($0, /"[^"]*"/)
+      print substr($0, RSTART + 1, RLENGTH - 2)
+    }
+  ' "$homebrew_module"
+}
+
+# Everything between the opener and `];` must be a blank line, a comment line,
+# or a bare quoted entry. Anything else is refused rather than skipped, because
+# skipping it is what turns an add into a silent duplicate.
+require_readable_list() {
+  unreadable=$(awk -v list="$1" '
+    $0 ~ "^[[:space:]]*" list " = \\[$" { inside = 1; next }
+    inside && /^[[:space:]]*\];[[:space:]]*$/ { inside = 0; next }
+    inside {
+      if ($0 ~ /^[[:space:]]*$/) next
+      if ($0 ~ /^[[:space:]]*#/) next
+      if ($0 ~ /^[[:space:]]*"[^"]*"$/) next
+      sub(/^[[:space:]]+/, "")
+      printf "%d: %s", NR, $0
+      exit
+    }
+  ' "$homebrew_module")
+
+  [ -z "$unreadable" ] || refuse \
+    "$homebrew_module line $unreadable" \
+    "An entry in $list must be a bare quoted name on its own line. Edit that line by hand; this helper refuses rather than skip it, because skipping it would duplicate an entry."
+}
+
+list_indent() {
+  awk -v list="$1" '
+    $0 ~ "^[[:space:]]*" list " = \\[$" {
+      match($0, /^[[:space:]]*/)
+      fallback = substr($0, 1, RLENGTH) "  "
+      inside = 1
+      next
+    }
+    inside && /^[[:space:]]*\];[[:space:]]*$/ { exit }
+    inside && /^[[:space:]]*"[^"]*"$/ {
+      match($0, /^[[:space:]]*/)
+      print substr($0, 1, RLENGTH)
+      found = 1
+      exit
+    }
+    END { if (!found) printf "%s", fallback }
+  ' "$homebrew_module"
+}
+
+# Insert or delete one entry line and nothing else.
+#
+# The sort key is the last slash-separated segment, not the whole string:
+# casks begins with "nikitabobko/tap/aerospace", sorted under aerospace, so a
+# raw-string comparison files a tapped cask in the wrong place.
+#
+# Comment lines are buffered rather than printed immediately, because a comment
+# block belongs to the entry below it. An insert therefore lands above that
+# block, and a removal takes the block with the entry: "bettercap" carries
+# "Broken on Darwin in the locked nixpkgs", and leaving that behind would
+# silently re-attach it to "displayplacer".
+edit_list() {
+  awk -v list="$1" -v mode="$2" -v item="$3" -v ind="$4" '
+    function key(s,   n, p) {
+      n = split(s, p, "/")
+      return p[n]
+    }
+    function flush(   i) {
+      for (i = 1; i <= buffered; i++) print buf[i]
+      buffered = 0
+    }
+    function insert() {
+      printf "%s\"%s\"\n", ind, item
+      done = 1
+    }
+    BEGIN { state = 0; buffered = 0; done = 0 }
+    state == 0 {
+      print
+      if ($0 ~ "^[[:space:]]*" list " = \\[$") state = 1
+      next
+    }
+    state == 1 && /^[[:space:]]*\];[[:space:]]*$/ {
+      flush()
+      if (mode == "add" && !done) insert()
+      print
+      state = 2
+      next
+    }
+    state == 1 && /^[[:space:]]*#/ {
+      buf[++buffered] = $0
+      next
+    }
+    state == 1 && /^[[:space:]]*"[^"]*"$/ {
+      match($0, /"[^"]*"/)
+      name = substr($0, RSTART + 1, RLENGTH - 2)
+      if (mode == "remove" && name == item) {
+        buffered = 0
+        next
+      }
+      if (mode == "add" && !done && key(name) > key(item)) insert()
+      flush()
+      print
+      next
+    }
+    { flush(); print }
+  ' "$homebrew_module"
+}
+
+homebrew_command() {
+  case $group in
+    brew)
+      list=brews
+      noun=formula
+      ;;
+    cask)
+      list=casks
+      noun=cask
+      ;;
+  esac
+
+  [ -f "$homebrew_module" ] || refuse "$homebrew_module is missing." \
+    "This helper edits the Homebrew inventory declared there."
+  grep -Eq "^[[:space:]]*$list = \[$" "$homebrew_module" \
+    || refuse "$homebrew_module declares no $list list." \
+      "Update the module or this helper; they disagree about the file's shape."
+  require_readable_list "$list"
+
+  require_untouched "$homebrew_module"
+
+  if list_entries "$list" | grep -Fxq -- "$item"; then
+    present=1
+  else
+    present=0
+  fi
+
+  case $action in
+    add)
+      [ "$present" -eq 0 ] || refuse "$item is already declared in $list." "Nothing to do."
+      message="feat(unixlike): add homebrew $noun $item"
+      ;;
+    remove)
+      [ "$present" -eq 1 ] || refuse "$item is not declared in $list." "Nothing to do."
+      message="chore(unixlike): remove homebrew $noun $item"
+      ;;
+  esac
+
+  require_classified "$homebrew_module"
+
+  candidate=$(mktemp)
+  trap 'rm -f "$candidate"' EXIT
+  edit_list "$list" "$action" "$item" "$(list_indent "$list")" >"$candidate"
+
+  if cmp -s "$homebrew_module" "$candidate"; then
+    refuse "The edit would change nothing in $homebrew_module." \
+      "The $list list is not shaped the way this helper reads it."
+  fi
+
+  printf 'edit: %s\n' "$homebrew_module"
+  git --no-pager diff --no-index --no-color -- "$homebrew_module" "$candidate" \
+    | sed -n '/^@@/,$p'
+  report_plan "$homebrew_module" "$message"
+
+  [ "$dry_run" -eq 0 ] || exit 0
+
+  confirm "Apply this edit and commit?"
+
+  # Written in place so the file keeps its mode and identity.
+  cat "$candidate" >"$homebrew_module"
+  git add -- "$homebrew_module"
+  commit_staged "$homebrew_module" "$message"
+}
+
+flake_command() {
+  # AGENTS.md line 127: do not update flake inputs unless the task calls for
+  # it. This is the only command that touches them, and it never runs as a side
+  # effect of another one.
+  require_untouched flake.lock
+
+  if [ -n "$input" ]; then
+    message="chore(unixlike-deps): refresh $input in flake.lock"
+    action_line="nix flake update $input"
+  else
+    message="chore(unixlike-deps): refresh flake.lock"
+    action_line="nix flake update"
+  fi
+
+  require_classified flake.lock
+
+  printf 'edit: flake.lock\n'
+  printf 'action: %s\n' "$action_line"
+  report_plan flake.lock "$message"
+
+  [ "$dry_run" -eq 0 ] || exit 0
+
+  if ! command -v nix >/dev/null 2>&1; then
+    evidence_unavailable "flake refresh" "nix is not installed" || exit 1
+    evidence_summary
+    exit 69
+  fi
+
+  confirm "Run this update and commit the result?"
+
+  before=$(git hash-object flake.lock)
+  if [ -n "$input" ]; then
+    nix flake update "$input"
+  else
+    nix flake update
+  fi
+  after=$(git hash-object flake.lock)
+
+  if [ "$before" = "$after" ]; then
+    printf '\nflake.lock is unchanged; nothing to commit.\n'
+    exit 0
+  fi
+
+  # CONTRIBUTING.md: flake.lock refreshes go in dedicated chore(unixlike-deps)
+  # commits, so nothing else may join this one.
+  git add -- flake.lock
+  commit_staged flake.lock "$message"
+}
+
+case $group in
+  brew | cask) homebrew_command ;;
+  flake) flake_command ;;
+esac
