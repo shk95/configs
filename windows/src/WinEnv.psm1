@@ -7,6 +7,12 @@ $script:WinGetNoPackageExitCode = -1978335212
 $script:WinGetNoApplicableUpdateExitCode = -1978335189
 $script:Utf8NoBom = [System.Text.UTF8Encoding]::new($false)
 
+# Every comparison mode a managed file may declare. The manifest is validated
+# against this list when it loads, so a misspelled mode names the entry at
+# fault instead of reaching a host and failing there as an unknown mode with
+# the file already written.
+$script:WinEnvComparisonMode = @('Text', 'ExactJson', 'JsonSubset', 'ExactJsonWithGeneratedProfiles')
+
 # The two host queries this domain's detection depends on. They are script-
 # scope defaults rather than inline calls so that every outcome, including the
 # one a given host cannot produce, has a fixture. Nothing but a test passes
@@ -19,7 +25,7 @@ function Get-WinEnvManifest {
 
     $manifest = Get-Content -LiteralPath $Path -Raw -Encoding utf8 |
         ConvertFrom-Json -AsHashtable -ErrorAction Stop
-    if ($manifest.SchemaVersion -ne 3) { throw "Unsupported manifest schema: $($manifest.SchemaVersion)" }
+    if ($manifest.SchemaVersion -ne 4) { throw "Unsupported manifest schema: $($manifest.SchemaVersion)" }
     [void][System.Management.Automation.SemanticVersion]$manifest.ProjectVersion
     # Every consumer reads the manifest through here, so the feature model is
     # validated once instead of separately in setup, the check tool, and tests.
@@ -126,9 +132,21 @@ function Assert-WinEnvFeatureModel {
 function Assert-WinEnvManagedFileModel {
     <#
         .SYNOPSIS
-        Validate the source shape of every managed file.
+        Validate the declared shape of every managed file.
 
         .DESCRIPTION
+        A managed file declares how it is compared and which sources it may
+        deploy, and both are validated here so a mistake in either names the
+        entry at fault while the manifest loads.
+
+        Comparison is one mode per entry rather than a mode plus a set of
+        per-entry tolerances. A tolerance that could be attached to any mode
+        would have combinations nothing implements -- a text file with a JSON
+        profile rule -- and each would read as meaningful and do nothing.
+        `ExactJsonWithGeneratedProfiles` reads its payload as JSON, so an
+        entry whose parser is not `Json` is declaring a mode that cannot apply
+        to it.
+
         Schema 3 lets one managed file declare alternative sources selected by
         the host's Windows build. One entry was chosen over two mutually
         exclusive entries because it keeps one Id, one Target, one Compare mode
@@ -148,6 +166,20 @@ function Assert-WinEnvManagedFileModel {
 
     foreach ($definition in $Manifest.ManagedFiles) {
         $id = [string]$definition.Id
+
+        $compare = if ($definition.ContainsKey('Compare')) { [string]$definition.Compare } else { '' }
+        if ($script:WinEnvComparisonMode -cnotcontains $compare) {
+            throw ("The managed file '$id' declares unknown comparison mode '$compare'; " +
+                "the modes are: $($script:WinEnvComparisonMode -join ', ').")
+        }
+        if ($compare -ceq 'ExactJsonWithGeneratedProfiles') {
+            $parser = if ($definition.ContainsKey('Parser')) { [string]$definition.Parser } else { '' }
+            if ($parser -cne 'Json') {
+                throw ("The managed file '$id' declares comparison mode '$compare' with parser '$parser'; " +
+                    'that mode reads both sides as JSON and can only be declared on a Json payload.')
+            }
+        }
+
         $hasSource = $definition.ContainsKey('Source')
         $hasSources = $definition.ContainsKey('Sources')
         if ($hasSource -and $hasSources) {
@@ -1003,6 +1035,38 @@ function Get-WinEnvObjectProperties {
     return @($Value.PSObject.Properties | Where-Object MemberType -in 'NoteProperty', 'Property')
 }
 
+function Get-WinEnvJsonMember {
+    <#
+        .SYNOPSIS
+        Read one member of a parsed JSON value, or $null when it has none.
+
+        .DESCRIPTION
+        The name is matched ordinally. PSObject's own indexer is
+        case-insensitive while every comparison built on this helper is
+        ordinal, so reading `Source` as `source` would let an entry Windows
+        Terminal did not write pass as one it generated.
+
+        Every return is comma-wrapped because a bare `return $array` writes the
+        array's elements to the pipeline one at a time, and a one-element
+        array comes back to the caller as its single element. A settings file
+        declaring one profile would then be read as an object rather than a
+        list.
+    #>
+    param(
+        $Value,
+        [Parameter(Mandatory)][string] $Name
+    )
+
+    if ($null -eq $Value) { return $null }
+    if ($Value -is [System.Collections.IDictionary]) {
+        if ($Value.Contains($Name)) { return , $Value[$Name] }
+        return $null
+    }
+    $property = $Value.PSObject.Properties | Where-Object { $_.Name -ceq $Name } | Select-Object -First 1
+    if (-not $property) { return $null }
+    return , $property.Value
+}
+
 function Test-WinEnvJsonSubset {
     param($Expected, $Actual)
 
@@ -1030,6 +1094,108 @@ function ConvertTo-WinEnvCanonicalJson {
     return (($Content | ConvertFrom-Json -ErrorAction Stop) | ConvertTo-Json -Depth 100 -Compress)
 }
 
+function Test-WinEnvGeneratedProfileList {
+    <#
+        .SYNOPSIS
+        Compare a declared Windows Terminal profile list with a host's.
+
+        .DESCRIPTION
+        Declared profiles are matched by guid rather than by position, because
+        Windows Terminal decides where in the list it writes the profiles its
+        fragments and dynamic generators produce. Every declared guid must
+        appear exactly once and its object must be equal, so a changed
+        declared profile is still drift.
+
+        An entry the payload does not declare is tolerated only when it
+        carries a non-empty string `guid` and a non-empty string `source`,
+        which is how Windows Terminal records that a fragment extension or a
+        profile generator produced it. An undeclared entry without `source`
+        was written by a person or by another tool, and one without a `guid`
+        is not the shape this rule can key on at all, so both stay drift:
+        this is a tolerance for one known writer, not a licence for the file
+        to hold anything.
+    #>
+    param(
+        [Parameter(Mandatory)] $Expected,
+        $Actual
+    )
+
+    if ($Actual -isnot [System.Collections.IList]) { return $false }
+
+    $declared = [System.Collections.Generic.Dictionary[string, object]]::new([System.StringComparer]::Ordinal)
+    foreach ($entry in $Expected) {
+        $guid = [string](Get-WinEnvJsonMember -Value $entry -Name 'guid')
+        if ([string]::IsNullOrWhiteSpace($guid)) {
+            throw 'A declared Windows Terminal profile has no guid; this mode matches declared profiles by guid.'
+        }
+        if ($declared.ContainsKey($guid)) {
+            throw "The declared Windows Terminal profiles use the guid '$guid' more than once."
+        }
+        $declared[$guid] = $entry
+    }
+
+    $matched = [System.Collections.Generic.HashSet[string]]::new([System.StringComparer]::Ordinal)
+    foreach ($entry in $Actual) {
+        $guid = Get-WinEnvJsonMember -Value $entry -Name 'guid'
+        if ($guid -is [string] -and $declared.ContainsKey($guid)) {
+            # A second entry carrying a declared guid is ambiguous rather than
+            # generated, whatever its source says.
+            if (-not $matched.Add($guid)) { return $false }
+            $expectedJson = $declared[$guid] | ConvertTo-Json -Depth 100 -Compress
+            $actualJson = $entry | ConvertTo-Json -Depth 100 -Compress
+            if ($expectedJson -cne $actualJson) { return $false }
+            continue
+        }
+        # Both members are tested as strings rather than coerced to one: a
+        # `source` of 0 or false is not a generator's name, and an entry with
+        # no guid is not something this rule could key on.
+        if ($guid -isnot [string] -or [string]::IsNullOrWhiteSpace($guid)) { return $false }
+        $source = Get-WinEnvJsonMember -Value $entry -Name 'source'
+        if ($source -isnot [string] -or [string]::IsNullOrWhiteSpace($source)) { return $false }
+    }
+
+    return $matched.Count -eq $declared.Count
+}
+
+function Test-WinEnvJsonWithGeneratedProfiles {
+    <#
+        .SYNOPSIS
+        Compare two Windows Terminal settings documents, tolerating the
+        profiles the application generated.
+
+        .DESCRIPTION
+        This is `ExactJson` everywhere except inside `profiles.list`. Apply
+        still writes the whole payload; only the read side accepts that
+        Windows Terminal materialises its fragment and dynamic profiles back
+        into the file it co-owns, which under plain `ExactJson` made a host
+        that merely runs Windows Terminal permanently drifted and left a
+        deployed host unrecorded when post-apply validation threw.
+    #>
+    param(
+        [Parameter(Mandatory)][string] $Expected,
+        [Parameter(Mandatory)][string] $Actual
+    )
+
+    $expectedDocument = $Expected | ConvertFrom-Json -ErrorAction Stop
+    $actualDocument = $Actual | ConvertFrom-Json -ErrorAction Stop
+
+    $expectedList = Get-WinEnvJsonMember -Value (Get-WinEnvJsonMember -Value $expectedDocument -Name 'profiles') -Name 'list'
+    if ($expectedList -isnot [System.Collections.IList]) {
+        throw 'A payload compared as ExactJsonWithGeneratedProfiles declares no profiles.list array.'
+    }
+
+    $actualProfiles = Get-WinEnvJsonMember -Value $actualDocument -Name 'profiles'
+    $actualList = Get-WinEnvJsonMember -Value $actualProfiles -Name 'list'
+    if (-not (Test-WinEnvGeneratedProfileList -Expected $expectedList -Actual $actualList)) { return $false }
+
+    # Every declared profile is present exactly once and equal, so putting the
+    # declared list back in place of the host's removes the generated entries
+    # and nothing else. What remains is held to the same canonical equality
+    # ExactJson applies, key set, key order and case included.
+    $actualProfiles.list = $expectedList
+    return (ConvertTo-WinEnvCanonicalJson $Expected) -ceq ($actualDocument | ConvertTo-Json -Depth 100 -Compress)
+}
+
 function Test-WinEnvManagedFile {
     param(
         [Parameter(Mandatory)][hashtable] $Definition,
@@ -1049,6 +1215,9 @@ function Test-WinEnvManagedFile {
             $expected = $expectedText | ConvertFrom-Json -ErrorAction Stop
             $actual = $actualText | ConvertFrom-Json -ErrorAction Stop
             return Test-WinEnvJsonSubset -Expected $expected -Actual $actual
+        }
+        'ExactJsonWithGeneratedProfiles' {
+            return Test-WinEnvJsonWithGeneratedProfiles -Expected $expectedText -Actual $actualText
         }
         default { throw "Unknown comparison mode '$($Definition.Compare)'." }
     }

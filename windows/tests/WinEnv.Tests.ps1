@@ -16,7 +16,7 @@ BeforeAll {
     function New-FeatureManifest {
         param([hashtable] $Override = @{})
         $manifest = @{
-            SchemaVersion  = 3
+            SchemaVersion  = 4
             ProjectVersion = '1.0.0'
             Features       = @(
                 @{ Id = 'core'; Name = 'Core'; Required = $true },
@@ -63,10 +63,10 @@ BeforeAll {
 }
 
 Describe 'win-env manifest' {
-    It 'loads schema 3 and the desired-state compatibility version' {
+    It 'loads schema 4 and the desired-state compatibility version' {
         $manifest = Get-WinEnvManifest -Path (Join-Path $desiredStateRoot 'manifest.json')
-        $manifest.SchemaVersion | Should -Be 3
-        $manifest.ProjectVersion | Should -Be '0.4.0'
+        $manifest.SchemaVersion | Should -Be 4
+        $manifest.ProjectVersion | Should -Be '0.5.0'
     }
 
     It 'pins the v3.5.0 D2Koding asset and hashes' {
@@ -187,6 +187,313 @@ Describe 'JSON ownership' {
         $expected = '{"enabled":true,"items":[1,2]}' | ConvertFrom-Json
         $actual = '{"enabled":false,"items":[1,2]}' | ConvertFrom-Json
         (Test-WinEnvJsonSubset -Expected $expected -Actual $actual) | Should -Be $false
+    }
+}
+
+Describe 'Windows Terminal generated profiles' {
+    BeforeAll {
+        $TerminalPayload = Join-Path $desiredStateRoot 'files\terminal\settings.json'
+        $TerminalTarget = Join-Path $TestDrive 'terminal-settings.json'
+
+        # Expand-WinEnvTemplate reads LOCALAPPDATA for every managed file it
+        # compares, and the hosts this suite is authored on do not set it. The
+        # value is irrelevant here, because this payload carries no template,
+        # but it has to exist for the managed-file path to run at all.
+        $SavedLocalAppData = $env:LOCALAPPDATA
+        if (-not $env:LOCALAPPDATA) { $env:LOCALAPPDATA = $TestDrive }
+
+        # The profile the maintainer's host held on 2026-08-30 beside the two
+        # the payload declares: a Git for Windows fragment profile, carrying
+        # the source that records which extension produced it. Windows
+        # Terminal wrote it back into the file seconds after Apply overwrote
+        # that file, which under ExactJson made post-apply validation throw
+        # and left the host deployed but unrecorded. The guid is not part of
+        # that observation; any key the payload does not declare reaches the
+        # same branch. Every invented guid in this Describe is written as a
+        # short opaque key rather than as a UUID, because a UUID in tracked
+        # desired state is what tool/version-control/hygiene exists to catch
+        # and a fixture must not teach it to ignore one.
+        $GeneratedGitBash = [pscustomobject]@{
+            guid   = '{generated-git-bash}'
+            hidden = $false
+            name   = 'Git Bash'
+            source = 'Git'
+        }
+    }
+
+    AfterAll { $env:LOCALAPPDATA = $SavedLocalAppData }
+
+    It 'converges on the three-profile file the maintainer''s host showed' {
+        # The whole point of the change, exercised through the manifest entry
+        # that declares the mode rather than through a synthetic definition.
+        $manifest = Get-WinEnvManifest -Path (Join-Path $desiredStateRoot 'manifest.json')
+        $definition = $manifest.ManagedFiles | Where-Object Id -eq 'windowsTerminal'
+        $definition.Target = $TerminalTarget
+
+        $document = Get-Content -LiteralPath $TerminalPayload -Raw -Encoding utf8 | ConvertFrom-Json
+        $document.profiles.list = @($document.profiles.list) + $GeneratedGitBash
+        @($document.profiles.list).Count | Should -Be 3
+        @($document.profiles.list | ForEach-Object { $_.name }) |
+            Should -Be @('PowerShell 7', 'Zellij Workspace', 'Git Bash')
+        [IO.File]::WriteAllText($TerminalTarget, ($document | ConvertTo-Json -Depth 100))
+
+        (Test-WinEnvManagedFile -Definition $definition -RepositoryRoot $desiredStateRoot) | Should -Be $true
+    }
+
+    It 'leaves ExactJson reporting that same file as drift' {
+        # The tolerance is one declared mode, not a loosening of ExactJson.
+        # Every other managed file keeps the comparison it had.
+        $manifest = Get-WinEnvManifest -Path (Join-Path $desiredStateRoot 'manifest.json')
+        $definition = $manifest.ManagedFiles | Where-Object Id -eq 'windowsTerminal'
+        $definition.Target = $TerminalTarget
+        $definition.Compare = 'ExactJson'
+
+        $document = Get-Content -LiteralPath $TerminalPayload -Raw -Encoding utf8 | ConvertFrom-Json
+        $document.profiles.list = @($document.profiles.list) + $GeneratedGitBash
+        [IO.File]::WriteAllText($TerminalTarget, ($document | ConvertTo-Json -Depth 100))
+
+        (Test-WinEnvManagedFile -Definition $definition -RepositoryRoot $desiredStateRoot) | Should -Be $false
+    }
+
+    It 'reports an undeclared profile without a source as drift' {
+        # A sourceless profile was written by a person or by another tool.
+        # Tolerating it would make the file unowned rather than co-owned.
+        $expected = Get-Content -LiteralPath $TerminalPayload -Raw -Encoding utf8
+        $document = $expected | ConvertFrom-Json
+        $handWritten = [pscustomobject]@{
+            commandline = 'cmd.exe'
+            guid        = '{hand-written-command-prompt}'
+            name        = 'Command Prompt'
+        }
+        $document.profiles.list = @($document.profiles.list) + $handWritten
+        $actual = $document | ConvertTo-Json -Depth 100
+
+        (Test-WinEnvJsonWithGeneratedProfiles -Expected $expected -Actual $actual) | Should -Be $false
+
+        # Reported as drift through the manifest entry as well, so -Check and
+        # post-apply validation see it and not only the comparison itself.
+        $manifest = Get-WinEnvManifest -Path (Join-Path $desiredStateRoot 'manifest.json')
+        $definition = $manifest.ManagedFiles | Where-Object Id -eq 'windowsTerminal'
+        $definition.Target = $TerminalTarget
+        [IO.File]::WriteAllText($TerminalTarget, $actual)
+        (Test-WinEnvManagedFile -Definition $definition -RepositoryRoot $desiredStateRoot) | Should -Be $false
+
+        # An empty source is not a generator's answer either. The object is
+        # already in the list, so this changes the entry in place.
+        $handWritten | Add-Member -NotePropertyName 'source' -NotePropertyValue '  '
+        (Test-WinEnvJsonWithGeneratedProfiles -Expected $expected -Actual ($document | ConvertTo-Json -Depth 100)) |
+            Should -Be $false
+    }
+
+    It 'reports a changed, missing or duplicated declared profile as drift' {
+        $expected = Get-Content -LiteralPath $TerminalPayload -Raw -Encoding utf8
+
+        $changed = $expected | ConvertFrom-Json
+        $changed.profiles.list[1].commandline = 'zellij.exe attach --create other'
+        (Test-WinEnvJsonWithGeneratedProfiles -Expected $expected -Actual ($changed | ConvertTo-Json -Depth 100)) |
+            Should -Be $false
+
+        $manifest = Get-WinEnvManifest -Path (Join-Path $desiredStateRoot 'manifest.json')
+        $definition = $manifest.ManagedFiles | Where-Object Id -eq 'windowsTerminal'
+        $definition.Target = $TerminalTarget
+        [IO.File]::WriteAllText($TerminalTarget, ($changed | ConvertTo-Json -Depth 100))
+        (Test-WinEnvManagedFile -Definition $definition -RepositoryRoot $desiredStateRoot) | Should -Be $false
+
+        # A declared profile that acquired a source is still a changed
+        # declared profile, not a generated one.
+        $sourced = $expected | ConvertFrom-Json
+        $sourced.profiles.list[1] | Add-Member -NotePropertyName 'source' -NotePropertyValue 'Git'
+        (Test-WinEnvJsonWithGeneratedProfiles -Expected $expected -Actual ($sourced | ConvertTo-Json -Depth 100)) |
+            Should -Be $false
+
+        $removed = $expected | ConvertFrom-Json
+        $removed.profiles.list = @($removed.profiles.list[0], $GeneratedGitBash)
+        (Test-WinEnvJsonWithGeneratedProfiles -Expected $expected -Actual ($removed | ConvertTo-Json -Depth 100)) |
+            Should -Be $false
+
+        # Two entries carrying one declared guid are ambiguous rather than
+        # generated, whatever the second one's source says.
+        $duplicated = $expected | ConvertFrom-Json
+        $twin = $duplicated.profiles.list[0] | ConvertTo-Json -Depth 100 | ConvertFrom-Json
+        $twin.name = 'PowerShell 7 (again)'
+        $duplicated.profiles.list = @($duplicated.profiles.list) + $twin
+        (Test-WinEnvJsonWithGeneratedProfiles -Expected $expected -Actual ($duplicated | ConvertTo-Json -Depth 100)) |
+            Should -Be $false
+    }
+
+    It 'tolerates only an entry keyed and sourced the way a generator writes one' {
+        # Every comparison in this mode is ordinal, so a capitalised Source is
+        # not the property Windows Terminal writes; a non-string source is not
+        # a generator's name; and an entry with no guid is not a shape this
+        # rule could key on, so none of them earns the tolerance.
+        $expected = '{"profiles":{"list":[{"guid":"{declared}","name":"PowerShell 7"}]}}'
+        $refused = @(
+            '{"guid":"{generated}","name":"Git Bash","Source":"Git"}',
+            '{"name":"Git Bash","source":"Git"}',
+            '{"guid":"   ","name":"Git Bash","source":"Git"}',
+            '{"guid":"{generated}","name":"Git Bash","source":0}',
+            '{"guid":"{generated}","name":"Git Bash","source":false}'
+        )
+        foreach ($extra in $refused) {
+            $actual = '{"profiles":{"list":[{"guid":"{declared}","name":"PowerShell 7"},' + $extra + ']}}'
+            (Test-WinEnvJsonWithGeneratedProfiles -Expected $expected -Actual $actual) | Should -Be $false
+        }
+
+        # The one shape it does accept, beside the five it refuses.
+        $accepted = '{"profiles":{"list":[{"guid":"{declared}","name":"PowerShell 7"},' +
+        '{"guid":"{generated}","name":"Git Bash","source":"Git"}]}}'
+        (Test-WinEnvJsonWithGeneratedProfiles -Expected $expected -Actual $accepted) | Should -Be $true
+    }
+
+    It 'matches declared profiles by guid rather than by position' {
+        # Windows Terminal decides where in the list it writes what it
+        # generated, so a positional comparison would report drift for a file
+        # that holds exactly the declared profiles.
+        $expected = Get-Content -LiteralPath $TerminalPayload -Raw -Encoding utf8
+        $document = $expected | ConvertFrom-Json
+        $declared = @($document.profiles.list)
+        $document.profiles.list = @($GeneratedGitBash, $declared[1], $declared[0])
+
+        (Test-WinEnvJsonWithGeneratedProfiles -Expected $expected -Actual ($document | ConvertTo-Json -Depth 100)) |
+            Should -Be $true
+    }
+
+    It 'reads a one-profile list as a list rather than as a single profile' {
+        # PowerShell hands a one-element array back as its element unless the
+        # value is protected on the way out, and a payload is allowed to
+        # declare one profile.
+        $expected = '{"profiles":{"list":[{"guid":"{declared}","name":"PowerShell 7"}]}}'
+        (Test-WinEnvJsonWithGeneratedProfiles -Expected $expected -Actual $expected) | Should -Be $true
+
+        $generated = '{"profiles":{"list":[{"guid":"{declared}","name":"PowerShell 7"},' +
+        '{"guid":"{generated}","name":"Git Bash","source":"Git"}]}}'
+        (Test-WinEnvJsonWithGeneratedProfiles -Expected $expected -Actual $generated) | Should -Be $true
+
+        $sourceless = '{"profiles":{"list":[{"guid":"{declared}","name":"PowerShell 7"},' +
+        '{"guid":"{generated}","name":"Git Bash"}]}}'
+        (Test-WinEnvJsonWithGeneratedProfiles -Expected $expected -Actual $sourceless) | Should -Be $false
+    }
+
+    It 'holds everything outside profiles.list to exact equality' {
+        $expected = Get-Content -LiteralPath $TerminalPayload -Raw -Encoding utf8
+
+        $theme = $expected | ConvertFrom-Json
+        $theme.theme = 'dark'
+        (Test-WinEnvJsonWithGeneratedProfiles -Expected $expected -Actual ($theme | ConvertTo-Json -Depth 100)) |
+            Should -Be $false
+
+        # profiles.defaults is beside the list and is not tolerated: it is the
+        # payload's own appearance, which nothing generates.
+        $defaults = $expected | ConvertFrom-Json
+        $defaults.profiles.defaults.colorScheme = 'Campbell'
+        (Test-WinEnvJsonWithGeneratedProfiles -Expected $expected -Actual ($defaults | ConvertTo-Json -Depth 100)) |
+            Should -Be $false
+
+        $added = $expected | ConvertFrom-Json
+        $added | Add-Member -NotePropertyName 'launchMode' -NotePropertyValue 'maximized'
+        (Test-WinEnvJsonWithGeneratedProfiles -Expected $expected -Actual ($added | ConvertTo-Json -Depth 100)) |
+            Should -Be $false
+
+        # A file Windows Terminal has not touched at all still converges.
+        (Test-WinEnvJsonWithGeneratedProfiles -Expected $expected -Actual $expected) | Should -Be $true
+    }
+
+    It 'refuses a target that is not shaped like a settings file' {
+        $expected = Get-Content -LiteralPath $TerminalPayload -Raw -Encoding utf8
+        foreach ($actual in @('{}', '{"profiles":[]}', '{"profiles":{"list":{}}}')) {
+            (Test-WinEnvJsonWithGeneratedProfiles -Expected $expected -Actual $actual) | Should -Be $false
+        }
+    }
+
+    It 'refuses a payload this mode cannot match by guid' {
+        # These are authoring errors in the repository's own payload, so they
+        # are named rather than silently converging.
+        $noList = '{"profiles":{"defaults":{}}}'
+        (Test-Throws { Test-WinEnvJsonWithGeneratedProfiles -Expected $noList -Actual $noList }) | Should -Be $true
+
+        $noGuid = '{"profiles":{"list":[{"name":"Unkeyed"}]}}'
+        (Test-Throws { Test-WinEnvJsonWithGeneratedProfiles -Expected $noGuid -Actual $noGuid }) | Should -Be $true
+
+        $repeated = '{"profiles":{"list":[{"guid":"{a}","name":"One"},{"guid":"{a}","name":"Two"}]}}'
+        (Test-Throws { Test-WinEnvJsonWithGeneratedProfiles -Expected $repeated -Actual $repeated }) | Should -Be $true
+    }
+
+    It 'rejects the generated-profile mode on an entry whose parser is not Json' {
+        # The mode reads both sides as JSON. Declared on a Lua or INI payload
+        # it would load, read as meaningful, and throw on the first host that
+        # compared the file.
+        foreach ($parser in @('Text', 'Ini', 'Lua', 'PowerShell', 'Kdl')) {
+            $manifest = New-FeatureManifest -Override @{
+                ManagedFiles = @(@{
+                        Id      = 'terminalSettings'
+                        Feature = 'terminal'
+                        Source  = 'files/settings.json'
+                        Target  = 'settings'
+                        Compare = 'ExactJsonWithGeneratedProfiles'
+                        Parser  = $parser
+                    })
+            }
+            (Test-Throws { Assert-WinEnvManagedFileModel -Manifest $manifest }) | Should -Be $true
+        }
+
+        $missingParser = New-FeatureManifest -Override @{
+            ManagedFiles = @(@{
+                    Id      = 'terminalSettings'
+                    Feature = 'terminal'
+                    Source  = 'files/settings.json'
+                    Target  = 'settings'
+                    Compare = 'ExactJsonWithGeneratedProfiles'
+                })
+        }
+        (Test-Throws { Assert-WinEnvManagedFileModel -Manifest $missingParser }) | Should -Be $true
+
+        $json = New-FeatureManifest -Override @{
+            ManagedFiles = @(@{
+                    Id      = 'terminalSettings'
+                    Feature = 'terminal'
+                    Source  = 'files/settings.json'
+                    Target  = 'settings'
+                    Compare = 'ExactJsonWithGeneratedProfiles'
+                    Parser  = 'Json'
+                })
+        }
+        { Assert-WinEnvManagedFileModel -Manifest $json } | Should -Not -Throw
+    }
+
+    It 'rejects a comparison mode no entry can be compared with' {
+        foreach ($compare in @('exactjsonwithgeneratedprofiles', 'JsonMerge', '')) {
+            $manifest = New-FeatureManifest -Override @{
+                ManagedFiles = @(@{
+                        Id      = 'terminalSettings'
+                        Feature = 'terminal'
+                        Source  = 'files/settings.json'
+                        Target  = 'settings'
+                        Compare = $compare
+                        Parser  = 'Json'
+                    })
+            }
+            (Test-Throws { Assert-WinEnvManagedFileModel -Manifest $manifest }) | Should -Be $true
+        }
+
+        $noCompare = New-FeatureManifest -Override @{
+            ManagedFiles = @(@{ Id = 'terminalSettings'; Feature = 'terminal'; Source = 'files/settings.json'; Target = 'settings'; Parser = 'Json' })
+        }
+        (Test-Throws { Assert-WinEnvManagedFileModel -Manifest $noCompare }) | Should -Be $true
+    }
+
+    It 'gives the tolerance to the one file Windows Terminal co-owns' {
+        # Apply still writes this payload whole. The tolerance is a read-side
+        # statement about one application, so a second entry claiming it would
+        # be a decision, not a detail.
+        $manifest = Get-WinEnvManifest -Path (Join-Path $desiredStateRoot 'manifest.json')
+        $tolerant = @($manifest.ManagedFiles | Where-Object Compare -eq 'ExactJsonWithGeneratedProfiles')
+        $tolerant.Count | Should -Be 1
+        $tolerant[0].Id | Should -Be 'windowsTerminal'
+        $tolerant[0].Parser | Should -Be 'Json'
+
+        # And the payload it names really is keyed the way the mode matches.
+        $document = Get-Content -LiteralPath $TerminalPayload -Raw -Encoding utf8 | ConvertFrom-Json
+        foreach ($entry in $document.profiles.list) { $entry.guid | Should -Not -BeNullOrEmpty }
     }
 }
 
