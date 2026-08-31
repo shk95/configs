@@ -128,7 +128,7 @@
       "IsDirect": true
     },
     ">": {
-      "CommandId": "com.microsoft.cmdpal.shell",
+      "CommandId": "com.microsoft.cmdpal.run",
       "Alias": ">",
       "IsDirect": true
     },

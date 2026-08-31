@@ -7,14 +7,14 @@
       "value": true
     },
     "CloseAfterLosingFocus": {
-      "value": false
+      "value": true
     },
     "EnableClipboardPreview": {
       "value": true
     },
     "advanced-paste-ui-hotkey": {
-      "win": true,
-      "ctrl": false,
+      "win": false,
+      "ctrl": true,
       "alt": false,
       "shift": true,
       "code": 86,
@@ -123,5 +123,5 @@
     }
   },
   "name": "AdvancedPaste",
-  "version": "1"
+  "version": "1.0"
 }
