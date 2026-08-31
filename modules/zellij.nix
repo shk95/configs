@@ -11,7 +11,7 @@
 #            which zellij switches between from the host terminal's own
 #            colour-scheme report (CSI 2031 / DSR 997). The reasoning for that
 #            pair is recorded in the asset itself.
-#   desktop  the same bytes plus a static `theme`, pinning Catppuccin Latte.
+#   desktop  the same bytes plus a static `theme`, pinning Flexoki Light.
 #
 # The desktop copy exists because the report is not universal, and the terminal
 # that does not send it is the one this class is for. Ghostty answers the
@@ -54,7 +54,7 @@ _: {
           // Appended by modules/zellij.nix for `homeManager.desktop` only,
           // because WezTerm never answers the colour-scheme query the pair
           // above depends on. See that file for the full reasoning.
-          theme "catppuccin-latte"
+          theme "flexoki-light"
         ''
       ));
   };
