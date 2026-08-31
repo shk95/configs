@@ -292,6 +292,15 @@ fi
 # gh and the remote are consulted only when --publish asks for them, and only
 # ever read here. Nothing below writes.
 publish_preflight() {
+  # --publish shells out the way a Unix-like host expects. Native Windows has
+  # its own PowerShell counterpart, so refuse before consulting gh at all.
+  case $(uname -s 2>/dev/null) in
+    MINGW* | MSYS* | CYGWIN*)
+      refuse "commit --publish is not supported on native Windows." \
+        "Use windows/tools/capture.ps1 -Feature <id> -Publish instead."
+      ;;
+  esac
+
   if ! command -v gh >/dev/null 2>&1; then
     refuse "gh is unavailable and --publish needs it." \
       "Install the GitHub CLI (https://cli.github.com), or drop --publish and open the pull request yourself."
