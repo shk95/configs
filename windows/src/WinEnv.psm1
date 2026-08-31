@@ -2447,6 +2447,8 @@ function Remove-WinEnvMergedLocalBranch {
         [Parameter(Mandatory)][string] $RepositoryRoot
     )
 
+    $PSNativeCommandUseErrorActionPreference = $false
+
     & git -C $RepositoryRoot rev-parse --verify --quiet refs/remotes/origin/dev *>$null
     if ($LASTEXITCODE -ne 0) { return @() }
 
