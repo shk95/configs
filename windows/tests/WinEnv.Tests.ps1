@@ -3302,13 +3302,97 @@ exit 7
         }
 
         It 'recovers the same glyphs when the console is already UTF-8, the common case' {
+            # "Already UTF-8" is a condition this test establishes, never one
+            # it inherits from whoever ran it. #109: on the maintainer's
+            # Korean host the suite's own console was CP949, the child pwsh
+            # inherited that codepage, and the line was already encoded as
+            # CP949 before it reached the pipe -- so this test was red there
+            # and green on CI while asserting nothing about
+            # Invoke-WinEnvTeeCommand. Both sides are pinned here: the
+            # console this process owns, which a Windows child inherits, and
+            # the child's own output encoding, because a Unix child inherits
+            # no console codepage at all.
             $stubPath = Join-Path $TestDrive 'utf8-glyphs-default.ps1'
-            [IO.File]::WriteAllText($stubPath, "Write-Output '→ ✓ ·'`nexit 0`n")
+            [IO.File]::WriteAllText($stubPath, @'
+[Console]::OutputEncoding = [System.Text.Encoding]::UTF8
+Write-Output '→ ✓ ·'
+exit 0
+'@)
 
-            $result = Invoke-WinEnvTeeCommand -FilePath $PwshPath -ArgumentList @('-NoProfile', '-File', $stubPath)
+            $saved = [Console]::OutputEncoding
+            try {
+                [Console]::OutputEncoding = [System.Text.Encoding]::UTF8
+                $result = Invoke-WinEnvTeeCommand -FilePath $PwshPath -ArgumentList @('-NoProfile', '-File', $stubPath)
+            }
+            finally {
+                [Console]::OutputEncoding = $saved
+            }
 
             $result.ExitCode | Should -Be 0
             $result.Evidence | Should -Contain '→ ✓ ·'
+        }
+
+        It 'reports what a CP949 console loses instead of inventing glyphs' {
+            # The regression #109 asked for, and the decision it asked for,
+            # recorded where it is exercised. Reproduced by hand on Linux
+            # pwsh with the same managed CP949 encoder .NET uses on Windows:
+            # the loss happens in the *child's* write, not in this
+            # repository's decode. A child encodes its own stdout with its
+            # own [Console]::OutputEncoding, so "→" and "·" (both mappable
+            # in CP949) leave as CP949 byte pairs and "✓" (not mappable at
+            # all) leaves as a literal "?". The glyphs are gone from the pipe
+            # before Invoke-WinEnvTeeCommand reads a byte.
+            #
+            # Decision: this is accepted display degradation, not a defect in
+            # that function's pinning.
+            #  - It owns only the read side and already pins it to UTF-8. No
+            #    read-side decoding recovers a glyph the writer never emitted,
+            #    and Windows offers no way to set a child's console codepage
+            #    from ProcessStartInfo; a child that wants its glyphs kept
+            #    declares its own encoding, as the CP437 fixture above does.
+            #  - Nothing that carries meaning is lost from real evidence. git,
+            #    the command actually teed for a push, writes its bytes
+            #    directly, and every marker ConvertTo-WinEnvCondensedPushEvidence
+            #    keys on ("→ <check>", "· ...") is printed by .githooks/evidence
+            #    through /bin/sh printf, which emits that file's own UTF-8
+            #    bytes whatever the console codepage is.
+            #  - ASCII survives byte for byte, asserted below: the tally, the
+            #    "[-]" markers and the failure detail a reviewer actually
+            #    reads are untouched.
+            # The contract is therefore that a line from a non-UTF-8 console
+            # arrives degraded but framed, ordered and ASCII-intact -- never
+            # silently replaced by plausible-but-wrong text.
+            $stubPath = Join-Path $TestDrive 'cp949-glyphs.ps1'
+            [IO.File]::WriteAllText($stubPath, @'
+[System.Text.Encoding]::RegisterProvider([System.Text.CodePagesEncodingProvider]::Instance)
+[Console]::OutputEncoding = [System.Text.Encoding]::GetEncoding(949)
+Write-Output '→ ✓ · Tests Passed: 1, Failed: 0'
+exit 0
+'@)
+
+            $saved = [Console]::OutputEncoding
+            try {
+                $result = Invoke-WinEnvTeeCommand -FilePath $PwshPath -ArgumentList @('-NoProfile', '-File', $stubPath)
+            }
+            finally {
+                # A console is shared by every process attached to it, so the
+                # child's own switch to CP949 outlives the child on Windows.
+                # Re-assigning the saved encoding puts the operator's console
+                # back where it was.
+                [Console]::OutputEncoding = $saved
+            }
+
+            $result.ExitCode | Should -Be 0
+            @($result.Evidence).Count | Should -Be 1
+            $line = @($result.Evidence)[0]
+            $line | Should -BeLike '*Tests Passed: 1, Failed: 0'
+            $line | Should -Not -Match ([regex]::Escape('→'))
+            $line | Should -Not -Match ([regex]::Escape('✓'))
+            $line | Should -Not -Match ([regex]::Escape('·'))
+            # Whatever replaced them is visibly lossy: U+FFFD where the bytes
+            # were not UTF-8, "?" where CP949 had no mapping to begin with.
+            @($line.ToCharArray() | Where-Object { [int]$_ -ge 0x80 -and [int]$_ -ne 0xFFFD }) |
+                Should -BeNullOrEmpty
         }
 
         It 'strips a stray control character from the body but keeps a tab' {
