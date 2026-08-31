@@ -11,9 +11,6 @@
     "AlwaysRunNotElevated": {
       "value": true
     },
-    "AlwaysOnTop": {
-      "value": false
-    },
     "ShowTaskbarIcon": {
       "value": true
     },

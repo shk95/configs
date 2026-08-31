@@ -6,9 +6,6 @@
     "ShowCustomPreview": {
       "value": true
     },
-    "ShowAIPaste": {
-      "value": true
-    },
     "CloseAfterLosingFocus": {
       "value": false
     },
