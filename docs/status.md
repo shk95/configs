@@ -196,14 +196,17 @@ Apply that could not change anything on it.
 
 No explicit `common/` component has yet been justified or created.
 
-Local hooks are not a Windows evidence source. `modules/powershell.nix` installs
-a Unix-like `pwsh` into every home this repository configures, so a Linux or
-macOS clone always has one. Treating it as the Windows shell ran the Windows
-scripts under foreign tooling, and because `check-desired-state.ps1` requires
-`zellij.exe` and `test.ps1` requires Pester 5.7.1, it also made the hook's own
-"CI must supply evidence" branch unreachable and left Windows work unpushable
-from the hosts where it is most often authored. `pre-push` therefore accepts
-only `pwsh.exe` and otherwise reports the Windows checks as unverified.
+Local hooks are a Windows evidence source, but only under the `pwsh` that
+belongs to the host running them (#113). `modules/powershell.nix` installs a
+Unix-like `pwsh` into every home this repository configures, so `pre-push`
+runs `check-desired-state.ps1` and `windows/tools/test.ps1` directly under it
+on a Linux or macOS clone, including WSL — where a `pwsh.exe` is also reachable
+through Windows interop but is never used for this, because Windows' script
+execution policy refuses an unsigned script reached that way. `pre-push`
+detects an actual Windows host the same way `tool/version-control/commit`'s
+`--publish` guard does (`uname -s` reporting `MINGW*` / `MSYS*` / `CYGWIN*`,
+Git for Windows' own `sh`) and only there reaches for `pwsh.exe`. A host with
+neither pwsh reports the Windows checks as unverified rather than failing.
 
 The merge gate is CI. The `windows-latest` job installs Pester, Lua, and Zellij,
 then runs the desired-state check and the Pester suite, and `Required checks`

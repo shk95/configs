@@ -294,53 +294,116 @@ if (cd "$test_root" && "$audit") >/dev/null 2>&1; then
   exit 1
 fi
 
-# The pre-push hook must not treat a Unix-like `pwsh` as native Windows
-# tooling. Every home this repository configures installs one, so accepting it
-# would make the CI-supplies-evidence path unreachable and leave Windows work
-# unpushable from the Linux and macOS clones where it is often authored.
-# Skipped where a real `pwsh.exe` is on PATH, because there the hook is
-# supposed to run the Windows scripts for real.
-if command -v pwsh.exe >/dev/null 2>&1; then
-  echo "· native pwsh.exe on PATH, skipping the hook shell-selection fixtures"
+# #113: the pre-push hook must pick the pwsh that belongs to the host it is
+# running on rather than the first one PATH happens to expose. A Unix-like
+# host (including WSL, where a `pwsh.exe` is also reachable through Windows
+# interop) runs the checks under its own native `pwsh`; only an actual Windows
+# host uses `pwsh.exe`; a host with neither reports the checks unverified
+# rather than failing. Isolated from whatever pwsh binaries this suite's own
+# host happens to have — modules/powershell.nix installs a Unix-like `pwsh`
+# into every home this repository configures, and a WSL host additionally
+# reaches a `pwsh.exe` through Windows interop, which is the exact shape #113
+# regressed on — by stripping any PATH component that resolves either before
+# each scenario adds back only the stub it names.
+hook_root="$test_root/pre-push"
+mkdir -p "$hook_root/none" "$hook_root/pwsh-only" "$hook_root/pwshexe-only" \
+  "$hook_root/win-host" "$hook_root/windows"
+cp -R "$root/.githooks" "$hook_root/.githooks"
+mkdir -p "$hook_root/tool"
+cp -R "$root/tool/version-control" "$hook_root/tool/version-control"
+cp -R "$root/tool/dispatch" "$hook_root/tool/dispatch"
+
+printf '#!/bin/sh\nexit 0\n' >"$hook_root/pwsh-only/pwsh"
+printf '#!/bin/sh\nexit 0\n' >"$hook_root/pwshexe-only/pwsh.exe"
+printf '#!/bin/sh\nexit 0\n' >"$hook_root/win-host/pwsh.exe"
+chmod +x "$hook_root/pwsh-only/pwsh" "$hook_root/pwshexe-only/pwsh.exe" \
+  "$hook_root/win-host/pwsh.exe"
+cat >"$hook_root/win-host/uname" <<'STUB'
+#!/bin/sh
+if [ "$1" = -s ]; then
+  printf '%s\n' 'MINGW64_NT-10.0-19045'
 else
-  hook_root="$test_root/pre-push"
-  mkdir -p "$hook_root/foreign" "$hook_root/native" "$hook_root/windows"
-  cp -R "$root/.githooks" "$hook_root/.githooks"
-  mkdir -p "$hook_root/tool"
-  cp -R "$root/tool/version-control" "$hook_root/tool/version-control"
-  cp -R "$root/tool/dispatch" "$hook_root/tool/dispatch"
-  printf '#!/bin/sh\nexit 0\n' >"$hook_root/foreign/pwsh"
-  printf '#!/bin/sh\nexit 0\n' >"$hook_root/native/pwsh.exe"
-  chmod +x "$hook_root/foreign/pwsh" "$hook_root/native/pwsh.exe"
+  exit 1
+fi
+STUB
+chmod +x "$hook_root/win-host/uname"
 
-  git -C "$hook_root" init -q -b dev
-  git -C "$hook_root" config user.name Fixture
-  git -C "$hook_root" config user.email fixture@example.invalid
-  printf 'fixture\n' >"$hook_root/file"
-  git -C "$hook_root" add file
-  git -C "$hook_root" commit -q -m 'feat(repository): create hook fixture'
-  hook_base=$(git -C "$hook_root" rev-parse HEAD)
-  printf 'param()\n' >"$hook_root/windows/setup.ps1"
-  git -C "$hook_root" add windows/setup.ps1
-  git -C "$hook_root" commit -q -m 'feat(windows): change desired state'
-  hook_head=$(git -C "$hook_root" rev-parse HEAD)
+git -C "$hook_root" init -q -b dev
+git -C "$hook_root" config user.name Fixture
+git -C "$hook_root" config user.email fixture@example.invalid
+printf 'fixture\n' >"$hook_root/file"
+git -C "$hook_root" add file
+git -C "$hook_root" commit -q -m 'feat(repository): create hook fixture'
+hook_base=$(git -C "$hook_root" rev-parse HEAD)
+printf 'param()\n' >"$hook_root/windows/setup.ps1"
+git -C "$hook_root" add windows/setup.ps1
+git -C "$hook_root" commit -q -m 'feat(windows): change desired state'
+hook_head=$(git -C "$hook_root" rev-parse HEAD)
 
-  run_pre_push() {
-    printf 'refs/heads/dev %s refs/heads/dev %s\n' "$hook_head" "$hook_base" |
-      (cd "$hook_root" && PATH="$1:$PATH" .githooks/pre-push 2>&1)
-  }
+hook_clean_path() {
+  clean=
+  save_ifs=$IFS
+  IFS=:
+  for dir in $PATH; do
+    [ -n "$dir" ] || continue
+    if [ -x "$dir/pwsh" ] || [ -x "$dir/pwsh.exe" ]; then
+      continue
+    fi
+    clean="${clean:+$clean:}$dir"
+  done
+  IFS=$save_ifs
+  printf '%s' "$clean"
+}
+hook_clean=$(hook_clean_path)
 
-  foreign_output=$(run_pre_push "$hook_root/foreign")
-  if ! printf '%s\n' "$foreign_output" | grep -q 'CI must supply evidence'; then
-    echo "pre-push accepted a Unix-like pwsh as native Windows tooling" >&2
-    exit 1
-  fi
+run_pre_push() {
+  printf 'refs/heads/dev %s refs/heads/dev %s\n' "$hook_head" "$hook_base" |
+    (cd "$hook_root" && PATH="$1:$hook_clean" .githooks/pre-push 2>&1)
+}
 
-  native_output=$(run_pre_push "$hook_root/native")
-  if ! printf '%s\n' "$native_output" | grep -q 'Windows desired-state check'; then
-    echo "pre-push skipped the Windows checks despite a native pwsh.exe" >&2
-    exit 1
-  fi
+# Unix-like host, its own native `pwsh` on PATH: the checks actually run under
+# it instead of being reported unverified, and the output names CI as the
+# native gate for what a Linux pwsh cannot exercise (WIN_ENV_E2E).
+unix_output=$(run_pre_push "$hook_root/pwsh-only")
+if ! printf '%s\n' "$unix_output" | grep -q 'Windows desired-state check'; then
+  echo "pre-push did not run the Windows checks under a Unix-like pwsh" >&2
+  exit 1
+fi
+if printf '%s\n' "$unix_output" | grep -q 'CI must supply evidence'; then
+  echo "pre-push reported the Windows checks unverified despite a Unix-like pwsh" >&2
+  exit 1
+fi
+if ! printf '%s\n' "$unix_output" | grep -qi 'WIN_ENV_E2E'; then
+  echo "pre-push did not note that WIN_ENV_E2E stays a CI concern under a Unix-like pwsh" >&2
+  exit 1
+fi
+
+# Unix-like host, only `pwsh.exe` reachable — the WSL-interop shape #113
+# reports. Using it there is exactly the SecurityError this fix removes, so a
+# host with no *native* pwsh must fall through to unverified instead of
+# reaching for it.
+interop_output=$(run_pre_push "$hook_root/pwshexe-only")
+if ! printf '%s\n' "$interop_output" | grep -q 'CI must supply evidence'; then
+  echo "pre-push accepted a WSL-interop pwsh.exe as native Windows tooling" >&2
+  exit 1
+fi
+
+# Unix-like host, no pwsh at all: unverified and still pushable, never a
+# failure.
+if ! none_output=$(run_pre_push "$hook_root/none"); then
+  echo "pre-push failed outright with no pwsh available" >&2
+  exit 1
+fi
+if ! printf '%s\n' "$none_output" | grep -q 'CI must supply evidence'; then
+  echo "pre-push did not report the Windows checks unverified with no pwsh" >&2
+  exit 1
+fi
+
+# An actual Windows host keeps using only `pwsh.exe`, unchanged from before.
+win_output=$(run_pre_push "$hook_root/win-host")
+if ! printf '%s\n' "$win_output" | grep -q 'Windows desired-state check'; then
+  echo "pre-push skipped the Windows checks on a native Windows host with pwsh.exe" >&2
+  exit 1
 fi
 
 # The three-state check protocol. A check that could not run must report and

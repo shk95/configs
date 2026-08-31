@@ -519,6 +519,31 @@ evidence. Exit status 69 carries this state everywhere in the repository, and
 The same line appears for `zellij.exe`, a `luac` compiler, Pester, and native
 PowerShell. Install the Windows ones with `.\windows\tools\setup-dev.ps1`.
 
+### `git push` from WSL fails the Windows checks with a PowerShell security error
+
+Historical, fixed by #113. Before it, `pre-push` located `pwsh.exe` through
+WSL's Windows interop and ran `check-desired-state.ps1` and
+`windows/tools/test.ps1` through it over `\\wsl.localhost\...`. Windows'
+script execution policy refuses an unsigned script reached that way, so every
+windows-scope push from WSL failed here for environmental reasons — never
+because the desired state was actually wrong. It was bypassed with
+`git push --no-verify` under a session-level maintainer ruling (manual native
+checks plus the `windows-latest` CI job as the real gate) that this repository
+never wrote down until now.
+
+`pre-push` now runs the Windows checks under this host's own `pwsh` on any
+Unix-like host, including WSL — the same binary `modules/powershell.nix`
+installs into every home this repository configures. `check-desired-state.ps1`
+and the Pester suite both run cleanly under it; the suite's `WIN_ENV_E2E`
+cases self-skip there, and `windows-latest` remains the native gate for what a
+Linux `pwsh` cannot exercise. `pre-push` reaches for `pwsh.exe` only when
+`uname -s` reports an actual Windows host (`MINGW*` / `MSYS*` / `CYGWIN*`, the
+same test `tool/version-control/commit`'s `--publish` guard uses) — never over
+WSL interop. A host with neither pwsh reports the Windows checks unverified
+(exit 69) rather than failing, the same as any other missing prerequisite; see
+the `· unverified: this host has no nix` entry above. No `--no-verify` should
+be needed for a windows-scope push from WSL again.
+
 ### `Unix-like tests failed` on a machine that has no Nix
 
 An old checkout. `tool/checks/*` used to invoke `nix` unguarded, so the shell's
