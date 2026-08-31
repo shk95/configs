@@ -2164,6 +2164,450 @@ function New-WinEnvCaptureBranch {
     return [pscustomobject]@{ Status = 'Created'; Message = $null; Detail = $null }
 }
 
+# The base branch a capture publishes against. `dev` is the only branch this
+# repository's source promotion lets a feature branch enter, so it is stated
+# once here rather than spelled into each of the four places below that
+# depend on it.
+$script:WinEnvPublishBase = 'dev'
+
+# The escape sequences a Git hook colours its output with. A pull-request body
+# renders those bytes rather than the colour, so the evidence block strips
+# them; the terminal keeps them, because the operator's copy is never the one
+# that goes through here.
+$script:WinEnvAnsiPattern = ([char]27) + '\[[0-9;]*m'
+
+function Invoke-WinEnvGh {
+    <#
+        .SYNOPSIS
+        Run `gh` inside this repository and return its output and exit status.
+
+        .DESCRIPTION
+        `gh` has no `-C`, and every call below depends on it resolving
+        `{owner}/{repo}` from the repository it is standing in, so the working
+        directory is set for the call and restored afterwards. The status is
+        read explicitly instead of being turned into a terminating error:
+        `gh auth status` answering "not logged in" is one of the questions
+        asked here, not a failure of asking it.
+    #>
+    param(
+        [Parameter(Mandatory)][string] $RepositoryRoot,
+        [Parameter(Mandatory)][string[]] $Argument
+    )
+
+    $PSNativeCommandUseErrorActionPreference = $false
+    Push-Location -LiteralPath $RepositoryRoot
+    try {
+        $output = & gh @Argument 2>&1
+        $status = $LASTEXITCODE
+    }
+    finally {
+        Pop-Location
+    }
+    return [pscustomobject]@{
+        ExitCode = $status
+        Output   = @($output | ForEach-Object { [string]$_ })
+    }
+}
+
+function New-WinEnvPublishRefusal {
+    param(
+        [Parameter(Mandatory)][string] $Message,
+        [Parameter(Mandatory)][string] $Detail
+    )
+
+    return [pscustomobject]@{
+        Status      = 'Refused'
+        PullRequest = $null
+        Message     = $Message
+        Detail      = $Detail
+    }
+}
+
+function Get-WinEnvPublishPreflight {
+    <#
+        .SYNOPSIS
+        Everything -Publish must know before anything is written: whether the
+        tools and the remote can carry this capture the rest of the way, and
+        whether a pull request from this branch already exists.
+
+        .DESCRIPTION
+        A copy of `tool/version-control/commit`'s publish preflight (#72),
+        restated in PowerShell for the reason Get-WinEnvCaptureBranchPlan is:
+        the Windows domain must stay authorable and deployable without a
+        Unix-like host, so this domain calls no POSIX helper.
+
+        Every question here is a read, and every one of them is asked before
+        the capture writes a payload, makes a commit, or pushes. The ordering
+        is the cheapest and most categorical first:
+
+          1. `gh` is not installed, so -Publish has nothing to publish with;
+          2. `gh` is installed but not authenticated for github.com;
+          3. the repository does not allow auto-merge -- read here because
+             arming it is the last thing a publish does, and finding out then
+             would mean the push and the pull request had already happened;
+          4. an open pull request from this head against a base other than
+             `dev`, which -Publish will not retarget;
+          5. a branch this run is about to create already existing on the
+             remote, which could only be published onto by forcing or merging.
+
+        One listing answers both halves of 4: a same-head pull request already
+        open against `dev` is the one to arm rather than a second one to open,
+        and it is returned instead of refused. `gh pr list --head` filters by
+        branch name alone and cannot be scoped to an owner, so a fork's branch
+        of the same name arrives in that listing too; those rows are dropped
+        here, because such a pull request is neither this branch's nor this
+        tool's to touch. The rows are read as JSON in PowerShell rather than
+        through `--jq`, so the filter itself is fixtured rather than delegated
+        to a jq program no fixture exercises.
+
+        No `/`-leading literal is passed to `gh`: `repos/{owner}/{repo}` and
+        `.allow_auto_merge` are both relative. That is a readability choice
+        rather than a safety one -- PowerShell is not an MSYS shell and
+        `gh.exe` is not an MSYS program, so the POSIX-path rewriting that
+        `MSYS_NO_PATHCONV` exists to suppress under Git Bash never applies to
+        these arguments.
+    #>
+    param(
+        [Parameter(Mandatory)][string] $RepositoryRoot,
+        [Parameter(Mandatory)][string] $Branch,
+        # The run will create $Branch rather than commit on it, so the remote
+        # must not already have one by that name.
+        [switch] $BranchIsNew
+    )
+
+    $PSNativeCommandUseErrorActionPreference = $false
+
+    if (-not (Get-Command gh -ErrorAction SilentlyContinue)) {
+        return New-WinEnvPublishRefusal -Message 'gh is unavailable and -Publish needs it.' `
+            -Detail "Install the GitHub CLI with 'winget install GitHub.cli', or drop -Publish and open the pull request yourself."
+    }
+
+    $auth = Invoke-WinEnvGh -RepositoryRoot $RepositoryRoot -Argument @('auth', 'status', '--hostname', 'github.com')
+    if ($auth.ExitCode -ne 0) {
+        return New-WinEnvPublishRefusal -Message 'gh is not authenticated for github.com.' `
+            -Detail "Run 'gh auth login' first. This tool opens the pull request as you and holds no credential of its own."
+    }
+
+    $setting = Invoke-WinEnvGh -RepositoryRoot $RepositoryRoot `
+        -Argument @('api', 'repos/{owner}/{repo}', '--jq', '.allow_auto_merge')
+    if ($setting.ExitCode -ne 0) {
+        return New-WinEnvPublishRefusal -Message "This repository's auto-merge setting could not be read." `
+            -Detail ("gh api 'repos/{owner}/{repo}' failed: " + (($setting.Output -join ' ').Trim()))
+    }
+    if (($setting.Output -join '').Trim() -cne 'true') {
+        return New-WinEnvPublishRefusal -Message 'This repository does not allow auto-merge.' `
+            -Detail "Turn on 'Allow auto-merge' in the repository settings, or drop -Publish. Arming a merge that waits for Required checks is what -Publish exists to do."
+    }
+
+    $listing = Invoke-WinEnvGh -RepositoryRoot $RepositoryRoot -Argument @(
+        'pr', 'list', '--head', $Branch, '--state', 'open',
+        '--json', 'baseRefName,isCrossRepository,url')
+    if ($listing.ExitCode -ne 0) {
+        return New-WinEnvPublishRefusal -Message 'The open pull requests for this branch could not be listed.' `
+            -Detail ('gh pr list failed: ' + (($listing.Output -join ' ').Trim()))
+    }
+
+    $rows = @()
+    $listingText = ($listing.Output -join [Environment]::NewLine).Trim()
+    if ($listingText) { $rows = @($listingText | ConvertFrom-Json) }
+    # A fork's branch of this name is not this branch.
+    $sameRepository = @($rows | Where-Object { -not $_.isCrossRepository })
+    $foreign = @($sameRepository |
+            Where-Object { [string]$_.baseRefName -cne $script:WinEnvPublishBase } |
+            ForEach-Object { [string]$_.url })
+    if ($foreign.Count) {
+        return New-WinEnvPublishRefusal -Message "$Branch already has an open pull request with a different base." `
+            -Detail ('Close or retarget it first: ' + ($foreign -join ' '))
+    }
+    $existing = @($sameRepository |
+            Where-Object { [string]$_.baseRefName -ceq $script:WinEnvPublishBase } |
+            ForEach-Object { [string]$_.url })
+
+    if ($BranchIsNew) {
+        & git -C $RepositoryRoot ls-remote --exit-code --heads origin $Branch *>$null
+        if ($LASTEXITCODE -eq 0) {
+            return New-WinEnvPublishRefusal -Message "origin already has $Branch." `
+                -Detail 'Finish or delete that branch first; this tool neither forces nor merges onto an existing one.'
+        }
+    }
+
+    return [pscustomobject]@{
+        Status      = 'Ready'
+        PullRequest = if ($existing.Count) { $existing[0] } else { $null }
+        Message     = $null
+        Detail      = $null
+    }
+}
+
+function Get-WinEnvPublishCarriedCommit {
+    <#
+        .SYNOPSIS
+        The commits this branch already carries beyond origin/dev.
+
+        .DESCRIPTION
+        Git pushes a branch, not a commit. Anything already on the branch and
+        not yet on `dev` is published by the same push and merged by the same
+        auto-merge, so a publish names it in the plan the operator confirms
+        rather than leaving it to be discovered in the pull request. A run
+        that is about to create its branch from origin/dev carries nothing,
+        and this returns an empty list there by construction.
+    #>
+    param([Parameter(Mandatory)][string] $RepositoryRoot)
+
+    $PSNativeCommandUseErrorActionPreference = $false
+    & git -C $RepositoryRoot rev-parse --verify --quiet refs/remotes/origin/dev *>$null
+    if ($LASTEXITCODE -ne 0) { return @() }
+
+    $lines = & git -C $RepositoryRoot log --oneline refs/remotes/origin/dev..HEAD 2>$null
+    if ($LASTEXITCODE -ne 0) { return @() }
+    return @($lines | ForEach-Object { [string]$_ } | Where-Object { $_ })
+}
+
+function Get-WinEnvPullRequestTitle {
+    <#
+        .SYNOPSIS
+        The title one pull request carries for the commits a capture made.
+
+        .DESCRIPTION
+        A capture makes one commit per feature, and a run that captured one
+        feature has a subject that already says everything the title can. A
+        run that captured several has no such subject: naming only the first
+        would describe part of the change, and joining them would spell a
+        subject no commit has. That run gets the general title instead, and
+        the body lists the commits.
+    #>
+    param([Parameter(Mandatory)][AllowEmptyCollection()][string[]] $Commit)
+
+    if (@($Commit).Count -eq 1) { return [string]$Commit[0] }
+    return 'feat(windows): capture settings from the host'
+}
+
+function New-WinEnvPullRequestBody {
+    <#
+        .SYNOPSIS
+        The pull-request body a published capture carries.
+
+        .DESCRIPTION
+        What a reviewer cannot get from the diff: which scope owns the change,
+        which features and managed files this host was asked about, which
+        Windows build produced the payloads -- a build-conditional payload
+        means something different depending on it -- what the operator typed,
+        which commits the push carries, and what the local commit reported on
+        the machine the capture was made on. Nothing here is re-derived; every
+        value is passed in by the caller that already answered the question.
+
+        The evidence block is a copy of the terminal's, not an interception of
+        it: the run writes every line to the terminal as it arrives and keeps a
+        second copy for this. Colour escapes are stripped, because a pull
+        request renders those bytes instead of the colour.
+
+        Two evidence blocks, because this repository's two local gates check
+        different things and only one of them is the Windows one. A capture
+        commit touches windows/desired/**, for which `tool/dispatch/select
+        commit` names no unit at all, so the pre-commit hook contributes the
+        repository-wide hygiene and secret scans and nothing more. The
+        domain's own checks -- check-desired-state.ps1 and test.ps1, run
+        natively through pwsh.exe -- belong to `.githooks/pre-push`, and that
+        output is the evidence a reviewer of this pull request cannot get any
+        other way. Publishing from a Windows host and then discarding it would
+        throw away the one thing that host can prove.
+    #>
+    param(
+        [Parameter(Mandatory)][string] $Branch,
+        [Parameter(Mandatory)][AllowEmptyCollection()][string[]] $Feature,
+        [Parameter(Mandatory)][AllowEmptyCollection()][string[]] $ManagedFile,
+        [Parameter(Mandatory)][AllowEmptyCollection()][string[]] $Commit,
+        [Parameter(Mandatory)][string] $Command,
+        [Parameter(Mandatory)][AllowEmptyString()][string] $Build,
+        [AllowEmptyCollection()][string[]] $Carried = @(),
+        [AllowEmptyCollection()][string[]] $Evidence = @(),
+        [AllowEmptyCollection()][string[]] $PushEvidence = @()
+    )
+
+    $lines = [System.Collections.Generic.List[string]]::new()
+    [void]$lines.Add('Scope: windows')
+    [void]$lines.Add("Branch: $Branch")
+    [void]$lines.Add('Feature selection: ' + (@($Feature) -join ', '))
+    [void]$lines.Add('Windows build: ' + $(if ($Build) { $Build } else { 'undetermined' }))
+    [void]$lines.Add("Command: $Command")
+
+    [void]$lines.Add('')
+    [void]$lines.Add('Captured managed files:')
+    [void]$lines.Add('')
+    foreach ($entry in @($ManagedFile)) { [void]$lines.Add("- $entry") }
+
+    [void]$lines.Add('')
+    [void]$lines.Add('Commits:')
+    [void]$lines.Add('')
+    foreach ($subject in @($Commit)) { [void]$lines.Add("- $subject") }
+
+    if (@($Carried).Count) {
+        [void]$lines.Add('')
+        [void]$lines.Add('This branch also carries, and this pull request merges:')
+        [void]$lines.Add('')
+        foreach ($entry in @($Carried)) { [void]$lines.Add("- $entry") }
+    }
+
+    [void]$lines.Add('')
+    [void]$lines.Add('Local commit evidence:')
+    [void]$lines.Add('')
+    [void]$lines.Add('```text')
+    if (@($Evidence).Count) {
+        foreach ($line in @($Evidence)) { [void]$lines.Add(($line -replace $script:WinEnvAnsiPattern, '')) }
+    }
+    else {
+        [void]$lines.Add('(the commit output, once the commit runs)')
+    }
+    [void]$lines.Add('```')
+
+    [void]$lines.Add('')
+    [void]$lines.Add('Local push evidence:')
+    [void]$lines.Add('')
+    [void]$lines.Add('```text')
+    if (@($PushEvidence).Count) {
+        foreach ($line in @($PushEvidence)) { [void]$lines.Add(($line -replace $script:WinEnvAnsiPattern, '')) }
+    }
+    else {
+        [void]$lines.Add('(the pre-push hook''s output, once the push runs)')
+    }
+    [void]$lines.Add('```')
+
+    [void]$lines.Add('')
+    [void]$lines.Add('Opened by windows/tools/capture.ps1 -Publish. Auto-merge is armed, so the')
+    [void]$lines.Add('merge commit happens when `Required checks` pass and not before.')
+
+    return ($lines -join [Environment]::NewLine) + [Environment]::NewLine
+}
+
+function Publish-WinEnvCapture {
+    <#
+        .SYNOPSIS
+        Carry the commits a capture made the rest of the way: push, one pull
+        request against dev, auto-merge armed.
+
+        .DESCRIPTION
+        The writing half of -Publish, called only after the operator's single
+        [y/N] and only once every refusal in Get-WinEnvPublishPreflight has
+        passed. Each step stops the run where it failed and says what is left
+        behind, because the honest report of a half-finished publish is worth
+        more than a retry: a rejected push leaves every commit local on the
+        branch, and nothing here retries with --no-verify, --force, or any
+        other bypass.
+
+        The push is a plain `git push`, so .githooks/pre-push selects and runs
+        the checks the pushed content owns -- on a Windows host, the domain's
+        own check-desired-state.ps1 and test.ps1 through pwsh.exe. Its output
+        is copied on the way past rather than intercepted: every line still
+        reaches this terminal, in order, and a second copy becomes the pull
+        request's push-evidence block, which is the only place a reviewer can
+        read what that host's native run reported. `gh pr merge --auto
+        --merge` arms the merge rather than performing it: the wait for
+        `Required checks` is the whole gate the flag exists to keep, and
+        `--admin` would remove it.
+
+        The body is therefore built here rather than passed in finished: the
+        push evidence does not exist until the push has run, and on the reuse
+        arm no body is built at all, because that pull request's own is left
+        exactly as it is.
+    #>
+    [CmdletBinding(SupportsShouldProcess)]
+    param(
+        [Parameter(Mandatory)][string] $RepositoryRoot,
+        [Parameter(Mandatory)][string] $Branch,
+        [Parameter(Mandatory)][string] $Title,
+        # Everything New-WinEnvPullRequestBody needs except -PushEvidence,
+        # splatted into it below once the push has produced that evidence.
+        [Parameter(Mandatory)][hashtable] $BodyParameter,
+        # The pull request Get-WinEnvPublishPreflight found already open
+        # against dev from this head, if there was one. Its title and body are
+        # left exactly as they are: this tool did not write them and does not
+        # rewrite them.
+        [AllowNull()][AllowEmptyString()][string] $PullRequest
+    )
+
+    $PSNativeCommandUseErrorActionPreference = $false
+
+    if (-not $PSCmdlet.ShouldProcess($Branch,
+            'Push this branch, open a pull request against dev and arm auto-merge')) {
+        return [pscustomobject]@{ Status = 'Skipped'; Url = $null; Message = $null; Detail = $null }
+    }
+
+    Write-Host ''
+    Write-Host "→ pushing $Branch"
+    # Copied the way the commit is copied in capture.ps1, and for the same
+    # reason: nobody reviews a pull request by scrolling somebody else's
+    # terminal. Every line is re-emitted as it arrives, so the operator reads
+    # the hook exactly when it speaks.
+    $pushEvidence = [System.Collections.Generic.List[string]]::new()
+    & git -C $RepositoryRoot push --set-upstream origin $Branch 2>&1 |
+        ForEach-Object {
+            $line = [string]$_
+            [void]$pushEvidence.Add($line)
+            Write-Host $line
+        }
+    if ($LASTEXITCODE -ne 0) {
+        return [pscustomobject]@{
+            Status  = 'Refused'
+            Url     = $null
+            Message = 'The push was rejected.'
+            Detail  = ("Every commit this run made is still local on $Branch and nothing was published. " +
+                'Fix what the hook or the remote reported and push again; nothing here retries with a bypass.')
+        }
+    }
+
+    $url = [string]$PullRequest
+    if ($url) {
+        Write-Host '→ reusing the pull request already open against dev'
+    }
+    else {
+        Write-Host '→ opening a pull request against dev'
+        $bodyPath = Join-Path ([IO.Path]::GetTempPath()) `
+        ('win-env-pull-request-' + [guid]::NewGuid().ToString('N') + '.md')
+        try {
+            $body = New-WinEnvPullRequestBody @BodyParameter -PushEvidence @($pushEvidence)
+            Write-WinEnvAtomicText -Path $bodyPath -Content $body
+            $created = Invoke-WinEnvGh -RepositoryRoot $RepositoryRoot -Argument @(
+                'pr', 'create', '--base', $script:WinEnvPublishBase, '--head', $Branch,
+                '--title', $Title, '--body-file', $bodyPath)
+        }
+        finally {
+            if (Test-Path -LiteralPath $bodyPath) { Remove-Item -LiteralPath $bodyPath -Force }
+        }
+        foreach ($line in $created.Output) { Write-Host $line }
+        if ($created.ExitCode -ne 0) {
+            return [pscustomobject]@{
+                Status  = 'Refused'
+                Url     = $null
+                Message = 'The pull request could not be opened.'
+                Detail  = "The commits are pushed to $Branch. Open the pull request against dev yourself."
+            }
+        }
+        $url = [string](@($created.Output | Where-Object { $_ -cmatch '^https://\S+$' }) | Select-Object -Last 1)
+        if (-not $url) {
+            return [pscustomobject]@{
+                Status  = 'Refused'
+                Url     = $null
+                Message = 'No pull-request URL came back.'
+                Detail  = "The commits are pushed to $Branch. Check the pull request on GitHub."
+            }
+        }
+    }
+
+    Write-Host '→ arming auto-merge'
+    $merge = Invoke-WinEnvGh -RepositoryRoot $RepositoryRoot -Argument @('pr', 'merge', '--auto', '--merge', $url)
+    foreach ($line in $merge.Output) { Write-Host $line }
+    if ($merge.ExitCode -ne 0) {
+        return [pscustomobject]@{
+            Status  = 'Refused'
+            Url     = $url
+            Message = 'Auto-merge could not be armed.'
+            Detail  = "The pull request is open: $url. Arm it there, or merge it once Required checks pass."
+        }
+    }
+
+    return [pscustomobject]@{ Status = 'Published'; Url = $url; Message = $null; Detail = $null }
+}
+
 function Get-WinEnvProfileHook {
     return @'
 #region win-env
