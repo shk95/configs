@@ -2399,6 +2399,84 @@ function New-WinEnvCaptureBranch {
     return [pscustomobject]@{ Status = 'Created'; Message = $null; Detail = $null }
 }
 
+function Remove-WinEnvMergedLocalBranch {
+    <#
+        .SYNOPSIS
+        Delete every local branch already merged into origin/dev, except the
+        current branch, dev and master.
+
+        .DESCRIPTION
+        The Windows-side half of the imbalance issue #103 names: GitHub
+        deletes a pull request's branch on the remote once auto-merge lands
+        it, but this clone's own local copy of that branch is never told and
+        lingers after every -Publish cycle. This is the one function that
+        clears it, called from capture.ps1's publish path so a fixture can
+        drive it without a terminal or a real remote.
+
+        `git merge-base --is-ancestor refs/heads/<branch> refs/remotes/origin/dev`
+        is the entire safety rule: a branch is deleted only once git itself
+        has proven every commit it carries already reached origin/dev, never
+        on this function's own reading of a merge state or a pull request.
+        The current branch, dev and master are excluded by name before that
+        proof is even asked for, because each of them can legitimately equal
+        origin/dev's tip -- dev by definition, and master or a freshly cut
+        capture branch by coincidence -- and being an ancestor is not reason
+        enough to delete any of the three. A branch that carries even one
+        commit origin/dev does not have fails the proof and is left exactly
+        alone.
+
+        Nothing here fetches: origin/dev is read as this clone already has
+        it, the same division New-WinEnvCaptureBranch draws between deciding
+        and writing. The caller fetches first if it wants a current answer.
+        A clone with no origin/dev at all -- never fetched -- is read as
+        having nothing to prune rather than as a refusal, because this
+        cleanup is strictly optional and the rest of the publish path already
+        refuses on a missing origin/dev where that actually matters.
+
+        A deletion is `git branch -D`, not `-d`: the ancestor proof above is
+        already stricter than the "merged into HEAD or its upstream" question
+        `-d` asks, and asking git to reapply a weaker check of its own would
+        only invent a second way for a genuinely safe deletion to be refused.
+        Each attempt is independent and reported on its own branch; one
+        failure -- a branch checked out in another worktree, most plainly --
+        is returned as `Failed` rather than thrown, so it never stops the
+        branches after it from being tried.
+    #>
+    [CmdletBinding(SupportsShouldProcess)]
+    param(
+        [Parameter(Mandatory)][string] $RepositoryRoot
+    )
+
+    & git -C $RepositoryRoot rev-parse --verify --quiet refs/remotes/origin/dev *>$null
+    if ($LASTEXITCODE -ne 0) { return @() }
+
+    $head = & git -C $RepositoryRoot symbolic-ref --quiet --short HEAD 2>$null
+    $currentBranch = if ($LASTEXITCODE -eq 0 -and $head) { [string]$head } else { $null }
+    $protected = @($currentBranch, 'dev', 'master')
+
+    $candidateBranch = @(& git -C $RepositoryRoot for-each-ref --format='%(refname:short)' refs/heads |
+            ForEach-Object { [string]$_ } | Where-Object { $_ -and $protected -cnotcontains $_ })
+
+    $result = @()
+    foreach ($branch in $candidateBranch) {
+        & git -C $RepositoryRoot merge-base --is-ancestor $branch refs/remotes/origin/dev *>$null
+        if ($LASTEXITCODE -ne 0) { continue }
+
+        if (-not $PSCmdlet.ShouldProcess($branch, 'Delete this local branch, already merged into origin/dev')) { continue }
+
+        $output = & git -C $RepositoryRoot branch -D -- $branch 2>&1
+        $status = $LASTEXITCODE
+        if ($status -eq 0) {
+            $result += [pscustomobject]@{ Branch = $branch; Status = 'Deleted'; Detail = $null }
+        }
+        else {
+            $detail = (@($output | ForEach-Object { [string]$_ } | Where-Object { $_ })) -join '; '
+            $result += [pscustomobject]@{ Branch = $branch; Status = 'Failed'; Detail = $detail }
+        }
+    }
+    return $result
+}
+
 # The base branch a capture publishes against. `dev` is the only branch this
 # repository's source promotion lets a feature branch enter, so it is stated
 # once here rather than spelled into each of the four places below that

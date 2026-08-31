@@ -448,6 +448,27 @@ finally {
     if ([IO.Directory]::Exists($stagingRoot)) { [IO.Directory]::Delete($stagingRoot, $true) }
 }
 
+if ($Publish) {
+    # GitHub deletes a merged pull request's branch on the remote, but this
+    # clone's own local copy of it survives until something clears it.
+    # --prune here both refreshes refs/remotes/origin/dev to what the branch
+    # below is actually cut from and drops this clone's now-stale
+    # refs/remotes/origin/* copies of branches GitHub already deleted. A
+    # failed fetch leaves whatever origin/dev this clone already had, which
+    # Remove-WinEnvMergedLocalBranch reads exactly as every other reader
+    # here does, so a network hiccup a plain, unpublished capture never had
+    # to survive is not one this cleanup aborts over either.
+    & git -C $repositoryRoot fetch --quiet --prune origin 2>$null
+    foreach ($pruned in @(Remove-WinEnvMergedLocalBranch -RepositoryRoot $repositoryRoot)) {
+        if ($pruned.Status -eq 'Deleted') {
+            Write-Host "  pruned: $($pruned.Branch)"
+        }
+        else {
+            Write-Host "  branch prune failed: $($pruned.Branch) ($($pruned.Detail))"
+        }
+    }
+}
+
 # The branch comes first, while the tree still matches HEAD, so switching
 # cannot disturb a payload that has not been written yet. Local dev is
 # already known to equal origin/dev (Get-WinEnvCaptureBranchPlan refused
