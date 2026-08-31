@@ -1165,6 +1165,61 @@ fi
 publish_wrote_nothing "refusing on master"
 publish_git switch -q dev
 
+# #90: --publish is a Unix-like flow with a PowerShell counterpart in
+# windows/tools/capture.ps1. A uname stub proves the platform guard without
+# depending on which platform runs this suite. It only ever answers `-s`,
+# which is all the helper asks it.
+publish_uname_stub() {
+  # $1: directory to create the stub in. $2: what `uname -s` reports there.
+  mkdir -p "$1"
+  cat >"$1/uname" <<STUB
+#!/bin/sh
+if [ "\$1" = -s ]; then
+  printf '%s\n' '$2'
+else
+  exit 1
+fi
+STUB
+  chmod +x "$1/uname"
+}
+
+# Positive: a Unix-like uname still reaches the ordinary preflight, gh
+# included.
+for publish_uname_os in Linux Darwin; do
+  publish_uname_stub "$publish_root/stub-uname-ok" "$publish_uname_os"
+  publish_snapshot
+  publish_path="$publish_root/stub-uname-ok:$publish_root/stub:$PATH"
+  if ! ok_out=$(run_publish n --dry-run --publish cask add "of$publish_uname_os"); then
+    printf '%s\n' "$ok_out" >&2
+    echo "commit --publish refused a dry run under $publish_uname_os" >&2
+    exit 1
+  fi
+  publish_path="$publish_root/stub:$PATH"
+  printf '%s\n' "$ok_out" | grep -q '^branch: '
+  grep -q '^auth status ' "$publish_log"
+  publish_wrote_nothing "planning a dry run under $publish_uname_os"
+done
+
+# Negative: every kernel string the guard's case pattern names refuses before
+# gh is consulted at all, with a message pointing at the Windows counterpart.
+for publish_uname_win in MINGW64_NT-10.0-19045 MSYS_NT-10.0-19045 CYGWIN_NT-10.0; do
+  publish_uname_stub "$publish_root/stub-uname-win" "$publish_uname_win"
+  publish_snapshot
+  publish_path="$publish_root/stub-uname-win:$publish_root/stub:$PATH"
+  if win_out=$(run_publish y --publish cask add "wf${publish_uname_win%%_*}"); then
+    echo "commit --publish acted on native Windows ($publish_uname_win)" >&2
+    exit 1
+  fi
+  publish_path="$publish_root/stub:$PATH"
+  printf '%s\n' "$win_out" | grep -q 'not supported on native Windows'
+  printf '%s\n' "$win_out" | grep -q 'capture\.ps1 -Feature <id> -Publish'
+  if [ -s "$publish_log" ]; then
+    echo "commit --publish consulted gh on native Windows ($publish_uname_win)" >&2
+    exit 1
+  fi
+  publish_wrote_nothing "refusing on native Windows ($publish_uname_win)"
+done
+
 # --publish without gh refuses before any write. Without --publish the same
 # clone still commits, so this is a prerequisite of publishing rather than of
 # the helper.
