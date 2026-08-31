@@ -507,6 +507,26 @@ function Get-WinEnvWindowsBuild {
     return [int]$build
 }
 
+function Test-WinEnvWindowsHost {
+    <#
+        .SYNOPSIS
+        Whether this run is on Windows, the only platform capture.ps1 (and
+        anything else that reads a host directly) may act on.
+
+        .DESCRIPTION
+        $IsWindows is PowerShell 7's own automatic variable; every caller of
+        this module already requires version 7, so it is always defined. Read
+        through this function instead of inline, with an injectable override,
+        so a refusal on Unix-like pwsh -- macOS or WSL included -- has a
+        fixture without needing a foreign host to prove itself.
+    #>
+    param(
+        [bool] $IsWindows = $global:IsWindows
+    )
+
+    return $IsWindows
+}
+
 # Private, like Get-WinGetRegistration: a definition copy carrying a scalar
 # Source is an implementation detail of the two resolvers below, not part of
 # this module's contract.
