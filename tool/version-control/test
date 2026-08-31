@@ -429,13 +429,23 @@ printf '_: {\n  identity = { %s = "%s"; };\n}\n' gitName Fixture \
   >"$commit_root/modules/flake/inventory.nix"
 : >"$commit_root/tool/version-control/hygiene.allow"
 
-# The two shapes that break a naive list editor: a comment attached to one
-# entry, and a tapped cask whose sort key is its last path segment rather than
-# the whole string.
+# The shapes that break a naive editor: a comment attached to one entry, a
+# tapped cask whose sort key is its last path segment rather than the whole
+# string, and a masApps attrset whose alphabetized main block is followed by a
+# `# safari extensions` section that an insertion must never enter.
 cat >"$commit_root/modules/darwin-homebrew.nix" <<'FIXTURE'
 _: {
   modules.darwin.system = _: {
     homebrew = {
+      masApps = {
+        keynote = 409183694;
+        pages = 409201541;
+
+        # safari extensions
+        bitwarden = 1352778147;
+        wblock = 6746388723;
+      };
+
       # Portable command-line tools belong to homeManager.shared.
       brews = [
         # Broken on Darwin in the locked nixpkgs.
@@ -579,6 +589,156 @@ if grep -q 'Broken on Darwin' "$commit_root/modules/darwin-homebrew.nix"; then
 fi
 grep -q 'Portable command-line tools' "$commit_root/modules/darwin-homebrew.nix"
 grep -q '"displayplacer"' "$commit_root/modules/darwin-homebrew.nix"
+
+# ---------------------------------------------------------------------------
+# tool/version-control/commit mas add/remove
+# ---------------------------------------------------------------------------
+#
+# masApps is a Nix attrset of `name = id;` pairs, not a string list, and its
+# alphabetized main block is followed by a `# safari extensions` section that
+# an insertion must never enter (#92).
+
+masapps_main_now() {
+  sed -n '/masApps = {/,/# safari extensions/p' "$commit_root/modules/darwin-homebrew.nix" \
+    | sed -n 's/^ *\([A-Za-z_][A-Za-z0-9_-]*\) = [0-9]*;$/\1/p' | tr '\n' ' '
+}
+
+masapps_safari_now() {
+  sed -n '/# safari extensions/,/};/p' "$commit_root/modules/darwin-homebrew.nix" \
+    | sed -n 's/^ *\([A-Za-z_][A-Za-z0-9_-]*\) = [0-9]*;$/\1/p' | tr '\n' ' '
+}
+
+mas_dry=$(run_commit n --dry-run mas add microsoft-onedrive 823766827)
+printf '%s\n' "$mas_dry" | grep -q '^+        microsoft-onedrive = 823766827;$'
+printf '%s\n' "$mas_dry" | grep -q '^classification: unixlike$'
+printf '%s\n' "$mas_dry" \
+  | grep -q '^message: feat(unixlike): add mas app microsoft-onedrive$'
+if [ -n "$(commit_git status --porcelain --untracked-files=no)" ]; then
+  echo "commit --dry-run wrote something for a mas addition" >&2
+  exit 1
+fi
+
+if ! run_commit y mas add microsoft-onedrive 823766827 >/dev/null; then
+  echo "the commit helper refused a valid mas addition" >&2
+  exit 1
+fi
+if [ "$(commit_git show -s --format=%s HEAD)" \
+  != 'feat(unixlike): add mas app microsoft-onedrive' ]; then
+  echo "commit helper used an unexpected message for a mas addition" >&2
+  exit 1
+fi
+if [ "$(commit_git diff-tree --no-commit-id --name-only -r HEAD)" \
+  != modules/darwin-homebrew.nix ]; then
+  echo "commit helper touched more than the homebrew module for a mas addition" >&2
+  exit 1
+fi
+# Alphabetized among the main block's own names: keynote < microsoft-onedrive
+# < pages.
+if [ "$(masapps_main_now)" != 'keynote microsoft-onedrive pages ' ]; then
+  echo "commit helper ignored masApps' alphabetical order: $(masapps_main_now)" >&2
+  exit 1
+fi
+
+# A name that would sort after every safari-section name too must still land
+# at the end of the main block, never inside the safari section: "zzz" sorts
+# after "wblock", but the main block is the only place an add may land.
+if ! run_commit y mas add zzz 999999999 >/dev/null; then
+  echo "the commit helper refused a mas addition at the end of the main block" >&2
+  exit 1
+fi
+if [ "$(masapps_main_now)" != 'keynote microsoft-onedrive pages zzz ' ]; then
+  echo "commit helper placed a mas addition outside the main block: $(masapps_main_now)" >&2
+  exit 1
+fi
+if [ "$(masapps_safari_now)" != 'bitwarden wblock ' ]; then
+  echo "commit helper disturbed the safari extensions section: $(masapps_safari_now)" >&2
+  exit 1
+fi
+# The blank line separating the two sections must survive the insertion.
+if ! awk '/zzz = 999999999;/ { getline; if ($0 == "") found = 1 } END { exit !found }' \
+  "$commit_root/modules/darwin-homebrew.nix"; then
+  echo "commit helper dropped the blank line before the safari extensions section" >&2
+  exit 1
+fi
+
+# A removed entry leaves the section it was in; both the main block and the
+# safari section are candidates.
+if ! run_commit y mas remove pages >/dev/null; then
+  echo "the commit helper refused a valid mas removal from the main block" >&2
+  exit 1
+fi
+if [ "$(commit_git show -s --format=%s HEAD)" \
+  != 'chore(unixlike): remove mas app pages' ]; then
+  echo "commit helper used an unexpected message for a mas removal" >&2
+  exit 1
+fi
+if [ "$(masapps_main_now)" != 'keynote microsoft-onedrive zzz ' ]; then
+  echo "commit helper did not remove the expected mas app: $(masapps_main_now)" >&2
+  exit 1
+fi
+
+if ! run_commit y mas remove bitwarden >/dev/null; then
+  echo "the commit helper refused a valid mas removal from the safari section" >&2
+  exit 1
+fi
+if [ "$(masapps_safari_now)" != 'wblock ' ]; then
+  echo "commit helper did not remove a mas app from the safari section: $(masapps_safari_now)" >&2
+  exit 1
+fi
+
+# The add and remove guards, mirroring the brew/cask ones above.
+if mas_already_output=$(run_commit y mas add keynote 409183694); then
+  echo "commit helper added a mas app that was already declared" >&2
+  exit 1
+fi
+printf '%s\n' "$mas_already_output" | grep -q 'already declared'
+if mas_missing_output=$(run_commit y mas remove nowhere); then
+  echo "commit helper removed a mas app that was not declared" >&2
+  exit 1
+fi
+printf '%s\n' "$mas_missing_output" | grep -q 'is not declared'
+if mas_id_output=$(run_commit y mas add newapp abc); then
+  echo "commit helper accepted a non-numeric Mac App Store id" >&2
+  exit 1
+fi
+printf '%s\n' "$mas_id_output" | grep -q 'Not a usable Mac App Store id'
+if mas_name_output=$(run_commit y mas add 'tap/name' 123456789); then
+  echo "commit helper accepted an unusable Nix attribute name" >&2
+  exit 1
+fi
+printf '%s\n' "$mas_name_output" | grep -q 'Not a usable Nix attribute name'
+
+# require_untouched applies to masApps exactly as it does to brews and casks.
+printf '\n' >>"$commit_root/modules/darwin-homebrew.nix"
+if run_commit y mas add untouched-guard 111111111 >/dev/null; then
+  echo "commit helper acted on masApps with uncommitted changes in the file" >&2
+  exit 1
+fi
+commit_git checkout -q -- modules/darwin-homebrew.nix
+
+# What every mas edit above produced must still satisfy alejandra, the
+# formatter tool/checks/format delegates to through `nix fmt`. This fixture
+# has no flake.nix of its own, so alejandra runs directly rather than through
+# that indirection; it is still the same binary the real pipeline calls.
+if command -v alejandra >/dev/null 2>&1; then
+  if ! alejandra --check --quiet --quiet -- "$commit_root/modules/darwin-homebrew.nix"; then
+    echo "commit helper left modules/darwin-homebrew.nix unformatted after mas edits" >&2
+    exit 1
+  fi
+else
+  echo "· alejandra not on PATH, skipping the mas formatting fixture"
+fi
+
+# The usage text documents the new subcommand and that mas itself needs no
+# command of its own, being already a declared Homebrew formula.
+mas_help=$(
+  unset GIT_DIR GIT_WORK_TREE GIT_INDEX_FILE
+  cd "$commit_root" || exit 1
+  PATH="$commit_stub_path:$PATH" tool/version-control/commit -h
+)
+printf '%s\n' "$mas_help" | grep -q '^  mas add <name> <id>'
+printf '%s\n' "$mas_help" | grep -q '^  mas remove <name>'
+printf '%s\n' "$mas_help" | grep -q 'already a declared Homebrew formula'
 
 # The add and remove guards. A name already declared, a name that is not there,
 # and a name the module could not hold are refusals, not edits.
@@ -882,6 +1042,13 @@ cat >"$publish_root/modules/darwin-homebrew.nix" <<'FIXTURE'
 _: {
   modules.darwin.system = _: {
     homebrew = {
+      masApps = {
+        keynote = 409183694;
+
+        # safari extensions
+        bitwarden = 1352778147;
+      };
+
       brews = [
         "mas"
       ];
@@ -1165,6 +1332,61 @@ fi
 publish_wrote_nothing "refusing on master"
 publish_git switch -q dev
 
+# #90: --publish is a Unix-like flow with a PowerShell counterpart in
+# windows/tools/capture.ps1. A uname stub proves the platform guard without
+# depending on which platform runs this suite. It only ever answers `-s`,
+# which is all the helper asks it.
+publish_uname_stub() {
+  # $1: directory to create the stub in. $2: what `uname -s` reports there.
+  mkdir -p "$1"
+  cat >"$1/uname" <<STUB
+#!/bin/sh
+if [ "\$1" = -s ]; then
+  printf '%s\n' '$2'
+else
+  exit 1
+fi
+STUB
+  chmod +x "$1/uname"
+}
+
+# Positive: a Unix-like uname still reaches the ordinary preflight, gh
+# included.
+for publish_uname_os in Linux Darwin; do
+  publish_uname_stub "$publish_root/stub-uname-ok" "$publish_uname_os"
+  publish_snapshot
+  publish_path="$publish_root/stub-uname-ok:$publish_root/stub:$PATH"
+  if ! ok_out=$(run_publish n --dry-run --publish cask add "of$publish_uname_os"); then
+    printf '%s\n' "$ok_out" >&2
+    echo "commit --publish refused a dry run under $publish_uname_os" >&2
+    exit 1
+  fi
+  publish_path="$publish_root/stub:$PATH"
+  printf '%s\n' "$ok_out" | grep -q '^branch: '
+  grep -q '^auth status ' "$publish_log"
+  publish_wrote_nothing "planning a dry run under $publish_uname_os"
+done
+
+# Negative: every kernel string the guard's case pattern names refuses before
+# gh is consulted at all, with a message pointing at the Windows counterpart.
+for publish_uname_win in MINGW64_NT-10.0-19045 MSYS_NT-10.0-19045 CYGWIN_NT-10.0; do
+  publish_uname_stub "$publish_root/stub-uname-win" "$publish_uname_win"
+  publish_snapshot
+  publish_path="$publish_root/stub-uname-win:$publish_root/stub:$PATH"
+  if win_out=$(run_publish y --publish cask add "wf${publish_uname_win%%_*}"); then
+    echo "commit --publish acted on native Windows ($publish_uname_win)" >&2
+    exit 1
+  fi
+  publish_path="$publish_root/stub:$PATH"
+  printf '%s\n' "$win_out" | grep -q 'not supported on native Windows'
+  printf '%s\n' "$win_out" | grep -q 'capture\.ps1 -Feature <id> -Publish'
+  if [ -s "$publish_log" ]; then
+    echo "commit --publish consulted gh on native Windows ($publish_uname_win)" >&2
+    exit 1
+  fi
+  publish_wrote_nothing "refusing on native Windows ($publish_uname_win)"
+done
+
 # --publish without gh refuses before any write. Without --publish the same
 # clone still commits, so this is a prerequisite of publishing rather than of
 # the helper.
@@ -1327,6 +1549,57 @@ if publish_remote_git show-ref --verify --quiet \
 fi
 if grep -Eq '^pr (create|merge)' "$publish_log"; then
   echo "commit --publish proposed a commit the remote never received" >&2
+  exit 1
+fi
+publish_git switch -q dev
+
+# --publish integration for mas, mirroring the cask happy path above: branch
+# naming, the commit message and the pull-request body all follow the same
+# shape, with only the topic and message text being group-specific.
+publish_snapshot
+: >"$publish_body"
+if ! mas_publish_out=$(run_publish y --publish mas add pages 409201541); then
+  printf '%s\n' "$mas_publish_out" >&2
+  echo "commit --publish refused a valid mas addition" >&2
+  exit 1
+fi
+if [ "$(publish_git branch --show-current)" != feature/unixlike-mas-add-pages ]; then
+  echo "commit --publish did not create the expected branch for a mas addition" >&2
+  exit 1
+fi
+if [ "$(publish_git rev-parse HEAD^)" \
+  != "$(publish_git rev-parse refs/remotes/origin/dev)" ]; then
+  echo "commit --publish did not branch a mas addition from origin/dev" >&2
+  exit 1
+fi
+if [ "$(publish_git show -s --format=%s HEAD)" != 'feat(unixlike): add mas app pages' ]; then
+  echo "commit --publish used an unexpected message for a mas addition" >&2
+  exit 1
+fi
+if [ "$(publish_remote_git rev-parse refs/heads/feature/unixlike-mas-add-pages)" \
+  != "$(publish_git rev-parse HEAD)" ]; then
+  echo "commit --publish did not push the mas addition it committed" >&2
+  exit 1
+fi
+grep -q '^Scope: unixlike$' "$publish_body"
+grep -q '^Command: tool/version-control/commit --publish mas add pages 409201541$' \
+  "$publish_body"
+printf '%s\n' "$mas_publish_out" | grep -q '^https://github.com/owner/repo/pull/7$'
+publish_git switch -q dev
+
+publish_snapshot
+if ! mas_remove_out=$(run_publish y --publish mas remove bitwarden); then
+  printf '%s\n' "$mas_remove_out" >&2
+  echo "commit --publish refused a valid mas removal" >&2
+  exit 1
+fi
+if [ "$(publish_git branch --show-current)" != feature/unixlike-mas-remove-bitwarden ]; then
+  echo "commit --publish did not create the expected branch for a mas removal" >&2
+  exit 1
+fi
+if [ "$(publish_git show -s --format=%s HEAD)" \
+  != 'chore(unixlike): remove mas app bitwarden' ]; then
+  echo "commit --publish used an unexpected message for a mas removal" >&2
   exit 1
 fi
 publish_git switch -q dev

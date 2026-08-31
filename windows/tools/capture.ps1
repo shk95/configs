@@ -101,6 +101,17 @@ function Stop-Capture {
     exit 1
 }
 
+# The first question this script asks, ahead of every host read below: a
+# managed target, the host path and the Windows build all mean something
+# specific to this platform, and reading them on Unix-like pwsh -- macOS or
+# WSL included -- would fail confusingly on paths and build detection that do
+# not apply there rather than refuse plainly. tool/version-control/commit
+# --publish is that host's own equivalent entry point.
+if (-not (Test-WinEnvWindowsHost)) {
+    Stop-Capture -Message 'capture.ps1 only runs on Windows.' `
+        -Detail 'On a Unix-like host, use tool/version-control/commit --publish instead.'
+}
+
 function Invoke-GitCommand {
     # Captured output, for the questions this script asks Git. The commit
     # itself deliberately does not go through here: a hook's evidence lines and

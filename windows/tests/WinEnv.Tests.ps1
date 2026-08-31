@@ -1561,6 +1561,23 @@ Describe 'Windows build condition' {
     }
 }
 
+Describe 'Windows host guard' {
+    # capture.ps1's refusal calls this with no override, so its positive and
+    # negative branches are otherwise only reachable by actually being on, or
+    # off, Windows. The override exists so both are fixtures here instead.
+    It 'answers true when told this run is on Windows' {
+        (Test-WinEnvWindowsHost -IsWindows $true) | Should -Be $true
+    }
+
+    It 'answers false when told this run is not on Windows' {
+        (Test-WinEnvWindowsHost -IsWindows $false) | Should -Be $false
+    }
+
+    It 'defaults to the automatic $IsWindows variable' {
+        (Test-WinEnvWindowsHost) | Should -Be $global:IsWindows
+    }
+}
+
 Describe 'capture' {
     BeforeAll {
         # A host no machine running this suite has to be. Every value is
@@ -2116,6 +2133,61 @@ Describe 'capture' {
             Should -Match 'SupportsShouldProcess'
         $parameters | Should -Not -Contain 'Force'
         $parameters | Should -Not -Contain 'Yes'
+    }
+
+    It 'guards every host read behind Test-WinEnvWindowsHost' {
+        # The predicate itself is fixtured in Describe 'Windows host guard'.
+        # What this suite can still assert on any platform, without running
+        # the script, is that the call happens exactly once, ahead of the
+        # first host read, and that finding it false is what stops the run.
+        $capturePath = Join-Path $repositoryRoot 'tools\capture.ps1'
+        $tokens = $null; $errors = $null
+        $tree = [System.Management.Automation.Language.Parser]::ParseFile($capturePath, [ref]$tokens, [ref]$errors)
+        $errors.Count | Should -Be 0
+
+        $guardCalls = @($tree.FindAll(
+                { $args[0] -is [System.Management.Automation.Language.CommandAst] }, $true) |
+                Where-Object { $_.GetCommandName() -eq 'Test-WinEnvWindowsHost' })
+        $guardCalls.Count | Should -Be 1
+
+        $firstManifestRead = @($tree.FindAll(
+                { $args[0] -is [System.Management.Automation.Language.CommandAst] }, $true) |
+                Where-Object { $_.GetCommandName() -eq 'Get-WinEnvManifest' }) | Select-Object -First 1
+        $firstManifestRead | Should -Not -BeNullOrEmpty
+        $guardCalls[0].Extent.StartOffset | Should -BeLessThan $firstManifestRead.Extent.StartOffset
+
+        $guardIf = @($tree.FindAll(
+                { $args[0] -is [System.Management.Automation.Language.IfStatementAst] }, $true) |
+                Where-Object { $_.Clauses[0].Item1.Extent.Text -match 'Test-WinEnvWindowsHost' }) |
+            Select-Object -First 1
+        $guardIf | Should -Not -BeNullOrEmpty
+        $guardIf.Clauses[0].Item1.Extent.Text | Should -Match '-not'
+
+        $guardBody = @($guardIf.Clauses[0].Item2.FindAll(
+                { $args[0] -is [System.Management.Automation.Language.CommandAst] }, $true) |
+                ForEach-Object { $_.GetCommandName() })
+        $guardBody | Should -Contain 'Stop-Capture'
+    }
+
+    It 'refuses to run at all on a non-Windows host' {
+        # Genuinely end-to-end, unlike the rest of this Describe block: the
+        # guard is the one thing in capture.ps1 that is safe to run for real,
+        # anywhere, because it is the only code that runs before any host
+        # read or write. On native Windows the real answer is the positive
+        # branch instead, which Describe 'Windows host guard' already covers
+        # directly; running the full script here would need a fixture
+        # repository this block does not build, and must never be this one.
+        if ([Environment]::OSVersion.Platform -eq [System.PlatformID]::Win32NT) {
+            Set-ItResult -Skipped -Because 'this host is Windows, where capture.ps1 does not refuse'
+            return
+        }
+
+        $capturePath = Join-Path $repositoryRoot 'tools\capture.ps1'
+        $pwsh = (Get-Process -Id $PID).Path
+        $output = @(& $pwsh -NoLogo -NoProfile -NonInteractive -File $capturePath 2>&1)
+        $LASTEXITCODE | Should -Be 1
+        ($output -join [Environment]::NewLine) | Should -Match 'only runs on Windows'
+        ($output -join [Environment]::NewLine) | Should -Match ([regex]::Escape('tool/version-control/commit --publish'))
     }
 
     It 'asks the documented question once, and only that question' {
