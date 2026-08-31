@@ -36,7 +36,6 @@ _: {
         microsoft-excel = 462058435;
         microsoft-powerpoint = 462062816;
         microsoft-word = 462054704;
-        microsoft-todo = 1274495053;
         microsoft-windows_app = 1295203466;
         numbers = 409203825;
         pages = 409201541;
@@ -70,7 +69,6 @@ _: {
 
       # `brew install --cask`
       casks = [
-        "nikitabobko/tap/aerospace"
         "anki"
         "android-commandlinetools"
         "android-platform-tools"
