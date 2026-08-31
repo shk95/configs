@@ -2676,6 +2676,163 @@ exit 1
         }
     }
 
+    Context 'evidence a published capture writes, readable' {
+        <#
+            #85: PR #84's body (the first real -Publish) reached GitHub with
+            the hook's UTF-8 glyphs mislabelled as mojibake and a stray
+            control character in the transcript, and its push-evidence block
+            was this suite's own multi-minute Pester transcript, including
+            lines a rejected-push fixture prints on purpose ("- the Windows
+            checks failed", a throwaway `Temp\...\remote.git`). These fixtures
+            cover the fix: correct decoding regardless of the console's own
+            codepage, control characters stripped from the body only, and the
+            push block condensed to what a reviewer needs.
+        #>
+        It 'recovers a hook''s UTF-8 glyphs a non-UTF-8 console codepage would mislabel' {
+            # The exact failure mode: PowerShell's own `2>&1 | ForEach-Object`
+            # decodes a captured native command's output with
+            # [Console]::OutputEncoding, not the encoding the command wrote
+            # in. Reproduced by hand while designing this fix: under codepage
+            # 437, this same "-> <check> <dot>" line survives as "ΓåÆ Γ£ô
+            # ┬╖" through that pipe. Invoke-WinEnvTeeCommand must not care --
+            # it declares its own pipe's encoding as UTF-8 instead of trusting
+            # the console's.
+            $stubPath = Join-Path $TestDrive 'utf8-glyphs.ps1'
+            [IO.File]::WriteAllText($stubPath, @'
+[Console]::OutputEncoding = [System.Text.Encoding]::UTF8
+Write-Output '→ ✓ ·'
+[Console]::Error.WriteLine('→-err')
+exit 7
+'@)
+
+            $saved = [Console]::OutputEncoding
+            try {
+                [Console]::OutputEncoding = [System.Text.Encoding]::GetEncoding(437)
+                $result = Invoke-WinEnvTeeCommand -FilePath $PwshPath -ArgumentList @('-NoProfile', '-File', $stubPath)
+            }
+            finally {
+                [Console]::OutputEncoding = $saved
+            }
+
+            $result.ExitCode | Should -Be 7
+            $result.Evidence | Should -Contain '→ ✓ ·'
+            $result.Evidence | Should -Contain '→-err'
+        }
+
+        It 'recovers the same glyphs when the console is already UTF-8, the common case' {
+            $stubPath = Join-Path $TestDrive 'utf8-glyphs-default.ps1'
+            [IO.File]::WriteAllText($stubPath, "Write-Output '→ ✓ ·'`nexit 0`n")
+
+            $result = Invoke-WinEnvTeeCommand -FilePath $PwshPath -ArgumentList @('-NoProfile', '-File', $stubPath)
+
+            $result.ExitCode | Should -Be 0
+            $result.Evidence | Should -Contain '→ ✓ ·'
+        }
+
+        It 'strips a stray control character from the body but keeps a tab' {
+            $body = New-WinEnvPullRequestBody -Branch 'feature/windows-capture-font' -Feature @('font') `
+                -ManagedFile @('fontPayload (windows/desired/files/font.json)') `
+                -Commit @('feat(windows): capture font settings from the host') `
+                -Command 'windows/tools/capture.ps1 -Publish' -Build '22631' `
+                -Evidence @("a line with a stray$([char]0x1A) control byte") `
+                -PushEvidence @("· a$([char]9)tabbed dot line", "Tests Passed: 1, Failed: 0")
+
+            $body | Should -Not -Match ([char]0x1A)
+            $body | Should -Match ([regex]::Escape('a line with a stray control byte'))
+            $body | Should -Match ([regex]::Escape("a$([char]9)tabbed dot line"))
+        }
+
+        It 'condenses a passing Pester transcript, keeping the summary and naming the count' {
+            $line = @(
+                '→ selected checks',
+                'windows:desired-state',
+                'windows:tests',
+                '→ Windows desired-state check',
+                'Windows desired state is valid.',
+                '→ Windows tests',
+                '',
+                'Starting discovery in 1 files.',
+                'Discovery found 165 tests in 620ms.',
+                'Running tests.',
+                '→ pushing feature/windows-capture-font',
+                'To C:\Users\…\Temp\publish-abc123\remote.git',
+                "branch 'feature/windows-capture-font' set up to track 'origin/feature/windows-capture-font'.",
+                '- the Windows checks failed',
+                "error: failed to push some refs to 'C:\Users\…\Temp\publish-abc123\remote.git'",
+                '· skipped: publish end to end, the happy path (set WIN_ENV_E2E=1 to run it; the CI windows job does)',
+                'Tests Passed: 154, Failed: 0, Skipped: 10, Inconclusive: 0, NotRun: 0'
+            )
+
+            $condensed = ConvertTo-WinEnvCondensedPushEvidence -Line $line
+
+            $condensed | Should -Contain '→ selected checks'
+            $condensed | Should -Contain '→ Windows desired-state check'
+            $condensed | Should -Contain 'Windows desired state is valid.'
+            $condensed | Should -Contain '→ Windows tests'
+            $condensed | Should -Contain ('· skipped: publish end to end, the happy path ' +
+                '(set WIN_ENV_E2E=1 to run it; the CI windows job does)')
+            $condensed | Should -Contain 'Tests Passed: 154, Failed: 0, Skipped: 10, Inconclusive: 0, NotRun: 0'
+            # The fixture's own push narration is inside the Windows tests
+            # span and matches none of the kept shapes, so it is elided along
+            # with Pester's own scaffolding -- this is the residual the note
+            # above the block exists for, not a promise this function makes.
+            $condensed | Should -Not -Contain '→ pushing feature/windows-capture-font'
+            $condensed | Should -Not -Contain 'Starting discovery in 1 files.'
+            # One elision marker naming a count, not one marker per line.
+            @($condensed | Where-Object { $_ -match '^… \d+ passing .* elided …$' }).Count | Should -Be 1
+        }
+
+        It 'keeps every line of a failed test, condensing only what passed around it' {
+            $esc = [char]27
+            $line = @(
+                '→ Windows tests',
+                'Discovery found 1 tests in 10ms.',
+                "$esc[91m[-] a test that failed$esc[0m$esc[90m 5ms (4ms|1ms)$esc[0m",
+                "$esc[91m Expected 1, but got 2.",
+                "$esc[91m at Should -Be 2, WinEnv.Tests.ps1:1$esc[0m",
+                '',
+                'Tests Passed: 0, Failed: 1, Skipped: 0, Inconclusive: 0, NotRun: 0'
+            )
+
+            $condensed = ConvertTo-WinEnvCondensedPushEvidence -Line $line
+
+            $condensed | Should -Contain "$esc[91m[-] a test that failed$esc[0m$esc[90m 5ms (4ms|1ms)$esc[0m"
+            $condensed | Should -Contain "$esc[91m Expected 1, but got 2."
+            $condensed | Should -Contain "$esc[91m at Should -Be 2, WinEnv.Tests.ps1:1$esc[0m"
+            $condensed | Should -Contain 'Tests Passed: 0, Failed: 1, Skipped: 0, Inconclusive: 0, NotRun: 0'
+            $condensed | Should -Not -Contain 'Discovery found 1 tests in 10ms.'
+        }
+
+        It 'leaves everything outside the Windows tests span untouched' {
+            # No "→ Windows tests" header at all: nothing here is a Pester
+            # transcript, so nothing is elided, regardless of shape.
+            $line = @('→ common check', 'a line that is neither a header nor a dot', 'common check passed')
+
+            ConvertTo-WinEnvCondensedPushEvidence -Line $line | Should -Be $line
+        }
+
+        It 'condenses the push-evidence block inside the pull-request body and keeps the note above it' {
+            $line = @(
+                '→ Windows tests',
+                'Discovery found 200 tests in 600ms.',
+                '→ pushing feature/windows-capture-font',
+                'To C:\Users\…\Temp\publish-abc123\remote.git',
+                'Tests Passed: 199, Failed: 0, Skipped: 1, Inconclusive: 0, NotRun: 0'
+            )
+
+            $body = New-WinEnvPullRequestBody -Branch 'feature/windows-capture-font' -Feature @('font') `
+                -ManagedFile @('fontPayload (windows/desired/files/font.json)') `
+                -Commit @('feat(windows): capture font settings from the host') `
+                -Command 'windows/tools/capture.ps1 -Publish' -Build '22631' -PushEvidence $line
+
+            $body | Should -Match ([regex]::Escape('Fixture output inside this suite may mention throwaway ' +
+                    '`Temp\…\remote.git` remotes'))
+            $body | Should -Match ([regex]::Escape('Tests Passed: 199, Failed: 0, Skipped: 1'))
+            $body | Should -Not -Match ([regex]::Escape('Discovery found 200 tests in 600ms.'))
+            $body | Should -Match '… \d+ passing .* elided …'
+        }
+    }
+
     Context 'what the branch already carries' {
         It 'is empty on a branch that is origin/dev' {
             $fixture = New-PublishRepository

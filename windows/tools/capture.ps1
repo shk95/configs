@@ -477,19 +477,29 @@ foreach ($featureId in $features) {
 
     Write-Host ''
     if ($Publish) {
-        & git -C $repositoryRoot commit -m $subject -m ($body -join [Environment]::NewLine) 2>&1 |
-            ForEach-Object {
-                $line = [string]$_
-                [void]$commitEvidence.Add($line)
-                Write-Host $line
-            }
+        # Invoke-WinEnvTeeCommand, not a `2>&1 | ForEach-Object` pipe: git
+        # writes UTF-8, and PowerShell's own pipe would decode it with the
+        # console's codepage instead, mislabelling every non-ASCII glyph the
+        # commit's hooks print. The console itself is untouched -- only the
+        # copy that becomes this pull request's evidence is decoded correctly.
+        #
+        # The exit code is read from the returned object, not $LASTEXITCODE:
+        # once anything assigns $LASTEXITCODE explicitly, a native command run
+        # by a function called afterwards (Invoke-WinEnvGh, later, inside
+        # Publish-WinEnvCapture) stops refreshing it -- confirmed empirically
+        # -- so this script never writes that variable at all.
+        $teed = Invoke-WinEnvTeeCommand -FilePath 'git' -ArgumentList @(
+            '-C', $repositoryRoot, 'commit', '-m', $subject, '-m', ($body -join [Environment]::NewLine))
+        $commitEvidence.AddRange([string[]]$teed.Evidence)
+        $commitExitCode = $teed.ExitCode
     }
     else {
         # No capture, no pipe, no redirection: a hook's evidence lines and its
         # closing unverified summary are the operator's to read.
         & git -C $repositoryRoot commit -m $subject -m ($body -join [Environment]::NewLine)
+        $commitExitCode = $LASTEXITCODE
     }
-    if ($LASTEXITCODE -ne 0) {
+    if ($commitExitCode -ne 0) {
         Write-Refusal -Message 'The commit was rejected.' `
             -Detail 'The captured payloads are left staged. Fix what the hook reported, or discard them with:'
         Write-Host ("    git restore --staged --worktree -- " + ($paths -join ' '))

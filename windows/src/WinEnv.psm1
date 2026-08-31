@@ -2176,6 +2176,175 @@ $script:WinEnvPublishBase = 'dev'
 # that goes through here.
 $script:WinEnvAnsiPattern = ([char]27) + '\[[0-9;]*m'
 
+# C0 controls other than tab (\x09) and newline (\x0A, \x0D), DEL, and the C1
+# controls. A pull-request body is Markdown text, not a terminal, and a stray
+# byte from a truncated escape sequence or a child process's own control
+# traffic has no business surviving into it.
+$script:WinEnvControlCharacterPattern = '[\x00-\x08\x0B\x0C\x0E-\x1F\x7F\x80-\x9F]'
+
+function Invoke-WinEnvTeeCommand {
+    <#
+        .SYNOPSIS
+        Run a native command, echo its output to the console exactly as
+        before, and return a UTF-8-correct copy for a pull-request body.
+
+        .DESCRIPTION
+        PowerShell decodes a captured native command's output with
+        [Console]::OutputEncoding -- the console's own codepage, not the
+        encoding the command actually wrote in. git and pwsh, the only
+        commands this repository tees for evidence, both write UTF-8, and on
+        a host whose codepage is not already UTF-8 (CP949, CP437, ...) that
+        mismatch turns a glyph such as "->" into several wrongly-decoded
+        characters (mojibake) by the time PowerShell hands the line over.
+
+        Re-encoding a wrongly-decoded line with the same (wrong) encoding and
+        decoding the result as UTF-8 recovers the original bytes for a
+        single-byte codepage such as CP437, but a double-byte one such as
+        CP949 can already have replaced an unmappable byte pair with '?'
+        before PowerShell ever sees the string -- verified empirically against
+        this repository's actual CP437 and CP949 encodings -- and no amount of
+        re-decoding then recovers what was already lost.
+
+        This function therefore never asks PowerShell to decode the child's
+        bytes at all: it starts the process itself and declares its stdout
+        and stderr as UTF-8 on the pipes that carry them, so the text this
+        function returns is correct regardless of what codepage the console,
+        or [Console]::OutputEncoding, happens to be set to -- which this
+        function never reads and never changes, so the operator's own console
+        keeps rendering everything else exactly as its codepage always has.
+        Every line is still echoed to the console with Write-Host as it
+        arrives, interleaved with the other stream in whatever order the
+        child actually produced it -- the same order (and the same
+        buffering-driven unevenness between a child's own stdout and stderr)
+        an inline `2>&1` pipe already has today.
+    #>
+    [CmdletBinding()]
+    param(
+        [Parameter(Mandatory)][string] $FilePath,
+        [Parameter(Mandatory)][AllowEmptyCollection()][string[]] $ArgumentList
+    )
+
+    $info = [System.Diagnostics.ProcessStartInfo]::new($FilePath)
+    foreach ($item in $ArgumentList) { [void]$info.ArgumentList.Add($item) }
+    $info.RedirectStandardOutput = $true
+    $info.RedirectStandardError = $true
+    $info.StandardOutputEncoding = [System.Text.Encoding]::UTF8
+    $info.StandardErrorEncoding = [System.Text.Encoding]::UTF8
+    $info.UseShellExecute = $false
+
+    $process = [System.Diagnostics.Process]::new()
+    $process.StartInfo = $info
+    [void]$process.Start()
+
+    $evidence = [System.Collections.Generic.List[string]]::new()
+    $outTask = $process.StandardOutput.ReadLineAsync()
+    $errTask = $process.StandardError.ReadLineAsync()
+
+    while ($null -ne $outTask -or $null -ne $errTask) {
+        $pending = @($outTask, $errTask) | Where-Object { $_ }
+        $winner = $pending[[System.Threading.Tasks.Task]::WaitAny($pending)]
+        $fromOutput = $winner -eq $outTask
+        $line = $winner.Result
+
+        if ($null -eq $line) {
+            if ($fromOutput) { $outTask = $null } else { $errTask = $null }
+            continue
+        }
+
+        Write-Host $line
+        [void]$evidence.Add($line)
+        if ($fromOutput) { $outTask = $process.StandardOutput.ReadLineAsync() }
+        else { $errTask = $process.StandardError.ReadLineAsync() }
+    }
+
+    $process.WaitForExit()
+    return [pscustomobject]@{ ExitCode = $process.ExitCode; Evidence = $evidence.ToArray() }
+}
+
+function ConvertTo-WinEnvCondensedPushEvidence {
+    <#
+        .SYNOPSIS
+        Condense a pushed evidence transcript to what a reviewer needs.
+
+        .DESCRIPTION
+        A capture's push runs .githooks/pre-push, which -- when the Windows
+        checks are selected -- runs windows/tools/test.ps1's whole Pester
+        suite as one of its steps. Most of that run is scaffolding nobody
+        reviewing a pull request needs: discovery banners, a pass mark per
+        test or container, and (because this suite's own module-level
+        publish fixtures push to throwaway remotes and simulate a rejected
+        push) product output from tests that passed. What a reviewer does
+        need survives regardless of source: the selected-checks header, each
+        check's own header line and final verdict, every skip or unverified
+        marker, the suite's own "Tests Passed: ..." tally, and every line of
+        any test that failed.
+
+        Condensing is scoped to the "Windows tests" check specifically --
+        entered at its own header line and left at the tally line -- because
+        that is the only check whose own output is a Pester transcript.
+        Everything outside that span (another check's header and verdict,
+        git's own push confirmation) is untouched: it was never part of "the
+        passing Pester transcript" this elides, and this function does not
+        try to tell a real git remote from a fixture's throwaway one by
+        content -- New-WinEnvPullRequestBody prints a note above this block
+        for exactly that residual case.
+
+        A failed test's own lines are kept by finding where Pester prints
+        them: every line Pester emits for a failing test, from its "[-]"
+        line through its assertion detail, carries the same bright-red
+        escape (ESC[91m); the "[-]" marker itself is also checked without
+        colour, so a run with colour disabled still keeps the line that
+        starts the failure even if none of its detail can be identified as
+        part of the same test that way.
+
+        No "-> " line is auto-kept once inside the span, unlike outside it:
+        the only "-> " header that legitimately appears inside a Pester
+        transcript is capture.ps1's and Publish-WinEnvCapture's own progress
+        narration ("-> pushing ...", "-> opening a pull request against
+        dev", "-> arming auto-merge") printed by this suite's own
+        module-level publish fixtures under test -- exactly the confusing
+        noise this function exists to remove, not preserve.
+    #>
+    param([AllowEmptyCollection()][string[]] $Line = @())
+
+    $result = [System.Collections.Generic.List[string]]::new()
+    $insideWindowsTests = $false
+    $elided = 0
+
+    function Add-ElisionMarker([ref] $Count, [System.Collections.Generic.List[string]] $Into) {
+        if ($Count.Value -le 0) { return }
+        $noun = if ($Count.Value -eq 1) { 'line' } else { 'lines' }
+        [void]$Into.Add("… $($Count.Value) passing $noun of the Pester transcript elided …")
+        $Count.Value = 0
+    }
+
+    foreach ($raw in @($Line)) {
+        $text = [string]$raw
+        $plain = ($text -replace $script:WinEnvAnsiPattern, '')
+
+        if (-not $insideWindowsTests) {
+            [void]$result.Add($text)
+            if ($plain -eq '→ Windows tests') { $insideWindowsTests = $true }
+            continue
+        }
+
+        $keep = $plain.StartsWith('· ') -or $plain.StartsWith('Tests Passed: ') -or
+            ($text -match '^\x1b\[91m') -or ($plain -match '^\[-\] ')
+
+        if (-not $keep) {
+            $elided++
+            continue
+        }
+
+        Add-ElisionMarker ([ref] $elided) $result
+        [void]$result.Add($text)
+        if ($plain.StartsWith('Tests Passed: ')) { $insideWindowsTests = $false }
+    }
+
+    Add-ElisionMarker ([ref] $elided) $result
+    return $result.ToArray()
+}
+
 function Invoke-WinEnvGh {
     <#
         .SYNOPSIS
@@ -2453,7 +2622,10 @@ function New-WinEnvPullRequestBody {
     [void]$lines.Add('')
     [void]$lines.Add('```text')
     if (@($Evidence).Count) {
-        foreach ($line in @($Evidence)) { [void]$lines.Add(($line -replace $script:WinEnvAnsiPattern, '')) }
+        foreach ($line in @($Evidence)) {
+            $clean = ($line -replace $script:WinEnvAnsiPattern, '') -replace $script:WinEnvControlCharacterPattern, ''
+            [void]$lines.Add($clean)
+        }
     }
     else {
         [void]$lines.Add('(the commit output, once the commit runs)')
@@ -2463,9 +2635,21 @@ function New-WinEnvPullRequestBody {
     [void]$lines.Add('')
     [void]$lines.Add('Local push evidence:')
     [void]$lines.Add('')
+    # The pre-push hook runs this very suite, whose own module-level publish
+    # fixtures push to throwaway remotes and simulate a rejected push. A
+    # fixture's own line can survive condensing below -- it is not this
+    # function's job to tell it apart from a real push by content -- so a
+    # line naming a throwaway `Temp\…\remote.git` remote here is that
+    # fixture's output, not a real push.
+    [void]$lines.Add('Fixture output inside this suite may mention throwaway `Temp\…\remote.git` ' +
+        'remotes; a line like that surviving condensing below is a fixture, not a real push.')
+    [void]$lines.Add('')
     [void]$lines.Add('```text')
     if (@($PushEvidence).Count) {
-        foreach ($line in @($PushEvidence)) { [void]$lines.Add(($line -replace $script:WinEnvAnsiPattern, '')) }
+        foreach ($line in (ConvertTo-WinEnvCondensedPushEvidence -Line @($PushEvidence))) {
+            $clean = ($line -replace $script:WinEnvAnsiPattern, '') -replace $script:WinEnvControlCharacterPattern, ''
+            [void]$lines.Add($clean)
+        }
     }
     else {
         [void]$lines.Add('(the pre-push hook''s output, once the push runs)')
@@ -2537,15 +2721,20 @@ function Publish-WinEnvCapture {
     # Copied the way the commit is copied in capture.ps1, and for the same
     # reason: nobody reviews a pull request by scrolling somebody else's
     # terminal. Every line is re-emitted as it arrives, so the operator reads
-    # the hook exactly when it speaks.
-    $pushEvidence = [System.Collections.Generic.List[string]]::new()
-    & git -C $RepositoryRoot push --set-upstream origin $Branch 2>&1 |
-        ForEach-Object {
-            $line = [string]$_
-            [void]$pushEvidence.Add($line)
-            Write-Host $line
-        }
-    if ($LASTEXITCODE -ne 0) {
+    # the hook exactly when it speaks. Invoke-WinEnvTeeCommand, not a
+    # `2>&1 | ForEach-Object` pipe, for the same encoding reason the commit
+    # tee gives: git and the pre-push hook's own pwsh.exe both write UTF-8,
+    # and only the evidence copy needs decoding that PowerShell's own pipe
+    # cannot be trusted to get right on a non-UTF-8 host.
+    # The exit code is read from the returned object, not $LASTEXITCODE:
+    # once anything assigns $LASTEXITCODE explicitly, a native command run by
+    # a function called afterwards (Invoke-WinEnvGh, below) stops refreshing
+    # it -- confirmed empirically -- so this function never writes that
+    # variable at all.
+    $teed = Invoke-WinEnvTeeCommand -FilePath 'git' -ArgumentList @(
+        '-C', $RepositoryRoot, 'push', '--set-upstream', 'origin', $Branch)
+    $pushEvidence = @($teed.Evidence)
+    if ($teed.ExitCode -ne 0) {
         return [pscustomobject]@{
             Status  = 'Refused'
             Url     = $null
