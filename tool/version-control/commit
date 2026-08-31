@@ -106,11 +106,18 @@ commands:
   mas add <name> <id>      declare a Mac App Store app in modules/darwin-homebrew.nix
   mas remove <name>        remove a Mac App Store app
   flake refresh [<input>]  refresh flake.lock, every input or one
+  prune                    delete local branches already merged into origin/dev
 
 mas add/remove edit the masApps attrset: <name> is the Nix attribute and <id>
 is the numeric App Store id the maintainer supplies (no lookup here); the mas
 CLI itself is already a declared Homebrew formula, so it needs no command of
 its own.
+
+prune deletes a local branch only once it is an ancestor of origin/dev, and
+never the current branch, dev, or master; a failed delete (checked out in
+another worktree, for instance) is skipped rather than reported. --publish
+runs the same sweep first, so a merged branch does not wait for a manual
+prune.
 
 On dev the helper first creates feature/<scope>-<topic> from origin/dev; on any
 other branch it commits where it is. The change is always confirmed
@@ -128,6 +135,44 @@ refuse() {
   printf '\033[31m✗ %s\033[0m\n' "$1" >&2
   printf '  %s\n' "$2" >&2
   exit 1
+}
+
+# Merged remote branches are auto-deleted (delete_branch_on_merge=true in the
+# repository settings), but their local counterpart lingers in every clone
+# that fetched it. --publish's preflight and the standalone `prune` subcommand
+# share this one sweep rather than each re-deriving when a branch is safe to
+# lose.
+#
+# A branch is a candidate only once it is an ancestor of origin/dev: that is
+# the proof that nothing unique would be lost, checked against the freshly
+# fetched remote ref rather than local dev, so a stale local dev can never
+# make this more permissive than the branch protection it mirrors. The
+# current branch, dev and master are refused by name before that question is
+# even asked, so switching HEAD or losing either is never on the table.
+#
+# This is maintenance, not a gate: a fetch that fails, an ancestor check that
+# comes back false, or a delete git refuses are all left alone without a
+# word, never reported and never fatal. git branch -d checks a branch's own
+# upstream (or HEAD, absent one), which is not the origin/dev proof this
+# already did, so it is not trusted here; -D deletes on that proof alone. A
+# worktree checkout is the one thing neither flag overrides, and that failure
+# is exactly the kind this must swallow rather than escalate.
+prune_branches() {
+  git fetch --quiet --prune origin 2>/dev/null || return 0
+  git rev-parse --verify --quiet refs/remotes/origin/dev >/dev/null 2>&1 || return 0
+
+  prune_current=$(git symbolic-ref --quiet --short HEAD 2>/dev/null || echo detached)
+
+  git for-each-ref --format='%(refname:short)' refs/heads \
+    | while IFS= read -r prune_candidate; do
+      case $prune_candidate in
+        "$prune_current" | dev | master) continue ;;
+      esac
+      if git merge-base --is-ancestor "$prune_candidate" refs/remotes/origin/dev 2>/dev/null \
+        && git branch -D "$prune_candidate" >/dev/null 2>&1; then
+        printf 'pruned: %s\n' "$prune_candidate"
+      fi
+    done
 }
 
 while [ "$#" -gt 0 ]; do
@@ -164,6 +209,18 @@ done
 [ "$#" -gt 0 ] || usage
 group=$1
 shift
+
+# prune has no templated edit, no owning scope, and no branch of its own: it
+# is a standalone maintenance sweep sharing prune_branches with --publish's
+# preflight, so none of the machinery below (topic, scope, the master and
+# staged-changes refusals, branch creation) applies to it.
+if [ "$group" = prune ]; then
+  [ "$#" -eq 0 ] || usage
+  [ "$dry_run" -eq 0 ] || usage
+  [ "$publish" -eq 0 ] || usage
+  prune_branches
+  exit 0
+fi
 
 item=
 input=
@@ -347,8 +404,10 @@ if [ "$publish" -eq 1 ] && [ "$branch" = detached ]; then
     "Switch to dev or to the feature branch this change belongs on."
 fi
 
-# gh and the remote are consulted only when --publish asks for them, and only
-# ever read here. Nothing below writes.
+# gh and the remote are consulted only when --publish asks for them, and
+# every gh and origin/dev call below is read-only. prune_branches is the one
+# write in here, and it only ever removes a local branch that its own
+# ancestor-of-origin/dev proof already cleared (see its definition above).
 publish_preflight() {
   # --publish shells out the way a Unix-like host expects. Native Windows has
   # its own PowerShell counterpart, so refuse before consulting gh at all.
@@ -358,6 +417,11 @@ publish_preflight() {
         "Use windows/tools/capture.ps1 -Feature <id> -Publish instead."
       ;;
   esac
+
+  # Before the new branch is created and before gh is consulted at all: a
+  # merged branch is never in the way of the one this run is about to make,
+  # and this never depends on gh being present or authenticated.
+  prune_branches
 
   if ! command -v gh >/dev/null 2>&1; then
     refuse "gh is unavailable and --publish needs it." \
