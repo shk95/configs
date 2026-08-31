@@ -190,6 +190,166 @@ Describe 'JSON ownership' {
     }
 }
 
+Describe 'JsonSubset projection' {
+    BeforeAll {
+        # The projection returns text, and every assertion below is about the
+        # document rather than about how ConvertTo-Json spaced it.
+        function Get-Projection {
+            param([string] $Declared, [string] $Actual)
+            $projected = ConvertTo-WinEnvJsonSubsetProjection -DeclaredContent $Declared -HostContent $Actual
+            return ($projected | ConvertFrom-Json -Depth 100)
+        }
+
+        function Get-ProjectionText {
+            param([string] $Declared, [string] $Actual)
+            $projected = ConvertTo-WinEnvJsonSubsetProjection -DeclaredContent $Declared -HostContent $Actual
+            return ((ConvertFrom-Json -InputObject $projected -NoEnumerate) | ConvertTo-Json -Depth 100 -Compress)
+        }
+
+        function Get-ProjectionError {
+            param([string] $Declared, [string] $Actual)
+            try {
+                [void](ConvertTo-WinEnvJsonSubsetProjection -DeclaredContent $Declared -HostContent $Actual)
+                return ''
+            }
+            catch { return [string]$_.Exception.Message }
+        }
+    }
+
+    It 'takes the host value of every key the payload declares' {
+        $projected = Get-Projection '{"a":1,"b":{"c":2}}' '{"a":9,"b":{"c":8}}'
+        $projected.a | Should -Be 9
+        $projected.b.c | Should -Be 8
+    }
+
+    It 'never captures a key the payload does not declare' {
+        # The whole mechanism in one case: the host file mixes the two settings
+        # the payload manages with the version stamp, the timestamp and the
+        # telemetry flag the application keeps beside them. None of the three
+        # is declared, so none of the three can reach desired state -- not
+        # because they are named anywhere, but because the payload does not
+        # declare them.
+        $declared = '{"properties":{"mode":0},"name":"Sample"}'
+        $actual = '{"properties":{"mode":2,"expirationDateTime":"2026-01-01T00:00:00Z"},' +
+        '"name":"Sample","version":"3.1.4","telemetry":{"optedIn":true}}'
+        $text = Get-ProjectionText $declared $actual
+
+        $text | Should -Be '{"properties":{"mode":2},"name":"Sample"}'
+        $text | Should -Not -Match 'version'
+        $text | Should -Not -Match 'expirationDateTime'
+        $text | Should -Not -Match 'telemetry'
+    }
+
+    It 'converges the comparison that reported the drift' {
+        # The invariant the whole mechanism rests on, asserted through
+        # Test-WinEnvJsonSubset itself rather than restated: there is no host
+        # this can project from and leave drifted.
+        $declared = '{"a":1,"list":[{"x":1}],"nested":{"deep":{"k":"old"}}}'
+        $actual = '{"a":2,"list":[{"x":5,"extra":true},{"y":6}],"nested":{"deep":{"k":"new","runtime":1}},"stamp":7}'
+        (Test-WinEnvJsonSubset -Expected ($declared | ConvertFrom-Json) -Actual ($actual | ConvertFrom-Json)) |
+            Should -Be $false
+
+        $projected = Get-Projection $declared $actual
+        (Test-WinEnvJsonSubset -Expected $projected -Actual ($actual | ConvertFrom-Json)) | Should -Be $true
+    }
+
+    It 'projects a list element onto the declared element and takes the rest as the host holds them' {
+        # The read side compares a list by position and requires equal length,
+        # so a payload cannot declare a member subset that outlives a length
+        # change. Element 0 has a declared shape and loses the member the
+        # payload never declared; element 1 has none and arrives whole.
+        $text = Get-ProjectionText '{"l":[{"a":1}]}' '{"l":[{"a":5,"extra":9},{"b":2,"c":3}]}'
+        $text | Should -Be '{"l":[{"a":5},{"b":2,"c":3}]}'
+    }
+
+    It 'shortens a declared list to the length the host holds' {
+        $text = Get-ProjectionText '{"l":[{"a":1},{"a":2}]}' '{"l":[{"a":7}]}'
+        $text | Should -Be '{"l":[{"a":7}]}'
+    }
+
+    It 'keeps a list nested inside a list from collapsing into its parent' {
+        # A projected element that is itself a list would be flattened by an
+        # array subexpression, which would silently rewrite the document's
+        # shape rather than fail.
+        $text = Get-ProjectionText '{"l":[[1,2]]}' '{"l":[[3,4]]}'
+        $text | Should -Be '{"l":[[3,4]]}'
+    }
+
+    It 'reads a document whose root is a one-element array as a list' {
+        # ConvertFrom-Json writes a top-level array's elements to the pipeline
+        # one at a time, so without -NoEnumerate this document would reach the
+        # projection as its single element and be refused as a shape change.
+        $text = Get-ProjectionText '[{"a":1}]' '[{"a":2,"x":3},{"z":4}]'
+        $text | Should -Be '[{"a":2},{"z":4}]'
+    }
+
+    It 'declares nothing by declaring an empty object, and everything by declaring an empty list' {
+        # Not a quirk of this direction but the read side's own asymmetry,
+        # carried across unchanged: a declared object is a member subset, so an
+        # empty one owns no member and can never drift; a declared list is
+        # positional and length-exact, so an empty one owns the whole list.
+        (Get-ProjectionText '{"m":{}}' '{"m":{"k":1}}') | Should -Be '{"m":{}}'
+        (Get-ProjectionText '{"l":[]}' '{"l":[1,2]}') | Should -Be '{"l":[1,2]}'
+    }
+
+    It 'writes the host value under the name the payload declares' {
+        # The member lookup is the comparison's own, which is case-insensitive.
+        # A host that respells a declared key is a key the read side already
+        # found, and the payload keeps its own spelling across captures.
+        (Get-ProjectionText '{"Alpha":1}' '{"alpha":42}') | Should -Be '{"Alpha":42}'
+    }
+
+    It 'moves a declared value between a scalar and null in both directions' {
+        # The read side treats a declared null as a leaf, so a settings key
+        # that moves between a path and null is an ordinary value change.
+        (Get-ProjectionText '{"p":null}' '{"p":"set"}') | Should -Be '{"p":"set"}'
+        (Get-ProjectionText '{"p":"set"}' '{"p":null}') | Should -Be '{"p":null}'
+    }
+
+    It 'refuses a declared key the host file no longer holds, and names it' {
+        $message = Get-ProjectionError '{"properties":{"kept":1,"gone":2}}' '{"properties":{"kept":1}}'
+        $message | Should -Match 'no longer holds'
+        # The path, not just the leaf name: a refusal an operator cannot act on
+        # is worse than no capture at all.
+        $message | Should -Match ([regex]::Escape("'properties.gone'"))
+    }
+
+    It 'refuses a host value whose shape is not the declared one, in either direction' {
+        $scalarForObject = Get-ProjectionError '{"a":{"b":1}}' '{"a":5}'
+        $scalarForObject | Should -Match 'holds a scalar'
+        $scalarForObject | Should -Match 'declares an object'
+        $scalarForObject | Should -Match ([regex]::Escape("at 'a'"))
+
+        $objectForList = Get-ProjectionError '{"a":[1]}' '{"a":{"b":1}}'
+        $objectForList | Should -Match 'holds an object'
+        $objectForList | Should -Match 'declares a list'
+
+        $rootMismatch = Get-ProjectionError '{"a":1}' '[{"a":1}]'
+        $rootMismatch | Should -Match 'at the document root'
+    }
+
+    It 'is idempotent on every JsonSubset payload this repository commits' {
+        # Each committed payload must already be a shape the projection can
+        # express, or the first real capture from a clean host would refuse.
+        # Projecting a payload onto itself proves that for the whole inventory
+        # without a Windows host, and fails the moment a new payload declares
+        # something the mechanism cannot carry.
+        $manifest = Get-WinEnvManifest -Path (Join-Path $desiredStateRoot 'manifest.json')
+        $subsets = @($manifest.ManagedFiles | Where-Object { [string]$_.Compare -ceq 'JsonSubset' })
+        $subsets.Count | Should -BeGreaterThan 0
+
+        foreach ($definition in $subsets) {
+            $payload = Get-Content -LiteralPath (Join-Path $desiredStateRoot ([string]$definition.Source)) `
+                -Raw -Encoding utf8
+            $projected = ConvertTo-WinEnvJsonSubsetProjection -DeclaredContent $payload -HostContent $payload
+            # Canonical rather than textual: the payload is pretty-printed and
+            # the projection is not, and only the document is under test.
+            (ConvertTo-WinEnvCanonicalJson $projected) |
+                Should -Be (ConvertTo-WinEnvCanonicalJson $payload) -Because "$($definition.Id) must project onto itself"
+        }
+    }
+}
+
 Describe 'Windows Terminal generated profiles' {
     BeforeAll {
         $TerminalPayload = Join-Path $desiredStateRoot 'files\terminal\settings.json'
@@ -1764,15 +1924,101 @@ Describe 'capture' {
         $targetPlan.Reason | Should -Match 'runtime state'
     }
 
-    It 'refuses a JsonSubset payload, which cannot be derived from the host file' {
-        $source = New-CapturePayload 'subset.json' '{"declared":true}'
-        $target = New-CaptureTarget 'subset.json' '{"declared":false,"untracked":1}'
+    It 'captures a JsonSubset payload onto the keys it declares and converges the check' {
+        # The headline case the mode used to refuse: the maintainer changed a
+        # setting in the application's UI, and the same file also carries the
+        # version stamp and the window geometry the application rewrites while
+        # it runs.
+        $source = New-CapturePayload 'subset.json' "{`n  `"declared`": true`n}`n"
+        $target = New-CaptureTarget 'subset.json' `
+            '{"declared":false,"version":"1.9.2","window":{"top":11,"left":907}}'
         $definition = New-CaptureDefinition -Id 'subset' -Compare 'JsonSubset' -Source $source -Target $target
 
         $plan = Get-WinEnvCapturePlan -Definition $definition -RepositoryRoot $CaptureRoot `
             -Build 22631 -HostPath $CaptureHost
+        $plan.Status | Should -Be 'Captured'
+
+        $captured = $plan.Content | ConvertFrom-Json
+        $captured.declared | Should -Be $false
+        # Neither undeclared key reaches desired state, and the payload gained
+        # no member at all.
+        @($captured.PSObject.Properties | ForEach-Object { $_.Name }) | Should -Be @('declared')
+        $plan.Content | Should -Not -Match 'version'
+        $plan.Content | Should -Not -Match 'window'
+
+        [void](Save-WinEnvCapturedPayload -Plan $plan -RepositoryRoot $CaptureRoot)
+        # The point of the whole change: a JsonSubset file the check called
+        # drift is clean afterwards, through the comparison the check uses.
+        (Test-WinEnvManagedFile -Definition $definition -RepositoryRoot $CaptureRoot -HostPath $CaptureHost) |
+            Should -Be $true
+    }
+
+    It 'drops an account path the payload never declared instead of refusing the capture' {
+        # The projection runs before the content scans, so a leak the payload
+        # does not own is gone by the time they read the content. This is the
+        # ordering under test: reversed, every capture from a real PowerToys
+        # host would be refused for a path in a key desired state never
+        # manages.
+        $source = New-CapturePayload 'subset-leak.json' "{`n  `"declared`": 1`n}`n"
+        $target = New-CaptureTarget 'subset-leak.json' `
+            ('{"declared":2,"recentFile":"' + $JsonUserProfile + '\\notes.txt"}')
+        $definition = New-CaptureDefinition -Id 'subsetLeak' -Compare 'JsonSubset' -Source $source -Target $target
+
+        $plan = Get-WinEnvCapturePlan -Definition $definition -RepositoryRoot $CaptureRoot `
+            -Build 22631 -HostPath $CaptureHost
+        $plan.Status | Should -Be 'Captured'
+        (ConvertTo-WinEnvCanonicalJson $plan.Content) | Should -Be '{"declared":2}'
+        $plan.Content | Should -Not -Match 'Users'
+    }
+
+    It 'still refuses this host''s account name inside a key the payload does declare' {
+        # The other half of the rule above. Dropping undeclared keys must not
+        # be mistaken for a licence to write a leak the payload owns: every
+        # content refusal still reads the projected document.
+        $source = New-CapturePayload 'subset-owned-leak.json' "{`n  `"owner`": `"someone`"`n}`n"
+        $target = New-CaptureTarget 'subset-owned-leak.json' ('{"owner":"' + $Account + '","other":1}')
+        $definition = New-CaptureDefinition -Id 'subsetOwnedLeak' -Compare 'JsonSubset' `
+            -Source $source -Target $target
+
+        $plan = Get-WinEnvCapturePlan -Definition $definition -RepositoryRoot $CaptureRoot `
+            -Build 22631 -HostPath $CaptureHost
         $plan.Status | Should -Be 'Refused'
-        $plan.Reason | Should -Match 'subset'
+        $plan.Reason | Should -Match 'account'
+    }
+
+    It 'refuses a JsonSubset file the payload''s declared shape cannot express' {
+        # Both genuinely non-derivable shapes, reported as a refusal with the
+        # key path rather than as a crash that would end the run.
+        $missingSource = New-CapturePayload 'subset-missing.json' "{`n  `"kept`": 1,`n  `"gone`": 2`n}`n"
+        $missingTarget = New-CaptureTarget 'subset-missing.json' '{"kept":9}'
+        $missing = Get-WinEnvCapturePlan -RepositoryRoot $CaptureRoot -Build 22631 -HostPath $CaptureHost `
+            -Definition (New-CaptureDefinition -Id 'subsetMissing' -Compare 'JsonSubset' `
+                -Source $missingSource -Target $missingTarget)
+        $missing.Status | Should -Be 'Refused'
+        $missing.Reason | Should -Match 'no longer holds'
+        $missing.Reason | Should -Match 'gone'
+
+        $shapeSource = New-CapturePayload 'subset-shape.json' "{`n  `"properties`": {`n    `"mode`": 0`n  }`n}`n"
+        $shapeTarget = New-CaptureTarget 'subset-shape.json' '{"properties":3}'
+        $shape = Get-WinEnvCapturePlan -RepositoryRoot $CaptureRoot -Build 22631 -HostPath $CaptureHost `
+            -Definition (New-CaptureDefinition -Id 'subsetShape' -Compare 'JsonSubset' `
+                -Source $shapeSource -Target $shapeTarget)
+        $shape.Status | Should -Be 'Refused'
+        $shape.Reason | Should -Match 'declares an object'
+        $shape.Reason | Should -Match 'properties'
+    }
+
+    It 'leaves a JsonSubset file that matches its payload untouched' {
+        # Unchanged is still decided before the projection, so a host holding
+        # any number of undeclared keys is not reported as a capture.
+        $source = New-CapturePayload 'subset-clean.json' "{`n  `"declared`": true`n}`n"
+        $target = New-CaptureTarget 'subset-clean.json' '{"declared":true,"version":"9.9.9"}'
+        $definition = New-CaptureDefinition -Id 'subsetClean' -Compare 'JsonSubset' -Source $source -Target $target
+
+        $plan = Get-WinEnvCapturePlan -Definition $definition -RepositoryRoot $CaptureRoot `
+            -Build 22631 -HostPath $CaptureHost
+        $plan.Status | Should -Be 'Unchanged'
+        $plan.Content | Should -BeNullOrEmpty
     }
 
     It 'refuses a target this host does not have' {

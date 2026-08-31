@@ -1287,6 +1287,194 @@ function Test-WinEnvJsonSubset {
     return $true
 }
 
+function Get-WinEnvJsonValueKind {
+    <#
+        .SYNOPSIS
+        Which of the three shapes a parsed JSON value has: `object`, `list`, or
+        `scalar`.
+
+        .DESCRIPTION
+        The three tests are the ones Test-WinEnvJsonSubset already branches on,
+        written in the same order and with the same operators, so the two
+        functions can never disagree about what a value is. `null` is a scalar
+        rather than a kind of its own: the read side treats a declared `null`
+        and a declared string as the same kind of leaf, and a settings key that
+        moves between a path and `null` is an ordinary value change rather than
+        a schema change.
+    #>
+    param($Value)
+
+    if ($null -eq $Value) { return 'scalar' }
+    if ($Value -is [string] -or $Value -is [ValueType]) { return 'scalar' }
+    if ($Value -is [System.Collections.IList]) { return 'list' }
+    return 'object'
+}
+
+function Join-WinEnvJsonPath {
+    # A dotted path used only to name the key a refusal is about. It is a
+    # diagnostic, never a lookup, so a member name that itself holds a dot is
+    # printed as it is rather than escaped.
+    param(
+        [Parameter(Mandatory)][AllowEmptyString()][string] $Path,
+        [Parameter(Mandatory)][string] $Name
+    )
+
+    if ([string]::IsNullOrEmpty($Path)) { return $Name }
+    return "$Path.$Name"
+}
+
+function Get-WinEnvJsonSubsetProjection {
+    <#
+        .SYNOPSIS
+        One host value reduced to the key paths its payload declares.
+
+        .DESCRIPTION
+        The recursive half of ConvertTo-WinEnvJsonSubsetProjection. It walks the
+        declared payload and the host document together and returns the host's
+        values arranged in the payload's declared shape, or throws with the key
+        path that made the projection impossible.
+
+        Each of the three kinds is projected the way the read side compares it:
+
+          - a declared object contributes exactly the member names it declares,
+            each carrying the host's value. Every other member of the host
+            object is dropped, which is the whole mechanism: a key the payload
+            does not declare cannot reach desired state, so a version stamp, a
+            timestamp, a telemetry flag or a window geometry the application
+            keeps in the same file is never captured;
+          - a declared list contributes the host's list, element by element,
+            with element `i` projected onto declared element `i` where the
+            payload has one and taken as the host holds it where it does not.
+            The read side compares a list by position and requires equal
+            length, so a payload cannot declare a member subset that survives a
+            length change; taking the elements it never declared as they are is
+            the only reading of the list the payload's own shape supports;
+          - a declared scalar contributes the host's scalar.
+
+        The member lookup is Test-WinEnvJsonSubset's own -- the PSObject
+        indexer, which is case-insensitive -- rather than the ordinal helper
+        Windows Terminal's guid matching uses. Agreeing with the comparison
+        matters more here than ordinality: a host that spells a declared key
+        with different case is a key the read side already found, and the
+        projection writes its value back under the name the payload declares,
+        so the payload's own spelling is stable across captures.
+
+        Two host shapes are refused rather than projected, and both are shapes
+        the read side already reports as drift while the payload's declared
+        shape cannot express the fix:
+
+          - a declared member the host object does not hold. Whether the key
+            should be dropped from desired state or restored to the host is not
+            a question this direction can answer, and guessing either way would
+            silently change what the payload manages;
+          - a host value whose kind is not the declared value's kind. The
+            application migrated its own schema under a key this payload
+            declares, and writing the new shape in would discard the whole
+            declared subtree without saying so.
+
+        Both name the key path, because a refusal an operator cannot act on is
+        worse than no capture at all.
+    #>
+    param(
+        $Declared,
+        $Actual,
+        [Parameter(Mandatory)][AllowEmptyString()][string] $Path
+    )
+
+    $declaredKind = Get-WinEnvJsonValueKind $Declared
+    $actualKind = Get-WinEnvJsonValueKind $Actual
+    if ($declaredKind -cne $actualKind) {
+        $where = if ([string]::IsNullOrEmpty($Path)) { 'at the document root' } else { "at '$Path'" }
+        # Spelt out rather than assembled, so the reason reads as a sentence
+        # in every one of the six pairings this can report.
+        $article = @{ object = 'an object'; list = 'a list'; scalar = 'a scalar' }
+        throw ("the host file holds $($article[$actualKind]) $where where the payload declares " +
+            "$($article[$declaredKind]); the application changed the shape of a key this payload " +
+            'declares, so edit the payload by hand')
+    }
+
+    if ($declaredKind -ceq 'object') {
+        $projected = [ordered]@{}
+        foreach ($property in (Get-WinEnvObjectProperties $Declared)) {
+            $name = [string]$property.Name
+            $child = Join-WinEnvJsonPath -Path $Path -Name $name
+            $actualProperty = $Actual.PSObject.Properties[$name]
+            if (-not $actualProperty) {
+                throw ("the host file no longer holds '$child', which the payload declares; " +
+                    'remove the key from the payload or restore it in the application')
+            }
+            $projected[$name] =
+                Get-WinEnvJsonSubsetProjection -Declared $property.Value -Actual $actualProperty.Value -Path $child
+        }
+        return $projected
+    }
+
+    if ($declaredKind -ceq 'list') {
+        # Collected into a typed list and returned comma-wrapped rather than
+        # gathered with @( ): a projected element that is itself a list would
+        # be flattened into its parent by the array subexpression, and a
+        # one-element result would reach the caller as its single element.
+        $declaredItems = @($Declared)
+        $actualItems = @($Actual)
+        $items = [System.Collections.Generic.List[object]]::new()
+        for ($index = 0; $index -lt $actualItems.Count; $index++) {
+            if ($index -lt $declaredItems.Count) {
+                $items.Add((Get-WinEnvJsonSubsetProjection -Declared $declaredItems[$index] `
+                            -Actual $actualItems[$index] -Path "$Path[$index]"))
+                continue
+            }
+            $items.Add($actualItems[$index])
+        }
+        return , $items.ToArray()
+    }
+
+    return $Actual
+}
+
+function ConvertTo-WinEnvJsonSubsetProjection {
+    <#
+        .SYNOPSIS
+        One host JSON document reduced to the key paths its payload declares,
+        as text.
+
+        .DESCRIPTION
+        The capture side of JsonSubset, and the reason that mode is no longer
+        refused outright. The read side has always said that a JsonSubset
+        payload declares which keys it owns and tolerates every other key the
+        application keeps in the same file. The write direction was missing
+        rather than impossible: the values of the keys the payload declares are
+        read straight off the host, so the payload that would make this host
+        clean is derivable after all. What is not derivable -- the keys the
+        payload deliberately does not declare -- is exactly what must never
+        reach desired state, so the projection drops it instead of guessing.
+
+        This is one mechanism rather than a list of keys to ignore per file. An
+        ignore list is a second declaration of what a payload owns, kept beside
+        the payload and free to disagree with it; a projection has only the
+        payload, so a key is captured if and only if the payload declares it,
+        and widening what is captured is an edit to the payload itself.
+
+        Projection converges the check that reported the drift, by
+        construction rather than by test: every member of the result is a
+        member Test-WinEnvJsonSubset looks for, holding the value it found
+        there, and every list in the result has the host's own length and
+        elements. There is no host this can capture from and leave drifted.
+    #>
+    param(
+        [Parameter(Mandatory)][string] $DeclaredContent,
+        [Parameter(Mandatory)][string] $HostContent
+    )
+
+    # -NoEnumerate on both sides. ConvertFrom-Json writes a top-level JSON
+    # array's elements to the pipeline one at a time, so a document whose root
+    # is a one-element array would reach the projection as that element and be
+    # read as an object rather than as a list.
+    $declared = ConvertFrom-Json -InputObject $DeclaredContent -NoEnumerate -ErrorAction Stop
+    $actual = ConvertFrom-Json -InputObject $HostContent -NoEnumerate -ErrorAction Stop
+    $projected = Get-WinEnvJsonSubsetProjection -Declared $declared -Actual $actual -Path ''
+    return ($projected | ConvertTo-Json -Depth 100)
+}
+
 function ConvertTo-WinEnvCanonicalJson {
     param([Parameter(Mandatory)][string] $Content)
     return (($Content | ConvertFrom-Json -ErrorAction Stop) | ConvertTo-Json -Depth 100 -Compress)
@@ -1749,15 +1937,21 @@ function Get-WinEnvCapturePlan {
           2. runtime state, which no branch of this tool may ever write;
           3. a target this host does not have.
 
-        Then drift, and a file that matches its payload is untouched. Only a
-        file that drifted can be refused for what it holds, which is why
-        JsonSubset is ranked after the comparison rather than before it: that
-        mode is most of the PowerToys inventory, and refusing all of it up
-        front would bury the one file a run has something to say about under a
-        list of files that agree with their payloads. Its payload is a subset
-        of the host file by design and cannot be derived from it, so a
-        JsonSubset file that really did drift is reported and left to the
-        operator.
+        Then drift, and a file that matches its payload is untouched.
+
+        A drifted JsonSubset file is projected rather than refused. That mode
+        is most of the PowerToys inventory, and refusing it left the maintainer
+        with a tool that reported the change made in the application's own UI
+        and could not move it into desired state. The payload declares which
+        keys it owns; the host holds a value for each of them; so the payload
+        that makes this host clean is the host's values arranged in the
+        payload's declared shape, and ConvertTo-WinEnvJsonSubsetProjection
+        derives it. Keys the payload does not declare -- the version stamps,
+        timestamps and telemetry the application keeps in the same file -- are
+        dropped by the projection rather than by a per-file ignore list, so
+        AGENTS.md's rule that runtime state stays out of desired state is
+        enforced by the payload itself. The two host shapes the projection
+        cannot express are still refused, with the key path that caused it.
 
         The content is read last, because the final three refusals — an
         unrepresentable host directory, a leaked account path or account name,
@@ -1794,18 +1988,28 @@ function Get-WinEnvCapturePlan {
         return New-CaptureOutcome -Definition $Definition -Status 'Unchanged' -Source $source -Target $target
     }
 
-    if ([string]$resolved.Compare -eq 'JsonSubset') {
-        return New-CaptureOutcome -Definition $Definition -Status 'Refused' -Source $source -Target $target `
-            -Reason 'the payload is a subset of the host file by design and cannot be derived from it'
-    }
-
     $hostText = Get-Content -LiteralPath $target -Raw -Encoding utf8
+    # Both reductions read the payload as it is committed rather than as Apply
+    # would expand it. Each decides on the payload's key names and list
+    # lengths, and no placeholder this domain expands appears in either; the
+    # values they carry are the host's, and ConvertFrom-WinEnvTemplate below
+    # puts the placeholders back.
+    #
+    # A host file a reduction cannot express is a refusal with its reason, not
+    # a crash: the run continues and reports every other selected file, and the
+    # operator is told what to fix in the application or in the payload.
+    if ([string]$resolved.Compare -eq 'JsonSubset') {
+        $declaredText = Get-Content -LiteralPath (Join-Path $RepositoryRoot $source) -Raw -Encoding utf8
+        try {
+            $hostText = ConvertTo-WinEnvJsonSubsetProjection -DeclaredContent $declaredText -HostContent $hostText
+        }
+        catch {
+            return New-CaptureOutcome -Definition $Definition -Status 'Refused' -Source $source -Target $target `
+                -Reason $_.Exception.Message
+        }
+    }
     if ([string]$resolved.Compare -eq 'ExactJsonWithGeneratedProfiles') {
         $declaredText = Get-Content -LiteralPath (Join-Path $RepositoryRoot $source) -Raw -Encoding utf8
-        # A host file this rule cannot reduce to desired state is a refusal
-        # with its reason, not a crash: the run continues and reports every
-        # other selected file, and the operator is told what to fix in the
-        # application.
         try {
             $hostText = Remove-WinEnvGeneratedProfile -DeclaredContent $declaredText -HostContent $hostText
         }
@@ -1912,7 +2116,7 @@ function ConvertTo-WinEnvPrettyJson {
         what follows.
 
         The content must already be valid JSON. Every caller captures from a
-        managed file whose comparison mode is ExactJson or
+        managed file whose comparison mode is ExactJson, JsonSubset or
         ExactJsonWithGeneratedProfiles, and Test-WinEnvManagedFile already
         parses both sides under that mode before a capture plan is ever
         reached, so an unparsable document here would already have thrown
