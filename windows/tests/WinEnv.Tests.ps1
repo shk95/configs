@@ -350,6 +350,89 @@ Describe 'JsonSubset projection' {
     }
 }
 
+Describe 'PowerToys payload audit' {
+    # Three keys the #93 audit of PowerToys' own settings models found and
+    # decided about. Each is asserted individually rather than through a list
+    # of forbidden names: a name list would be the second declaration of what a
+    # payload owns that the projection exists to avoid, and each of these has
+    # its own reason that a shared list would flatten away.
+    BeforeAll {
+        function Get-PowerToysPayload {
+            param([string] $Relative)
+            return (Get-Content -LiteralPath (Join-Path $desiredStateRoot "files/powertoys/$Relative") `
+                    -Raw -Encoding utf8 | ConvertFrom-Json -Depth 100)
+        }
+    }
+
+    It 'declares no AI provider list for Advanced Paste' {
+        # A declared list is captured as the host holds it, so declaring
+        # `providers` would let one capture copy an API key or endpoint out of
+        # the maintainer's host and into a committed payload. Desired state
+        # says AI paste is off with no active provider, which needs neither.
+        $advancedPaste = Get-PowerToysPayload 'AdvancedPaste/settings.json'
+        $configuration = $advancedPaste.properties.'paste-ai-configuration'
+        $configuration.PSObject.Properties['active-provider-id'] | Should -Not -BeNullOrEmpty
+        $configuration.PSObject.Properties['providers'] | Should -BeNullOrEmpty
+        $advancedPaste.properties.IsAIEnabled.value | Should -Be $false
+    }
+
+    It 'declares no Awake expiry timestamp' {
+        # PowerToys initialises expirationDateTime to the moment the file is
+        # created and rewrites it whenever the module's state changes. It is a
+        # timestamp, not a setting, and AGENTS.md keeps runtime state out of
+        # every domain.
+        $awake = Get-PowerToysPayload 'Awake/settings.json'
+        $awake.properties.PSObject.Properties['expirationDateTime'] | Should -BeNullOrEmpty
+        # The four values that do describe intent are still declared, so this
+        # is an exclusion rather than an unmanaged file.
+        foreach ($name in @('keepDisplayOn', 'mode', 'intervalHours', 'intervalMinutes')) {
+            $awake.properties.PSObject.Properties[$name] | Should -Not -BeNullOrEmpty -Because "Awake declares $name"
+        }
+    }
+
+    It 'declares none of the root settings PowerToys computes at runtime' {
+        # The runner rewrites each of these from the live host -- the product
+        # version, the elevation checks, the detected OS theme, and a one-shot
+        # IPC field -- so a captured payload holding one would be a snapshot of
+        # one machine's session. PowerToys' own backup manifest ignores
+        # powertoys_version for the same reason.
+        $root = Get-PowerToysPayload 'settings.json'
+        foreach ($name in @('powertoys_version', 'is_elevated', 'is_admin', 'system_theme', 'action_name')) {
+            $root.PSObject.Properties[$name] | Should -BeNullOrEmpty -Because "the root payload must not declare $name"
+        }
+        # run_elevated is the genuine setting beside them and stays declared.
+        $root.PSObject.Properties['run_elevated'] | Should -Not -BeNullOrEmpty
+    }
+
+    It 'declares no computed default-shortcut member' {
+        # PowerToys serialises a get-only DefaultActivationShortcut /
+        # DefaultEditorShortcut into these three files. It is a constant the
+        # application recomputes, not a setting, and it is version-specific, so
+        # declaring it would make desired state carry a value no maintainer
+        # chose. The real shortcut beside it stays declared.
+        $peek = Get-PowerToysPayload 'Peek/settings.json'
+        $peek.properties.PSObject.Properties['DefaultActivationShortcut'] | Should -BeNullOrEmpty
+        $peek.properties.PSObject.Properties['ActivationShortcut'] | Should -Not -BeNullOrEmpty
+
+        $findMyMouse = Get-PowerToysPayload 'FindMyMouse/settings.json'
+        $findMyMouse.properties.PSObject.Properties['DefaultActivationShortcut'] | Should -BeNullOrEmpty
+        $findMyMouse.properties.PSObject.Properties['activation_shortcut'] | Should -Not -BeNullOrEmpty
+
+        $keyboardManager = Get-PowerToysPayload 'Keyboard Manager/settings.json'
+        $keyboardManager.properties.PSObject.Properties['DefaultEditorShortcut'] | Should -BeNullOrEmpty
+        $keyboardManager.properties.PSObject.Properties['EditorShortcut'] | Should -Not -BeNullOrEmpty
+    }
+
+    It 'keeps the module version each file migrates on' {
+        # Peek migrates when version is absent or "0.0.1", and that migration
+        # also forces EnableSpaceToActivate off; FindMyMouse migrates from
+        # "1.0". Declaring the post-migration literal is what stops Apply from
+        # re-triggering either one on every reconcile.
+        (Get-PowerToysPayload 'Peek/settings.json').version | Should -Be '0.0.2'
+        (Get-PowerToysPayload 'FindMyMouse/settings.json').version | Should -Be '1.1'
+    }
+}
+
 Describe 'Windows Terminal generated profiles' {
     BeforeAll {
         $TerminalPayload = Join-Path $desiredStateRoot 'files\terminal\settings.json'

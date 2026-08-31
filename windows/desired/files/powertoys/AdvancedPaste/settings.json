@@ -6,6 +6,9 @@
     "ShowCustomPreview": {
       "value": true
     },
+    "ShowAIPaste": {
+      "value": true
+    },
     "CloseAfterLosingFocus": {
       "value": false
     },
@@ -52,6 +55,17 @@
     },
     "additional-actions": {
       "image-to-text": {
+        "shortcut": {
+          "win": false,
+          "ctrl": false,
+          "alt": false,
+          "shift": false,
+          "code": 0,
+          "key": ""
+        },
+        "isShown": false
+      },
+      "fix-spelling-and-grammar": {
         "shortcut": {
           "win": false,
           "ctrl": false,
@@ -125,8 +139,7 @@
       }
     },
     "paste-ai-configuration": {
-      "active-provider-id": "",
-      "providers": []
+      "active-provider-id": ""
     }
   },
   "name": "AdvancedPaste",
