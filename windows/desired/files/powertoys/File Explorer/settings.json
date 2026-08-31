@@ -18,9 +18,6 @@
     "md-previewer-toggle-setting": {
       "value": true
     },
-    "md-previewer-local-images-setting": {
-      "value": false
-    },
     "monaco-previewer-toggle-setting": {
       "value": true
     },
