@@ -66,7 +66,7 @@ Describe 'win-env manifest' {
     It 'loads schema 4 and the desired-state compatibility version' {
         $manifest = Get-WinEnvManifest -Path (Join-Path $desiredStateRoot 'manifest.json')
         $manifest.SchemaVersion | Should -Be 4
-        $manifest.ProjectVersion | Should -Be '0.5.0'
+        $manifest.ProjectVersion | Should -Be '0.6.0'
     }
 
     It 'pins the v3.5.0 D2Koding asset and hashes' {
@@ -187,6 +187,308 @@ Describe 'JSON ownership' {
         $expected = '{"enabled":true,"items":[1,2]}' | ConvertFrom-Json
         $actual = '{"enabled":false,"items":[1,2]}' | ConvertFrom-Json
         (Test-WinEnvJsonSubset -Expected $expected -Actual $actual) | Should -Be $false
+    }
+}
+
+Describe 'JsonSubset projection' {
+    BeforeAll {
+        # The projection returns text, and every assertion below is about the
+        # document rather than about how ConvertTo-Json spaced it.
+        function Get-Projection {
+            param([string] $Declared, [string] $Actual)
+            $projected = ConvertTo-WinEnvJsonSubsetProjection -DeclaredContent $Declared -HostContent $Actual
+            return ($projected | ConvertFrom-Json -Depth 100)
+        }
+
+        function Get-ProjectionText {
+            param([string] $Declared, [string] $Actual)
+            $projected = ConvertTo-WinEnvJsonSubsetProjection -DeclaredContent $Declared -HostContent $Actual
+            return ((ConvertFrom-Json -InputObject $projected -NoEnumerate) | ConvertTo-Json -Depth 100 -Compress)
+        }
+
+        function Get-ProjectionError {
+            param([string] $Declared, [string] $Actual)
+            try {
+                [void](ConvertTo-WinEnvJsonSubsetProjection -DeclaredContent $Declared -HostContent $Actual)
+                return ''
+            }
+            catch { return [string]$_.Exception.Message }
+        }
+    }
+
+    It 'takes the host value of every key the payload declares' {
+        $projected = Get-Projection '{"a":1,"b":{"c":2}}' '{"a":9,"b":{"c":8}}'
+        $projected.a | Should -Be 9
+        $projected.b.c | Should -Be 8
+    }
+
+    It 'never captures a key the payload does not declare' {
+        # The whole mechanism in one case: the host file mixes the two settings
+        # the payload manages with the version stamp, the timestamp and the
+        # telemetry flag the application keeps beside them. None of the three
+        # is declared, so none of the three can reach desired state -- not
+        # because they are named anywhere, but because the payload does not
+        # declare them.
+        $declared = '{"properties":{"mode":0},"name":"Sample"}'
+        $actual = '{"properties":{"mode":2,"expirationDateTime":"2026-01-01T00:00:00Z"},' +
+        '"name":"Sample","version":"3.1.4","telemetry":{"optedIn":true}}'
+        $text = Get-ProjectionText $declared $actual
+
+        $text | Should -Be '{"properties":{"mode":2},"name":"Sample"}'
+        $text | Should -Not -Match 'version'
+        $text | Should -Not -Match 'expirationDateTime'
+        $text | Should -Not -Match 'telemetry'
+    }
+
+    It 'converges the comparison that reported the drift' {
+        # The invariant the whole mechanism rests on, asserted through
+        # Test-WinEnvJsonSubset itself rather than restated: there is no host
+        # this can project from and leave drifted.
+        $declared = '{"a":1,"list":[{"x":1}],"nested":{"deep":{"k":"old"}}}'
+        $actual = '{"a":2,"list":[{"x":5,"extra":true},{"y":6}],"nested":{"deep":{"k":"new","runtime":1}},"stamp":7}'
+        (Test-WinEnvJsonSubset -Expected ($declared | ConvertFrom-Json) -Actual ($actual | ConvertFrom-Json)) |
+            Should -Be $false
+
+        $projected = Get-Projection $declared $actual
+        (Test-WinEnvJsonSubset -Expected $projected -Actual ($actual | ConvertFrom-Json)) | Should -Be $true
+    }
+
+    It 'projects a list element onto the declared element and takes the rest as the host holds them' {
+        # The read side compares a list by position and requires equal length,
+        # so a payload cannot declare a member subset that outlives a length
+        # change. Element 0 has a declared shape and loses the member the
+        # payload never declared; element 1 has none and arrives whole.
+        $text = Get-ProjectionText '{"l":[{"a":1}]}' '{"l":[{"a":5,"extra":9},{"b":2,"c":3}]}'
+        $text | Should -Be '{"l":[{"a":5},{"b":2,"c":3}]}'
+    }
+
+    It 'shortens a declared list to the length the host holds' {
+        $text = Get-ProjectionText '{"l":[{"a":1},{"a":2}]}' '{"l":[{"a":7}]}'
+        $text | Should -Be '{"l":[{"a":7}]}'
+    }
+
+    It 'keeps a list nested inside a list from collapsing into its parent' {
+        # A projected element that is itself a list would be flattened by an
+        # array subexpression, which would silently rewrite the document's
+        # shape rather than fail.
+        $text = Get-ProjectionText '{"l":[[1,2]]}' '{"l":[[3,4]]}'
+        $text | Should -Be '{"l":[[3,4]]}'
+    }
+
+    It 'reads a document whose root is a one-element array as a list' {
+        # ConvertFrom-Json writes a top-level array's elements to the pipeline
+        # one at a time, so without -NoEnumerate this document would reach the
+        # projection as its single element and be refused as a shape change.
+        $text = Get-ProjectionText '[{"a":1}]' '[{"a":2,"x":3},{"z":4}]'
+        $text | Should -Be '[{"a":2},{"z":4}]'
+    }
+
+    It 'declares nothing by declaring an empty object, and everything by declaring an empty list' {
+        # Not a quirk of this direction but the read side's own asymmetry,
+        # carried across unchanged: a declared object is a member subset, so an
+        # empty one owns no member and can never drift; a declared list is
+        # positional and length-exact, so an empty one owns the whole list.
+        (Get-ProjectionText '{"m":{}}' '{"m":{"k":1}}') | Should -Be '{"m":{}}'
+        (Get-ProjectionText '{"l":[]}' '{"l":[1,2]}') | Should -Be '{"l":[1,2]}'
+    }
+
+    It 'writes the host value under the name the payload declares' {
+        # The member lookup is the comparison's own, which is case-insensitive.
+        # A host that respells a declared key is a key the read side already
+        # found, and the payload keeps its own spelling across captures.
+        (Get-ProjectionText '{"Alpha":1}' '{"alpha":42}') | Should -Be '{"Alpha":42}'
+    }
+
+    It 'moves a declared value between a scalar and null in both directions' {
+        # The read side treats a declared null as a leaf, so a settings key
+        # that moves between a path and null is an ordinary value change.
+        (Get-ProjectionText '{"p":null}' '{"p":"set"}') | Should -Be '{"p":"set"}'
+        (Get-ProjectionText '{"p":"set"}' '{"p":null}') | Should -Be '{"p":null}'
+    }
+
+    It 'refuses a declared key the host file no longer holds, and names it' {
+        $message = Get-ProjectionError '{"properties":{"kept":1,"gone":2}}' '{"properties":{"kept":1}}'
+        $message | Should -Match 'no longer holds'
+        # The path, not just the leaf name: a refusal an operator cannot act on
+        # is worse than no capture at all.
+        $message | Should -Match ([regex]::Escape("'properties.gone'"))
+    }
+
+    It 'refuses a host value whose shape is not the declared one, in either direction' {
+        $scalarForObject = Get-ProjectionError '{"a":{"b":1}}' '{"a":5}'
+        $scalarForObject | Should -Match 'holds a scalar'
+        $scalarForObject | Should -Match 'declares an object'
+        $scalarForObject | Should -Match ([regex]::Escape("at 'a'"))
+
+        $objectForList = Get-ProjectionError '{"a":[1]}' '{"a":{"b":1}}'
+        $objectForList | Should -Match 'holds an object'
+        $objectForList | Should -Match 'declares a list'
+
+        $rootMismatch = Get-ProjectionError '{"a":1}' '[{"a":1}]'
+        $rootMismatch | Should -Match 'at the document root'
+    }
+
+    It 'is idempotent on every JsonSubset payload this repository commits' {
+        # Each committed payload must already be a shape the projection can
+        # express, or the first real capture from a clean host would refuse.
+        # Projecting a payload onto itself proves that for the whole inventory
+        # without a Windows host, and fails the moment a new payload declares
+        # something the mechanism cannot carry.
+        $manifest = Get-WinEnvManifest -Path (Join-Path $desiredStateRoot 'manifest.json')
+        $subsets = @($manifest.ManagedFiles | Where-Object { [string]$_.Compare -ceq 'JsonSubset' })
+        $subsets.Count | Should -BeGreaterThan 0
+
+        foreach ($definition in $subsets) {
+            $payload = Get-Content -LiteralPath (Join-Path $desiredStateRoot ([string]$definition.Source)) `
+                -Raw -Encoding utf8
+            $projected = ConvertTo-WinEnvJsonSubsetProjection -DeclaredContent $payload -HostContent $payload
+            # Canonical rather than textual: the payload is pretty-printed and
+            # the projection is not, and only the document is under test.
+            (ConvertTo-WinEnvCanonicalJson $projected) |
+                Should -Be (ConvertTo-WinEnvCanonicalJson $payload) -Because "$($definition.Id) must project onto itself"
+        }
+    }
+}
+
+Describe 'PowerToys payload audit' {
+    # Three keys the #93 audit of PowerToys' own settings models found and
+    # decided about. Each is asserted individually rather than through a list
+    # of forbidden names: a name list would be the second declaration of what a
+    # payload owns that the projection exists to avoid, and each of these has
+    # its own reason that a shared list would flatten away.
+    BeforeAll {
+        function Get-PowerToysPayload {
+            param([string] $Relative)
+            return (Get-Content -LiteralPath (Join-Path $desiredStateRoot "files/powertoys/$Relative") `
+                    -Raw -Encoding utf8 | ConvertFrom-Json -Depth 100)
+        }
+    }
+
+    It 'declares no empty list anywhere in a JsonSubset payload' {
+        # The one shape in which a payload can silently absorb host state, and
+        # the finding that review caught (#100). A declared list is exact --
+        # the read side matches it by position and requires equal length -- so
+        # an empty declared list is not "owns nothing", it is "owns whatever
+        # the host holds". The PowerToys inventory declared twenty-eight of
+        # them, and capture would have absorbed CmdPal's monitor topology and
+        # its installed-extension ranking through two of them.
+        #
+        # The rule is uniform, so this needs no allowlist: a list is declared
+        # only when there is content to declare. A key left undeclared owns
+        # nothing, which is what an empty list cannot express. Assert it over
+        # the manifest rather than over a fixed file list, so a payload added
+        # later is covered the day it is declared.
+        function Get-EmptyListPath {
+            param($Node, [string] $Path)
+            if ($Node -is [System.Collections.IList]) {
+                if (@($Node).Count -eq 0) { return $Path }
+                $found = @()
+                for ($i = 0; $i -lt @($Node).Count; $i++) {
+                    $found += @(Get-EmptyListPath -Node @($Node)[$i] -Path "$Path[$i]")
+                }
+                return $found
+            }
+            if ($null -eq $Node -or $Node -is [string] -or $Node -is [ValueType]) { return @() }
+            $found = @()
+            foreach ($property in $Node.PSObject.Properties) {
+                $child = if ([string]::IsNullOrEmpty($Path)) { $property.Name } else { "$Path.$($property.Name)" }
+                $found += @(Get-EmptyListPath -Node $property.Value -Path $child)
+            }
+            return $found
+        }
+
+        $manifest = Get-WinEnvManifest -Path (Join-Path $desiredStateRoot 'manifest.json')
+        $subsets = @($manifest.ManagedFiles | Where-Object { [string]$_.Compare -ceq 'JsonSubset' })
+        $subsets.Count | Should -BeGreaterThan 0
+
+        foreach ($definition in $subsets) {
+            $document = Get-Content -LiteralPath (Join-Path $desiredStateRoot ([string]$definition.Source)) `
+                -Raw -Encoding utf8 | ConvertFrom-Json -Depth 100
+            $empty = @(Get-EmptyListPath -Node $document -Path '')
+            $empty -join ', ' | Should -Be '' `
+                -Because "$($definition.Id) must declare a list only where it has content to declare"
+        }
+    }
+
+    It 'declares no AI provider list for Advanced Paste' {
+        # A declared list is captured as the host holds it, so declaring
+        # `providers` would let one capture copy an API key or endpoint out of
+        # the maintainer's host and into a committed payload. Desired state
+        # says AI paste is off with no active provider, which needs neither.
+        $advancedPaste = Get-PowerToysPayload 'AdvancedPaste/settings.json'
+        $configuration = $advancedPaste.properties.'paste-ai-configuration'
+        $configuration.PSObject.Properties['active-provider-id'] | Should -Not -BeNullOrEmpty
+        $configuration.PSObject.Properties['providers'] | Should -BeNullOrEmpty
+        $advancedPaste.properties.IsAIEnabled.value | Should -Be $false
+        # custom-actions carries the same hazard in the same file: a user's
+        # free-text AI prompts, captured verbatim through an empty declared
+        # list. AI paste is off in desired state, so a custom action is inert.
+        $advancedPaste.properties.PSObject.Properties['custom-actions'] | Should -BeNullOrEmpty
+    }
+
+    It 'declares no Awake expiry timestamp' {
+        # PowerToys initialises expirationDateTime to the moment the file is
+        # created and rewrites it whenever the module's state changes. It is a
+        # timestamp, not a setting, and AGENTS.md keeps runtime state out of
+        # every domain.
+        $awake = Get-PowerToysPayload 'Awake/settings.json'
+        $awake.properties.PSObject.Properties['expirationDateTime'] | Should -BeNullOrEmpty
+        # The four values that do describe intent are still declared, so this
+        # is an exclusion rather than an unmanaged file.
+        foreach ($name in @('keepDisplayOn', 'mode', 'intervalHours', 'intervalMinutes')) {
+            $awake.properties.PSObject.Properties[$name] | Should -Not -BeNullOrEmpty -Because "Awake declares $name"
+        }
+    }
+
+    It 'declares none of the root settings PowerToys computes at runtime' {
+        # The runner rewrites each of these from the live host -- the product
+        # version, the elevation checks, the detected OS theme, and a one-shot
+        # IPC field -- so a captured payload holding one would be a snapshot of
+        # one machine's session. PowerToys' own backup manifest ignores
+        # powertoys_version for the same reason.
+        $root = Get-PowerToysPayload 'settings.json'
+        foreach ($name in @('powertoys_version', 'is_elevated', 'is_admin', 'system_theme', 'action_name')) {
+            $root.PSObject.Properties[$name] | Should -BeNullOrEmpty -Because "the root payload must not declare $name"
+        }
+        # run_elevated and startup are the genuine settings beside them and
+        # stay declared. PowerToys does reconcile startup against the live
+        # scheduled task, so review asked whether it belongs above (#100). It
+        # does not: the test is not "does the application write it back" --
+        # PowerToys writes all of these back -- but "does it change without the
+        # maintainer changing anything". powertoys_version moves on every
+        # upgrade, is_elevated on how the process launched, system_theme with
+        # the OS. startup moves only when someone chooses it, which is what a
+        # declared setting is.
+        $root.PSObject.Properties['run_elevated'] | Should -Not -BeNullOrEmpty
+        $root.PSObject.Properties['startup'] | Should -Not -BeNullOrEmpty
+    }
+
+    It 'declares no computed default-shortcut member' {
+        # PowerToys serialises a get-only DefaultActivationShortcut /
+        # DefaultEditorShortcut into these three files. It is a constant the
+        # application recomputes, not a setting, and it is version-specific, so
+        # declaring it would make desired state carry a value no maintainer
+        # chose. The real shortcut beside it stays declared.
+        $peek = Get-PowerToysPayload 'Peek/settings.json'
+        $peek.properties.PSObject.Properties['DefaultActivationShortcut'] | Should -BeNullOrEmpty
+        $peek.properties.PSObject.Properties['ActivationShortcut'] | Should -Not -BeNullOrEmpty
+
+        $findMyMouse = Get-PowerToysPayload 'FindMyMouse/settings.json'
+        $findMyMouse.properties.PSObject.Properties['DefaultActivationShortcut'] | Should -BeNullOrEmpty
+        $findMyMouse.properties.PSObject.Properties['activation_shortcut'] | Should -Not -BeNullOrEmpty
+
+        $keyboardManager = Get-PowerToysPayload 'Keyboard Manager/settings.json'
+        $keyboardManager.properties.PSObject.Properties['DefaultEditorShortcut'] | Should -BeNullOrEmpty
+        $keyboardManager.properties.PSObject.Properties['EditorShortcut'] | Should -Not -BeNullOrEmpty
+    }
+
+    It 'keeps the module version each file migrates on' {
+        # Peek migrates when version is absent or "0.0.1", and that migration
+        # also forces EnableSpaceToActivate off; FindMyMouse migrates from
+        # "1.0". Declaring the post-migration literal is what stops Apply from
+        # re-triggering either one on every reconcile.
+        (Get-PowerToysPayload 'Peek/settings.json').version | Should -Be '0.0.2'
+        (Get-PowerToysPayload 'FindMyMouse/settings.json').version | Should -Be '1.1'
     }
 }
 
@@ -1764,15 +2066,101 @@ Describe 'capture' {
         $targetPlan.Reason | Should -Match 'runtime state'
     }
 
-    It 'refuses a JsonSubset payload, which cannot be derived from the host file' {
-        $source = New-CapturePayload 'subset.json' '{"declared":true}'
-        $target = New-CaptureTarget 'subset.json' '{"declared":false,"untracked":1}'
+    It 'captures a JsonSubset payload onto the keys it declares and converges the check' {
+        # The headline case the mode used to refuse: the maintainer changed a
+        # setting in the application's UI, and the same file also carries the
+        # version stamp and the window geometry the application rewrites while
+        # it runs.
+        $source = New-CapturePayload 'subset.json' "{`n  `"declared`": true`n}`n"
+        $target = New-CaptureTarget 'subset.json' `
+            '{"declared":false,"version":"1.9.2","window":{"top":11,"left":907}}'
         $definition = New-CaptureDefinition -Id 'subset' -Compare 'JsonSubset' -Source $source -Target $target
 
         $plan = Get-WinEnvCapturePlan -Definition $definition -RepositoryRoot $CaptureRoot `
             -Build 22631 -HostPath $CaptureHost
+        $plan.Status | Should -Be 'Captured'
+
+        $captured = $plan.Content | ConvertFrom-Json
+        $captured.declared | Should -Be $false
+        # Neither undeclared key reaches desired state, and the payload gained
+        # no member at all.
+        @($captured.PSObject.Properties | ForEach-Object { $_.Name }) | Should -Be @('declared')
+        $plan.Content | Should -Not -Match 'version'
+        $plan.Content | Should -Not -Match 'window'
+
+        [void](Save-WinEnvCapturedPayload -Plan $plan -RepositoryRoot $CaptureRoot)
+        # The point of the whole change: a JsonSubset file the check called
+        # drift is clean afterwards, through the comparison the check uses.
+        (Test-WinEnvManagedFile -Definition $definition -RepositoryRoot $CaptureRoot -HostPath $CaptureHost) |
+            Should -Be $true
+    }
+
+    It 'drops an account path the payload never declared instead of refusing the capture' {
+        # The projection runs before the content scans, so a leak the payload
+        # does not own is gone by the time they read the content. This is the
+        # ordering under test: reversed, every capture from a real PowerToys
+        # host would be refused for a path in a key desired state never
+        # manages.
+        $source = New-CapturePayload 'subset-leak.json' "{`n  `"declared`": 1`n}`n"
+        $target = New-CaptureTarget 'subset-leak.json' `
+            ('{"declared":2,"recentFile":"' + $JsonUserProfile + '\\notes.txt"}')
+        $definition = New-CaptureDefinition -Id 'subsetLeak' -Compare 'JsonSubset' -Source $source -Target $target
+
+        $plan = Get-WinEnvCapturePlan -Definition $definition -RepositoryRoot $CaptureRoot `
+            -Build 22631 -HostPath $CaptureHost
+        $plan.Status | Should -Be 'Captured'
+        (ConvertTo-WinEnvCanonicalJson $plan.Content) | Should -Be '{"declared":2}'
+        $plan.Content | Should -Not -Match 'Users'
+    }
+
+    It 'still refuses this host''s account name inside a key the payload does declare' {
+        # The other half of the rule above. Dropping undeclared keys must not
+        # be mistaken for a licence to write a leak the payload owns: every
+        # content refusal still reads the projected document.
+        $source = New-CapturePayload 'subset-owned-leak.json' "{`n  `"owner`": `"someone`"`n}`n"
+        $target = New-CaptureTarget 'subset-owned-leak.json' ('{"owner":"' + $Account + '","other":1}')
+        $definition = New-CaptureDefinition -Id 'subsetOwnedLeak' -Compare 'JsonSubset' `
+            -Source $source -Target $target
+
+        $plan = Get-WinEnvCapturePlan -Definition $definition -RepositoryRoot $CaptureRoot `
+            -Build 22631 -HostPath $CaptureHost
         $plan.Status | Should -Be 'Refused'
-        $plan.Reason | Should -Match 'subset'
+        $plan.Reason | Should -Match 'account'
+    }
+
+    It 'refuses a JsonSubset file the payload''s declared shape cannot express' {
+        # Both genuinely non-derivable shapes, reported as a refusal with the
+        # key path rather than as a crash that would end the run.
+        $missingSource = New-CapturePayload 'subset-missing.json' "{`n  `"kept`": 1,`n  `"gone`": 2`n}`n"
+        $missingTarget = New-CaptureTarget 'subset-missing.json' '{"kept":9}'
+        $missing = Get-WinEnvCapturePlan -RepositoryRoot $CaptureRoot -Build 22631 -HostPath $CaptureHost `
+            -Definition (New-CaptureDefinition -Id 'subsetMissing' -Compare 'JsonSubset' `
+                -Source $missingSource -Target $missingTarget)
+        $missing.Status | Should -Be 'Refused'
+        $missing.Reason | Should -Match 'no longer holds'
+        $missing.Reason | Should -Match 'gone'
+
+        $shapeSource = New-CapturePayload 'subset-shape.json' "{`n  `"properties`": {`n    `"mode`": 0`n  }`n}`n"
+        $shapeTarget = New-CaptureTarget 'subset-shape.json' '{"properties":3}'
+        $shape = Get-WinEnvCapturePlan -RepositoryRoot $CaptureRoot -Build 22631 -HostPath $CaptureHost `
+            -Definition (New-CaptureDefinition -Id 'subsetShape' -Compare 'JsonSubset' `
+                -Source $shapeSource -Target $shapeTarget)
+        $shape.Status | Should -Be 'Refused'
+        $shape.Reason | Should -Match 'declares an object'
+        $shape.Reason | Should -Match 'properties'
+    }
+
+    It 'leaves a JsonSubset file that matches its payload untouched' {
+        # Unchanged is still decided before the projection, so a host holding
+        # any number of undeclared keys is not reported as a capture.
+        $source = New-CapturePayload 'subset-clean.json' "{`n  `"declared`": true`n}`n"
+        $target = New-CaptureTarget 'subset-clean.json' '{"declared":true,"version":"9.9.9"}'
+        $definition = New-CaptureDefinition -Id 'subsetClean' -Compare 'JsonSubset' -Source $source -Target $target
+
+        $plan = Get-WinEnvCapturePlan -Definition $definition -RepositoryRoot $CaptureRoot `
+            -Build 22631 -HostPath $CaptureHost
+        $plan.Status | Should -Be 'Unchanged'
+        $plan.Content | Should -BeNullOrEmpty
     }
 
     It 'refuses a target this host does not have' {

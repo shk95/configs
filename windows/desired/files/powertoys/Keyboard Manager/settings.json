@@ -8,14 +8,6 @@
         "default"
       ]
     },
-    "DefaultEditorShortcut": {
-      "win": true,
-      "ctrl": false,
-      "alt": false,
-      "shift": true,
-      "code": 81,
-      "key": ""
-    },
     "EditorShortcut": {
       "win": false,
       "ctrl": false,

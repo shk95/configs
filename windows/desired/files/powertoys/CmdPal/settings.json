@@ -17,38 +17,31 @@
   "IgnoreShortcutWhenFullscreen": true,
   "IgnoreShortcutWhenBusy": false,
   "AllowBreakthroughShortcut": false,
-  "PinnedCommands": [],
   "AllowExternalReload": false,
   "ProviderSettings": {
     "com.microsoft.cmdpal.builtin.remotedesktop": {
       "IsEnabled": true,
-      "FallbackCommands": {},
-      "PinnedCommandIds": []
+      "FallbackCommands": {}
     },
     "com.microsoft.cmdpal.builtin.run": {
       "IsEnabled": true,
-      "FallbackCommands": {},
-      "PinnedCommandIds": []
+      "FallbackCommands": {}
     },
     "Windows.Registry": {
       "IsEnabled": true,
-      "FallbackCommands": {},
-      "PinnedCommandIds": []
+      "FallbackCommands": {}
     },
     "Windows.ClipboardHistory": {
       "IsEnabled": true,
-      "FallbackCommands": {},
-      "PinnedCommandIds": []
+      "FallbackCommands": {}
     },
     "WindowsTerminalProfiles": {
       "IsEnabled": true,
-      "FallbackCommands": {},
-      "PinnedCommandIds": []
+      "FallbackCommands": {}
     },
     "com.microsoft.cmdpal.builtin.websearch": {
       "IsEnabled": true,
-      "FallbackCommands": {},
-      "PinnedCommandIds": []
+      "FallbackCommands": {}
     },
     "Microsoft.PowerToys.SparseApp_8wekyb3d8bbwe!PowerToys.CmdPalExtension!PowerToys": {
       "IsEnabled": true,
@@ -57,71 +50,57 @@
           "IsEnabled": true,
           "IncludeInGlobalResults": false
         }
-      },
-      "PinnedCommandIds": []
+      }
     },
     "com.microsoft.cmdpal.builtin.core": {
       "IsEnabled": true,
-      "FallbackCommands": {},
-      "PinnedCommandIds": []
+      "FallbackCommands": {}
     },
     "Windows.Services": {
       "IsEnabled": true,
-      "FallbackCommands": {},
-      "PinnedCommandIds": []
+      "FallbackCommands": {}
     },
     "WinGet": {
       "IsEnabled": true,
-      "FallbackCommands": {},
-      "PinnedCommandIds": []
+      "FallbackCommands": {}
     },
     "com.microsoft.cmdpal.builtin.calculator": {
       "IsEnabled": true,
-      "FallbackCommands": {},
-      "PinnedCommandIds": []
+      "FallbackCommands": {}
     },
     "com.microsoft.cmdpal.builtin.windowssettings": {
       "IsEnabled": true,
-      "FallbackCommands": {},
-      "PinnedCommandIds": []
+      "FallbackCommands": {}
     },
     "Files": {
       "IsEnabled": true,
-      "FallbackCommands": {},
-      "PinnedCommandIds": []
+      "FallbackCommands": {}
     },
     "PerformanceMonitor": {
       "IsEnabled": true,
-      "FallbackCommands": {},
-      "PinnedCommandIds": []
+      "FallbackCommands": {}
     },
     "Bookmarks": {
       "IsEnabled": true,
-      "FallbackCommands": {},
-      "PinnedCommandIds": []
+      "FallbackCommands": {}
     },
     "com.microsoft.cmdpal.builtin.datetime": {
       "IsEnabled": true,
-      "FallbackCommands": {},
-      "PinnedCommandIds": []
+      "FallbackCommands": {}
     },
     "WindowWalker": {
       "IsEnabled": true,
-      "FallbackCommands": {},
-      "PinnedCommandIds": []
+      "FallbackCommands": {}
     },
     "com.microsoft.cmdpal.builtin.system": {
       "IsEnabled": true,
-      "FallbackCommands": {},
-      "PinnedCommandIds": []
+      "FallbackCommands": {}
     },
     "AllApps": {
       "IsEnabled": true,
-      "FallbackCommands": {},
-      "PinnedCommandIds": []
+      "FallbackCommands": {}
     }
   },
-  "FallbackRanks": [],
   "Aliases": {
     "file ": {
       "CommandId": "com.microsoft.indexer.fileSearch",
@@ -164,7 +143,6 @@
       "IsDirect": true
     }
   },
-  "CommandHotkeys": [],
   "SummonOn": "ToMouse",
   "DisableAnimations": true,
   "AutoGoHomeInterval": "-00:00:00.0010000",
@@ -203,7 +181,6 @@
         "ShowSubtitles": null
       }
     ],
-    "CenterBands": [],
     "EndBands": [
       {
         "ProviderId": "PerformanceMonitor",
@@ -218,8 +195,7 @@
         "ShowSubtitles": null
       }
     ],
-    "ShowLabels": true,
-    "MonitorConfigs": []
+    "ShowLabels": true
   },
   "Theme": "Default",
   "ColorizationMode": "None",

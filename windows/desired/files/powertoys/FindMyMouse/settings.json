@@ -1,13 +1,5 @@
 {
   "properties": {
-    "DefaultActivationShortcut": {
-      "win": true,
-      "ctrl": false,
-      "alt": false,
-      "shift": true,
-      "code": 70,
-      "key": ""
-    },
     "activation_method": {
       "value": 0
     },

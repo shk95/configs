@@ -102,6 +102,19 @@
         "key": ""
       }
     },
+    "fancyzones_monitorRotation": {
+      "value": false
+    },
+    "fancyzones_monitorRotation_hotkey": {
+      "value": {
+        "win": false,
+        "ctrl": false,
+        "alt": true,
+        "shift": false,
+        "code": 88,
+        "key": ""
+      }
+    },
     "fancyzones_excluded_apps": {
       "value": ""
     },
