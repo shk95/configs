@@ -41,6 +41,7 @@
   "run_elevated": true,
   "show_new_updates_toast_notification": true,
   "download_updates_automatically": true,
+  "include_prerelease_updates": false,
   "show_whats_new_after_updates": true,
   "enable_experimentation": true,
   "dashboard_sort_order": 0,
