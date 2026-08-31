@@ -2532,6 +2532,20 @@ function Invoke-WinEnvTeeCommand {
         child actually produced it -- the same order (and the same
         buffering-driven unevenness between a child's own stdout and stderr)
         an inline `2>&1` pipe already has today.
+
+        What this deliberately does not do, decided in #109: a child encodes
+        its own stdout with its own [Console]::OutputEncoding, which on
+        Windows it inherits from the console it was started under. A child
+        that writes "->" through a CP949 console puts CP949 bytes on the pipe
+        -- or a literal '?' for a character CP949 cannot map at all -- and no
+        read-side encoding recovers a glyph the writer never emitted. Windows
+        offers no way to set a child's console codepage from
+        ProcessStartInfo, so this is accepted display degradation rather than
+        a defect to fix here: ASCII survives byte for byte, git writes its own
+        bytes directly, and every marker
+        ConvertTo-WinEnvCondensedPushEvidence keys on is printed by
+        .githooks/evidence through /bin/sh printf. A child that needs its own
+        glyphs kept declares its own encoding.
     #>
     [CmdletBinding()]
     param(
