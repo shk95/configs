@@ -2821,6 +2821,128 @@ Describe 'capture branch' {
     }
 }
 
+Describe 'capture branch pruning' {
+    <#
+        Remove-WinEnvMergedLocalBranch (#103): GitHub auto-deletes a merged
+        pull request's remote branch, but the same branch lingers in this
+        clone until something clears it. Every fixture below runs against a
+        throwaway working copy and a throwaway bare remote under $TestDrive,
+        the same shape Describe 'capture branch' builds -- never this
+        repository's own dev.
+    #>
+    BeforeAll {
+        function New-PruneFixture {
+            # A repository with one commit on dev, pushed to a bare remote and
+            # fetched back, plus a master branch: exactly the shape
+            # Remove-WinEnvMergedLocalBranch reads.
+            $token = [guid]::NewGuid().ToString('N')
+            $remote = Join-Path $TestDrive "prune-remote-$token.git"
+            $repo = Join-Path $TestDrive "prune-repo-$token"
+            [void](New-Item -ItemType Directory -Path $repo -Force)
+
+            & git init -q --bare -b dev $remote | Out-Null
+            & git -C $repo init -q -b dev | Out-Null
+            & git -C $repo config user.name Fixture | Out-Null
+            & git -C $repo config user.email fixture@example.invalid | Out-Null
+            & git -C $repo remote add origin $remote | Out-Null
+            [IO.File]::WriteAllText((Join-Path $repo 'seed.txt'), 'seed')
+            & git -C $repo add -- seed.txt | Out-Null
+            & git -C $repo commit -q -m 'seed' | Out-Null
+            & git -C $repo push -q --set-upstream origin dev | Out-Null
+            & git -C $repo branch -q master | Out-Null
+
+            return [pscustomobject]@{ Repo = $repo; Remote = $remote }
+        }
+
+        function Get-FixtureBranches {
+            param([Parameter(Mandatory)][string] $Repo)
+            return @(& git -C $Repo for-each-ref --format='%(refname:short)' refs/heads)
+        }
+    }
+
+    It 'deletes a local branch already merged into origin/dev' {
+        $fixture = New-PruneFixture
+        & git -C $fixture.Repo branch -q feature/windows-old-capture | Out-Null
+
+        $result = @(Remove-WinEnvMergedLocalBranch -RepositoryRoot $fixture.Repo)
+        $result.Count | Should -Be 1
+        $result[0].Branch | Should -Be 'feature/windows-old-capture'
+        $result[0].Status | Should -Be 'Deleted'
+        (Get-FixtureBranches -Repo $fixture.Repo) | Should -Not -Contain 'feature/windows-old-capture'
+    }
+
+    It 'keeps a branch that carries a commit origin/dev does not have' {
+        $fixture = New-PruneFixture
+        & git -C $fixture.Repo switch -q -c feature/windows-unique | Out-Null
+        [IO.File]::WriteAllText((Join-Path $fixture.Repo 'unique.txt'), 'unique')
+        & git -C $fixture.Repo add -- unique.txt | Out-Null
+        & git -C $fixture.Repo commit -q -m 'a commit origin/dev does not have' | Out-Null
+        & git -C $fixture.Repo switch -q dev | Out-Null
+
+        $result = @(Remove-WinEnvMergedLocalBranch -RepositoryRoot $fixture.Repo)
+        $result | Should -BeNullOrEmpty
+        (Get-FixtureBranches -Repo $fixture.Repo) | Should -Contain 'feature/windows-unique'
+    }
+
+    It 'never deletes the current branch, dev or master even when each is an ancestor of origin/dev' {
+        $fixture = New-PruneFixture
+        # Cut from dev's own tip, so this branch, dev and master are all,
+        # trivially, ancestors of origin/dev; only the name-based exclusion
+        # can be what keeps them.
+        & git -C $fixture.Repo switch -q -c feature/windows-current | Out-Null
+
+        $result = @(Remove-WinEnvMergedLocalBranch -RepositoryRoot $fixture.Repo)
+        $result | Should -BeNullOrEmpty
+        $branches = Get-FixtureBranches -Repo $fixture.Repo
+        $branches | Should -Contain 'dev'
+        $branches | Should -Contain 'master'
+        $branches | Should -Contain 'feature/windows-current'
+    }
+
+    It 'reports a deletion failure on its own branch without stopping the rest of the run' {
+        $fixture = New-PruneFixture
+        & git -C $fixture.Repo branch -q feature/windows-merged-one | Out-Null
+        & git -C $fixture.Repo branch -q feature/windows-merged-two | Out-Null
+
+        # A branch checked out in another worktree is the ordinary way git
+        # itself refuses `branch -D`, standing in for whatever else could make
+        # one deletion fail without weakening the ancestor proof under test.
+        $worktree = Join-Path $TestDrive ('prune-worktree-' + [guid]::NewGuid().ToString('N'))
+        & git -C $fixture.Repo worktree add -q $worktree feature/windows-merged-two | Out-Null
+
+        try {
+            $result = @(Remove-WinEnvMergedLocalBranch -RepositoryRoot $fixture.Repo)
+            ($result | Where-Object Branch -eq 'feature/windows-merged-one').Status | Should -Be 'Deleted'
+            $failed = $result | Where-Object Branch -eq 'feature/windows-merged-two'
+            $failed.Status | Should -Be 'Failed'
+            $failed.Detail | Should -Not -BeNullOrEmpty
+            (Get-FixtureBranches -Repo $fixture.Repo) | Should -Contain 'feature/windows-merged-two'
+        }
+        finally {
+            & git -C $fixture.Repo worktree remove --force $worktree 2>$null | Out-Null
+        }
+    }
+
+    It 'prunes nothing when origin/dev has never been fetched' {
+        $fixture = New-PruneFixture
+        & git -C $fixture.Repo branch -q feature/windows-old-capture | Out-Null
+        & git -C $fixture.Repo update-ref -d refs/remotes/origin/dev | Out-Null
+
+        $result = @(Remove-WinEnvMergedLocalBranch -RepositoryRoot $fixture.Repo)
+        $result | Should -BeNullOrEmpty
+        (Get-FixtureBranches -Repo $fixture.Repo) | Should -Contain 'feature/windows-old-capture'
+    }
+
+    It 'writes nothing under -WhatIf' {
+        $fixture = New-PruneFixture
+        & git -C $fixture.Repo branch -q feature/windows-old-capture | Out-Null
+        $before = Get-FixtureBranches -Repo $fixture.Repo
+
+        [void](Remove-WinEnvMergedLocalBranch -RepositoryRoot $fixture.Repo -WhatIf)
+        (Get-FixtureBranches -Repo $fixture.Repo) | Should -Be $before
+    }
+}
+
 Describe 'capture publish' {
     <#
         The publish half of capture (#80), a copy of what --publish added to
