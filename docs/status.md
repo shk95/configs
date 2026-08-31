@@ -859,10 +859,24 @@ decision worth recording. An ignore list is a second declaration of what a
 payload owns, kept beside the payload and free to drift from it; every new
 module would need an entry, and a missing entry fails open by writing runtime
 state into desired state. A projection has only the payload, so a key is
-captured if and only if the payload declares it, it fails closed on a key
-nobody thought about, and widening coverage is an edit to the payload itself.
-AGENTS.md's rule that runtime state stays out of desired state is then enforced
-by the payload rather than by a list of names someone has to maintain.
+captured if and only if the payload declares it, it fails closed on an object
+member nobody thought about, and widening coverage is an edit to the payload
+itself. AGENTS.md's rule that runtime state stays out of desired state is then
+enforced by the payload rather than by a list of names someone has to maintain.
+
+That guarantee is about object members, and review found the sentence had been
+overstated into one about payloads (#100). A declared list is exact rather than
+a subset, so it fails *open*: declaring an empty list is a claim to own the
+whole list, and the projection then captures whatever the host holds there. The
+mechanism is right — a declared list has to be exact, because the read side
+matches it by position and requires equal length, so no member subset a payload
+declared could outlive a length change. What was wrong was the payloads. The
+PowerToys inventory declared twenty-eight empty lists, and the worst of them
+would have captured CmdPal's monitor topology, its installed-extension ranking,
+and Advanced Paste's free-text AI prompts. The rule the audit settled on is
+that a list is declared only when there is content to declare: a key left
+undeclared owns nothing, which is exactly what an empty declared list cannot
+express, and a fixture now holds the whole inventory to it.
 
 Each JSON kind is projected the way the read side compares it, so the two
 directions cannot disagree about what a payload owns. A declared object

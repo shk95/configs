@@ -302,10 +302,17 @@ the body and every command, and writes nothing.
 
 A `JsonSubset` payload — most of the PowerToys inventory — is captured by
 projecting the host file onto the keys the payload declares. The payload gains
-the host's value for every key it already owns and gains no key it did not,
+the host's value for every key it already owns and gains no member it did not,
 so a version stamp, a timestamp or a window position the application keeps in
 the same file cannot reach desired state. Widening what a capture picks up is
 therefore an edit to the payload, not to a list of exceptions.
+
+That holds for the members of a declared object. A declared *list* is exact —
+the comparison matches it by position and requires equal length — so declaring
+one is a claim to own the whole list, and declaring an empty list means
+capturing whatever the host happens to hold there. Declare a list only when
+there is content to declare; a key left undeclared owns nothing, which is what
+an empty list cannot express.
 
 It refuses instead of guessing, and says which rule it refused under:
 a file the suite already names as runtime state; a `JsonSubset` payload whose

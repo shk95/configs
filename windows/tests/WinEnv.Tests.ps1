@@ -364,6 +364,52 @@ Describe 'PowerToys payload audit' {
         }
     }
 
+    It 'declares no empty list anywhere in a JsonSubset payload' {
+        # The one shape in which a payload can silently absorb host state, and
+        # the finding that review caught (#100). A declared list is exact --
+        # the read side matches it by position and requires equal length -- so
+        # an empty declared list is not "owns nothing", it is "owns whatever
+        # the host holds". The PowerToys inventory declared twenty-eight of
+        # them, and capture would have absorbed CmdPal's monitor topology and
+        # its installed-extension ranking through two of them.
+        #
+        # The rule is uniform, so this needs no allowlist: a list is declared
+        # only when there is content to declare. A key left undeclared owns
+        # nothing, which is what an empty list cannot express. Assert it over
+        # the manifest rather than over a fixed file list, so a payload added
+        # later is covered the day it is declared.
+        function Get-EmptyListPath {
+            param($Node, [string] $Path)
+            if ($Node -is [System.Collections.IList]) {
+                if (@($Node).Count -eq 0) { return $Path }
+                $found = @()
+                for ($i = 0; $i -lt @($Node).Count; $i++) {
+                    $found += @(Get-EmptyListPath -Node @($Node)[$i] -Path "$Path[$i]")
+                }
+                return $found
+            }
+            if ($null -eq $Node -or $Node -is [string] -or $Node -is [ValueType]) { return @() }
+            $found = @()
+            foreach ($property in $Node.PSObject.Properties) {
+                $child = if ([string]::IsNullOrEmpty($Path)) { $property.Name } else { "$Path.$($property.Name)" }
+                $found += @(Get-EmptyListPath -Node $property.Value -Path $child)
+            }
+            return $found
+        }
+
+        $manifest = Get-WinEnvManifest -Path (Join-Path $desiredStateRoot 'manifest.json')
+        $subsets = @($manifest.ManagedFiles | Where-Object { [string]$_.Compare -ceq 'JsonSubset' })
+        $subsets.Count | Should -BeGreaterThan 0
+
+        foreach ($definition in $subsets) {
+            $document = Get-Content -LiteralPath (Join-Path $desiredStateRoot ([string]$definition.Source)) `
+                -Raw -Encoding utf8 | ConvertFrom-Json -Depth 100
+            $empty = @(Get-EmptyListPath -Node $document -Path '')
+            $empty -join ', ' | Should -Be '' `
+                -Because "$($definition.Id) must declare a list only where it has content to declare"
+        }
+    }
+
     It 'declares no AI provider list for Advanced Paste' {
         # A declared list is captured as the host holds it, so declaring
         # `providers` would let one capture copy an API key or endpoint out of
@@ -374,6 +420,10 @@ Describe 'PowerToys payload audit' {
         $configuration.PSObject.Properties['active-provider-id'] | Should -Not -BeNullOrEmpty
         $configuration.PSObject.Properties['providers'] | Should -BeNullOrEmpty
         $advancedPaste.properties.IsAIEnabled.value | Should -Be $false
+        # custom-actions carries the same hazard in the same file: a user's
+        # free-text AI prompts, captured verbatim through an empty declared
+        # list. AI paste is off in desired state, so a custom action is inert.
+        $advancedPaste.properties.PSObject.Properties['custom-actions'] | Should -BeNullOrEmpty
     }
 
     It 'declares no Awake expiry timestamp' {
@@ -400,8 +450,17 @@ Describe 'PowerToys payload audit' {
         foreach ($name in @('powertoys_version', 'is_elevated', 'is_admin', 'system_theme', 'action_name')) {
             $root.PSObject.Properties[$name] | Should -BeNullOrEmpty -Because "the root payload must not declare $name"
         }
-        # run_elevated is the genuine setting beside them and stays declared.
+        # run_elevated and startup are the genuine settings beside them and
+        # stay declared. PowerToys does reconcile startup against the live
+        # scheduled task, so review asked whether it belongs above (#100). It
+        # does not: the test is not "does the application write it back" --
+        # PowerToys writes all of these back -- but "does it change without the
+        # maintainer changing anything". powertoys_version moves on every
+        # upgrade, is_elevated on how the process launched, system_theme with
+        # the OS. startup moves only when someone chooses it, which is what a
+        # declared setting is.
         $root.PSObject.Properties['run_elevated'] | Should -Not -BeNullOrEmpty
+        $root.PSObject.Properties['startup'] | Should -Not -BeNullOrEmpty
     }
 
     It 'declares no computed default-shortcut member' {

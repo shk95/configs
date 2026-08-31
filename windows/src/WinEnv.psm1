@@ -1454,6 +1454,17 @@ function ConvertTo-WinEnvJsonSubsetProjection {
         payload, so a key is captured if and only if the payload declares it,
         and widening what is captured is an edit to the payload itself.
 
+        One warning for whoever writes the next payload, because the safety of
+        the sentence above is not uniform across the three kinds. An undeclared
+        object member is dropped, so an object fails safe. A declared list is
+        exact -- the read side matches it by position and requires equal length
+        -- so declaring one claims the whole list, and declaring an EMPTY list
+        claims whatever the host happens to hold there. That is the one shape in
+        which a payload can silently absorb host state. Declare a list only when
+        there is content to declare; a key left undeclared owns nothing, which is
+        precisely what an empty declared list cannot express. The Pester suite
+        holds every JsonSubset payload in this repository to that rule.
+
         Projection converges the check that reported the drift, by
         construction rather than by test: every member of the result is a
         member Test-WinEnvJsonSubset looks for, holding the value it found

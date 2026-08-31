@@ -55,8 +55,5 @@
     "code": 0,
     "key": ""
   },
-  "theme": "system",
-  "ignored_conflict_properties": {
-    "ignored_shortcuts": []
-  }
+  "theme": "system"
 }
