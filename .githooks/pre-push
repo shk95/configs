@@ -67,19 +67,43 @@ if selected unixlike:test; then
 fi
 
 if selected windows:desired-state || selected windows:tests; then
-  # Only `pwsh.exe` counts. A Unix-like `pwsh` is not native Windows evidence,
-  # and modules/powershell.nix installs one into every home this repository
-  # configures — accepting it would leave Windows work unpushable from the
-  # Linux and macOS clones where it is often authored. The merge gate is the
-  # windows-latest CI job, not this hook.
-  if command -v pwsh.exe >/dev/null 2>&1; then
+  # Pick the pwsh that belongs to this host rather than the first one PATH
+  # happens to expose. A Unix-like host — including WSL, where `pwsh.exe` is
+  # also reachable through Windows interop — runs the checks under its own
+  # native `pwsh`: modules/powershell.nix installs one into every home this
+  # repository configures, the suite's WIN_ENV_E2E cases self-skip there, and
+  # the windows-latest CI job remains the native gate for what a Linux pwsh
+  # cannot exercise. Reaching for `pwsh.exe` over WSL interop instead runs an
+  # unsigned script from \\wsl.localhost\... under Windows' own execution
+  # policy, which refuses it (SecurityError) for reasons that have nothing to
+  # do with the change being pushed — that was the recurring failure #113
+  # tracked and the reason every prior windows-scope push from WSL needed
+  # `--no-verify`. An actual Windows host (Git for Windows' own `sh`, detected
+  # the same way tool/version-control/commit's --publish guard does) keeps
+  # using only `pwsh.exe`, unchanged from before.
+  windows_pwsh=
+  case $(uname -s 2>/dev/null) in
+    MINGW* | MSYS* | CYGWIN*)
+      if command -v pwsh.exe >/dev/null 2>&1; then
+        windows_pwsh=pwsh.exe
+      fi
+      ;;
+    *)
+      if command -v pwsh >/dev/null 2>&1; then
+        windows_pwsh=pwsh
+        echo "· running the Windows checks under this host's own pwsh (not pwsh.exe); WIN_ENV_E2E cases self-skip here and the windows-latest CI job remains the native gate for them"
+      fi
+      ;;
+  esac
+
+  if [ -n "$windows_pwsh" ]; then
     if selected windows:desired-state; then
       evidence_run "Windows desired-state check" \
-        pwsh.exe -NoProfile -File ./windows/tools/check-desired-state.ps1 || exit 1
+        "$windows_pwsh" -NoProfile -File ./windows/tools/check-desired-state.ps1 || exit 1
     fi
     if selected windows:tests; then
       evidence_run "Windows tests" \
-        pwsh.exe -NoProfile -File ./windows/tools/test.ps1 || exit 1
+        "$windows_pwsh" -NoProfile -File ./windows/tools/test.ps1 || exit 1
     fi
   else
     evidence_unavailable "Windows checks" "native PowerShell is unavailable" || exit 1
