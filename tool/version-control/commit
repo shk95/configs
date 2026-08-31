@@ -103,7 +103,14 @@ commands:
   brew remove <formula>    remove a Homebrew formula
   cask add <cask>          declare a Homebrew cask
   cask remove <cask>       remove a Homebrew cask
+  mas add <name> <id>      declare a Mac App Store app in modules/darwin-homebrew.nix
+  mas remove <name>        remove a Mac App Store app
   flake refresh [<input>]  refresh flake.lock, every input or one
+
+mas add/remove edit the masApps attrset: <name> is the Nix attribute and <id>
+is the numeric App Store id the maintainer supplies (no lookup here); the mas
+CLI itself is already a declared Homebrew formula, so it needs no command of
+its own.
 
 On dev the helper first creates feature/<scope>-<topic> from origin/dev; on any
 other branch it commits where it is. The change is always confirmed
@@ -160,6 +167,7 @@ shift
 
 item=
 input=
+mas_id=
 case $group in
   brew | cask)
     [ "$#" -eq 2 ] || usage
@@ -167,6 +175,21 @@ case $group in
     item=$2
     case $action in
       add | remove) ;;
+      *) usage ;;
+    esac
+    ;;
+  mas)
+    [ "$#" -ge 2 ] || usage
+    action=$1
+    item=$2
+    case $action in
+      add)
+        [ "$#" -eq 3 ] || usage
+        mas_id=$3
+        ;;
+      remove)
+        [ "$#" -eq 2 ] || usage
+        ;;
       *) usage ;;
     esac
     ;;
@@ -190,6 +213,28 @@ valid_name() {
   return 0
 }
 
+# masApps is a Nix attrset, not a string list: <name> reaches a bare attribute
+# name rather than a quoted entry. Nix identifiers take digits, underscores and
+# dashes unquoted (`microsoft-onedrive = 823766827;` needs no quoting), but not
+# a leading digit or a slash; the quoting style a tapped cask uses is a list
+# convention that has no counterpart here, so a name that would need it is
+# refused rather than quoted.
+valid_attr_name() {
+  case $1 in
+    '' | [!A-Za-z_]* | *[!A-Za-z0-9_-]*) return 1 ;;
+  esac
+  return 0
+}
+
+# The maintainer supplies the numeric App Store id directly; this never looks
+# one up.
+valid_mas_id() {
+  case $1 in
+    '' | *[!0-9]*) return 1 ;;
+  esac
+  return 0
+}
+
 # A branch topic is the name reduced to what a ref and the audit's branch
 # pattern both accept: lower case, letters, digits and single hyphens.
 # "nikitabobko/tap/aerospace" becomes "nikitabobko-tap-aerospace".
@@ -198,9 +243,18 @@ slugify() {
     | sed -e 's/--*/-/g' -e 's/^-//' -e 's/-$//'
 }
 
-[ -z "$item" ] || valid_name "$item" \
-  || refuse "Not a usable package name: $item" \
-    "Use the name as Homebrew spells it, for example 'displayplacer' or 'nikitabobko/tap/aerospace'."
+if [ "$group" = mas ]; then
+  valid_attr_name "$item" \
+    || refuse "Not a usable Nix attribute name: $item" \
+      "Use lowercase letters, digits, underscores and dashes, for example 'microsoft-onedrive'. A name needing real quoting is a list convention that masApps does not use."
+  [ "$action" != add ] || valid_mas_id "$mas_id" \
+    || refuse "Not a usable Mac App Store id: $mas_id" \
+      "Supply the numeric id mas or the App Store listing shows, for example 409183694 for Keynote. This never looks one up."
+else
+  [ -z "$item" ] || valid_name "$item" \
+    || refuse "Not a usable package name: $item" \
+      "Use the name as Homebrew spells it, for example 'displayplacer' or 'nikitabobko/tap/aerospace'."
+fi
 [ -z "$input" ] || valid_name "$input" \
   || refuse "Not a usable flake input name: $input" \
     "Use the input name as flake.nix declares it, for example 'nixpkgs'."
@@ -213,6 +267,10 @@ case $group in
   brew | cask)
     target=$homebrew_module
     topic="$group-$action-$(slugify "$item")"
+    ;;
+  mas)
+    target=$homebrew_module
+    topic="mas-$action-$(slugify "$item")"
     ;;
   flake)
     target=flake.lock
@@ -796,6 +854,201 @@ homebrew_command() {
   publish_commit
 }
 
+# The masApps attrset holds `name = id;` pairs rather than the quoted list
+# entries edit_list understands, and its main block is followed by a
+# `# safari extensions` section that a new entry never enters (issue #92: the
+# main block is alphabetized and insertion is alphabetical within it only). A
+# name is unique across both sections, so mas_entries and removal look at the
+# whole attrset while insertion tracks the boundary itself.
+mas_entries() {
+  awk '
+    $0 ~ "^[[:space:]]*masApps = \\{$" { inside = 1; next }
+    inside && /^[[:space:]]*\};[[:space:]]*$/ { inside = 0 }
+    inside && /^[[:space:]]*[A-Za-z_][A-Za-z0-9_-]*[[:space:]]*=[[:space:]]*[0-9]+;[[:space:]]*$/ {
+      line = $0
+      sub(/^[[:space:]]*/, "", line)
+      split(line, parts, "=")
+      name = parts[1]
+      gsub(/[[:space:]]/, "", name)
+      print name
+    }
+  ' "$homebrew_module"
+}
+
+# Everything between the opener and the matching `};` must be a blank line,
+# the `# safari extensions` marker, a comment, or a bare `name = id;` entry.
+# Anything else is refused rather than skipped, for the same reason
+# require_readable_list refuses: skipping it would turn an add into a silent
+# duplicate.
+require_readable_masapps() {
+  unreadable=$(awk '
+    $0 ~ "^[[:space:]]*masApps = \\{$" { inside = 1; next }
+    inside && /^[[:space:]]*\};[[:space:]]*$/ { inside = 0; next }
+    inside {
+      if ($0 ~ /^[[:space:]]*$/) next
+      if ($0 ~ /^[[:space:]]*#/) next
+      if ($0 ~ /^[[:space:]]*[A-Za-z_][A-Za-z0-9_-]*[[:space:]]*=[[:space:]]*[0-9]+;[[:space:]]*$/) next
+      sub(/^[[:space:]]+/, "")
+      printf "%d: %s", NR, $0
+      exit
+    }
+  ' "$homebrew_module")
+
+  [ -z "$unreadable" ] || refuse \
+    "$homebrew_module line $unreadable" \
+    "An entry in masApps must be a bare 'name = id;' line. Edit that line by hand; this helper refuses rather than skip it, because skipping it would duplicate an entry."
+}
+
+masapps_indent() {
+  awk '
+    $0 ~ "^[[:space:]]*masApps = \\{$" {
+      match($0, /^[[:space:]]*/)
+      fallback = substr($0, 1, RLENGTH) "  "
+      inside = 1
+      next
+    }
+    inside && /^[[:space:]]*\};[[:space:]]*$/ { exit }
+    inside && /^[[:space:]]*[A-Za-z_][A-Za-z0-9_-]*[[:space:]]*=[[:space:]]*[0-9]+;[[:space:]]*$/ {
+      match($0, /^[[:space:]]*/)
+      print substr($0, 1, RLENGTH)
+      found = 1
+      exit
+    }
+    END { if (!found) printf "%s", fallback }
+  ' "$homebrew_module"
+}
+
+# Insert or delete one `name = id;` entry. Unlike edit_list, an insertion is
+# only ever considered while still in the main block: once the
+# `# safari extensions` marker is seen, an add that has not landed yet is
+# placed immediately before it, and nothing after the marker is a candidate
+# insertion point even when its key would sort later. Removal has no such
+# restriction, because an existing entry belongs wherever it already is.
+#
+# The blank line that separates the two sections is buffered like a comment so
+# an insertion at the boundary lands above it rather than between it and the
+# marker; that is also why the marker rule inserts before it flushes, the
+# opposite order from the closing brace, where a trailing insertion belongs
+# after whatever is already buffered.
+edit_masapps() {
+  awk -v mode="$1" -v item="$2" -v id="$3" -v ind="$4" '
+    function flush(   i) {
+      for (i = 1; i <= buffered; i++) print buf[i]
+      buffered = 0
+    }
+    function insert() {
+      printf "%s%s = %s;\n", ind, item, id
+      done = 1
+    }
+    BEGIN { state = 0; buffered = 0; done = 0; main = 1 }
+    state == 0 {
+      print
+      if ($0 ~ "^[[:space:]]*masApps = \\{$") state = 1
+      next
+    }
+    state == 1 && /^[[:space:]]*\};[[:space:]]*$/ {
+      flush()
+      if (mode == "add" && !done) insert()
+      print
+      state = 2
+      next
+    }
+    state == 1 && /^[[:space:]]*# safari extensions[[:space:]]*$/ {
+      if (mode == "add" && !done) insert()
+      flush()
+      print
+      main = 0
+      next
+    }
+    state == 1 && /^[[:space:]]*#/ {
+      buf[++buffered] = $0
+      next
+    }
+    state == 1 && /^[[:space:]]*$/ {
+      buf[++buffered] = $0
+      next
+    }
+    state == 1 && /^[[:space:]]*[A-Za-z_][A-Za-z0-9_-]*[[:space:]]*=[[:space:]]*[0-9]+;[[:space:]]*$/ {
+      line = $0
+      sub(/^[[:space:]]*/, "", line)
+      split(line, parts, "=")
+      name = parts[1]
+      gsub(/[[:space:]]/, "", name)
+      if (mode == "remove" && name == item) {
+        buffered = 0
+        next
+      }
+      if (mode == "add" && main && !done && name > item) insert()
+      flush()
+      print
+      next
+    }
+    { flush(); print }
+  ' "$homebrew_module"
+}
+
+mas_command() {
+  [ -f "$homebrew_module" ] || refuse "$homebrew_module is missing." \
+    "This helper edits the Mac App Store inventory declared there."
+  grep -Eq '^[[:space:]]*masApps = \{$' "$homebrew_module" \
+    || refuse "$homebrew_module declares no masApps attrset." \
+      "Update the module or this helper; they disagree about the file's shape."
+  require_readable_masapps
+
+  require_untouched "$homebrew_module"
+
+  if mas_entries | grep -Fxq -- "$item"; then
+    present=1
+  else
+    present=0
+  fi
+
+  case $action in
+    add)
+      [ "$present" -eq 0 ] || refuse "$item is already declared in masApps." "Nothing to do."
+      message="feat(unixlike): add mas app $item"
+      ;;
+    remove)
+      [ "$present" -eq 1 ] || refuse "$item is not declared in masApps." "Nothing to do."
+      message="chore(unixlike): remove mas app $item"
+      ;;
+  esac
+
+  require_classified "$homebrew_module"
+
+  candidate="$work/candidate"
+  edit_masapps "$action" "$item" "$mas_id" "$(masapps_indent)" >"$candidate"
+
+  if cmp -s "$homebrew_module" "$candidate"; then
+    refuse "The edit would change nothing in $homebrew_module." \
+      "masApps is not shaped the way this helper reads it."
+  fi
+
+  printf 'edit: %s\n' "$homebrew_module"
+  git --no-pager diff --no-index --no-color -- "$homebrew_module" "$candidate" \
+    | sed -n '/^@@/,$p'
+  report_plan "$homebrew_module" "$message"
+  report_publish_plan
+
+  [ "$dry_run" -eq 0 ] || exit 0
+
+  if [ "$publish" -eq 1 ]; then
+    confirm "Commit and publish this change?"
+  else
+    confirm "Apply this edit and commit?"
+  fi
+
+  # The branch comes first, while the tree still matches HEAD, so switching
+  # cannot disturb an edit that has not been made yet.
+  create_publish_branch
+
+  # Written in place so the file keeps its mode and identity.
+  cat "$candidate" >"$homebrew_module"
+  git add -- "$homebrew_module"
+  commit_staged "$homebrew_module" "$message"
+  publish_commit
+}
+
 flake_command() {
   # AGENTS.md line 127: do not update flake inputs unless the task calls for
   # it. This is the only command that touches them, and it never runs as a side
@@ -869,5 +1122,6 @@ flake_command() {
 
 case $group in
   brew | cask) homebrew_command ;;
+  mas) mas_command ;;
   flake) flake_command ;;
 esac
