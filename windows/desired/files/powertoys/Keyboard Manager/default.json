@@ -2,24 +2,24 @@
   "remapKeys": {
     "inProcess": [
       {
-        "originalKeys": "20",
-        "newRemapKeys": "27"
+        "originalKeys": "92",
+        "newRemapKeys": "21"
       },
       {
         "originalKeys": "164",
         "newRemapKeys": "162"
       },
       {
-        "originalKeys": "92",
-        "newRemapKeys": "21"
-      },
-      {
-        "originalKeys": "91",
-        "newRemapKeys": "164"
+        "originalKeys": "20",
+        "newRemapKeys": "27"
       },
       {
         "originalKeys": "27",
         "newRemapKeys": "20"
+      },
+      {
+        "originalKeys": "91",
+        "newRemapKeys": "164"
       },
       {
         "originalKeys": "162",
