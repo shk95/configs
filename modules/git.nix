@@ -139,9 +139,9 @@ in {
   };
 
   # The graphical Unix-like homes. Here the background is a value this flake
-  # declares — WezTerm and Ghostty are both set to Catppuccin Latte — rather
-  # than one it has to guess, which is what makes a light-tuned pager legal
-  # here and not in `shared`.
+  # declares — WezTerm and Ghostty are both set to Flexoki Light — rather than
+  # one it has to guess, which is what makes a light-tuned pager legal here
+  # and not in `shared`.
   modules.homeManager.desktop = {
     programs.delta.options = {
       # Not cosmetic: `light` is how delta picks the backgrounds it paints for
@@ -151,11 +151,15 @@ in {
       # diff`, `git show` and `git log -p`.
       light = true;
 
-      # The syntax colours that sit on top of those bands, from the same family
-      # as the two terminals. delta bundles bat's themes; `delta
-      # --list-syntax-themes` on the pinned delta 0.19.2 lists "Catppuccin
-      # Latte" among the light ones.
-      syntax-theme = "Catppuccin Latte";
+      # The syntax colours that sit on top of those bands used to name a
+      # bundled bat theme from the same family as the two terminals, the way
+      # `light` above still does for the diff bands. Flexoki has no such
+      # bundled delta/bat theme to name, and modules/bat.nix already declines
+      # to guess a named theme for the same reason: `ansi` defers to the
+      # terminal's own sixteen colours instead, which on this class is Flexoki
+      # Light because WezTerm and Ghostty declare it, and needs no bundled
+      # theme to track it.
+      syntax-theme = "ansi";
     };
   };
 }
