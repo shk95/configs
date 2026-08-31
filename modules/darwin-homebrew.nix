@@ -65,6 +65,7 @@ _: {
         "cmatrix"
         "cowsay"
         "displayplacer"
+        "fastfetch"
         "mas"
       ];
 
