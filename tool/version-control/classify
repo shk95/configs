@@ -58,7 +58,8 @@ while IFS= read -r path; do
       ;;
     AGENTS.md|CLAUDE.md|CONTRIBUTING.md|README.md|LICENSE|docs/*|\
     .agents/*|.claude/*|.github/*|.githooks/*|.editorconfig|.gitattributes|\
-    .gitignore|tool/setup|tool/doctor.sh|tool/worktree.sh|tool/version-control/*)
+    .gitignore|tool/setup|tool/doctor.sh|tool/worktree.sh|tool/version-control/*|\
+    tool/dispatch/*)
       echo repository
       ;;
     *) echo unclassified ;;

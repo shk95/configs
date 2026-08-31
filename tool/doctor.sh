@@ -74,12 +74,16 @@ else
 fi
 
 if [ "$scope" = windows ] || [ "$scope" = all ]; then
-  if command -v pwsh >/dev/null 2>&1 || command -v pwsh.exe >/dev/null 2>&1; then
-    ok "PowerShell 7 command available for Windows checks"
-  elif [ "$scope" = windows ]; then
-    bad "PowerShell 7 is unavailable" "Run Windows validation on a native Windows host with PowerShell 7."
+  # Only `pwsh.exe`, matching .githooks/pre-push. A Unix-like `pwsh` is present
+  # in every home this repository configures, so accepting it here would report
+  # a capability the hook does not agree exists.
+  if command -v pwsh.exe >/dev/null 2>&1; then
+    ok "native pwsh.exe available for Windows checks"
   else
-    warn "PowerShell 7 is unavailable" "Windows evidence requires a native Windows host with PowerShell 7."
+    # Not a failure even when the scope is windows. Windows work is authored on
+    # Linux and macOS clones, and the windows-latest CI job is its merge gate.
+    warn "native PowerShell is unavailable" \
+      "Windows checks stay unverified here; CI supplies that evidence."
   fi
 fi
 

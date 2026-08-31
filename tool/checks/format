@@ -6,4 +6,7 @@
 # place: flake.nix. Assumes that formatter accepts --check, as alejandra does.
 
 set -e
+. "$(CDPATH= cd -- "$(dirname -- "$0")" && pwd)/prerequisite"
+require_command nix
+
 nix fmt -- --check .

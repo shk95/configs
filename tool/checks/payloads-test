@@ -1,0 +1,25 @@
+#!/bin/sh
+# Negative fixtures for tool/checks/payloads.
+#
+# The positive case is the real assets/ tree. The negatives are the ways a
+# payload can escape validation — content that does not parse, a file no
+# declaration mentions, a declaration whose file is gone — plus the way a
+# format can, which is being declared with no validator behind it.
+
+set -e
+
+repo=$(CDPATH= cd -- "$(dirname "$0")/../.." && pwd)
+cd "$repo"
+
+printf '→ accepts assets\n'
+tool/checks/payloads
+
+for case in broken-lua undeclared stale unknown-format; do
+  printf '→ rejects %s\n' "$case"
+  if tool/checks/payloads "tool/checks/fixtures/payloads/$case" >/dev/null 2>&1; then
+    printf '\033[31m✗ the payload check accepted the %s fixture\033[0m\n' "$case" >&2
+    exit 1
+  fi
+done
+
+printf '✓ payload fixtures behave\n'

@@ -17,7 +17,16 @@ _: {
 
         font-family = "D2KodingLigature Nerd Font Mono";
         font-size = 14;
-        theme = "Catppuccin Mocha";
+        # Flexoki Light is the light member of the same family WezTerm
+        # selects in assets/wezterm/config/appearance.lua; keeping both
+        # terminals in one family is what stops a graphical host from looking
+        # like two different machines. Ghostty ships both "Flexoki Light" and
+        # "Flexoki Dark" as built-in themes (verified in the pinned nixpkgs
+        # ghostty package's share/ghostty/themes/), so the dual form here
+        # needs no extra file: Ghostty answers the terminal's own light/dark
+        # appearance rather than the colour-scheme query modules/zellij.nix
+        # describes, and switches between the two names on its own.
+        theme = "light:Flexoki Light,dark:Flexoki Dark";
         minimum-contrast = 1.1;
 
         cursor-style = "block";

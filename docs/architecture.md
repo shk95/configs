@@ -43,6 +43,17 @@ It owns:
 - Unix-like source payloads consumed by those modules;
 - Unix-like evaluation, build, and activation tooling.
 
+A payload is not only a file a domain owns. It has a format, and being well
+formed is a property of that format rather than of the domain holding it, so it
+needs a parser that the domain's own evaluator does not provide. Nix delivers
+payloads with `.source`, which copies without reading, so evaluation and build
+evidence say nothing about payload content. Each deployable domain therefore
+declares its payloads and their formats — `assets/payloads.json` for Unix-like,
+the `Parser` field of `windows/desired/manifest.json` for Windows — and
+validates them with the parser that will consume them. The two declarations are
+independent copies of one idea, not a shared authority, and neither imports the
+other.
+
 Linux and macOS may share Nix modules where the Nix module system can evaluate
 the complete result directly for both. Platform-specific Nix modules remain
 preferable when behavior differs. This internal sharing does not make their
@@ -69,6 +80,16 @@ read-only `bootstrap.ps1 -Check` evidence precede any explicit Apply.
 The source manifest and every owned payload live below `windows/desired/`.
 PowerShell reads that source directly; there is no Nix-rendered Windows
 consumer tree.
+
+The manifest declares features, and every package, managed file, font, and
+registry delegation is owned by exactly one of them. A feature may declare that
+it requires another when its payload cannot be honest without it. Which
+features a host deploys is host state recorded in that host's `state.json`, not
+desired state: the repository declares what exists and a host records how much
+of it it took. A minimal deployment is therefore a supported outcome rather
+than an incomplete one, and drift is only ever computed against the selected
+set. Deselection stops management; it never uninstalls or deletes what an
+earlier Apply deployed.
 
 ## Common domain
 
@@ -136,6 +157,16 @@ This scope is deliberately narrow:
 - domain behavior discovered during governance work is changed separately in
   the owning domain.
 
+Check dispatch uses three evidence states rather than two. A check reports
+verified with exit status 0, failed with any other status, and unverified with
+69 when the host cannot supply one of its prerequisites. A failure outranks an
+unverified result. `REQUIRE_NATIVE=1` turns unverified into failure; CI sets it
+so the merge gate never accepts an unchecked change, and hooks leave it unset
+so a clone is never blocked from pushing work for a domain it cannot verify.
+The governance plane owns this contract and the hooks that consume it. Each
+domain owns the detection of its own prerequisites and reports through the
+contract rather than deciding what a missing tool means.
+
 The canonical agent workflow follows the Agent Skills open standard under
 `.agents/skills/`. Product-specific discovery locations may contain thin
 adapters, but they do not own or duplicate the workflow.
@@ -145,6 +176,49 @@ The gate validates classification, the repository-wide secret scan, and each
 job selected by the classifier. Individual domain jobs remain conditional and
 are not protection contracts, so adding or skipping a domain does not silently
 weaken or deadlock protected branches.
+
+### Desired-state hygiene
+
+Committed desired state carries no secret, no undeclared user or host name, no
+absolute home path, and no snapshot of runtime state. `AGENTS.md` states this
+under "Durable decisions". The invariant is repository-wide because every
+domain publishes its desired state from one history, and it belongs to the
+`repository` governance scope because assigning it to one platform would make
+that platform authoritative for the others. The repository maintainer owns the
+decision.
+
+The failure it prevents is not hypothetical. A host path that reaches history
+stays there after the file is edited, the way a credential does, and it turns a
+public description of intended state into a description of one machine. Two
+absolute home paths reached `docs/troubleshooting.md` and stayed for the
+document's whole history, because the sentence had a policy owner and no
+enforcement owner, which "Governance design" says must not happen.
+
+The invariants, stated without reference to any command:
+
+- An account or host name appears in committed desired state only when it is
+  declared. `modules/flake/inventory.nix` is the declaration of record, and a
+  declaration that cannot be read is a failure rather than a permission.
+- An absolute path into a home directory is never desired state, in any
+  spelling a supported host writes. A declared value interpolated into a path
+  is not an absolute path.
+- Runtime state is observed, never committed. A tracked path that an ignore
+  rule covers is runtime state that escaped the ignore file rather than an
+  exception to it.
+- A machine-unique identifier is host identity. A constant that names an
+  interface, or is derived from a name, is not.
+- Whatever forgives a violation is declared, reviewable, and enforced in both
+  directions: an exclusion that no longer excludes anything is removed rather
+  than kept, and one that forgives more than the single occurrence it was
+  written for is a whole-file exemption wearing an exclusion's clothes.
+- Secret detection stays with the secret scan, which already owns it and must
+  not be duplicated.
+
+One half of the first invariant is decidable by no scanner: a bare account name
+in free prose has no naming context to recognise it by. It remains a manual
+invariant, its evidence is the reviewer's reading of prose in the diff as
+required by `docs/definition-of-done.md`, and the repository maintainer is its
+decision owner. Nothing in the enforcement plane covers it.
 
 Governance itself has separate authority layers:
 

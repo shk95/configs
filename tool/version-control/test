@@ -16,6 +16,46 @@ plan_promotion="$root/tool/version-control/plan-promotion"
 # `git -C` into the temporary repository below.
 unset GIT_INDEX_FILE
 
+# Git exports an absolute GIT_DIR (and, for some invocations, GIT_WORK_TREE)
+# to hooks it runs from a linked worktree. Left set, every `git -C "$fixture"`
+# below would resolve against the worktree's real git-dir instead of the
+# fixture, silently reinitializing and committing onto the real repository.
+# The rest of git's repo-local override set is scrubbed too, as defence in
+# depth: GIT_COMMON_DIR alone is enough to redirect `git init` the same way.
+unset GIT_DIR GIT_WORK_TREE GIT_COMMON_DIR GIT_OBJECT_DIRECTORY \
+  GIT_ALTERNATE_OBJECT_DIRECTORIES GIT_NAMESPACE GIT_CEILING_DIRECTORIES
+
+# Guards this suite's own `sed -n '/casks = \[/,/\];/p'` call (casks_now,
+# below) from Git for Windows' MSYS argument conversion, the same mechanism
+# tool/version-control/hygiene guards against. See that file for the full
+# explanation and the observed failure (#79). Inert everywhere else.
+MSYS_NO_PATHCONV=1
+MSYS2_ARG_CONV_EXCL='*'
+export MSYS_NO_PATHCONV MSYS2_ARG_CONV_EXCL
+
+# Static fixture for #79: every governance script that passes a leading-`/`
+# argv element to a native binary must disable MSYS argument conversion, or a
+# hook-gated Windows commit can be rejected by a mangled argument instead of
+# the real check result. MSYS itself cannot run on this host, so this checks
+# the one thing a Unix host can: that the guard is actually declared in each
+# affected script's source, not that MSYS would leave it alone.
+for msys_guarded in tool/version-control/hygiene .githooks/commit-msg \
+  tool/version-control/check-promotion-queue tool/version-control/commit \
+  tool/version-control/test tool/worktree.sh; do
+  if ! grep -q '^MSYS_NO_PATHCONV=1$' "$root/$msys_guarded"; then
+    echo "$msys_guarded does not set MSYS_NO_PATHCONV=1 (#79)" >&2
+    exit 1
+  fi
+  if ! grep -q "^MSYS2_ARG_CONV_EXCL='\\*'\$" "$root/$msys_guarded"; then
+    echo "$msys_guarded does not set MSYS2_ARG_CONV_EXCL='*' (#79)" >&2
+    exit 1
+  fi
+  if ! grep -q '^export MSYS_NO_PATHCONV MSYS2_ARG_CONV_EXCL$' "$root/$msys_guarded"; then
+    echo "$msys_guarded does not export both MSYS guard variables (#79)" >&2
+    exit 1
+  fi
+done
+
 grep -q '^  required:$' "$root/.github/workflows/ci.yml"
 grep -q '^    name: Required checks$' "$root/.github/workflows/ci.yml"
 grep -q 'needs: \[classify, repository, unix, windows, common, secrets, promotion\]' \
@@ -107,6 +147,54 @@ expect unclassified "$classify" --files unexpected.file
 expect 'windows
 repository' "$classify" --files windows/setup.ps1 docs/status.md
 
+# Ownership and check selection are different questions and both are fixtured.
+# classify keeps answering the first, for release tags, promotion and CI job
+# selection. tool/dispatch/select answers the second for the local gate, where
+# running a whole flake evaluation for a file Nix never parses was the cost.
+expect_units() {
+  expected=$1
+  actual=$(printf '%s\n' "$3" | "$root/tool/dispatch/select" "$2")
+  if [ "$actual" != "$expected" ]; then
+    printf 'select %s expected <%s>, got <%s>\n' "$2" "$expected" "$actual" >&2
+    exit 1
+  fi
+}
+
+kdl_modified=$(printf 'M\tassets/zellij/config.kdl')
+kdl_added=$(printf 'A\tassets/zellij/extra.kdl')
+module_modified=$(printf 'M\tmodules/git.nix')
+windows_modified=$(printf 'M\twindows/setup.ps1')
+docs_modified=$(printf 'M\tdocs/status.md')
+unknown_modified=$(printf 'M\tunexpected.file')
+
+# Nix copies a payload without reading it, so evaluating the flake says nothing
+# about a modified one either way.
+expect_units 'unixlike:payloads' commit "$kdl_modified"
+expect_units '' push "$kdl_modified"
+
+# An added or removed payload can change what a module references, and a rename
+# appears as both, so the full suite comes back.
+expect_units 'unixlike:format
+unixlike:lint
+unixlike:payloads' commit "$kdl_added"
+expect_units 'unixlike:test' push "$kdl_added"
+
+expect_units 'unixlike:test' push "$module_modified"
+
+# A rename carries two paths on one line. Both have to reach classify, or a
+# payload moved into assets/ is never selected for the payload check.
+renamed_into_assets=$(printf 'R100\tdocs/note.md\tassets/moved.lua')
+expect_units 'repository:fixtures
+unixlike:format
+unixlike:lint
+unixlike:payloads' commit "$renamed_into_assets"
+expect_units 'repository:fixtures
+unixlike:test' push "$renamed_into_assets"
+expect_units 'windows:desired-state
+windows:tests' push "$windows_modified"
+expect_units 'repository:fixtures' commit "$docs_modified"
+expect_units 'unclassified' commit "$unknown_modified"
+
 test_root=$(mktemp -d)
 cleanup() {
   case "$test_root" in /tmp/*) rm -rf -- "$test_root" ;; esac
@@ -121,6 +209,47 @@ printf 'fixture\n' >"$test_root/file"
 git -C "$test_root" add file
 git -C "$test_root" commit -q -m 'feat(repository): create fixture'
 git -C "$test_root" branch dev
+
+# When re-invoked as the regression fixture's child (below), stop here: the
+# gate/classify fixtures above and the fixture-repo setup just above are the
+# exact code the bug corrupted, and re-running everything past this point
+# would double this script's cost on every repository-scope commit and push
+# for no additional coverage.
+if [ -n "${VC_TEST_GIT_DIR_REGRESSION_CHILD:-}" ]; then
+  exit 0
+fi
+
+# Regression fixture for #45: git exports an absolute GIT_DIR (and, for some
+# hooks, GIT_WORK_TREE) when it invokes a hook from a linked worktree. Prove
+# the unset above protects fixture setup by naming a throwaway repository with
+# GIT_DIR, re-running this suite in that environment, and confirming the named
+# repository's refs and config come back untouched.
+worktree_target="$test_root/worktree-target"
+mkdir -p "$worktree_target"
+git -C "$worktree_target" init -q -b master
+git -C "$worktree_target" config user.name Fixture
+git -C "$worktree_target" config user.email fixture@example.invalid
+printf 'fixture\n' >"$worktree_target/file"
+git -C "$worktree_target" add file
+git -C "$worktree_target" commit -q -m 'feat(repository): create worktree-target fixture'
+worktree_target_refs=$(git -C "$worktree_target" for-each-ref)
+worktree_target_config=$(git -C "$worktree_target" config --local --list)
+
+if ! child_output=$(GIT_DIR="$worktree_target/.git" GIT_WORK_TREE="$worktree_target" \
+    VC_TEST_GIT_DIR_REGRESSION_CHILD=1 "$0" 2>&1); then
+  printf '%s\n' "$child_output" >&2
+  echo "version-control test suite failed with GIT_DIR exported" >&2
+  exit 1
+fi
+
+if [ "$(git -C "$worktree_target" for-each-ref)" != "$worktree_target_refs" ]; then
+  echo "GIT_DIR export let the fixture suite write refs into the named repository" >&2
+  exit 1
+fi
+if [ "$(git -C "$worktree_target" config --local --list)" != "$worktree_target_config" ]; then
+  echo "GIT_DIR export let the fixture suite write config into the named repository" >&2
+  exit 1
+fi
 
 git -C "$test_root" switch -q dev
 printf 'promotion\n' >>"$test_root/file"
@@ -162,6 +291,1918 @@ git -C "$test_root" tag -d windows-v2030.01.02 >/dev/null
 git -C "$test_root" tag -a windows-v2030.01.02 -m 'Domain: windows'
 if (cd "$test_root" && "$audit") >/dev/null 2>&1; then
   echo "audit accepted a release tag without evidence" >&2
+  exit 1
+fi
+
+# #113: the pre-push hook must pick the pwsh that belongs to the host it is
+# running on rather than the first one PATH happens to expose. A Unix-like
+# host (including WSL, where a `pwsh.exe` is also reachable through Windows
+# interop) runs the checks under its own native `pwsh`; only an actual Windows
+# host uses `pwsh.exe`; a host with neither reports the checks unverified
+# rather than failing. Isolated from whatever pwsh binaries this suite's own
+# host happens to have — modules/powershell.nix installs a Unix-like `pwsh`
+# into every home this repository configures, and a WSL host additionally
+# reaches a `pwsh.exe` through Windows interop, which is the exact shape #113
+# regressed on — by hiding any real pwsh/pwsh.exe from PATH before each
+# scenario adds back only the stub it names.
+hook_root="$test_root/pre-push"
+mkdir -p "$hook_root/none" "$hook_root/pwsh-only" "$hook_root/pwshexe-only" \
+  "$hook_root/win-host" "$hook_root/windows"
+cp -R "$root/.githooks" "$hook_root/.githooks"
+mkdir -p "$hook_root/tool"
+cp -R "$root/tool/version-control" "$hook_root/tool/version-control"
+cp -R "$root/tool/dispatch" "$hook_root/tool/dispatch"
+
+printf '#!/bin/sh\nexit 0\n' >"$hook_root/pwsh-only/pwsh"
+printf '#!/bin/sh\nexit 0\n' >"$hook_root/pwshexe-only/pwsh.exe"
+printf '#!/bin/sh\nexit 0\n' >"$hook_root/win-host/pwsh.exe"
+chmod +x "$hook_root/pwsh-only/pwsh" "$hook_root/pwshexe-only/pwsh.exe" \
+  "$hook_root/win-host/pwsh.exe"
+cat >"$hook_root/win-host/uname" <<'STUB'
+#!/bin/sh
+if [ "$1" = -s ]; then
+  printf '%s\n' 'MINGW64_NT-10.0-19045'
+else
+  exit 1
+fi
+STUB
+chmod +x "$hook_root/win-host/uname"
+
+git -C "$hook_root" init -q -b dev
+git -C "$hook_root" config user.name Fixture
+git -C "$hook_root" config user.email fixture@example.invalid
+printf 'fixture\n' >"$hook_root/file"
+git -C "$hook_root" add file
+git -C "$hook_root" commit -q -m 'feat(repository): create hook fixture'
+hook_base=$(git -C "$hook_root" rev-parse HEAD)
+printf 'param()\n' >"$hook_root/windows/setup.ps1"
+git -C "$hook_root" add windows/setup.ps1
+git -C "$hook_root" commit -q -m 'feat(windows): change desired state'
+hook_head=$(git -C "$hook_root" rev-parse HEAD)
+
+# Dropping a whole PATH directory that happens to contain a real pwsh is not
+# safe: a host that packages pwsh alongside its everyday utilities (a stock
+# Linux distribution keeps `pwsh`, `git`, `dirname`, `sort`, and `mktemp` in
+# the same directory; this repository's own Nix-installed `pwsh` does not,
+# which is why this shape survives on a Nix-configured host and only shows up
+# elsewhere) would take those utilities down with the directory, and the hook
+# would die reaching for one of them before it ever gets to the Windows-check
+# logic under test — silently, since that happens before this suite prints
+# anything. Only a directory that actually carries a real pwsh/pwsh.exe needs
+# this treatment, so leave every other PATH entry untouched and shim just
+# that directory's other executables into one place, leaving out only the two
+# names under test.
+hook_clean_path() {
+  clean=
+  shim_dir=
+  save_ifs=$IFS
+  IFS=:
+  for dir in $PATH; do
+    [ -n "$dir" ] || continue
+    if [ -x "$dir/pwsh" ] || [ -x "$dir/pwsh.exe" ]; then
+      shim_dir=${shim_dir:-$test_root/path-shim}
+      mkdir -p "$shim_dir"
+      for entry in "$dir"/*; do
+        [ -f "$entry" ] && [ -x "$entry" ] || continue
+        name=${entry##*/}
+        case "$name" in
+          pwsh | pwsh.exe) continue ;;
+        esac
+        [ -e "$shim_dir/$name" ] && continue
+        ln -s "$entry" "$shim_dir/$name" 2>/dev/null || true
+      done
+      continue
+    fi
+    clean="${clean:+$clean:}$dir"
+  done
+  IFS=$save_ifs
+  [ -z "$shim_dir" ] || clean="${clean:+$clean:}$shim_dir"
+  printf '%s' "$clean"
+}
+hook_clean=$(hook_clean_path)
+
+run_pre_push() {
+  printf 'refs/heads/dev %s refs/heads/dev %s\n' "$hook_head" "$hook_base" |
+    (cd "$hook_root" && PATH="$1:$hook_clean" .githooks/pre-push 2>&1)
+}
+
+# Unix-like host, its own native `pwsh` on PATH: the checks actually run under
+# it instead of being reported unverified, and the output names CI as the
+# native gate for what a Linux pwsh cannot exercise (WIN_ENV_E2E).
+if ! unix_output=$(run_pre_push "$hook_root/pwsh-only"); then
+  echo "pre-push failed outright with a Unix-like host's own pwsh available" >&2
+  echo "$unix_output" >&2
+  exit 1
+fi
+if ! printf '%s\n' "$unix_output" | grep -q 'Windows desired-state check'; then
+  echo "pre-push did not run the Windows checks under a Unix-like pwsh" >&2
+  exit 1
+fi
+if printf '%s\n' "$unix_output" | grep -q 'CI must supply evidence'; then
+  echo "pre-push reported the Windows checks unverified despite a Unix-like pwsh" >&2
+  exit 1
+fi
+if ! printf '%s\n' "$unix_output" | grep -qi 'WIN_ENV_E2E'; then
+  echo "pre-push did not note that WIN_ENV_E2E stays a CI concern under a Unix-like pwsh" >&2
+  exit 1
+fi
+
+# Unix-like host, only `pwsh.exe` reachable — the WSL-interop shape #113
+# reports. Using it there is exactly the SecurityError this fix removes, so a
+# host with no *native* pwsh must fall through to unverified instead of
+# reaching for it.
+if ! interop_output=$(run_pre_push "$hook_root/pwshexe-only"); then
+  echo "pre-push failed outright with only a WSL-interop pwsh.exe reachable" >&2
+  echo "$interop_output" >&2
+  exit 1
+fi
+if ! printf '%s\n' "$interop_output" | grep -q 'CI must supply evidence'; then
+  echo "pre-push accepted a WSL-interop pwsh.exe as native Windows tooling" >&2
+  exit 1
+fi
+
+# Unix-like host, no pwsh at all: unverified and still pushable, never a
+# failure.
+if ! none_output=$(run_pre_push "$hook_root/none"); then
+  echo "pre-push failed outright with no pwsh available" >&2
+  echo "$none_output" >&2
+  exit 1
+fi
+if ! printf '%s\n' "$none_output" | grep -q 'CI must supply evidence'; then
+  echo "pre-push did not report the Windows checks unverified with no pwsh" >&2
+  exit 1
+fi
+
+# An actual Windows host keeps using only `pwsh.exe`, unchanged from before.
+if ! win_output=$(run_pre_push "$hook_root/win-host"); then
+  echo "pre-push failed outright on a native Windows host with pwsh.exe" >&2
+  echo "$win_output" >&2
+  exit 1
+fi
+if ! printf '%s\n' "$win_output" | grep -q 'Windows desired-state check'; then
+  echo "pre-push skipped the Windows checks on a native Windows host with pwsh.exe" >&2
+  exit 1
+fi
+
+# The three-state check protocol. A check that could not run must report and
+# let the push through locally, and must fail under REQUIRE_NATIVE, which is
+# what CI sets. Exercised through a real hook run with a stand-in check, so the
+# assertion covers the hook's own handling rather than a copy of it.
+protocol_root="$test_root/protocol"
+mkdir -p "$protocol_root/tool/checks" "$protocol_root/modules"
+cp -R "$root/.githooks" "$protocol_root/.githooks"
+cp -R "$root/tool/version-control" "$protocol_root/tool/version-control"
+cp -R "$root/tool/dispatch" "$protocol_root/tool/dispatch"
+
+git -C "$protocol_root" init -q -b dev
+git -C "$protocol_root" config user.name Fixture
+git -C "$protocol_root" config user.email fixture@example.invalid
+printf 'fixture\n' >"$protocol_root/file"
+git -C "$protocol_root" add file
+git -C "$protocol_root" commit -q -m 'feat(repository): create protocol fixture'
+protocol_base=$(git -C "$protocol_root" rev-parse HEAD)
+printf '_: {}\n' >"$protocol_root/modules/fixture.nix"
+git -C "$protocol_root" add modules/fixture.nix
+git -C "$protocol_root" commit -q -m 'feat(unixlike): change a module'
+protocol_head=$(git -C "$protocol_root" rev-parse HEAD)
+
+stub_check() {
+  printf '#!/bin/sh\nexit %s\n' "$1" >"$protocol_root/tool/checks/test"
+  chmod +x "$protocol_root/tool/checks/test"
+}
+
+run_protocol_pre_push() {
+  printf 'refs/heads/dev %s refs/heads/dev %s\n' "$protocol_head" "$protocol_base" |
+    (cd "$protocol_root" && .githooks/pre-push 2>&1)
+}
+
+stub_check 0
+if ! run_protocol_pre_push >/dev/null; then
+  echo "pre-push rejected a passing check" >&2
+  exit 1
+fi
+
+stub_check 1
+if run_protocol_pre_push >/dev/null 2>&1; then
+  echo "pre-push accepted a failing check" >&2
+  exit 1
+fi
+
+stub_check 69
+if ! unverified_output=$(run_protocol_pre_push); then
+  echo "pre-push blocked a check that reported unverified" >&2
+  exit 1
+fi
+if ! printf '%s\n' "$unverified_output" | grep -q 'unverified'; then
+  echo "pre-push did not report the unverified check" >&2
+  exit 1
+fi
+
+if (REQUIRE_NATIVE=1; export REQUIRE_NATIVE; run_protocol_pre_push) >/dev/null 2>&1; then
+  echo "pre-push accepted an unverified check under REQUIRE_NATIVE" >&2
+  exit 1
+fi
+
+# tool/version-control/commit is a composition rather than a new authority:
+# classify answers ownership, dispatch/select answers check selection,
+# .githooks/evidence decides what an exit status means, and the hook runs
+# because core.hooksPath points at it. Only a real repository with real hooks
+# can assert that, so this block builds one the way the fixtures above do.
+#
+# Every git call here runs with the ambient git environment unset. A hook that
+# invoked this runner exports an absolute GIT_DIR for the real clone, and
+# `git -C` does not override it, so a fixture that trusted the environment
+# would commit into the repository it is meant to be testing.
+commit_root="$test_root/commit"
+mkdir -p "$commit_root/tool/checks" "$commit_root/modules" "$commit_root/stub" \
+  "$commit_root/stub-nix"
+cp -R "$root/.githooks" "$commit_root/.githooks"
+cp -R "$root/tool/version-control" "$commit_root/tool/version-control"
+cp -R "$root/tool/dispatch" "$commit_root/tool/dispatch"
+
+# The pre-commit hook this fixture enables also runs
+# tool/version-control/hygiene, which fails closed when it cannot read a
+# declaration of record and rejects an allow entry naming a document this
+# repository does not have. Supply both, through printf arguments so the
+# naming context lives in the fixture rather than in this file.
+mkdir -p "$commit_root/modules/flake"
+printf '_: {\n  identity = { %s = "%s"; };\n}\n' gitName Fixture \
+  >"$commit_root/modules/flake/inventory.nix"
+: >"$commit_root/tool/version-control/hygiene.allow"
+
+# The shapes that break a naive editor: a comment attached to one entry, a
+# tapped cask whose sort key is its last path segment rather than the whole
+# string, and a masApps attrset whose alphabetized main block is followed by a
+# `# safari extensions` section that an insertion must never enter.
+cat >"$commit_root/modules/darwin-homebrew.nix" <<'FIXTURE'
+_: {
+  modules.darwin.system = _: {
+    homebrew = {
+      masApps = {
+        keynote = 409183694;
+        pages = 409201541;
+
+        # safari extensions
+        bitwarden = 1352778147;
+        wblock = 6746388723;
+      };
+
+      # Portable command-line tools belong to homeManager.shared.
+      brews = [
+        # Broken on Darwin in the locked nixpkgs.
+        "bettercap"
+        "displayplacer"
+        "mas"
+      ];
+
+      # `brew install --cask`
+      casks = [
+        "nikitabobko/tap/aerospace"
+        "anki"
+        "zen"
+      ];
+    };
+  };
+}
+FIXTURE
+printf '{ "nodes": {}, "root": "root", "version": 7 }\n' >"$commit_root/flake.lock"
+
+# gitleaks is stubbed so the hook's secret scan behaves the same on every host.
+# Otherwise a clone without it reports unverified for its own reason and the
+# assertions below would stop proving anything about the stubbed check.
+printf '#!/bin/sh\nexit 0\n' >"$commit_root/stub/gitleaks"
+cat >"$commit_root/stub-nix/nix" <<'STUB'
+#!/bin/sh
+[ "$1" = flake ] && [ "$2" = update ] || exit 1
+printf '{ "nodes": {}, "root": "root", "version": 7, "refreshed": "%s" }\n' \
+  "${3:-all}" >flake.lock
+STUB
+chmod +x "$commit_root/stub/gitleaks" "$commit_root/stub-nix/nix"
+
+commit_git() {
+  (
+    unset GIT_DIR GIT_WORK_TREE GIT_INDEX_FILE
+    git -C "$commit_root" "$@"
+  )
+}
+
+commit_git init -q -b dev
+commit_git config user.name Fixture
+commit_git config user.email fixture@example.invalid
+commit_git add .
+commit_git commit -q -m 'feat(repository): create commit fixture'
+# Hooks come after the seed commit: that commit stages tool/ and .githooks/,
+# which select reports as repository:fixtures, and this runner is that unit.
+commit_git config core.hooksPath .githooks
+commit_git branch master
+
+# The cases below assert what the helper does where it is told to commit, so
+# they run on a feature branch. On dev the helper branches from origin/dev
+# instead, which the publish block further down owns; leaving these on dev
+# would make every one of them exercise that path too.
+commit_git switch -q -c feature/unixlike-fixture
+
+commit_stub_path="$commit_root/stub"
+
+run_commit() {
+  commit_answer=$1
+  shift
+  printf '%s\n' "$commit_answer" | (
+    unset GIT_DIR GIT_WORK_TREE GIT_INDEX_FILE
+    cd "$commit_root" || exit 1
+    PATH="$commit_stub_path:$PATH" tool/version-control/commit "$@" 2>&1
+  )
+}
+
+# The same run with the streams left apart. --publish copies the hook's output
+# into the pull-request body and merges its stderr into stdout to do it; a run
+# without --publish must not, so this is how the two are told apart.
+run_commit_stdout() {
+  commit_answer=$1
+  shift
+  printf '%s\n' "$commit_answer" | (
+    unset GIT_DIR GIT_WORK_TREE GIT_INDEX_FILE
+    cd "$commit_root" || exit 1
+    PATH="$commit_stub_path:$PATH" tool/version-control/commit "$@" 2>/dev/null
+  )
+}
+
+commit_count() { commit_git rev-list --count HEAD; }
+
+stub_commit_check() {
+  printf '#!/bin/sh\nexit %s\n' "$1" >"$commit_root/tool/checks/format"
+  chmod +x "$commit_root/tool/checks/format"
+}
+
+casks_now() {
+  sed -n '/casks = \[/,/\];/p' "$commit_root/modules/darwin-homebrew.nix" \
+    | sed -n 's/^ *"\(.*\)"$/\1/p' | tr '\n' ' '
+}
+
+# A dry run answers the four questions and writes nothing.
+commit_before=$(commit_count)
+dry_output=$(run_commit n --dry-run cask add af)
+printf '%s\n' "$dry_output" | grep -q '^+        "af"$'
+printf '%s\n' "$dry_output" | grep -q '^classification: unixlike$'
+printf '%s\n' "$dry_output" | grep -q '^  unixlike:format$'
+printf '%s\n' "$dry_output" | grep -q '^message: feat(unixlike): add homebrew cask af$'
+if [ -n "$(commit_git status --porcelain --untracked-files=no)" ] \
+  || [ "$(commit_count)" != "$commit_before" ]; then
+  echo "commit --dry-run wrote something" >&2
+  exit 1
+fi
+
+if ! run_commit y cask add af >/dev/null; then
+  echo "the commit helper refused a valid cask addition" >&2
+  exit 1
+fi
+if [ "$(commit_git show -s --format=%s HEAD)" \
+  != 'feat(unixlike): add homebrew cask af' ]; then
+  echo "commit helper used an unexpected message for a cask addition" >&2
+  exit 1
+fi
+if [ "$(commit_git diff-tree --no-commit-id --name-only -r HEAD)" \
+  != modules/darwin-homebrew.nix ]; then
+  echo "commit helper touched more than the homebrew module" >&2
+  exit 1
+fi
+# Sorting on the raw string would file "af" before "nikitabobko/tap/aerospace";
+# the key is the last path segment, so the tapped cask sorts under aerospace.
+if [ "$(casks_now)" != 'nikitabobko/tap/aerospace af anki zen ' ]; then
+  echo "commit helper ignored the tap-aware sort order: $(casks_now)" >&2
+  exit 1
+fi
+
+# A removed entry takes the comment block attached to it. Leaving that behind
+# would silently re-attach it to the next entry.
+if ! run_commit y brew remove bettercap >/dev/null; then
+  echo "the commit helper refused a valid formula removal" >&2
+  exit 1
+fi
+if [ "$(commit_git show -s --format=%s HEAD)" \
+  != 'chore(unixlike): remove homebrew formula bettercap' ]; then
+  echo "commit helper used an unexpected message for a formula removal" >&2
+  exit 1
+fi
+if grep -q 'Broken on Darwin' "$commit_root/modules/darwin-homebrew.nix"; then
+  echo "commit helper left a removed entry's comment behind" >&2
+  exit 1
+fi
+grep -q 'Portable command-line tools' "$commit_root/modules/darwin-homebrew.nix"
+grep -q '"displayplacer"' "$commit_root/modules/darwin-homebrew.nix"
+
+# ---------------------------------------------------------------------------
+# tool/version-control/commit mas add/remove
+# ---------------------------------------------------------------------------
+#
+# masApps is a Nix attrset of `name = id;` pairs, not a string list, and its
+# alphabetized main block is followed by a `# safari extensions` section that
+# an insertion must never enter (#92).
+
+masapps_main_now() {
+  sed -n '/masApps = {/,/# safari extensions/p' "$commit_root/modules/darwin-homebrew.nix" \
+    | sed -n 's/^ *\([A-Za-z_][A-Za-z0-9_-]*\) = [0-9]*;$/\1/p' | tr '\n' ' '
+}
+
+masapps_safari_now() {
+  sed -n '/# safari extensions/,/};/p' "$commit_root/modules/darwin-homebrew.nix" \
+    | sed -n 's/^ *\([A-Za-z_][A-Za-z0-9_-]*\) = [0-9]*;$/\1/p' | tr '\n' ' '
+}
+
+mas_dry=$(run_commit n --dry-run mas add microsoft-onedrive 823766827)
+printf '%s\n' "$mas_dry" | grep -q '^+        microsoft-onedrive = 823766827;$'
+printf '%s\n' "$mas_dry" | grep -q '^classification: unixlike$'
+printf '%s\n' "$mas_dry" \
+  | grep -q '^message: feat(unixlike): add mas app microsoft-onedrive$'
+if [ -n "$(commit_git status --porcelain --untracked-files=no)" ]; then
+  echo "commit --dry-run wrote something for a mas addition" >&2
+  exit 1
+fi
+
+if ! run_commit y mas add microsoft-onedrive 823766827 >/dev/null; then
+  echo "the commit helper refused a valid mas addition" >&2
+  exit 1
+fi
+if [ "$(commit_git show -s --format=%s HEAD)" \
+  != 'feat(unixlike): add mas app microsoft-onedrive' ]; then
+  echo "commit helper used an unexpected message for a mas addition" >&2
+  exit 1
+fi
+if [ "$(commit_git diff-tree --no-commit-id --name-only -r HEAD)" \
+  != modules/darwin-homebrew.nix ]; then
+  echo "commit helper touched more than the homebrew module for a mas addition" >&2
+  exit 1
+fi
+# Alphabetized among the main block's own names: keynote < microsoft-onedrive
+# < pages.
+if [ "$(masapps_main_now)" != 'keynote microsoft-onedrive pages ' ]; then
+  echo "commit helper ignored masApps' alphabetical order: $(masapps_main_now)" >&2
+  exit 1
+fi
+
+# A name that would sort after every safari-section name too must still land
+# at the end of the main block, never inside the safari section: "zzz" sorts
+# after "wblock", but the main block is the only place an add may land.
+if ! run_commit y mas add zzz 999999999 >/dev/null; then
+  echo "the commit helper refused a mas addition at the end of the main block" >&2
+  exit 1
+fi
+if [ "$(masapps_main_now)" != 'keynote microsoft-onedrive pages zzz ' ]; then
+  echo "commit helper placed a mas addition outside the main block: $(masapps_main_now)" >&2
+  exit 1
+fi
+if [ "$(masapps_safari_now)" != 'bitwarden wblock ' ]; then
+  echo "commit helper disturbed the safari extensions section: $(masapps_safari_now)" >&2
+  exit 1
+fi
+# The blank line separating the two sections must survive the insertion.
+if ! awk '/zzz = 999999999;/ { getline; if ($0 == "") found = 1 } END { exit !found }' \
+  "$commit_root/modules/darwin-homebrew.nix"; then
+  echo "commit helper dropped the blank line before the safari extensions section" >&2
+  exit 1
+fi
+
+# A removed entry leaves the section it was in; both the main block and the
+# safari section are candidates.
+if ! run_commit y mas remove pages >/dev/null; then
+  echo "the commit helper refused a valid mas removal from the main block" >&2
+  exit 1
+fi
+if [ "$(commit_git show -s --format=%s HEAD)" \
+  != 'chore(unixlike): remove mas app pages' ]; then
+  echo "commit helper used an unexpected message for a mas removal" >&2
+  exit 1
+fi
+if [ "$(masapps_main_now)" != 'keynote microsoft-onedrive zzz ' ]; then
+  echo "commit helper did not remove the expected mas app: $(masapps_main_now)" >&2
+  exit 1
+fi
+
+if ! run_commit y mas remove bitwarden >/dev/null; then
+  echo "the commit helper refused a valid mas removal from the safari section" >&2
+  exit 1
+fi
+if [ "$(masapps_safari_now)" != 'wblock ' ]; then
+  echo "commit helper did not remove a mas app from the safari section: $(masapps_safari_now)" >&2
+  exit 1
+fi
+
+# The add and remove guards, mirroring the brew/cask ones above.
+if mas_already_output=$(run_commit y mas add keynote 409183694); then
+  echo "commit helper added a mas app that was already declared" >&2
+  exit 1
+fi
+printf '%s\n' "$mas_already_output" | grep -q 'already declared'
+if mas_missing_output=$(run_commit y mas remove nowhere); then
+  echo "commit helper removed a mas app that was not declared" >&2
+  exit 1
+fi
+printf '%s\n' "$mas_missing_output" | grep -q 'is not declared'
+if mas_id_output=$(run_commit y mas add newapp abc); then
+  echo "commit helper accepted a non-numeric Mac App Store id" >&2
+  exit 1
+fi
+printf '%s\n' "$mas_id_output" | grep -q 'Not a usable Mac App Store id'
+if mas_name_output=$(run_commit y mas add 'tap/name' 123456789); then
+  echo "commit helper accepted an unusable Nix attribute name" >&2
+  exit 1
+fi
+printf '%s\n' "$mas_name_output" | grep -q 'Not a usable Nix attribute name'
+
+# require_untouched applies to masApps exactly as it does to brews and casks.
+printf '\n' >>"$commit_root/modules/darwin-homebrew.nix"
+if run_commit y mas add untouched-guard 111111111 >/dev/null; then
+  echo "commit helper acted on masApps with uncommitted changes in the file" >&2
+  exit 1
+fi
+commit_git checkout -q -- modules/darwin-homebrew.nix
+
+# What every mas edit above produced must still satisfy alejandra, the
+# formatter tool/checks/format delegates to through `nix fmt`. This fixture
+# has no flake.nix of its own, so alejandra runs directly rather than through
+# that indirection; it is still the same binary the real pipeline calls.
+if command -v alejandra >/dev/null 2>&1; then
+  if ! alejandra --check --quiet --quiet -- "$commit_root/modules/darwin-homebrew.nix"; then
+    echo "commit helper left modules/darwin-homebrew.nix unformatted after mas edits" >&2
+    exit 1
+  fi
+else
+  echo "· alejandra not on PATH, skipping the mas formatting fixture"
+fi
+
+# The usage text documents the new subcommand and that mas itself needs no
+# command of its own, being already a declared Homebrew formula.
+mas_help=$(
+  unset GIT_DIR GIT_WORK_TREE GIT_INDEX_FILE
+  cd "$commit_root" || exit 1
+  PATH="$commit_stub_path:$PATH" tool/version-control/commit -h
+)
+printf '%s\n' "$mas_help" | grep -q '^  mas add <name> <id>'
+printf '%s\n' "$mas_help" | grep -q '^  mas remove <name>'
+printf '%s\n' "$mas_help" | grep -q 'already a declared Homebrew formula'
+
+# The add and remove guards. A name already declared, a name that is not there,
+# and a name the module could not hold are refusals, not edits.
+if already_output=$(run_commit y cask add anki); then
+  echo "commit helper added a cask that was already declared" >&2
+  exit 1
+fi
+printf '%s\n' "$already_output" | grep -q 'already declared'
+if missing_output=$(run_commit y brew remove nowhere); then
+  echo "commit helper removed a formula that was not declared" >&2
+  exit 1
+fi
+printf '%s\n' "$missing_output" | grep -q 'is not declared'
+if name_output=$(run_commit y cask add 'bad name'); then
+  echo "commit helper accepted an unusable package name" >&2
+  exit 1
+fi
+printf '%s\n' "$name_output" | grep -q 'Not a usable package name'
+
+# An entry line carrying a trailing comment matches neither the reader nor the
+# editor. Skipping it would report "displayplacer" as absent and add a second
+# copy of it, so the whole edit is refused instead. Committed by hand first, so
+# the refusal is the readability guard and not the uncommitted-changes one.
+sed 's/^\( *\)"displayplacer"$/\1"displayplacer" # broken/' \
+  "$commit_root/modules/darwin-homebrew.nix" >"$test_root/trailing.nix"
+cp "$test_root/trailing.nix" "$commit_root/modules/darwin-homebrew.nix"
+commit_git add -- modules/darwin-homebrew.nix
+if ! annotate_output=$(
+  unset GIT_DIR GIT_WORK_TREE GIT_INDEX_FILE
+  cd "$commit_root" || exit 1
+  PATH="$commit_stub_path:$PATH" \
+    git commit -q -m 'chore(unixlike): annotate an entry by hand' 2>&1
+); then
+  printf '%s\n' "$annotate_output" >&2
+  echo "the fixture could not commit an annotated entry" >&2
+  exit 1
+fi
+commit_before=$(commit_count)
+if trailing_output=$(run_commit y brew add displayplacer); then
+  echo "commit helper edited a list holding an entry it cannot read" >&2
+  exit 1
+fi
+printf '%s\n' "$trailing_output" | grep -q 'bare quoted name'
+if [ "$(grep -c '"displayplacer"' "$commit_root/modules/darwin-homebrew.nix")" != 1 ]; then
+  echo "commit helper duplicated an entry it could not read" >&2
+  exit 1
+fi
+if run_commit y brew remove displayplacer >/dev/null; then
+  echo "commit helper removed from a list holding an entry it cannot read" >&2
+  exit 1
+fi
+if [ "$(commit_count)" != "$commit_before" ]; then
+  echo "commit helper committed over an unreadable entry line" >&2
+  exit 1
+fi
+# The guard is per list: casks is still readable and still editable.
+run_commit n --dry-run cask add readable >/dev/null
+
+# AGENTS.md: only dev enters master, and there is no operational bypass.
+commit_git switch -q master
+if master_output=$(run_commit y cask add zzz); then
+  echo "commit helper committed on master" >&2
+  exit 1
+fi
+printf '%s\n' "$master_output" | grep -q master
+if [ -n "$(commit_git status --porcelain --untracked-files=no)" ]; then
+  echo "commit helper changed the tree while refusing on master" >&2
+  exit 1
+fi
+commit_git switch -q feature/unixlike-fixture
+
+# AGENTS.md line 93: a tool that takes the hook's bypass silently creates the
+# policy a human was trusted to decide.
+if bypass_output=$(run_commit y --no-verify cask add zzz); then
+  echo "commit helper honoured a hook bypass" >&2
+  exit 1
+fi
+printf '%s\n' "$bypass_output" | grep -q 'hook bypass'
+
+# The helper commits only the edit it makes.
+printf 'scratch\n' >"$commit_root/unrelated"
+commit_git add unrelated
+if run_commit y cask add zzz >/dev/null; then
+  echo "commit helper acted with unrelated staged changes" >&2
+  exit 1
+fi
+commit_git reset -q -- unrelated
+rm -f "$commit_root/unrelated"
+
+printf '\n' >>"$commit_root/modules/darwin-homebrew.nix"
+if run_commit y cask add zzz >/dev/null; then
+  echo "commit helper acted on a file with uncommitted changes" >&2
+  exit 1
+fi
+commit_git checkout -q -- modules/darwin-homebrew.nix
+
+# An unclassified path is fatal at both gates, so the helper refuses before it
+# writes rather than after the hook rejects it.
+cp "$commit_root/tool/version-control/classify" "$test_root/classify.real"
+printf '#!/bin/sh\necho unclassified\n' >"$commit_root/tool/version-control/classify"
+chmod +x "$commit_root/tool/version-control/classify"
+if unclassified_output=$(run_commit y cask add zzz); then
+  echo "commit helper acted on an unclassified path" >&2
+  exit 1
+fi
+printf '%s\n' "$unclassified_output" | grep -q 'no owning scope'
+cp "$test_root/classify.real" "$commit_root/tool/version-control/classify"
+
+# The hook decides. A failing check stops the helper, an unverified one does
+# not, and REQUIRE_NATIVE turns the second into the first the way CI does.
+commit_before=$(commit_count)
+stub_commit_check 1
+if run_commit y cask add zzz >/dev/null; then
+  echo "commit helper survived a failing pre-commit hook" >&2
+  exit 1
+fi
+if [ "$(commit_count)" != "$commit_before" ]; then
+  echo "commit helper committed despite a failing pre-commit hook" >&2
+  exit 1
+fi
+commit_git reset -q --hard HEAD
+
+stub_commit_check 69
+if ! unverified_commit=$(run_commit y cask add zzz); then
+  echo "commit helper blocked a check that reported unverified" >&2
+  exit 1
+fi
+if [ "$(commit_count)" = "$commit_before" ]; then
+  echo "commit helper treated an unverified check as a failure" >&2
+  exit 1
+fi
+# Verbatim, on the operator's terminal: the unverified state is only
+# meaningful if it is read.
+printf '%s\n' "$unverified_commit" | grep -q '^→ format$'
+printf '%s\n' "$unverified_commit" | grep -q '^· format unverified'
+printf '%s\n' "$unverified_commit" \
+  | grep -q 'Some checks could not run on this host and remain unverified\.'
+
+# #31's guarantee is that without --publish nothing stands between the hook and
+# the terminal. Git gives a hook the commit's stderr, and the publish path
+# copies that stream into the pull-request body by folding it into stdout, so
+# the two paths are told apart here: without --publish the helper's own plan is
+# on stdout and not one line of the hook's is.
+commit_before=$(commit_count)
+stub_commit_check 1
+if plain_stdout=$(run_commit_stdout y cask add qqq); then
+  echo "commit helper survived a failing pre-commit hook" >&2
+  exit 1
+fi
+printf '%s\n' "$plain_stdout" \
+  | grep -q '^message: feat(unixlike): add homebrew cask qqq$'
+if printf '%s\n' "$plain_stdout" | grep -q '^→ '; then
+  echo "the commit helper captured the hook's stream without --publish" >&2
+  exit 1
+fi
+if [ "$(commit_count)" != "$commit_before" ]; then
+  echo "commit helper committed despite a failing pre-commit hook" >&2
+  exit 1
+fi
+commit_git reset -q --hard HEAD
+stub_commit_check 69
+
+commit_before=$(commit_count)
+if (
+  REQUIRE_NATIVE=1
+  export REQUIRE_NATIVE
+  run_commit y cask add yyy
+) >/dev/null 2>&1; then
+  echo "commit helper committed an unverified check under REQUIRE_NATIVE" >&2
+  exit 1
+fi
+if [ "$(commit_count)" != "$commit_before" ]; then
+  echo "commit helper committed under REQUIRE_NATIVE despite an unverified check" >&2
+  exit 1
+fi
+commit_git reset -q --hard HEAD
+stub_commit_check 0
+
+# A flake refresh is its own command, never a side effect of another one, and
+# CONTRIBUTING.md keeps it in a dedicated chore(unixlike-deps) commit. The
+# homebrew assertions above already show it does not ride along with an edit.
+flake_dry=$(run_commit n --dry-run flake refresh)
+printf '%s\n' "$flake_dry" | grep -q '^action: nix flake update$'
+printf '%s\n' "$flake_dry" | grep -q '^message: chore(unixlike-deps): refresh flake.lock$'
+
+commit_stub_path="$commit_root/stub-nix:$commit_root/stub"
+if ! run_commit y flake refresh nixpkgs >/dev/null; then
+  echo "commit helper did not commit a flake refresh" >&2
+  exit 1
+fi
+commit_stub_path="$commit_root/stub"
+if [ "$(commit_git show -s --format=%s HEAD)" \
+  != 'chore(unixlike-deps): refresh nixpkgs in flake.lock' ]; then
+  echo "commit helper used an unexpected message for a flake refresh" >&2
+  exit 1
+fi
+if [ "$(commit_git diff-tree --no-commit-id --name-only -r HEAD)" != flake.lock ]; then
+  echo "a flake refresh commit carried more than flake.lock" >&2
+  exit 1
+fi
+
+# Without nix the refresh is unverified, not failed: exit 69, no commit.
+# Skipped where a real nix is on PATH, because there the update runs for real.
+if command -v nix >/dev/null 2>&1; then
+  echo "· nix on PATH, skipping the unavailable-nix fixture"
+else
+  commit_before=$(commit_count)
+  no_nix_status=0
+  run_commit y flake refresh >/dev/null 2>&1 || no_nix_status=$?
+  if [ "$no_nix_status" != 69 ]; then
+    echo "commit helper did not report a missing nix as unverified" >&2
+    exit 1
+  fi
+  if [ "$(commit_count)" != "$commit_before" ]; then
+    echo "commit helper committed a flake refresh without nix" >&2
+    exit 1
+  fi
+fi
+
+# Hooks are opt-in: tool/setup --fix sets core.hooksPath, the clone does not.
+# Naming check units in a clone that runs no hooks would report a gate that
+# never applied, so the helper reports them unavailable instead, and refuses
+# under the REQUIRE_NATIVE that CI sets.
+commit_git config --unset core.hooksPath
+nohooks_output=$(run_commit n --dry-run cask add unhooked)
+if printf '%s\n' "$nohooks_output" | grep -q 'unixlike:format'; then
+  echo "commit helper named check units in a clone that runs no hooks" >&2
+  exit 1
+fi
+printf '%s\n' "$nohooks_output" | grep -q '^· pre-commit checks unverified'
+printf '%s\n' "$nohooks_output" \
+  | grep -q 'Some checks could not run on this host and remain unverified\.'
+if (
+  REQUIRE_NATIVE=1
+  export REQUIRE_NATIVE
+  run_commit n --dry-run cask add unhooked
+) >/dev/null 2>&1; then
+  echo "commit helper planned a commit without hooks under REQUIRE_NATIVE" >&2
+  exit 1
+fi
+commit_git config core.hooksPath .githooks
+
+# The helper refuses a bypass; it must also never take one. Its own refusal
+# names those flags, so this asserts an invocation rather than a mention.
+if grep -Eq 'git commit.*--no-verify|git push.*(--no-verify|--force|-f )|core\.hooksPath=|HUSKY=|GIT_DIR=' \
+  "$root/tool/version-control/commit"; then
+  echo "the commit helper carries a hook bypass" >&2
+  exit 1
+fi
+# Arming auto-merge is the whole point of --publish; merging past Required
+# checks is the whole point of not doing it that way. The flag that would is
+# assembled from printf arguments so this file's own text cannot satisfy the
+# grep, and only a merge invocation carrying it is a finding.
+if grep 'gh pr merge' "$root/tool/version-control/commit" \
+  | grep -Fq -- "$(printf -- '--%s' admin)"; then
+  echo "the commit helper can merge past Required checks" >&2
+  exit 1
+fi
+# It reads core.hooksPath in order to report an unhooked clone. Reading is not
+# a bypass; writing it is, so every git config that touches it must be a --get.
+if grep 'git config' "$root/tool/version-control/commit" \
+  | grep 'core\.hooksPath' | grep -qv -- '--get'; then
+  echo "the commit helper writes core.hooksPath" >&2
+  exit 1
+fi
+
+# What it produced must satisfy the audit the repository already runs.
+(
+  unset GIT_DIR GIT_WORK_TREE GIT_INDEX_FILE
+  cd "$commit_root" && "$audit"
+) >/dev/null
+# ---------------------------------------------------------------------------
+# tool/version-control/commit --publish
+# ---------------------------------------------------------------------------
+
+# --publish carries the same commit through to a pull request, so this needs a
+# remote and a gh. Both are throwaway. `origin` is a bare repository under
+# $test_root and `gh` is a stub on PATH that records its argv and answers from
+# the environment, so nothing here can reach github.com or this repository's
+# real remote, and the authenticated gh on the developer's machine is shadowed
+# rather than trusted to be absent.
+publish_root="$test_root/publish"
+publish_remote="$test_root/publish-remote.git"
+publish_log="$test_root/publish-gh.log"
+publish_body="$test_root/publish-pr-body"
+
+(
+  unset GIT_DIR GIT_WORK_TREE GIT_INDEX_FILE
+  git init -q --bare -b dev "$publish_remote"
+)
+
+mkdir -p "$publish_root/tool/checks" "$publish_root/modules/flake" \
+  "$publish_root/stub" "$publish_root/nogh"
+cp -R "$root/.githooks" "$publish_root/.githooks"
+cp -R "$root/tool/version-control" "$publish_root/tool/version-control"
+cp -R "$root/tool/dispatch" "$publish_root/tool/dispatch"
+printf '_: {\n  identity = { %s = "%s"; };\n}\n' gitName Fixture \
+  >"$publish_root/modules/flake/inventory.nix"
+: >"$publish_root/tool/version-control/hygiene.allow"
+cat >"$publish_root/modules/darwin-homebrew.nix" <<'FIXTURE'
+_: {
+  modules.darwin.system = _: {
+    homebrew = {
+      masApps = {
+        keynote = 409183694;
+
+        # safari extensions
+        bitwarden = 1352778147;
+      };
+
+      brews = [
+        "mas"
+      ];
+
+      casks = [
+        "anki"
+        "zen"
+      ];
+    };
+  };
+}
+FIXTURE
+printf '{ "nodes": {}, "root": "root", "version": 7 }\n' >"$publish_root/flake.lock"
+
+# The pre-commit hook selects unixlike:format, lint and payloads for the module
+# and the pre-push hook selects unixlike:test for it. All four exist here so
+# the assertions below are about the helper rather than about a host's Nix.
+for publish_check in format lint payloads test; do
+  printf '#!/bin/sh\nexit 0\n' >"$publish_root/tool/checks/$publish_check"
+  chmod +x "$publish_root/tool/checks/$publish_check"
+done
+printf '#!/bin/sh\nexit 0\n' >"$publish_root/stub/gitleaks"
+chmod +x "$publish_root/stub/gitleaks"
+
+cat >"$publish_root/stub/gh" <<STUB
+#!/bin/sh
+printf '%s\n' "\$*" >>"$publish_log"
+case "\$1 \$2" in
+  'auth status') exit "\${STUB_GH_AUTH_STATUS:-0}" ;;
+  'api repos/'*) printf '%s\n' "\${STUB_GH_AUTO_MERGE:-true}" ;;
+  'pr list') printf '%s' "\${STUB_GH_OPEN_PULLS:-}" ;;
+  'pr create')
+    while [ "\$#" -gt 0 ]; do
+      if [ "\$1" = --body-file ] && [ "\$#" -gt 1 ]; then
+        cat "\$2" >"$publish_body"
+      fi
+      shift
+    done
+    printf 'https://github.com/owner/repo/pull/7\n'
+    ;;
+  'pr merge') exit "\${STUB_GH_MERGE_STATUS:-0}" ;;
+  *) exit 1 ;;
+esac
+STUB
+chmod +x "$publish_root/stub/gh"
+
+# A PATH with no gh at all. Removing one command from PATH is impossible, so
+# this is a PATH of exactly the commands the helper reaches before its gh
+# preflight, and the fixture asserts gh is genuinely unreachable through it.
+for publish_tool in git awk sed tr sort grep cut cat rm mktemp dirname; do
+  publish_tool_path=$(command -v "$publish_tool" 2>/dev/null) || continue
+  ln -sf "$publish_tool_path" "$publish_root/nogh/$publish_tool"
+done
+if PATH="$publish_root/nogh" command -v gh >/dev/null 2>&1; then
+  echo "the no-gh fixture PATH still resolves gh" >&2
+  exit 1
+fi
+
+publish_git() {
+  (
+    unset GIT_DIR GIT_WORK_TREE GIT_INDEX_FILE
+    git -C "$publish_root" "$@"
+  )
+}
+
+publish_remote_git() {
+  (
+    unset GIT_DIR GIT_WORK_TREE GIT_INDEX_FILE
+    git -C "$publish_remote" "$@"
+  )
+}
+
+publish_git init -q -b dev
+publish_git config user.name Fixture
+publish_git config user.email fixture@example.invalid
+publish_git remote add origin "$publish_remote"
+publish_git add .
+publish_git commit -q -m 'feat(repository): create publish fixture'
+# The seed push is made before hooks are enabled: it carries tool/ and
+# .githooks/, which select reports as repository:fixtures, and this runner is
+# that unit.
+publish_git push -q --set-upstream origin dev
+publish_git config core.hooksPath .githooks
+publish_git branch master
+
+publish_path="$publish_root/stub:$PATH"
+
+run_publish() {
+  publish_answer=$1
+  shift
+  printf '%s\n' "$publish_answer" | (
+    unset GIT_DIR GIT_WORK_TREE GIT_INDEX_FILE
+    cd "$publish_root" || exit 1
+    PATH="$publish_path" tool/version-control/commit "$@" 2>&1
+  )
+}
+
+publish_branches() { publish_git for-each-ref --format='%(refname)' refs/heads; }
+publish_remote_branches() {
+  publish_remote_git for-each-ref --format='%(refname)'
+}
+
+publish_wrote_nothing() {
+  if [ "$(publish_branches)" != "$publish_branches_before" ]; then
+    echo "commit --publish created a branch while $1" >&2
+    exit 1
+  fi
+  if [ "$(publish_remote_branches)" != "$publish_remote_before" ]; then
+    echo "commit --publish wrote to the remote while $1" >&2
+    exit 1
+  fi
+  if [ -n "$(publish_git status --porcelain --untracked-files=no)" ]; then
+    echo "commit --publish changed the tree while $1" >&2
+    exit 1
+  fi
+  if grep -Eq '^pr (create|merge)' "$publish_log"; then
+    echo "commit --publish called a writing gh subcommand while $1" >&2
+    exit 1
+  fi
+}
+
+publish_snapshot() {
+  publish_branches_before=$(publish_branches)
+  publish_remote_before=$(publish_remote_branches)
+  : >"$publish_log"
+}
+
+# A dry run names the branch, the pull request and every command, and writes
+# nothing anywhere. The gh calls it does make are the read-only preflight.
+publish_snapshot
+publish_dry=$(run_publish n --dry-run --publish cask add af)
+printf '%s\n' "$publish_dry" \
+  | grep -q '^branch: feature/unixlike-cask-add-af (new, from origin/dev)$'
+printf '%s\n' "$publish_dry" \
+  | grep -q '^pull request title: feat(unixlike): add homebrew cask af$'
+printf '%s\n' "$publish_dry" | grep -q '^  Scope: unixlike$'
+printf '%s\n' "$publish_dry" \
+  | grep -q '^  Selected checks: unixlike:format, unixlike:lint, unixlike:payloads$'
+printf '%s\n' "$publish_dry" \
+  | grep -q '^  Command: tool/version-control/commit --dry-run --publish cask add af$'
+printf '%s\n' "$publish_dry" \
+  | grep -q '^  git push --set-upstream origin feature/unixlike-cask-add-af$'
+printf '%s\n' "$publish_dry" \
+  | grep -q '^  gh pr create --base dev --head feature/unixlike-cask-add-af '
+printf '%s\n' "$publish_dry" | grep -q '^  gh pr merge --auto --merge '
+grep -q '^auth status ' "$publish_log"
+grep -Fq -- 'api repos/{owner}/{repo} --jq .allow_auto_merge' "$publish_log"
+# gh filters --head by branch name alone, so a fork's branch of the same name
+# lands in the listing. The invocation has to ask which repository each row
+# came from, or the helper cannot drop the ones that are not this branch.
+grep -Fq -- '--json baseRefName,isCrossRepository,url' "$publish_log"
+publish_wrote_nothing "planning a dry run"
+
+# The confirmation still gates everything. An answer that is not y publishes
+# nothing, not even the branch.
+publish_snapshot
+if run_publish n --publish cask add af >/dev/null; then
+  echo "commit --publish acted without a confirmation" >&2
+  exit 1
+fi
+publish_wrote_nothing "the answer was not y"
+
+# The happy path: one y, and the change is on a branch of its own, pushed,
+# proposed against dev, and armed to merge when Required checks pass.
+publish_snapshot
+: >"$publish_body"
+if ! publish_out=$(run_publish y --publish cask add af); then
+  printf '%s\n' "$publish_out" >&2
+  echo "commit --publish refused a valid publish" >&2
+  exit 1
+fi
+if [ "$(publish_git branch --show-current)" != feature/unixlike-cask-add-af ]; then
+  echo "commit --publish did not create the branch it named" >&2
+  exit 1
+fi
+if [ "$(publish_git rev-parse HEAD^)" \
+  != "$(publish_git rev-parse refs/remotes/origin/dev)" ]; then
+  echo "commit --publish did not branch from origin/dev" >&2
+  exit 1
+fi
+if [ "$(publish_git show -s --format=%s HEAD)" \
+  != 'feat(unixlike): add homebrew cask af' ]; then
+  echo "commit --publish used an unexpected message" >&2
+  exit 1
+fi
+if [ "$(publish_remote_git rev-parse refs/heads/feature/unixlike-cask-add-af)" \
+  != "$(publish_git rev-parse HEAD)" ]; then
+  echo "commit --publish did not push the commit it made" >&2
+  exit 1
+fi
+# The pull request opens against dev, and auto-merge is armed once, on the
+# pull request that was just opened.
+if [ "$(grep -c '^pr create --base dev --head feature/unixlike-cask-add-af ' \
+  "$publish_log")" != 1 ]; then
+  echo "commit --publish did not open exactly one pull request against dev" >&2
+  exit 1
+fi
+if [ "$(grep -c '^pr merge --auto --merge https://github.com/owner/repo/pull/7$' \
+  "$publish_log")" != 1 ]; then
+  echo "commit --publish did not arm auto-merge exactly once" >&2
+  exit 1
+fi
+printf '%s\n' "$publish_out" | grep -q '^https://github.com/owner/repo/pull/7$'
+# The body carries what the diff cannot: the owning scope, the checks the local
+# gate selected, the command, and the hook's own evidence lines.
+grep -q '^Scope: unixlike$' "$publish_body"
+grep -q '^Selected checks: unixlike:format, unixlike:lint, unixlike:payloads$' \
+  "$publish_body"
+grep -q '^Command: tool/version-control/commit --publish cask add af$' "$publish_body"
+grep -q '^→ format$' "$publish_body"
+grep -q '^→ hygiene$' "$publish_body"
+grep -q 'Required checks' "$publish_body"
+# Copying those lines into the body must not take them away from the terminal.
+printf '%s\n' "$publish_out" | grep -q '^→ format$'
+
+# A pull request already open from this branch against dev is the one to arm,
+# not a reason to open a second.
+publish_snapshot
+STUB_GH_OPEN_PULLS='dev https://github.com/owner/repo/pull/7'
+export STUB_GH_OPEN_PULLS
+if ! reuse_out=$(run_publish y --publish cask add kf); then
+  printf '%s\n' "$reuse_out" >&2
+  echo "commit --publish refused a branch that already has a pull request" >&2
+  exit 1
+fi
+unset STUB_GH_OPEN_PULLS
+if [ "$(publish_git branch --show-current)" != feature/unixlike-cask-add-af ]; then
+  echo "commit --publish left the branch it was invoked on" >&2
+  exit 1
+fi
+# git pushes a branch, not a commit. The commit already on this branch is
+# published and merged by the same run, so the plan has to name it.
+printf '%s\n' "$reuse_out" \
+  | grep -q '^this branch also carries, and will publish and merge:$'
+printf '%s\n' "$reuse_out" | grep -q 'add homebrew cask af$'
+# Nothing rewrites an existing pull request, so nothing may promise a body for
+# one.
+printf '%s\n' "$reuse_out" \
+  | grep -q '^pull request: https://github.com/owner/repo/pull/7 (existing; title and body unchanged)$'
+if printf '%s\n' "$reuse_out" | grep -q '^pull request body:$'; then
+  echo "commit --publish showed a body it was never going to apply" >&2
+  exit 1
+fi
+if grep -q '^pr create' "$publish_log"; then
+  echo "commit --publish opened a second pull request for one branch" >&2
+  exit 1
+fi
+if [ "$(grep -c '^pr merge --auto --merge https://github.com/owner/repo/pull/7$' \
+  "$publish_log")" != 1 ]; then
+  echo "commit --publish did not arm the pull request that was already open" >&2
+  exit 1
+fi
+publish_git switch -q dev
+
+# An open pull request with a different base would be retargeted or duplicated
+# by gh pr create. Neither is this helper's call, so it refuses before writing.
+publish_snapshot
+STUB_GH_OPEN_PULLS='master https://github.com/owner/repo/pull/9'
+export STUB_GH_OPEN_PULLS
+if base_out=$(run_publish y --publish cask add bf); then
+  echo "commit --publish acted on a branch proposed against another base" >&2
+  exit 1
+fi
+unset STUB_GH_OPEN_PULLS
+printf '%s\n' "$base_out" | grep -q 'different base'
+publish_wrote_nothing "a pull request with another base was open"
+
+# AGENTS.md: master is entered by promotion only. The refusal precedes the
+# publish preflight, so gh is never consulted at all.
+publish_git switch -q master
+publish_snapshot
+if master_publish=$(run_publish y --publish cask add cf); then
+  echo "commit --publish committed on master" >&2
+  exit 1
+fi
+printf '%s\n' "$master_publish" | grep -q master
+if [ -s "$publish_log" ]; then
+  echo "commit --publish consulted gh before refusing on master" >&2
+  exit 1
+fi
+publish_wrote_nothing "refusing on master"
+publish_git switch -q dev
+
+# #90: --publish is a Unix-like flow with a PowerShell counterpart in
+# windows/tools/capture.ps1. A uname stub proves the platform guard without
+# depending on which platform runs this suite. It only ever answers `-s`,
+# which is all the helper asks it.
+publish_uname_stub() {
+  # $1: directory to create the stub in. $2: what `uname -s` reports there.
+  mkdir -p "$1"
+  cat >"$1/uname" <<STUB
+#!/bin/sh
+if [ "\$1" = -s ]; then
+  printf '%s\n' '$2'
+else
+  exit 1
+fi
+STUB
+  chmod +x "$1/uname"
+}
+
+# Positive: a Unix-like uname still reaches the ordinary preflight, gh
+# included.
+for publish_uname_os in Linux Darwin; do
+  publish_uname_stub "$publish_root/stub-uname-ok" "$publish_uname_os"
+  publish_snapshot
+  publish_path="$publish_root/stub-uname-ok:$publish_root/stub:$PATH"
+  if ! ok_out=$(run_publish n --dry-run --publish cask add "of$publish_uname_os"); then
+    printf '%s\n' "$ok_out" >&2
+    echo "commit --publish refused a dry run under $publish_uname_os" >&2
+    exit 1
+  fi
+  publish_path="$publish_root/stub:$PATH"
+  printf '%s\n' "$ok_out" | grep -q '^branch: '
+  grep -q '^auth status ' "$publish_log"
+  publish_wrote_nothing "planning a dry run under $publish_uname_os"
+done
+
+# Negative: every kernel string the guard's case pattern names refuses before
+# gh is consulted at all, with a message pointing at the Windows counterpart.
+for publish_uname_win in MINGW64_NT-10.0-19045 MSYS_NT-10.0-19045 CYGWIN_NT-10.0; do
+  publish_uname_stub "$publish_root/stub-uname-win" "$publish_uname_win"
+  publish_snapshot
+  publish_path="$publish_root/stub-uname-win:$publish_root/stub:$PATH"
+  if win_out=$(run_publish y --publish cask add "wf${publish_uname_win%%_*}"); then
+    echo "commit --publish acted on native Windows ($publish_uname_win)" >&2
+    exit 1
+  fi
+  publish_path="$publish_root/stub:$PATH"
+  printf '%s\n' "$win_out" | grep -q 'not supported on native Windows'
+  printf '%s\n' "$win_out" | grep -q 'capture\.ps1 -Feature <id> -Publish'
+  if [ -s "$publish_log" ]; then
+    echo "commit --publish consulted gh on native Windows ($publish_uname_win)" >&2
+    exit 1
+  fi
+  publish_wrote_nothing "refusing on native Windows ($publish_uname_win)"
+done
+
+# --publish without gh refuses before any write. Without --publish the same
+# clone still commits, so this is a prerequisite of publishing rather than of
+# the helper.
+publish_snapshot
+publish_path="$publish_root/nogh"
+if nogh_out=$(run_publish y --publish cask add df); then
+  echo "commit --publish acted without gh" >&2
+  exit 1
+fi
+publish_path="$publish_root/stub:$PATH"
+printf '%s\n' "$nogh_out" | grep -q 'gh is unavailable'
+publish_wrote_nothing "gh was unavailable"
+
+# Arming auto-merge is the last thing --publish does, so a repository that does
+# not allow it is a refusal before the push rather than a failure after it.
+publish_snapshot
+STUB_GH_AUTO_MERGE=false
+export STUB_GH_AUTO_MERGE
+if automerge_out=$(run_publish y --publish cask add ef); then
+  echo "commit --publish pushed to a repository that cannot auto-merge" >&2
+  exit 1
+fi
+unset STUB_GH_AUTO_MERGE
+printf '%s\n' "$automerge_out" | grep -q 'does not allow auto-merge'
+publish_wrote_nothing "auto-merge was not allowed"
+
+# gh present but not authenticated is the same shape of refusal: this helper
+# opens the pull request as the operator and holds no credential of its own.
+publish_snapshot
+STUB_GH_AUTH_STATUS=1
+export STUB_GH_AUTH_STATUS
+if unauth_out=$(run_publish y --publish cask add if); then
+  echo "commit --publish acted with an unauthenticated gh" >&2
+  exit 1
+fi
+unset STUB_GH_AUTH_STATUS
+printf '%s\n' "$unauth_out" | grep -q 'not authenticated'
+publish_wrote_nothing "gh was not authenticated"
+
+# The most consequential ordering the change has: a pre-commit hook that fails
+# under --publish must stop before the push, so nothing reaches the remote and
+# no pull request is proposed for a commit that was never made.
+publish_snapshot
+printf '#!/bin/sh\nexit 1\n' >"$publish_root/tool/checks/format"
+if precommit_out=$(run_publish y --publish cask add nf); then
+  echo "commit --publish survived a failing pre-commit hook" >&2
+  exit 1
+fi
+printf '#!/bin/sh\nexit 0\n' >"$publish_root/tool/checks/format"
+printf '%s\n' "$precommit_out" | grep -q 'The commit was rejected'
+# It names the branch it put the operator on, which is not where they started.
+printf '%s\n' "$precommit_out" \
+  | grep -q 'You are now on feature/unixlike-cask-add-nf, which this run created\.'
+if [ "$(publish_git rev-parse HEAD)" \
+  != "$(publish_git rev-parse refs/remotes/origin/dev)" ]; then
+  echo "commit --publish committed despite a failing pre-commit hook" >&2
+  exit 1
+fi
+if [ "$(publish_remote_branches)" != "$publish_remote_before" ]; then
+  echo "commit --publish pushed a commit the hook rejected" >&2
+  exit 1
+fi
+if grep -Eq '^pr (create|merge)' "$publish_log"; then
+  echo "commit --publish proposed a commit the hook rejected" >&2
+  exit 1
+fi
+publish_git reset -q --hard HEAD
+publish_git switch -q dev
+publish_git branch -q -D feature/unixlike-cask-add-nf
+
+# The pull request opens and arming it then fails: the helper says so, names
+# the pull request, and does not pretend the merge is armed.
+publish_snapshot
+STUB_GH_MERGE_STATUS=1
+export STUB_GH_MERGE_STATUS
+if arm_out=$(run_publish y --publish cask add mf); then
+  echo "commit --publish reported success when auto-merge was not armed" >&2
+  exit 1
+fi
+unset STUB_GH_MERGE_STATUS
+printf '%s\n' "$arm_out" | grep -q 'Auto-merge could not be armed'
+printf '%s\n' "$arm_out" | grep -q 'https://github.com/owner/repo/pull/7'
+# The commit and the pull request are real and are left in place; only the last
+# step failed.
+if [ "$(publish_remote_git rev-parse refs/heads/feature/unixlike-cask-add-mf)" \
+  != "$(publish_git rev-parse refs/heads/feature/unixlike-cask-add-mf)" ]; then
+  echo "commit --publish lost the commit it had already pushed" >&2
+  exit 1
+fi
+if [ "$(grep -c '^pr create ' "$publish_log")" != 1 ]; then
+  echo "commit --publish did not open the pull request before arming it" >&2
+  exit 1
+fi
+publish_git switch -q dev
+
+# On dev the branch is created with or without --publish, and without it
+# nothing reaches gh or the remote.
+publish_snapshot
+if ! run_publish y cask add hf >/dev/null; then
+  echo "the commit helper refused to branch from dev" >&2
+  exit 1
+fi
+if [ "$(publish_git branch --show-current)" != feature/unixlike-cask-add-hf ]; then
+  echo "the commit helper did not branch from dev" >&2
+  exit 1
+fi
+if [ -s "$publish_log" ]; then
+  echo "the commit helper called gh without --publish" >&2
+  exit 1
+fi
+if [ "$(publish_remote_branches)" != "$publish_remote_before" ]; then
+  echo "the commit helper pushed without --publish" >&2
+  exit 1
+fi
+publish_git switch -q dev
+
+# The branch it would create already exists: that edit is in flight and this
+# helper does not add a second commit to it behind the operator's back.
+publish_snapshot
+if exists_out=$(run_publish y cask add hf); then
+  echo "the commit helper reused a branch that already exists" >&2
+  exit 1
+fi
+printf '%s\n' "$exists_out" \
+  | grep -q '✗ feature/unixlike-cask-add-hf already exists\.'
+publish_wrote_nothing "the branch already existed"
+
+# The edit is computed against the tree of local dev, so a dev that is not
+# origin/dev is refused rather than branched from.
+publish_snapshot
+publish_git update-ref refs/remotes/origin/dev \
+  "$(publish_git rev-parse refs/heads/feature/unixlike-cask-add-hf)"
+if behind_out=$(run_publish y cask add jf); then
+  echo "the commit helper branched from an origin/dev it was not built on" >&2
+  exit 1
+fi
+printf '%s\n' "$behind_out" | grep -q 'dev is not at origin/dev'
+publish_git update-ref refs/remotes/origin/dev "$(publish_git rev-parse refs/heads/dev)"
+publish_wrote_nothing "dev was behind origin/dev"
+
+# A push the pre-push hook rejects leaves the commit local and says so. Nothing
+# is retried, and no pull request is opened for a commit the remote never got.
+publish_snapshot
+printf '#!/bin/sh\nexit 1\n' >"$publish_root/tool/checks/test"
+if push_out=$(run_publish y --publish cask add gf); then
+  echo "commit --publish survived a rejected push" >&2
+  exit 1
+fi
+printf '#!/bin/sh\nexit 0\n' >"$publish_root/tool/checks/test"
+printf '%s\n' "$push_out" | grep -q 'push was rejected'
+if [ "$(publish_git show -s --format=%s refs/heads/feature/unixlike-cask-add-gf)" \
+  != 'feat(unixlike): add homebrew cask gf' ]; then
+  echo "commit --publish lost the commit a rejected push left local" >&2
+  exit 1
+fi
+if publish_remote_git show-ref --verify --quiet \
+  refs/heads/feature/unixlike-cask-add-gf; then
+  echo "commit --publish pushed past a rejecting pre-push hook" >&2
+  exit 1
+fi
+if grep -Eq '^pr (create|merge)' "$publish_log"; then
+  echo "commit --publish proposed a commit the remote never received" >&2
+  exit 1
+fi
+publish_git switch -q dev
+
+# --publish integration for mas, mirroring the cask happy path above: branch
+# naming, the commit message and the pull-request body all follow the same
+# shape, with only the topic and message text being group-specific.
+publish_snapshot
+: >"$publish_body"
+if ! mas_publish_out=$(run_publish y --publish mas add pages 409201541); then
+  printf '%s\n' "$mas_publish_out" >&2
+  echo "commit --publish refused a valid mas addition" >&2
+  exit 1
+fi
+if [ "$(publish_git branch --show-current)" != feature/unixlike-mas-add-pages ]; then
+  echo "commit --publish did not create the expected branch for a mas addition" >&2
+  exit 1
+fi
+if [ "$(publish_git rev-parse HEAD^)" \
+  != "$(publish_git rev-parse refs/remotes/origin/dev)" ]; then
+  echo "commit --publish did not branch a mas addition from origin/dev" >&2
+  exit 1
+fi
+if [ "$(publish_git show -s --format=%s HEAD)" != 'feat(unixlike): add mas app pages' ]; then
+  echo "commit --publish used an unexpected message for a mas addition" >&2
+  exit 1
+fi
+if [ "$(publish_remote_git rev-parse refs/heads/feature/unixlike-mas-add-pages)" \
+  != "$(publish_git rev-parse HEAD)" ]; then
+  echo "commit --publish did not push the mas addition it committed" >&2
+  exit 1
+fi
+grep -q '^Scope: unixlike$' "$publish_body"
+grep -q '^Command: tool/version-control/commit --publish mas add pages 409201541$' \
+  "$publish_body"
+printf '%s\n' "$mas_publish_out" | grep -q '^https://github.com/owner/repo/pull/7$'
+publish_git switch -q dev
+
+publish_snapshot
+if ! mas_remove_out=$(run_publish y --publish mas remove bitwarden); then
+  printf '%s\n' "$mas_remove_out" >&2
+  echo "commit --publish refused a valid mas removal" >&2
+  exit 1
+fi
+if [ "$(publish_git branch --show-current)" != feature/unixlike-mas-remove-bitwarden ]; then
+  echo "commit --publish did not create the expected branch for a mas removal" >&2
+  exit 1
+fi
+if [ "$(publish_git show -s --format=%s HEAD)" \
+  != 'chore(unixlike): remove mas app bitwarden' ]; then
+  echo "commit --publish used an unexpected message for a mas removal" >&2
+  exit 1
+fi
+publish_git switch -q dev
+
+# Everything it produced must satisfy the audit the repository already runs,
+# branch names included.
+(
+  unset GIT_DIR GIT_WORK_TREE GIT_INDEX_FILE
+  cd "$publish_root" && "$audit"
+) >/dev/null
+
+# ---------------------------------------------------------------------------
+# tool/version-control/commit prune (#102)
+# ---------------------------------------------------------------------------
+
+# Merged remote branches are auto-deleted, but the local clone that fetched
+# them keeps its copy. prune_branches is shared between the standalone prune
+# subcommand exercised here and --publish's preflight, exercised further
+# below with the same publish_root fixture already wired to an origin.
+
+run_prune() {
+  (
+    unset GIT_DIR GIT_WORK_TREE GIT_INDEX_FILE
+    cd "$publish_root" || exit 1
+    PATH="$publish_path" tool/version-control/commit "$@" 2>&1
+  )
+}
+
+publish_git switch -q dev
+# Identical to dev's tip, so trivially an ancestor of origin/dev: exactly the
+# shape a merged pull request leaves behind once its remote branch is gone.
+publish_git branch prune-merged dev
+# A commit dev does not have makes this a permanent non-candidate, however
+# stale its name looks.
+publish_git switch -q -c prune-unique dev
+printf '\n# prune-unique fixture marker\n' >>"$publish_root/modules/darwin-homebrew.nix"
+publish_git add modules/darwin-homebrew.nix
+publish_git commit -q -m 'chore(unixlike): create prune-unique fixture commit'
+publish_git switch -q dev
+# Also an ancestor of origin/dev, but the branch prune runs from: surviving
+# here proves the current-branch refusal fires on its own, independently of
+# the dev/master name check.
+publish_git branch prune-current dev
+publish_git switch -q prune-current
+
+prune_out=$(run_prune prune)
+publish_git switch -q dev
+prune_branches_after=$(publish_branches)
+
+if [ "$(printf '%s\n' "$prune_out" | grep -c '^pruned: ')" != 1 ]; then
+  echo "commit prune reported other than exactly one deletion" >&2
+  exit 1
+fi
+printf '%s\n' "$prune_out" | grep -q '^pruned: prune-merged$'
+if printf '%s\n' "$prune_branches_after" | grep -qx refs/heads/prune-merged; then
+  echo "commit prune left a merged branch behind" >&2
+  exit 1
+fi
+for prune_survivor in dev master prune-unique prune-current; do
+  if ! printf '%s\n' "$prune_branches_after" | grep -qx "refs/heads/$prune_survivor"; then
+    echo "commit prune deleted $prune_survivor, which it must never touch" >&2
+    exit 1
+  fi
+done
+publish_git branch -q -D prune-unique prune-current
+
+# --dry-run and --publish describe an edit prune has none of; both refuse with
+# the same usage error rather than silently doing something undefined.
+if run_prune --dry-run prune >/dev/null 2>&1; then
+  echo "commit --dry-run prune should have refused" >&2
+  exit 1
+fi
+if run_prune --publish prune >/dev/null 2>&1; then
+  echo "commit --publish prune should have refused" >&2
+  exit 1
+fi
+
+# A branch this cannot delete -- checked out in another worktree, here -- must
+# not turn --publish into a failure. It survives untouched and the rest of the
+# run still reaches a real pull request.
+publish_git branch prune-locked dev
+publish_worktree="$test_root/prune-worktree"
+publish_git worktree add -q "$publish_worktree" prune-locked
+if ! prune_fail_out=$(run_publish y --publish cask add qf); then
+  printf '%s\n' "$prune_fail_out" >&2
+  echo "commit --publish aborted when a merged branch could not be deleted" >&2
+  exit 1
+fi
+printf '%s\n' "$prune_fail_out" | grep -q '^https://github.com/owner/repo/pull/7$'
+if printf '%s\n' "$prune_fail_out" | grep -q 'prune-locked'; then
+  echo "commit --publish reported on a deletion that failed" >&2
+  exit 1
+fi
+if ! publish_git show-ref --verify --quiet refs/heads/prune-locked; then
+  echo "commit --publish deleted a branch checked out in another worktree" >&2
+  exit 1
+fi
+publish_git worktree remove -f "$publish_worktree"
+publish_git branch -q -D prune-locked
+publish_git switch -q dev
+
+# ---------------------------------------------------------------------------
+# Desired-state hygiene
+# ---------------------------------------------------------------------------
+#
+# AGENTS.md requires positive and negative fixtures for every enforceable
+# invariant, and this file is the only thing that runs them: the
+# repository:fixtures dispatch unit and the CI repository job both invoke
+# exactly tool/version-control/test.
+#
+# tool/version-control/hygiene resolves its root with `git rev-parse
+# --show-toplevel`, so each case below runs the real script -- not a copy of it
+# -- against a throwaway repository. Every violating literal is assembled from
+# printf arguments rather than written out, so this tracked file never contains
+# one of the strings the check hunts and the scan of this repository stays
+# green without excluding this file from it.
+
+hygiene="$root/tool/version-control/hygiene"
+
+grep -q 'evidence_run hygiene tool/version-control/hygiene' "$root/.githooks/pre-commit"
+grep -q '^  secrets:$' "$root/.github/workflows/ci.yml"
+grep -q 'run: tool/version-control/hygiene' "$root/.github/workflows/ci.yml"
+
+backslash='\'
+backslashes='\\'
+hygiene_seq=0
+
+hygiene_new() {
+  hygiene_seq=$((hygiene_seq + 1))
+  hygiene_repo="$test_root/hygiene-$hygiene_seq"
+  mkdir -p "$hygiene_repo/tool/version-control" "$hygiene_repo/modules/flake"
+  git -C "$hygiene_repo" init -q -b dev
+  git -C "$hygiene_repo" config user.name Fixture
+  git -C "$hygiene_repo" config user.email fixture@example.invalid
+  # The declaration of record for axis 2, written through printf arguments so
+  # that the naming context lives in the fixture rather than in this file.
+  {
+    printf '_: {\n  identity = {\n'
+    printf '    %s = "%s";\n' gitName declared-name
+    printf '    %s = "%s";\n' hostName declared-host
+    printf '  };\n}\n'
+  } >"$hygiene_repo/modules/flake/inventory.nix"
+  : >"$hygiene_repo/tool/version-control/hygiene.allow"
+}
+
+hygiene_run() {
+  git -C "$hygiene_repo" add -A
+  (cd "$hygiene_repo" && "$hygiene" 2>&1)
+}
+
+hygiene_expect_pass() {
+  if ! hygiene_output=$(hygiene_run); then
+    printf '%s\n' "$hygiene_output" >&2
+    echo "hygiene rejected a clean fixture: $1" >&2
+    exit 1
+  fi
+}
+
+hygiene_expect_fail() {
+  if hygiene_output=$(hygiene_run); then
+    printf '%s\n' "$hygiene_output" >&2
+    echo "hygiene accepted a violation: $1" >&2
+    exit 1
+  fi
+  if ! printf '%s\n' "$hygiene_output" | grep -qF "$2"; then
+    printf '%s\n' "$hygiene_output" >&2
+    echo "hygiene did not name the violation: $1" >&2
+    exit 1
+  fi
+}
+
+# Axis 1, positive: the anchoring rule. A guillemet does not open a path, which
+# is why the Nix error message docs/troubleshooting.md quotes is not one.
+hygiene_new
+printf 'error: path %s»/%s/programs/x.nix%s does not exist\n' "'" home "'" \
+  >"$hygiene_repo/doc.md"
+hygiene_expect_pass 'axis 1, an unanchored slash is not a home path'
+
+# Axis 1, negative: POSIX, macOS, the JSON-escaped Windows spelling every
+# payload under windows/desired/files/ would carry, and both WSL UNC forms.
+hygiene_new
+printf 'HOME=/%s/%s\n' home eve >"$hygiene_repo/profile.sh"
+hygiene_expect_fail 'axis 1, a POSIX absolute home path' 'absolute home path'
+
+hygiene_new
+printf 'path = "/%s/%s/notes"\n' Users eve >"$hygiene_repo/config.toml"
+hygiene_expect_fail 'axis 1, a macOS absolute home path' 'absolute home path'
+
+hygiene_new
+printf '{"%s": "C:%sUsers%s%s"}\n' startingDirectory "$backslashes" \
+  "$backslashes" eve >"$hygiene_repo/settings.json"
+hygiene_expect_fail 'axis 1, a JSON-escaped Windows home path' 'absolute home path'
+
+hygiene_new
+printf '%swsl.localhost%sUbuntu%shome%s%s\n' "$backslashes" "$backslash" \
+  "$backslash" "$backslash" eve >"$hygiene_repo/unc-localhost.md"
+printf '%swsl$%sUbuntu%shome%s%s\n' "$backslashes" "$backslash" \
+  "$backslash" "$backslash" eve >"$hygiene_repo/unc-dollar.md"
+hygiene_expect_fail 'axis 1, the wsl.localhost UNC form' 'unc-localhost.md'
+hygiene_expect_fail 'axis 1, the wsl$ UNC form' 'unc-dollar.md'
+
+# The name inside an axis-1 match is also an axis-2 candidate, so a leaked path
+# reports both the path and the account in it.
+if ! printf '%s\n' "$hygiene_output" | grep -qF "undeclared name 'eve'"; then
+  printf '%s\n' "$hygiene_output" >&2
+  echo "hygiene did not report the name captured from an axis 1 match" >&2
+  exit 1
+fi
+
+# Axis 2, positive and negative: a name is only decidable inside a naming
+# context, and the allowed set is every literal the inventory declares.
+hygiene_new
+printf '%s: %s\n' hostname declared-host >"$hygiene_repo/host.yml"
+hygiene_expect_pass 'axis 2, a declared host name'
+
+hygiene_new
+printf '%s: "%s"\n' hostname mystery-box >"$hygiene_repo/host.yml"
+hygiene_expect_fail 'axis 2, an undeclared host name' 'undeclared name'
+
+# The key may carry a closing quote. Every payload under windows/desired/files/
+# is JSON, so this is the spelling a leak arrives in there; a Nix attribute may
+# be quoted too. Unquoted keys alone would have left that whole tree unscanned.
+hygiene_new
+printf '{"%s": "%s"}\n' hostname pc-042 >"$hygiene_repo/settings.json"
+hygiene_expect_fail 'axis 2, a quoted JSON key' "undeclared name 'pc-042'"
+
+hygiene_new
+printf '{"%s": "%s"}\n' username eve >"$hygiene_repo/settings.json"
+hygiene_expect_fail 'axis 2, a quoted JSON user key' "undeclared name 'eve'"
+
+hygiene_new
+printf '{ "%s" = "%s"; }\n' hostName eve >"$hygiene_repo/host.nix"
+hygiene_expect_fail 'axis 2, a quoted Nix attribute' "undeclared name 'eve'"
+
+# The two separator forms the bare and quoted branches exist for: a shell
+# environment assignment, and the Nix quoted form -- the likeliest real leak in
+# modules/, and the one the spaced ` = ` exclusion must not swallow.
+hygiene_new
+printf '%s=%s\n' USER eve >"$hygiene_repo/profile.sh"
+hygiene_expect_fail 'axis 2, a bare shell assignment' "undeclared name 'eve'"
+
+hygiene_new
+printf '  %s = "%s";\n' user eve >"$hygiene_repo/module.nix"
+hygiene_expect_fail 'axis 2, a quoted Nix assignment' "undeclared name 'eve'"
+
+# A bare right-hand side after the spaced ` = ` form is an expression, not a
+# name; modules/home-account.nix assigns one on every evaluation.
+hygiene_new
+printf '  %s = config.identity.wsl.%s;\n' username user >"$hygiene_repo/module.nix"
+hygiene_expect_pass 'axis 2, a bare expression is not a name'
+
+# The declarations are read from the index, like the scan itself. Reading the
+# working tree would let an unstaged edit change the result of a scan of the
+# index, so the pre-commit hook and CI could disagree about the same commit.
+hygiene_new
+printf '{ %s = "%s"; }\n' user eve >"$hygiene_repo/module.nix"
+hygiene_expect_fail 'axis 2, a leak against the staged inventory' "undeclared name 'eve'"
+{
+  printf '_: {\n  identity = {\n'
+  printf '    %s = "%s";\n' gitName declared-name
+  printf '    %s = "%s";\n' hostName declared-host
+  printf '    %s = "%s";\n' leak eve
+  printf '  };\n}\n'
+} >"$hygiene_repo/modules/flake/inventory.nix"
+if (cd "$hygiene_repo" && "$hygiene") >/dev/null 2>&1; then
+  echo "hygiene widened the declared set from an unstaged inventory" >&2
+  exit 1
+fi
+# Staged, the same edit does take effect: the index is the authority, not the
+# file's absence or presence on disk.
+hygiene_expect_pass 'axis 2, a name declared by the staged inventory'
+
+# The extraction must fail closed. An inventory whose literals move out of
+# reach cannot silently retire the axis, which is what #18 makes a live
+# possibility.
+hygiene_new
+printf '_: {\n  identity = {};\n}\n' >"$hygiene_repo/modules/flake/inventory.nix"
+printf 'clean\n' >"$hygiene_repo/file"
+hygiene_expect_fail 'axis 2, an empty declared-name extraction' 'no declared name'
+
+# Axis 3, positive: a near-miss basename the denylist must not claim.
+hygiene_new
+printf 'result\n' >"$hygiene_repo/.gitignore"
+printf '{}\n' >"$hygiene_repo/results.json"
+hygiene_expect_pass 'axis 3, a near-miss basename'
+
+# Axis 3, negative: a tracked path an ignore rule already covers, which is
+# exactly the machine-local artefact .gitignore cannot protect against once it
+# has been committed.
+hygiene_new
+printf '*.tmp\n' >"$hygiene_repo/.gitignore"
+printf 'state\n' >"$hygiene_repo/host.tmp"
+git -C "$hygiene_repo" add -f host.tmp
+hygiene_expect_fail 'axis 3, a tracked ignored path' 'matches an ignore rule'
+
+# Axis 3, negative: an artefact no ignore rule covers. PowerToys writes this
+# one at runtime, and the Windows suite already asserts on it.
+hygiene_new
+mkdir -p "$hygiene_repo/files/powertoys"
+printf '{}\n' >"$hygiene_repo/files/powertoys/workspaces.json"
+hygiene_expect_fail 'axis 3, a tracked runtime artefact' 'runtime-state artefact'
+
+# Axis 4, positive: a well-known constant. A UUIDv5 is derived from a name and
+# a CLSID names an interface, so neither is host identity.
+hygiene_new
+printf '{"%s": "{%s}"}\n' defaultProfile 574e775e-4f2a-5b96-ac1e-a2962a402336 \
+  >"$hygiene_repo/settings.json"
+hygiene_expect_pass 'axis 4, a well-known GUID'
+
+# Axis 4, negative: GUID, MAC address, and Windows SID.
+hygiene_new
+printf '{"%s": "{%s-%s}"}\n' machineId 11111111-2222-3333-4444 555555555555 \
+  >"$hygiene_repo/settings.json"
+hygiene_expect_fail 'axis 4, a machine GUID' 'machine-unique identifier'
+
+hygiene_new
+printf 'adapter %s:%s\n' aa:bb:cc:dd:ee ff >"$hygiene_repo/net.txt"
+hygiene_expect_fail 'axis 4, a MAC address' 'MAC address'
+
+hygiene_new
+printf 'owner=%s-%s\n' S-1-5-21-1001-1002-1003 4 >"$hygiene_repo/acl.txt"
+hygiene_expect_fail 'axis 4, a Windows SID' 'Windows SID'
+
+# The exclusion rule, in both directions. An entry is live while its literal
+# still occurs at its path -- deliberately not "while the scanner would flag
+# it", because the anchoring rule already excludes the seeded line, and that
+# reading would make the seed entry in tool/version-control/hygiene.allow stale
+# the moment it was written.
+hygiene_new
+printf 'error: path %s»/%s/programs/x.nix%s does not exist\n' "'" home "'" \
+  >"$hygiene_repo/doc.md"
+printf 'doc.md\t/%s/programs/\n' home \
+  >"$hygiene_repo/tool/version-control/hygiene.allow"
+hygiene_expect_pass 'exclusion, a live entry the scanner would not have flagged'
+
+# The allow file is read from the index for the same reason the inventory is.
+# An unstaged entry forgives nothing: an exclusion is a committed, reviewable
+# artefact, not a local override.
+hygiene_new
+printf 'see /%s/%s for the layout\n' home eve >"$hygiene_repo/doc.md"
+hygiene_expect_fail 'exclusion, a leak with no entry yet' 'absolute home path'
+printf 'doc.md\t/%s/%s\n' home eve \
+  >"$hygiene_repo/tool/version-control/hygiene.allow"
+if (cd "$hygiene_repo" && "$hygiene") >/dev/null 2>&1; then
+  echo "hygiene honoured an unstaged allow entry" >&2
+  exit 1
+fi
+hygiene_expect_pass 'exclusion, the same entry once staged'
+
+hygiene_new
+printf 'nothing to see here\n' >"$hygiene_repo/doc.md"
+printf 'doc.md\t/%s/programs/\n' home \
+  >"$hygiene_repo/tool/version-control/hygiene.allow"
+hygiene_expect_fail 'exclusion, a stale entry' 'stale entry'
+
+# An entry forgives its literal at its own path and nowhere else. Without the
+# second half the allow file would be a file-granularity exclusion in disguise.
+hygiene_new
+printf 'see /%s/%s for the layout\n' home eve >"$hygiene_repo/doc.md"
+printf 'see /%s/%s for the layout\n' home eve >"$hygiene_repo/other.md"
+printf 'doc.md\t/%s/%s\n' home eve \
+  >"$hygiene_repo/tool/version-control/hygiene.allow"
+hygiene_expect_fail 'exclusion, a literal forgiven at one path only' 'other.md'
+if printf '%s\n' "$hygiene_output" | grep -qF 'doc.md:'; then
+  printf '%s\n' "$hygiene_output" >&2
+  echo "hygiene ignored an allow entry at the path it was declared for" >&2
+  exit 1
+fi
+
+# One entry, one line. The path half of an entry is anchored but the literal
+# half is an unanchored substring, so nothing in the format stops `doc.md<TAB>/`
+# from forgiving every line in that file -- and the stale-entry rule cannot
+# catch it, because the literal does still occur there. This is the rule that
+# keeps the allow file from becoming the whole-file exclusion the design
+# refuses.
+hygiene_new
+printf 'see /%s/%s\n' home eve >"$hygiene_repo/doc.md"
+printf 'and /%s/%s\n' home mallory >>"$hygiene_repo/doc.md"
+printf 'doc.md\t/\n' >"$hygiene_repo/tool/version-control/hygiene.allow"
+hygiene_expect_fail 'exclusion, one entry blinding a whole file' 'forgives 2 lines'
+
+# A near-miss for the same rule: the same broad literal forgiving exactly one
+# line is still a legitimate entry, so the rule counts rather than guesses at
+# specificity.
+hygiene_new
+printf 'see /%s/%s\n' home eve >"$hygiene_repo/doc.md"
+printf 'doc.md\t/\n' >"$hygiene_repo/tool/version-control/hygiene.allow"
+hygiene_expect_pass 'exclusion, a broad literal that forgives one line'
+
+# A scan that could not run is a failure, not an empty result. git grep exits 1
+# for "nothing matched" and more than 1 for "the scan did not run", and
+# collapsing the two would retire an axis inside a green run. Corrupting the
+# fixture's own index reaches that path without a test-only hook in the check:
+# `git rev-parse --show-toplevel` still resolves, so the check starts and then
+# cannot read what it is meant to scan.
+hygiene_new
+printf 'clean\n' >"$hygiene_repo/file"
+git -C "$hygiene_repo" add -A
+printf 'GARBAGE-NOT-AN-INDEX' >"$hygiene_repo/.git/index"
+if hygiene_output=$( (cd "$hygiene_repo" && "$hygiene" 2>&1) ); then
+  printf '%s\n' "$hygiene_output" >&2
+  echo "hygiene reported verified after a scan that could not run" >&2
+  exit 1
+fi
+if ! printf '%s\n' "$hygiene_output" | grep -qF 'scan did not run'; then
+  printf '%s\n' "$hygiene_output" >&2
+  echo "hygiene did not distinguish a failed scan from an empty one" >&2
+  exit 1
+fi
+
+# The three evidence states. Nothing beyond a POSIX shell and Git is needed, so
+# 69 should never occur on this design; it is implemented and fixtured anyway,
+# because a future prerequisite must report through the contract rather than
+# invent a fourth answer, and because CI's REQUIRE_NATIVE is what turns it back
+# into a failure.
+hygiene_new
+printf 'clean\n' >"$hygiene_repo/file"
+hygiene_expect_pass 'the three-state base case'
+
+hygiene_no_git="$test_root/hygiene-no-git"
+mkdir -p "$hygiene_no_git"
+hygiene_status=0
+(cd "$hygiene_repo" && PATH="$hygiene_no_git" "$hygiene") >/dev/null 2>&1 \
+  || hygiene_status=$?
+if [ "$hygiene_status" -ne 69 ]; then
+  echo "hygiene exited $hygiene_status without git, expected the unverified 69" >&2
+  exit 1
+fi
+
+hygiene_status=0
+(cd "$hygiene_repo" && REQUIRE_NATIVE=1 PATH="$hygiene_no_git" "$hygiene") \
+  >/dev/null 2>&1 || hygiene_status=$?
+if [ "$hygiene_status" -eq 0 ] || [ "$hygiene_status" -eq 69 ]; then
+  echo "hygiene did not fail an unverified run under REQUIRE_NATIVE" >&2
+  exit 1
+fi
+
+# The pre-commit wiring. The hook's run_check helper resolves tool/checks/<name>
+# and cannot reach a repository-scope check, so the hook calls evidence_run
+# directly; these cases exercise that call through a real hook run with a
+# stand-in check, in the style of the pre-push protocol fixture above.
+hygiene_hook_root="$test_root/hygiene-hook"
+mkdir -p "$hygiene_hook_root/tool" "$hygiene_hook_root/modules"
+cp -R "$root/.githooks" "$hygiene_hook_root/.githooks"
+cp -R "$root/tool/version-control" "$hygiene_hook_root/tool/version-control"
+cp -R "$root/tool/dispatch" "$hygiene_hook_root/tool/dispatch"
+
+git -C "$hygiene_hook_root" init -q -b dev
+git -C "$hygiene_hook_root" config user.name Fixture
+git -C "$hygiene_hook_root" config user.email fixture@example.invalid
+printf 'fixture\n' >"$hygiene_hook_root/file"
+git -C "$hygiene_hook_root" add file
+git -C "$hygiene_hook_root" commit -q -m 'feat(repository): create hygiene hook fixture'
+# A Unix-like path, so the hook does not select repository:fixtures and re-enter
+# this script. tool/checks/ is absent, so the domain checks it does select are
+# skipped by the hook's own [ -x ] guard.
+printf '_: {}\n' >"$hygiene_hook_root/modules/fixture.nix"
+git -C "$hygiene_hook_root" add modules/fixture.nix
+
+stub_hygiene() {
+  printf '#!/bin/sh\nexit %s\n' "$1" \
+    >"$hygiene_hook_root/tool/version-control/hygiene"
+  chmod +x "$hygiene_hook_root/tool/version-control/hygiene"
+}
+
+run_hygiene_pre_commit() {
+  (cd "$hygiene_hook_root" && .githooks/pre-commit 2>&1)
+}
+
+stub_hygiene 0
+if ! run_hygiene_pre_commit >/dev/null; then
+  echo "pre-commit rejected a passing hygiene check" >&2
+  exit 1
+fi
+
+stub_hygiene 1
+if run_hygiene_pre_commit >/dev/null 2>&1; then
+  echo "pre-commit accepted a failing hygiene check" >&2
+  exit 1
+fi
+
+stub_hygiene 69
+if ! hygiene_hook_output=$(run_hygiene_pre_commit); then
+  printf '%s\n' "$hygiene_hook_output" >&2
+  echo "pre-commit blocked a hygiene check that reported unverified" >&2
+  exit 1
+fi
+if ! printf '%s\n' "$hygiene_hook_output" | grep -q 'hygiene unverified'; then
+  printf '%s\n' "$hygiene_hook_output" >&2
+  echo "pre-commit did not report the unverified hygiene check" >&2
+  exit 1
+fi
+
+if hygiene_hook_output=$(REQUIRE_NATIVE=1; export REQUIRE_NATIVE;
+  run_hygiene_pre_commit); then
+  printf '%s\n' "$hygiene_hook_output" >&2
+  echo "pre-commit accepted an unverified hygiene check under REQUIRE_NATIVE" >&2
+  exit 1
+fi
+if ! printf '%s\n' "$hygiene_hook_output" | grep -q 'hygiene is unverified'; then
+  printf '%s\n' "$hygiene_hook_output" >&2
+  echo "pre-commit did not fail the unverified hygiene check under REQUIRE_NATIVE" >&2
   exit 1
 fi
 

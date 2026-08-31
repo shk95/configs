@@ -16,6 +16,15 @@
 
 set -e
 
+# Guards the `grep -E "/(feature|fix)-${name}\$"` call below from Git for
+# Windows' MSYS argument conversion, which rewrites a leading-`/` argv
+# element into a Windows path before grep sees it. See
+# tool/version-control/hygiene for the full explanation and the observed
+# failure (#79). Inert everywhere else.
+MSYS_NO_PATHCONV=1
+MSYS2_ARG_CONV_EXCL='*'
+export MSYS_NO_PATHCONV MSYS2_ARG_CONV_EXCL
+
 cd "$(dirname "$0")/.." || exit 1
 root=$(pwd)
 wt_root="$(dirname "$root")/$(basename "$root")-wt"

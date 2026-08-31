@@ -67,11 +67,17 @@ jobs:
     needs: classify
     if: needs.classify.outputs.unixlike == 'true'
     runs-on: ubuntu-latest
+    # The merge gate is the one place where a check that could not run must not
+    # pass. Locally the same checks report unverified and let the push through.
+    env:
+      REQUIRE_NATIVE: "1"
     steps:
       - uses: actions/checkout@v7
       - uses: DeterminateSystems/nix-installer-action@v22
       - run: tool/checks/format
       - run: tool/checks/lint
+      - run: tool/checks/payloads-test
+      - run: tool/checks/prerequisite-test
       - run: tool/checks/test
 
   windows:
@@ -79,13 +85,18 @@ jobs:
     needs: classify
     if: needs.classify.outputs.windows == 'true'
     runs-on: windows-latest
+    env:
+      REQUIRE_NATIVE: "1"
+      # The Pester suite's end-to-end capture cases each launch a child
+      # PowerShell, so .githooks/pre-push leaves them out to keep a local push
+      # quick. This is the merge gate, where nothing is left out.
+      WIN_ENV_E2E: "1"
     steps:
       - uses: actions/checkout@v7
       - name: Validate desired state and test PowerShell
         shell: pwsh
         run: |
-          Install-Module Pester -RequiredVersion 5.7.1 -Scope CurrentUser -Force
-          winget install --id DEVCOM.Lua --version 5.4.6 --exact --source winget --accept-source-agreements --accept-package-agreements --disable-interactivity
+          .\windows\tools\setup-dev.ps1
           winget install --id Zellij.Zellij --exact --source winget --accept-source-agreements --accept-package-agreements --disable-interactivity
           $machinePath = [Environment]::GetEnvironmentVariable('Path', 'Machine')
           $userPath = [Environment]::GetEnvironmentVariable('Path', 'User')
@@ -100,8 +111,14 @@ jobs:
             ) | Out-Null
             if ($errors.Count) { throw "$($_.FullName): $($errors[0].Message)" }
           }
+          # These report through their exit status rather than by throwing, so
+          # the status has to be read. Without this the block would run on past
+          # a failed desired-state check and the step would take its result
+          # from whatever ran last.
           .\windows\tools\check-desired-state.ps1
+          if ($LASTEXITCODE -ne 0) { exit $LASTEXITCODE }
           .\windows\tools\test.ps1
+          if ($LASTEXITCODE -ne 0) { exit $LASTEXITCODE }
 
   common:
     name: Common contract
@@ -114,9 +131,18 @@ jobs:
           test -x common/check
           common/check
 
+  # The job key stays `secrets`: the required-checks gate, its SECRETS_RESULT
+  # input, and the `needs:` list below all key off it. Only the display name
+  # widens, because the job now carries both repository-wide scans.
   secrets:
-    name: Secret scan
+    name: Secret and hygiene scan
     runs-on: ubuntu-latest
+    # The merge gate is the one place where a check that could not run must not
+    # pass. tool/version-control/hygiene needs nothing but a POSIX shell and
+    # Git today; this is what keeps a future prerequisite from passing through
+    # the gate unverified.
+    env:
+      REQUIRE_NATIVE: "1"
     steps:
       - uses: actions/checkout@v7
         with:
@@ -128,6 +154,7 @@ jobs:
           curl -sSfL "https://github.com/gitleaks/gitleaks/releases/download/v${GITLEAKS_VERSION}/gitleaks_${GITLEAKS_VERSION}_linux_x64.tar.gz" |
             sudo tar -xz -C /usr/local/bin gitleaks
       - run: gitleaks git --redact --no-banner
+      - run: tool/version-control/hygiene
 
   promotion:
     name: Promotion policy

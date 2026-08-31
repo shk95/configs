@@ -51,6 +51,19 @@ shell initialization while HM contributes them for the portable per-user zsh
 configuration. They are evaluator-owned requirements rather than duplicate
 package-list entries.
 
+SDKMAN is adopted but not owned. `homeManager.shared` sources
+`$HOME/.sdkman/bin/sdkman-init.sh` only when that file exists, last in the zsh
+`initContent`, because SDKMAN rewrites PATH and declarative packages must keep
+precedence. Installing it stays with the user; there is deliberately no package,
+activation script, or generated payload for it, and no bash or PowerShell
+equivalent of the hook. The JVM toolchain is split on purpose: `gradle` is a
+shared Nix package, while JDK distributions and their version switching belong
+to SDKMAN. Declaring a JDK in Nix as well would put two version authorities on
+one PATH, and the later SDKMAN initialization would win. The Windows domain has
+no SDKMAN equivalent and needs none — SDKMAN is a POSIX shell-function
+installer, so JVM work on a Windows host happens inside a WSL Unix-like home.
+Its absence from `windows/desired/manifest.json` is a decision, not a gap.
+
 Homebrew owns Mac App Store applications, macOS GUI applications, and the few
 command-line tools that cannot use the shared Nix package. In the current lock,
 `bettercap` is broken on Darwin, so Homebrew owns it on macOS while shared HM
@@ -107,12 +120,366 @@ The Windows domain is independent:
   may diverge.
 - Hooks and CI no longer make a Windows artifact depend on Unix-like evaluation.
 
+`windows/desired/files/terminal/settings.json` and
+`windows/desired/files/wezterm/config/appearance.lua` adopted the Unix-like
+light-theme decision (#35) by copying: both now select the light member of the
+same Catppuccin family, `Catppuccin Latte`, the WezTerm payload as its built-in
+scheme name and the Windows Terminal payload as an inline `schemes` entry using
+the published `catppuccin/windows-terminal` port, because Windows Terminal does
+not ship Catppuccin as a built-in scheme. As with the other rows in this list,
+each copy is Windows-owned from the moment it lands and may diverge from the
+Unix-like source without that being a failure. The adoption also re-judged
+`useAcrylic` and `useAcrylicInTabRow`, which the prior dark scheme left `true`,
+and turned both off: acrylic blends the window with whatever sits behind it, so
+its result is inherently unpredictable, and Catppuccin Latte's foreground
+already runs a moderate ~7:1 contrast against its background (`#4C4F69` on
+`#EFF1F5`) with less margin than the dark scheme it replaced to spend on an
+unpredictable blend. `windows/desired/files/terminal/settings.json` is plain
+JSON and carries no comment syntax, so this reasoning is recorded here rather
+than beside the setting.
+
+Windows desired state is selectable. Manifest schema 4 declares seven features
+(`core`, `font`, `zellij`, `terminal`, `wezterm`, `powertoys`, `wsl`) and every
+package, managed file, the font, and the terminal delegation is owned by exactly
+one of them. `bootstrap.ps1 -Minimal` deploys `core` alone, which installs
+PowerShell 7 and the managed profile and touches no font, registry value, or
+application setting. State schema 2 records the selection; a schema 1 state is
+read as a full deployment, so a host that applied before this change keeps
+exactly what it has.
+
+Three boundaries are decisions rather than accidents. `terminal` requires
+`zellij` because `files/terminal/settings.json` is owned whole on
+write and carries a profile that launches `zellij.exe`; splitting that
+payload or adding a merge comparison mode was rejected as more expensive than
+installing one small package. `wezterm` requires `font` because
+`files/wezterm/fonts.json` leads with `D2KodingLigature Nerd Font Mono` for
+Hangul coverage: the list names only D2Koding families, and the concrete
+alternative already on a default Windows install, Malgun Gothic, is not
+fixed-pitch and would misalign any line mixing Korean and Latin.
+Declaring the dependency, the same way `terminal` already does, was cheaper
+than that misalignment; a host selecting `wezterm` alone now installs `font`
+too, reported as `added by dependency`. PowerToys stays one feature because
+`files/powertoys/settings.json` already owns the per-module enable map; a
+second selection axis over the same modules would have two sources.
+
+The read side of that one file carries a tolerance the write side does not.
+Windows Terminal materialises the profiles its fragment extensions and dynamic
+generators discover back into `settings.json` so they can be edited: on the
+maintainer's host it added a `Git Bash` profile carrying `"source": "Git"`
+beside the two the payload declares, seconds after Apply had overwritten the
+file. Under `ExactJson` that reserialisation was drift, so post-apply
+validation threw before `Write-WinEnvState` ran and left a fully deployed host
+unrecorded, and every later `-Check` reported the same drift on any host that
+actually runs Windows Terminal. The entry now declares
+`ExactJsonWithGeneratedProfiles`: everything outside `profiles.list` is still
+compared exactly, each declared profile is matched by `guid` and must be equal,
+and an undeclared entry is accepted only when it carries a non-empty `source`,
+which is how Windows Terminal records that a generator produced it. An
+undeclared profile without a `source` remains drift, because a person or
+another tool wrote it. This does not reopen the merge decision above. Apply
+still writes the whole payload, the payload still declares neither `Git Bash`
+nor `disabledProfileSources`, and nothing merges the host's file on write; the
+tolerance is a read-side statement about one application co-owning one file,
+which is why it is a declared comparison mode on a single manifest entry that
+the loader refuses on an entry whose parser is not `Json`. Declaring a mode no
+earlier loader can honour is a manifest shape change, so this is a
+`SchemaVersion` bump, 3 to 4, with `ProjectVersion` moving 0.4.0 to 0.5.0 the
+way the schema 2 to 3 bump moved 0.3.0 to 0.4.0. Without it a manifest paired
+with an older module would load as schema 3 and then fail at comparison time
+as an unknown mode, rather than saying the schema is unsupported. **No
+`state.json` schema changes**: an applied host keeps its recorded selection,
+sees a changed desired-state hash and a higher project version, and redeploys.
+
+The desired-state hash is scoped to the selected features plus `manifest.json`.
+A whole-tree hash reported drift for payloads a host never deploys and forced an
+Apply that could not change anything on it.
+
 No explicit `common/` component has yet been justified or created.
+
+Local hooks are a Windows evidence source, but only under the `pwsh` that
+belongs to the host running them (#113). `modules/powershell.nix` installs a
+Unix-like `pwsh` into every home this repository configures, so `pre-push`
+runs `check-desired-state.ps1` and `windows/tools/test.ps1` directly under it
+on a Linux or macOS clone, including WSL — where a `pwsh.exe` is also reachable
+through Windows interop but is never used for this, because Windows' script
+execution policy refuses an unsigned script reached that way. `pre-push`
+detects an actual Windows host the same way `tool/version-control/commit`'s
+`--publish` guard does (`uname -s` reporting `MINGW*` / `MSYS*` / `CYGWIN*`,
+Git for Windows' own `sh`) and only there reaches for `pwsh.exe`. A host with
+neither pwsh reports the Windows checks as unverified rather than failing.
+
+The merge gate is CI. The `windows-latest` job installs Pester, Lua, and Zellij,
+then runs the desired-state check and the Pester suite, and `Required checks`
+demands success whenever the change is in Windows scope. A Windows change
+authored on Linux or macOS is therefore verified natively at the pull request
+rather than locally. `bootstrap.ps1 -Check` stays outside CI because a fresh
+runner has no host state to observe; it is host evidence for a `windows-v...`
+tag, not a merge condition.
 
 Windows tests target Pester 5.7.1 through `windows/tools/test.ps1`. The exact
 version is shared by local native verification and CI so Pester discovery,
 scope, and assertion behavior cannot silently change with a runner image. Test
 setup runs in `BeforeAll`, and assertions use the parameterized Pester 5 syntax.
+
+## Font install states
+
+The font check answers one question — may Apply write here — and it needs four
+answers rather than three. `Installed`, `RegistrationRepairable` and `Missing`
+left one shape undescribed: a host holding some of the faces the manifest lists,
+each of them the manifest's own file, valid, and registered to its own path.
+That is what every host that installed D2Koding before the manifest's file list
+grew from two faces to four looks like, and the model called it `Conflict`, so
+`-Check` reported `partial/conflicting installation` and Apply refused with
+`automatic overwrite is disabled` on a host with nothing wrong on it.
+
+`Incomplete` names that shape: no machine-wide registration of the family, no
+present file whose hash is not the pinned one, no registration under one of the
+manifest's own names pointing at another path, at least one artifact already
+present, and at least one listed face not yet fully installed. `-Check` reports
+it as its own drift line naming how many of the faces are installed, and Apply
+treats it like `Missing` — the same installer, which fetches the pinned archive,
+leaves a face this host already holds byte for byte alone rather than copying
+over a file Windows holds open, and writes and registers the rest. Post-apply
+validation still expects `Installed`.
+
+`Conflict` keeps everything else and its refusal is unchanged: a present file
+whose bytes are not the pinned ones, a registration under a manifest name that
+points somewhere else, a machine-wide install of the same family, and a fully
+registered font DirectWrite still cannot resolve. There is no `-Force` for
+fonts, deliberately. Nothing on this path overwrites a file this repository did
+not put there.
+
+That last sentence is now true of registrations too. `RegistrationRepairable`
+used to be decided from the file count alone, so a host holding every listed
+file whose registrations were valid except for one pointing elsewhere was read
+as a repair and Apply rewrote that value. A registration naming another path is
+not a missing registration, and repairing it means overwriting something this
+repository did not write, so it now leaves that state the same way it leaves
+`Incomplete`, and both of the states that write are bounded by the same rule.
+
+`Get-WinEnvFontStatus` decides the state from three injected host observations —
+the per-user font directory, the two registry keys, and the DirectWrite family
+probe — for the same reason package detection injects its two: the states a font
+can be in outnumber the ones any one host can be put into on request, and the
+one that caused this regression is among them. The seam is what gives every
+state a fixture; it reads no registry the tests do not hand it.
+
+## Windows 10 support boundary
+
+Windows 10 was two reported symptoms rather than a recorded boundary. A sweep
+over three items of the manifest surface — the default terminal delegation and
+the two `Appx` items — assigns each exactly one of the evidence states defined
+in `docs/architecture.md`. All three are unverified on Windows 10, for two
+different reasons, and `bootstrap.ps1 -Check` reports none of them that way
+today.
+
+The default terminal delegation is a read-back, not a behavior check.
+`Set-WinEnvTerminalDelegation` writes `DelegationTerminal` and
+`DelegationConsole` under `HKCU:\Console\%%Startup`, and
+`Test-WinEnvTerminalDelegation` reads those two values back from the same key
+and compares them to `manifest.Terminal`. Microsoft states the condition under
+which the setting is supported: the default terminal application requires
+Windows 11 22H2, or Windows 10 22H2 at OS build 19045.3031 with KB5026435, and
+Windows Terminal 1.17 or later. The same document names this key, these two
+value names, and the two GUIDs this manifest carries for Windows Terminal, so
+the values written here are the documented ones. The boundary is therefore an
+OS build plus an application version, not a Windows release name. Below either
+half of it the host accepts the write, the read-back passes, and the setting is
+ignored: `-Check` exits 0 and never reports drift for a setting that does
+nothing. That false pass is the one outcome the evidence contract has no room
+for, and deciding the item against the documented condition rather than against
+the write (#53) is the fix. Above the boundary the read-back still observes no
+handoff. No Windows 10 host at build 19045.3031 was available, so the item is
+recorded unverified against its documentary source rather than closed as works.
+
+The two `Appx` items are supported on Windows 10 and undetectable there by the
+route this domain uses. Those are different statements and the record keeps
+them apart. PowerToys, which contains Command Palette, requires Windows 11 or
+Windows 10 version 2004 (20H1, build 19041) or newer; Windows Terminal requires
+Windows 10 2004 (build 19041) or later. Both therefore run on a supported
+Windows 10 host, and neither item is absent or unsupported there. What does not
+work is the question. `Get-AppxPackage` backs both the `powertoys` feature's
+`Microsoft.CommandPalette` precondition and the `Microsoft.WindowsTerminal`
+package's `Appx` detection, and Microsoft's Windows module compatibility table
+footnotes `Appx` with "Must use Compatibility Layer with PowerShell 7.1". This
+domain runs PowerShell 7 and both call sites pass
+`-ErrorAction SilentlyContinue`, so a route that cannot answer returns nothing
+and is read as absence. The precondition then reports the package missing and
+Apply refuses the feature; the package either reports missing, so Apply
+reinstalls an installed Windows Terminal, or disagrees with the WinGet
+registration and reports a detection conflict that blocks Apply. An
+unavailable route must report unverified, never absence. The open
+Appx-detection change (#37) owns that fix and moves both items to unverified;
+Windows version detection (#38) owns the mechanism the delegation condition
+needs, and this record builds none of its own. That mechanism now exists as
+`Get-WinEnvWindowsBuild`, recorded under "`.wslconfig` content is selected by
+the host's Windows build" below; #53 decides the delegation item against it.
+
+Declining `terminal` and `powertoys` at selection time removes all three items
+from a host's check: `setup.ps1` evaluates the delegation only when `terminal`
+is selected and a feature's preconditions only when that feature is selected,
+so `-Minimal` reaches none of them. That is a mitigation available today rather
+than a fix, and a `-Minimal` run is evidence for none of these three items.
+
+The sweep is deliberately narrow and its edge is part of the record. It did not
+examine the `WinGet` and `Command` detections, the font download and its
+registry registration, the PowerToys lifecycle, the managed-file targets and
+their packaged `LocalState` paths, an unpackaged Windows Terminal installation,
+or PowerShell 7 itself; `.wslconfig` is recorded separately below. Windows releases older
+than 10, Windows Server, and non-x64 hosts stay out of scope. Those items are
+not known to be safe on Windows 10; they are unexamined.
+
+The repository maintainer owns this boundary. It is a manual invariant: no
+check can produce the record, and `-Check` has no way to express its conclusion
+today — the Windows half of the staged migration declared in "Check evidence
+states" below — because it exits 0 or 2 and reports its `unverified` list
+without letting it affect the status. #54 owns that conversion.
+
+Sources for the claims above:
+
+- Group Policy for Windows Terminal —
+  https://learn.microsoft.com/en-us/windows/terminal/group-policy
+- Windows Terminal installation —
+  https://learn.microsoft.com/en-us/windows/terminal/install
+- How to Install PowerToys on Windows 11 and Windows 10 —
+  https://learn.microsoft.com/en-us/windows/powertoys/install
+- PowerShell 7 module compatibility (Windows) —
+  https://learn.microsoft.com/en-us/powershell/windows/module-compatibility
+- Windows Terminal product repository — https://github.com/microsoft/terminal
+
+## `.wslconfig` content is selected by the host's Windows build
+
+`.wslconfig` is host-global: one file per machine, read by the WSL VM for every
+distribution on it, so a wrong value is not scoped to one distro. The option
+set it may carry is not the same on every Windows build, and the boundary is
+not where "Windows 10 versus Windows 11" puts it. Microsoft's `.wslconfig`
+reference footnotes each key — footnote 1 means "only available on Windows 11",
+footnote 2 means "require Windows 11 version 22H2 or higher". Against the four
+keys this repository sets:
+
+| Key | Section | Gate | Payload |
+| --- | --- | --- | --- |
+| `networkingMode=Mirrored` | `[wsl2]` | Windows build, 22H2 or later | 22H2 payload only |
+| `hostAddressLoopback=true` | `[experimental]` | Windows build, 22H2 or later; also requires `networkingMode=mirrored` | 22H2 payload only |
+| `bestEffortDnsParsing=true` | `[experimental]` | Windows build, 22H2 or later; also requires `dnsTunneling=true` | 22H2 payload only |
+| `autoMemoryReclaim=Gradual` | `[experimental]` | WSL **application** version, not the Windows build | **both** payloads |
+
+`autoMemoryReclaim` arrived with the Microsoft Store WSL 2.0.0 release in
+September 2023 alongside `sparseVhd` and carries no footnote, so it is gated by
+the installed WSL application and works on Windows 10 with a recent WSL.
+Dropping it from the lower payload would remove a setting that host honours,
+which is a regression dressed as a version fix. Every key in either payload
+traces to a row above; no `firewall` value appears in either, which `AGENTS.md`
+forbids without explicit direction.
+
+Because three of the four keys share one bound, the payloads are named after
+the capability they assume rather than after a Windows release. A Windows 11
+21H2 host — build 22000, unmistakably Windows 11 — honours none of the three
+22H2 keys and belongs on the same side as Windows 10, so a release name would
+encode a boundary the option set does not have. The two payloads are
+`files/wsl/mirrored-networking.wslconfig`, which is the previously deployed
+content unchanged, and `files/wsl/nat-networking.wslconfig`, which carries only
+`autoMemoryReclaim` and leaves the host on WSL's default NAT networking.
+
+The manifest expresses this with **one entry and alternative sources**, not two
+entries with mutually exclusive conditions. A single `ManagedFiles` entry keeps
+one `Id`, one `Target`, one `Compare` mode and one owning feature, so drift,
+backup, and deselection continue to reason about one logical file; the cost is
+that `Source` stops being a scalar and every consumer must go through the
+resolver. Two entries would have kept a scalar `Source` everywhere, at the
+price of two `Id`s competing for one `Target` and a new invariant nothing
+enforces today: exactly one entry must select on any host. A manifest whose
+conditions overlapped would deploy twice, and one whose conditions all failed
+would deploy nothing, and neither failure is visible in the file the manifest
+declares. The chosen shape makes that invariant structural instead: a
+conditional entry declares `Sources` as an ordered list whose bounds descend
+strictly and whose **last variant carries no condition**, so resolution is a
+total function and "exactly one variant applies" cannot be violated by editing
+the manifest. `Get-WinEnvManifest` rejects a `Sources` list that breaks either
+rule, so the invariant fails at load rather than at deployment.
+
+Windows build detection reads `[Environment]::OSVersion.Version.Build` and
+compares the **build alone**, not the build and revision.
+`[Environment]::OSVersion.Version.Major` is `10` on Windows 10 and Windows 11
+alike, so a major-version comparison would silently classify every Windows 11
+host as Windows 10; the build is the discriminator, Windows 11 begins at build
+22000, and the bound for this option set is Windows 11 22H2, build 22621. The
+source is in-process and cannot be blocked by a stopped WMI service or a
+restricted registry hive, which `Get-CimInstance Win32_OperatingSystem` and
+`HKLM:\SOFTWARE\Microsoft\Windows NT\CurrentVersion` respectively can be;
+PowerShell 7 runs on .NET 5 or newer, where `OSVersion` is taken from
+`RtlGetVersion` and is not capped by the Win32 compatibility-manifest shim.
+Microsoft's footnote links the 22621.2359 release announcement, but the
+revision is a servicing level rather than an OS version: pinning it would
+classify a 22621 host that is merely behind on cumulative updates as below the
+bound, and this source carries no UBR, so a revision comparison would need a
+second and more failure-prone source to decide a boundary the documentation
+states in builds.
+
+When the build cannot be determined — the platform is not `Win32NT`, or the
+reported build is not a positive number — the resolver selects the
+unconditional last variant, the lower payload. That is the documented behaviour
+rather than an arbitrary default: it is the only payload whose every key is
+honoured on every supported build, so a key is never deployed to a host that
+was not shown to honour it. `setup.ps1` reports the build it resolved against,
+or `undetermined`, in its summary whenever a conditional payload is selected.
+
+The desired-state hash covers **every** declared variant of a selected managed
+file, not the variant this host resolved. Hashing only the resolved one would
+make the hash depend on host state, so two hosts of different build classes
+would disagree about the same desired state and a host that crossed the bound
+would report drift it could not clear.
+
+This is a `SchemaVersion` bump, 2 to 3, and `ProjectVersion` moves 0.3.0 to
+0.4.0 the way the schema 1 to 2 bump moved 0.2.0 to 0.3.0. **No `state.json`
+schema changes.** State schema 2 records the applied feature set, project
+version, and desired-state hash, none of which describe managed-file sources,
+so an existing schema 1 or schema 2 state stays readable and keeps its recorded
+selection. What an applied host does see is a changed desired-state hash and a
+higher project version, both of which are true — the payload it deployed is no
+longer the payload this repository declares for it — so the next `-Check`
+reports `desired state changed` and the next Apply redeploys the file its build
+actually honours.
+
+A host that later **crosses the bound** — Windows Update carrying it from 22000
+to 22621 — is a different case and is deliberately left where every other
+content change already sits. Nothing the Apply trigger reads has changed: the
+hash covers both variants by design, and the project version and feature set are
+untouched, so `$shouldApply` stays false and the host keeps the payload it has.
+`-Check` does report it, as `wslConfig settings` drift with exit status 2, and
+`bootstrap.ps1 -Force` is what redeploys the payload the new build honours.
+Making drift itself trigger an Apply would change the exit contract, which is
+#54's to decide, not this record's.
+
+This mechanism is deliberately not the one #37 uses for Appx detection, and the
+two must not be merged. Whether the `Appx` module loads is a question a probe
+can ask the host directly, so a build comparison there would be a worse proxy
+for an answer already available; #37's constraint "no version number appears in
+the implementation" is about that capability probe. Here no probe exists:
+`.wslconfig` is read by the WSL VM only after a restart this domain deliberately
+does not perform, and an unhonoured key is ignored silently rather than
+reported, so the build is the only thing left to ask. Two issues, two
+mechanisms, one motivation.
+
+**The runtime effect is permanently unverifiable here, not merely unverified in
+this change.** `.wslconfig` takes effect only when the WSL VM starts, `AGENTS.md`
+forbids `wsl --shutdown` without an explicit request, and an unhonoured key
+produces no error. The only thing any check in this domain can ever assert is
+the deployed file's content and its agreement with the host's build. A passing
+managed-file assertion is not evidence that mirrored networking is active.
+
+The per-distribution `/etc/wsl.conf` is a different file with a different
+option set and a different owner — on this host inventory it is generated by
+NixOS-WSL in the Unix-like domain — and is out of scope for this decision.
+
+Sources for the claims above:
+
+- Advanced settings configuration in WSL —
+  https://learn.microsoft.com/en-us/windows/wsl/wsl-config
+- WSL 2.0.0 release notes —
+  https://github.com/microsoft/WSL/releases/tag/2.0.0
+- `Environment.OSVersion` —
+  https://learn.microsoft.com/en-us/dotnet/api/system.environment.osversion
 
 ## PowerShell 7 ownership
 
@@ -161,6 +528,15 @@ rather than part of one of the three configuration domains. It owns policy
 dispatch and agent workflow mechanics, creates no host output, and has no
 release tag.
 
+GitHub milestones are now the planning surface for scoped outcomes. They remain
+metadata over independently reviewable issues: repository documents own
+architecture and current support decisions, domain tags own release
+certification, and explicit commands own deployment. The first adoption is the
+`unixlike: NixOS GUI host foundation` roadmap. Milestone naming, required
+description sections, issue membership, and closure are reviewed manually by
+the repository maintainer; automated remote enforcement is deferred until the
+manual workflow demonstrates a recurring failure that justifies it.
+
 Durable judgement remains in `AGENTS.md` and the architecture documents. The
 repeatable agent procedure is implemented once as an Agent Skills
 open-standard skill under `.agents/skills/`. Model-specific skill locations
@@ -181,18 +557,17 @@ disabled. Both branches now require only the stable `Required checks` gate, and
 the repository-governance PR and its post-merge `dev` run demonstrated that
 selected repository checks pass while unrelated domain jobs skip.
 
-The next governance refinement makes source promotion explicitly one-way:
-only same-repository `dev` may open against `master`, and the result is a merge
-commit representing source acceptance rather than release. `dev` remains
-strictly up to date for ordinary integration. `master` must change from strict
-status checks to non-strict status checks so an earlier promotion merge commit
-does not force a meaningless `master`-to-`dev` reverse merge. CI source
-validation, one open promotion at a time, merge commits, and the prohibition on
-direct changes retain the safety boundary. This remote strictness migration is
-pending until the source-gate workflow is merged and observed. The repository
-also still permits squash and rebase merging alongside merge commits; disabling
-those two methods is part of the same pending migration. Current audits report
-both gaps as failures rather than treating documented intent as applied state.
+Source promotion is explicitly one-way: only same-repository `dev` may open
+against `master`, and the result is a merge commit representing source
+acceptance rather than release. `dev` remains strictly up to date for ordinary
+integration. `master` uses non-strict status checks so an earlier promotion
+merge commit does not force a meaningless `master`-to-`dev` reverse merge. CI
+source validation, one open promotion at a time, merge commits, and the
+prohibition on direct changes retain the safety boundary. The source gate was
+observed on `dev` and `master` before the remote migration was completed.
+Repository settings now allow merge commits while disabling squash and rebase
+merging, and the remote audit verifies both settings together with branch
+protection.
 
 Governance rules now follow an explicit decomposition contract: durable
 judgement and invariants, human procedure, agent orchestration, deterministic
@@ -201,6 +576,110 @@ enforcement, and execution evidence have distinct owners. The generic
 project because it contains no branch names, repository paths, release choices,
 or current state from this repository. This repository retains the resulting
 policy, procedure, enforcement, migrations, and evidence.
+
+## Payloads were verified by nobody
+
+Twelve files under `assets/` — eight WezTerm Lua modules, a Lua template, a
+WezTerm JSON manifest, the Zellij KDL, and the PowerShell profile — were parsed
+by nothing, on any host, in any CI job. `modules/zellij.nix`,
+`modules/wezterm.nix` and `modules/powershell.nix` deliver them with `.source`,
+which copies a file into the store without reading it, so a syntax error
+evaluated, built, activated, and failed for the first time when the application
+started. `tool/checks/*` ran alejandra, statix, deadnix and `nix eval`, all of
+which read only Nix, and the flake declares no `checks` output. Their Windows
+counterparts had been parsed by native zellij, luac, jq and the PowerShell
+parser the whole time, including the `.lua.example` template.
+
+The cause was structural rather than an oversight. Ownership decomposes by
+domain, and the repository used that same partition for verification, which
+decomposes by format. Windows noticed because its manifest already had to say
+what each managed file was in order to reconcile it, so a `Parser` field was
+natural there. Nix never had to know, so nothing on the Unix-like side was ever
+in a position to ask. The validators were present the entire time: `lua5_4` and
+`stylua` sit in `modules/flake/dev-shell.nix`, and every configured host
+installs Zellij.
+
+`assets/payloads.json` now declares each payload's format and
+`tool/checks/payloads` parses them, with coverage enforced in both directions
+so a payload added without a declaration fails rather than escaping quietly,
+and a declared format with no validator fails too. It is an adoption by copying
+of the Windows manifest's idea, which is the mechanism the architecture already
+prescribed; the two declarations stay independent.
+
+## Check evidence states
+
+A check has three possible outcomes — verified, failed, and unverified — and
+only the first two could be expressed. A shell exit status carries a binary
+answer, so every place that needed the third state invented one, and eight call
+sites disagreed. `pre-push` reported an unverified Windows check and passed;
+`check-desired-state.ps1` and `test.ps1` threw before validating anything;
+`Test-WinEnvSourceFile` skipped a missing Zellij silently and so reported
+unverified as valid; the Unix-like branch of both hooks had no detection at
+all; `doctor.sh` accepted a shell that `pre-push` rejects. This document's own
+requirement is unverified rather than valid, and none of those answers were
+unverified except the first.
+
+The failure being prevented is a native Windows clone that cannot push its own
+domain's work, and its mirror, a clone reporting a payload as verified when
+nothing parsed it. The owning scope is `repository`. The architecture already
+reserved the position: root tooling may dispatch domain checks without owning
+their semantics, and must not turn one domain's success into a prerequisite for
+a change in another.
+
+The invariant is tool independent. A prerequisite the host cannot supply is
+reported as unverified, never as valid and never as failure. Exit status 69
+carries it, a failure outranks it, and `REQUIRE_NATIVE=1` converts it into a
+failure. Hooks leave that unset because the local gate is advisory. CI sets it
+because the merge gate is the one place where "nobody could check this" must
+not pass.
+
+Deterministic enforcement lives in `.githooks/evidence`, which both hooks
+source, and in each domain's own checks, which decide what their prerequisites
+are. The hooks select which checks run and never decide whether a missing tool
+is a failure. Domains do not share an implementation of the probe; each detects
+its own tooling in its own language, which is the ordinary duplication this
+repository prefers over a cross-domain abstraction.
+
+Evidence is the fixtures in `tool/version-control/test`, which run the real
+pre-push hook against a stand-in check and require that 0 passes, that any
+other status blocks, that 69 passes while reporting, and that 69 blocks under
+`REQUIRE_NATIVE`. Migration is staged: hooks and `doctor.sh` consume the
+protocol first, then the Unix-like and Windows checks are converted to emit it.
+The superseded behaviour can be removed once no check reports a missing
+prerequisite through `throw` or an unguarded command.
+
+The Windows check now carries the third state itself, and its ranking is a
+decision rather than a derivation. `windows/setup.ps1` reports a detection its
+host could not decide — today an Appx package whose module will not load — as
+unverified instead of as absence, and `Get-WinEnvCheckStatus` is the one place
+that ranks the run. The architecture settles only half the question: a failure
+outranks an unverified result, and it says nothing about drift, which is
+neither. The recorded answer is that drift outranks unverified.
+`bootstrap.ps1 -Check` returns 2 whenever anything drifted, 69 only when the
+sole open question could not be decided on that host, and 1 under
+`REQUIRE_NATIVE=1`, which promotes an undecided item into the failure that
+outranks both. The reason is what the command is for: it answers whether an
+Apply is needed, drift is the actionable half of that answer, and a known 2
+must not collapse into a 69. The cost, which the decision accepts, is that 69
+is observable only on a host that has already converged — a host that has never
+applied reports `state missing` drift and returns 2, naming the undecided items
+in its summary but not in its status. The repository maintainer owns the
+decision and it is recorded on the issue that introduced it; the evidence is
+the Pester fixture over the whole ranking plus a native `-Check` on an
+already-applied Windows 10 host.
+
+One Windows 10 sub-case survives that, and it is not Appx silence read as
+absence. When the module cannot answer, package detection keeps the WinGet
+registration as its answer, so a package WinGet's configured source does not
+report is still recorded missing — the same claim a `WinGet`-detected package
+already makes, drawn from a route that did answer. A Store-installed Windows
+Terminal reaches it. Apply then attempts an install, and
+`Install-WinEnvPackage` accepts WinGet's documented "no applicable update"
+status as success so a run is not aborted mid-deployment over a package that is
+present; post-apply validation still asks the same undecidable question and
+refuses to record state. Deciding that item needs detection independent of the
+registration query, which belongs with the general unverified state rather than
+with the Appx route.
 
 ## Initial monorepo convergence
 
@@ -260,3 +739,237 @@ import order. List-valued options can therefore produce different store hashes
 even when their element set is unchanged. Features whose list order carries
 meaning must use explicit ordering or a keyed attribute model instead of
 relying on file collection order.
+
+## Desired-state hygiene had no enforcement owner
+
+`AGENTS.md` has asked since the three-domain split that secrets, undeclared
+usernames, absolute home paths, and snapshots of runtime state stay out of
+every domain's committed desired state. Only the first quarter of that sentence
+was enforced. `gitleaks` covers secrets from the pre-commit hook and the CI
+secret job; one Pester assertion covered a single literal user path inside one
+directory of the Windows payloads. Nothing looked at the rest, and the
+2026-08-29 audit found the gap had already been used: two absolute home paths
+sat in `docs/troubleshooting.md` for the document's whole history. A rule with a
+policy owner and no enforcement owner is exactly what the governance
+decomposition says must not exist.
+
+`tool/version-control/hygiene` is that enforcement owner now. It scans the
+index along four axes — absolute home paths, undeclared user and host names,
+tracked runtime state, and machine-unique identifiers — needs nothing beyond a
+POSIX shell and Git, and runs unconditionally beside the secret scan instead of
+through `tool/dispatch/select`, because it is repository-wide and
+domain-agnostic in the same way the secret scan is. Routing it through dispatch
+would also have pulled an unrelated domain's checks into a governance-only
+commit. Its fixtures are folded into `tool/version-control/test` rather than
+given a runner of their own, because that script is the only thing the
+`repository:fixtures` unit and the CI repository job invoke, and a check whose
+fixtures nothing runs is not enforced.
+
+Axis 2 reads `modules/flake/inventory.nix` by extracting its double-quoted
+literals rather than evaluating it. A structured read does work, but it needs
+an impure evaluation and would make Nix a prerequisite for a governance check,
+which the three-state contract would then have to report as unverified on every
+host without one. Literal extraction keeps the requirement at a POSIX shell and
+Git and stays correct when the inventory grows fields. It over-accepts, which
+is the safe direction for an allowlist, and it fails closed when the extraction
+comes back empty, so a reformat cannot retire the axis quietly.
+
+Two gaps are current and deliberate. A bare account name in free prose has no
+naming context to decide it by and is a manual invariant with named evidence
+rather than a silent hole. The Windows-side assertion still matches one literal
+path inside one directory; generalising it is separate work, because
+classification maps the Windows tree to the Windows domain unconditionally and
+the two guards are meant to stay independent — `docs/architecture.md` requires
+the Windows domain to remain testable without a Unix-like host.
+
+This implementation is superseded when the same four axes are decided from a
+typed declaration rather than from text. The condition for removing it is the
+one the payload declaration already sets: coverage enforced in both directions,
+positive and negative fixtures for every axis, and no host prerequisite beyond
+those the governance plane already has.
+
+## Capture moves a host change into desired state
+
+Every direction between this repository and a Windows host ran one way until
+now. `bootstrap.ps1 -Check` reported `<id> settings` drift and Apply overwrote
+the host from the payload; moving a change the other way was manual, which
+meant finding the target, copying it under `windows/desired/files/`, restoring
+placeholders by hand, remembering which files are runtime state, and writing a
+commit. `tool/version-control/hygiene` and the payload assertions in the Pester
+suite catch the mistakes that work invites; neither does the work.
+
+`windows/tools/capture.ps1` does it, and it is a copy of the shape of
+`tool/version-control/commit` rather than a caller of it. The Windows domain
+must stay authorable and deployable without a Unix-like host and the
+maintainer's two clones are separate checkouts, so the guards are restated in
+PowerShell: refuse on `master`, refuse a dirty index, refuse a payload that
+already has uncommitted changes, never bypass a hook, and end every run at one
+interactive confirmation with no unattended mode. The branch rule is restated
+too (#77, after the maintainer's first real capture landed a commit on `dev`,
+which is protected and had to be moved by hand): on `dev`, fetch `origin/dev`
+and branch to `feature/windows-capture-<feature>` from it before committing;
+on any other branch, commit where it is. A captured JSON payload is also
+pretty-printed to this repository's two-space style before it is written,
+regardless of how the host application wrote it, so the diff the operator
+confirms at the `[y/N]` prompt is the diff a reviewer reads. The decisions
+live in `windows/src/WinEnv.psm1` where they have fixtures; the script owns
+only what needs a terminal and a Git repository.
+
+Drift is decided by `Test-WinEnvManagedFile`, the function `-Check` uses, and
+the payload variant by `Resolve-WinEnvManagedFile`. A second comparison
+implementation would eventually disagree with the first, and the failure would
+be a capture that reports as changed what the check reports as clean.
+
+The placeholder direction is deliberately asymmetric. Apply expands exactly one
+content placeholder, `__LOCALAPPDATA_JSON__`, to the JSON-escaped spelling of
+that directory. Capture therefore restores that one spelling and reports every
+other one — the raw spelling of the same directory, and either spelling of the
+profile and roaming directories — as unrepresentable, and refuses the file.
+Writing `{USERPROFILE}` into a payload instead would look like a capture and
+deploy as literal text, leaving the host holding the placeholder and every
+later check reporting drift no Apply could clear. Extending the deploy side to
+expand more placeholders is a change to what a payload means on a host, so it
+belongs to its own issue with its own evidence rather than to the tool that
+would benefit from it. Until then a payload needing another host directory is
+edited by hand, and the refusal says so.
+
+A ranking decision is worth recording. A build-conditional entry on a host
+whose build is undetermined is refused outright, which is stricter than Apply:
+Apply reads a null build as the variant every supported build honours, and that
+is safe because it deploys the lower payload, while capture writing host
+content into a payload no host selected would put one machine's state into a
+file another machine deploys.
+
+### A JsonSubset payload is captured by projection
+
+`JsonSubset` was refused outright, on the grounds that the payload is a subset
+of the host file by design and cannot be derived from it. Eleven of the
+eighteen PowerToys managed files declare that mode, including the root
+`settings.json` that owns the per-module enable map, so the maintainer could
+change a setting in the PowerToys UI, watch `capture.ps1` report the drift, and
+have no way to move it into desired state (#93).
+
+The premise was wrong in one direction only. A `JsonSubset` payload declares
+which keys it owns and tolerates every other key the application keeps in the
+same file. The host holds a value for each declared key, so the payload that
+makes this host clean is the host's values arranged in the payload's declared
+shape, and that *is* derivable. What is not derivable — the keys the payload
+deliberately does not declare — is exactly what must never reach desired state,
+so the projection drops it.
+
+This is one mechanism rather than a per-file ignore list, and the choice is the
+decision worth recording. An ignore list is a second declaration of what a
+payload owns, kept beside the payload and free to drift from it; every new
+module would need an entry, and a missing entry fails open by writing runtime
+state into desired state. A projection has only the payload, so a key is
+captured if and only if the payload declares it, it fails closed on an object
+member nobody thought about, and widening coverage is an edit to the payload
+itself. AGENTS.md's rule that runtime state stays out of desired state is then
+enforced by the payload rather than by a list of names someone has to maintain.
+
+That guarantee is about object members, and review found the sentence had been
+overstated into one about payloads (#100). A declared list is exact rather than
+a subset, so it fails *open*: declaring an empty list is a claim to own the
+whole list, and the projection then captures whatever the host holds there. The
+mechanism is right — a declared list has to be exact, because the read side
+matches it by position and requires equal length, so no member subset a payload
+declared could outlive a length change. What was wrong was the payloads. The
+PowerToys inventory declared twenty-eight empty lists, and the worst of them
+would have captured CmdPal's monitor topology, its installed-extension ranking,
+and Advanced Paste's free-text AI prompts. The rule the audit settled on is
+that a list is declared only when there is content to declare: a key left
+undeclared owns nothing, which is exactly what an empty declared list cannot
+express, and a fixture now holds the whole inventory to it.
+
+Each JSON kind is projected the way the read side compares it, so the two
+directions cannot disagree about what a payload owns. A declared object
+contributes exactly the members it declares. A declared list contributes the
+host's list element by element, with element *i* projected onto declared
+element *i* where the payload has one and taken whole where it does not,
+because the read side compares a list by position and requires equal length: a
+payload cannot declare a member subset that outlives a length change, so taking
+the elements it never declared as they are is the only reading the payload's
+own shape supports. A declared scalar contributes the host's scalar, `null`
+included, because the read side treats a declared `null` as a leaf.
+
+Convergence is by construction rather than by test: every member of a projected
+document is a member `Test-WinEnvJsonSubset` looks for, holding the value it
+found there, and every projected list has the host's own length. There is no
+host this can capture from and leave drifted, and the fixture asserts it
+through the comparison itself rather than restating it.
+
+Two host shapes are still refused, and both are shapes the read side already
+calls drift while the payload's declared shape cannot express the fix: a
+declared member the host object no longer holds, and a host value whose kind is
+not the declared value's kind. Whether a vanished key should be dropped from
+desired state or restored in the application is not a question this direction
+can answer, and writing a migrated shape in would discard a declared subtree
+without saying so. Both name the key path.
+
+The projection is ordered before the content refusals. An absolute account path
+in a key the payload never declared is therefore gone by the time they read the
+content, while this host's account name in a key the payload *does* declare is
+still refused. Reversed, every capture from a real PowerToys host would be
+refused for a path in a key desired state does not manage.
+
+**No `SchemaVersion` bump, and this is a departure from the three bumps above
+that needs its reason stated.** Those bumps each declared something no earlier
+loader could honour — a `Features` array, a `Sources` variant list, a new
+`Compare` mode — so the schema number is what makes an old module say the
+schema is unsupported instead of failing later with a mangled message. Nothing
+here is such a declaration: `JsonSubset`'s read semantics are untouched, no
+manifest key or `Compare` value is added, and every earlier loader honours
+every declaration in this manifest. The refused direction was unimplemented,
+not undeclarable, and an older `capture.ps1` paired with this manifest still
+refuses conservatively rather than doing something wrong. Inventing a second
+mode with identical read semantics purely to carry a schema number would put
+two spellings of one comparison in the manifest, which is the thing the
+one-mode-per-entry decision exists to prevent.
+
+`ProjectVersion` does move, 0.5.0 to 0.6.0. That field is what an applied host
+compares against its recorded `state.json`, and both halves of this change are
+things an applied host should redeploy for: the payloads widen to cover
+settings surfaces they did not declare before, and the domain's reconciliation
+behaviour changes. No `state.json` schema changes.
+
+One thing this repository did not know until the maintainer's host answered it:
+whether the POSIX shell hooks under `.githooks` run under Git for Windows. They
+do. The maintainer's first hook-gated commit there (#77, `capture.ps1`, git
+2.50.1.windows.1) exercised `core.hooksPath` and ran `.githooks/pre-commit`
+under Git for Windows' `sh`, which found and ran
+`tool/version-control/hygiene` and the rest of the local check chain the same
+way a Unix-like clone does. The one incompatibility that surfaced was not
+missing hook support: MSYS argument conversion silently rewrote a leading-`/`
+argv element before a native binary saw it, which made the stale-entry check
+in `tool/version-control/hygiene` search for a mangled string and reject a
+clean commit (#79). Every governance script that passes such an argument to a
+native binary now disables that conversion (`MSYS_NO_PATHCONV` and
+`MSYS2_ARG_CONV_EXCL`, both inert on every other platform), so a Windows
+commit through the hooks reaches the same verdict a Unix-like one does.
+`capture.ps1` still reports whether `core.hooksPath` is `.githooks` rather than
+assuming it, because hooks stay opt-in per clone regardless of platform.
+
+Three rules earned their shape from review rather than from design. The
+account-path refusal carries the same three axes `tool/version-control/hygiene`
+enforces repository-wide -- a drive-letter path in either separator, the POSIX
+form, and the WSL UNC form -- because a Windows Terminal starting directory or a
+WezTerm setting routinely holds a WSL path, and the account-name refusal only
+backstops a leak that names this host's own account. Capture does not lean on
+the commit hook for that check, because hooks stay opt-in per clone: a fresh
+clone with `core.hooksPath` unset must refuse the same leak the hook would have
+caught. The generated-profile rule drops a host profile with no usable guid and
+refuses a capture whose kept profiles repeat one, because either shape written
+into a payload makes every later `-Check` and Apply throw instead of reporting
+drift, and a payload that cannot be compared is worse than the drift it came
+from. And a capture whose payload text equals the one already committed is
+reported as nothing to commit rather than carried into the commit path, where an
+empty `git add` would make `git commit` fail and read as a hook rejection: the
+host drifted in a way desired state cannot express, and saying that is the whole
+answer.
+
+Evidence is split accordingly. The Unix-like Pester run covers every rule
+above, including the branch rule against a throwaway repository and bare
+remote, and is not Windows evidence: the fixtures hand the module a host no
+machine has to be. What is owed from the maintainer's host is one real capture
+after a change made in an application's own UI, showing the branch line in the
+plan and a readable diff, and the hooks' behaviour on that host.

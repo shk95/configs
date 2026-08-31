@@ -28,6 +28,11 @@ native checks instead of treating them as passed.
       requires it instead of conditional domain job names.
 - [ ] Model-specific skill locations only discover the canonical Agent Skills
       workflow and do not duplicate its policy.
+- [ ] Committed desired state carries no undeclared user or host name, no
+      absolute home path, no tracked runtime state, and no machine-unique
+      identifier, and every exclusion is declared with its reason.
+- [ ] Prose in the diff was read for a bare account name, which no scanner
+      decides, and that reading is reported as the manual evidence.
 
 ## Governance rule design
 
@@ -64,6 +69,9 @@ native checks instead of treating them as passed.
 - [ ] A native build is performed on a matching system when sources or packages
       changed.
 - [ ] Foreign evaluation is reported as evaluation, not native build evidence.
+- [ ] Every source payload is declared in `assets/payloads.json` and parsed by
+      the tool that will consume it. Evaluation is not payload evidence: Nix
+      copies these files without reading them.
 - [ ] Activation is performed only when explicitly requested.
 - [ ] Runtime claims name the host on which they were observed.
 - [ ] A `unixlike-v...` tag is assigned only after required native evidence is
@@ -73,12 +81,17 @@ native checks instead of treating them as passed.
 
 - [ ] The change is owned and semantically validated by the Windows domain.
 - [ ] `windows/tools/check-desired-state.ps1` validates the manifest and every
-      PowerShell, JSON, INI, KDL, and Lua source with native tooling.
+      PowerShell, JSON, INI, KDL, and Lua source with native tooling, and names
+      any source it had no parser for instead of failing or skipping it.
 - [ ] Pester passes under native PowerShell when reconciliation behavior changed.
 - [ ] `windows/bootstrap.ps1 -Check` is observed on native Windows when package
       detection, target paths, registry behavior, fonts, configuration parsing,
       or application lifecycle behavior changed.
-- [ ] Missing native tooling is reported as unverified rather than valid.
+- [ ] The feature selection that produced the observed evidence is named. A
+      check that ran under a partial selection is evidence for that selection
+      only and reports the rest as not selected, never as verified.
+- [ ] Missing native tooling is reported as unverified rather than valid, and
+      reaches its caller as exit status 69 rather than as a failure.
 - [ ] Apply is run only when explicitly requested, followed by another
       read-only check.
 - [ ] A `windows-v...` tag is assigned only after required native evidence is

@@ -1,0 +1,83 @@
+# Shell library sourced by the hooks. Not a hook itself; Git only runs files
+# named after a hook, so this name is inert.
+#
+# A check has three possible outcomes, and this file is the one place that
+# decides what each one means:
+#
+#   0    verified
+#   69   unverified — the host cannot supply a prerequisite (EX_UNAVAILABLE)
+#   any  failed
+#
+# The third state is the reason this file exists. Before it, a check that could
+# not run had to be squeezed into an exit code with room for two answers, so
+# every call site invented its own third state and they disagreed: one reported
+# unverified, two threw, one passed silently, and one had no detection at all.
+# Missing tooling was reported as invalid in some places and as valid in
+# others, and `docs/definition-of-done.md` asks for neither.
+#
+# Locally, unverified reports and passes. A host that cannot run a domain's
+# native tooling must not be blocked from pushing that domain's work —
+# `docs/architecture.md` states that root tooling must not turn one domain's
+# success into a prerequisite for a change in another. CI sets REQUIRE_NATIVE=1
+# so the same signal fails there instead, because the merge gate is the one
+# place where "nobody could check this" must not pass.
+#
+# A failure always outranks an unverified result. Callers read evidence_failed
+# and evidence_unverified after the runs rather than the last exit status.
+
+evidence_failed=0
+evidence_unverified=0
+
+# Report a check that could not run. Used where the capability is probed
+# directly rather than signalled by an exit code.
+evidence_unavailable() {
+  evidence_label=$1
+  evidence_detail=$2
+
+  if [ "${REQUIRE_NATIVE:-0}" = 1 ]; then
+    printf '\033[31m✗ %s is unverified (%s) and REQUIRE_NATIVE is set\033[0m\n' \
+      "$evidence_label" "$evidence_detail" >&2
+    evidence_failed=1
+    return 1
+  fi
+
+  printf '· %s unverified: %s; CI must supply evidence\n' \
+    "$evidence_label" "$evidence_detail"
+  evidence_unverified=1
+  return 0
+}
+
+# Run one check and translate its exit status.
+evidence_run() {
+  evidence_label=$1
+  shift
+
+  printf '→ %s\n' "$evidence_label"
+  if "$@"; then
+    evidence_status=0
+  else
+    evidence_status=$?
+  fi
+
+  case $evidence_status in
+    0)
+      return 0
+      ;;
+    69)
+      evidence_unavailable "$evidence_label" "a prerequisite is unavailable here"
+      return $?
+      ;;
+    *)
+      printf '\033[31m✗ %s\033[0m\n' "$evidence_label" >&2
+      evidence_failed=1
+      return 1
+      ;;
+  esac
+}
+
+# Print once, at the end, so an unverified run does not look like a clean one.
+evidence_summary() {
+  [ "$evidence_unverified" -eq 1 ] || return 0
+  printf '\n· Some checks could not run on this host and remain unverified.\n'
+  printf '  CI is the merge gate for them.\n'
+}

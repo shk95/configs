@@ -1,0 +1,1191 @@
+#!/bin/sh
+#
+# Interactive helper for routine desired-state commits: one command that
+# applies a templated edit, shows exactly what it will do, and commits it.
+#
+# It composes the tools that already exist instead of becoming a second source
+# of policy, which AGENTS.md line 93 forbids. tool/version-control/classify
+# still answers who owns the change, tool/dispatch/select still answers which
+# checks it needs, and .githooks/evidence still decides what a check's exit
+# status means. Nothing here re-derives any of the three.
+#
+# The commit is a plain `git commit`, so .githooks/pre-commit runs and its
+# output reaches the terminal unaltered. That is the point rather than an
+# accident: exit 69 means unverified, not failed, and an unverified check is
+# only meaningful if the operator reads it. Publishing gives that stream a
+# second reader and copies it into the pull-request body with tee, which is a
+# copy rather than an interception: every line still reaches this terminal, in
+# order. There is no --no-verify here and no other hook bypass. The hook header
+# offers that bypass to a human deciding to skip a gate; a tool that took it
+# silently would create new policy.
+#
+# The scope is edits whose commit message is a template. It is not a general
+# Nix editor: it inserts and deletes whole lines and never re-serialises a
+# file, leaving tool/checks/format as the arbiter of layout. That check is
+# selected automatically, because modules/* classifies unixlike, so a host
+# without Nix reports it unverified rather than skipping the question.
+#
+# --publish carries the same commit the rest of the way: a branch from
+# origin/dev, a push, a pull request against dev, and auto-merge. It removes
+# ceremony rather than a gate. The pre-push hook still runs, branch protection
+# still requires `Required checks` and an up-to-date base, and the merge still
+# happens on GitHub's side once those pass. This helper prints the pull-request
+# URL and stops; it never waits on CI and never merges anything itself.
+#
+# Every run ends at one interactive confirmation. There is deliberately no
+# unattended mode: no --yes, no --force, no environment override.
+#
+# usage: tool/version-control/commit [--dry-run] [--publish] <command>
+
+set -eu
+
+# Guards the `sed -n '/^@@/,$p'` call below from Git for Windows' MSYS
+# argument conversion, which rewrites a leading-`/` argv element into a
+# Windows path before sed sees it. See tool/version-control/hygiene for the
+# full explanation and the observed failure (#79). Inert everywhere else.
+MSYS_NO_PATHCONV=1
+MSYS2_ARG_CONV_EXCL='*'
+export MSYS_NO_PATHCONV MSYS2_ARG_CONV_EXCL
+
+root=$(git rev-parse --show-toplevel)
+cd "$root"
+
+script_dir=$(CDPATH= cd -- "$(dirname -- "$0")" && pwd)
+classify="$script_dir/classify"
+select_checks="$root/tool/dispatch/select"
+
+hooks_dir="$root/.githooks"
+. "$hooks_dir/evidence"
+
+# Hooks are opt-in: tool/setup --fix sets core.hooksPath, a fresh clone does
+# not. Naming the units a commit needs would otherwise report a gate that never
+# applied.
+hooks_path=$(git config --get core.hooksPath 2>/dev/null || true)
+
+homebrew_module=modules/darwin-homebrew.nix
+
+# One scratch directory for the candidate edit, the pull-request body and the
+# copy of the hook's output. Trapped on the signals a prompt is interrupted
+# with as well as on EXIT, because a helper that stops at a question is exactly
+# the one an operator interrupts.
+work=$(mktemp -d)
+trap 'rm -rf "$work"' EXIT
+# POSIX sh resumes after a trap handler, so an interrupt handler that only
+# cleans up would leave the run going with its scratch files gone.
+trap 'rm -rf "$work"; exit 130' INT HUP TERM
+
+# What the operator typed, recorded for the pull-request body. Every argument
+# that reaches it has already passed valid_name or the subcommand table.
+invocation="tool/version-control/commit $*"
+
+publish=0
+dry_run=0
+create_branch=0
+publish_branch=
+existing_pr_url=
+pr_url=
+pr_body_file="$work/pull-request-body"
+commit_log=
+commit_status="$work/commit.status"
+plan_units_line=
+
+usage_text() {
+  cat <<'EOF'
+usage: tool/version-control/commit [--dry-run] [--publish] <command>
+
+options:
+  --dry-run                show everything that would happen and write nothing
+  --publish                after committing, push, open a pull request against
+                           dev, and arm auto-merge
+
+commands:
+  brew add <formula>       declare a Homebrew formula in modules/darwin-homebrew.nix
+  brew remove <formula>    remove a Homebrew formula
+  cask add <cask>          declare a Homebrew cask
+  cask remove <cask>       remove a Homebrew cask
+  mas add <name> <id>      declare a Mac App Store app in modules/darwin-homebrew.nix
+  mas remove <name>        remove a Mac App Store app
+  flake refresh [<input>]  refresh flake.lock, every input or one
+  prune                    delete local branches already merged into origin/dev
+
+mas add/remove edit the masApps attrset: <name> is the Nix attribute and <id>
+is the numeric App Store id the maintainer supplies (no lookup here); the mas
+CLI itself is already a declared Homebrew formula, so it needs no command of
+its own.
+
+prune deletes a local branch only once it is an ancestor of origin/dev, and
+never the current branch, dev, or master; a failed delete (checked out in
+another worktree, for instance) is skipped rather than reported. --publish
+runs the same sweep first, so a merged branch does not wait for a manual
+prune.
+
+On dev the helper first creates feature/<scope>-<topic> from origin/dev; on any
+other branch it commits where it is. The change is always confirmed
+interactively before anything is written. There is no unattended mode and no
+hook bypass.
+EOF
+}
+
+usage() {
+  usage_text >&2
+  exit 2
+}
+
+refuse() {
+  printf '\033[31m✗ %s\033[0m\n' "$1" >&2
+  printf '  %s\n' "$2" >&2
+  exit 1
+}
+
+# Merged remote branches are auto-deleted (delete_branch_on_merge=true in the
+# repository settings), but their local counterpart lingers in every clone
+# that fetched it. --publish's preflight and the standalone `prune` subcommand
+# share this one sweep rather than each re-deriving when a branch is safe to
+# lose.
+#
+# A branch is a candidate only once it is an ancestor of origin/dev: that is
+# the proof that nothing unique would be lost, checked against the freshly
+# fetched remote ref rather than local dev, so a stale local dev can never
+# make this more permissive than the branch protection it mirrors. The
+# current branch, dev and master are refused by name before that question is
+# even asked, so switching HEAD or losing either is never on the table.
+#
+# This is maintenance, not a gate: a fetch that fails, an ancestor check that
+# comes back false, or a delete git refuses are all left alone without a
+# word, never reported and never fatal. git branch -d checks a branch's own
+# upstream (or HEAD, absent one), which is not the origin/dev proof this
+# already did, so it is not trusted here; -D deletes on that proof alone. A
+# worktree checkout is the one thing neither flag overrides, and that failure
+# is exactly the kind this must swallow rather than escalate.
+prune_branches() {
+  git fetch --quiet --prune origin 2>/dev/null || return 0
+  git rev-parse --verify --quiet refs/remotes/origin/dev >/dev/null 2>&1 || return 0
+
+  prune_current=$(git symbolic-ref --quiet --short HEAD 2>/dev/null || echo detached)
+
+  git for-each-ref --format='%(refname:short)' refs/heads \
+    | while IFS= read -r prune_candidate; do
+      case $prune_candidate in
+        "$prune_current" | dev | master) continue ;;
+      esac
+      if git merge-base --is-ancestor "$prune_candidate" refs/remotes/origin/dev 2>/dev/null \
+        && git branch -D "$prune_candidate" >/dev/null 2>&1; then
+        printf 'pruned: %s\n' "$prune_candidate"
+      fi
+    done
+}
+
+while [ "$#" -gt 0 ]; do
+  case $1 in
+    --dry-run)
+      dry_run=1
+      shift
+      ;;
+    --publish)
+      publish=1
+      shift
+      ;;
+    -h | --help)
+      usage_text
+      exit 0
+      ;;
+    -n | --no-verify | --no-hooks | -f | --force)
+      refuse "Refusing a hook bypass: $1" \
+        "AGENTS.md line 93: procedures and tools implement policy but must not silently create new policy. Skipping a gate is a human decision, not this tool's."
+      ;;
+    --)
+      shift
+      break
+      ;;
+    -*)
+      usage
+      ;;
+    *)
+      break
+      ;;
+  esac
+done
+
+[ "$#" -gt 0 ] || usage
+group=$1
+shift
+
+# prune has no templated edit, no owning scope, and no branch of its own: it
+# is a standalone maintenance sweep sharing prune_branches with --publish's
+# preflight, so none of the machinery below (topic, scope, the master and
+# staged-changes refusals, branch creation) applies to it.
+if [ "$group" = prune ]; then
+  [ "$#" -eq 0 ] || usage
+  [ "$dry_run" -eq 0 ] || usage
+  [ "$publish" -eq 0 ] || usage
+  prune_branches
+  exit 0
+fi
+
+item=
+input=
+mas_id=
+case $group in
+  brew | cask)
+    [ "$#" -eq 2 ] || usage
+    action=$1
+    item=$2
+    case $action in
+      add | remove) ;;
+      *) usage ;;
+    esac
+    ;;
+  mas)
+    [ "$#" -ge 2 ] || usage
+    action=$1
+    item=$2
+    case $action in
+      add)
+        [ "$#" -eq 3 ] || usage
+        mas_id=$3
+        ;;
+      remove)
+        [ "$#" -eq 2 ] || usage
+        ;;
+      *) usage ;;
+    esac
+    ;;
+  flake)
+    [ "$#" -ge 1 ] || usage
+    [ "$#" -le 2 ] || usage
+    action=$1
+    shift
+    [ "$action" = refresh ] || usage
+    input=${1:-}
+    ;;
+  *) usage ;;
+esac
+
+# A name reaches a Nix string literal and a shell argument list. Keep it to what
+# Homebrew and flake inputs actually spell.
+valid_name() {
+  case $1 in
+    '' | *[!A-Za-z0-9._/+-]*) return 1 ;;
+  esac
+  return 0
+}
+
+# masApps is a Nix attrset, not a string list: <name> reaches a bare attribute
+# name rather than a quoted entry. Nix identifiers take digits, underscores and
+# dashes unquoted (`microsoft-onedrive = 823766827;` needs no quoting), but not
+# a leading digit or a slash; the quoting style a tapped cask uses is a list
+# convention that has no counterpart here, so a name that would need it is
+# refused rather than quoted.
+valid_attr_name() {
+  case $1 in
+    '' | [!A-Za-z_]* | *[!A-Za-z0-9_-]*) return 1 ;;
+  esac
+  return 0
+}
+
+# The maintainer supplies the numeric App Store id directly; this never looks
+# one up.
+valid_mas_id() {
+  case $1 in
+    '' | *[!0-9]*) return 1 ;;
+  esac
+  return 0
+}
+
+# A branch topic is the name reduced to what a ref and the audit's branch
+# pattern both accept: lower case, letters, digits and single hyphens.
+# "nikitabobko/tap/aerospace" becomes "nikitabobko-tap-aerospace".
+slugify() {
+  printf '%s' "$1" | tr 'A-Z' 'a-z' | tr -c 'a-z0-9' '-' \
+    | sed -e 's/--*/-/g' -e 's/^-//' -e 's/-$//'
+}
+
+if [ "$group" = mas ]; then
+  valid_attr_name "$item" \
+    || refuse "Not a usable Nix attribute name: $item" \
+      "Use lowercase letters, digits, underscores and dashes, for example 'microsoft-onedrive'. A name needing real quoting is a list convention that masApps does not use."
+  [ "$action" != add ] || valid_mas_id "$mas_id" \
+    || refuse "Not a usable Mac App Store id: $mas_id" \
+      "Supply the numeric id mas or the App Store listing shows, for example 409183694 for Keynote. This never looks one up."
+else
+  [ -z "$item" ] || valid_name "$item" \
+    || refuse "Not a usable package name: $item" \
+      "Use the name as Homebrew spells it, for example 'displayplacer' or 'nikitabobko/tap/aerospace'."
+fi
+[ -z "$input" ] || valid_name "$input" \
+  || refuse "Not a usable flake input name: $input" \
+    "Use the input name as flake.nix declares it, for example 'nixpkgs'."
+
+# The file each command edits, and the branch topic that describes the edit.
+# CONTRIBUTING.md spells a branch feature/<scope>-<topic>, and
+# tool/version-control/audit enforces that spelling; both halves are read from
+# the tools that own them rather than restated here.
+case $group in
+  brew | cask)
+    target=$homebrew_module
+    topic="$group-$action-$(slugify "$item")"
+    ;;
+  mas)
+    target=$homebrew_module
+    topic="mas-$action-$(slugify "$item")"
+    ;;
+  flake)
+    target=flake.lock
+    if [ -n "$input" ]; then
+      topic="deps-refresh-$(slugify "$input")"
+    else
+      topic=deps-refresh
+    fi
+    ;;
+esac
+
+# A name of nothing but punctuation slugifies to nothing and would spell
+# feature/unixlike-brew-add-, which the audit's branch pattern rejects.
+case $topic in
+  *-)
+    refuse "No branch topic can be derived from that name." \
+      "A branch topic is the name reduced to letters, digits and hyphens, and that leaves nothing here."
+    ;;
+esac
+
+# classify still owns ownership. A path it cannot place, or places in more than
+# one scope, has no single branch to be published from.
+scope=$("$classify" --files "$target")
+case $scope in
+  unixlike | windows | common | repository) ;;
+  *)
+    refuse "$target has no owning scope: $(printf '%s' "$scope" | tr '\n' ' ')" \
+      "Update tool/version-control/classify before committing it. Both gates reject an unclassified path, and a path owned by more than one scope has no single branch to publish from."
+    ;;
+esac
+
+# Refusals that hold for every command. Checked before any work so that a
+# refusal leaves the clone exactly as it was found.
+branch=$(git symbolic-ref --quiet --short HEAD || echo detached)
+if [ "$branch" = master ]; then
+  refuse "Refusing to commit on master." \
+    "AGENTS.md: only this repository's dev may enter master, by pull request and merge commit. There is no operational bypass."
+fi
+
+if [ -n "$(git diff --cached --name-only)" ]; then
+  refuse "The index already holds staged changes." \
+    "This helper commits only the edit it makes. Commit or unstage the rest first."
+fi
+
+# On dev the helper works on a branch of its own; anywhere else it commits
+# where it is. The branch is created after the confirmation, not here, so this
+# only decides the name and refuses what cannot work.
+if [ "$branch" = dev ]; then
+  create_branch=1
+  publish_branch="feature/$scope-$topic"
+
+  if ! git rev-parse --verify --quiet refs/remotes/origin/dev >/dev/null; then
+    refuse "origin/dev is unavailable." \
+      "This helper branches from origin/dev. Run 'git fetch origin dev' first."
+  fi
+  # The edit below is computed against the tree of local dev. Branching from a
+  # different origin/dev would carry it onto a tree it was never computed
+  # against, so the two have to be the same commit. dev's protection already
+  # requires an up-to-date base; this asks for nothing new.
+  if [ "$(git rev-parse refs/heads/dev)" != "$(git rev-parse refs/remotes/origin/dev)" ]; then
+    refuse "dev is not at origin/dev." \
+      "Fast-forward first: git fetch origin dev && git merge --ff-only origin/dev."
+  fi
+  if git show-ref --verify --quiet "refs/heads/$publish_branch"; then
+    refuse "$publish_branch already exists." \
+      "That edit already has a branch. Finish or delete it before starting it again."
+  fi
+else
+  publish_branch=$branch
+fi
+
+if [ "$publish" -eq 1 ] && [ "$branch" = detached ]; then
+  refuse "HEAD is detached, so there is no branch to publish." \
+    "Switch to dev or to the feature branch this change belongs on."
+fi
+
+# gh and the remote are consulted only when --publish asks for them, and
+# every gh and origin/dev call below is read-only. prune_branches is the one
+# write in here, and it only ever removes a local branch that its own
+# ancestor-of-origin/dev proof already cleared (see its definition above).
+publish_preflight() {
+  # --publish shells out the way a Unix-like host expects. Native Windows has
+  # its own PowerShell counterpart, so refuse before consulting gh at all.
+  case $(uname -s 2>/dev/null) in
+    MINGW* | MSYS* | CYGWIN*)
+      refuse "commit --publish is not supported on native Windows." \
+        "Use windows/tools/capture.ps1 -Feature <id> -Publish instead."
+      ;;
+  esac
+
+  # Before the new branch is created and before gh is consulted at all: a
+  # merged branch is never in the way of the one this run is about to make,
+  # and this never depends on gh being present or authenticated.
+  prune_branches
+
+  if ! command -v gh >/dev/null 2>&1; then
+    refuse "gh is unavailable and --publish needs it." \
+      "Install the GitHub CLI (https://cli.github.com), or drop --publish and open the pull request yourself."
+  fi
+  if ! gh auth status --hostname github.com >/dev/null 2>&1; then
+    refuse "gh is not authenticated for github.com." \
+      "Run 'gh auth login' first. This helper opens the pull request as you and holds no credential of its own."
+  fi
+
+  # Auto-merge is a repository setting, and arming it is the last thing this
+  # helper does. Reading it here turns "the push and the pull request happened
+  # and then the last step failed" into a refusal that costs nothing.
+  # Read through the REST API, the way tool/version-control/audit-remote reads
+  # this repository's other settings; `gh repo view --json` has no field for it.
+  if [ "$(gh api 'repos/{owner}/{repo}' --jq .allow_auto_merge)" != true ]; then
+    refuse "This repository does not allow auto-merge." \
+      "Turn on 'Allow auto-merge' in the repository settings, or drop --publish. Arming a merge that waits for Required checks is what --publish exists to do."
+  fi
+
+  # One listing answers both questions: a pull request from this head against
+  # anything but dev is a refusal, and one against dev is the pull request to
+  # arm rather than a second one to open. gh filters --head by branch name
+  # alone, so a fork's branch of the same name arrives in this list too and is
+  # dropped here: it is not this branch and it is not this helper's to touch.
+  open_pulls=$(gh pr list --head "$publish_branch" --state open \
+    --json baseRefName,isCrossRepository,url \
+    --jq '.[] | select(.isCrossRepository | not) | .baseRefName + " " + .url')
+  foreign=$(printf '%s\n' "$open_pulls" | awk '$1 != "dev" && NF { print $2 }')
+  if [ -n "$foreign" ]; then
+    refuse "$publish_branch already has an open pull request with a different base." \
+      "Close or retarget it first: $(printf '%s' "$foreign" | tr '\n' ' ')"
+  fi
+  existing_pr_url=$(printf '%s\n' "$open_pulls" | awk '$1 == "dev" { print $2; exit }')
+
+  # A branch this helper is about to create must not already exist on the
+  # remote: publishing onto it would have to force or merge, and neither is
+  # this helper's decision to make.
+  if [ "$create_branch" -eq 1 ] \
+    && git ls-remote --exit-code --heads origin "$publish_branch" >/dev/null 2>&1; then
+    refuse "origin already has $publish_branch." \
+      "Finish or delete that branch first; this helper neither forces nor merges onto an existing one."
+  fi
+}
+
+if [ "$publish" -eq 1 ]; then
+  publish_preflight
+fi
+
+require_untouched() {
+  if [ -n "$(git status --porcelain -- "$1")" ]; then
+    refuse "$1 already has uncommitted changes." \
+      "This helper commits only the edit it makes. Commit or restore that file first."
+  fi
+}
+
+# Ownership and check selection come from the tools that own those questions.
+report_plan() {
+  plan_path=$1
+  plan_message=$2
+
+  printf '\nclassification: %s\n' "$scope"
+  printf 'checks:\n'
+  if [ "$hooks_path" = .githooks ]; then
+    plan_units=$(selected_units "$plan_path")
+    printf '%s\n' "$plan_units" | sed 's/^/  /'
+    plan_units_line=$(printf '%s' "$plan_units" | tr '\n' ',' | sed 's/,/, /g')
+  else
+    # Listing units nothing will run is worse than saying so: the commit would
+    # look gated when no check ran at all.
+    evidence_unavailable "pre-commit checks" \
+      "core.hooksPath is ${hooks_path:-unset}, not .githooks; fix with tool/setup --fix" \
+      || exit 1
+    plan_units_line="unavailable; this clone runs no hooks"
+  fi
+  printf 'message: %s\n' "$plan_message"
+  evidence_summary
+}
+
+selected_units() {
+  printf 'M\t%s\n' "$1" | "$select_checks" commit
+}
+
+require_classified() {
+  if selected_units "$1" | grep -qx unclassified; then
+    refuse "$1 has no owning scope." \
+      "Update tool/version-control/classify before committing it. Both gates reject an unclassified path."
+  fi
+}
+
+# The pull-request body carries what a reviewer cannot get from the diff: who
+# owns the change, which checks the local gate selected, the exact command that
+# produced it, and what the pre-commit hook reported on the machine it was made
+# on. Nothing here is re-derived; every line comes from a tool that already
+# answered the question.
+build_pr_body() {
+  body_evidence=$1
+  {
+    printf 'Scope: %s\n' "$scope"
+    printf 'Selected checks: %s\n' "$plan_units_line"
+    printf 'Command: %s\n' "$invocation"
+
+    commit_body=$(printf '%s\n' "$message" | sed -n '2,$p')
+    if [ -n "$commit_body" ]; then
+      printf '\n%s\n' "$commit_body"
+    fi
+
+    printf '\nLocal pre-commit evidence:\n\n'
+    printf '```text\n'
+    if [ -n "$body_evidence" ] && [ -s "$body_evidence" ]; then
+      # The hook colours its failures; a pull request renders the escape bytes
+      # rather than the colour.
+      sed "s/$(printf '\033')\[[0-9;]*m//g" "$body_evidence"
+    else
+      printf '(the pre-commit hook output, once the commit runs)\n'
+    fi
+    printf '```\n'
+
+    printf '\nOpened by tool/version-control/commit. Auto-merge is armed, so the\n'
+    printf 'merge commit happens when `Required checks` pass and not before.\n'
+  } >"$pr_body_file"
+}
+
+report_publish_plan() {
+  [ "$create_branch" -eq 1 ] || [ "$publish" -eq 1 ] || return 0
+
+  printf '\n'
+  if [ "$create_branch" -eq 1 ]; then
+    printf 'branch: %s (new, from origin/dev)\n' "$publish_branch"
+  else
+    printf 'branch: %s (current)\n' "$publish_branch"
+  fi
+  [ "$publish" -eq 1 ] || return 0
+
+  # git pushes a branch, not a commit. Anything already on this branch and not
+  # yet on dev is published by the same push and merged by the same auto-merge,
+  # so it is named here rather than left for the operator to discover in the
+  # pull request.
+  if git rev-parse --verify --quiet refs/remotes/origin/dev >/dev/null; then
+    carried=$(git log --oneline origin/dev..HEAD)
+    if [ -n "$carried" ]; then
+      printf 'this branch also carries, and will publish and merge:\n'
+      printf '%s\n' "$carried" | sed 's/^/  /'
+    fi
+  fi
+
+  if [ -n "$existing_pr_url" ]; then
+    # The pull request already exists and this helper does not rewrite it.
+    # Printing the body it would have written would promise a reviewer
+    # something nobody is going to read.
+    printf 'pull request: %s (existing; title and body unchanged)\n' "$existing_pr_url"
+  else
+    build_pr_body ""
+    printf 'pull request title: %s\n' "$message"
+    printf 'pull request body:\n'
+    sed 's/^/  /' "$pr_body_file"
+  fi
+  printf 'commands:\n'
+  if [ "$create_branch" -eq 1 ]; then
+    printf '  git fetch --quiet origin dev\n'
+    printf '  git switch --quiet --create %s origin/dev\n' "$publish_branch"
+  fi
+  printf '  git push --set-upstream origin %s\n' "$publish_branch"
+  if [ -n "$existing_pr_url" ]; then
+    printf '  gh pr merge --auto --merge %s\n' "$existing_pr_url"
+    printf '  (that pull request is already open against dev; no second one is opened)\n'
+  else
+    printf '  gh pr create --base dev --head %s --title %s --body-file <body>\n' \
+      "$publish_branch" "'$message'"
+    printf '  gh pr merge --auto --merge <the pull request that opens>\n'
+  fi
+}
+
+# Undo the one write that precedes the commit, so an abort after it does not
+# leave a branch behind for the next run to refuse over.
+remove_created_branch() {
+  [ "$create_branch" -eq 1 ] || return 0
+
+  git switch --quiet dev
+  git branch --quiet --delete "$publish_branch"
+  printf 'branch: removed %s\n' "$publish_branch"
+}
+
+# The first write of the run, and only after the confirmation.
+create_publish_branch() {
+  [ "$create_branch" -eq 1 ] || return 0
+
+  if ! git fetch --quiet origin dev; then
+    refuse "git fetch origin dev failed." \
+      "Nothing was written. Fix the remote or the network and run this again."
+  fi
+  if [ "$(git rev-parse refs/heads/dev)" != "$(git rev-parse refs/remotes/origin/dev)" ]; then
+    refuse "origin/dev moved while this was waiting for an answer." \
+      "Nothing was written. Fast-forward dev and run this again."
+  fi
+  git switch --quiet --create "$publish_branch" origin/dev
+  printf 'branch: created %s from origin/dev\n' "$publish_branch"
+}
+
+publish_commit() {
+  [ "$publish" -eq 1 ] || return 0
+
+  printf '\n→ pushing %s\n' "$publish_branch"
+  # A plain push, so .githooks/pre-push selects and runs the checks the pushed
+  # content owns. A rejection stops here with the commit local; nothing is
+  # retried and nothing is bypassed.
+  if ! git push --set-upstream origin "$publish_branch"; then
+    printf '\033[31m✗ The push was rejected.\033[0m\n' >&2
+    printf '  The commit is local on %s and nothing was published. Fix what the hook\n' \
+      "$publish_branch" >&2
+    printf '  or the remote reported and push again; nothing here retries with a bypass.\n' >&2
+    exit 1
+  fi
+
+  if [ -n "$existing_pr_url" ]; then
+    pr_url=$existing_pr_url
+    printf '→ reusing the pull request already open against dev\n'
+  else
+    printf '→ opening a pull request against dev\n'
+    build_pr_body "$commit_log"
+    if ! pr_created=$(gh pr create --base dev --head "$publish_branch" \
+      --title "$message" --body-file "$pr_body_file"); then
+      printf '\033[31m✗ The pull request could not be opened.\033[0m\n' >&2
+      printf '  The commit is pushed to %s. Open the pull request against dev yourself.\n' \
+        "$publish_branch" >&2
+      exit 1
+    fi
+    pr_url=$(printf '%s\n' "$pr_created" | sed -n 's|^\(https://[^ ]*\)$|\1|p' | tail -1)
+  fi
+
+  if [ -z "$pr_url" ]; then
+    printf '\033[31m✗ No pull-request URL came back.\033[0m\n' >&2
+    printf '  The commit is pushed to %s. Check the pull request on GitHub.\n' \
+      "$publish_branch" >&2
+    exit 1
+  fi
+
+  # --merge, never --admin: auto-merge waits for Required checks, and that
+  # wait is the whole gate this flag exists to keep.
+  printf '→ arming auto-merge\n'
+  if ! gh pr merge --auto --merge "$pr_url"; then
+    printf '\033[31m✗ Auto-merge could not be armed.\033[0m\n' >&2
+    printf '  The pull request is open: %s\n' "$pr_url" >&2
+    printf '  Arm it there, or merge it once Required checks pass.\n' >&2
+    exit 1
+  fi
+
+  printf '\n%s\n' "$pr_url"
+}
+
+confirm() {
+  printf '\n%s [y/N] ' "$1"
+  if ! IFS= read -r answer; then
+    answer=
+  fi
+  case $answer in
+    y | Y)
+      # Stdin may be a pipe, which echoes no newline of its own. Start the
+      # hook's output on a line of its own either way.
+      printf '\n'
+      return 0
+      ;;
+  esac
+  printf 'Aborted. Nothing was written.\n'
+  exit 1
+}
+
+commit_rejected() {
+  printf '\033[31m✗ The commit was rejected.\033[0m\n' >&2
+  if [ "$create_branch" -eq 1 ]; then
+    printf '  You are now on %s, which this run created.\n' "$publish_branch" >&2
+  fi
+  printf '  The edit is left staged. Fix what the hook reported, or discard it with:\n' >&2
+  printf '    git restore --staged --worktree -- %s\n' "$1" >&2
+  exit 1
+}
+
+commit_staged() {
+  commit_path=$1
+  commit_message=$2
+
+  if [ "$publish" -eq 0 ]; then
+    # No capture, no pipe, no redirection: the hook's evidence lines and its
+    # closing unverified summary are the operator's to read.
+    if git commit -m "$commit_message"; then
+      return 0
+    fi
+    commit_rejected "$commit_path"
+  fi
+
+  # Publishing gives those lines a second reader, and nobody reviews a pull
+  # request by scrolling somebody else's terminal. tee copies rather than
+  # intercepts, so every line still reaches this terminal in order; git's own
+  # status leaves the pipeline through a file, because tee's would always be 0.
+  commit_log="$work/commit.log"
+  {
+    if git commit -m "$commit_message" 2>&1; then
+      printf '0\n' >"$commit_status"
+    else
+      printf '%s\n' "$?" >"$commit_status"
+    fi
+  } | tee "$commit_log"
+  if [ "$(cat "$commit_status")" = 0 ]; then
+    return 0
+  fi
+  commit_rejected "$commit_path"
+}
+
+# The entries of one Nix string list, in file order. The pattern is strict, and
+# the strictness is only safe because require_readable_list refuses the whole
+# edit when the list holds a line neither this nor the editor can read. A reader
+# that quietly skipped `"displayplacer" # broken` would report that entry as
+# absent, and the editor would then add a second copy of it.
+list_entries() {
+  awk -v list="$1" '
+    $0 ~ "^[[:space:]]*" list " = \\[$" { inside = 1; next }
+    inside && /^[[:space:]]*\];[[:space:]]*$/ { inside = 0 }
+    inside && /^[[:space:]]*"[^"]*"$/ {
+      match($0, /"[^"]*"/)
+      print substr($0, RSTART + 1, RLENGTH - 2)
+    }
+  ' "$homebrew_module"
+}
+
+# Everything between the opener and `];` must be a blank line, a comment line,
+# or a bare quoted entry. Anything else is refused rather than skipped, because
+# skipping it is what turns an add into a silent duplicate.
+require_readable_list() {
+  unreadable=$(awk -v list="$1" '
+    $0 ~ "^[[:space:]]*" list " = \\[$" { inside = 1; next }
+    inside && /^[[:space:]]*\];[[:space:]]*$/ { inside = 0; next }
+    inside {
+      if ($0 ~ /^[[:space:]]*$/) next
+      if ($0 ~ /^[[:space:]]*#/) next
+      if ($0 ~ /^[[:space:]]*"[^"]*"$/) next
+      sub(/^[[:space:]]+/, "")
+      printf "%d: %s", NR, $0
+      exit
+    }
+  ' "$homebrew_module")
+
+  [ -z "$unreadable" ] || refuse \
+    "$homebrew_module line $unreadable" \
+    "An entry in $list must be a bare quoted name on its own line. Edit that line by hand; this helper refuses rather than skip it, because skipping it would duplicate an entry."
+}
+
+list_indent() {
+  awk -v list="$1" '
+    $0 ~ "^[[:space:]]*" list " = \\[$" {
+      match($0, /^[[:space:]]*/)
+      fallback = substr($0, 1, RLENGTH) "  "
+      inside = 1
+      next
+    }
+    inside && /^[[:space:]]*\];[[:space:]]*$/ { exit }
+    inside && /^[[:space:]]*"[^"]*"$/ {
+      match($0, /^[[:space:]]*/)
+      print substr($0, 1, RLENGTH)
+      found = 1
+      exit
+    }
+    END { if (!found) printf "%s", fallback }
+  ' "$homebrew_module"
+}
+
+# Insert or delete one entry line and nothing else.
+#
+# The sort key is the last slash-separated segment, not the whole string:
+# casks begins with "nikitabobko/tap/aerospace", sorted under aerospace, so a
+# raw-string comparison files a tapped cask in the wrong place.
+#
+# Comment lines are buffered rather than printed immediately, because a comment
+# block belongs to the entry below it. An insert therefore lands above that
+# block, and a removal takes the block with the entry: "bettercap" carries
+# "Broken on Darwin in the locked nixpkgs", and leaving that behind would
+# silently re-attach it to "displayplacer".
+edit_list() {
+  awk -v list="$1" -v mode="$2" -v item="$3" -v ind="$4" '
+    function key(s,   n, p) {
+      n = split(s, p, "/")
+      return p[n]
+    }
+    function flush(   i) {
+      for (i = 1; i <= buffered; i++) print buf[i]
+      buffered = 0
+    }
+    function insert() {
+      printf "%s\"%s\"\n", ind, item
+      done = 1
+    }
+    BEGIN { state = 0; buffered = 0; done = 0 }
+    state == 0 {
+      print
+      if ($0 ~ "^[[:space:]]*" list " = \\[$") state = 1
+      next
+    }
+    state == 1 && /^[[:space:]]*\];[[:space:]]*$/ {
+      flush()
+      if (mode == "add" && !done) insert()
+      print
+      state = 2
+      next
+    }
+    state == 1 && /^[[:space:]]*#/ {
+      buf[++buffered] = $0
+      next
+    }
+    state == 1 && /^[[:space:]]*"[^"]*"$/ {
+      match($0, /"[^"]*"/)
+      name = substr($0, RSTART + 1, RLENGTH - 2)
+      if (mode == "remove" && name == item) {
+        buffered = 0
+        next
+      }
+      if (mode == "add" && !done && key(name) > key(item)) insert()
+      flush()
+      print
+      next
+    }
+    { flush(); print }
+  ' "$homebrew_module"
+}
+
+homebrew_command() {
+  case $group in
+    brew)
+      list=brews
+      noun=formula
+      ;;
+    cask)
+      list=casks
+      noun=cask
+      ;;
+  esac
+
+  [ -f "$homebrew_module" ] || refuse "$homebrew_module is missing." \
+    "This helper edits the Homebrew inventory declared there."
+  grep -Eq "^[[:space:]]*$list = \[$" "$homebrew_module" \
+    || refuse "$homebrew_module declares no $list list." \
+      "Update the module or this helper; they disagree about the file's shape."
+  require_readable_list "$list"
+
+  require_untouched "$homebrew_module"
+
+  if list_entries "$list" | grep -Fxq -- "$item"; then
+    present=1
+  else
+    present=0
+  fi
+
+  case $action in
+    add)
+      [ "$present" -eq 0 ] || refuse "$item is already declared in $list." "Nothing to do."
+      message="feat(unixlike): add homebrew $noun $item"
+      ;;
+    remove)
+      [ "$present" -eq 1 ] || refuse "$item is not declared in $list." "Nothing to do."
+      message="chore(unixlike): remove homebrew $noun $item"
+      ;;
+  esac
+
+  require_classified "$homebrew_module"
+
+  candidate="$work/candidate"
+  edit_list "$list" "$action" "$item" "$(list_indent "$list")" >"$candidate"
+
+  if cmp -s "$homebrew_module" "$candidate"; then
+    refuse "The edit would change nothing in $homebrew_module." \
+      "The $list list is not shaped the way this helper reads it."
+  fi
+
+  printf 'edit: %s\n' "$homebrew_module"
+  git --no-pager diff --no-index --no-color -- "$homebrew_module" "$candidate" \
+    | sed -n '/^@@/,$p'
+  report_plan "$homebrew_module" "$message"
+  report_publish_plan
+
+  [ "$dry_run" -eq 0 ] || exit 0
+
+  if [ "$publish" -eq 1 ]; then
+    confirm "Commit and publish this change?"
+  else
+    confirm "Apply this edit and commit?"
+  fi
+
+  # The branch comes first, while the tree still matches HEAD, so switching
+  # cannot disturb an edit that has not been made yet.
+  create_publish_branch
+
+  # Written in place so the file keeps its mode and identity.
+  cat "$candidate" >"$homebrew_module"
+  git add -- "$homebrew_module"
+  commit_staged "$homebrew_module" "$message"
+  publish_commit
+}
+
+# The masApps attrset holds `name = id;` pairs rather than the quoted list
+# entries edit_list understands, and its main block is followed by a
+# `# safari extensions` section that a new entry never enters (issue #92: the
+# main block is alphabetized and insertion is alphabetical within it only). A
+# name is unique across both sections, so mas_entries and removal look at the
+# whole attrset while insertion tracks the boundary itself.
+mas_entries() {
+  awk '
+    $0 ~ "^[[:space:]]*masApps = \\{$" { inside = 1; next }
+    inside && /^[[:space:]]*\};[[:space:]]*$/ { inside = 0 }
+    inside && /^[[:space:]]*[A-Za-z_][A-Za-z0-9_-]*[[:space:]]*=[[:space:]]*[0-9]+;[[:space:]]*$/ {
+      line = $0
+      sub(/^[[:space:]]*/, "", line)
+      split(line, parts, "=")
+      name = parts[1]
+      gsub(/[[:space:]]/, "", name)
+      print name
+    }
+  ' "$homebrew_module"
+}
+
+# Everything between the opener and the matching `};` must be a blank line,
+# the `# safari extensions` marker, a comment, or a bare `name = id;` entry.
+# Anything else is refused rather than skipped, for the same reason
+# require_readable_list refuses: skipping it would turn an add into a silent
+# duplicate.
+require_readable_masapps() {
+  unreadable=$(awk '
+    $0 ~ "^[[:space:]]*masApps = \\{$" { inside = 1; next }
+    inside && /^[[:space:]]*\};[[:space:]]*$/ { inside = 0; next }
+    inside {
+      if ($0 ~ /^[[:space:]]*$/) next
+      if ($0 ~ /^[[:space:]]*#/) next
+      if ($0 ~ /^[[:space:]]*[A-Za-z_][A-Za-z0-9_-]*[[:space:]]*=[[:space:]]*[0-9]+;[[:space:]]*$/) next
+      sub(/^[[:space:]]+/, "")
+      printf "%d: %s", NR, $0
+      exit
+    }
+  ' "$homebrew_module")
+
+  [ -z "$unreadable" ] || refuse \
+    "$homebrew_module line $unreadable" \
+    "An entry in masApps must be a bare 'name = id;' line. Edit that line by hand; this helper refuses rather than skip it, because skipping it would duplicate an entry."
+}
+
+masapps_indent() {
+  awk '
+    $0 ~ "^[[:space:]]*masApps = \\{$" {
+      match($0, /^[[:space:]]*/)
+      fallback = substr($0, 1, RLENGTH) "  "
+      inside = 1
+      next
+    }
+    inside && /^[[:space:]]*\};[[:space:]]*$/ { exit }
+    inside && /^[[:space:]]*[A-Za-z_][A-Za-z0-9_-]*[[:space:]]*=[[:space:]]*[0-9]+;[[:space:]]*$/ {
+      match($0, /^[[:space:]]*/)
+      print substr($0, 1, RLENGTH)
+      found = 1
+      exit
+    }
+    END { if (!found) printf "%s", fallback }
+  ' "$homebrew_module"
+}
+
+# Insert or delete one `name = id;` entry. Unlike edit_list, an insertion is
+# only ever considered while still in the main block: once the
+# `# safari extensions` marker is seen, an add that has not landed yet is
+# placed immediately before it, and nothing after the marker is a candidate
+# insertion point even when its key would sort later. Removal has no such
+# restriction, because an existing entry belongs wherever it already is.
+#
+# The blank line that separates the two sections is buffered like a comment so
+# an insertion at the boundary lands above it rather than between it and the
+# marker; that is also why the marker rule inserts before it flushes, the
+# opposite order from the closing brace, where a trailing insertion belongs
+# after whatever is already buffered.
+edit_masapps() {
+  awk -v mode="$1" -v item="$2" -v id="$3" -v ind="$4" '
+    function flush(   i) {
+      for (i = 1; i <= buffered; i++) print buf[i]
+      buffered = 0
+    }
+    function insert() {
+      printf "%s%s = %s;\n", ind, item, id
+      done = 1
+    }
+    BEGIN { state = 0; buffered = 0; done = 0; main = 1 }
+    state == 0 {
+      print
+      if ($0 ~ "^[[:space:]]*masApps = \\{$") state = 1
+      next
+    }
+    state == 1 && /^[[:space:]]*\};[[:space:]]*$/ {
+      flush()
+      if (mode == "add" && !done) insert()
+      print
+      state = 2
+      next
+    }
+    state == 1 && /^[[:space:]]*# safari extensions[[:space:]]*$/ {
+      if (mode == "add" && !done) insert()
+      flush()
+      print
+      main = 0
+      next
+    }
+    state == 1 && /^[[:space:]]*#/ {
+      buf[++buffered] = $0
+      next
+    }
+    state == 1 && /^[[:space:]]*$/ {
+      buf[++buffered] = $0
+      next
+    }
+    state == 1 && /^[[:space:]]*[A-Za-z_][A-Za-z0-9_-]*[[:space:]]*=[[:space:]]*[0-9]+;[[:space:]]*$/ {
+      line = $0
+      sub(/^[[:space:]]*/, "", line)
+      split(line, parts, "=")
+      name = parts[1]
+      gsub(/[[:space:]]/, "", name)
+      if (mode == "remove" && name == item) {
+        buffered = 0
+        next
+      }
+      if (mode == "add" && main && !done && name > item) insert()
+      flush()
+      print
+      next
+    }
+    { flush(); print }
+  ' "$homebrew_module"
+}
+
+mas_command() {
+  [ -f "$homebrew_module" ] || refuse "$homebrew_module is missing." \
+    "This helper edits the Mac App Store inventory declared there."
+  grep -Eq '^[[:space:]]*masApps = \{$' "$homebrew_module" \
+    || refuse "$homebrew_module declares no masApps attrset." \
+      "Update the module or this helper; they disagree about the file's shape."
+  require_readable_masapps
+
+  require_untouched "$homebrew_module"
+
+  if mas_entries | grep -Fxq -- "$item"; then
+    present=1
+  else
+    present=0
+  fi
+
+  case $action in
+    add)
+      [ "$present" -eq 0 ] || refuse "$item is already declared in masApps." "Nothing to do."
+      message="feat(unixlike): add mas app $item"
+      ;;
+    remove)
+      [ "$present" -eq 1 ] || refuse "$item is not declared in masApps." "Nothing to do."
+      message="chore(unixlike): remove mas app $item"
+      ;;
+  esac
+
+  require_classified "$homebrew_module"
+
+  candidate="$work/candidate"
+  edit_masapps "$action" "$item" "$mas_id" "$(masapps_indent)" >"$candidate"
+
+  if cmp -s "$homebrew_module" "$candidate"; then
+    refuse "The edit would change nothing in $homebrew_module." \
+      "masApps is not shaped the way this helper reads it."
+  fi
+
+  printf 'edit: %s\n' "$homebrew_module"
+  git --no-pager diff --no-index --no-color -- "$homebrew_module" "$candidate" \
+    | sed -n '/^@@/,$p'
+  report_plan "$homebrew_module" "$message"
+  report_publish_plan
+
+  [ "$dry_run" -eq 0 ] || exit 0
+
+  if [ "$publish" -eq 1 ]; then
+    confirm "Commit and publish this change?"
+  else
+    confirm "Apply this edit and commit?"
+  fi
+
+  # The branch comes first, while the tree still matches HEAD, so switching
+  # cannot disturb an edit that has not been made yet.
+  create_publish_branch
+
+  # Written in place so the file keeps its mode and identity.
+  cat "$candidate" >"$homebrew_module"
+  git add -- "$homebrew_module"
+  commit_staged "$homebrew_module" "$message"
+  publish_commit
+}
+
+flake_command() {
+  # AGENTS.md line 127: do not update flake inputs unless the task calls for
+  # it. This is the only command that touches them, and it never runs as a side
+  # effect of another one.
+  require_untouched flake.lock
+
+  if [ -n "$input" ]; then
+    message="chore(unixlike-deps): refresh $input in flake.lock"
+    action_line="nix flake update $input"
+  else
+    message="chore(unixlike-deps): refresh flake.lock"
+    action_line="nix flake update"
+  fi
+
+  require_classified flake.lock
+
+  printf 'edit: flake.lock\n'
+  printf 'action: %s\n' "$action_line"
+  report_plan flake.lock "$message"
+  report_publish_plan
+
+  [ "$dry_run" -eq 0 ] || exit 0
+
+  if ! command -v nix >/dev/null 2>&1; then
+    evidence_unavailable "flake refresh" "nix is not installed" || exit 1
+    evidence_summary
+    exit 69
+  fi
+
+  # Named rather than folded into the publish wording: an update writes, and
+  # the prompt that authorises it has to say so.
+  if [ "$publish" -eq 1 ]; then
+    confirm "Run this update, then commit and publish?"
+  else
+    confirm "Run this update and commit the result?"
+  fi
+
+  create_publish_branch
+
+  before=$(git hash-object flake.lock)
+  update_status=0
+  if [ -n "$input" ]; then
+    nix flake update "$input" || update_status=$?
+  else
+    nix flake update || update_status=$?
+  fi
+  if [ "$update_status" != 0 ]; then
+    # Restore first: a failed update may still have written a partial lock, and
+    # the branch cannot be left behind for the next run to refuse over.
+    git checkout --quiet -- flake.lock
+    remove_created_branch
+    refuse "$action_line exited $update_status." \
+      "Nothing was committed. Read what nix reported and run this again."
+  fi
+  after=$(git hash-object flake.lock)
+
+  if [ "$before" = "$after" ]; then
+    printf '\nflake.lock is unchanged; nothing to commit.\n'
+    # Leaving an empty branch behind would be a write with nothing to show for
+    # it, and the next run would then refuse because that branch exists.
+    remove_created_branch
+    exit 0
+  fi
+
+  # CONTRIBUTING.md: flake.lock refreshes go in dedicated chore(unixlike-deps)
+  # commits, so nothing else may join this one.
+  git add -- flake.lock
+  commit_staged flake.lock "$message"
+  publish_commit
+}
+
+case $group in
+  brew | cask) homebrew_command ;;
+  mas) mas_command ;;
+  flake) flake_command ;;
+esac

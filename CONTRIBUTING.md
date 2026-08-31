@@ -66,6 +66,29 @@ Keep `flake.lock` refreshes in dedicated `chore(unixlike-deps)` commits. A
 domain tag certifies only the named domain even though the commit may contain
 accepted history from the others.
 
+For a routine desired-state edit whose message is a template — a Homebrew
+formula or cask, a `flake.lock` refresh — `tool/version-control/commit` shows
+the edit, the classification, the selected checks, and the message, then
+applies it and commits on your confirmation. It refuses on `master` and never
+bypasses a hook.
+
+Add `--publish` and that one confirmation carries the change the rest of the
+way. On `dev` the helper branches to `feature/<scope>-<topic>` from
+`origin/dev`; on any other branch it commits where it is. It then pushes,
+opens a pull request against `dev`, arms auto-merge, and prints the
+pull-request URL. It never waits on CI and never merges: `Required checks` and
+an up-to-date base still decide that, and a push the pre-push hook or the
+remote rejects leaves the commit local. `--dry-run --publish` prints the
+branch, the pull-request title and body, and every command, and writes
+nothing.
+
+`--publish` requires `Allow auto-merge` to be on in the repository settings and
+`gh` to be authenticated for github.com; it refuses before writing anything if
+either is missing. It pushes the branch rather than the one commit, so it lists
+everything on the branch that is not yet on `dev` before you confirm. Where a
+pull request from the branch is already open against `dev` it arms that one and
+leaves its title and body alone.
+
 Domain releases use immutable annotated tags. The target commit must be
 reachable from `master`. The annotation records the domain and reports
 evaluation, build, and native-runtime evidence separately, including explicit
@@ -123,6 +146,32 @@ Use `design-project-governance` from the sibling `skills` project to perform
 this decomposition. The skill owns only the generic method; this repository
 owns the result. A product-specific adapter must not own any part of either.
 
+## Plan work with GitHub milestones
+
+GitHub milestones group planned work after its owning scope and outcome are
+known. They coordinate issues; they do not replace repository policy, domain
+release evidence, or deployment authorization.
+
+1. Search open and closed milestones for the same outcome before creating one.
+2. Choose exactly one scope and title the milestone `<scope>: <outcome>`.
+3. Write `Outcome`, `Included`, `Excluded`, `Completion criteria`, and
+   `Authority` sections in the description. Link the repository documents that
+   own durable decisions and current support boundaries.
+4. Set a due date only when the maintainer has chosen a real schedule. Leave it
+   unset for an unordered roadmap.
+5. Create independently closable issues with the same scope prefix and assign
+   only those issues to the milestone. Link cross-scope prerequisites without
+   assigning them.
+6. Keep one final evidence issue open until the milestone's evaluation, build,
+   native runtime, and activation or Apply evidence is reported as applicable.
+7. Close the milestone only after every assigned issue is closed and the
+   maintainer confirms the completion criteria.
+
+If the scope or outcome was wrong, edit the milestone and its issue membership;
+do not reinterpret a closed milestone as a release or move work between domains
+silently. The milestone description and final evidence issue are the review
+record for this intentionally manual policy.
+
 ## Unix-like changes
 
 1. Put feature-oriented declarations under `modules/`.
@@ -142,7 +191,10 @@ also runs on Windows.
 Windows declarations, payloads, checks, and Apply logic live inside `windows/`
 and are validated on native Windows.
 
-1. Edit `windows/desired/manifest.json` for packages and managed-file policy.
+1. Edit `windows/desired/manifest.json` for features, packages, and
+   managed-file policy. Every package, managed file, the font, and the terminal
+   delegation names exactly one declared feature; a new payload without one is
+   rejected when the manifest loads.
 2. Edit owned payloads below `windows/desired/files/`.
 3. Update PowerShell under `windows/src/` when reconciliation semantics change.
 4. Run native Windows tests and read-only host verification.
@@ -151,20 +203,66 @@ and are validated on native Windows.
 Native read-only verification is:
 
 ```powershell
+.\windows\tools\setup-dev.ps1
 .\windows\tools\check-desired-state.ps1
 .\windows\tools\test.ps1
 .\windows\bootstrap.ps1 -Check
 ```
 
-The test entrypoint requires Pester 5.7.1 so local Windows and CI use the same
-discovery, scope, and assertion semantics. Install that exact version once with
-`Install-Module Pester -RequiredVersion 5.7.1 -Scope CurrentUser`.
+`setup-dev.ps1` installs the contributor toolchain declared in
+`windows/toolchain.json`, which is also what CI installs from, so local Windows
+and CI use the same Pester discovery, scope, and assertion semantics and the
+same Lua compiler. Without it the checks still run: a source whose parser is
+absent is reported as unverified and the command exits 69, so Windows work
+remains pushable from a clone that has not installed anything.
 
 Apply is a deployment, not verification, and requires an explicit request:
 
 ```powershell
 .\windows\bootstrap.ps1
 ```
+
+A host may deploy part of the manifest with `-Minimal`, `-Feature`, `-Add`, or
+`-All`; `README.md` describes the selection model. Selection is host state and
+is recorded in `state.json`, so a change to the feature model is a Windows
+desired-state change while a host's chosen set is not. Report which selection
+produced any `-Check` or Apply evidence, because a check that passed under a
+minimal selection says nothing about the features it excluded.
+
+A change made in an application's own UI moves back into desired state with
+`.\windows\tools\capture.ps1`, which reads the managed targets, writes only
+this repository's payloads — a JSON payload pretty-printed to this
+repository's two-space style — and ends at one confirmation before committing.
+Preview it with `-WhatIf` first. It restates the guards of
+`tool/version-control/commit` rather than calling it, including its branch
+rule: it refuses on `master`, on a dirty index, and on a payload that already
+has uncommitted changes, and never bypasses a hook. On `dev` it branches to
+`feature/windows-capture-<feature>` from a freshly fetched `origin/dev` (or a
+name given with `-Branch`) before it commits, reported in the plan before the
+`[y/N]`, so a capture run on `dev` never leaves a commit on that protected
+branch; on any other branch the commit stays there. Read its refusals rather
+than working around them, and read the hook output under its commit: Git for
+Windows runs the POSIX hooks natively, but a clone that has not set
+`core.hooksPath` runs none of them.
+
+Add `-Publish` and that same confirmation pushes the branch, opens one pull
+request against `dev`, arms auto-merge and prints the pull-request URL. It is
+the Windows copy of `--publish` above and behaves the same way: it never waits
+on CI and never merges, a rejected push leaves every commit local on the named
+branch, and nothing retries with a bypass. It requires `gh` authenticated for
+github.com and `Allow auto-merge` on in the repository settings, and refuses
+before writing anything if either is missing, if a pull request from the same
+branch is open against another base, or if the remote already has the branch
+the run would create; a pull request already open against `dev` from that
+branch is armed unchanged. It pushes a branch rather than a commit, so it
+lists whatever the branch already carries beyond `dev` before the `[y/N]`.
+`-WhatIf -Publish` prints the branch, the title, the body and every command
+and writes nothing. Promotion to `master` and release remain the flows above.
+
+`windows/tools/test.ps1` leaves out the Pester cases that run `capture.ps1`
+end to end in a child PowerShell, and says which ones it skipped. Set
+`WIN_ENV_E2E=1` to run them; the `windows-latest` CI job does, so the merge
+gate covers them and a local push stays quick.
 
 ## Common changes
 
@@ -194,8 +292,13 @@ For Unix-like changes:
 ```sh
 tool/checks/format
 tool/checks/lint
+tool/checks/payloads
 tool/checks/test
 ```
+
+`tool/checks/payloads` parses every source payload declared in
+`assets/payloads.json` with the tool that consumes it. Evaluation does not
+cover them: Nix copies a payload into the store without reading it.
 
 `tool/checks/test` evaluates every declared Unix-like configuration and builds
 configurations native to the current host when appropriate. Foreign evaluation
@@ -218,6 +321,43 @@ tool/version-control/test
 tool/version-control/audit
 tool/version-control/audit-remote  # when gh is authenticated
 ```
+
+### Desired-state hygiene
+
+`tool/version-control/hygiene` scans the tracked tree for undeclared user and
+host names, absolute home paths, tracked runtime state, and machine-unique
+identifiers. It runs on every commit from `.githooks/pre-commit` beside the
+secret scan and outside domain dispatch, and again in CI, because the invariant
+is repository-wide rather than scoped to the domain being changed.
+
+```sh
+tool/version-control/hygiene
+```
+
+When it reports something, in order of preference:
+
+1. Remove the value. A leaked value is desired state that names one machine.
+2. If it is a user or host name that genuinely belongs in desired state,
+   declare it in `modules/flake/inventory.nix` first. That is a `unixlike`
+   change and lands as its own change.
+3. If it is a runtime artefact, delete it and add an ignore rule. The ignore
+   rule alone changes nothing once the file is tracked; it has to leave the
+   index too.
+4. Only when the reported text is genuinely not what it looks like, add one
+   `<path>`, tab, `<literal string>` row to `tool/version-control/hygiene.allow`
+   with a comment giving the reason. Both halves of "one string at one path"
+   are enforced, not conventions: an entry whose literal no longer occurs at
+   its path fails the check and is removed together with the text it forgave,
+   and an entry that forgives more than one line fails as the whole-file
+   exclusion it is. Write a literal specific enough to name the occurrence.
+
+Adding an allow entry is a governance change and is reviewed as one. There is
+no operational bypass: `git commit --no-verify` skips every hook and leaves CI
+to reject the same content.
+
+A bare account name written into prose is not detectable and is not covered.
+Reading prose in the diff for one is a manual obligation recorded in
+`docs/definition-of-done.md`.
 
 Branch protection on `dev` and `master` requires the stable `Required checks`
 job. That job fails unless classification and secret scanning pass and every

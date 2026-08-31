@@ -65,6 +65,11 @@ assets/wezterm/local.lua
 .claude/settings.local.json
 .claude/.cc-writes/
 
+# Maintainer scratch space. Free-form notes with no structure, no review, and no
+# retention promise. Ignoring it is what keeps it out of a public history and out
+# of every ignore-aware search, and therefore out of project context.
+notes/
+
 # ---------------------------------------------------------------------------
 # Nix
 # ---------------------------------------------------------------------------

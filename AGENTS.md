@@ -68,6 +68,11 @@ deployment model.
 - Keep branch protection independent of conditional job names. Require the
   stable `Required checks` CI gate, which accepts only the selected domain jobs
   plus the repository-wide secret scan.
+- Do not re-declare an imperative version manager as a Nix package or install
+  its managed toolchain declaratively. A Unix-like home may source such an
+  installer optionally and last, after declarative PATH entries, so Nix keeps
+  precedence on name collisions. The native Windows domain does not adopt
+  POSIX-shell version managers at all; their absence there is a decision.
 
 ## Governance design
 
@@ -102,6 +107,17 @@ does not certify a domain release or authorize deployment. Do not merge
 `master` back into `dev` merely to carry a promotion merge commit. The
 repository maintainer owns promotion decisions. There is no operational
 bypass; change this policy through the governance workflow before deviating.
+
+GitHub milestones are the repository's planning surface, not a source of
+configuration, architecture, release, or deployment authority. Each milestone
+owns exactly one of `unixlike`, `windows`, `common`, or `repository`, uses the
+title `<scope>: <outcome>`, and contains only issues in that scope. Cross-scope
+dependencies are linked instead of being assigned to the same milestone. A
+closed milestone means its planned source work is complete; it does not certify
+a domain release or authorize activation or Apply. Repository documents remain
+authoritative for durable decisions and current support boundaries. The
+repository maintainer owns milestone scope and closure decisions, with the
+milestone description and final evidence issue providing the manual evidence.
 
 ## Host safety
 
@@ -140,3 +156,8 @@ Canonical project-specific agent workflows live under `.agents/skills/` and
 follow the Agent Skills open standard. Reusable cross-project methods live in
 the separate sibling `skills` project. Model-specific context and skill files
 only point to canonical sources.
+
+`notes/` is untracked maintainer scratch space. It is free-form by design and
+carries no structure, review, or retention promise, so it states no policy and
+records no decision. It is not project context: do not read, search, summarise,
+or act on anything in it unless the user names a file inside it.

@@ -16,13 +16,13 @@
   "newTabPosition": "afterCurrentTab",
   "profiles": {
     "defaults": {
-      "colorScheme": "CyberPunk2077",
+      "colorScheme": "Flexoki Light",
       "experimental.retroTerminalEffect": false,
       "font": {
         "face": "D2KodingLigature Nerd Font Mono",
         "size": 13
       },
-      "useAcrylic": true
+      "useAcrylic": false
     },
     "list": [
       {
@@ -41,31 +41,31 @@
   },
   "schemes": [
     {
-      "background": "#272932",
-      "black": "#272932",
-      "blue": "#9381FF",
-      "brightBlack": "#7B8097",
-      "brightBlue": "#37EBF3",
-      "brightCyan": "#37EBF3",
-      "brightGreen": "#40FFE9",
-      "brightPurple": "#CB1DCD",
-      "brightRed": "#C71515",
-      "brightWhite": "#C1DEFF",
-      "brightYellow": "#FFF955",
-      "cursorColor": "#FDF500",
-      "cyan": "#00D0DB",
-      "foreground": "#E455AE",
-      "green": "#1AC5B0",
-      "name": "CyberPunk2077",
-      "purple": "#742D8B",
-      "red": "#710000",
-      "selectionBackground": "#742D8B",
-      "white": "#D1C5C0",
-      "yellow": "#FDF500"
+      "background": "#FFFCF0",
+      "black": "#100F0F",
+      "blue": "#205EA6",
+      "brightBlack": "#575653",
+      "brightBlue": "#4385BE",
+      "brightCyan": "#3AA99F",
+      "brightGreen": "#879A39",
+      "brightPurple": "#CE5D97",
+      "brightRed": "#D14D41",
+      "brightWhite": "#FFFCF0",
+      "brightYellow": "#D0A215",
+      "cursorColor": "#100F0F",
+      "cyan": "#24837B",
+      "foreground": "#100F0F",
+      "green": "#66800B",
+      "name": "Flexoki Light",
+      "purple": "#A02F6F",
+      "red": "#AF3029",
+      "selectionBackground": "#CECDC3",
+      "white": "#F2F0E5",
+      "yellow": "#C19C00"
     }
   ],
   "theme": "light",
   "themes": [],
-  "useAcrylicInTabRow": true,
+  "useAcrylicInTabRow": false,
   "warning.multiLinePaste": "automatic"
 }

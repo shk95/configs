@@ -1,19 +1,6 @@
 {
   "families": [
-    "JetBrainsMono Nerd Font Mono",
-    "JetBrains Mono",
-    "Symbols Nerd Font Mono"
-  ],
-  "windowsChecks": [
-    {
-      "family": "JetBrainsMono Nerd Font Mono",
-      "importance": "recommended",
-      "hint": "Install a JetBrainsMono Nerd Font release if prompt icons are missing."
-    },
-    {
-      "family": "Symbols Nerd Font Mono",
-      "importance": "optional",
-      "hint": "Install Symbols Nerd Font Mono for broader icon coverage."
-    }
+    "D2KodingLigature Nerd Font Mono",
+    "D2KodingLigature Nerd Font"
   ]
 }

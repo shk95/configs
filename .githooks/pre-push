@@ -1,18 +1,24 @@
 #!/bin/sh
 
 # Run only the checks owned by content being pushed. Deletion-only pushes skip
-# checks, and missing foreign-native tooling remains visible without making one
-# platform depend on another.
+# checks, and a check this host cannot run stays visible as unverified without
+# making one platform depend on another.
+#
+# .githooks/evidence owns what each outcome means. This hook decides which
+# checks are selected, never whether a missing tool is a failure.
 
 set -eu
+
+hooks_dir=$(CDPATH= cd -- "$(dirname -- "$0")" && pwd)
+. "$hooks_dir/evidence"
 
 fail() {
   printf '\033[31m✗ %s\033[0m\n' "$1" >&2
   exit 1
 }
 
-paths=$(mktemp)
-trap 'rm -f "$paths"' EXIT
+changes=$(mktemp)
+trap 'rm -f "$changes"' EXIT
 saw_ref=0
 pushing_content=0
 
@@ -31,7 +37,7 @@ while read -r _local_ref local_sha _remote_ref remote_sha; do
   else
     base=$remote_sha
   fi
-  git diff --name-only "$base" "$local_sha" >>"$paths"
+  git diff --name-status "$base" "$local_sha" >>"$changes"
 done
 
 if [ "$saw_ref" -eq 1 ] && [ "$pushing_content" -eq 0 ]; then
@@ -40,52 +46,78 @@ if [ "$saw_ref" -eq 1 ] && [ "$pushing_content" -eq 0 ]; then
 fi
 
 if [ "$saw_ref" -eq 0 ]; then
-  git diff-tree --no-commit-id --name-only -r HEAD >>"$paths"
+  git diff-tree --no-commit-id --name-status -r HEAD >>"$changes"
 fi
 
-scopes=$(sort -u "$paths" | tool/version-control/classify --stdin)
-printf '→ scopes\n%s\n' "$scopes"
+units=$(sort -u "$changes" | tool/dispatch/select push)
+printf '→ selected checks\n%s\n' "${units:-none}"
 
-if printf '%s\n' "$scopes" | grep -qx unclassified; then
+selected() { printf '%s\n' "$units" | grep -qx "$1"; }
+
+if selected unclassified; then
   fail "A pushed path has no owning scope."
 fi
 
-if printf '%s\n' "$scopes" | grep -qx repository; then
-  printf '→ version-control fixtures\n'
-  tool/version-control/test || fail "Version-control policy fixtures failed."
+if selected repository:fixtures; then
+  evidence_run "version-control fixtures" tool/version-control/test || exit 1
 fi
 
-if printf '%s\n' "$scopes" | grep -qx unixlike; then
-  printf '→ Unix-like test\n'
-  tool/checks/test || fail "Unix-like tests failed."
+if selected unixlike:test; then
+  evidence_run "Unix-like test" tool/checks/test || exit 1
 fi
 
-if printf '%s\n' "$scopes" | grep -qx windows; then
-  if command -v pwsh >/dev/null 2>&1; then
-    shell=pwsh
-  elif command -v pwsh.exe >/dev/null 2>&1; then
-    shell=pwsh.exe
+if selected windows:desired-state || selected windows:tests; then
+  # Pick the pwsh that belongs to this host rather than the first one PATH
+  # happens to expose. A Unix-like host — including WSL, where `pwsh.exe` is
+  # also reachable through Windows interop — runs the checks under its own
+  # native `pwsh`: modules/powershell.nix installs one into every home this
+  # repository configures, the suite's WIN_ENV_E2E cases self-skip there, and
+  # the windows-latest CI job remains the native gate for what a Linux pwsh
+  # cannot exercise. Reaching for `pwsh.exe` over WSL interop instead runs an
+  # unsigned script from \\wsl.localhost\... under Windows' own execution
+  # policy, which refuses it (SecurityError) for reasons that have nothing to
+  # do with the change being pushed — that was the recurring failure #113
+  # tracked and the reason every prior windows-scope push from WSL needed
+  # `--no-verify`. An actual Windows host (Git for Windows' own `sh`, detected
+  # the same way tool/version-control/commit's --publish guard does) keeps
+  # using only `pwsh.exe`, unchanged from before.
+  windows_pwsh=
+  case $(uname -s 2>/dev/null) in
+    MINGW* | MSYS* | CYGWIN*)
+      if command -v pwsh.exe >/dev/null 2>&1; then
+        windows_pwsh=pwsh.exe
+      fi
+      ;;
+    *)
+      if command -v pwsh >/dev/null 2>&1; then
+        windows_pwsh=pwsh
+        echo "· running the Windows checks under this host's own pwsh (not pwsh.exe); WIN_ENV_E2E cases self-skip here and the windows-latest CI job remains the native gate for them"
+      fi
+      ;;
+  esac
+
+  if [ -n "$windows_pwsh" ]; then
+    if selected windows:desired-state; then
+      evidence_run "Windows desired-state check" \
+        "$windows_pwsh" -NoProfile -File ./windows/tools/check-desired-state.ps1 || exit 1
+    fi
+    if selected windows:tests; then
+      evidence_run "Windows tests" \
+        "$windows_pwsh" -NoProfile -File ./windows/tools/test.ps1 || exit 1
+    fi
   else
-    shell=
-  fi
-
-  if [ -n "$shell" ]; then
-    printf '→ Windows desired-state check\n'
-    "$shell" -NoProfile -File ./windows/tools/check-desired-state.ps1 \
-      || fail "Windows desired-state validation failed."
-    printf '→ Windows tests\n'
-    "$shell" -NoProfile -File ./windows/tools/test.ps1 \
-      || fail "Windows tests failed."
-  else
-    echo "· native PowerShell unavailable; Windows checks remain unverified locally and CI must supply evidence"
+    evidence_unavailable "Windows checks" "native PowerShell is unavailable" || exit 1
   fi
 fi
 
-if printf '%s\n' "$scopes" | grep -qx common; then
+if selected common:check; then
+  # Not a host capability: common material that arrives without its own check
+  # is an incomplete change, and no runner can supply the missing script.
   if [ -x common/check ]; then
-    printf '→ common check\n'
-    common/check || fail "Common checks failed."
+    evidence_run "common check" common/check || exit 1
   else
     fail "Common content changed but common/check is unavailable."
   fi
 fi
+
+evidence_summary

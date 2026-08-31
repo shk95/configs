@@ -1,0 +1,6 @@
+{
+  "schemaVersion": 1,
+  "payloads": [
+    { "source": "sample.lua", "format": "lua" }
+  ]
+}

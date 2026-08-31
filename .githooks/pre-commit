@@ -1,52 +1,87 @@
 #!/bin/sh
 #
-# Domain-aware local checks and a repository-wide secret scan.
+# Domain-aware local checks plus the two repository-wide scans: desired-state
+# hygiene and secrets.
 #
 # Windows-only commits must not require Nix. The classifier is shared with the
-# pre-push hook, CI, and the version-control skill.
+# pre-push hook, CI, and the version-control skill. What a check that could not
+# run means is decided in .githooks/evidence rather than here, so this hook
+# needs no knowledge of any domain's tooling.
 #
 # Bypass with `git commit --no-verify`.
 
 set -e
+
+hooks_dir=$(CDPATH= cd -- "$(dirname -- "$0")" && pwd)
+. "$hooks_dir/evidence"
 
 fail() {
   printf '\033[31m✗ %s\033[0m\n' "$1" >&2
   exit 1
 }
 
-run_check() {
-  script="tool/checks/$1"
-  [ -x "$script" ] || return 0
-  printf '→ %s\n' "$1"
-  "$script" || fail "$2"
+abort() {
+  printf '  %s\n' "$1" >&2
+  exit 1
 }
 
-scopes=$(tool/version-control/classify --staged)
+run_check() {
+  name=$1
+  hint=$2
+  script="tool/checks/$name"
+  [ -x "$script" ] || return 0
+  evidence_run "$name" "$script" || abort "$hint"
+}
 
-if printf '%s\n' "$scopes" | grep -qx unclassified; then
+# Which checks this change needs, which is not the same question as who owns
+# it. tool/dispatch/select answers the first; classify still answers the second
+# for release tags, promotion, and CI job selection.
+units=$(git diff --cached --name-status --relative | tool/dispatch/select commit)
+
+selected() { printf '%s\n' "$units" | grep -qx "$1"; }
+
+if selected unclassified; then
   fail "A staged path has no owning scope. Update tool/version-control/classify."
 fi
 
-if printf '%s\n' "$scopes" | grep -qx unixlike; then
+if selected unixlike:format; then
   run_check format "Formatting is off. See tool/checks/format for the fix command."
-  run_check lint   "Static analysis found problems."
 fi
 
-if printf '%s\n' "$scopes" | grep -qx repository; then
-  printf '→ version-control fixtures\n'
-  tool/version-control/test || fail "Version-control policy fixtures failed."
+if selected unixlike:lint; then
+  run_check lint "Static analysis found problems."
 fi
+
+if selected unixlike:payloads; then
+  run_check payloads "Fix the payload it rejected, or declare it in assets/payloads.json."
+fi
+
+if selected repository:fixtures; then
+  evidence_run "version-control fixtures" tool/version-control/test \
+    || abort "Version-control policy fixtures failed."
+fi
+
+# Desired-state hygiene is repository-wide, domain-agnostic and cheap, the same
+# shape as the secret scan below, so it runs unconditionally rather than
+# through tool/dispatch/select. The run_check helper above resolves
+# tool/checks/<name> and cannot reach a repository-scope check, so this calls
+# evidence_run directly.
+evidence_run hygiene tool/version-control/hygiene \
+  || abort "See AGENTS.md, Durable decisions, and tool/version-control/hygiene.allow."
 
 # Hooks are opt-in, so CI mirrors the secret check. A credential that reaches
 # history stays there after the file is deleted, making the staged state the
 # cheapest place to catch one.
 if command -v gitleaks >/dev/null 2>&1; then
-  printf '→ gitleaks\n'
   if gitleaks git --help >/dev/null 2>&1; then
-    gitleaks git --staged --redact --no-banner || fail "Possible secret in staged changes."
+    evidence_run gitleaks gitleaks git --staged --redact --no-banner \
+      || abort "Possible secret in staged changes."
   else
-    gitleaks protect --staged --redact --no-banner || fail "Possible secret in staged changes."
+    evidence_run gitleaks gitleaks protect --staged --redact --no-banner \
+      || abort "Possible secret in staged changes."
   fi
 else
-  printf '· gitleaks not installed, skipping the secret scan\n'
+  evidence_unavailable gitleaks "gitleaks is not installed" || exit 1
 fi
+
+evidence_summary

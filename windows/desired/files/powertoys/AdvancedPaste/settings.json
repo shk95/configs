@@ -7,17 +7,14 @@
       "value": true
     },
     "CloseAfterLosingFocus": {
-      "value": false
+      "value": true
     },
     "EnableClipboardPreview": {
       "value": true
     },
-    "AutoCopySelectionForCustomActionHotkey": {
-      "value": false
-    },
     "advanced-paste-ui-hotkey": {
-      "win": true,
-      "ctrl": false,
+      "win": false,
+      "ctrl": true,
       "alt": false,
       "shift": true,
       "code": 86,
@@ -46,9 +43,6 @@
       "shift": false,
       "code": 0,
       "key": ""
-    },
-    "custom-actions": {
-      "value": []
     },
     "additional-actions": {
       "image-to-text": {
@@ -125,10 +119,9 @@
       }
     },
     "paste-ai-configuration": {
-      "active-provider-id": "",
-      "providers": []
+      "active-provider-id": ""
     }
   },
   "name": "AdvancedPaste",
-  "version": "1"
+  "version": "1.0"
 }

@@ -20,11 +20,12 @@ _darwin-target:
 doctor:
     tool/doctor.sh
 
-# Run formatting, lint, and evaluation/native-build coverage.
+# Run formatting, lint, payload parsing, and evaluation/native-build coverage.
 [group('repository')]
 check:
     tool/checks/format
     tool/checks/lint
+    tool/checks/payloads
     tool/checks/test
 
 [group('repository')]
@@ -34,6 +35,21 @@ format-check:
 [group('repository')]
 lint:
     tool/checks/lint
+
+# Parse every declared Unix-like source payload with its own native tool.
+[group('repository')]
+payloads:
+    tool/checks/payloads
+
+# The same check plus the fixtures that prove it rejects what it must.
+[group('repository')]
+payloads-test:
+    tool/checks/payloads-test
+
+# Prove each Unix-like check reports a missing Nix as unverified, not failed.
+[group('repository')]
+prerequisite-test:
+    tool/checks/prerequisite-test
 
 [group('repository')]
 test:
