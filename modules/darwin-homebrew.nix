@@ -62,6 +62,7 @@ _: {
       brews = [
         # Broken on Darwin in the locked nixpkgs; Linux uses the shared HM list.
         "bettercap"
+        "cmatrix"
         "cowsay"
         "displayplacer"
         "mas"
