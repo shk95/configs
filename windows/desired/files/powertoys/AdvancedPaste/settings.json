@@ -12,9 +12,6 @@
     "EnableClipboardPreview": {
       "value": true
     },
-    "AutoCopySelectionForCustomActionHotkey": {
-      "value": false
-    },
     "advanced-paste-ui-hotkey": {
       "win": true,
       "ctrl": false,
@@ -49,17 +46,6 @@
     },
     "additional-actions": {
       "image-to-text": {
-        "shortcut": {
-          "win": false,
-          "ctrl": false,
-          "alt": false,
-          "shift": false,
-          "code": 0,
-          "key": ""
-        },
-        "isShown": false
-      },
-      "fix-spelling-and-grammar": {
         "shortcut": {
           "win": false,
           "ctrl": false,

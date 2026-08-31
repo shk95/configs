@@ -11,9 +11,6 @@
     "AlwaysRunNotElevated": {
       "value": true
     },
-    "ShowTaskbarIcon": {
-      "value": true
-    },
     "CloseAfterLosingFocus": {
       "value": false
     },

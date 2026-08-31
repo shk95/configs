@@ -1486,6 +1486,72 @@ function ConvertTo-WinEnvJsonSubsetProjection {
     return ($projected | ConvertTo-Json -Depth 100)
 }
 
+function Get-WinEnvJsonSubsetMissingKeyPath {
+    <#
+        .SYNOPSIS
+        Every declared key path a host document does not hold.
+
+        .DESCRIPTION
+        Get-WinEnvJsonSubsetProjection throws on the first missing declared
+        key it meets, which is right for the value it returns -- there is no
+        projected document once one key cannot be found -- but wrong for what
+        an operator learns from a refusal. A payload that has drifted from
+        several PowerToys releases in a row can be missing several keys at
+        once, and finding them one host round-trip at a time, fixing the
+        first, capturing again, and meeting the second, is the failure this
+        exists to avoid.
+
+        This walks the same declared/actual shape Get-WinEnvJsonSubsetProjection
+        does, in the same order, but collects every missing member instead of
+        stopping at the first. A kind mismatch under a member both sides hold
+        is a different refusal -- the application changed the shape of a key
+        this payload declares, not a key it no longer has -- and is left
+        entirely to Get-WinEnvJsonSubsetProjection's own throw: this stops
+        descending there and reports nothing for that subtree, so the two
+        refusals are never blended into one confusing message.
+    #>
+    param(
+        $Declared,
+        $Actual,
+        [Parameter(Mandatory)][AllowEmptyString()][string] $Path
+    )
+
+    $found = [System.Collections.Generic.List[string]]::new()
+
+    $declaredKind = Get-WinEnvJsonValueKind $Declared
+    if ($declaredKind -cne (Get-WinEnvJsonValueKind $Actual)) {
+        return , $found.ToArray()
+    }
+
+    if ($declaredKind -ceq 'object') {
+        foreach ($property in (Get-WinEnvObjectProperties $Declared)) {
+            $name = [string]$property.Name
+            $child = Join-WinEnvJsonPath -Path $Path -Name $name
+            $actualProperty = $Actual.PSObject.Properties[$name]
+            if (-not $actualProperty) {
+                $found.Add($child)
+                continue
+            }
+            $found.AddRange((Get-WinEnvJsonSubsetMissingKeyPath -Declared $property.Value `
+                        -Actual $actualProperty.Value -Path $child))
+        }
+    }
+    elseif ($declaredKind -ceq 'list') {
+        # No missing-key concept applies here: the read side matches a list by
+        # position, so an index the host lacks is a length change, not an
+        # absent key, and stays with the shape refusal below it.
+        $declaredItems = @($Declared)
+        $actualItems = @($Actual)
+        $limit = [Math]::Min($declaredItems.Count, $actualItems.Count)
+        for ($index = 0; $index -lt $limit; $index++) {
+            $found.AddRange((Get-WinEnvJsonSubsetMissingKeyPath -Declared $declaredItems[$index] `
+                        -Actual $actualItems[$index] -Path "$Path[$index]"))
+        }
+    }
+
+    return , $found.ToArray()
+}
+
 function ConvertTo-WinEnvCanonicalJson {
     param([Parameter(Mandatory)][string] $Content)
     return (($Content | ConvertFrom-Json -ErrorAction Stop) | ConvertTo-Json -Depth 100 -Compress)
@@ -2011,6 +2077,28 @@ function Get-WinEnvCapturePlan {
     # operator is told what to fix in the application or in the payload.
     if ([string]$resolved.Compare -eq 'JsonSubset') {
         $declaredText = Get-Content -LiteralPath (Join-Path $RepositoryRoot $source) -Raw -Encoding utf8
+        # Collected before the projection runs, and reported together, so one
+        # capture attempt names every declared key this host is missing
+        # instead of the projection's own first-thrown one; fixing five such
+        # keys used to take five separate host round-trips.
+        #
+        # Not @()-wrapped: Get-WinEnvJsonSubsetMissingKeyPath already returns
+        # an array through the comma idiom that keeps an empty or one-element
+        # result from being unrolled, and @() around a call already protected
+        # that way nests it inside a second, one-element array instead of
+        # flattening it -- turning a clean zero-match result into a false
+        # single "missing" entry that is itself the (empty) array.
+        $missing = Get-WinEnvJsonSubsetMissingKeyPath `
+            -Declared (ConvertFrom-Json -InputObject $declaredText -NoEnumerate -ErrorAction Stop) `
+            -Actual (ConvertFrom-Json -InputObject $hostText -NoEnumerate -ErrorAction Stop) -Path ''
+        if ($missing.Count -gt 0) {
+            $quoted = ($missing | ForEach-Object { "'$_'" }) -join ', '
+            $noun = if ($missing.Count -eq 1) { 'key' } else { 'keys' }
+            $pronoun = if ($missing.Count -eq 1) { 'it' } else { 'them' }
+            return New-CaptureOutcome -Definition $Definition -Status 'Refused' -Source $source -Target $target `
+                -Reason ("the host file no longer holds $quoted, which the payload declares; " +
+                    "remove the $noun from the payload or restore $pronoun in the application")
+        }
         try {
             $hostText = ConvertTo-WinEnvJsonSubsetProjection -DeclaredContent $declaredText -HostContent $hostText
         }

@@ -2150,6 +2150,32 @@ Describe 'capture' {
         $shape.Reason | Should -Match 'properties'
     }
 
+    It 'names every declared key a host file no longer holds, not only the first' {
+        # #110: the projection itself still throws on the first missing key,
+        # which is right for the document it would have returned, but a
+        # refusal built from that one throw let three PowerToys payloads each
+        # surface a second missing key only after the first was already fixed
+        # and captured again. One run has to name all of them.
+        $source = New-CapturePayload 'subset-missing-many.json' `
+            "{`n  `"properties`": {`n    `"kept`": 1,`n    `"first-gone`": 2`n  },`n  `"second-gone`": 3`n}`n"
+        $target = New-CaptureTarget 'subset-missing-many.json' '{"properties":{"kept":9}}'
+        $plan = Get-WinEnvCapturePlan -RepositoryRoot $CaptureRoot -Build 22631 -HostPath $CaptureHost `
+            -Definition (New-CaptureDefinition -Id 'subsetMissingMany' -Compare 'JsonSubset' `
+                -Source $source -Target $target)
+
+        $plan.Status | Should -Be 'Refused'
+        $plan.Reason | Should -Match 'no longer holds'
+        $plan.Reason | Should -Match ([regex]::Escape("'properties.first-gone'"))
+        $plan.Reason | Should -Match ([regex]::Escape("'second-gone'"))
+        # Stable and readable: the nested path names before the top-level one
+        # that follows it in the declared document, not an arbitrary order.
+        $plan.Reason.IndexOf('properties.first-gone') | Should -BeLessThan $plan.Reason.IndexOf('second-gone')
+        # Plural wording once there is more than one, so the message still
+        # reads as a sentence rather than a list grammar disagrees with.
+        $plan.Reason | Should -Match 'keys'
+        $plan.Reason | Should -Match 'restore them'
+    }
+
     It 'leaves a JsonSubset file that matches its payload untouched' {
         # Unchanged is still decided before the projection, so a host holding
         # any number of undeclared keys is not reported as a capture.
