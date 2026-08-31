@@ -66,7 +66,7 @@ Describe 'win-env manifest' {
     It 'loads schema 4 and the desired-state compatibility version' {
         $manifest = Get-WinEnvManifest -Path (Join-Path $desiredStateRoot 'manifest.json')
         $manifest.SchemaVersion | Should -Be 4
-        $manifest.ProjectVersion | Should -Be '0.5.0'
+        $manifest.ProjectVersion | Should -Be '0.6.0'
     }
 
     It 'pins the v3.5.0 D2Koding asset and hashes' {

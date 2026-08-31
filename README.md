@@ -300,9 +300,17 @@ a branch rather than a commit, anything the branch already holds beyond `dev`
 is listed before the `[y/N]`. `-WhatIf -Publish` prints the branch, the title,
 the body and every command, and writes nothing.
 
+A `JsonSubset` payload — most of the PowerToys inventory — is captured by
+projecting the host file onto the keys the payload declares. The payload gains
+the host's value for every key it already owns and gains no key it did not,
+so a version stamp, a timestamp or a window position the application keeps in
+the same file cannot reach desired state. Widening what a capture picks up is
+therefore an edit to the payload, not to a list of exceptions.
+
 It refuses instead of guessing, and says which rule it refused under:
-a file the suite already names as runtime state; a `JsonSubset` payload, which
-is a subset of the host file by design and cannot be derived from it; content
+a file the suite already names as runtime state; a `JsonSubset` payload whose
+declared key the host file no longer holds, or whose host value is no longer
+the shape the payload declares, both named by key path; content
 that still holds an absolute account path, this host's account name, or a
 `.wslconfig` `firewall` key; and a build-conditional file on a host whose
 Windows build is undetermined. Windows Terminal profiles the application
