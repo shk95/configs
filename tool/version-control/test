@@ -303,8 +303,8 @@ fi
 # host happens to have — modules/powershell.nix installs a Unix-like `pwsh`
 # into every home this repository configures, and a WSL host additionally
 # reaches a `pwsh.exe` through Windows interop, which is the exact shape #113
-# regressed on — by stripping any PATH component that resolves either before
-# each scenario adds back only the stub it names.
+# regressed on — by hiding any real pwsh/pwsh.exe from PATH before each
+# scenario adds back only the stub it names.
 hook_root="$test_root/pre-push"
 mkdir -p "$hook_root/none" "$hook_root/pwsh-only" "$hook_root/pwshexe-only" \
   "$hook_root/win-host" "$hook_root/windows"
@@ -340,18 +340,43 @@ git -C "$hook_root" add windows/setup.ps1
 git -C "$hook_root" commit -q -m 'feat(windows): change desired state'
 hook_head=$(git -C "$hook_root" rev-parse HEAD)
 
+# Dropping a whole PATH directory that happens to contain a real pwsh is not
+# safe: a host that packages pwsh alongside its everyday utilities (a stock
+# Linux distribution keeps `pwsh`, `git`, `dirname`, `sort`, and `mktemp` in
+# the same directory; this repository's own Nix-installed `pwsh` does not,
+# which is why this shape survives on a Nix-configured host and only shows up
+# elsewhere) would take those utilities down with the directory, and the hook
+# would die reaching for one of them before it ever gets to the Windows-check
+# logic under test — silently, since that happens before this suite prints
+# anything. Only a directory that actually carries a real pwsh/pwsh.exe needs
+# this treatment, so leave every other PATH entry untouched and shim just
+# that directory's other executables into one place, leaving out only the two
+# names under test.
 hook_clean_path() {
   clean=
+  shim_dir=
   save_ifs=$IFS
   IFS=:
   for dir in $PATH; do
     [ -n "$dir" ] || continue
     if [ -x "$dir/pwsh" ] || [ -x "$dir/pwsh.exe" ]; then
+      shim_dir=${shim_dir:-$test_root/path-shim}
+      mkdir -p "$shim_dir"
+      for entry in "$dir"/*; do
+        [ -f "$entry" ] && [ -x "$entry" ] || continue
+        name=${entry##*/}
+        case "$name" in
+          pwsh | pwsh.exe) continue ;;
+        esac
+        [ -e "$shim_dir/$name" ] && continue
+        ln -s "$entry" "$shim_dir/$name" 2>/dev/null || true
+      done
       continue
     fi
     clean="${clean:+$clean:}$dir"
   done
   IFS=$save_ifs
+  [ -z "$shim_dir" ] || clean="${clean:+$clean:}$shim_dir"
   printf '%s' "$clean"
 }
 hook_clean=$(hook_clean_path)
@@ -364,7 +389,11 @@ run_pre_push() {
 # Unix-like host, its own native `pwsh` on PATH: the checks actually run under
 # it instead of being reported unverified, and the output names CI as the
 # native gate for what a Linux pwsh cannot exercise (WIN_ENV_E2E).
-unix_output=$(run_pre_push "$hook_root/pwsh-only")
+if ! unix_output=$(run_pre_push "$hook_root/pwsh-only"); then
+  echo "pre-push failed outright with a Unix-like host's own pwsh available" >&2
+  echo "$unix_output" >&2
+  exit 1
+fi
 if ! printf '%s\n' "$unix_output" | grep -q 'Windows desired-state check'; then
   echo "pre-push did not run the Windows checks under a Unix-like pwsh" >&2
   exit 1
@@ -382,7 +411,11 @@ fi
 # reports. Using it there is exactly the SecurityError this fix removes, so a
 # host with no *native* pwsh must fall through to unverified instead of
 # reaching for it.
-interop_output=$(run_pre_push "$hook_root/pwshexe-only")
+if ! interop_output=$(run_pre_push "$hook_root/pwshexe-only"); then
+  echo "pre-push failed outright with only a WSL-interop pwsh.exe reachable" >&2
+  echo "$interop_output" >&2
+  exit 1
+fi
 if ! printf '%s\n' "$interop_output" | grep -q 'CI must supply evidence'; then
   echo "pre-push accepted a WSL-interop pwsh.exe as native Windows tooling" >&2
   exit 1
@@ -392,6 +425,7 @@ fi
 # failure.
 if ! none_output=$(run_pre_push "$hook_root/none"); then
   echo "pre-push failed outright with no pwsh available" >&2
+  echo "$none_output" >&2
   exit 1
 fi
 if ! printf '%s\n' "$none_output" | grep -q 'CI must supply evidence'; then
@@ -400,7 +434,11 @@ if ! printf '%s\n' "$none_output" | grep -q 'CI must supply evidence'; then
 fi
 
 # An actual Windows host keeps using only `pwsh.exe`, unchanged from before.
-win_output=$(run_pre_push "$hook_root/win-host")
+if ! win_output=$(run_pre_push "$hook_root/win-host"); then
+  echo "pre-push failed outright on a native Windows host with pwsh.exe" >&2
+  echo "$win_output" >&2
+  exit 1
+fi
 if ! printf '%s\n' "$win_output" | grep -q 'Windows desired-state check'; then
   echo "pre-push skipped the Windows checks on a native Windows host with pwsh.exe" >&2
   exit 1
