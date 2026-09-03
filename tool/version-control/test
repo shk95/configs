@@ -536,6 +536,11 @@ mkdir -p "$commit_root/tool/checks" "$commit_root/modules" "$commit_root/stub" \
 cp -R "$root/.githooks" "$commit_root/.githooks"
 cp -R "$root/tool/version-control" "$commit_root/tool/version-control"
 cp -R "$root/tool/dispatch" "$commit_root/tool/dispatch"
+# The pre-commit hook this fixture enables also runs
+# tool/version-control/invariants, whose own cases are below; here it is a
+# stand-in so only the behaviour under test decides the outcome.
+printf '#!/bin/sh\nexit 0\n' >"$commit_root/tool/version-control/invariants"
+chmod +x "$commit_root/tool/version-control/invariants"
 
 # The pre-commit hook this fixture enables also runs
 # tool/version-control/hygiene, which fails closed when it cannot read a
@@ -1153,6 +1158,11 @@ mkdir -p "$publish_root/tool/checks" "$publish_root/modules/flake" \
 cp -R "$root/.githooks" "$publish_root/.githooks"
 cp -R "$root/tool/version-control" "$publish_root/tool/version-control"
 cp -R "$root/tool/dispatch" "$publish_root/tool/dispatch"
+# The pre-commit hook this fixture enables also runs
+# tool/version-control/invariants, whose own cases are below; here it is a
+# stand-in so only the behaviour under test decides the outcome.
+printf '#!/bin/sh\nexit 0\n' >"$publish_root/tool/version-control/invariants"
+chmod +x "$publish_root/tool/version-control/invariants"
 printf '_: {\n  identity = { %s = "%s"; };\n}\n' gitName Fixture \
   >"$publish_root/modules/flake/inventory.nix"
 : >"$publish_root/tool/version-control/hygiene.allow"
@@ -2166,6 +2176,11 @@ mkdir -p "$hygiene_hook_root/tool" "$hygiene_hook_root/modules"
 cp -R "$root/.githooks" "$hygiene_hook_root/.githooks"
 cp -R "$root/tool/version-control" "$hygiene_hook_root/tool/version-control"
 cp -R "$root/tool/dispatch" "$hygiene_hook_root/tool/dispatch"
+# The pre-commit hook this fixture enables also runs
+# tool/version-control/invariants, whose own cases are below; here it is a
+# stand-in so only the behaviour under test decides the outcome.
+printf '#!/bin/sh\nexit 0\n' >"$hygiene_hook_root/tool/version-control/invariants"
+chmod +x "$hygiene_hook_root/tool/version-control/invariants"
 
 git -C "$hygiene_hook_root" init -q -b dev
 git -C "$hygiene_hook_root" config user.name Fixture
@@ -2316,6 +2331,8 @@ fi
 # arguments so this tracked file never carries an unregistered `INV` literal.
 
 invariants="$root/tool/version-control/invariants"
+grep -q 'evidence_run invariants tool/version-control/invariants' "$root/.githooks/pre-commit"
+grep -q 'run: tool/version-control/invariants' "$root/.github/workflows/ci.yml"
 inv_seq=0
 inv_new() {
   inv_seq=$((inv_seq + 1))
@@ -2623,6 +2640,71 @@ inv_status=0
 (cd "$inv_repo" && "$invariants" --bogus) >/dev/null 2>&1 || inv_status=$?
 if [ "$inv_status" -ne 2 ]; then
   echo "invariants exited $inv_status on bad usage, expected 2" >&2
+  exit 1
+fi
+
+# The pre-commit wiring, in the style of the hygiene hook fixture: a real hook
+# run with a stand-in checker returning each of the three states.
+inv_hook_root="$test_root/invariants-hook"
+mkdir -p "$inv_hook_root/tool" "$inv_hook_root/modules"
+cp -R "$root/.githooks" "$inv_hook_root/.githooks"
+cp -R "$root/tool/version-control" "$inv_hook_root/tool/version-control"
+cp -R "$root/tool/dispatch" "$inv_hook_root/tool/dispatch"
+printf '#!/bin/sh\nexit 0\n' >"$inv_hook_root/tool/version-control/hygiene"
+chmod +x "$inv_hook_root/tool/version-control/hygiene"
+# A passing stand-in secret scanner, so the outcome does not depend on
+# whether this host has gitleaks or on REQUIRE_NATIVE.
+mkdir -p "$inv_hook_root/stub"
+printf '#!/bin/sh\nexit 0\n' >"$inv_hook_root/stub/gitleaks"
+chmod +x "$inv_hook_root/stub/gitleaks"
+
+git -C "$inv_hook_root" init -q -b dev
+git -C "$inv_hook_root" config user.name Fixture
+git -C "$inv_hook_root" config user.email fixture@example.invalid
+printf 'fixture\n' >"$inv_hook_root/file"
+git -C "$inv_hook_root" add file
+git -C "$inv_hook_root" commit -q -m 'feat(repository): create invariants hook fixture'
+printf '_: {}\n' >"$inv_hook_root/modules/fixture.nix"
+git -C "$inv_hook_root" add modules/fixture.nix
+
+stub_invariants() {
+  printf '#!/bin/sh\nexit %s\n' "$1" \
+    >"$inv_hook_root/tool/version-control/invariants"
+  chmod +x "$inv_hook_root/tool/version-control/invariants"
+}
+run_inv_pre_commit() {
+  (cd "$inv_hook_root" && PATH="$inv_hook_root/stub:$PATH" .githooks/pre-commit 2>&1)
+}
+
+stub_invariants 0
+if ! run_inv_pre_commit >/dev/null; then
+  echo "pre-commit rejected a passing invariant check" >&2
+  exit 1
+fi
+
+stub_invariants 1
+if run_inv_pre_commit >/dev/null 2>&1; then
+  echo "pre-commit accepted a failing invariant check" >&2
+  exit 1
+fi
+
+stub_invariants 69
+if ! inv_hook_output=$(run_inv_pre_commit); then
+  printf '%s\n' "$inv_hook_output" >&2
+  echo "pre-commit blocked an invariant check that reported unverified" >&2
+  exit 1
+fi
+if ! printf '%s\n' "$inv_hook_output" | grep -q 'invariants unverified'; then
+  printf '%s\n' "$inv_hook_output" >&2
+  echo "pre-commit did not report the unverified invariant check" >&2
+  exit 1
+fi
+
+# The repository's own registry, against the real index: this suite is the
+# fixture INV repository/registry-coverage names, so it proves itself here.
+if ! inv_real_output=$(cd "$root" && "$invariants" 2>&1); then
+  printf '%s\n' "$inv_real_output" >&2
+  echo "the repository's own invariant registry fails its coverage check" >&2
   exit 1
 fi
 

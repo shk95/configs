@@ -133,9 +133,9 @@ jobs:
 
   # The job key stays `secrets`: the required-checks gate, its SECRETS_RESULT
   # input, and the `needs:` list below all key off it. Only the display name
-  # widens, because the job now carries both repository-wide scans.
+  # widens, because the job carries the three repository-wide scans.
   secrets:
-    name: Secret and hygiene scan
+    name: Secret, hygiene and invariant scan
     runs-on: ubuntu-latest
     # The merge gate is the one place where a check that could not run must not
     # pass. tool/version-control/hygiene needs nothing but a POSIX shell and
@@ -155,6 +155,7 @@ jobs:
             sudo tar -xz -C /usr/local/bin gitleaks
       - run: gitleaks git --redact --no-banner
       - run: tool/version-control/hygiene
+      - run: tool/version-control/invariants
 
   promotion:
     name: Promotion policy

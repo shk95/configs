@@ -69,6 +69,12 @@ fi
 evidence_run hygiene tool/version-control/hygiene \
   || abort "See invariants/repository/hygiene-*.md and tool/version-control/hygiene.allow."
 
+# The invariant registry check is repository-wide for the same reason
+# hygiene is: a fixture renamed in any scope can orphan the tag an entry
+# depends on, so it runs unconditionally rather than through dispatch.
+evidence_run invariants tool/version-control/invariants \
+  || abort "See invariants/README.md."
+
 # Hooks are opt-in, so CI mirrors the secret check. A credential that reaches
 # history stays there after the file is deleted, making the staged state the
 # cheapest place to catch one.
