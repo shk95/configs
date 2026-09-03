@@ -36,6 +36,12 @@
 
 set -eu
 
+# Guards this script's sed/grep/awk calls from Git for Windows' MSYS argument
+# conversion (#79); see tool/version-control/hygiene. Inert elsewhere.
+MSYS_NO_PATHCONV=1
+MSYS2_ARG_CONV_EXCL='*'
+export MSYS_NO_PATHCONV MSYS2_ARG_CONV_EXCL
+
 # The three-state prerequisite contract, restated rather than sourced from
 # tool/checks/prerequisite for the same reason tool/version-control/hygiene
 # restates it: a repository check must not depend on a domain's plane.

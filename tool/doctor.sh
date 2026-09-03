@@ -8,6 +8,12 @@
 # machine with flakes disabled fails every command in a way that looks like a
 # broken flake rather than a missing setting.
 
+# Guards this script's sed/grep/awk calls from Git for Windows' MSYS argument
+# conversion (#79); see tool/version-control/hygiene. Inert elsewhere.
+MSYS_NO_PATHCONV=1
+MSYS2_ARG_CONV_EXCL='*'
+export MSYS_NO_PATHCONV MSYS2_ARG_CONV_EXCL
+
 cd "$(dirname "$0")/.." || exit 1
 
 scope=${1:-all}

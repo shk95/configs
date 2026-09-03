@@ -33,28 +33,28 @@ MSYS_NO_PATHCONV=1
 MSYS2_ARG_CONV_EXCL='*'
 export MSYS_NO_PATHCONV MSYS2_ARG_CONV_EXCL
 
-# Static fixture for #79: every governance script that passes a leading-`/`
-# argv element to a native binary must disable MSYS argument conversion, or a
-# hook-gated Windows commit can be rejected by a mangled argument instead of
-# the real check result. MSYS itself cannot run on this host, so this checks
-# the one thing a Unix host can: that the guard is actually declared in each
-# affected script's source, not that MSYS would leave it alone.
-for msys_guarded in tool/version-control/hygiene .githooks/commit-msg \
-  tool/version-control/check-promotion-queue tool/version-control/commit \
-  tool/version-control/test tool/worktree.sh; do
-  if ! grep -q '^MSYS_NO_PATHCONV=1$' "$root/$msys_guarded"; then
-    echo "$msys_guarded does not set MSYS_NO_PATHCONV=1 (#79)" >&2
-    exit 1
-  fi
-  if ! grep -q "^MSYS2_ARG_CONV_EXCL='\\*'\$" "$root/$msys_guarded"; then
-    echo "$msys_guarded does not set MSYS2_ARG_CONV_EXCL='*' (#79)" >&2
-    exit 1
-  fi
-  if ! grep -q '^export MSYS_NO_PATHCONV MSYS2_ARG_CONV_EXCL$' "$root/$msys_guarded"; then
-    echo "$msys_guarded does not export both MSYS guard variables (#79)" >&2
-    exit 1
-  fi
-done
+# INV repository/msys-argument-guard
+# Git for Windows' sh rewrites a leading-`/` argument before a native binary
+# sees it (#79). The value can arrive through a variable, so the rule is not
+# "a literal appears" but "the script calls a text tool at all": every POSIX
+# shell script in the governance plane that invokes sed, grep or awk declares
+# the guard. Derived from the tree, so a new script is covered on arrival.
+git -C "$root" ls-files -- tool/version-control tool/dispatch tool/doctor.sh tool/setup tool/worktree.sh .githooks |
+  while IFS= read -r msys_script; do
+  [ -f "$root/$msys_script" ] || continue
+  case "$(head -1 "$root/$msys_script")" in
+    '#!/bin/sh'*) ;;
+    *) continue ;;
+  esac
+  grep -qE '(^|[^A-Za-z_])(sed|grep|awk)([^A-Za-z_]|$)' "$root/$msys_script" || continue
+  for guard_line in '^MSYS_NO_PATHCONV=1$' "^MSYS2_ARG_CONV_EXCL='\\*'\$" \
+    '^export MSYS_NO_PATHCONV MSYS2_ARG_CONV_EXCL$'; do
+    if ! grep -q "$guard_line" "$root/$msys_script"; then
+      echo "$msys_script calls a text tool without the MSYS argument guard (#79): missing $guard_line" >&2
+      exit 1
+    fi
+  done
+done || exit 1
 
 grep -q '^  required:$' "$root/.github/workflows/ci.yml"
 grep -q '^    name: Required checks$' "$root/.github/workflows/ci.yml"
