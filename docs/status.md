@@ -992,11 +992,11 @@ The Unix-like entries landed on 2026-09-03 under `invariants/unixlike/`:
 eight entries, three enforced (`INV unixlike/typed-identity` and
 `INV unixlike/desktop-not-wsl`, proven by `tool/checks/flake-test`, and
 `INV unixlike/payload-declared-and-parsed`) and five `pending` with issues
-#127, #128, #129, #130, and #131. The three "Durable decisions" statements this section
-carried until then (`unixlike/typed-identity`,
+#127, #128, #129, #130, and #131. The three "Durable decisions" statements
+this section carried until then (`unixlike/typed-identity`,
 `unixlike/import-order-independence`, `unixlike/version-manager-last`) now
 live in their entries. The `flake-test` suite's banner units are tagged, so
-the untagged baseline stays at the three repository units recorded above.
+the untagged baseline stays at the three repository units recorded below.
 
 One citation into the old `AGENTS.md` layout survives outside this scope:
 `windows/src/WinEnv.psm1` cites "AGENTS.md, Host safety" for the
