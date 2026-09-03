@@ -67,11 +67,12 @@ fi
 # tool/checks/<name> and cannot reach a repository-scope check, so this calls
 # evidence_run directly.
 evidence_run hygiene tool/version-control/hygiene \
-  || abort "See AGENTS.md, Durable decisions, and tool/version-control/hygiene.allow."
+  || abort "See invariants/repository/hygiene-*.md and tool/version-control/hygiene.allow."
 
 # Hooks are opt-in, so CI mirrors the secret check. A credential that reaches
 # history stays there after the file is deleted, making the staged state the
 # cheapest place to catch one.
+# INV repository/no-secret-in-history
 if command -v gitleaks >/dev/null 2>&1; then
   if gitleaks git --help >/dev/null 2>&1; then
     evidence_run gitleaks gitleaks git --staged --redact --no-banner \

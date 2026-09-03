@@ -1,6 +1,8 @@
 #!/bin/sh
 
 # Enforce the stable branch-protection result from conditional CI jobs.
+#
+# INV repository/required-checks-gate
 
 set -eu
 

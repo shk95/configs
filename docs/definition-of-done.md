@@ -27,12 +27,12 @@ native checks instead of treating them as passed.
 - [ ] CI exposes the stable `Required checks` gate and branch protection
       requires it instead of conditional domain job names.
 - [ ] Model-specific skill locations only discover the canonical Agent Skills
-      workflow and do not duplicate its policy.
+      workflow and do not duplicate its policy (INV repository/adapters-pointer-only).
 - [ ] Committed desired state carries no undeclared user or host name, no
       absolute home path, no tracked runtime state, and no machine-unique
       identifier, and every exclusion is declared with its reason.
 - [ ] Prose in the diff was read for a bare account name, which no scanner
-      decides, and that reading is reported as the manual evidence.
+      decides, and that reading is reported as the manual evidence (INV repository/hygiene-prose-account-name).
 
 ## Governance rule design
 

@@ -63,6 +63,7 @@ grep -q 'needs: \[classify, repository, unix, windows, common, secrets, promotio
 grep -q 'run: tool/version-control/required-checks' \
   "$root/.github/workflows/ci.yml"
 
+# INV repository/required-checks-gate
 run_gate() {
   env \
     CLASSIFY_RESULT=${CLASSIFY_RESULT:-success} \
@@ -99,6 +100,7 @@ if PROMOTION_SCOPE=true PROMOTION_RESULT=failure run_gate >/dev/null 2>&1; then
   exit 1
 fi
 
+# INV repository/promotion-source
 PROMOTION_BASE_REF=master \
 PROMOTION_HEAD_REF=dev \
 PROMOTION_BASE_REPOSITORY=owner/repo \
@@ -284,6 +286,8 @@ git -C "$test_root" tag -a unixlike-v2030.01.02 \
 second_plan=$(cd "$test_root" && "$plan_release" unixlike master 2030.01.02)
 printf '%s\n' "$second_plan" | grep -q '^tag: unixlike-v2030.01.02.1$'
 
+# INV repository/flake-lock-isolated
+# INV repository/release-tag-contract
 (cd "$test_root" && "$audit") >/dev/null
 
 git -C "$test_root" tag bad-v2030.01.02
@@ -478,6 +482,7 @@ git -C "$protocol_root" add modules/fixture.nix
 git -C "$protocol_root" commit -q -m 'feat(unixlike): change a module'
 protocol_head=$(git -C "$protocol_root" rev-parse HEAD)
 
+# INV repository/evidence-three-states
 stub_check() {
   printf '#!/bin/sh\nexit %s\n' "$1" >"$protocol_root/tool/checks/test"
   chmod +x "$protocol_root/tool/checks/test"
@@ -1830,6 +1835,8 @@ publish_git switch -q dev
 # one of the strings the check hunts and the scan of this repository stays
 # green without excluding this file from it.
 
+# INV repository/hygiene-home-paths, INV repository/hygiene-declared-names,
+# INV repository/hygiene-runtime-state, INV repository/hygiene-machine-identity
 hygiene="$root/tool/version-control/hygiene"
 
 grep -q 'evidence_run hygiene tool/version-control/hygiene' "$root/.githooks/pre-commit"
@@ -2215,6 +2222,85 @@ fi
 if ! printf '%s\n' "$hygiene_hook_output" | grep -q 'hygiene is unverified'; then
   printf '%s\n' "$hygiene_hook_output" >&2
   echo "pre-commit did not fail the unverified hygiene check under REQUIRE_NATIVE" >&2
+  exit 1
+fi
+
+# ---------------------------------------------------------------------------
+# Commit subjects
+# ---------------------------------------------------------------------------
+#
+# INV repository/conventional-subject
+# The hook is the owner of the grammar; these cases run the real hook on a
+# message file the way Git does.
+
+commit_msg="$root/.githooks/commit-msg"
+msg_file="$test_root/commit-msg-fixture"
+msg_case() {
+  printf '%s\n' "$1" >"$msg_file"
+  "$commit_msg" "$msg_file" >/dev/null 2>&1
+}
+msg_case 'feat(repository): add a rule' ||
+  { echo "commit-msg rejected a conventional subject" >&2; exit 1; }
+msg_case 'Merge branch dev into feature/x' ||
+  { echo "commit-msg rejected a merge subject Git wrote" >&2; exit 1; }
+if msg_case 'Added a rule'; then
+  echo "commit-msg accepted a subject without a type" >&2
+  exit 1
+fi
+long_subject="feat(repository): $(awk 'BEGIN { s = ""; for (i = 0; i < 60; i++) s = s "x"; print s }')"
+if msg_case "$long_subject"; then
+  echo "commit-msg accepted a subject over 72 characters" >&2
+  exit 1
+fi
+
+# ---------------------------------------------------------------------------
+# Secret scan wiring
+# ---------------------------------------------------------------------------
+#
+# INV repository/no-secret-in-history
+# The scanner's rule set is upstream's; what this repository owns is that a
+# scanner refusal blocks the commit. A stand-in scanner on PATH answers
+# `gitleaks git --help` (so the hook picks the `git --staged` form) and then
+# exits with the status under test. hygiene and invariants are stubbed to
+# pass so only the secret scan decides the outcome.
+
+secret_hook_root="$test_root/secret-hook"
+mkdir -p "$secret_hook_root/tool" "$secret_hook_root/modules" "$secret_hook_root/stub"
+cp -R "$root/.githooks" "$secret_hook_root/.githooks"
+cp -R "$root/tool/version-control" "$secret_hook_root/tool/version-control"
+cp -R "$root/tool/dispatch" "$secret_hook_root/tool/dispatch"
+printf '#!/bin/sh\nexit 0\n' >"$secret_hook_root/tool/version-control/hygiene"
+printf '#!/bin/sh\nexit 0\n' >"$secret_hook_root/tool/version-control/invariants"
+chmod +x "$secret_hook_root/tool/version-control/hygiene" \
+  "$secret_hook_root/tool/version-control/invariants"
+
+git -C "$secret_hook_root" init -q -b dev
+git -C "$secret_hook_root" config user.name Fixture
+git -C "$secret_hook_root" config user.email fixture@example.invalid
+printf 'fixture\n' >"$secret_hook_root/file"
+git -C "$secret_hook_root" add file
+git -C "$secret_hook_root" commit -q -m 'feat(repository): create secret hook fixture'
+printf '_: {}\n' >"$secret_hook_root/modules/fixture.nix"
+git -C "$secret_hook_root" add modules/fixture.nix
+
+stub_gitleaks() {
+  printf '#!/bin/sh\ncase "$*" in *--help*) exit 0 ;; esac\nexit %s\n' "$1" \
+    >"$secret_hook_root/stub/gitleaks"
+  chmod +x "$secret_hook_root/stub/gitleaks"
+}
+run_secret_pre_commit() {
+  (cd "$secret_hook_root" && PATH="$secret_hook_root/stub:$PATH" .githooks/pre-commit 2>&1)
+}
+
+stub_gitleaks 0
+if ! run_secret_pre_commit >/dev/null; then
+  echo "pre-commit rejected a commit the secret scan passed" >&2
+  exit 1
+fi
+
+stub_gitleaks 1
+if run_secret_pre_commit >/dev/null 2>&1; then
+  echo "pre-commit accepted a commit the secret scan refused" >&2
   exit 1
 fi
 
