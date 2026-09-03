@@ -3,7 +3,11 @@
 #
 # INV unixlike/desktop-not-wsl — `home.desktop` is composed below into the
 # Darwin home only; the WSL homes take `shared` and `wsl` and nothing
-# graphical. tool/checks/flake-test evaluates that.
+# graphical. tool/checks/flake-test is the enforcement.
+#
+# INV unixlike/composition-in-one-place — this file is that place. Pending
+# #127 tracks a check that no feature file names a host or forces a class's
+# decision.
 {
   config,
   inputs,

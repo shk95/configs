@@ -1,7 +1,6 @@
 id: unixlike/desktop-not-wsl
 statement: A graphical program reaches only a home whose class is graphical, and the WSL homes receive none.
 rationale: docs/architecture.md § Unix-like domain
-enforced-by: schema modules/flake/configurations.nix
 enforced-by: fixture tool/checks/flake-test
 
 The WSL homes render inside a terminal the Windows domain declares, so a
