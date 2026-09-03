@@ -17,7 +17,6 @@ jobs:
     outputs:
       unixlike: ${{ steps.scopes.outputs.unixlike }}
       windows: ${{ steps.scopes.outputs.windows }}
-      common: ${{ steps.scopes.outputs.common }}
       repository: ${{ steps.scopes.outputs.repository }}
     steps:
       - uses: actions/checkout@v7
@@ -45,7 +44,7 @@ jobs:
             echo "A changed path has no owning scope." >&2
             exit 1
           fi
-          for scope in unixlike windows common repository; do
+          for scope in unixlike windows repository; do
             if grep -qx "$scope" <<<"$scopes"; then
               echo "$scope=true" >>"$GITHUB_OUTPUT"
             else
@@ -125,17 +124,6 @@ jobs:
           .\windows\tools\test.ps1
           if ($LASTEXITCODE -ne 0) { exit $LASTEXITCODE }
 
-  common:
-    name: Common contract
-    needs: classify
-    if: needs.classify.outputs.common == 'true'
-    runs-on: ubuntu-latest
-    steps:
-      - uses: actions/checkout@v7
-      - run: |
-          test -x common/check
-          common/check
-
   # The job key stays `secrets`: the required-checks gate, its SECRETS_RESULT
   # input, and the `needs:` list below all key off it. Only the display name
   # widens, because the job carries the three repository-wide scans.
@@ -184,7 +172,7 @@ jobs:
 
   required:
     name: Required checks
-    needs: [classify, repository, unix, windows, common, secrets, promotion]
+    needs: [classify, repository, unix, windows, secrets, promotion]
     if: always()
     runs-on: ubuntu-latest
     env:
@@ -195,8 +183,6 @@ jobs:
       UNIXLIKE_RESULT: ${{ needs.unix.result }}
       WINDOWS_SCOPE: ${{ needs.classify.outputs.windows }}
       WINDOWS_RESULT: ${{ needs.windows.result }}
-      COMMON_SCOPE: ${{ needs.classify.outputs.common }}
-      COMMON_RESULT: ${{ needs.common.result }}
       SECRETS_RESULT: ${{ needs.secrets.result }}
       PROMOTION_SCOPE: ${{ github.event_name == 'pull_request' && github.base_ref == 'master' }}
       PROMOTION_RESULT: ${{ needs.promotion.result }}

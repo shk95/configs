@@ -10,8 +10,8 @@
 #
 # Rules, as named in failure output:
 #
-#   C1  a tracked path under invariants/ is README.md, common/.gitkeep, or
-#       <scope>/<slug>.md with a known scope and a [a-z0-9-] slug
+#   C1  a tracked path under invariants/ is README.md or <scope>/<slug>.md
+#       with a known scope and a [a-z0-9-] slug
 #   C2  the header parses: `key: value` lines, known keys, one each of
 #       id, statement, rationale, at most one owner
 #   C3  id equals <scope>/<slug>
@@ -137,7 +137,7 @@ tab=$(printf '\t')
 while IFS= read -r path; do
   [ -n "$path" ] || continue
   case "$path" in
-    "$registry"/README.md | "$registry"/common/.gitkeep) continue ;;
+    "$registry"/README.md) continue ;;
     "$registry"/*/*.md) ;;
     *)
       fail "$path: C1 not a registry path"
@@ -149,7 +149,7 @@ while IFS= read -r path; do
   slug=${rest#*/}
   slug=${slug%.md}
   case "$scope" in
-    unixlike | windows | common | repository) ;;
+    unixlike | windows | repository) ;;
     *)
       fail "$path: C1 unknown scope '$scope'"
       continue

@@ -35,7 +35,6 @@ require_result secrets "${SECRETS_RESULT:?}"
 require_scope repository "${REPOSITORY_SCOPE:?}" "${REPOSITORY_RESULT:?}"
 require_scope unixlike "${UNIXLIKE_SCOPE:?}" "${UNIXLIKE_RESULT:?}"
 require_scope windows "${WINDOWS_SCOPE:?}" "${WINDOWS_RESULT:?}"
-require_scope common "${COMMON_SCOPE:?}" "${COMMON_RESULT:?}"
 require_scope promotion "${PROMOTION_SCOPE:?}" "${PROMOTION_RESULT:?}"
 
 echo "required checks passed"

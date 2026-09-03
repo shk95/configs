@@ -52,7 +52,6 @@ while IFS= read -r path; do
   [ -n "$path" ] || continue
   case "$path" in
     windows/*) echo windows ;;
-    common/*) echo common ;;
     flake.nix|flake.lock|modules/*|assets/*|.envrc|Justfile|tool/checks/*)
       echo unixlike
       ;;
@@ -62,20 +61,20 @@ while IFS= read -r path; do
     tool/dispatch/*)
       echo repository
       ;;
+    # common/ has no arm: the change that creates the domain restores its classification, dispatch and gate together (docs/architecture.md, "Common domain").
     # INV repository/scope-ownership
     # The invariant registry (invariants/README.md is the format contract).
     # Each scope owns the entries under its own directory, so a Windows
     # invariant is a windows change and needs no Unix-like host to check.
-    invariants/README.md|invariants/common/.gitkeep) echo repository ;;
+    invariants/README.md) echo repository ;;
     invariants/unixlike/*) echo unixlike ;;
     invariants/windows/*) echo windows ;;
-    invariants/common/*) echo common ;;
     invariants/repository/*) echo repository ;;
     *) echo unclassified ;;
   esac
 done <"$paths" | sort -u >"$scopes"
 
-for scope in unixlike windows common repository unclassified; do
+for scope in unixlike windows repository unclassified; do
   if grep -qx "$scope" "$scopes"; then
     echo "$scope"
   fi

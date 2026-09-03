@@ -21,8 +21,11 @@ invariants/
   repository/*.md    version-control policy, hooks, CI, hygiene
   unixlike/*.md      Nix, Home Manager, NixOS, nix-darwin, Unix-like payloads
   windows/*.md       manifest, payloads, PowerShell reconciliation
-  common/            empty until a common component exists
 ```
+
+A scope directory exists only for a domain that exists; the change that
+creates a domain adds its directory, its classifier arm and its checks
+together.
 
 Each scope owns the entries under its directory. A Windows entry is a
 `windows` change and can be written and checked without a Unix-like host.

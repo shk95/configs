@@ -112,16 +112,6 @@ if selected windows:desired-state || selected windows:tests; then
   fi
 fi
 
-if selected common:check; then
-  # Not a host capability: common material that arrives without its own check
-  # is an incomplete change, and no runner can supply the missing script.
-  if [ -x common/check ]; then
-    evidence_run "common check" common/check || exit 1
-  else
-    fail "Common content changed but common/check is unavailable."
-  fi
-fi
-
 # History and clone policy are audited on every push, whatever the change
 # touched: a badly named branch or a non-conventional subject is a property
 # of the push, not of a scope.

@@ -58,7 +58,7 @@ done
 
 grep -q '^  required:$' "$root/.github/workflows/ci.yml"
 grep -q '^    name: Required checks$' "$root/.github/workflows/ci.yml"
-grep -q 'needs: \[classify, repository, unix, windows, common, secrets, promotion\]' \
+grep -q 'needs: \[classify, repository, unix, windows, secrets, promotion\]' \
   "$root/.github/workflows/ci.yml"
 grep -q 'run: tool/version-control/required-checks' \
   "$root/.github/workflows/ci.yml"
@@ -75,8 +75,6 @@ run_gate() {
     UNIXLIKE_RESULT=${UNIXLIKE_RESULT:-skipped} \
     WINDOWS_SCOPE=${WINDOWS_SCOPE:-false} \
     WINDOWS_RESULT=${WINDOWS_RESULT:-skipped} \
-    COMMON_SCOPE=${COMMON_SCOPE:-false} \
-    COMMON_RESULT=${COMMON_RESULT:-skipped} \
     SECRETS_RESULT=${SECRETS_RESULT:-success} \
     PROMOTION_SCOPE=${PROMOTION_SCOPE:-false} \
     PROMOTION_RESULT=${PROMOTION_RESULT:-skipped} \
@@ -87,7 +85,6 @@ run_gate >/dev/null
 REPOSITORY_SCOPE=true REPOSITORY_RESULT=success run_gate >/dev/null
 UNIXLIKE_SCOPE=true UNIXLIKE_RESULT=success run_gate >/dev/null
 WINDOWS_SCOPE=true WINDOWS_RESULT=success run_gate >/dev/null
-COMMON_SCOPE=true COMMON_RESULT=success run_gate >/dev/null
 PROMOTION_SCOPE=true PROMOTION_RESULT=success run_gate >/dev/null
 if REPOSITORY_SCOPE=true REPOSITORY_RESULT=failure run_gate >/dev/null 2>&1; then
   echo "required-checks accepted a failed selected job" >&2
@@ -145,7 +142,7 @@ expect() {
 
 expect unixlike "$classify" --files modules/git.nix
 expect windows "$classify" --files windows/src/WinEnv.psm1
-expect common "$classify" --files common/example.txt
+expect unclassified "$classify" --files common/example.txt
 expect repository "$classify" --files .agents/skills/example/SKILL.md
 expect unclassified "$classify" --files unexpected.file
 # INV repository/scope-ownership
@@ -153,11 +150,11 @@ expect unclassified "$classify" --files unexpected.file
 # owns it, the format contract as repository, and anything else under
 # invariants/ as nothing, so a misplaced file is refused at commit.
 expect repository "$classify" --files invariants/README.md
-expect repository "$classify" --files invariants/common/.gitkeep
 expect repository "$classify" --files invariants/repository/registry-coverage.md
 expect unixlike "$classify" --files invariants/unixlike/import-order.md
 expect windows "$classify" --files invariants/windows/parser-declared.md
-expect common "$classify" --files invariants/common/example.md
+# A common scope is restored together with the domain; until then its paths have no owner.
+expect unclassified "$classify" --files invariants/common/example.md
 expect unclassified "$classify" --files invariants/stray.md
 expect unclassified "$classify" --files invariants/linux/x.md
 expect 'windows
