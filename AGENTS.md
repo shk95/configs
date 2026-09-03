@@ -35,6 +35,7 @@ deferred module classes reach a Unix-like host.
   explicit purpose of the work.
 - Do not introduce implicit imports, generated dependencies, or shared mutable
   payloads across domains.
+- Do not recreate plugin or addon discovery between repository domains.
 - Prefer two locally understandable implementations over a cross-platform
   abstraction.
 - Copying from another domain is allowed and preferred to premature sharing.

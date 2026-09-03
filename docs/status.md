@@ -984,3 +984,20 @@ issue rather than fixing it, so the gap is visible in
 `tool/version-control/invariants` output on every commit. The repository
 entries landed first; the Unix-like and Windows entries follow in their own
 scopes.
+
+Three Unix-like statements from the former `AGENTS.md` "Durable decisions"
+have no registry entry yet because `invariants/unixlike/` lands in its own
+scope. They remain policy unchanged until then, and the Unix-like migration
+registers each of them (as `unixlike/typed-identity`,
+`unixlike/import-order-independence`, and `unixlike/version-manager-last`):
+
+- Do not introduce `specialArgs` for repository identity or host inventory;
+  declare typed flake-parts options inside the Unix-like domain instead.
+- Do not rely on import-tree collection order for order-sensitive list
+  values. Use explicit ordering or a keyed attribute model.
+- Do not re-declare an imperative version manager as a Nix package or
+  install its managed toolchain declaratively. A Unix-like home may source
+  such an installer optionally and last, after declarative PATH entries, so
+  Nix keeps precedence on name collisions. The native Windows domain does not
+  adopt POSIX-shell version managers at all; their absence there is a
+  decision.
