@@ -41,10 +41,12 @@ _: {
     pkgs,
     ...
   }: {
-    # mkForce, because `shared` already defines this file and one of the two
-    # has to win outright. The generated copy is the asset byte for byte with
-    # one node appended, so the keymap stays in exactly one place and no second
-    # payload appears under assets/.
+    # INV unixlike/composition-in-one-place — this is the known leak (#127):
+    # `desktop` forces a file `shared` already declares, so this feature file
+    # decides which class wins. Until a class-level shape expresses it, the
+    # generated copy is the asset byte for byte with one node appended, so the
+    # keymap stays in exactly one place and no second payload appears under
+    # assets/.
     xdg.configFile."zellij/config.kdl".source =
       lib.mkForce
       (pkgs.writeText "zellij-config.kdl" (

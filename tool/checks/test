@@ -24,6 +24,10 @@
 # Every configuration is evaluated. Configurations targeting the current
 # system are built when this host can activate them; foreign configurations
 # remain explicit evaluation-only evidence until a native runner builds them.
+#
+# INV unixlike/eval-covers-every-host — pending #131: check_flavour returns 0
+# for a flavour with no names, and an empty report reaches the summary as a
+# pass. Evaluation is evidence only when it reached every configuration.
 
 set -e
 . "$(CDPATH= cd -- "$(dirname -- "$0")" && pwd)/prerequisite"

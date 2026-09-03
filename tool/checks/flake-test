@@ -1,0 +1,101 @@
+#!/bin/sh
+# Fixtures for the flake's own schema: the typed identity contract in
+# modules/flake/identity.nix and the class composition in
+# modules/flake/configurations.nix. Both are enforced by evaluation, so the
+# fixtures are evaluations — a value the schema must accept, a value it must
+# refuse, and a package that must reach one class of home and not another.
+#
+# `builtins.getFlake` needs --impure to read a path; the locked nixpkgs `lib`
+# is the one the flake evaluates with, so a module-system change in the input
+# shows up here first.
+
+set -e
+. "$(CDPATH= cd -- "$(dirname -- "$0")" && pwd)/prerequisite"
+require_command nix
+
+repo=$(CDPATH= cd -- "$(dirname -- "$0")/../.." && pwd)
+cd "$repo"
+
+fail() {
+  printf '\033[31m✗ %s\033[0m\n' "$1" >&2
+  exit 1
+}
+
+# Evaluates identity.nix against inventory.nix plus one override module and
+# prints the identity attribute asked for. `{ }` is the no-override case; a
+# refusal case forces its value with `lib.mkForce`, otherwise the override
+# collides with the inventory at equal priority and the merge error would
+# stand in for the type refusal being proved.
+identity_eval() {
+  nix eval --raw --impure --expr "
+    let
+      flake = builtins.getFlake (toString ./.);
+      lib = flake.inputs.nixpkgs.lib;
+      eval = lib.evalModules {
+        modules = [ ./modules/flake/identity.nix ./modules/flake/inventory.nix $1 ];
+      };
+    in eval.config.identity.$2"
+}
+
+# ---------------------------------------------------------------------------
+# Typed identity
+# ---------------------------------------------------------------------------
+#
+# INV unixlike/typed-identity
+# The schema is identity.nix. The inventory must satisfy it, and a wrong shape
+# must be refused at evaluation, before any host configuration is composed.
+
+printf '→ accepts the inventory\n'
+user=$(identity_eval '{ }' wsl.user)
+[ -n "$user" ] || fail "identity.nix evaluated the inventory to an empty WSL account"
+
+printf '→ refuses a platform outside the enum\n'
+if identity_eval '{ identity.darwin.system = lib.mkForce "x86_64-linux"; }' darwin.system >/dev/null 2>&1; then
+  fail "identity.nix accepted x86_64-linux as a Darwin platform"
+fi
+
+printf '→ refuses a non-string account\n'
+if identity_eval '{ identity.wsl.user = lib.mkForce 5; }' wsl.user >/dev/null 2>&1; then
+  fail "identity.nix accepted a number as the WSL account"
+fi
+
+# ---------------------------------------------------------------------------
+# The desktop class stays out of the WSL homes
+# ---------------------------------------------------------------------------
+#
+# INV unixlike/desktop-not-wsl
+# modules/flake/configurations.nix composes `homeManager.desktop` into the
+# Darwin home only. WezTerm is the marker: modules/wezterm.nix declares it in
+# the desktop class alone, so its presence in a WSL home's packages means a
+# graphical class reached a headless home. The Darwin arm proves the probe
+# sees the package where the class is composed, so an empty result is not a
+# pass by accident.
+
+packages_of() {
+  nix eval --raw "path:$repo#$1" \
+    --apply 'ps: builtins.concatStringsSep "\n" (map (p: p.pname or p.name) ps)'
+}
+
+wsl_user=$(identity_eval '{ }' wsl.user)
+darwin_user=$(identity_eval '{ }' darwin.user)
+darwin_host=$(identity_eval '{ }' darwin.hostName)
+
+for home in \
+  "homeConfigurations.\"$wsl_user\".config.home.packages" \
+  "nixosConfigurations.wsl.config.home-manager.users.\"$wsl_user\".home.packages"
+do
+  printf '→ %s carries no graphical program\n' "${home%%.config*}"
+  names=$(packages_of "$home")
+  if printf '%s\n' "$names" | grep -qx wezterm; then
+    fail "$home carries wezterm, a desktop-class program"
+  fi
+done
+
+printf '→ the Darwin home carries it\n'
+darwin_home="darwinConfigurations.\"$darwin_host\".config.home-manager.users.\"$darwin_user\".home.packages"
+names=$(packages_of "$darwin_home")
+if ! printf '%s\n' "$names" | grep -qx wezterm; then
+  fail "the Darwin home has no wezterm; the probe cannot see the desktop class"
+fi
+
+echo "✓ flake schema fixtures behave"

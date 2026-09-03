@@ -51,6 +51,11 @@ payloads-test:
 prerequisite-test:
     tool/checks/prerequisite-test
 
+# Prove the flake's typed identity and class composition refuse what they must.
+[group('repository')]
+flake-test:
+    tool/checks/flake-test
+
 [group('repository')]
 test:
     tool/checks/test

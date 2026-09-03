@@ -1,6 +1,12 @@
-# Packages with nothing to configure. Anything that has a home-manager module —
-# and so a config file to generate — gets its own file instead; `bat` moved out of
-# here for exactly that reason, and `programs.bat` contributes the package itself.
+# Packages with nothing to configure.
+#
+# INV unixlike/package-ownership — a package has one declaring module. A
+# feature module owns it only when that module generates its configuration
+# (`bat` moved out of here for exactly that reason, and `programs.bat`
+# contributes the package itself); everything else is declared here once,
+# whether or not Home Manager happens to offer a module for it. Enabling such
+# a module for a package with nothing to configure is a behaviour change, not
+# a tidy-up. Pending #130 tracks a check.
 #
 # These are Home Manager packages rather than `environment.systemPackages`.
 # That makes the same interactive tool set available to Darwin, NixOS-WSL, and

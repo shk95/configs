@@ -38,9 +38,12 @@ overlays, not parallel implementations:
 - `homeManager.desktop` contains graphical Unix-like programs;
 - `homeManager.darwin` contains macOS-only user behavior.
 
-Packages with Home Manager options are owned by their `programs.*` feature
-modules. Unconfigured portable CLI packages are owned by
-`homeManager.shared`. A package belongs in a system module only when a service,
+A package is owned by the feature module that generates its configuration; a
+package with nothing to configure is owned by the shared package list in
+`homeManager.shared`, whether or not Home Manager offers a module for it
+(`INV unixlike/package-ownership`, decided 2026-09-03 over the alternative of
+enabling every available module, which would have been twelve behaviour
+changes). A package belongs in a system module only when a service,
 activation script, or root/system account needs it; installing the same
 interactive package into both HM and `environment.systemPackages` is not a way
 to make it more available. The Darwin system `EDITOR` therefore uses an
@@ -985,22 +988,15 @@ issue rather than fixing it, so the gap is visible in
 entries landed first; the Unix-like and Windows entries follow in their own
 scopes.
 
-Three Unix-like statements from the former `AGENTS.md` "Durable decisions"
-have no registry entry yet because `invariants/unixlike/` lands in its own
-scope. They remain policy unchanged until then, and the Unix-like migration
-registers each of them (as `unixlike/typed-identity`,
-`unixlike/import-order-independence`, and `unixlike/version-manager-last`):
-
-- Do not introduce `specialArgs` for repository identity or host inventory;
-  declare typed flake-parts options inside the Unix-like domain instead.
-- Do not rely on import-tree collection order for order-sensitive list
-  values. Use explicit ordering or a keyed attribute model.
-- Do not re-declare an imperative version manager as a Nix package or
-  install its managed toolchain declaratively. A Unix-like home may source
-  such an installer optionally and last, after declarative PATH entries, so
-  Nix keeps precedence on name collisions. The native Windows domain does not
-  adopt POSIX-shell version managers at all; their absence there is a
-  decision.
+The Unix-like entries landed on 2026-09-03 under `invariants/unixlike/`:
+eight entries, three enforced (`INV unixlike/typed-identity` and
+`INV unixlike/desktop-not-wsl`, proven by `tool/checks/flake-test`, and
+`INV unixlike/payload-declared-and-parsed`) and five `pending` with issues
+#127, #128, #129, #130, and #131. The three "Durable decisions" statements
+this section carried until then (`unixlike/typed-identity`,
+`unixlike/import-order-independence`, `unixlike/version-manager-last`) now
+live in their entries. The `flake-test` suite's banner units are tagged, so
+the untagged baseline stays at the three repository units recorded below.
 
 One citation into the old `AGENTS.md` layout survives outside this scope:
 `windows/src/WinEnv.psm1` cites "AGENTS.md, Host safety" for the

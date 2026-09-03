@@ -54,6 +54,25 @@ validates them with the parser that will consume them. The two declarations are
 independent copies of one idea, not a shared authority, and neither imports the
 other.
 
+Composition, identity, and ownership in this domain rest on seven rules, each
+registered under `invariants/unixlike/`. One file maps module classes to
+hosts, and a feature file writes into a class without naming a host or
+forcing another class's decision, so where a program reaches is read in one
+place. A graphical class is composed only into a home that has a display; the
+WSL homes take no graphical program, because their terminal is declared in the
+Windows domain. Host identity is a typed option set whose values live in the
+inventory, so an evaluator refuses a wrong shape before any host is composed,
+and no untyped argument carries identity around the module system. Module
+files are collected by a directory walk, so nothing order-sensitive may depend
+on that order. A package has one declaring module: a feature module when it
+generates the package's configuration, otherwise the shared list, and a system
+module only when a service, activation script, or system account needs it,
+because two owners on one PATH make precedence an accident; the one accepted
+imperative exception is a version manager the user installs, which is never
+declared as a package and runs last so declared packages keep precedence.
+Finally, evaluation is evidence only when it reached every configuration: a
+check that found nothing to evaluate has failed, not passed.
+
 Linux and macOS may share Nix modules where the Nix module system can evaluate
 the complete result directly for both. Platform-specific Nix modules remain
 preferable when behavior differs. This internal sharing does not make their

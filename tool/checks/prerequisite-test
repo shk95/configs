@@ -18,7 +18,7 @@ if env -i $bare sh -c 'command -v nix' >/dev/null 2>&1; then
   exit 0
 fi
 
-for check in format lint payloads test; do
+for check in format lint payloads flake-test test; do
   printf '→ %s without nix\n' "$check"
 
   status=0
