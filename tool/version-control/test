@@ -2398,6 +2398,11 @@ fi
 # stand-in check, in the style of the pre-push protocol fixture above.
 hygiene_hook_root="$test_root/hygiene-hook"
 mkdir -p "$hygiene_hook_root/tool" "$hygiene_hook_root/modules"
+mkdir -p "$hygiene_hook_root/tool/checks"
+for stub_check_name in format lint payloads; do
+  printf '#!/bin/sh\nexit 0\n' >"$hygiene_hook_root/tool/checks/$stub_check_name"
+  chmod +x "$hygiene_hook_root/tool/checks/$stub_check_name"
+done
 cp -R "$root/.githooks" "$hygiene_hook_root/.githooks"
 cp -R "$root/tool/version-control" "$hygiene_hook_root/tool/version-control"
 cp -R "$root/tool/dispatch" "$hygiene_hook_root/tool/dispatch"
@@ -2414,8 +2419,7 @@ printf 'fixture\n' >"$hygiene_hook_root/file"
 git -C "$hygiene_hook_root" add file
 git -C "$hygiene_hook_root" commit -q -m 'feat(repository): create hygiene hook fixture'
 # A Unix-like path, so the hook does not select repository:fixtures and re-enter
-# this script. tool/checks/ is absent, so the domain checks it does select are
-# skipped by the hook's own [ -x ] guard.
+# this script.
 printf '_: {}\n' >"$hygiene_hook_root/modules/fixture.nix"
 git -C "$hygiene_hook_root" add modules/fixture.nix
 
@@ -2516,6 +2520,11 @@ fi
 
 secret_hook_root="$test_root/secret-hook"
 mkdir -p "$secret_hook_root/tool" "$secret_hook_root/modules" "$secret_hook_root/stub"
+mkdir -p "$secret_hook_root/tool/checks"
+for stub_check_name in format lint payloads; do
+  printf '#!/bin/sh\nexit 0\n' >"$secret_hook_root/tool/checks/$stub_check_name"
+  chmod +x "$secret_hook_root/tool/checks/$stub_check_name"
+done
 cp -R "$root/.githooks" "$secret_hook_root/.githooks"
 cp -R "$root/tool/version-control" "$secret_hook_root/tool/version-control"
 cp -R "$root/tool/dispatch" "$secret_hook_root/tool/dispatch"
@@ -2882,6 +2891,11 @@ fi
 # run with a stand-in checker returning each of the three states.
 inv_hook_root="$test_root/invariants-hook"
 mkdir -p "$inv_hook_root/tool" "$inv_hook_root/modules"
+mkdir -p "$inv_hook_root/tool/checks"
+for stub_check_name in format lint payloads; do
+  printf '#!/bin/sh\nexit 0\n' >"$inv_hook_root/tool/checks/$stub_check_name"
+  chmod +x "$inv_hook_root/tool/checks/$stub_check_name"
+done
 cp -R "$root/.githooks" "$inv_hook_root/.githooks"
 cp -R "$root/tool/version-control" "$inv_hook_root/tool/version-control"
 cp -R "$root/tool/dispatch" "$inv_hook_root/tool/dispatch"
@@ -2934,6 +2948,29 @@ if ! printf '%s\n' "$inv_hook_output" | grep -q 'invariants unverified'; then
   echo "pre-commit did not report the unverified invariant check" >&2
   exit 1
 fi
+
+# INV repository/evidence-three-states
+# A selected check whose script this host cannot run is unverified, not
+# silently passed: the hook says so, and REQUIRE_NATIVE turns it into failure.
+rm "$inv_hook_root/tool/checks/format"
+stub_invariants 0
+if ! inv_hook_output=$(run_inv_pre_commit); then
+  printf '%s\n' "$inv_hook_output" >&2
+  echo "pre-commit blocked a commit whose format check is absent" >&2
+  exit 1
+fi
+if ! printf '%s\n' "$inv_hook_output" | grep -q 'format unverified'; then
+  printf '%s\n' "$inv_hook_output" >&2
+  echo "pre-commit passed an absent format check silently" >&2
+  exit 1
+fi
+if inv_hook_output=$(REQUIRE_NATIVE=1; export REQUIRE_NATIVE; run_inv_pre_commit); then
+  printf '%s\n' "$inv_hook_output" >&2
+  echo "pre-commit accepted an absent format check under REQUIRE_NATIVE" >&2
+  exit 1
+fi
+printf '#!/bin/sh\nexit 0\n' >"$inv_hook_root/tool/checks/format"
+chmod +x "$inv_hook_root/tool/checks/format"
 
 # The repository's own registry, against the real index: this suite is the
 # fixture INV repository/registry-coverage names, so it proves itself here.

@@ -35,7 +35,12 @@ run_check() {
   name=$1
   hint=$2
   script="tool/checks/$name"
-  [ -x "$script" ] || return 0
+  if [ ! -x "$script" ]; then
+    # Not a pass: a selected check this host cannot run is unverified, and
+    # .githooks/evidence decides what that means here and in CI.
+    evidence_unavailable "$name" "$script is not runnable here" || exit 1
+    return 0
+  fi
   evidence_run "$name" "$script" || abort "$hint"
 }
 
