@@ -71,7 +71,7 @@ grep -q 'needs: \[classify, repository, unix, windows, secrets, promotion\]' \
 grep -q 'run: tool/version-control/required-checks' \
   "$root/.github/workflows/ci.yml"
 grep -q 'evidence_run audit tool/version-control/audit' "$root/.githooks/pre-push"
-grep -q 'run: tool/version-control/audit' "$root/.github/workflows/ci.yml"
+grep -q 'run: tool/version-control/audit --history' "$root/.github/workflows/ci.yml"
 
 # INV repository/merge-gate-requires-native
 # Every job that runs a check converts unverified into failure; the two jobs
@@ -186,6 +186,10 @@ expect unixlike "$classify" --files invariants/unixlike/import-order.md
 expect windows "$classify" --files invariants/windows/parser-declared.md
 # A common scope is restored together with the domain; until then its paths have no owner.
 expect unclassified "$classify" --files invariants/common/example.md
+# The removed scope's placeholder keeps an arm of its own: its deletion is
+# inside every pull-request range that spans it, and an unclassified path
+# cannot be pushed.
+expect repository "$classify" --files invariants/common/.gitkeep
 expect unclassified "$classify" --files invariants/stray.md
 expect unclassified "$classify" --files invariants/linux/x.md
 expect 'windows
@@ -408,6 +412,40 @@ audit_status=0
 (cd "$audit_norefs" && REQUIRE_NATIVE=1 "$audit") >/dev/null 2>&1 || audit_status=$?
 if [ "$audit_status" -ne 1 ]; then
   echo "audit exited $audit_status without refs under REQUIRE_NATIVE, expected 1" >&2
+  exit 1
+fi
+
+# The shape a CI runner checks out: a fresh clone, detached, carrying no local
+# branch and no core.hooksPath, because nothing configured it. `--history` is
+# the form the merge gate runs there, and it must pass under REQUIRE_NATIVE;
+# the full form must not, since the clone-local half has nothing to audit.
+audit_ci="$test_root/audit-ci"
+git clone -q "$audit_bare" "$audit_ci"
+git -C "$audit_ci" checkout -q --detach origin/dev
+for audit_ci_branch in $(git -C "$audit_ci" for-each-ref --format='%(refname:short)' refs/heads); do
+  git -C "$audit_ci" branch -q -D "$audit_ci_branch"
+done
+if ! audit_ci_output=$(cd "$audit_ci" && REQUIRE_NATIVE=1 "$audit" --history 2>&1); then
+  printf '%s\n' "$audit_ci_output" >&2
+  echo "audit --history failed on a CI-shaped checkout" >&2
+  exit 1
+fi
+audit_status=0
+audit_ci_full=$(cd "$audit_ci" && "$audit" 2>&1) || audit_status=$?
+if [ "$audit_status" -eq 0 ]; then
+  printf '%s\n' "$audit_ci_full" >&2
+  echo "the full audit passed on a checkout that configured no hooks" >&2
+  exit 1
+fi
+if ! printf '%s\n' "$audit_ci_full" | grep -q 'core.hooksPath'; then
+  printf '%s\n' "$audit_ci_full" >&2
+  echo "the full audit failed on a CI checkout for a reason other than hooks" >&2
+  exit 1
+fi
+audit_status=0
+"$audit" --bogus >/dev/null 2>&1 || audit_status=$?
+if [ "$audit_status" -ne 2 ]; then
+  echo "audit exited $audit_status for an unknown option, expected 2" >&2
   exit 1
 fi
 

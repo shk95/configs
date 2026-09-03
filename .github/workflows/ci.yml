@@ -63,12 +63,7 @@ jobs:
       REQUIRE_NATIVE: "1"
     steps:
       - uses: actions/checkout@v7
-        with:
-          # audit reasons about dev and master history, which a shallow
-          # checkout does not carry.
-          fetch-depth: 0
       - run: tool/version-control/test
-      - run: tool/version-control/audit
 
   unix:
     name: Flake and Unix-like hosts
@@ -130,9 +125,9 @@ jobs:
 
   # The job key stays `secrets`: the required-checks gate, its SECRETS_RESULT
   # input, and the `needs:` list below all key off it. Only the display name
-  # widens, because the job carries the three repository-wide scans.
+  # widens, because the job carries the four repository-wide scans.
   secrets:
-    name: Secret, hygiene and invariant scan
+    name: Secret, hygiene, invariant and history scan
     runs-on: ubuntu-latest
     # The merge gate is the one place where a check that could not run must not
     # pass. tool/version-control/hygiene and tool/version-control/invariants
@@ -153,6 +148,12 @@ jobs:
       - run: gitleaks git --redact --no-banner
       - run: tool/version-control/hygiene
       - run: tool/version-control/invariants
+      # The clone-local half of the audit has nothing to say about a runner,
+      # which configures no hooks and checks out no branch; history is what a
+      # merge gate can and must judge. Unconditional because a badly named
+      # branch or a non-conventional subject is a property of the push, not of
+      # a scope, and needs the fetch-depth: 0 checkout this job already takes.
+      - run: tool/version-control/audit --history
 
   promotion:
     name: Promotion policy

@@ -120,7 +120,10 @@ that two files contain similar lines.
 Until a common component exists the repository carries no common
 classification, dispatch unit, or gate job; the change that creates the
 domain restores all three together with its contract and checks, so common
-content cannot land unchecked.
+content cannot land unchecked. A removed scope keeps a classifier arm for the
+paths it once owned until its historical deletions are no longer inside any
+pull-request range; a path nothing classifies cannot be pushed, and that
+includes its own removal.
 
 ## Change and dependency rules
 

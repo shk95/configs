@@ -72,7 +72,9 @@ while IFS= read -r path; do
     # The invariant registry (invariants/README.md is the format contract).
     # Each scope owns the entries under its own directory, so a Windows
     # invariant is a windows change and needs no Unix-like host to check.
-    invariants/README.md) echo repository ;;
+    # The removed common scope's placeholder: its deletion must still classify
+    # while it sits inside a pull-request range. Dropped when the domain returns.
+    invariants/README.md|invariants/common/.gitkeep) echo repository ;;
     invariants/unixlike/*) echo unixlike ;;
     invariants/windows/*) echo windows ;;
     invariants/repository/*) echo repository ;;

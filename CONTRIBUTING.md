@@ -361,8 +361,9 @@ tool/version-control/audit-remote  # when gh is authenticated
 tool/version-control/hook-evidence
 ```
 
-`tool/version-control/audit` now runs on every push and in the CI repository
-job; running it by hand is for a read-only look between pushes.
+`tool/version-control/audit` now runs on every push and, as `audit --history`,
+in the repository-wide CI scan job; running it by hand is for a read-only look
+between pushes.
 
 ### Desired-state hygiene
 
