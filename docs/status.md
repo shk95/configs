@@ -973,3 +973,14 @@ remote, and is not Windows evidence: the fixtures hand the module a host no
 machine has to be. What is owed from the maintainer's host is one real capture
 after a change made in an application's own UI, showing the branch line in the
 plan and a readable diff, and the hooks' behaviour on that host.
+
+## Invariant registry
+
+Layer-3 invariants are enumerated under `invariants/<scope>/` as of
+2026-09-03 (`INV repository/registry-coverage`). The 2026-09-02 audit found
+twenty-one prose statements of which seven had no enforcement and four were
+violated; the registry records each such statement as `pending` with an
+issue rather than fixing it, so the gap is visible in
+`tool/version-control/invariants` output on every commit. The repository
+entries landed first; the Unix-like and Windows entries follow in their own
+scopes.

@@ -233,6 +233,37 @@ obligation; an enforcement mechanism must trace back to an invariant; evidence
 records an execution and never becomes desired-state authority. This separation
 keeps context concise while retaining reproducible operations.
 
+## Invariant registry
+
+The third layer of this repository's specification — what must remain true
+of committed desired state and tooling — is enumerated under
+`invariants/<scope>/`, one entry per invariant, rather than written as prose
+in this document or in `AGENTS.md`. The registry is the authority for which
+invariants exist. This document remains the authority for why: every entry
+cites a section of this file or of `AGENTS.md` as its rationale, and an
+entry with no such section is refused.
+
+An entry declares its enforcement as `schema` (an evaluator or loader refuses
+the violation), `tool` (a script exits non-zero), `fixture` (a test holds
+positive and negative cases), `manual` (a reviewer evidence item named in
+`docs/definition-of-done.md`), or `pending` (an issue, until a check exists).
+`schema` and `tool` require a `fixture` on the same entry, because an
+enforcement with no fixture is a convention written as a control. `pending`
+is a declared gap with an owner; it is reported, never passed off as
+enforcement.
+
+The canonical statement lives in the registry and the enforcement point
+carries only the entry's id, as the literal `INV <scope>/<slug>`. This is a
+deliberate departure from the rule "rule text lives where it is enforced":
+enforcement here spans POSIX shell, PowerShell and Nix, and a loader's error
+string in one of them cannot serve as the repository-wide sentence. The id
+at the enforcement point is what lets `tool/version-control/invariants`
+verify coverage in both directions.
+
+The registry does not replace the decision record. An entry may point at a
+`docs/status.md` section with `decision:`; the pointer is checked, so a
+renamed section fails the check rather than leaving a dangling citation.
+
 ## Version control and releases
 
 The repository keeps shared integration branches so history remains easy to
