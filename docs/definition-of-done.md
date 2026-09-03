@@ -11,6 +11,9 @@ native checks instead of treating them as passed.
 - [ ] Formatting, lint, and narrow checks relevant to the changed files pass.
 - [ ] User-facing behavior and expensive decisions are documented.
 - [ ] The final diff contains no unrelated changes.
+- [ ] A changed or added invariant has a registry entry under
+      `invariants/<scope>/` whose declared locators name it, and the tagged
+      fixture was read to confirm it exercises the statement.
 - [ ] Evaluation, build, native runtime check, and deployment evidence are
       reported separately where they apply.
 - [ ] No commit, push, tag, branch change, activation, or Apply occurred without
@@ -30,7 +33,9 @@ native checks instead of treating them as passed.
       workflow and do not duplicate its policy (INV repository/adapters-pointer-only).
 - [ ] Committed desired state carries no undeclared user or host name, no
       absolute home path, no tracked runtime state, and no machine-unique
-      identifier, and every exclusion is declared with its reason.
+      identifier, and every exclusion is declared with its reason
+      (INV repository/hygiene-home-paths, INV repository/hygiene-declared-names,
+      INV repository/hygiene-runtime-state, INV repository/hygiene-machine-identity).
 - [ ] Prose in the diff was read for a bare account name, which no scanner
       decides, and that reading is reported as the manual evidence (INV repository/hygiene-prose-account-name).
 

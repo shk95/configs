@@ -49,45 +49,51 @@ deferred module classes reach a Unix-like host.
 See `docs/architecture.md` for the complete ownership, versioning, and
 deployment model.
 
-## Durable decisions
+## Rules that are expensive to break
 
-- Do not introduce `specialArgs` for repository identity or host inventory;
-  declare typed flake-parts options inside the Unix-like domain instead.
-- Do not rely on import-tree collection order for order-sensitive list values.
-  Use explicit ordering or a keyed attribute model.
-- Do not recreate plugin or addon discovery between repository domains.
-- Do not make `common` the default location for new code. Promotion into
-  `common` requires demonstrated stable semantics on every intended consumer.
-- Keep secrets, undeclared usernames, absolute home paths, and snapshots of
-  runtime state out of every domain's committed desired state.
-- Version and release `unixlike`, `windows`, and `common` independently even
-  when their tags point to commits in the same repository.
-- Treat release tags as immutable, annotated domain certifications. Put the
-  required evidence in the tag annotation rather than in model context or a
-  snapshot of host state committed to desired state.
-- Keep branch protection independent of conditional job names. Require the
-  stable `Required checks` CI gate, which accepts only the selected domain jobs
-  plus the repository-wide secret scan.
-- Do not re-declare an imperative version manager as a Nix package or install
-  its managed toolchain declaratively. A Unix-like home may source such an
-  installer optionally and last, after declarative PATH entries, so Nix keeps
-  precedence on name collisions. The native Windows domain does not adopt
-  POSIX-shell version managers at all; their absence there is a decision.
+Absolute rules for a session. Each names what enforces it; `none` means the
+rule stands on this sentence alone.
+
+| Rule | Why | Enforced by |
+| --- | --- | --- |
+| Never activate Home Manager, NixOS, or nix-darwin without an explicit request. | Activation changes a host; evaluation and build evidence never imply permission. | none |
+| Never run Windows `Apply` without an explicit request. `-Check` is the read-only path. | The same boundary on the Windows side. | none |
+| Do not commit, push, tag, rewrite history, or change branches unless the user explicitly requests it. | A tool allowlist reduces prompts; it never authorizes a mutation. | skill (`run-version-control-workflow` refuses); `tool/version-control/commit` refuses on `master` |
+| Do not update flake inputs, change login shells, garbage-collect Nix stores, shut down WSL, or change global Git configuration unless the task calls for it. | Each is host-global or irreversible from inside a session. | none |
+| Treat WSL cgroups, binfmt_misc, mounts, and similar kernel-global resources as shared by every distribution. | One distribution's fix is every distribution's change. | none |
+| Preserve externally managed PowerShell profile blocks. Do not change Windows OpenSSH DefaultShell or add a `.wslconfig` firewall value without explicit direction. | Both are host state another owner writes. | none |
+| Classify a change before editing and change only the owning domain. | Evidence, release tags, and CI jobs are selected by ownership. | hook (`tool/version-control/classify` refuses an unclassified path) |
+| Report evaluation, build, native runtime, and activation or Apply evidence separately, and never upgrade partial evidence. | A tag or a merge is only as true as the lane it names. | `.githooks/evidence`; skill |
+
+## Where invariants are enforced
+
+Codebase invariants — what must remain true of committed desired state and
+tooling — are enumerated under `invariants/<scope>/`, one file each. An entry
+states the rule without naming a command, cites its rationale in
+`docs/architecture.md` or this file, and declares its enforcement as
+`schema` (an evaluator or loader refuses it), `tool` (a script refuses it),
+`fixture` (a test proves both directions), `manual` (a reviewer evidence item
+in `docs/definition-of-done.md`), or `pending` (an issue, until a check
+exists). `tool/version-control/invariants` checks in both directions that
+every declaration exists and names its invariant, on every commit and in CI.
+Read the classified scope's list before editing that scope.
+`invariants/README.md` is the format.
 
 ## Governance design
 
 When adding a repository rule, separate its concerns before implementation:
 
-- Put durable rationale and invariants in `AGENTS.md` or
-  `docs/architecture.md`. State what must remain true without depending on a
-  particular command, product, or model.
+- Put durable rationale in `AGENTS.md` or `docs/architecture.md` and the
+  invariant itself in `invariants/<scope>/`. State what must remain true
+  without depending on a particular command, product, or model.
 - Put human-operable prerequisites, ordered steps, recovery, and authorization
   boundaries in `CONTRIBUTING.md`.
 - Put repeatable agent orchestration in a canonical `.agents/skills/` skill.
 - Put deterministic classification and enforcement in `tool/`, hooks, CI, and
   remote repository settings.
 - Put current adoption state, migration gaps, and expensive choices in
-  `docs/status.md`; put per-run proof in CI, pull requests, and release evidence.
+  `docs/status.md`; put per-run proof in CI, pull requests, and release
+  evidence.
 
 Each obligation has one authoritative source. Procedures and tools implement
 policy but must not silently create new policy. Model-specific adapters only
@@ -119,25 +125,10 @@ authoritative for durable decisions and current support boundaries. The
 repository maintainer owns milestone scope and closure decisions, with the
 milestone description and final evidence issue providing the manual evidence.
 
-## Host safety
-
-- Never activate Home Manager, NixOS, or nix-darwin without an explicit request.
-- Never run Windows `Apply` without an explicit request. `-Check` is the
-  read-only Windows path.
-- Do not update flake inputs, change login shells, garbage-collect Nix stores,
-  shut down WSL, or change global Git configuration unless the task calls for it.
-- Treat WSL cgroups, binfmt_misc, mounts, and similar kernel-global resources as
-  shared by every distribution.
-- Preserve externally managed PowerShell profile blocks. Do not change Windows
-  OpenSSH DefaultShell or add a `.wslconfig` firewall value without explicit
-  direction.
-- Do not commit, push, tag, rewrite history, or change branches unless the user
-  explicitly requests it.
-
 ## Working contract
 
-1. Read `CONTRIBUTING.md`, `docs/architecture.md`, and the relevant part of
-   `docs/status.md`.
+1. Read `CONTRIBUTING.md`, `docs/architecture.md`, the relevant part of
+   `docs/status.md`, and `invariants/<scope>/` for the classified scope.
 2. Classify the task as `unixlike`, `windows`, `common`, `repository`, or an
    explicit transfer.
 3. Use `tool/doctor.sh` before relying on host-local capabilities.
@@ -151,11 +142,11 @@ milestone description and final evidence issue providing the manual evidence.
 User-facing usage belongs in `README.md`, workflow in `CONTRIBUTING.md`,
 architecture and ownership in `docs/architecture.md`, expensive decisions and
 current state in `docs/status.md`, recurring symptoms in
-`docs/troubleshooting.md`, and executable policy in `tool/`, hooks, and CI.
-Canonical project-specific agent workflows live under `.agents/skills/` and
-follow the Agent Skills open standard. Reusable cross-project methods live in
-the separate sibling `skills` project. Model-specific context and skill files
-only point to canonical sources.
+`docs/troubleshooting.md`, invariants in `invariants/`, and executable policy
+in `tool/`, hooks, and CI. Canonical project-specific agent workflows live
+under `.agents/skills/` and follow the Agent Skills open standard. Reusable
+cross-project methods live in the separate sibling `skills` project.
+Model-specific context and skill files only point to canonical sources.
 
 `notes/` is untracked maintainer scratch space. It is free-form by design and
 carries no structure, review, or retention promise, so it states no policy and

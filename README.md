@@ -13,6 +13,9 @@ cross-platform build graph:
 
 See `docs/architecture.md` for the domain and release model.
 
+The invariants each domain must keep, and how each one is enforced, are
+enumerated under `invariants/`.
+
 ## Architecture
 
 ```text
