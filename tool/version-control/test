@@ -2936,6 +2936,26 @@ if (cd "$inv_repo" && INVARIANTS_ENFORCE_C10=1 "$invariants") >/dev/null 2>&1; t
 fi
 (cd "$inv_repo" && INVARIANTS_ENFORCE_C10=1 "$invariants") 2>&1 | grep -q 'C10'
 
+# INV repository/fixtures-name-invariants
+# A tag line directly after a closing banner, with no bare `#` between them,
+# must be read as content of the section it tags, not as a phantom title.
+inv_base
+inv_id=repository/base-rule
+{
+  printf '#!/bin/sh\n'
+  printf '# %s\n# adjacent section\n# %s\n' "$(printf -- '-%.0s' 1 2 3 4 5 6 7 8 9 10 11 12)" "$(printf -- '-%.0s' 1 2 3 4 5 6 7 8 9 10 11 12)"
+  printf '# %s %s\n' INV "$inv_id"
+  printf 'true\n'
+} >"$inv_repo/tests/probe.sh"
+inv_expect_pass 'a tag directly after a closing banner is content, not a phantom title' \
+  '0 fixture units untagged'
+inv_adjacent=$(cd "$inv_repo" && "$invariants" --untagged)
+if printf '%s\n' "$inv_adjacent" | grep -q 'INV'; then
+  printf '%s\n' "$inv_adjacent" >&2
+  echo "invariants --untagged listed a phantom unit for a tag after a closing banner" >&2
+  exit 1
+fi
+
 inv_status=0
 (cd "$inv_repo" && "$invariants" --bogus) >/dev/null 2>&1 || inv_status=$?
 if [ "$inv_status" -ne 2 ]; then

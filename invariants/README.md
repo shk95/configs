@@ -83,6 +83,10 @@ reports the untagged count in its summary and lists them with `--untagged`;
 switches to once every scope has mapped its fixtures. A unit that proves
 no invariant is a deletion candidate, not a rule.
 
+A shell unit runs from its title line to the next unit or the end of the
+file; when a tag follows a closing banner directly, put a bare `#` line
+between them so the tag is read as content, not as a title.
+
 ## Naming an invariant from code, tests and documents
 
 Write the literal `INV <scope>/<slug>`:
