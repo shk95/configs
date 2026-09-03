@@ -65,6 +65,28 @@ grep -q 'run: tool/version-control/required-checks' \
 grep -q 'evidence_run audit tool/version-control/audit' "$root/.githooks/pre-push"
 grep -q 'run: tool/version-control/audit' "$root/.github/workflows/ci.yml"
 
+# INV repository/merge-gate-requires-native
+# Every job that runs a check converts unverified into failure; the two jobs
+# that run none (classify, required) are the only exemptions. Parsed job by
+# job from the workflow's two-space indentation rather than grepped for a
+# literal, so a job added without the variable is caught.
+if ! awk '
+  /^jobs:$/ { in_jobs = 1; next }
+  !in_jobs { next }
+  /^  [a-z]+:$/ { job = $1; sub(":", "", job); jobs[job] = 1; in_env = ""; next }
+  /^    env:$/ { in_env = job; next }
+  /^    [a-z-]+:/ { in_env = "" }
+  in_env != "" && /^      REQUIRE_NATIVE: "1"$/ { native[in_env] = 1 }
+  END {
+    for (j in jobs)
+      if (j != "classify" && j != "required" && !(j in native)) { print j; missing = 1 }
+    exit missing ? 1 : 0
+  }
+' "$root/.github/workflows/ci.yml"; then
+  echo "a CI job that runs checks does not set REQUIRE_NATIVE=1 (listed above)" >&2
+  exit 1
+fi
+
 # INV repository/required-checks-gate
 run_gate() {
   env \
