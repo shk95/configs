@@ -74,9 +74,18 @@ hooks_actual() {
   esac
   (CDPATH= cd -- "$hooks_actual_dir" 2>/dev/null && pwd -P)
 }
-hooks_expected=$(CDPATH= cd -- "$(git rev-parse --show-toplevel)/.githooks" 2>/dev/null && pwd -P)
-hooks_enabled=0
-[ -n "$hooks_expected" ] && [ "$(hooks_actual)" = "$hooks_expected" ] && hooks_enabled=1
+# Enabled when Git's hooks directory is the tracked .githooks of any worktree
+# of this repository: a linked worktree shares the clone's absolute
+# core.hooksPath, which names the main worktree's copy of the same tracked
+# directory.
+hooks_enabled() {
+  hooks_enabled_actual=$(hooks_actual) || return 1
+  git worktree list --porcelain 2>/dev/null | sed -n 's/^worktree //p' |
+    while IFS= read -r hooks_enabled_root; do
+      hooks_enabled_expected=$(CDPATH= cd -- "$hooks_enabled_root/.githooks" 2>/dev/null && pwd -P) || continue
+      [ "$hooks_enabled_actual" = "$hooks_enabled_expected" ] && echo yes
+    done | grep -q yes
+}
 
 homebrew_module=modules/darwin-homebrew.nix
 
@@ -501,7 +510,7 @@ report_plan() {
 
   printf '\nclassification: %s\n' "$scope"
   printf 'checks:\n'
-  if [ "$hooks_enabled" -eq 1 ]; then
+  if hooks_enabled; then
     plan_units=$(selected_units "$plan_path")
     printf '%s\n' "$plan_units" | sed 's/^/  /'
     plan_units_line=$(printf '%s' "$plan_units" | tr '\n' ',' | sed 's/,/, /g')

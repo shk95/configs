@@ -1928,6 +1928,27 @@ if [ "$(git -C "$hooks_root" config --local --get core.hooksPath)" != .githooks 
   exit 1
 fi
 
+# A linked worktree shares the clone's absolute core.hooksPath, which names
+# the main worktree's .githooks; that is the tracked hooks and counts as enabled.
+git -C "$hooks_root" config core.hooksPath "$hooks_root/.githooks"
+printf 'seed\n' >"$hooks_root/seed"
+git -C "$hooks_root" add seed
+git -C "$hooks_root" commit -q -m 'feat(repository): seed hooks fixture'
+hooks_wt="$test_root/hooks-path-wt"
+git -C "$hooks_root" worktree add -q -b feature/repository-hooks-wt "$hooks_wt"
+mkdir -p "$hooks_wt/tool"
+cp "$root/tool/setup" "$hooks_wt/tool/setup"
+cp "$root/tool/doctor.sh" "$hooks_wt/tool/doctor.sh"
+if ! (cd "$hooks_wt" && tool/setup) | grep -q '✓ core.hooksPath'; then
+  echo "tool/setup rejected the main clone's .githooks from a linked worktree" >&2
+  exit 1
+fi
+if ! (cd "$hooks_wt" && tool/doctor.sh repository 2>/dev/null) | grep -q 'git hooks enabled'; then
+  echo "tool/doctor.sh rejected the main clone's .githooks from a linked worktree" >&2
+  exit 1
+fi
+git -C "$hooks_root" worktree remove --force "$hooks_wt"
+
 # ---------------------------------------------------------------------------
 # Desired-state hygiene
 # ---------------------------------------------------------------------------

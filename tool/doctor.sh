@@ -99,12 +99,23 @@ hooks_actual() {
   esac
   (CDPATH= cd -- "$hooks_actual_dir" 2>/dev/null && pwd -P)
 }
-hooks_expected=$(CDPATH= cd -- "$(git rev-parse --show-toplevel)/.githooks" 2>/dev/null && pwd -P)
+# Enabled when Git's hooks directory is the tracked .githooks of any worktree
+# of this repository: a linked worktree shares the clone's absolute
+# core.hooksPath, which names the main worktree's copy of the same tracked
+# directory.
+hooks_enabled() {
+  hooks_enabled_actual=$(hooks_actual) || return 1
+  git worktree list --porcelain 2>/dev/null | sed -n 's/^worktree //p' |
+    while IFS= read -r hooks_enabled_root; do
+      hooks_enabled_expected=$(CDPATH= cd -- "$hooks_enabled_root/.githooks" 2>/dev/null && pwd -P) || continue
+      [ "$hooks_enabled_actual" = "$hooks_enabled_expected" ] && echo yes
+    done | grep -q yes
+}
 
 echo
 echo "Version control"
 
-if [ -n "$hooks_expected" ] && [ "$(hooks_actual)" = "$hooks_expected" ]; then
+if hooks_enabled; then
   ok "git hooks enabled"
 else
   # A hard failure: without this a clone commits with no local policy or secret
