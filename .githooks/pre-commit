@@ -8,6 +8,9 @@
 # run means is decided in .githooks/evidence rather than here, so this hook
 # needs no knowledge of any domain's tooling.
 #
+# INV repository/hook-evidence-recorded: every check run through
+# .githooks/evidence is appended to a log outside the working tree.
+#
 # Bypass with `git commit --no-verify`.
 
 set -e

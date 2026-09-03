@@ -132,6 +132,13 @@ else
   bad "git hooks are NOT enabled" "Inspect with 'tool/setup', then enable with 'tool/setup --fix'."
 fi
 
+# INV repository/hook-evidence-recorded: silent when the log is absent, since
+# a fresh clone or a --reset host has run no hook yet.
+hook_log="$(git rev-parse --git-common-dir 2>/dev/null)/hooks-evidence.log"
+if [ -s "$hook_log" ]; then
+  ok "$(tool/version-control/hook-evidence | head -1)"
+fi
+
 git_name=$(git config --get user.name 2>/dev/null || true)
 git_email=$(git config --get user.email 2>/dev/null || true)
 if [ -n "$git_name" ] && [ -n "$git_email" ]; then

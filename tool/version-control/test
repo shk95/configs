@@ -2986,6 +2986,46 @@ fi
 printf '#!/bin/sh\nexit 0\n' >"$inv_hook_root/tool/checks/format"
 chmod +x "$inv_hook_root/tool/checks/format"
 
+# INV repository/hook-evidence-recorded
+inv_hook_log="$inv_hook_root/.git/hooks-evidence.log"
+if [ ! -f "$inv_hook_log" ]; then
+  echo "pre-commit recorded no hook evidence" >&2
+  exit 1
+fi
+if ! grep -q "$(printf 'pre-commit\tinvariants\tverified')" "$inv_hook_log"; then
+  cat "$inv_hook_log" >&2
+  echo "the hook log lacks the verified invariants outcome" >&2
+  exit 1
+fi
+if ! grep -q "$(printf 'pre-commit\tinvariants\tfailed')" "$inv_hook_log"; then
+  echo "the hook log lacks the failed invariants outcome" >&2
+  exit 1
+fi
+if ! grep -q "$(printf 'pre-commit\tinvariants\tunverified')" "$inv_hook_log"; then
+  echo "the hook log lacks the unverified invariants outcome" >&2
+  exit 1
+fi
+if git -C "$inv_hook_root" status --porcelain | grep -q hooks-evidence; then
+  echo "the hook log is visible to git status; it must live under .git/" >&2
+  exit 1
+fi
+hook_evidence="$root/tool/version-control/hook-evidence"
+if ! hook_summary=$(cd "$inv_hook_root" && "$hook_evidence"); then
+  echo "hook-evidence failed to read the log" >&2
+  exit 1
+fi
+printf '%s\n' "$hook_summary" | grep -q '^hook evidence: [0-9][0-9]* outcomes'
+printf '%s\n' "$hook_summary" | grep -q "$(printf '  invariants\tverified\t')"
+(cd "$inv_hook_root" && "$hook_evidence" --reset) >/dev/null
+if [ -s "$inv_hook_log" ]; then
+  echo "hook-evidence --reset left outcomes in the log" >&2
+  exit 1
+fi
+if ! (cd "$audit_norefs" && "$hook_evidence") | grep -q 'no hook evidence recorded yet'; then
+  echo "hook-evidence did not report an absent log" >&2
+  exit 1
+fi
+
 # The repository's own registry, against the real index: this suite is the
 # fixture INV repository/registry-coverage names, so it proves itself here.
 if ! inv_real_output=$(cd "$root" && "$invariants" 2>&1); then

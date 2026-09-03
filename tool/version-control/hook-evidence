@@ -1,0 +1,56 @@
+#!/bin/sh
+#
+# Summarise the outcomes the hooks recorded (INV repository/hook-evidence-recorded).
+# The log lives under the git common directory, never in the working tree.
+#
+# usage: tool/version-control/hook-evidence [--reset]
+
+set -eu
+
+# Guards this script's awk/sort calls from Git for Windows' MSYS argument
+# conversion (#79); see tool/version-control/hygiene. Inert elsewhere.
+MSYS_NO_PATHCONV=1
+MSYS2_ARG_CONV_EXCL='*'
+export MSYS_NO_PATHCONV MSYS2_ARG_CONV_EXCL
+
+mode=summary
+case "${1:-}" in
+  '') ;;
+  --reset) mode=reset ;;
+  *)
+    echo "usage: tool/version-control/hook-evidence [--reset]" >&2
+    exit 2
+    ;;
+esac
+
+common_dir=$(git rev-parse --git-common-dir)
+case "$common_dir" in
+  /*) ;;
+  *) common_dir="$(pwd)/$common_dir" ;;
+esac
+log="$common_dir/hooks-evidence.log"
+
+if [ "$mode" = reset ]; then
+  : >"$log"
+  echo "hook evidence reset"
+  exit 0
+fi
+
+if [ ! -s "$log" ]; then
+  echo "no hook evidence recorded yet"
+  exit 0
+fi
+
+awk -F'\t' '
+  NF == 4 {
+    n++
+    if (first == "") first = $1
+    last = $1
+    count[$3 "\t" $4]++
+  }
+  END {
+    printf "hook evidence: %d outcomes, %s .. %s\n", n, first, last
+    for (k in count) printf "  %s\t%d\n", k, count[k] | "sort"
+    close("sort")
+  }
+' "$log"
