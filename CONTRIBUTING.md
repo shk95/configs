@@ -13,9 +13,12 @@ tool/doctor.sh
 ```
 
 `tool/setup` changes only the clone-local hooks setting and only with `--fix`.
-`tool/doctor.sh` is read-only. Pass `unixlike`, `windows`, `common`, or
-`repository` to check only that scope; omit the scope for a complete host
-inventory. A missing foreign-platform capability does not block scoped work.
+`tool/doctor.sh` is read-only. `tool/doctor.sh` also prints a one-line
+summary of the outcomes the hooks have recorded on this clone;
+`tool/version-control/hook-evidence` prints the full count. Pass `unixlike`,
+`windows`, `common`, or `repository` to check only that scope; omit the
+scope for a complete host inventory. A missing foreign-platform capability
+does not block scoped work.
 
 ## Classify the change
 
@@ -162,7 +165,9 @@ procedure.
    `fixture`; add the fixture in the same change and tag it with
    `INV <scope>/<slug>`. A `manual` entry names its evidence and is listed by
    id in `docs/definition-of-done.md`. If nothing enforces it yet, open an
-   issue and declare `pending #<n>` with an owner.
+   issue and declare `pending #<n>` with an owner. Tag the fixture *unit* —
+   the `Describe` or the banner section — so
+   `tool/version-control/invariants --untagged` stops listing it.
 5. Put the tag `INV <scope>/<slug>` in every declared locator: a header
    comment in a script, the test name or a comment above a fixture, the
    loader's refusal message.
@@ -205,7 +210,8 @@ record for this intentionally manual policy.
 3. Keep host composition in `modules/flake/configurations.nix`.
 4. Run narrow formatting, lint, evaluation, and native build checks.
 5. Create a Unix-like release tag only after the required matching-host
-   evidence exists.
+   evidence exists, including a build of every configuration with
+   `CHECKS_BUILD_ALL=1 tool/checks/test` on a matching host.
 6. Activate only when explicitly requested, from the intended Unix-like
    release.
 
@@ -352,7 +358,11 @@ tool/version-control/test
 tool/version-control/invariants
 tool/version-control/audit
 tool/version-control/audit-remote  # when gh is authenticated
+tool/version-control/hook-evidence
 ```
+
+`tool/version-control/audit` now runs on every push and in the CI repository
+job; running it by hand is for a read-only look between pushes.
 
 ### Desired-state hygiene
 

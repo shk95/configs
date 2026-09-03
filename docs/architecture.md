@@ -117,6 +117,11 @@ Creating or expanding `common` requires evidence from existing independent
 implementations. The burden is to prove stable shared semantics, not to prove
 that two files contain similar lines.
 
+Until a common component exists the repository carries no common
+classification, dispatch unit, or gate job; the change that creates the
+domain restores all three together with its contract and checks, so common
+content cannot land unchecked.
+
 ## Change and dependency rules
 
 ```text
@@ -251,6 +256,14 @@ verify coverage in both directions.
 The registry does not replace the decision record. An entry may point at a
 `docs/status.md` section with `decision:`; the pointer is checked, so a
 renamed section fails the check rather than leaving a dangling citation.
+
+The rule runs in both directions. A fixture unit — a top-level `Describe` in
+a Pester file, a banner section in a shell suite — names the invariant it
+proves, and a unit that names none is a deletion candidate rather than
+coverage. The 2026-09-03 review of the suite measured why: over 157 CI runs
+the suite caught one configuration defect, and no fixture had ever caught a
+regression, because every fixture proved a tool once and nothing tied it to
+a claim.
 
 ## Version control and releases
 

@@ -38,6 +38,9 @@ native checks instead of treating them as passed.
       INV repository/hygiene-runtime-state, INV repository/hygiene-machine-identity).
 - [ ] Prose in the diff was read for a bare account name, which no scanner
       decides, and that reading is reported as the manual evidence (INV repository/hygiene-prose-account-name).
+- [ ] Every fixture unit this change touches names an invariant
+      (INV repository/fixtures-name-invariants), and every gate job converts
+      unverified into failure (INV repository/merge-gate-requires-native).
 
 ## Governance rule design
 
@@ -79,8 +82,9 @@ native checks instead of treating them as passed.
       copies these files without reading them.
 - [ ] Activation is performed only when explicitly requested.
 - [ ] Runtime claims name the host on which they were observed.
-- [ ] A `unixlike-v...` tag is assigned only after required native evidence is
-      available.
+- [ ] A `unixlike-v...` tag is assigned only after required native evidence
+      is available, including `CHECKS_BUILD_ALL=1 tool/checks/test` on a
+      matching host.
 
 ## Windows domain
 
