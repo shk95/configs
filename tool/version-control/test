@@ -290,6 +290,37 @@ printf '%s\n' "$second_plan" | grep -q '^tag: unixlike-v2030.01.02.1$'
 # INV repository/release-tag-contract
 (cd "$test_root" && "$audit") >/dev/null
 
+# INV repository/flake-lock-isolated: a lock refresh mixed with a source
+# change, then one under the wrong subject, then the isolated form that
+# passes. Exercised on dev, not master: a commit landed straight on master
+# would itself trip the master-not-present-on-dev check above, which is not
+# what this case is testing.
+git -C "$test_root" switch -q dev
+printf 'lock\n' >"$test_root/flake.lock"
+printf 'src\n' >"$test_root/module.nix"
+git -C "$test_root" add flake.lock module.nix
+git -C "$test_root" commit -q -m 'chore(unixlike-deps): refresh flake.lock'
+if (cd "$test_root" && "$audit") >/dev/null 2>&1; then
+  echo "audit accepted a flake.lock refresh mixed with other files" >&2
+  exit 1
+fi
+git -C "$test_root" reset -q --hard HEAD~1
+
+printf 'lock\n' >"$test_root/flake.lock"
+git -C "$test_root" add flake.lock
+git -C "$test_root" commit -q -m 'feat(unixlike): bump the lock'
+if (cd "$test_root" && "$audit") >/dev/null 2>&1; then
+  echo "audit accepted a flake.lock change outside chore(unixlike-deps)" >&2
+  exit 1
+fi
+git -C "$test_root" reset -q --hard HEAD~1
+
+printf 'lock\n' >"$test_root/flake.lock"
+git -C "$test_root" add flake.lock
+git -C "$test_root" commit -q -m 'chore(unixlike-deps): refresh flake.lock'
+(cd "$test_root" && "$audit") >/dev/null
+git -C "$test_root" switch -q master
+
 git -C "$test_root" tag bad-v2030.01.02
 if (cd "$test_root" && "$audit") >/dev/null 2>&1; then
   echo "audit accepted an invalid tag name" >&2
@@ -2083,6 +2114,7 @@ hygiene_new
 printf 'nothing to see here\n' >"$hygiene_repo/doc.md"
 printf 'doc.md\t/%s/programs/\n' home \
   >"$hygiene_repo/tool/version-control/hygiene.allow"
+# INV repository/hygiene-exclusion-symmetry
 hygiene_expect_fail 'exclusion, a stale entry' 'stale entry'
 
 # An entry forgives its literal at its own path and nowhere else. Without the
@@ -2265,6 +2297,16 @@ fi
 long_subject="feat(repository): $(awk 'BEGIN { s = ""; for (i = 0; i < 60; i++) s = s "x"; print s }')"
 if msg_case "$long_subject"; then
   echo "commit-msg accepted a subject over 72 characters" >&2
+  exit 1
+fi
+
+# The limit is exactly 72: one character either side of it decides.
+subject_72="feat(repository): $(awk 'BEGIN { s = ""; for (i = 0; i < 54; i++) s = s "x"; print s }')"
+subject_73="${subject_72}x"
+msg_case "$subject_72" ||
+  { echo "commit-msg rejected a 72-character subject" >&2; exit 1; }
+if msg_case "$subject_73"; then
+  echo "commit-msg accepted a 73-character subject" >&2
   exit 1
 fi
 

@@ -1001,3 +1001,10 @@ registers each of them (as `unixlike/typed-identity`,
   Nix keeps precedence on name collisions. The native Windows domain does not
   adopt POSIX-shell version managers at all; their absence there is a
   decision.
+
+One citation into the old `AGENTS.md` layout survives outside this scope:
+`windows/src/WinEnv.psm1` cites "AGENTS.md, Host safety" for the
+`.wslconfig` firewall rule, which now lives in the "Rules that are expensive
+to break" table. The Windows migration, which edits that module's messages
+anyway, updates the citation; a repository change does not reach into
+`windows/`.

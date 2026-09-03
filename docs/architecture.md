@@ -197,14 +197,10 @@ enforcement owner, which "Governance design" says must not happen.
 The invariants are registered, one file each, as
 `INV repository/hygiene-home-paths`, `INV repository/hygiene-declared-names`,
 `INV repository/hygiene-runtime-state`, `INV repository/hygiene-machine-identity`,
-and the manual `INV repository/hygiene-prose-account-name`; secret detection
-stays with the secret scan as `INV repository/no-secret-in-history`. Two
-properties of the enforcement are worth keeping here because they are design,
-not rule: a declared value interpolated into a path is not an absolute path,
-and whatever forgives a violation is declared, reviewable, and enforced in
-both directions — an exclusion that no longer excludes anything is removed,
-and one that forgives more than the single occurrence it was written for is a
-whole-file exemption wearing an exclusion's clothes.
+`INV repository/hygiene-exclusion-symmetry`, and the manual
+`INV repository/hygiene-prose-account-name`; secret detection stays with the
+secret scan as `INV repository/no-secret-in-history`. Each entry carries its
+own qualifications, so this section no longer restates them.
 
 One half of the first invariant is decidable by no scanner: a bare account name
 in free prose has no naming context to recognise it by. It remains a manual

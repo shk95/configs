@@ -138,9 +138,9 @@ jobs:
     name: Secret, hygiene and invariant scan
     runs-on: ubuntu-latest
     # The merge gate is the one place where a check that could not run must not
-    # pass. tool/version-control/hygiene needs nothing but a POSIX shell and
-    # Git today; this is what keeps a future prerequisite from passing through
-    # the gate unverified.
+    # pass. tool/version-control/hygiene and tool/version-control/invariants
+    # need nothing but a POSIX shell, awk and Git today; this is what keeps a
+    # future prerequisite from passing through the gate unverified.
     env:
       REQUIRE_NATIVE: "1"
     steps:

@@ -3,7 +3,8 @@
 # Enforce the desired-state hygiene invariant.
 #
 # INV repository/hygiene-home-paths, INV repository/hygiene-declared-names,
-# INV repository/hygiene-runtime-state, INV repository/hygiene-machine-identity.
+# INV repository/hygiene-runtime-state, INV repository/hygiene-machine-identity,
+# INV repository/hygiene-exclusion-symmetry.
 #
 # The invariants registered as the four INV tags above state it: keep
 # secrets, undeclared usernames, absolute home paths, and snapshots of
