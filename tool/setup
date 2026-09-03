@@ -24,8 +24,22 @@ esac
 expected=.githooks
 current=$(git config --local --get core.hooksPath 2>/dev/null || true)
 
-if [ "$current" = "$expected" ]; then
-  echo "✓ core.hooksPath is $expected"
+# The directory Git will run hooks from, canonical. Relative values are
+# relative to the worktree root; an unset value resolves to .git/hooks, which
+# is never the tracked directory. Comparing directories rather than strings
+# is what lets an absolute core.hooksPath naming .githooks count as enabled.
+hooks_actual() {
+  hooks_actual_dir=$(git rev-parse --git-path hooks 2>/dev/null) || return 1
+  case "$hooks_actual_dir" in
+    /*) ;;
+    *) hooks_actual_dir="$(git rev-parse --show-toplevel)/$hooks_actual_dir" ;;
+  esac
+  (CDPATH= cd -- "$hooks_actual_dir" 2>/dev/null && pwd -P)
+}
+hooks_expected=$(CDPATH= cd -- "$(git rev-parse --show-toplevel)/.githooks" 2>/dev/null && pwd -P)
+
+if [ -n "$hooks_expected" ] && [ "$(hooks_actual)" = "$hooks_expected" ]; then
+  echo "✓ core.hooksPath is ${current:-$expected} (resolves to .githooks)"
   exit 0
 fi
 

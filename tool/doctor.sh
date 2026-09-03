@@ -87,11 +87,24 @@ if [ "$scope" = windows ] || [ "$scope" = all ]; then
   fi
 fi
 
+# The directory Git will run hooks from, canonical. Relative values are
+# relative to the worktree root; an unset value resolves to .git/hooks, which
+# is never the tracked directory. Comparing directories rather than strings
+# is what lets an absolute core.hooksPath naming .githooks count as enabled.
+hooks_actual() {
+  hooks_actual_dir=$(git rev-parse --git-path hooks 2>/dev/null) || return 1
+  case "$hooks_actual_dir" in
+    /*) ;;
+    *) hooks_actual_dir="$(git rev-parse --show-toplevel)/$hooks_actual_dir" ;;
+  esac
+  (CDPATH= cd -- "$hooks_actual_dir" 2>/dev/null && pwd -P)
+}
+hooks_expected=$(CDPATH= cd -- "$(git rev-parse --show-toplevel)/.githooks" 2>/dev/null && pwd -P)
+
 echo
 echo "Version control"
 
-hooks=$(git config core.hooksPath 2>/dev/null)
-if [ "$hooks" = ".githooks" ]; then
+if [ -n "$hooks_expected" ] && [ "$(hooks_actual)" = "$hooks_expected" ]; then
   ok "git hooks enabled"
 else
   # A hard failure: without this a clone commits with no local policy or secret

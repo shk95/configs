@@ -62,6 +62,22 @@ hooks_dir="$root/.githooks"
 # applied.
 hooks_path=$(git config --get core.hooksPath 2>/dev/null || true)
 
+# The directory Git will run hooks from, canonical. Relative values are
+# relative to the worktree root; an unset value resolves to .git/hooks, which
+# is never the tracked directory. Comparing directories rather than strings
+# is what lets an absolute core.hooksPath naming .githooks count as enabled.
+hooks_actual() {
+  hooks_actual_dir=$(git rev-parse --git-path hooks 2>/dev/null) || return 1
+  case "$hooks_actual_dir" in
+    /*) ;;
+    *) hooks_actual_dir="$(git rev-parse --show-toplevel)/$hooks_actual_dir" ;;
+  esac
+  (CDPATH= cd -- "$hooks_actual_dir" 2>/dev/null && pwd -P)
+}
+hooks_expected=$(CDPATH= cd -- "$(git rev-parse --show-toplevel)/.githooks" 2>/dev/null && pwd -P)
+hooks_enabled=0
+[ -n "$hooks_expected" ] && [ "$(hooks_actual)" = "$hooks_expected" ] && hooks_enabled=1
+
 homebrew_module=modules/darwin-homebrew.nix
 
 # One scratch directory for the candidate edit, the pull-request body and the
@@ -485,7 +501,7 @@ report_plan() {
 
   printf '\nclassification: %s\n' "$scope"
   printf 'checks:\n'
-  if [ "$hooks_path" = .githooks ]; then
+  if [ "$hooks_enabled" -eq 1 ]; then
     plan_units=$(selected_units "$plan_path")
     printf '%s\n' "$plan_units" | sed 's/^/  /'
     plan_units_line=$(printf '%s' "$plan_units" | tr '\n' ',' | sed 's/,/, /g')
@@ -493,7 +509,7 @@ report_plan() {
     # Listing units nothing will run is worse than saying so: the commit would
     # look gated when no check ran at all.
     evidence_unavailable "pre-commit checks" \
-      "core.hooksPath is ${hooks_path:-unset}, not .githooks; fix with tool/setup --fix" \
+      "core.hooksPath is ${hooks_path:-unset}, does not resolve to .githooks; fix with tool/setup --fix" \
       || exit 1
     plan_units_line="unavailable; this clone runs no hooks"
   fi

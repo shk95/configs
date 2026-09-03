@@ -219,6 +219,7 @@ git -C "$test_root" init -q -b master
 git -C "$test_root" config user.name Fixture
 git -C "$test_root" config user.email fixture@example.invalid
 git -C "$test_root" config core.hooksPath .githooks
+mkdir -p "$test_root/.githooks"
 printf 'fixture\n' >"$test_root/file"
 git -C "$test_root" add file
 git -C "$test_root" commit -q -m 'feat(repository): create fixture'
@@ -289,6 +290,22 @@ printf '%s\n' "$second_plan" | grep -q '^tag: unixlike-v2030.01.02.1$'
 # INV repository/flake-lock-isolated
 # INV repository/release-tag-contract
 (cd "$test_root" && "$audit") >/dev/null
+
+# core.hooksPath is read by resolution, not by string: an absolute value that
+# names the tracked hooks directory is the same setting as `.githooks`.
+git -C "$test_root" config core.hooksPath "$test_root/.githooks"
+(cd "$test_root" && "$audit") >/dev/null
+git -C "$test_root" config core.hooksPath "$test_root/elsewhere"
+if (cd "$test_root" && "$audit") >/dev/null 2>&1; then
+  echo "audit accepted a core.hooksPath that names no tracked hooks" >&2
+  exit 1
+fi
+git -C "$test_root" config --unset core.hooksPath
+if (cd "$test_root" && "$audit") >/dev/null 2>&1; then
+  echo "audit accepted an unset core.hooksPath" >&2
+  exit 1
+fi
+git -C "$test_root" config core.hooksPath .githooks
 
 # INV repository/flake-lock-isolated: a lock refresh mixed with a source
 # change, then one under the wrong subject, then the isolated form that
@@ -1135,6 +1152,17 @@ if (
 fi
 commit_git config core.hooksPath .githooks
 
+# An absolute core.hooksPath naming the tracked directory is the same setting
+# as .githooks: the helper resolves it rather than comparing strings.
+commit_git config core.hooksPath "$commit_root/.githooks"
+resolved_output=$(run_commit n --dry-run cask add resolved)
+if printf '%s\n' "$resolved_output" | grep -q '^· pre-commit checks unverified'; then
+  echo "commit helper treated an absolute core.hooksPath naming .githooks as unhooked" >&2
+  exit 1
+fi
+printf '%s\n' "$resolved_output" | grep -q '^  unixlike:format$'
+commit_git config core.hooksPath .githooks
+
 # The helper refuses a bypass; it must also never take one. Its own refusal
 # names those flags, so this asserts an invocation rather than a mention.
 if grep -Eq 'git commit.*--no-verify|git push.*(--no-verify|--force|-f )|core\.hooksPath=|HUSKY=|GIT_DIR=' \
@@ -1859,6 +1887,46 @@ fi
 publish_git worktree remove -f "$publish_worktree"
 publish_git branch -q -D prune-locked
 publish_git switch -q dev
+
+# ---------------------------------------------------------------------------
+# core.hooksPath resolution in tool/setup and tool/doctor.sh
+# ---------------------------------------------------------------------------
+#
+# Both scripts resolve their root from their own path, so each runs as a copy
+# inside the fixture repository rather than against it.
+
+hooks_root="$test_root/hooks-path"
+mkdir -p "$hooks_root/tool/version-control" "$hooks_root/.githooks"
+cp "$root/tool/setup" "$hooks_root/tool/setup"
+cp "$root/tool/doctor.sh" "$hooks_root/tool/doctor.sh"
+git -C "$hooks_root" init -q -b dev
+git -C "$hooks_root" config user.name Fixture
+git -C "$hooks_root" config user.email fixture@example.invalid
+
+git -C "$hooks_root" config core.hooksPath "$hooks_root/.githooks"
+if ! (cd "$hooks_root" && tool/setup) | grep -q '✓ core.hooksPath'; then
+  echo "tool/setup rejected an absolute core.hooksPath naming .githooks" >&2
+  exit 1
+fi
+if ! (cd "$hooks_root" && tool/doctor.sh repository 2>/dev/null) | grep -q 'git hooks enabled'; then
+  echo "tool/doctor.sh rejected an absolute core.hooksPath naming .githooks" >&2
+  exit 1
+fi
+
+git -C "$hooks_root" config --unset core.hooksPath
+if (cd "$hooks_root" && tool/setup) >/dev/null 2>&1; then
+  echo "tool/setup accepted an unset core.hooksPath" >&2
+  exit 1
+fi
+if (cd "$hooks_root" && tool/doctor.sh repository 2>/dev/null) | grep -q 'git hooks enabled'; then
+  echo "tool/doctor.sh reported hooks enabled with core.hooksPath unset" >&2
+  exit 1
+fi
+(cd "$hooks_root" && tool/setup --fix) >/dev/null
+if [ "$(git -C "$hooks_root" config --local --get core.hooksPath)" != .githooks ]; then
+  echo "tool/setup --fix did not set core.hooksPath" >&2
+  exit 1
+fi
 
 # ---------------------------------------------------------------------------
 # Desired-state hygiene
