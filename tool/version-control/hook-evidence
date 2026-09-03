@@ -50,6 +50,7 @@ awk -F'\t' '
   }
   END {
     printf "hook evidence: %d outcomes, %s .. %s\n", n, first, last
+    fflush()
     for (k in count) printf "  %s\t%d\n", k, count[k] | "sort"
     close("sort")
   }
