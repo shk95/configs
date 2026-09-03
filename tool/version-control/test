@@ -144,6 +144,18 @@ expect windows "$classify" --files windows/src/WinEnv.psm1
 expect common "$classify" --files common/example.txt
 expect repository "$classify" --files .agents/skills/example/SKILL.md
 expect unclassified "$classify" --files unexpected.file
+# INV repository/scope-ownership
+# The invariant registry is per scope: an entry classifies as the scope that
+# owns it, the format contract as repository, and anything else under
+# invariants/ as nothing, so a misplaced file is refused at commit.
+expect repository "$classify" --files invariants/README.md
+expect repository "$classify" --files invariants/common/.gitkeep
+expect repository "$classify" --files invariants/repository/registry-coverage.md
+expect unixlike "$classify" --files invariants/unixlike/import-order.md
+expect windows "$classify" --files invariants/windows/parser-declared.md
+expect common "$classify" --files invariants/common/example.md
+expect unclassified "$classify" --files invariants/stray.md
+expect unclassified "$classify" --files invariants/linux/x.md
 expect 'windows
 repository' "$classify" --files windows/setup.ps1 docs/status.md
 

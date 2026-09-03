@@ -62,6 +62,15 @@ while IFS= read -r path; do
     tool/dispatch/*)
       echo repository
       ;;
+    # INV repository/scope-ownership
+    # The invariant registry (invariants/README.md is the format contract).
+    # Each scope owns the entries under its own directory, so a Windows
+    # invariant is a windows change and needs no Unix-like host to check.
+    invariants/README.md|invariants/common/.gitkeep) echo repository ;;
+    invariants/unixlike/*) echo unixlike ;;
+    invariants/windows/*) echo windows ;;
+    invariants/common/*) echo common ;;
+    invariants/repository/*) echo repository ;;
     *) echo unclassified ;;
   esac
 done <"$paths" | sort -u >"$scopes"
