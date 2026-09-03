@@ -62,6 +62,8 @@ grep -q 'needs: \[classify, repository, unix, windows, common, secrets, promotio
   "$root/.github/workflows/ci.yml"
 grep -q 'run: tool/version-control/required-checks' \
   "$root/.github/workflows/ci.yml"
+grep -q 'evidence_run audit tool/version-control/audit' "$root/.githooks/pre-push"
+grep -q 'run: tool/version-control/audit' "$root/.github/workflows/ci.yml"
 
 # INV repository/required-checks-gate
 run_gate() {
@@ -220,8 +222,16 @@ git -C "$test_root" config user.name Fixture
 git -C "$test_root" config user.email fixture@example.invalid
 git -C "$test_root" config core.hooksPath .githooks
 mkdir -p "$test_root/.githooks"
+# audit delegates subject judgment to .githooks/commit-msg (INV
+# repository/conventional-subject), so the fixture needs the real hook
+# available at that path for audit's own invocation. Only commit-msg is
+# copied (not pre-commit and the rest): those still run as no-ops here, and a
+# live pre-commit would need tooling this throwaway repository does not
+# carry. Tracked (not just copied to disk) so the audit-clone fixture below
+# inherits it through a normal clone.
+cp "$root/.githooks/commit-msg" "$test_root/.githooks/commit-msg"
 printf 'fixture\n' >"$test_root/file"
-git -C "$test_root" add file
+git -C "$test_root" add file .githooks
 git -C "$test_root" commit -q -m 'feat(repository): create fixture'
 git -C "$test_root" branch dev
 
@@ -309,6 +319,70 @@ if (cd "$test_root" && "$audit") >/dev/null 2>&1; then
 fi
 git -C "$test_root" config core.hooksPath .githooks
 
+# A commit subject Git writes itself is exempt in the hook and therefore in
+# audit, which delegates to .githooks/commit-msg rather than keeping a second
+# grammar (INV repository/conventional-subject).
+git -C "$test_root" switch -q dev
+printf 'fixup\n' >"$test_root/fixup-file"
+git -C "$test_root" add fixup-file
+git -C "$test_root" commit -q -m 'fixup! feat(repository): create fixture'
+(cd "$test_root" && "$audit") >/dev/null
+git -C "$test_root" reset -q --hard HEAD~1
+printf 'plain\n' >"$test_root/plain-file"
+git -C "$test_root" add plain-file
+# --no-verify: this case is about audit's own after-the-fact judgment, not
+# about the live commit-msg hook (that gate is exercised elsewhere in this
+# suite), so the commit must land regardless of what the hook would say.
+git -C "$test_root" commit -q -m 'Added a file' --no-verify
+if (cd "$test_root" && "$audit") >/dev/null 2>&1; then
+  echo "audit accepted a non-conventional subject on dev" >&2
+  exit 1
+fi
+git -C "$test_root" reset -q --hard HEAD~1
+git -C "$test_root" switch -q master
+
+# A clone that only fetched the integration branches reasons about
+# origin/dev and origin/master; a repository with neither is unverified.
+audit_bare="$test_root/audit-remote.git"
+audit_clone="$test_root/audit-clone"
+git clone -q --bare "$test_root" "$audit_bare"
+git clone -q "$audit_bare" "$audit_clone"
+git -C "$audit_clone" config user.name Fixture
+git -C "$audit_clone" config user.email fixture@example.invalid
+git -C "$audit_clone" config core.hooksPath .githooks
+mkdir -p "$audit_clone/.githooks"
+git -C "$audit_clone" switch -q -c feature/repository-audit-clone
+git -C "$audit_clone" branch -q -D master 2>/dev/null || true
+git -C "$audit_clone" branch -q -D dev 2>/dev/null || true
+if ! audit_clone_output=$(cd "$audit_clone" && "$audit" 2>&1); then
+  printf '%s\n' "$audit_clone_output" >&2
+  echo "audit failed on a clone with only origin/dev and origin/master" >&2
+  exit 1
+fi
+printf '%s\n' "$audit_clone_output" | grep -q 'origin/master'
+
+audit_norefs="$test_root/audit-norefs"
+git init -q -b feature/repository-norefs "$audit_norefs"
+git -C "$audit_norefs" config user.name Fixture
+git -C "$audit_norefs" config user.email fixture@example.invalid
+git -C "$audit_norefs" config core.hooksPath .githooks
+mkdir -p "$audit_norefs/.githooks"
+printf 'x\n' >"$audit_norefs/file"
+git -C "$audit_norefs" add file
+git -C "$audit_norefs" commit -q -m 'feat(repository): create norefs fixture'
+audit_status=0
+(cd "$audit_norefs" && "$audit") >/dev/null 2>&1 || audit_status=$?
+if [ "$audit_status" -ne 69 ]; then
+  echo "audit exited $audit_status without dev/master refs, expected 69" >&2
+  exit 1
+fi
+audit_status=0
+(cd "$audit_norefs" && REQUIRE_NATIVE=1 "$audit") >/dev/null 2>&1 || audit_status=$?
+if [ "$audit_status" -ne 1 ]; then
+  echo "audit exited $audit_status without refs under REQUIRE_NATIVE, expected 1" >&2
+  exit 1
+fi
+
 # INV repository/flake-lock-isolated: a lock refresh mixed with a source
 # change, then one under the wrong subject, then the isolated form that
 # passes. Exercised on dev, not master: a commit landed straight on master
@@ -378,6 +452,9 @@ cp -R "$root/.githooks" "$hook_root/.githooks"
 mkdir -p "$hook_root/tool"
 cp -R "$root/tool/version-control" "$hook_root/tool/version-control"
 cp -R "$root/tool/dispatch" "$hook_root/tool/dispatch"
+# pre-push now runs audit unconditionally; a stand-in keeps these cases about dispatch.
+printf '#!/bin/sh\nexit 0\n' >"$hook_root/tool/version-control/audit"
+chmod +x "$hook_root/tool/version-control/audit"
 
 printf '#!/bin/sh\nexit 0\n' >"$hook_root/pwsh-only/pwsh"
 printf '#!/bin/sh\nexit 0\n' >"$hook_root/pwshexe-only/pwsh.exe"
@@ -519,6 +596,9 @@ mkdir -p "$protocol_root/tool/checks" "$protocol_root/modules"
 cp -R "$root/.githooks" "$protocol_root/.githooks"
 cp -R "$root/tool/version-control" "$protocol_root/tool/version-control"
 cp -R "$root/tool/dispatch" "$protocol_root/tool/dispatch"
+# pre-push now runs audit unconditionally; a stand-in keeps these cases about dispatch.
+printf '#!/bin/sh\nexit 0\n' >"$protocol_root/tool/version-control/audit"
+chmod +x "$protocol_root/tool/version-control/audit"
 
 git -C "$protocol_root" init -q -b dev
 git -C "$protocol_root" config user.name Fixture
@@ -1224,6 +1304,9 @@ cp -R "$root/tool/dispatch" "$publish_root/tool/dispatch"
 # stand-in so only the behaviour under test decides the outcome.
 printf '#!/bin/sh\nexit 0\n' >"$publish_root/tool/version-control/invariants"
 chmod +x "$publish_root/tool/version-control/invariants"
+# pre-push now runs audit unconditionally; a stand-in keeps these cases about dispatch.
+printf '#!/bin/sh\nexit 0\n' >"$publish_root/tool/version-control/audit"
+chmod +x "$publish_root/tool/version-control/audit"
 printf '_: {\n  identity = { %s = "%s"; };\n}\n' gitName Fixture \
   >"$publish_root/modules/flake/inventory.nix"
 : >"$publish_root/tool/version-control/hygiene.allow"

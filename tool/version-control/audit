@@ -3,6 +3,10 @@
 # Audit committed history and clone-local version-control policy. Read-only.
 #
 # INV repository/flake-lock-isolated, INV repository/release-tag-contract
+# INV repository/conventional-subject — subjects are judged by
+# .githooks/commit-msg, the grammar's only owner.
+#
+# Exit 0 verified, 69 unverified (no dev/master ref), any other status failed.
 
 set -eu
 
@@ -69,11 +73,27 @@ else
   fail "core.hooksPath is '$(git config --get core.hooksPath || echo unset)' and does not resolve to .githooks"
 fi
 
+# The integration branches as this clone can see them: a local branch when it
+# exists, else the remote-tracking ref a fetch left behind. A clone with
+# neither cannot answer the history questions below and says so as
+# unverified, which CI turns into a failure.
+ref_of() {
+  if git show-ref --verify --quiet "refs/heads/$1"; then
+    printf '%s\n' "$1"
+  elif git show-ref --verify --quiet "refs/remotes/origin/$1"; then
+    printf 'origin/%s\n' "$1"
+  fi
+}
+dev_ref=$(ref_of dev)
+master_ref=$(ref_of master)
+unverified=0
 for required in dev master; do
-  if git show-ref --verify --quiet "refs/heads/$required"; then
-    ok "$required branch exists"
+  eval "resolved=\$${required}_ref"
+  if [ -n "$resolved" ]; then
+    ok "$required resolves to $resolved"
   else
-    fail "$required branch is unavailable"
+    printf '· unverified: no local or origin/%s ref in this clone\n' "$required"
+    unverified=1
   fi
 done
 
@@ -92,17 +112,20 @@ for local_branch in $(git for-each-ref --format='%(refname:short)' refs/heads); 
   esac
 done
 
+commit_msg_hook="$root/.githooks/commit-msg"
 commits=$(mktemp)
-trap 'rm -f "$commits"' EXIT
-if git show-ref --verify --quiet refs/heads/dev; then
-  git log dev --no-merges --format='%H%x09%s' >"$commits"
+subject_file=$(mktemp)
+trap 'rm -f "$commits" "$subject_file"' EXIT
+if [ -n "$dev_ref" ]; then
+  git log "$dev_ref" --no-merges --format='%H%x09%s' >"$commits"
   tab=$(printf '\t')
   commit_failures=$failures
   while IFS="$tab" read -r sha subject; do
-    if printf '%s\n' "$subject" | grep -Eq '^(build|chore|ci|docs|feat|fix|perf|refactor|revert|style|test)(\([a-z0-9._/-]+\))?!?: .+$|^Revert .+'; then
+    printf '%s\n' "$subject" >"$subject_file"
+    if "$commit_msg_hook" "$subject_file" >/dev/null 2>&1; then
       :
     else
-      fail "non-conventional commit $sha: $subject"
+      fail "commit subject rejected by .githooks/commit-msg $sha: $subject"
     fi
   done <"$commits"
   if [ "$failures" -eq "$commit_failures" ]; then
@@ -110,8 +133,8 @@ if git show-ref --verify --quiet refs/heads/dev; then
   fi
 fi
 
-if git show-ref --verify --quiet refs/heads/master && git show-ref --verify --quiet refs/heads/dev; then
-  direct=$(git rev-list --no-merges master --not dev)
+if [ -n "$master_ref" ] && [ -n "$dev_ref" ]; then
+  direct=$(git rev-list --no-merges "$master_ref" --not "$dev_ref")
   if [ -n "$direct" ]; then
     fail "master contains non-merge commits not present on dev"
   else
@@ -119,10 +142,10 @@ if git show-ref --verify --quiet refs/heads/master && git show-ref --verify --qu
   fi
 
   invalid_promotions=0
-  for merge in $(git rev-list --first-parent --merges master); do
+  for merge in $(git rev-list --first-parent --merges "$master_ref"); do
     parents=$(git show -s --format='%P' "$merge")
     second_parent=$(printf '%s\n' "$parents" | awk '{print $2}')
-    if [ -z "$second_parent" ] || ! git merge-base --is-ancestor "$second_parent" dev; then
+    if [ -z "$second_parent" ] || ! git merge-base --is-ancestor "$second_parent" "$dev_ref"; then
       fail "master merge does not carry history accepted through dev: $merge"
       invalid_promotions=$((invalid_promotions + 1))
     fi
@@ -141,7 +164,10 @@ for tag in $(git tag); do
   fi
   if [ "$(git cat-file -t "refs/tags/$tag")" != tag ]; then
     fail "release tag is lightweight, expected annotated: $tag"
-  elif ! git merge-base --is-ancestor "$tag^{}" master; then
+  elif [ -z "$master_ref" ]; then
+    printf '· unverified: no local or origin/master ref to check tag reachability: %s\n' "$tag"
+    unverified=1
+  elif ! git merge-base --is-ancestor "$tag^{}" "$master_ref"; then
     fail "release tag target is not reachable from master: $tag"
   else
     annotation=$(git for-each-ref --format='%(contents)' "refs/tags/$tag")
@@ -178,4 +204,13 @@ for sha in $(git log --format='%H' -- flake.lock); do
 done
 
 printf 'summary: %s warning(s), %s failure(s)\n' "$warnings" "$failures"
-[ "$failures" -eq 0 ]
+if [ "$failures" -ne 0 ]; then
+  exit 1
+fi
+if [ "$unverified" -eq 1 ]; then
+  if [ "${REQUIRE_NATIVE:-0}" = 1 ]; then
+    printf 'failure: unverified under REQUIRE_NATIVE\n' >&2
+    exit 1
+  fi
+  exit 69
+fi

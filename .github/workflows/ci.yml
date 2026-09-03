@@ -60,7 +60,12 @@ jobs:
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v7
+        with:
+          # audit reasons about dev and master history, which a shallow
+          # checkout does not carry.
+          fetch-depth: 0
       - run: tool/version-control/test
+      - run: tool/version-control/audit
 
   unix:
     name: Flake and Unix-like hosts

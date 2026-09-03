@@ -122,4 +122,9 @@ if selected common:check; then
   fi
 fi
 
+# History and clone policy are audited on every push, whatever the change
+# touched: a badly named branch or a non-conventional subject is a property
+# of the push, not of a scope.
+evidence_run audit tool/version-control/audit || exit 1
+
 evidence_summary
