@@ -304,6 +304,10 @@ semantics.
 
 When common ownership is justified:
 
+Until the domain exists, no path under `common/` classifies; the change that
+creates it restores classification, dispatch and the gate job first, or the
+first commit is refused as having no owning scope.
+
 1. Put it under `common/`, not under either platform domain.
 2. Document its contract, supported consumers, and exclusions.
 3. Give it consumer-independent checks.

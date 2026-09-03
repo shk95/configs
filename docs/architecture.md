@@ -229,6 +229,10 @@ obligation; an enforcement mechanism must trace back to an invariant; evidence
 records an execution and never becomes desired-state authority. This separation
 keeps context concise while retaining reproducible operations.
 
+The hooks a clone runs are audited as a directory rather than a string, and
+the outcomes the hooks produce are recorded outside the working tree so that
+the local gate's yield can be measured.
+
 ## Invariant registry
 
 The third layer of this repository's specification — what must remain true

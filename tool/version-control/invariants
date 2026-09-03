@@ -361,7 +361,7 @@ sort -u "$work/fixtures" | while IFS= read -r fixture_file; do
     *)
       git show ":$fixture_file" | awk -v file="$fixture_file" '
         function flush() { if (open && !tagged) printf "%s:%d: %s\n", file, line, title; open = 0 }
-        /^# -{10,}$/ { banner = NR; next }
+        /^# ----------/ { banner = NR; next }
         NR > 1 && banner == NR - 1 && /^# [^-]/ && !/INV [a-z]+\// { flush(); line = NR; title = $0; sub(/^# /, "", title); tagged = 0; open = 1; next }
         open && /INV [a-z]+\/[a-z0-9]+(-[a-z0-9]+)*/ { tagged = 1 }
         END { flush() }

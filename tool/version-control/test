@@ -47,22 +47,99 @@ export MSYS_NO_PATHCONV MSYS2_ARG_CONV_EXCL
 # the guard. Derived from the tree, so a new script is covered on arrival.
 # tool/checks/* is unixlike scope and outside this rule by the maintainer's
 # ruling.
-git -C "$root" ls-files -- tool/version-control tool/dispatch tool/doctor.sh tool/setup tool/worktree.sh .githooks |
+#
+# The scan is a function so the rule itself can be exercised, not only the
+# tree it happens to be run over: a derived check that silently matched
+# nothing would pass forever. Under a real work tree the list is the tracked
+# governance scripts; under a plain directory (the synthetic cases below) it
+# is that directory's files. Every offending script is reported before the
+# scan fails, so one push shows all of them.
+msys_scan() {
+  msys_root=$1
+  if git -C "$msys_root" rev-parse --git-dir >/dev/null 2>&1; then
+    msys_list=$(git -C "$msys_root" ls-files -- tool/version-control tool/dispatch \
+      tool/doctor.sh tool/setup tool/worktree.sh .githooks)
+  else
+    msys_list=$(cd "$msys_root" && find . -type f | sed 's|^\./||' | sort)
+  fi
+  if [ -z "$msys_list" ]; then
+    echo "no governance scripts found under $msys_root" >&2
+    return 1
+  fi
+  msys_bad=0
+  msys_listing=$(mktemp)
+  printf '%s\n' "$msys_list" >"$msys_listing"
   while IFS= read -r msys_script; do
-  [ -f "$root/$msys_script" ] || continue
-  case "$(head -1 "$root/$msys_script")" in
-    '#!/bin/sh'*) ;;
-    *) continue ;;
-  esac
-  grep -qE '(^|[^A-Za-z_])(sed|grep|awk)([^A-Za-z_]|$)' "$root/$msys_script" || continue
-  for guard_line in '^MSYS_NO_PATHCONV=1$' "^MSYS2_ARG_CONV_EXCL='\\*'\$" \
-    '^export MSYS_NO_PATHCONV MSYS2_ARG_CONV_EXCL$'; do
-    if ! grep -q "$guard_line" "$root/$msys_script"; then
-      echo "$msys_script calls a text tool without the MSYS argument guard (#79): missing $guard_line" >&2
-      exit 1
-    fi
-  done
-done || exit 1
+    [ -n "$msys_script" ] || continue
+    [ -f "$msys_root/$msys_script" ] || continue
+    case "$(head -1 "$msys_root/$msys_script")" in
+      '#!/bin/sh'*) ;;
+      *) continue ;;
+    esac
+    grep -qE '(^|[^A-Za-z_])(sed|grep|awk)([^A-Za-z_]|$)' "$msys_root/$msys_script" || continue
+    for guard_line in '^MSYS_NO_PATHCONV=1$' "^MSYS2_ARG_CONV_EXCL='\\*'\$" \
+      '^export MSYS_NO_PATHCONV MSYS2_ARG_CONV_EXCL$'; do
+      if ! grep -q "$guard_line" "$msys_root/$msys_script"; then
+        echo "$msys_script calls a text tool without the MSYS argument guard (#79): missing $guard_line" >&2
+        msys_bad=1
+      fi
+    done
+  done <"$msys_listing"
+  rm -f "$msys_listing"
+  [ "$msys_bad" -eq 0 ]
+}
+
+if ! msys_scan "$root"; then
+  echo "a governance script calls a text tool without the MSYS argument guard (#79)" >&2
+  exit 1
+fi
+
+# The scan's own positive and negative cases, over synthetic scripts, so a
+# rule that stopped catching anything is visible here rather than on a
+# Windows host.
+msys_fixture=$(mktemp -d)
+if msys_fixture_output=$(msys_scan "$msys_fixture" 2>&1); then
+  echo "the MSYS scan passed over a directory holding no script" >&2
+  exit 1
+fi
+if ! printf '%s\n' "$msys_fixture_output" | grep -q 'no governance scripts found under'; then
+  printf '%s\n' "$msys_fixture_output" >&2
+  echo "the MSYS scan did not report an empty script list" >&2
+  exit 1
+fi
+
+printf '#!/bin/sh\ngrep -q pattern "$1"\n' >"$msys_fixture/unguarded"
+if msys_fixture_output=$(msys_scan "$msys_fixture" 2>&1); then
+  echo "the MSYS scan accepted a script that calls grep without the guard" >&2
+  exit 1
+fi
+if ! printf '%s\n' "$msys_fixture_output" | grep -q '^unguarded calls a text tool'; then
+  printf '%s\n' "$msys_fixture_output" >&2
+  echo "the MSYS scan did not name the offending script" >&2
+  exit 1
+fi
+
+{
+  printf '#!/bin/sh\n'
+  printf 'MSYS_NO_PATHCONV=1\n'
+  printf "MSYS2_ARG_CONV_EXCL='*'\n"
+  printf 'export MSYS_NO_PATHCONV MSYS2_ARG_CONV_EXCL\n'
+  printf 'grep -q pattern "$1"\n'
+} >"$msys_fixture/unguarded"
+if ! msys_fixture_output=$(msys_scan "$msys_fixture" 2>&1); then
+  printf '%s\n' "$msys_fixture_output" >&2
+  echo "the MSYS scan rejected a script that declares the guard" >&2
+  exit 1
+fi
+
+# No text tool, no guard needed: the rule is about what a script calls.
+printf '#!/bin/sh\nexit 0\n' >"$msys_fixture/unguarded"
+if ! msys_fixture_output=$(msys_scan "$msys_fixture" 2>&1); then
+  printf '%s\n' "$msys_fixture_output" >&2
+  echo "the MSYS scan rejected a script that calls no text tool" >&2
+  exit 1
+fi
+case "$msys_fixture" in /tmp/*) rm -rf -- "$msys_fixture" ;; esac
 
 grep -q '^  required:$' "$root/.github/workflows/ci.yml"
 grep -q '^    name: Required checks$' "$root/.github/workflows/ci.yml"
@@ -79,22 +156,74 @@ grep -q 'run: tool/version-control/audit --history' "$root/.github/workflows/ci.
 # results) are the only exemptions. Parsed job by job from the workflow's
 # two-space indentation rather than grepped for a literal, so a job added
 # without the variable is caught.
-if ! awk '
-  /^jobs:$/ { in_jobs = 1; next }
-  !in_jobs { next }
-  /^  [a-z][a-z0-9_-]*:$/ { job = $1; sub(":", "", job); jobs[job] = 1; in_env = ""; next }
-  /^    env:$/ { in_env = job; next }
-  /^    [a-z-]+:/ { in_env = "" }
-  in_env != "" && /^      REQUIRE_NATIVE: "1"$/ { native[in_env] = 1 }
-  END {
-    for (j in jobs)
-      if (j != "classify" && j != "required" && !(j in native)) { print j; missing = 1 }
-    exit missing ? 1 : 0
-  }
-' "$root/.github/workflows/ci.yml"; then
+#
+# A function, for the same reason the MSYS scan is one: the real workflow is
+# expected to pass, so only a synthetic workflow that omits the variable can
+# show that the parse still finds a job at all.
+gate_env_scan() {
+  awk '
+    /^jobs:$/ { in_jobs = 1; next }
+    !in_jobs { next }
+    /^  [a-z][a-z0-9_-]*:$/ { job = $1; sub(":", "", job); jobs[job] = 1; in_env = ""; next }
+    /^    env:$/ { in_env = job; next }
+    /^    [a-z-]+:/ { in_env = "" }
+    in_env != "" && /^      REQUIRE_NATIVE: "1"$/ { native[in_env] = 1 }
+    END {
+      for (j in jobs)
+        if (j != "classify" && j != "required" && !(j in native)) { print j; missing = 1 }
+      exit missing ? 1 : 0
+    }
+  ' "$1"
+}
+
+if ! gate_env_missing=$(gate_env_scan "$root/.github/workflows/ci.yml"); then
+  printf '%s\n' "$gate_env_missing" >&2
   echo "a CI job that runs checks does not set REQUIRE_NATIVE=1 (listed above)" >&2
   exit 1
 fi
+
+gate_fixture=$(mktemp -d)
+cat >"$gate_fixture/missing.yml" <<'GATEYML'
+name: Synthetic
+
+jobs:
+  foo-bar:
+    name: Runs a check
+    runs-on: ubuntu-latest
+    env:
+      SOMETHING_ELSE: "1"
+    steps:
+      - run: true
+GATEYML
+if gate_env_missing=$(gate_env_scan "$gate_fixture/missing.yml"); then
+  echo "the merge-gate scan accepted a job with no REQUIRE_NATIVE" >&2
+  exit 1
+fi
+if [ "$gate_env_missing" != foo-bar ]; then
+  printf 'expected <foo-bar>, got <%s>\n' "$gate_env_missing" >&2
+  echo "the merge-gate scan did not name the job that omits REQUIRE_NATIVE" >&2
+  exit 1
+fi
+
+cat >"$gate_fixture/present.yml" <<'GATEYML'
+name: Synthetic
+
+jobs:
+  foo-bar:
+    name: Runs a check
+    runs-on: ubuntu-latest
+    env:
+      REQUIRE_NATIVE: "1"
+      SOMETHING_ELSE: "1"
+    steps:
+      - run: true
+GATEYML
+if ! gate_env_missing=$(gate_env_scan "$gate_fixture/present.yml"); then
+  printf '%s\n' "$gate_env_missing" >&2
+  echo "the merge-gate scan rejected a job that sets REQUIRE_NATIVE" >&2
+  exit 1
+fi
+case "$gate_fixture" in /tmp/*) rm -rf -- "$gate_fixture" ;; esac
 
 # INV repository/required-checks-gate
 run_gate() {
@@ -2046,6 +2175,7 @@ publish_git switch -q dev
 # Both scripts resolve their root from their own path, so each runs as a copy
 # inside the fixture repository rather than against it.
 
+# INV repository/hooks-are-the-tracked-ones
 hooks_root="$test_root/hooks-path"
 mkdir -p "$hooks_root/tool/version-control" "$hooks_root/.githooks"
 cp "$root/tool/setup" "$hooks_root/tool/setup"

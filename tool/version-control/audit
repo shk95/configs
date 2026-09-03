@@ -8,6 +8,7 @@
 # because a runner has no clone-local configuration to audit.
 #
 # INV repository/flake-lock-isolated, INV repository/release-tag-contract
+# INV repository/hooks-are-the-tracked-ones
 # INV repository/conventional-subject — subjects are judged by
 # .githooks/commit-msg, the grammar's only owner.
 #

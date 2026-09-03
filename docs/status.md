@@ -1020,7 +1020,7 @@ the Unix-like and Windows migrations have mapped their suites — the flip is
 one line, `INVARIANTS_ENFORCE_C10` becoming the default, and is recorded
 here when it happens); and hooks record their outcomes under the git common
 directory (`INV repository/hook-evidence-recorded`). The untagged baseline at
-this change was 4 units. The same review made the MSYS guard a derived rule
+this change was 3 units. The same review made the MSYS guard a derived rule
 (`INV repository/msys-argument-guard`) rather than hand-maintained text, and
 every gate job now requires native evidence
 (`INV repository/merge-gate-requires-native`) so an unverified check fails
