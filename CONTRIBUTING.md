@@ -146,6 +146,32 @@ Use `design-project-governance` from the sibling `skills` project to perform
 this decomposition. The skill owns only the generic method; this repository
 owns the result. A product-specific adapter must not own any part of either.
 
+## Add or change an invariant
+
+An invariant is a statement that must remain true of committed desired state
+or repository tooling. `invariants/README.md` is the format; this is the
+procedure.
+
+1. Classify the invariant's scope. Its file goes under
+   `invariants/<scope>/<slug>.md` and the change classifies as that scope.
+2. Write the statement as one sentence naming no command, product, or model.
+3. Point `rationale` at the section of `docs/architecture.md` or `AGENTS.md`
+   that justifies it. If none does, write that section first; a rule with no
+   rationale is not ready to register.
+4. Declare the enforcement. A `schema` or `tool` entry also declares a
+   `fixture`; add the fixture in the same change and tag it with
+   `INV <scope>/<slug>`. A `manual` entry names its evidence and is listed by
+   id in `docs/definition-of-done.md`. If nothing enforces it yet, open an
+   issue and declare `pending #<n>` with an owner.
+5. Put the tag `INV <scope>/<slug>` in every declared locator: a header
+   comment in a script, the test name or a comment above a fixture, the
+   loader's refusal message.
+6. Run `tool/version-control/invariants`. It runs again on every commit.
+
+Removing an invariant removes its file and every tag that named it; the check
+refuses an orphan tag. Weakening a statement is a governance change and is
+reviewed as one.
+
 ## Plan work with GitHub milestones
 
 GitHub milestones group planned work after its owning scope and outcome are
@@ -316,8 +342,14 @@ only the domain checks whose dispatch or enforcement behavior changed. Secret
 scanning remains repository-wide. A governance change does not receive a
 domain tag.
 
+`tool/version-control/invariants` checks the invariant registry in both
+directions and runs on every commit beside the hygiene scan, whatever the
+scope of the change, because a renamed fixture in any scope can orphan the tag
+an entry depends on.
+
 ```sh
 tool/version-control/test
+tool/version-control/invariants
 tool/version-control/audit
 tool/version-control/audit-remote  # when gh is authenticated
 ```
@@ -375,6 +407,7 @@ not branch-protection contexts because unselected domains are skipped.
 | `docs/status.md` | Current state and expensive decisions |
 | `docs/troubleshooting.md` | Recurring problems indexed by symptom |
 | `docs/definition-of-done.md` | Domain-specific evidence requirements |
+| `invariants/` | Enumerated invariants and how each one is enforced |
 | `.agents/skills/` | Model-neutral workflows specific to this repository |
 | `tool/`, hooks, CI | Executable policy |
 

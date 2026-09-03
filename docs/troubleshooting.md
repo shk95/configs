@@ -95,10 +95,10 @@ Two consequences worth knowing before you go looking:
   `pull_request: synchronize` even when the branch itself is not in the
   workflow's `push` filter.
 - **It interacts badly with branch protection.** `setup-repo.sh` makes the
-  release branch require the `Secret and hygiene scan` check. With Actions off
-  that check never reports, so every pull request into it waits forever on
-  something that cannot arrive — and the branch protection settings look
-  perfectly correct while it happens.
+  release branch require the `Secret, hygiene and invariant scan` check. With
+  Actions off that check never reports, so every pull request into it waits
+  forever on something that cannot arrive — and the branch protection settings
+  look perfectly correct while it happens.
 
 ### `tool/doctor.sh`: `could not ask the flake whether nix-command works`
 

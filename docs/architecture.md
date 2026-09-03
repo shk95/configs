@@ -180,8 +180,8 @@ weaken or deadlock protected branches.
 ### Desired-state hygiene
 
 Committed desired state carries no secret, no undeclared user or host name, no
-absolute home path, and no snapshot of runtime state. `AGENTS.md` states this
-under "Durable decisions". The invariant is repository-wide because every
+absolute home path, and no snapshot of runtime state. The registry entries
+named below state it. The invariant is repository-wide because every
 domain publishes its desired state from one history, and it belongs to the
 `repository` governance scope because assigning it to one platform would make
 that platform authoritative for the others. The repository maintainer owns the
@@ -194,25 +194,13 @@ absolute home paths reached `docs/troubleshooting.md` and stayed for the
 document's whole history, because the sentence had a policy owner and no
 enforcement owner, which "Governance design" says must not happen.
 
-The invariants, stated without reference to any command:
-
-- An account or host name appears in committed desired state only when it is
-  declared. `modules/flake/inventory.nix` is the declaration of record, and a
-  declaration that cannot be read is a failure rather than a permission.
-- An absolute path into a home directory is never desired state, in any
-  spelling a supported host writes. A declared value interpolated into a path
-  is not an absolute path.
-- Runtime state is observed, never committed. A tracked path that an ignore
-  rule covers is runtime state that escaped the ignore file rather than an
-  exception to it.
-- A machine-unique identifier is host identity. A constant that names an
-  interface, or is derived from a name, is not.
-- Whatever forgives a violation is declared, reviewable, and enforced in both
-  directions: an exclusion that no longer excludes anything is removed rather
-  than kept, and one that forgives more than the single occurrence it was
-  written for is a whole-file exemption wearing an exclusion's clothes.
-- Secret detection stays with the secret scan, which already owns it and must
-  not be duplicated.
+The invariants are registered, one file each, as
+`INV repository/hygiene-home-paths`, `INV repository/hygiene-declared-names`,
+`INV repository/hygiene-runtime-state`, `INV repository/hygiene-machine-identity`,
+`INV repository/hygiene-exclusion-symmetry`, and the manual
+`INV repository/hygiene-prose-account-name`; secret detection stays with the
+secret scan as `INV repository/no-secret-in-history`. Each entry carries its
+own qualifications, so this section no longer restates them.
 
 One half of the first invariant is decidable by no scanner: a bare account name
 in free prose has no naming context to recognise it by. It remains a manual
@@ -232,6 +220,37 @@ implementation. A procedure may select commands but cannot invent a new
 obligation; an enforcement mechanism must trace back to an invariant; evidence
 records an execution and never becomes desired-state authority. This separation
 keeps context concise while retaining reproducible operations.
+
+## Invariant registry
+
+The third layer of this repository's specification — what must remain true
+of committed desired state and tooling — is enumerated under
+`invariants/<scope>/`, one entry per invariant, rather than written as prose
+in this document or in `AGENTS.md`. The registry is the authority for which
+invariants exist. This document remains the authority for why: every entry
+cites a section of this file or of `AGENTS.md` as its rationale, and an
+entry with no such section is refused.
+
+An entry declares its enforcement as `schema` (an evaluator or loader refuses
+the violation), `tool` (a script exits non-zero), `fixture` (a test holds
+positive and negative cases), `manual` (a reviewer evidence item named in
+`docs/definition-of-done.md`), or `pending` (an issue, until a check exists).
+`schema` and `tool` require a `fixture` on the same entry, because an
+enforcement with no fixture is a convention written as a control. `pending`
+is a declared gap with an owner; it is reported, never passed off as
+enforcement.
+
+The canonical statement lives in the registry and the enforcement point
+carries only the entry's id, as the literal `INV <scope>/<slug>`. This is a
+deliberate departure from the rule "rule text lives where it is enforced":
+enforcement here spans POSIX shell, PowerShell and Nix, and a loader's error
+string in one of them cannot serve as the repository-wide sentence. The id
+at the enforcement point is what lets `tool/version-control/invariants`
+verify coverage in both directions.
+
+The registry does not replace the decision record. An entry may point at a
+`docs/status.md` section with `decision:`; the pointer is checked, so a
+renamed section fails the check rather than leaving a dangling citation.
 
 ## Version control and releases
 
@@ -255,6 +274,12 @@ releases an earlier accepted state. The annotation is the portable release
 evidence record and distinguishes evaluation, build, and native-runtime checks.
 Activation and Apply remain later deployment events and are never inferred
 from the tag.
+
+Commit subjects on the integration branches are Conventional Commits, and a
+`flake.lock` refresh is its own commit: the first keeps history readable by
+tools that group by type, the second keeps a change that moves every
+Unix-like derivation hash separable from the source change beside it
+(`INV repository/conventional-subject`, `INV repository/flake-lock-isolated`).
 
 Source flows one way from topic branches through `dev` into `master`.
 `master` accepts only a same-repository `dev` pull request and preserves that

@@ -973,3 +973,38 @@ remote, and is not Windows evidence: the fixtures hand the module a host no
 machine has to be. What is owed from the maintainer's host is one real capture
 after a change made in an application's own UI, showing the branch line in the
 plan and a readable diff, and the hooks' behaviour on that host.
+
+## Invariant registry
+
+Layer-3 invariants are enumerated under `invariants/<scope>/` as of
+2026-09-03 (`INV repository/registry-coverage`). The 2026-09-02 audit found
+twenty-one prose statements of which seven had no enforcement and four were
+violated; the registry records each such statement as `pending` with an
+issue rather than fixing it, so the gap is visible in
+`tool/version-control/invariants` output on every commit. The repository
+entries landed first; the Unix-like and Windows entries follow in their own
+scopes.
+
+Three Unix-like statements from the former `AGENTS.md` "Durable decisions"
+have no registry entry yet because `invariants/unixlike/` lands in its own
+scope. They remain policy unchanged until then, and the Unix-like migration
+registers each of them (as `unixlike/typed-identity`,
+`unixlike/import-order-independence`, and `unixlike/version-manager-last`):
+
+- Do not introduce `specialArgs` for repository identity or host inventory;
+  declare typed flake-parts options inside the Unix-like domain instead.
+- Do not rely on import-tree collection order for order-sensitive list
+  values. Use explicit ordering or a keyed attribute model.
+- Do not re-declare an imperative version manager as a Nix package or
+  install its managed toolchain declaratively. A Unix-like home may source
+  such an installer optionally and last, after declarative PATH entries, so
+  Nix keeps precedence on name collisions. The native Windows domain does not
+  adopt POSIX-shell version managers at all; their absence there is a
+  decision.
+
+One citation into the old `AGENTS.md` layout survives outside this scope:
+`windows/src/WinEnv.psm1` cites "AGENTS.md, Host safety" for the
+`.wslconfig` firewall rule, which now lives in the "Rules that are expensive
+to break" table. The Windows migration, which edits that module's messages
+anyway, updates the citation; a repository change does not reach into
+`windows/`.

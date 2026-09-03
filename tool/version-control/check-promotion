@@ -1,6 +1,8 @@
 #!/bin/sh
 
 # Validate the immutable source boundary for a master promotion pull request.
+#
+# INV repository/promotion-source
 
 set -eu
 

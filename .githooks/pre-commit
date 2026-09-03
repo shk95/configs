@@ -1,7 +1,7 @@
 #!/bin/sh
 #
-# Domain-aware local checks plus the two repository-wide scans: desired-state
-# hygiene and secrets.
+# Domain-aware local checks plus the three repository-wide scans: desired-state
+# hygiene, the invariant registry, and secrets.
 #
 # Windows-only commits must not require Nix. The classifier is shared with the
 # pre-push hook, CI, and the version-control skill. What a check that could not
@@ -67,11 +67,18 @@ fi
 # tool/checks/<name> and cannot reach a repository-scope check, so this calls
 # evidence_run directly.
 evidence_run hygiene tool/version-control/hygiene \
-  || abort "See AGENTS.md, Durable decisions, and tool/version-control/hygiene.allow."
+  || abort "See invariants/repository/hygiene-*.md and tool/version-control/hygiene.allow."
+
+# The invariant registry check is repository-wide for the same reason
+# hygiene is: a fixture renamed in any scope can orphan the tag an entry
+# depends on, so it runs unconditionally rather than through dispatch.
+evidence_run invariants tool/version-control/invariants \
+  || abort "See invariants/README.md."
 
 # Hooks are opt-in, so CI mirrors the secret check. A credential that reaches
 # history stays there after the file is deleted, making the staged state the
 # cheapest place to catch one.
+# INV repository/no-secret-in-history
 if command -v gitleaks >/dev/null 2>&1; then
   if gitleaks git --help >/dev/null 2>&1; then
     evidence_run gitleaks gitleaks git --staged --redact --no-banner \

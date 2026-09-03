@@ -1,6 +1,8 @@
 #!/bin/sh
 
 # Produce a release tag candidate and evidence template. Never create a tag.
+#
+# INV repository/release-tag-contract
 
 set -eu
 

@@ -3,6 +3,8 @@
 # Enforces Conventional Commits, so `git log --oneline` stays readable and
 # changelog tooling can group commits by type later.
 #
+# INV repository/conventional-subject
+#
 # Entirely stack-agnostic; copy as-is.
 
 # Guards the `sed '/^[[:space:]]*$/d'` call below from Git for Windows' MSYS

@@ -4,6 +4,8 @@
 # checks, and a check this host cannot run stays visible as unverified without
 # making one platform depend on another.
 #
+# INV repository/evidence-three-states — the hooks are the executables that source .githooks/evidence.
+#
 # .githooks/evidence owns what each outcome means. This hook decides which
 # checks are selected, never whether a missing tool is a failure.
 

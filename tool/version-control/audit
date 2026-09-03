@@ -1,6 +1,8 @@
 #!/bin/sh
 
 # Audit committed history and clone-local version-control policy. Read-only.
+#
+# INV repository/flake-lock-isolated, INV repository/release-tag-contract
 
 set -eu
 
