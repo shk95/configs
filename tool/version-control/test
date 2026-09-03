@@ -295,6 +295,8 @@ printf '%s\n' "$second_plan" | grep -q '^tag: unixlike-v2030.01.02.1$'
 # names the tracked hooks directory is the same setting as `.githooks`.
 git -C "$test_root" config core.hooksPath "$test_root/.githooks"
 (cd "$test_root" && "$audit") >/dev/null
+# An existing directory that is not the tracked hooks: rejected by comparison, not by absence.
+mkdir -p "$test_root/elsewhere"
 git -C "$test_root" config core.hooksPath "$test_root/elsewhere"
 if (cd "$test_root" && "$audit") >/dev/null 2>&1; then
   echo "audit accepted a core.hooksPath that names no tracked hooks" >&2

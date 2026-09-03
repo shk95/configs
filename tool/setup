@@ -28,6 +28,9 @@ current=$(git config --local --get core.hooksPath 2>/dev/null || true)
 # relative to the worktree root; an unset value resolves to .git/hooks, which
 # is never the tracked directory. Comparing directories rather than strings
 # is what lets an absolute core.hooksPath naming .githooks count as enabled.
+# git rev-parse prints a relative value relative to the current directory, so
+# this helper is only correct after the script has changed to the toplevel,
+# which every caller here does first.
 hooks_actual() {
   hooks_actual_dir=$(git rev-parse --git-path hooks 2>/dev/null) || return 1
   case "$hooks_actual_dir" in
