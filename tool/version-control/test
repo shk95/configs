@@ -2889,6 +2889,53 @@ if ! printf '%s\n' "$inv_table" | grep -qF '| `repository/base-rule` | tool, fix
   exit 1
 fi
 
+# INV repository/fixtures-name-invariants
+# A fixture unit — a top-level Describe in a Pester file, a banner section
+# in a shell suite — names the invariant it proves. Report mode counts and
+# lists; INVARIANTS_ENFORCE_C10=1 fails, which is the mode PR 2 and PR 3
+# flip on.
+inv_base
+inv_id=repository/base-rule
+inv_pester="$inv_repo/tests/Fixture.Tests.ps1"
+{
+  printf "Describe 'tagged unit' {\n"
+  printf "    It '%s %s: holds' { \$true | Should -BeTrue }\n" INV "$inv_id"
+  printf "}\n\n"
+  printf "Describe 'untagged unit' {\n"
+  printf "    It 'proves nothing registered' { \$true | Should -BeTrue }\n"
+  printf "}\n"
+} >"$inv_pester"
+{
+  printf '#!/bin/sh\n'
+  printf '# preamble\n\n'
+  printf '# %s\n# tagged section\n# %s\n#\n' "$(printf -- '-%.0s' 1 2 3 4 5 6 7 8 9 10 11 12)" "$(printf -- '-%.0s' 1 2 3 4 5 6 7 8 9 10 11 12)"
+  printf '# %s %s\n\n' INV "$inv_id"
+  printf '# %s\n# untagged section\n# %s\n' "$(printf -- '-%.0s' 1 2 3 4 5 6 7 8 9 10 11 12)" "$(printf -- '-%.0s' 1 2 3 4 5 6 7 8 9 10 11 12)"
+  printf 'true\n'
+} >"$inv_repo/tests/probe.sh"
+inv_entry base-rule <<'ENTRY'
+id: repository/base-rule
+statement: The fixture holds.
+rationale: docs/architecture.md § Model
+enforced-by: tool tool/probe
+enforced-by: fixture tests/probe.sh
+enforced-by: fixture tests/Fixture.Tests.ps1
+ENTRY
+inv_expect_pass 'untagged units are reported, not failed' '2 fixture units untagged'
+inv_untagged=$(cd "$inv_repo" && "$invariants" --untagged)
+printf '%s\n' "$inv_untagged" | grep -q 'tests/Fixture.Tests.ps1:[0-9]*: untagged unit'
+printf '%s\n' "$inv_untagged" | grep -q 'tests/probe.sh:[0-9]*: untagged section'
+if printf '%s\n' "$inv_untagged" | grep -q ': tagged unit$\|: tagged section$'; then
+  printf '%s\n' "$inv_untagged" >&2
+  echo "invariants --untagged listed a tagged unit" >&2
+  exit 1
+fi
+if (cd "$inv_repo" && INVARIANTS_ENFORCE_C10=1 "$invariants") >/dev/null 2>&1; then
+  echo "invariants passed untagged units under INVARIANTS_ENFORCE_C10" >&2
+  exit 1
+fi
+(cd "$inv_repo" && INVARIANTS_ENFORCE_C10=1 "$invariants") 2>&1 | grep -q 'C10'
+
 inv_status=0
 (cd "$inv_repo" && "$invariants" --bogus) >/dev/null 2>&1 || inv_status=$?
 if [ "$inv_status" -ne 2 ]; then

@@ -72,6 +72,17 @@ no fixture is a convention written as a control. A `pending` entry is a
 declared gap, reported in the checker's summary and never failed; the issue
 is its enforcement owner until a check exists.
 
+## Fixture units name invariants
+
+Every fixture unit in a file an entry declares as `fixture` names at least
+one registered invariant with its tag. A unit is a top-level `Describe` in
+a Pester file, or a banner section (`# ----------`, a title line,
+`# ----------`) in a shell suite. `tool/version-control/invariants`
+reports the untagged count in its summary and lists them with `--untagged`;
+`INVARIANTS_ENFORCE_C10=1` turns each into a failure, the mode the checker
+switches to once every scope has mapped its fixtures. A unit that proves
+no invariant is a deletion candidate, not a rule.
+
 ## Naming an invariant from code, tests and documents
 
 Write the literal `INV <scope>/<slug>`:

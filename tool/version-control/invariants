@@ -24,11 +24,13 @@
 #   C7  manual or pending needs an owner
 #   C8  every `INV <scope>/<slug>` in a tracked file is registered
 #   C9  rationale points at AGENTS.md or docs/architecture.md
+#   C10 every fixture unit in a declared fixture file names an invariant
+#       (report mode unless INVARIANTS_ENFORCE_C10=1)
 #
 # A pending entry is reported in the summary and never fails the check; an
 # issue number is its enforcement owner until a check exists.
 #
-# usage: tool/version-control/invariants [--table]
+# usage: tool/version-control/invariants [--table | --untagged]
 #
 # Exit 0 verified, 69 unverified, any other status failed. See
 # docs/architecture.md, "Repository governance plane", and .githooks/evidence,
@@ -69,8 +71,9 @@ mode=check
 case "${1:-}" in
   '') ;;
   --table) mode=table ;;
+  --untagged) mode=untagged ;;
   *)
-    echo "usage: tool/version-control/invariants [--table]" >&2
+    echo "usage: tool/version-control/invariants [--table | --untagged]" >&2
     exit 2
     ;;
 esac
@@ -137,6 +140,7 @@ git ls-files -- "$registry" >"$work/paths"
 : >"$work/ids"
 : >"$work/pending"
 : >"$work/table"
+: >"$work/fixtures"
 count=0
 tab=$(printf '\t')
 
@@ -236,6 +240,7 @@ while IFS= read -r path; do
           schema | tool | fixture)
             if [ "$kind" = fixture ]; then
               has_fixture=1
+              printf '%s\n' "$locator" >>"$work/fixtures"
             else
               has_schema_tool=1
             fi
@@ -329,6 +334,52 @@ while IFS= read -r hit; do
 done <"$work/tags"
 
 # ---------------------------------------------------------------------------
+# C10: every fixture unit names an invariant
+# ---------------------------------------------------------------------------
+#
+# INV repository/fixtures-name-invariants
+#
+# A unit is a top-level `Describe` in a Pester file, or a banner section
+# (`# ----------`, a title line, `# ----------`) in a shell suite. Report
+# mode lists and counts; enforcement is a one-line flip once every scope
+# has mapped its fixtures.
+: >"$work/untagged"
+sort -u "$work/fixtures" | while IFS= read -r fixture_file; do
+  [ -n "$fixture_file" ] || continue
+  tracked "$fixture_file" || continue
+  case "$fixture_file" in
+    *.Tests.ps1)
+      git show ":$fixture_file" | awk -v file="$fixture_file" '
+        function flush() { if (open && !tagged) printf "%s:%d: %s\n", file, line, title; open = 0 }
+        /^Describe / { flush(); line = NR; title = $0; sub(/^Describe +[\x27"]?/, "", title); sub(/[\x27"]? *\{.*$/, "", title); tagged = 0; open = 1; next }
+        open && /INV [a-z]+\/[a-z0-9]+(-[a-z0-9]+)*/ { tagged = 1 }
+        END { flush() }
+      ' >>"$work/untagged"
+      ;;
+    *)
+      git show ":$fixture_file" | awk -v file="$fixture_file" '
+        function flush() { if (open && !tagged) printf "%s:%d: %s\n", file, line, title; open = 0 }
+        /^# -{10,}$/ { banner = NR; next }
+        banner == NR - 1 && /^# [^-]/ { flush(); line = NR; title = $0; sub(/^# /, "", title); tagged = 0; open = 1; next }
+        open && /INV [a-z]+\/[a-z0-9]+(-[a-z0-9]+)*/ { tagged = 1 }
+        END { flush() }
+      ' >>"$work/untagged"
+      ;;
+  esac
+done
+untagged_count=$(wc -l <"$work/untagged" | tr -d ' ')
+if [ "${INVARIANTS_ENFORCE_C10:-0}" = 1 ] && [ "$untagged_count" -gt 0 ]; then
+  while IFS= read -r unit; do
+    fail "$unit: C10 fixture unit names no invariant"
+  done <"$work/untagged"
+fi
+
+# ---------------------------------------------------------------------------
+
+if [ "$mode" = untagged ]; then
+  cat "$work/untagged"
+  exit 0
+fi
 
 if [ "$mode" = table ]; then
   printf '| Invariant | Enforced by | Statement |\n|---|---|---|\n'
@@ -343,8 +394,10 @@ fi
 
 pending_count=$(wc -l <"$work/pending" | tr -d ' ')
 if [ "$pending_count" -gt 0 ]; then
-  printf '✓ invariants: %s registered, %s pending (%s)\n' "$count" "$pending_count" \
-    "$(paste -sd, "$work/pending" | sed 's/,/, /g')"
+  printf '✓ invariants: %s registered, %s pending (%s), %s fixture units untagged\n' \
+    "$count" "$pending_count" \
+    "$(paste -sd, "$work/pending" | sed 's/,/, /g')" "$untagged_count"
 else
-  printf '✓ invariants: %s registered, 0 pending\n' "$count"
+  printf '✓ invariants: %s registered, 0 pending, %s fixture units untagged\n' \
+    "$count" "$untagged_count"
 fi
