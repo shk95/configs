@@ -1,6 +1,9 @@
 # Typed schema only. Concrete, non-secret host inventory lives in
 # `inventory.nix`; keeping the two separate makes it clear which values are
 # machine declarations and which are reusable option contracts.
+#
+# INV unixlike/typed-identity — this file is the schema; tool/checks/flake-test
+# proves it accepts the inventory and refuses a wrong shape.
 {lib, ...}: let
   inherit (lib) mkOption types;
 in {
