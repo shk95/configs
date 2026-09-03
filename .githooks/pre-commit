@@ -1,7 +1,7 @@
 #!/bin/sh
 #
-# Domain-aware local checks plus the two repository-wide scans: desired-state
-# hygiene and secrets.
+# Domain-aware local checks plus the three repository-wide scans: desired-state
+# hygiene, the invariant registry, and secrets.
 #
 # Windows-only commits must not require Nix. The classifier is shared with the
 # pre-push hook, CI, and the version-control skill. What a check that could not
