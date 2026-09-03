@@ -16,6 +16,12 @@ plan_promotion="$root/tool/version-control/plan-promotion"
 # `git -C` into the temporary repository below.
 unset GIT_INDEX_FILE
 
+# The fixtures own REQUIRE_NATIVE per case: each local-pass case expects it
+# unset and each merge-gate case sets it explicitly. CI hands the repository
+# job REQUIRE_NATIVE=1 for the checks it runs directly, and that must not
+# invert the cases here.
+unset REQUIRE_NATIVE
+
 # Git exports an absolute GIT_DIR (and, for some invocations, GIT_WORK_TREE)
 # to hooks it runs from a linked worktree. Left set, every `git -C "$fixture"`
 # below would resolve against the worktree's real git-dir instead of the
@@ -39,6 +45,8 @@ export MSYS_NO_PATHCONV MSYS2_ARG_CONV_EXCL
 # "a literal appears" but "the script calls a text tool at all": every POSIX
 # shell script in the governance plane that invokes sed, grep or awk declares
 # the guard. Derived from the tree, so a new script is covered on arrival.
+# tool/checks/* is unixlike scope and outside this rule by the maintainer's
+# ruling.
 git -C "$root" ls-files -- tool/version-control tool/dispatch tool/doctor.sh tool/setup tool/worktree.sh .githooks |
   while IFS= read -r msys_script; do
   [ -f "$root/$msys_script" ] || continue
@@ -67,13 +75,14 @@ grep -q 'run: tool/version-control/audit' "$root/.github/workflows/ci.yml"
 
 # INV repository/merge-gate-requires-native
 # Every job that runs a check converts unverified into failure; the two jobs
-# that run none (classify, required) are the only exemptions. Parsed job by
-# job from the workflow's two-space indentation rather than grepped for a
-# literal, so a job added without the variable is caught.
+# that produce no check evidence (classify, required — the gate only reads
+# results) are the only exemptions. Parsed job by job from the workflow's
+# two-space indentation rather than grepped for a literal, so a job added
+# without the variable is caught.
 if ! awk '
   /^jobs:$/ { in_jobs = 1; next }
   !in_jobs { next }
-  /^  [a-z]+:$/ { job = $1; sub(":", "", job); jobs[job] = 1; in_env = ""; next }
+  /^  [a-z][a-z0-9_-]*:$/ { job = $1; sub(":", "", job); jobs[job] = 1; in_env = ""; next }
   /^    env:$/ { in_env = job; next }
   /^    [a-z-]+:/ { in_env = "" }
   in_env != "" && /^      REQUIRE_NATIVE: "1"$/ { native[in_env] = 1 }
@@ -2967,6 +2976,11 @@ fi
 if inv_hook_output=$(REQUIRE_NATIVE=1; export REQUIRE_NATIVE; run_inv_pre_commit); then
   printf '%s\n' "$inv_hook_output" >&2
   echo "pre-commit accepted an absent format check under REQUIRE_NATIVE" >&2
+  exit 1
+fi
+if ! printf '%s\n' "$inv_hook_output" | grep -q 'format is unverified'; then
+  printf '%s\n' "$inv_hook_output" >&2
+  echo "pre-commit did not fail the absent format check under REQUIRE_NATIVE" >&2
   exit 1
 fi
 printf '#!/bin/sh\nexit 0\n' >"$inv_hook_root/tool/checks/format"
