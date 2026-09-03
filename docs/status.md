@@ -491,6 +491,18 @@ runtime dependency. The Unix-like Home Manager feature owns the package and
 the CurrentUserAllHosts profile for Linux, WSL, and macOS. Windows continues to
 own its WinGet package declaration, managed profile payload, and profile hook.
 
+Pester follows the same split. The Windows domain treats it as contributor
+tooling: `windows/toolchain.json` pins 5.7.1 and `windows/tools/setup-dev.ps1`
+installs it from the PowerShell Gallery, deliberately outside the manifest so
+no user host reports drift for a test framework. The Unix-like domain, as of
+2026-09-04, places the same version into every home from
+`modules/powershell.nix`: nixpkgs carries no Pester, so the module fetches the
+Gallery package by hash and lays it under the user module path pwsh searches
+first. The two pins are independent copies. What this buys is local evidence:
+`pre-push` on a Linux, WSL, or macOS clone runs the Windows suite under the
+home's own pwsh and reports a result instead of an unverified 69, while the
+`windows-latest` CI job remains the native merge gate.
+
 The two profiles independently adopt the same small, platform-neutral
 interactive policy: PSReadLine suppresses duplicate history entries, moves the
 cursor to the end of a recalled history match, and uses history prediction when
