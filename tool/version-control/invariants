@@ -10,8 +10,8 @@
 #
 # Rules, as named in failure output:
 #
-#   C1  a tracked path under invariants/ is README.md, common/.gitkeep, or
-#       <scope>/<slug>.md with a known scope and a [a-z0-9-] slug
+#   C1  a tracked path under invariants/ is README.md or <scope>/<slug>.md
+#       with a known scope and a [a-z0-9-] slug
 #   C2  the header parses: `key: value` lines, known keys, one each of
 #       id, statement, rationale, at most one owner
 #   C3  id equals <scope>/<slug>
@@ -24,17 +24,25 @@
 #   C7  manual or pending needs an owner
 #   C8  every `INV <scope>/<slug>` in a tracked file is registered
 #   C9  rationale points at AGENTS.md or docs/architecture.md
+#   C10 every fixture unit in a declared fixture file names an invariant
+#       (report mode unless INVARIANTS_ENFORCE_C10=1)
 #
 # A pending entry is reported in the summary and never fails the check; an
 # issue number is its enforcement owner until a check exists.
 #
-# usage: tool/version-control/invariants [--table]
+# usage: tool/version-control/invariants [--table | --untagged]
 #
 # Exit 0 verified, 69 unverified, any other status failed. See
 # docs/architecture.md, "Repository governance plane", and .githooks/evidence,
 # which is the one place that decides what each means.
 
 set -eu
+
+# Guards this script's sed/grep/awk calls from Git for Windows' MSYS argument
+# conversion (#79); see tool/version-control/hygiene. Inert elsewhere.
+MSYS_NO_PATHCONV=1
+MSYS2_ARG_CONV_EXCL='*'
+export MSYS_NO_PATHCONV MSYS2_ARG_CONV_EXCL
 
 # The three-state prerequisite contract, restated rather than sourced from
 # tool/checks/prerequisite for the same reason tool/version-control/hygiene
@@ -63,8 +71,9 @@ mode=check
 case "${1:-}" in
   '') ;;
   --table) mode=table ;;
+  --untagged) mode=untagged ;;
   *)
-    echo "usage: tool/version-control/invariants [--table]" >&2
+    echo "usage: tool/version-control/invariants [--table | --untagged]" >&2
     exit 2
     ;;
 esac
@@ -131,13 +140,14 @@ git ls-files -- "$registry" >"$work/paths"
 : >"$work/ids"
 : >"$work/pending"
 : >"$work/table"
+: >"$work/fixtures"
 count=0
 tab=$(printf '\t')
 
 while IFS= read -r path; do
   [ -n "$path" ] || continue
   case "$path" in
-    "$registry"/README.md | "$registry"/common/.gitkeep) continue ;;
+    "$registry"/README.md) continue ;;
     "$registry"/*/*.md) ;;
     *)
       fail "$path: C1 not a registry path"
@@ -149,7 +159,7 @@ while IFS= read -r path; do
   slug=${rest#*/}
   slug=${slug%.md}
   case "$scope" in
-    unixlike | windows | common | repository) ;;
+    unixlike | windows | repository) ;;
     *)
       fail "$path: C1 unknown scope '$scope'"
       continue
@@ -230,6 +240,7 @@ while IFS= read -r path; do
           schema | tool | fixture)
             if [ "$kind" = fixture ]; then
               has_fixture=1
+              printf '%s\n' "$locator" >>"$work/fixtures"
             else
               has_schema_tool=1
             fi
@@ -323,6 +334,54 @@ while IFS= read -r hit; do
 done <"$work/tags"
 
 # ---------------------------------------------------------------------------
+# C10: every fixture unit names an invariant
+# ---------------------------------------------------------------------------
+#
+# INV repository/fixtures-name-invariants
+#
+# A unit is a top-level `Describe` in a Pester file, or a banner section
+# (`# ----------`, a title line, `# ----------`) in a shell suite. Report
+# mode lists and counts; enforcement is a one-line flip once every scope
+# has mapped its fixtures.
+: >"$work/untagged"
+sort -u "$work/fixtures" | while IFS= read -r fixture_file; do
+  [ -n "$fixture_file" ] || continue
+  tracked "$fixture_file" || continue
+  case "$fixture_file" in
+    *.Tests.ps1)
+      # \x27 is a gawk extension; the quote is passed in dynamically so the
+      # regex works on any POSIX awk.
+      git show ":$fixture_file" | awk -v file="$fixture_file" -v q="'" '
+        function flush() { if (open && !tagged) printf "%s:%d: %s\n", file, line, title; open = 0 }
+        /^Describe / { flush(); line = NR; title = $0; sub("^Describe +[" q "\"]?", "", title); sub("[" q "\"]? *\\{.*$", "", title); tagged = 0; open = 1; next }
+        open && /INV [a-z]+\/[a-z0-9]+(-[a-z0-9]+)*/ { tagged = 1 }
+        END { flush() }
+      ' >>"$work/untagged"
+      ;;
+    *)
+      git show ":$fixture_file" | awk -v file="$fixture_file" '
+        function flush() { if (open && !tagged) printf "%s:%d: %s\n", file, line, title; open = 0 }
+        /^# ----------/ { banner = NR; next }
+        NR > 1 && banner == NR - 1 && /^# [^-]/ && !/INV [a-z]+\// { flush(); line = NR; title = $0; sub(/^# /, "", title); tagged = 0; open = 1; next }
+        open && /INV [a-z]+\/[a-z0-9]+(-[a-z0-9]+)*/ { tagged = 1 }
+        END { flush() }
+      ' >>"$work/untagged"
+      ;;
+  esac
+done
+untagged_count=$(wc -l <"$work/untagged" | tr -d ' ')
+if [ "${INVARIANTS_ENFORCE_C10:-0}" = 1 ] && [ "$untagged_count" -gt 0 ]; then
+  while IFS= read -r unit; do
+    fail "$unit: C10 fixture unit names no invariant"
+  done <"$work/untagged"
+fi
+
+# ---------------------------------------------------------------------------
+
+if [ "$mode" = untagged ]; then
+  cat "$work/untagged"
+  exit 0
+fi
 
 if [ "$mode" = table ]; then
   printf '| Invariant | Enforced by | Statement |\n|---|---|---|\n'
@@ -337,8 +396,10 @@ fi
 
 pending_count=$(wc -l <"$work/pending" | tr -d ' ')
 if [ "$pending_count" -gt 0 ]; then
-  printf '✓ invariants: %s registered, %s pending (%s)\n' "$count" "$pending_count" \
-    "$(paste -sd, "$work/pending" | sed 's/,/, /g')"
+  printf '✓ invariants: %s registered, %s pending (%s), %s fixture units untagged\n' \
+    "$count" "$pending_count" \
+    "$(paste -sd, "$work/pending" | sed 's/,/, /g')" "$untagged_count"
 else
-  printf '✓ invariants: %s registered, 0 pending\n' "$count"
+  printf '✓ invariants: %s registered, 0 pending, %s fixture units untagged\n' \
+    "$count" "$untagged_count"
 fi

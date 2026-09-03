@@ -21,8 +21,11 @@ invariants/
   repository/*.md    version-control policy, hooks, CI, hygiene
   unixlike/*.md      Nix, Home Manager, NixOS, nix-darwin, Unix-like payloads
   windows/*.md       manifest, payloads, PowerShell reconciliation
-  common/            empty until a common component exists
 ```
+
+A scope directory exists only for a domain that exists; the change that
+creates a domain adds its directory, its classifier arm and its checks
+together.
 
 Each scope owns the entries under its directory. A Windows entry is a
 `windows` change and can be written and checked without a Unix-like host.
@@ -68,6 +71,21 @@ A `schema` or `tool` entry must also declare a `fixture`: an enforcement with
 no fixture is a convention written as a control. A `pending` entry is a
 declared gap, reported in the checker's summary and never failed; the issue
 is its enforcement owner until a check exists.
+
+## Fixture units name invariants
+
+Every fixture unit in a file an entry declares as `fixture` names at least
+one registered invariant with its tag. A unit is a top-level `Describe` in
+a Pester file, or a banner section (`# ----------`, a title line,
+`# ----------`) in a shell suite. `tool/version-control/invariants`
+reports the untagged count in its summary and lists them with `--untagged`;
+`INVARIANTS_ENFORCE_C10=1` turns each into a failure, the mode the checker
+switches to once every scope has mapped its fixtures. A unit that proves
+no invariant is a deletion candidate, not a rule.
+
+A shell unit runs from its title line to the next unit or the end of the
+file; when a tag follows a closing banner directly, put a bare `#` line
+between them so the tag is read as content, not as a title.
 
 ## Naming an invariant from code, tests and documents
 

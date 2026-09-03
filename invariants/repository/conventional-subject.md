@@ -6,5 +6,5 @@ enforced-by: fixture tool/version-control/test
 
 The commit-message hook is the owner of the grammar, including which
 subjects Git writes itself and are exempt. `tool/version-control/audit`
-carries a second copy of the pattern for history audit; where the two
-disagree the hook is the rule and the audit is a defect to align.
+asks the hook rather than keeping a pattern of its own, so history audit and
+the commit gate cannot disagree.

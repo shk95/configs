@@ -99,8 +99,9 @@ When adding a repository rule, separate its concerns before implementation:
 Each obligation has one authoritative source. Procedures and tools implement
 policy but must not silently create new policy. Model-specific adapters only
 discover canonical skills. Every enforceable invariant needs positive and
-negative fixtures, while non-automated invariants need an explicit evidence
-item and named decision owner.
+negative fixtures, every fixture names the invariant it proves and a fixture
+that proves none is removed, and non-automated invariants need an explicit
+evidence item and named decision owner.
 
 Extract a method into the sibling `skills` project only when it contains
 no repository decision, path convention, branch name, infrastructure identity,

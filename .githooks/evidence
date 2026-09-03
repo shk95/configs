@@ -24,9 +24,27 @@
 #
 # A failure always outranks an unverified result. Callers read evidence_failed
 # and evidence_unverified after the runs rather than the last exit status.
+#
+# Every outcome is also appended to a log outside the working tree
+# (INV repository/hook-evidence-recorded), so a later review can count what
+# the hooks refused instead of guessing.
 
 evidence_failed=0
 evidence_unverified=0
+
+# One line per outcome, outside the working tree, so the next review of the
+# hooks can count what they refused instead of guessing. A write failure
+# never changes a check's result.
+evidence_hook=${0##*/}
+evidence_log() {
+  evidence_log_dir=$(git rev-parse --git-common-dir 2>/dev/null) || return 0
+  case "$evidence_log_dir" in
+    /*) ;;
+    *) evidence_log_dir="$(pwd)/$evidence_log_dir" ;;
+  esac
+  printf '%s\t%s\t%s\t%s\n' "$(date -u +%Y-%m-%dT%H:%M:%SZ)" \
+    "$evidence_hook" "$1" "$2" >>"$evidence_log_dir/hooks-evidence.log" 2>/dev/null || :
+}
 
 # Report a check that could not run. Used where the capability is probed
 # directly rather than signalled by an exit code.
@@ -38,12 +56,14 @@ evidence_unavailable() {
     printf '\033[31m✗ %s is unverified (%s) and REQUIRE_NATIVE is set\033[0m\n' \
       "$evidence_label" "$evidence_detail" >&2
     evidence_failed=1
+    evidence_log "$evidence_label" failed
     return 1
   fi
 
   printf '· %s unverified: %s; CI must supply evidence\n' \
     "$evidence_label" "$evidence_detail"
   evidence_unverified=1
+  evidence_log "$evidence_label" unverified
   return 0
 }
 
@@ -61,6 +81,7 @@ evidence_run() {
 
   case $evidence_status in
     0)
+      evidence_log "$evidence_label" verified
       return 0
       ;;
     69)
@@ -70,6 +91,7 @@ evidence_run() {
     *)
       printf '\033[31m✗ %s\033[0m\n' "$evidence_label" >&2
       evidence_failed=1
+      evidence_log "$evidence_label" failed
       return 1
       ;;
   esac

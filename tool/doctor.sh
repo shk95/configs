@@ -8,6 +8,12 @@
 # machine with flakes disabled fails every command in a way that looks like a
 # broken flake rather than a missing setting.
 
+# Guards this script's sed/grep/awk calls from Git for Windows' MSYS argument
+# conversion (#79); see tool/version-control/hygiene. Inert elsewhere.
+MSYS_NO_PATHCONV=1
+MSYS2_ARG_CONV_EXCL='*'
+export MSYS_NO_PATHCONV MSYS2_ARG_CONV_EXCL
+
 cd "$(dirname "$0")/.." || exit 1
 
 scope=${1:-all}
@@ -87,16 +93,50 @@ if [ "$scope" = windows ] || [ "$scope" = all ]; then
   fi
 fi
 
+# The directory Git will run hooks from, canonical. Relative values are
+# relative to the worktree root; an unset value resolves to .git/hooks, which
+# is never the tracked directory. Comparing directories rather than strings
+# is what lets an absolute core.hooksPath naming .githooks count as enabled.
+# git rev-parse prints a relative value relative to the current directory, so
+# this helper is only correct after the script has changed to the toplevel,
+# which every caller here does first.
+hooks_actual() {
+  hooks_actual_dir=$(git rev-parse --git-path hooks 2>/dev/null) || return 1
+  case "$hooks_actual_dir" in
+    /*) ;;
+    *) hooks_actual_dir="$(git rev-parse --show-toplevel)/$hooks_actual_dir" ;;
+  esac
+  (CDPATH= cd -- "$hooks_actual_dir" 2>/dev/null && pwd -P)
+}
+# Enabled when Git's hooks directory is the tracked .githooks of any worktree
+# of this repository: a linked worktree shares the clone's absolute
+# core.hooksPath, which names the main worktree's copy of the same tracked
+# directory.
+hooks_enabled() {
+  hooks_enabled_actual=$(hooks_actual) || return 1
+  git worktree list --porcelain 2>/dev/null | sed -n 's/^worktree //p' |
+    while IFS= read -r hooks_enabled_root; do
+      hooks_enabled_expected=$(CDPATH= cd -- "$hooks_enabled_root/.githooks" 2>/dev/null && pwd -P) || continue
+      [ "$hooks_enabled_actual" = "$hooks_enabled_expected" ] && echo yes
+    done | grep -q yes
+}
+
 echo
 echo "Version control"
 
-hooks=$(git config core.hooksPath 2>/dev/null)
-if [ "$hooks" = ".githooks" ]; then
+if hooks_enabled; then
   ok "git hooks enabled"
 else
   # A hard failure: without this a clone commits with no local policy or secret
   # scan. CI remains a backstop, not the primary feedback loop.
   bad "git hooks are NOT enabled" "Inspect with 'tool/setup', then enable with 'tool/setup --fix'."
+fi
+
+# INV repository/hook-evidence-recorded: silent when the log is absent, since
+# a fresh clone or a --reset host has run no hook yet.
+hook_log="$(git rev-parse --git-common-dir 2>/dev/null)/hooks-evidence.log"
+if [ -s "$hook_log" ]; then
+  ok "$(tool/version-control/hook-evidence | head -1)"
 fi
 
 git_name=$(git config --get user.name 2>/dev/null || true)

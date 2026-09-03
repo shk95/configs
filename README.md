@@ -14,7 +14,8 @@ cross-platform build graph:
 See `docs/architecture.md` for the domain and release model.
 
 The invariants each domain must keep, and how each one is enforced, are
-enumerated under `invariants/`.
+enumerated under `invariants/`. The hooks record what they refused;
+`tool/doctor.sh` shows the count.
 
 ## Architecture
 

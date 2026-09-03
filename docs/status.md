@@ -1008,3 +1008,37 @@ One citation into the old `AGENTS.md` layout survives outside this scope:
 to break" table. The Windows migration, which edits that module's messages
 anyway, updates the citation; a repository change does not reach into
 `windows/`.
+
+The 2026-09-03 review of the verification suite led to four rulings, landed
+as the governance-hygiene change: `tool/version-control/audit` runs on every
+push and in CI and delegates commit subjects to the commit-message hook;
+the `common` job, dispatch unit and classifier arm are removed until a
+common component exists (restored by the change that creates it); every
+fixture unit names an invariant (`INV repository/fixtures-name-invariants`,
+reported by `tool/version-control/invariants --untagged` and enforced once
+the Unix-like and Windows migrations have mapped their suites — the flip is
+one line, `INVARIANTS_ENFORCE_C10` becoming the default, and is recorded
+here when it happens); and hooks record their outcomes under the git common
+directory (`INV repository/hook-evidence-recorded`). The untagged baseline at
+this change was 3 units. The same review made the MSYS guard a derived rule
+(`INV repository/msys-argument-guard`) rather than hand-maintained text, and
+every gate job now requires native evidence
+(`INV repository/merge-gate-requires-native`) so an unverified check fails
+the merge instead of passing silently.
+
+## CI runners are not added
+
+Measured on 2026-09-03 over 157 CI runs since 2026-08-11: one configuration
+defect caught (a lint warning, before the hooks existed), eight failures
+that were defects in the verification machinery itself, none in a fixture
+that had caught a regression. Every defect found on a host — the Windows
+Terminal generated profile, the partial font install, the older PowerToys
+keys, the Windows 10 Appx route, the CP949 console — depended on host state
+a fresh runner does not have, and `bootstrap.ps1 -Check` is recorded above as
+host evidence for that reason. The decision is to add no runner: no Windows
+Apply on a Server runner, no per-run NixOS-WSL closure build, no macOS
+runner, no VM test before a NixOS host configuration exists. Build evidence
+for a `unixlike-v…` tag is `CHECKS_BUILD_ALL=1 tool/checks/test` on a
+matching host. Reopen when a defect class that a hosted runner would have
+caught occurs twice, or when a NixOS host configuration exists for VM tests
+to target.
