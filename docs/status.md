@@ -1015,8 +1015,8 @@ this section carried until then (`unixlike/typed-identity`,
 live in their entries. The `flake-test` suite's banner units are tagged, so
 the untagged baseline stayed at the three repository units recorded below.
 
-The Windows entries landed on 2026-09-04 under `invariants/windows/`: eleven
-entries, eight enforced (`INV windows/feature-owns-every-item`,
+The Windows entries landed on 2026-09-04 under `invariants/windows/`: twelve
+entries, nine enforced (`INV windows/feature-owns-every-item`,
 `INV windows/sources-total-function`, `INV windows/compare-mode-declared`,
 `INV windows/schema-version-refused` by the loader and the suite;
 `INV windows/declared-list-has-content`, `INV windows/hash-covers-selection`,
@@ -1026,7 +1026,11 @@ suite) and three `pending` (`INV windows/unique-ids` #134,
 The same change corrected the one citation into the old `AGENTS.md` layout,
 in `windows/src/WinEnv.psm1`. Every scope has now mapped its fixtures; the
 Pester file contributes the untagged units the per-scope pruning change
-takes up before `INVARIANTS_ENFORCE_C10` becomes the default.
+takes up before `INVARIANTS_ENFORCE_C10` becomes the default. A twelfth
+Windows entry, `INV windows/no-inherited-git-context`, landed in the same
+change after its first push ran the suite from a hook in a linked worktree
+and the fixtures rewrote the clone; the Windows domain now carries the same
+defence the repository suite has had since #45.
 
 The 2026-09-03 review of the verification suite led to four rulings, landed
 as the governance-hygiene change: `tool/version-control/audit` runs on every

@@ -133,7 +133,9 @@ status only when its sole open question, or a prerequisite the host lacks,
 could not be decided there, with native evidence able to turn that into a
 failure. Finally, the Windows checks and suite read only the Windows tree
 and need no Unix-like toolchain, because this domain must be authorable and
-checkable on its own host.
+checkable on its own host. They also drop any repository context their caller
+exported, so a suite run from a hook acts only on the fixture repositories it
+creates.
 
 ## Common domain
 
