@@ -1993,6 +1993,7 @@ publish_wrote_nothing "the branch already existed"
 
 # The edit is computed against the tree of local dev, so a dev that is not
 # origin/dev is refused rather than branched from.
+# INV repository/publish-through-dev: a branch starts at the remote tip of dev or not at all.
 publish_snapshot
 publish_git update-ref refs/remotes/origin/dev \
   "$(publish_git rev-parse refs/heads/feature/unixlike-cask-add-hf)"
