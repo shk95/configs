@@ -2758,8 +2758,10 @@ cp -R "$root/.githooks" "$secret_hook_root/.githooks"
 cp -R "$root/tool/version-control" "$secret_hook_root/tool/version-control"
 cp -R "$root/tool/dispatch" "$secret_hook_root/tool/dispatch"
 printf '#!/bin/sh\nexit 0\n' >"$secret_hook_root/tool/version-control/hygiene"
+printf '#!/bin/sh\nexit 0\n' >"$secret_hook_root/tool/version-control/domain-reads"
 printf '#!/bin/sh\nexit 0\n' >"$secret_hook_root/tool/version-control/invariants"
 chmod +x "$secret_hook_root/tool/version-control/hygiene" \
+  "$secret_hook_root/tool/version-control/domain-reads" \
   "$secret_hook_root/tool/version-control/invariants"
 
 git -C "$secret_hook_root" init -q -b dev
@@ -3319,6 +3321,84 @@ if ! (cd "$audit_norefs" && "$hook_evidence") | grep -q 'no hook evidence record
   echo "hook-evidence did not report an absent log" >&2
   exit 1
 fi
+
+# ---------------------------------------------------------------------------
+# Domain trees are read only by their owners
+# ---------------------------------------------------------------------------
+#
+# INV repository/no-cross-domain-dependency
+# tool/version-control/domain-reads scans each domain's code in the index for
+# a path that names the other domain's tree. The real repository is the
+# positive case. The negative is a throwaway repository that reads across the
+# boundary in both directions; the scan must name each offending file and
+# line. A third repository only mentions the other tree in comments — a Nix
+# line comment, a PowerShell line comment, and PowerShell block comments over
+# several lines and inside one — plus `$#` and `${#x}`, which are not
+# comments, and a Windows payload that names a Unix-like path, which is data
+# and is not scanned; it must pass, because a read is code and prose is not.
+domain_reads="$root/tool/version-control/domain-reads"
+
+# Wired the way hygiene is: every commit, and the repository-wide CI scan
+# job. The Windows job's own parse loop from the checkout root was the
+# second known read across the boundary, so its absence is asserted too.
+grep -q 'evidence_run "domain reads" tool/version-control/domain-reads' "$root/.githooks/pre-commit"
+grep -q 'run: tool/version-control/domain-reads' "$root/.github/workflows/ci.yml"
+if grep -q 'Get-ChildItem -Recurse' "$root/.github/workflows/ci.yml"; then
+  echo "the CI workflow walks the checkout for PowerShell files; windows/tools/test.ps1 owns that parse" >&2
+  exit 1
+fi
+
+if ! domain_reads_output=$(cd "$root" && "$domain_reads" 2>&1); then
+  printf '%s\n' "$domain_reads_output" >&2
+  echo "the repository's own domains read across their boundary" >&2
+  exit 1
+fi
+# Both counts are positive, or a broken pathspec has retired the scan.
+printf '%s\n' "$domain_reads_output" | grep -q '^✓ domain reads: [1-9][0-9]* Unix-like and [1-9][0-9]* Windows' || {
+  printf '%s\n' "$domain_reads_output" >&2
+  echo "domain-reads did not report a positive count of files for both domains" >&2
+  exit 1
+}
+
+domain_reads_fixture=$(mktemp -d)
+git -C "$domain_reads_fixture" init -q
+mkdir -p "$domain_reads_fixture/tool/checks" "$domain_reads_fixture/windows/tools" "$domain_reads_fixture/modules"
+printf '#!/bin/sh\ncat windows/desired/manifest.json\n' >"$domain_reads_fixture/tool/checks/probe"
+printf '_: {\n  home.file."probe".source = ../windows/desired/files/probe;\n}\n' >"$domain_reads_fixture/modules/probe.nix"
+printf '$fonts = Get-Content (Join-Path $root %s)\n' "'assets\\wezterm\\fonts.json'" >"$domain_reads_fixture/windows/tools/probe.ps1"
+printf 'Import-Module (Join-Path $root %s)\n' "'modules/flake/probe.nix'" >"$domain_reads_fixture/windows/tools/module.psm1"
+git -C "$domain_reads_fixture" add -A
+if domain_reads_output=$(cd "$domain_reads_fixture" && "$domain_reads" 2>&1); then
+  printf '%s\n' "$domain_reads_output" >&2
+  echo "domain-reads accepted a repository that reads across the boundary" >&2
+  exit 1
+fi
+for domain_reads_hit in \
+  'tool/checks/probe:2:' \
+  'modules/probe.nix:2:' \
+  'windows/tools/probe.ps1:1:' \
+  'windows/tools/module.psm1:1:'; do
+  printf '%s\n' "$domain_reads_output" | grep -qF "$domain_reads_hit" || {
+    printf '%s\n' "$domain_reads_output" >&2
+    echo "domain-reads did not name $domain_reads_hit" >&2
+    exit 1
+  }
+done
+case "$domain_reads_fixture" in /tmp/*) rm -rf -- "$domain_reads_fixture" ;; esac
+
+domain_reads_fixture=$(mktemp -d)
+git -C "$domain_reads_fixture" init -q
+mkdir -p "$domain_reads_fixture/windows/src" "$domain_reads_fixture/windows/desired/files" "$domain_reads_fixture/modules"
+printf '# The Windows domain declares this terminal in windows/desired/files/terminal/settings.json.\n_: {\n  home.file."probe".text = "windows-terminal"; # not windows/\n}\n' >"$domain_reads_fixture/modules/probe.nix"
+printf '<#\n    .SYNOPSIS\n    Copied from assets/powershell/profile.ps1; see modules/powershell.nix and flake.nix.\n#>\n# tool/checks/payloads parses the Unix-like copy.\n$own = Join-Path $root %s <# not modules/ #>\nif ($args.Count -ne $#) { $x = ${#own} }\n' "'desired\\files\\profile.ps1'" >"$domain_reads_fixture/windows/src/probe.psm1"
+printf '$profile = %s\n' "'assets/powershell/profile.ps1'" >"$domain_reads_fixture/windows/desired/files/payload.ps1"
+git -C "$domain_reads_fixture" add -A
+if ! domain_reads_output=$(cd "$domain_reads_fixture" && "$domain_reads" 2>&1); then
+  printf '%s\n' "$domain_reads_output" >&2
+  echo "domain-reads read a comment as a cross-domain read" >&2
+  exit 1
+fi
+case "$domain_reads_fixture" in /tmp/*) rm -rf -- "$domain_reads_fixture" ;; esac
 
 # The repository's own registry, against the real index: this suite is the
 # fixture INV repository/registry-coverage names, so it proves itself here.

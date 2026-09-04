@@ -110,16 +110,10 @@ jobs:
           $machinePath = [Environment]::GetEnvironmentVariable('Path', 'Machine')
           $userPath = [Environment]::GetEnvironmentVariable('Path', 'User')
           $env:Path = "$machinePath;$userPath;$env:Path"
-          Get-ChildItem -Recurse -Include *.ps1,*.psm1 | ForEach-Object {
-            $tokens = $null
-            $errors = $null
-            [System.Management.Automation.Language.Parser]::ParseFile(
-              $_.FullName,
-              [ref]$tokens,
-              [ref]$errors
-            ) | Out-Null
-            if ($errors.Count) { throw "$($_.FullName): $($errors[0].Message)" }
-          }
+          # No parse loop here: windows/tools/test.ps1 parses every script
+          # under windows/ before the suite runs, and a loop from the checkout
+          # root reached the Unix-like PowerShell payload
+          # (INV repository/no-cross-domain-dependency).
           # These report through their exit status rather than by throwing, so
           # the status has to be read. Without this the block would run on past
           # a failed desired-state check and the step would take its result
@@ -131,14 +125,15 @@ jobs:
 
   # The job key stays `secrets`: the required-checks gate, its SECRETS_RESULT
   # input, and the `needs:` list below all key off it. Only the display name
-  # widens, because the job carries the four repository-wide scans.
+  # widens, because the job carries the five repository-wide scans.
   secrets:
-    name: Secret, hygiene, invariant and history scan
+    name: Secret, hygiene, domain-read, invariant and history scan
     runs-on: ubuntu-latest
     # The merge gate is the one place where a check that could not run must not
     # pass. tool/version-control/hygiene and tool/version-control/invariants
-    # need nothing but a POSIX shell, awk and Git today; this is what keeps a
-    # future prerequisite from passing through the gate unverified.
+    # need nothing but a POSIX shell, awk and Git today, as does
+    # tool/version-control/domain-reads; this is what keeps a future
+    # prerequisite from passing through the gate unverified.
     env:
       REQUIRE_NATIVE: "1"
     steps:
@@ -153,6 +148,7 @@ jobs:
             sudo tar -xz -C /usr/local/bin gitleaks
       - run: gitleaks git --redact --no-banner
       - run: tool/version-control/hygiene
+      - run: tool/version-control/domain-reads
       - run: tool/version-control/invariants
       # The clone-local half of the audit has nothing to say about a runner,
       # which configures no hooks and checks out no branch; history is what a

@@ -1,7 +1,7 @@
 #!/bin/sh
 #
-# Domain-aware local checks plus the three repository-wide scans: desired-state
-# hygiene, the invariant registry, and secrets.
+# Domain-aware local checks plus the four repository-wide scans: desired-state
+# hygiene, cross-domain reads, the invariant registry, and secrets.
 #
 # Windows-only commits must not require Nix. The classifier is shared with the
 # pre-push hook, CI, and the version-control skill. What a check that could not
@@ -82,6 +82,11 @@ fi
 # evidence_run directly.
 evidence_run hygiene tool/version-control/hygiene \
   || abort "See invariants/repository/hygiene-*.md and tool/version-control/hygiene.allow."
+
+# A read across a domain boundary is repository-wide for the same reason: it
+# is a property of two trees, and cheap to decide from the index.
+evidence_run "domain reads" tool/version-control/domain-reads \
+  || abort "See invariants/repository/no-cross-domain-dependency.md."
 
 # The invariant registry check is repository-wide for the same reason
 # hygiene is: a fixture renamed in any scope can orphan the tag an entry

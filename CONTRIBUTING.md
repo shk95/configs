@@ -372,6 +372,7 @@ an entry depends on.
 ```sh
 tool/version-control/test
 tool/version-control/invariants
+tool/version-control/domain-reads
 tool/version-control/audit
 tool/version-control/audit-remote  # when gh is authenticated
 tool/version-control/hook-evidence
@@ -417,6 +418,24 @@ to reject the same content.
 A bare account name written into prose is not detectable and is not covered.
 Reading prose in the diff for one is a manual obligation recorded in
 `docs/definition-of-done.md`.
+
+### Cross-domain reads
+
+`tool/version-control/domain-reads` scans each domain's code in the index —
+the flake, the modules and the Unix-like checks on one side, the Windows
+scripts on the other — for a path that names the other domain's tree, with
+comments stripped and payload trees left out. It runs on every commit beside
+the hygiene scan and in CI, because a read across the boundary is a property
+of two trees rather than of the domain being changed.
+
+```sh
+tool/version-control/domain-reads
+```
+
+When it reports something, copy what the other domain owns into the domain
+that reads it; the destination then owns the copy (`docs/architecture.md`,
+"Default rule: keep implementations separate"). There is no allow list: a
+read across the boundary has no legitimate form.
 
 Branch protection on `dev` and `master` requires the stable `Required checks`
 job. That job fails unless classification and secret scanning pass and every
