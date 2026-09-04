@@ -36,16 +36,18 @@ decision` is the procedure.
 
 | Date | Scope | Title | Status | Record |
 |---|---|---|---|---|
+| 2026-08-11 | repository | The monorepo starts a clean history | accepted | monorepo-starts-clean-history.md |
 | 2026-08-12 | unixlike | Home Manager platform classes are overlays | accepted | home-manager-platform-classes.md |
 | 2026-08-12 | unixlike | Homebrew owns Mac App Store and macOS GUI applications | accepted | homebrew-owns-mac-apps.md |
 | 2026-08-12 | unixlike | The identity contract and its values are separate | accepted | identity-contract-values-separated.md |
+| 2026-08-13 | unixlike, windows | PowerShell is configured per domain by copying | accepted | powershell-copied-per-domain.md |
 | 2026-08-16 | unixlike | SDKMAN is adopted but not owned | accepted | sdkman-adopted-not-owned.md |
 | 2026-08-16 | unixlike | Every payload declares its format and is parsed | accepted | payloads-declared-and-parsed.md |
-| 2026-09-03 | unixlike | A package is owned by the module that configures it | accepted | package-ownership-by-generating-module.md |
-| 2026-08-30 | windows | Windows adopts Catppuccin Latte by copying | accepted | windows-adopts-catppuccin-latte.md |
+| 2026-08-16 | repository | A check reports verified, failed or unverified | accepted | check-evidence-three-states.md |
+| 2026-08-16 | repository | CI runs the suites and adds no hosted runner | accepted | ci-evidence-without-hosted-runners.md |
 | 2026-08-18 | windows | Feature selection is closed over declared dependencies | accepted | feature-selection-closed.md |
+| 2026-08-30 | windows | Windows adopts Catppuccin Latte by copying | accepted | windows-adopts-catppuccin-latte.md |
 | 2026-08-30 | windows | Windows Terminal's generated profiles are tolerated on read | accepted | terminal-generated-profiles-tolerated.md |
-| 2026-08-31 | windows | Windows checks run only under the host's own pwsh | accepted | windows-checks-run-under-native-pwsh.md |
 | 2026-08-30 | windows | Font install states | accepted | font-install-states.md |
 | 2026-08-30 | windows | Terminal delegation is unverified below the documented boundary | accepted | terminal-delegation-unverified-below-boundary.md |
 | 2026-08-30 | windows | Undecidable Appx detection is unverified, not absent | accepted | appx-detection-unverified-not-absent.md |
@@ -53,4 +55,11 @@ decision` is the procedure.
 | 2026-08-30 | windows | Drift outranks unverified in the check exit status | accepted | drift-outranks-unverified.md |
 | 2026-08-30 | windows | Capture moves a host change into desired state | accepted | capture-moves-host-changes.md |
 | 2026-08-30 | windows | Capture restores exactly one placeholder | accepted | capture-restores-one-placeholder.md |
+| 2026-08-30 | repository | The hygiene tool owns desired-state hygiene | accepted | hygiene-tool-owns-enforcement.md |
+| 2026-08-31 | windows | Windows checks run only under the host's own pwsh | accepted | windows-checks-run-under-native-pwsh.md |
 | 2026-08-31 | windows | A JsonSubset payload is captured by projection | accepted | jsonsubset-captured-by-projection.md |
+| 2026-08-31 | repository | Hooks run under Git for Windows | accepted | hooks-run-under-git-for-windows.md |
+| 2026-09-03 | unixlike | A package is owned by the module that configures it | accepted | package-ownership-by-generating-module.md |
+| 2026-09-03 | repository | The invariant registry is created with pending entries | accepted | invariant-registry-created.md |
+| 2026-09-04 | repository | A fixture tag names only an invariant its case proves | accepted | fixture-tags-name-proven-invariants.md |
+| 2026-09-04 | repository | The local gate selects checks by effect | accepted | local-gate-selects-by-effect.md |
