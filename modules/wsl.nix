@@ -54,7 +54,8 @@ in {
     # on 2026-08-05, and neither changed anything: the first is overwritten
     # within the same service start by WSL's own generated drop-in, and the
     # second disarms `binfmt.c`'s flush while the one that fires is
-    # `shutdown.c`'s. See docs/status.md, "The root cause, found by a canary".
+    # `shutdown.c`'s. See the `cat: /proc/sys/fs/binfmt_misc/WSLInterop` entry
+    # in docs/troubleshooting.md.
     #
     # What is left is the guard `disable_binfmt()` opens with:
     #
