@@ -13,6 +13,14 @@ $script:Utf8NoBom = [System.Text.UTF8Encoding]::new($false)
 # the file already written.
 $script:WinEnvComparisonMode = @('Text', 'ExactJson', 'JsonSubset', 'ExactJsonWithGeneratedProfiles')
 
+# Every parser a managed file may declare: the names Test-WinEnvSourceFile has
+# a case for, and nothing else. The manifest is validated against this list
+# when it loads for the same reason as the modes above, and the validator's
+# own default arm refuses any name that reaches it anyway, because a parser
+# that matched no case used to fall through and count as parsed.
+# INV windows/parser-declared
+$script:WinEnvParser = @('Json', 'Ini', 'PowerShell', 'Kdl', 'Lua', 'Text')
+
 # The two host queries this domain's detection depends on. They are script-
 # scope defaults rather than inline calls so that every outcome, including the
 # one a given host cannot produce, has a fixture. Nothing but a test passes
@@ -76,11 +84,30 @@ function Assert-WinEnvFeatureModel {
 
     $declared = [System.Collections.Generic.List[string]]::new()
     foreach ($feature in $Manifest.Features) {
-        if (-not $feature.ContainsKey('Id')) { throw 'A feature is declared without an Id.' }
+        if (-not $feature.ContainsKey('Id') -or [string]::IsNullOrWhiteSpace([string]$feature.Id)) {
+            throw 'INV windows/unique-ids: A feature is declared without an Id.'
+        }
         $id = [string]$feature.Id
-        # INV windows/unique-ids — pending #134: feature ids are checked here; package and managed-file ids are not yet.
-        if ($declared.Contains($id)) { throw "Feature '$id' is declared more than once." }
+        if ($declared.Contains($id)) { throw "INV windows/unique-ids: Feature '$id' is declared more than once." }
         $declared.Add($id)
+    }
+
+    # INV windows/unique-ids — a plan and a state record name a package or a
+    # managed file by its Id, so a second declaration of one would let the
+    # name mean either item. Each kind is its own namespace: a package and a
+    # managed file may share a spelling, two packages may not.
+    foreach ($kind in @(@('Packages', 'package'), @('ManagedFiles', 'managed file'))) {
+        $key, $label = $kind
+        if (-not $Manifest.ContainsKey($key)) { continue }
+        $ids = [System.Collections.Generic.HashSet[string]]::new([System.StringComparer]::Ordinal)
+        foreach ($item in $Manifest[$key]) {
+            if (-not $item.ContainsKey('Id') -or [string]::IsNullOrWhiteSpace([string]$item.Id)) {
+                throw "INV windows/unique-ids: A $label is declared without an Id."
+            }
+            if (-not $ids.Add([string]$item.Id)) {
+                throw "INV windows/unique-ids: The $label '$($item.Id)' is declared more than once."
+            }
+        }
     }
 
     if (-not (Get-WinEnvRequiredFeatureId -Manifest $Manifest)) {
@@ -186,8 +213,15 @@ function Assert-WinEnvManagedFileModel {
             throw ("INV windows/compare-mode-declared: The managed file '$id' declares unknown comparison mode '$compare'; " +
                 "the modes are: $($script:WinEnvComparisonMode -join ', ').")
         }
+        # The parser names the validator that will read the payload, so an
+        # unknown or missing one is refused here, where the entry at fault is
+        # named, rather than reaching the validator or a host.
+        $parser = if ($definition.ContainsKey('Parser')) { [string]$definition.Parser } else { '' }
+        if ($script:WinEnvParser -cnotcontains $parser) {
+            throw ("INV windows/parser-declared: The managed file '$id' declares unknown parser '$parser'; " +
+                "the parsers are: $($script:WinEnvParser -join ', ').")
+        }
         if ($compare -ceq 'ExactJsonWithGeneratedProfiles') {
-            $parser = if ($definition.ContainsKey('Parser')) { [string]$definition.Parser } else { '' }
             if ($parser -cne 'Json') {
                 throw ("INV windows/compare-mode-declared: The managed file '$id' declares comparison mode '$compare' with parser '$parser'; " +
                     'that mode reads both sides as JSON and can only be declared on a Json payload.')
@@ -1725,8 +1759,12 @@ function Test-WinEnvSourceFile {
     )
 
     $path = Join-Path $RepositoryRoot $Definition.Source
-    # INV windows/parser-declared — pending #135: this switch has no default arm, so an unknown parser falls through as parsed.
-    switch ($Definition.Parser) {
+    # INV windows/parser-declared — the loader refuses a parser outside
+    # $script:WinEnvParser, so a manifest-sourced definition never reaches
+    # the default arm; it exists for a definition built in code, whose
+    # unknown or missing parser used to fall through and count as parsed.
+    $parser = if ($Definition.ContainsKey('Parser')) { [string]$Definition.Parser } else { '' }
+    switch ($parser) {
         'Json' { $null = Get-Content -LiteralPath $path -Raw | ConvertFrom-Json -ErrorAction Stop }
         'Ini' {
             $section = $null
@@ -1765,6 +1803,9 @@ function Test-WinEnvSourceFile {
         }
         'Text' {
             # Existence and content are checked by the managed-file path.
+        }
+        default {
+            throw "INV windows/parser-declared: No validator exists for parser '$parser' declared on '$($Definition.Source)'."
         }
     }
 

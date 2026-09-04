@@ -1,8 +1,11 @@
 BeforeAll {
     $testsRoot = Split-Path -Parent $PSCommandPath
     $repositoryRoot = Split-Path -Parent $testsRoot
-    # INV windows/no-unix-host-required — pending #124: the only reason this suite knows the monorepo root is the WezTerm font-list comparison below.
-    $monorepoRoot = Split-Path -Parent $repositoryRoot
+    # INV windows/no-unix-host-required — the suite reads the Windows tree
+    # only. The one path it takes above it is the repository's own git
+    # metadata, for the applied-commit case, which is repository state
+    # rather than another domain's tree; the 'Windows tree isolation' cases
+    # below scan every script here for a read into a Unix-like tree.
     $desiredStateRoot = Join-Path $repositoryRoot 'desired'
     Import-Module (Join-Path $repositoryRoot 'src\WinEnv.psm1') -Force
     # Invoke-Pester can be called without test.ps1; the suite defends itself.
@@ -99,10 +102,13 @@ Describe 'win-env manifest' {
     }
 
     It 'installs a registered face for every family WezTerm''s font list names' {
-        # #67: the font list on Windows equals the Unix-like list, which names
-        # a Mono and a non-Mono D2Koding family. A fixture must fail if either
-        # family has no registered face, or the two copies could drift again
-        # without either domain's own checks noticing.
+        # #67: the Windows font list names a Mono and a non-Mono D2Koding
+        # family. A fixture must fail if either family has no registered
+        # face; the list is this domain's own copy and is held to this
+        # domain's manifest, not to the Unix-like copy it was taken from
+        # (INV windows/no-unix-host-required took the byte comparison out,
+        # and with it the guard against a `windowsChecks` addendum, a key
+        # nothing on Windows consumes).
         $manifest = Get-WinEnvManifest -Path (Join-Path $desiredStateRoot 'manifest.json')
         $fonts = Get-Content (Join-Path $desiredStateRoot 'files\wezterm\fonts.json') -Raw | ConvertFrom-Json
         $registeredFamilies = @($manifest.Font.Files | ForEach-Object { $_.FullName -replace ' Bold$', '' }) |
@@ -110,12 +116,6 @@ Describe 'win-env manifest' {
         foreach ($family in $fonts.families) {
             $registeredFamilies | Should -Contain $family
         }
-    }
-
-    It 'copies the Unix-like WezTerm font list without a Windows-only windowsChecks addendum' {
-        $unixFontsPath = Join-Path $monorepoRoot 'assets\wezterm\fonts.json'
-        $windowsFontsPath = Join-Path $desiredStateRoot 'files\wezterm\fonts.json'
-        (Get-Content $unixFontsPath -Raw) | Should -Be (Get-Content $windowsFontsPath -Raw)
     }
 
     It 'uses exact expected WinGet IDs' {
@@ -831,7 +831,10 @@ Describe 'PowerShell profile marker' {
 
 Describe 'state safety' {
     It 'resolves the repository commit without trusting Windows Git safe-directory state' {
-        (Get-WinEnvGitCommit -RepositoryRoot $monorepoRoot) | Should -Match '^(unborn|[0-9a-f]{40})$'
+        # The repository root, the way setup.ps1 resolves it for
+        # Get-WinEnvGitCommit: git metadata is repository state, not a
+        # Unix-like tree (INV windows/no-unix-host-required).
+        (Get-WinEnvGitCommit -RepositoryRoot (Split-Path -Parent $repositoryRoot)) | Should -Match '^(unborn|[0-9a-f]{40})$'
     }
 
     It 'treats a missing state as uninitialized' {
@@ -1136,6 +1139,141 @@ Describe 'feature model' {
         $owner.Count | Should -Be 1
         $owner[0].Id | Should -Be 'powertoys'
         @($manifest.ManagedFiles | Where-Object Feature -eq 'powertoys').Count | Should -Be 18
+    }
+}
+
+Describe 'identifier uniqueness' {
+    BeforeAll {
+        function Get-FeatureModelRefusal {
+            param([hashtable] $Manifest)
+            $message = $null
+            try { Assert-WinEnvFeatureModel -Manifest $Manifest } catch { $message = $_.Exception.Message }
+            return $message
+        }
+    }
+
+    It 'INV windows/unique-ids: refuses a feature id declared twice' {
+        $manifest = New-FeatureManifest -Override @{
+            Features = @(
+                @{ Id = 'core'; Name = 'Core'; Required = $true },
+                @{ Id = 'font'; Name = 'Font' },
+                @{ Id = 'font'; Name = 'Font again' },
+                @{ Id = 'zellij'; Name = 'Zellij' },
+                @{ Id = 'terminal'; Name = 'Terminal'; Requires = @('font', 'zellij') }
+            )
+        }
+        (Get-FeatureModelRefusal -Manifest $manifest) | Should -Match 'INV windows/unique-ids'
+    }
+
+    It 'INV windows/unique-ids: refuses a package id declared twice' {
+        $manifest = New-FeatureManifest -Override @{
+            Packages = @(
+                @{ Id = 'Vendor.Shell'; Feature = 'core'; Bootstrap = $true; Detection = 'Command'; Command = 'pwsh.exe' },
+                @{ Id = 'Vendor.Shell'; Feature = 'font'; Detection = 'WinGet' }
+            )
+        }
+        (Get-FeatureModelRefusal -Manifest $manifest) | Should -Match "INV windows/unique-ids: The package 'Vendor.Shell' is declared more than once"
+    }
+
+    It 'INV windows/unique-ids: refuses a managed-file id declared twice' {
+        $manifest = New-FeatureManifest -Override @{
+            ManagedFiles = @(
+                @{ Id = 'profile'; Feature = 'core'; Source = 'files/profile.ps1'; Target = 'profile'; Compare = 'Text'; Parser = 'PowerShell' },
+                @{ Id = 'profile'; Feature = 'terminal'; Source = 'files/other.ps1'; Target = 'other'; Compare = 'Text'; Parser = 'PowerShell' }
+            )
+        }
+        (Get-FeatureModelRefusal -Manifest $manifest) | Should -Match "INV windows/unique-ids: The managed file 'profile' is declared more than once"
+    }
+
+    It 'INV windows/unique-ids: refuses a package or managed file declared without an Id' {
+        $package = New-FeatureManifest -Override @{
+            Packages = @(@{ Feature = 'core'; Detection = 'WinGet' })
+        }
+        (Get-FeatureModelRefusal -Manifest $package) | Should -Match 'INV windows/unique-ids: A package is declared without an Id'
+
+        $file = New-FeatureManifest -Override @{
+            ManagedFiles = @(@{ Id = ''; Feature = 'core'; Source = 'files/profile.ps1'; Target = 'profile'; Compare = 'Text'; Parser = 'PowerShell' })
+        }
+        (Get-FeatureModelRefusal -Manifest $file) | Should -Match 'INV windows/unique-ids: A managed file is declared without an Id'
+    }
+
+    It 'INV windows/unique-ids: keeps packages and managed files as separate namespaces' {
+        # A plan names a package or a managed file, never "an item", so one
+        # spelling in both lists is unambiguous; the same spelling twice in
+        # one list is what the rule refuses.
+        $manifest = New-FeatureManifest -Override @{
+            Packages     = @(@{ Id = 'profile'; Feature = 'core'; Bootstrap = $true; Detection = 'Command'; Command = 'pwsh.exe' })
+            ManagedFiles = @(@{ Id = 'profile'; Feature = 'core'; Source = 'files/profile.ps1'; Target = 'profile'; Compare = 'Text'; Parser = 'PowerShell' })
+        }
+        (Get-FeatureModelRefusal -Manifest $manifest) | Should -BeNullOrEmpty
+    }
+
+    It 'INV windows/unique-ids: loads the repository manifest, whose ids are distinct' {
+        $manifest = Get-WinEnvManifest -Path (Join-Path $desiredStateRoot 'manifest.json')
+        foreach ($list in @($manifest.Packages, $manifest.ManagedFiles)) {
+            $ids = @($list | ForEach-Object { [string]$_.Id })
+            @($ids | Sort-Object -Unique).Count | Should -Be $ids.Count
+        }
+    }
+}
+
+Describe 'parser declaration' {
+    BeforeAll {
+        function New-ParserManifest {
+            param([hashtable] $Entry)
+            $definition = @{ Id = 'payload'; Feature = 'core'; Source = 'files/payload'; Target = 'payload'; Compare = 'Text' }
+            foreach ($key in $Entry.Keys) { $definition[$key] = $Entry[$key] }
+            return New-FeatureManifest -Override @{ ManagedFiles = @($definition) }
+        }
+
+        function Get-ManagedFileRefusal {
+            param([hashtable] $Manifest)
+            $message = $null
+            try { Assert-WinEnvManagedFileModel -Manifest $Manifest } catch { $message = $_.Exception.Message }
+            return $message
+        }
+    }
+
+    It 'INV windows/parser-declared: refuses a parser the domain has no validator for when the manifest loads' {
+        # A misspelling and a case slip are the two ways a name that is
+        # almost right would have fallen through the validator as parsed.
+        foreach ($parser in @('Yaml', 'json', 'Powershell')) {
+            (Get-ManagedFileRefusal -Manifest (New-ParserManifest -Entry @{ Parser = $parser })) |
+                Should -Match "INV windows/parser-declared: The managed file 'payload' declares unknown parser '$parser'"
+        }
+    }
+
+    It 'INV windows/parser-declared: refuses a managed file that declares no parser' {
+        (Get-ManagedFileRefusal -Manifest (New-ParserManifest -Entry @{})) |
+            Should -Match "INV windows/parser-declared: The managed file 'payload' declares unknown parser ''"
+        (Get-ManagedFileRefusal -Manifest (New-ParserManifest -Entry @{ Parser = '' })) |
+            Should -Match 'INV windows/parser-declared'
+    }
+
+    It 'INV windows/parser-declared: accepts every parser the validator has a case for' {
+        # Listed here rather than read from the module on purpose: the case
+        # is an independent oracle for the declared list, so a name dropped
+        # from the module fails here instead of disappearing from both.
+        foreach ($parser in @('Json', 'Ini', 'PowerShell', 'Kdl', 'Lua', 'Text')) {
+            (Get-ManagedFileRefusal -Manifest (New-ParserManifest -Entry @{ Parser = $parser })) | Should -BeNullOrEmpty
+        }
+    }
+
+    It 'INV windows/parser-declared: the validator refuses an unknown or missing parser instead of counting the source as parsed' {
+        # Reaches the validator without the loader, the way a definition
+        # built in code would. Before the default arm this returned $null,
+        # which every caller reads as "parsed".
+        $root = Join-Path $TestDrive 'parser-declared'
+        [void](New-Item -ItemType Directory -Path $root -Force)
+        [IO.File]::WriteAllText((Join-Path $root 'payload.yaml'), "key: value`n")
+        foreach ($definition in @(
+                @{ Id = 'payload'; Source = 'payload.yaml'; Parser = 'Yaml' },
+                @{ Id = 'payload'; Source = 'payload.yaml' }
+            )) {
+            $message = $null
+            try { Test-WinEnvSourceFile -Definition $definition -RepositoryRoot $root | Out-Null } catch { $message = $_.Exception.Message }
+            $message | Should -Match "INV windows/parser-declared: No validator exists for parser '(Yaml|)' declared on 'payload.yaml'"
+        }
     }
 }
 
@@ -4111,6 +4249,78 @@ Describe 'repository isolation' {
 
     It 'INV windows/no-inherited-git-context: without the isolation script the inherited context wins' {
         (Get-ResolvedGitDir -Isolated $false) | Should -Match 'decoy'
+    }
+}
+
+Describe 'Windows tree isolation' {
+    BeforeAll {
+        # INV windows/no-unix-host-required
+        # A read into a Unix-like tree is a path in a script, so the scan
+        # reads each script the way PowerShell does, as tokens, and looks at
+        # the tokens a path can be -- a string, a bare command argument, and
+        # the tokens nested inside an expandable string -- so a comment that
+        # mentions a Unix-like path is not a read. The pattern names the
+        # Unix-like roots -- the payload and module trees, the flake, its
+        # checks -- rather than every path above windows/, because the
+        # applied-commit code legitimately resolves the repository's own git
+        # metadata from the repository root. Case-sensitive on purpose:
+        # PowerShell's own 'Modules' directory is not the Nix module tree.
+        $UnixLikeTreePattern = '(^|[\\/''" ])(assets|modules)([\\/]|$)|flake\.(nix|lock)|tool[\\/]checks'
+        $StringTokenKinds = @('StringLiteral', 'StringExpandable', 'HereStringLiteral', 'HereStringExpandable')
+
+        function Get-UnixLikeTreeReference {
+            param([string] $Path)
+            $tokens = $null
+            $errors = $null
+            [void][System.Management.Automation.Language.Parser]::ParseFile($Path, [ref]$tokens, [ref]$errors)
+            $queue = [System.Collections.Generic.Queue[object]]::new()
+            foreach ($token in $tokens) { $queue.Enqueue($token) }
+            while ($queue.Count) {
+                $token = $queue.Dequeue()
+                if ($token -is [System.Management.Automation.Language.StringExpandableToken] -and $token.NestedTokens) {
+                    foreach ($nested in $token.NestedTokens) { $queue.Enqueue($nested) }
+                }
+                $kind = [string]$token.Kind
+                $text = if ($StringTokenKinds -contains $kind) { [string]$token.Value }
+                elseif ($kind -eq 'Generic') { [string]$token.Text }
+                else { continue }
+                if ($text -cmatch $UnixLikeTreePattern) {
+                    "$($Path):$($token.Extent.StartLineNumber): $($token.Text)"
+                }
+            }
+        }
+    }
+
+    It 'INV windows/no-unix-host-required: no script under windows/ reads a Unix-like tree' {
+        $scripts = @(Get-ChildItem -Path $repositoryRoot -Recurse -File |
+            Where-Object { $_.Extension -in '.ps1', '.psm1' })
+        $scripts.Count | Should -BeGreaterThan 0
+        $hits = @(foreach ($script in $scripts) { Get-UnixLikeTreeReference -Path $script.FullName })
+        ($hits -join "`n") | Should -BeNullOrEmpty
+    }
+
+    It 'INV windows/no-unix-host-required: the scan names a script that reads a Unix-like payload and passes a comment that mentions one' {
+        # The offending path is assembled from pieces so this file, which
+        # the case above scans, does not carry the shape it looks for. Three
+        # spellings of the same read: a quoted string, a bare argument, and
+        # a string nested inside an expandable one.
+        $unixPayload = 'as' + 'sets' + '\wezterm\fonts.json'
+        $unixRoot = 'as' + 'sets'
+        $offender = Join-Path $TestDrive 'reads-unixlike.ps1'
+        [IO.File]::WriteAllText($offender, (@(
+                    "`$fonts = Get-Content (Join-Path `$root '$unixPayload')"
+                    "`$fonts = Get-Content (Join-Path `$root $unixPayload)"
+                    "`$fonts = Get-Content `"`$root/`$(Join-Path '$unixRoot' 'wezterm')`""
+                ) -join "`n") + "`n")
+        $hit = @(Get-UnixLikeTreeReference -Path $offender)
+        $hit.Count | Should -Be 3
+        $hit[0] | Should -Match 'reads-unixlike\.ps1:1: '
+        $hit[1] | Should -Match 'reads-unixlike\.ps1:2: '
+        $hit[2] | Should -Match 'reads-unixlike\.ps1:3: '
+
+        $mention = Join-Path $TestDrive 'mentions-unixlike.ps1'
+        [IO.File]::WriteAllText($mention, "# The Unix-like copy lives under $($unixPayload.Replace('\', '/')).`n`$own = 'files\wezterm\fonts.json'`n")
+        @(Get-UnixLikeTreeReference -Path $mention).Count | Should -Be 0
     }
 }
 
