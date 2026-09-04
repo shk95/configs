@@ -110,6 +110,31 @@ than an incomplete one, and drift is only ever computed against the selected
 set. Deselection stops management; it never uninstalls or deletes what an
 earlier Apply deployed.
 
+The manifest is held to a few more rules because a host reads it with no
+evaluator in front of it. Every identifier is unique, so a plan and a state
+record can name an item without ambiguity. A file that varies by Windows
+build declares its variants as a strictly descending list ending in an
+unconditional one, so every host resolves to exactly one payload and none
+falls through. A managed file names a parser the domain actually has and a
+comparison mode the domain declares, and a mode that reads both sides in one
+format is refused on any other parser, because a check that cannot parse
+what it compares reports nothing. An unsupported manifest or state schema is
+refused before any comparison, so an older module never misreads a newer
+shape as drift. A subset payload declares a list only when it has content,
+because an empty declared list would claim whatever the host holds there and
+absorb host state silently. The desired-state hash covers the manifest, the
+selected features, and every variant of a selected file, and nothing a host
+did not select, so drift is never reported for a payload a host never
+deploys. Deployment expands exactly one content placeholder and capture
+restores exactly that one; any other host-specific spelling is refused
+rather than invented. A read-only check answers whether an Apply is needed:
+it returns 0 when converged, 2 when anything drifted, and the unverified
+status only when its sole open question, or a prerequisite the host lacks,
+could not be decided there, with native evidence able to turn that into a
+failure. Finally, the Windows checks and suite read only the Windows tree
+and need no Unix-like toolchain, because this domain must be authorable and
+checkable on its own host.
+
 ## Common domain
 
 The common domain is an explicit exception for material whose semantics are
