@@ -1,0 +1,166 @@
+#!/bin/sh
+#
+# Enforce INV repository/no-cross-domain-dependency: no domain's checks or
+# tests read another domain's tree.
+#
+# Each configuration domain must be authorable and checkable on its own host,
+# so a Unix-like check that opens a file under windows/ or a Windows script
+# that opens a file under assets/ or modules/ makes one domain's evidence
+# depend on the other's tree. The two known cases were exactly that: the
+# Windows suite byte-compared assets/wezterm/fonts.json, and the merge-gate
+# job parsed every PowerShell file in the checkout. Similarity between copies
+# is never a failure; a read across the boundary is.
+#
+# A read is a path in code, so the scan looks at code and not prose: line
+# comments (`#`) and PowerShell block comments (`<# … #>`) are stripped before
+# the patterns are applied, which is what lets a Nix module say "the Windows
+# domain declares this terminal" and a Windows script cite a Nix file for the
+# reader. Payload trees are not scanned; a payload is data and reads nothing.
+#
+#   Unix-like code   flake.nix, Justfile, .envrc, modules/, tool/checks/
+#                    must not name  windows/
+#   Windows code     windows/ *.ps1 and *.psm1, outside windows/desired/files
+#                    must not name  assets/  modules/  flake.nix  flake.lock
+#                                   tool/checks
+#
+# Three limits are accepted and are what a reviewer reads for by hand: a path
+# assembled from pieces at run time is not a literal and passes; a `#` after
+# whitespace inside a string is read as a comment and hides the rest of that
+# line; a Nix `/* … */` block comment is not stripped and can flag prose. The
+# tree uses `#` comments and the Windows suite carries the first shape on
+# purpose, in the fixture that proves its own scan.
+#
+# The subject is the index, like tool/version-control/hygiene: the invariant is
+# about committed state, and reading the working tree would let an unstaged
+# edit change the answer for a commit.
+#
+# usage: tool/version-control/domain-reads
+#
+# Exit 0 verified, 69 unverified, any other status failed. See
+# docs/architecture.md, "Repository governance plane", and .githooks/evidence,
+# which is the one place that decides what each means.
+
+set -eu
+
+# Guards this script's sed/grep/awk calls from Git for Windows' MSYS argument
+# conversion (#79); see tool/version-control/hygiene. Inert elsewhere.
+MSYS_NO_PATHCONV=1
+MSYS2_ARG_CONV_EXCL='*'
+export MSYS_NO_PATHCONV MSYS2_ARG_CONV_EXCL
+
+# The three-state prerequisite contract, restated rather than sourced from
+# tool/checks/prerequisite for the reason tool/version-control/hygiene gives:
+# a repository check must not depend on a domain's plane.
+require_command() {
+  require_missing=
+  for require_name in "$@"; do
+    command -v "$require_name" >/dev/null 2>&1 ||
+      require_missing="$require_missing $require_name"
+  done
+  [ -n "$require_missing" ] || return 0
+
+  if [ "${REQUIRE_NATIVE:-0}" = 1 ]; then
+    printf '\033[31m✗ required tooling is missing:%s\033[0m\n' \
+      "$require_missing" >&2
+    exit 1
+  fi
+
+  printf '· unverified: this host has no%s\n' "$require_missing" >&2
+  exit 69
+}
+
+require_command git awk
+
+# The repository being committed, not the one this file lives in, so the
+# fixtures in tool/version-control/test run this exact script against a
+# throwaway repository.
+root=$(git rev-parse --show-toplevel)
+cd "$root"
+
+work=$(mktemp -d)
+trap 'rm -rf "$work"' EXIT
+
+status=0
+violation() {
+  printf '\033[31m✗ %s\033[0m\n' "$1" >&2
+  status=1
+}
+
+# Strips comments and prints `<line>:<text>` for what remains, so a hit names
+# the line it was found on. `<# … #>` is PowerShell's block comment and is
+# inert in the other languages here, where the sequence does not occur.
+code_lines() {
+  awk '
+    {
+      line = $0
+      out = ""
+      while (line != "") {
+        if (block) {
+          end = index(line, "#>")
+          if (end == 0) { line = ""; break }
+          line = substr(line, end + 2); block = 0
+          continue
+        }
+        start = index(line, "<#")
+        if (start > 0) {
+          out = out substr(line, 1, start - 1)
+          line = substr(line, start + 2); block = 1
+          continue
+        }
+        out = out line
+        line = ""
+      }
+      # A line comment runs from a `#` at the start of the line or after
+      # whitespace; `$#` and `${#x}` are not comments.
+      sub(/(^|[ \t])#.*$/, "", out)
+      if (out ~ /[^ \t]/) print NR ":" out
+    }
+  '
+}
+
+# Sets `count` and records violations; not a command substitution, so the
+# violations it records survive the call.
+scan() {
+  domain=$1
+  pattern=$2
+  shift 2
+  git ls-files -- "$@" >"$work/files"
+  count=0
+  while IFS= read -r file; do
+    [ -n "$file" ] || continue
+    count=$((count + 1))
+    # A blob that cannot be read is a scan that did not run, never a clean
+    # file, the way tool/version-control/hygiene treats a failed git grep.
+    git show ":$file" >"$work/blob" || {
+      printf '\033[31m✗ scan did not run: git show failed for %s\033[0m\n' "$file" >&2
+      exit 1
+    }
+    code_lines <"$work/blob" | grep -E "$pattern" >"$work/hits" || true
+    [ -s "$work/hits" ] || continue
+    while IFS= read -r hit; do
+      violation "$file:$hit"
+    done <"$work/hits"
+    violation "a $domain file reads another domain's tree: $file"
+  done <"$work/files"
+}
+
+# A path opens at the start of the line or after anything that cannot be part
+# of a longer name, so `home-windows/` is not `windows/` while `../windows/`,
+# `$root/windows/` and `..\assets\` are what they look like.
+open='(^|[^A-Za-z0-9_-])'
+
+scan 'Unix-like' "${open}windows[/\\\\]" \
+  flake.nix Justfile .envrc 'modules/*' 'tool/checks/*'
+unixlike_count=$count
+scan Windows \
+  "${open}(assets|modules)[/\\\\]|${open}flake\\.(nix|lock)([^A-Za-z0-9_]|\$)|${open}tool[/\\\\]checks" \
+  'windows/*.ps1' 'windows/*.psm1' ':(exclude)windows/desired/files'
+windows_count=$count
+
+if [ "$status" -ne 0 ]; then
+  echo "  See invariants/repository/no-cross-domain-dependency.md: copy what the other domain" >&2
+  echo "  owns into this one instead of reading it there." >&2
+  exit 1
+fi
+
+echo "✓ domain reads: $unixlike_count Unix-like and $windows_count Windows code files read only their own tree"
