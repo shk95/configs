@@ -81,8 +81,13 @@ jobs:
       - run: tool/checks/lint
       - run: tool/checks/payloads-test
       - run: tool/checks/flake-test
+      - run: tool/checks/composition-test
+      - run: tool/checks/eval-coverage-test
       - run: tool/checks/prerequisite-test
       - run: tool/checks/test
+      # Composes every host twice; the merge gate runs it, the local gate
+      # does not (INV unixlike/import-order-independence).
+      - run: tool/checks/import-order-test
 
   windows:
     name: Windows desired state
