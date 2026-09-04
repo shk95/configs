@@ -646,7 +646,7 @@ a code change under those trees runs the suite at pre-push and again in
 CI — is the "know before you push" lane and stays until the maintainer
 decides otherwise. The first documentation-only commit after the change is
 the proof: its pre-commit runs hygiene, the registry and the secret scan
-and no suite.
+and no suite. The commit that added this sentence was that commit.
 
 ## Check evidence states
 
