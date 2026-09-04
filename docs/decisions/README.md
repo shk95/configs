@@ -42,3 +42,15 @@ decision` is the procedure.
 | 2026-08-16 | unixlike | SDKMAN is adopted but not owned | accepted | sdkman-adopted-not-owned.md |
 | 2026-08-16 | unixlike | Every payload declares its format and is parsed | accepted | payloads-declared-and-parsed.md |
 | 2026-09-03 | unixlike | A package is owned by the module that configures it | accepted | package-ownership-by-generating-module.md |
+| 2026-08-30 | windows | Windows adopts Catppuccin Latte by copying | accepted | windows-adopts-catppuccin-latte.md |
+| 2026-08-18 | windows | Feature selection is closed over declared dependencies | accepted | feature-selection-closed.md |
+| 2026-08-30 | windows | Windows Terminal's generated profiles are tolerated on read | accepted | terminal-generated-profiles-tolerated.md |
+| 2026-08-31 | windows | Windows checks run only under the host's own pwsh | accepted | windows-checks-run-under-native-pwsh.md |
+| 2026-08-30 | windows | Font install states | accepted | font-install-states.md |
+| 2026-08-30 | windows | Terminal delegation is unverified below the documented boundary | accepted | terminal-delegation-unverified-below-boundary.md |
+| 2026-08-30 | windows | Undecidable Appx detection is unverified, not absent | accepted | appx-detection-unverified-not-absent.md |
+| 2026-08-30 | windows | `.wslconfig` content is selected by the host's Windows build | accepted | wslconfig-selected-by-windows-build.md |
+| 2026-08-30 | windows | Drift outranks unverified in the check exit status | accepted | drift-outranks-unverified.md |
+| 2026-08-30 | windows | Capture moves a host change into desired state | accepted | capture-moves-host-changes.md |
+| 2026-08-30 | windows | Capture restores exactly one placeholder | accepted | capture-restores-one-placeholder.md |
+| 2026-08-31 | windows | A JsonSubset payload is captured by projection | accepted | jsonsubset-captured-by-projection.md |
