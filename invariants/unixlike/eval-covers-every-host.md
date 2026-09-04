@@ -1,10 +1,12 @@
 id: unixlike/eval-covers-every-host
 statement: The evaluation check fails when it reaches no configuration.
 rationale: docs/architecture.md § Unix-like domain
-enforced-by: pending #131
-owner: repository maintainer
+enforced-by: tool tool/checks/test
+enforced-by: fixture tool/checks/eval-coverage-test
 
 Evaluation is evidence only when it reached every configuration. The check
-today returns success for a flavour that lists nothing and for an empty
-report, so a flake that stopped exporting its hosts would pass. #131 owns the
-fix and its fixture.
+fails on a flavour the flake exports but that lists nothing, on a flavour
+whose attribute fails to evaluate, and on a run that reached no
+configuration at all; a flavour the flake does not export is reported as
+absent. The fixture flakes carry no inputs and exercise each outcome
+through `CHECKS_FLAKE` (#131).

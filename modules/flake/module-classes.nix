@@ -37,7 +37,7 @@
 #
 # INV unixlike/composition-in-one-place — a feature file writes into a class
 # and never names a host; `flake/configurations.nix` alone maps classes to
-# hosts. Pending #127 tracks a check.
+# hosts, and tool/checks/composition refuses a feature file that does either.
 {lib, ...}: let
   inherit (lib) mapAttrs mkOption types;
 
