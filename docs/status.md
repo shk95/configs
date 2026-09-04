@@ -41,6 +41,10 @@ PowerShell 7 is missing, or 1 under `REQUIRE_NATIVE=1`
 
 ### Windows 10 support boundary
 
+This table is the evidence record `INV windows/support-boundary-named`
+names; a reviewer reports each item in the state below, against the build
+the observation ran on.
+
 | Item | Documented boundary | Evidence state | Source |
 | --- | --- | --- | --- |
 | Default terminal delegation (`HKCU:\Console\%%Startup`) | Windows 11 22H2, or Windows 10 22H2 build 19045.3031 with KB5026435, plus Windows Terminal 1.17+ | Unverified: the read-back passes below the boundary although the setting does nothing (#53) | Group Policy for Windows Terminal; Windows Terminal installation |
@@ -83,7 +87,7 @@ are disabled.
 The merge gate is CI's `Required checks`, demanded whenever a change falls
 in a domain that check covers.
 
-The invariant registry holds 49 entries: 9 pending, listed under Pending
+The invariant registry holds 50 entries: 9 pending, listed under Pending
 invariants, 0 fixture units untagged, and `tool/version-control/invariants`
 enforces C10 (no untagged fixture unit) by default.
 
@@ -111,9 +115,11 @@ semantics across independent platform validation and release cycles.
 - Milestone naming, issue membership, and closure stay a manual maintainer
   review; automated remote enforcement is deferred until that workflow shows
   a recurring failure.
-- The Windows 10 support boundary is a manual invariant with no registry
-  entry; #54 owns converting `-Check`'s exit status to express it, and a
-  windows pending/manual entry is separate work.
+- The Windows 10 support boundary is registered as the manual
+  `INV windows/support-boundary-named`; its evidence is the reviewer's
+  naming of the build and of each item's boundary state. #53 owns deciding
+  the terminal delegation item against the boundary so `-Check` can report
+  it unverified there, and #54 stays open for that conversion.
 - Unix-like import-order independence is pending (#128).
 - One real-host capture run is still owed as evidence
   (`docs/decisions/capture-moves-host-changes.md`).
