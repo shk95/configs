@@ -231,10 +231,10 @@ contract rather than deciding what a missing tool means.
 
 The local gate selects a check unit only for a change that can alter that
 unit's result — the version-control fixture suite for the hooks, the
-dispatcher, the version-control tools and the workflow it reads; flake
-evaluation for the modules and the flake — while the merge gate runs a
-domain's whole suite, because a local gate optimises for feedback and a
-merge gate for completeness.
+dispatcher, the version-control tools, the governance scripts it scans and
+the workflow it reads; flake evaluation for the modules and the flake —
+while the merge gate runs a domain's whole suite, because a local gate
+optimises for feedback and a merge gate for completeness.
 
 The canonical agent workflow follows the Agent Skills open standard under
 `.agents/skills/`. Product-specific discovery locations may contain thin
