@@ -38,7 +38,7 @@ function Get-WinEnvManifest {
 
     $manifest = Get-Content -LiteralPath $Path -Raw -Encoding utf8 |
         ConvertFrom-Json -AsHashtable -ErrorAction Stop
-    if ($manifest.SchemaVersion -ne 4) { throw "Unsupported manifest schema: $($manifest.SchemaVersion)" }
+    if ($manifest.SchemaVersion -ne 4) { throw "INV windows/schema-version-refused: Unsupported manifest schema: $($manifest.SchemaVersion)" }
     [void][System.Management.Automation.SemanticVersion]$manifest.ProjectVersion
     # Every consumer reads the manifest through here, so the feature model is
     # validated once instead of separately in setup, the check tool, and tests.
@@ -768,7 +768,7 @@ function Get-WinEnvState {
     if (-not (Test-Path -LiteralPath $Path -PathType Leaf)) { return $null }
     try {
         $state = Get-Content -LiteralPath $Path -Raw -Encoding utf8 | ConvertFrom-Json -ErrorAction Stop
-        if ($state.schemaVersion -ne 1 -and $state.schemaVersion -ne 2) { throw 'Unsupported state schema.' }
+        if ($state.schemaVersion -ne 1 -and $state.schemaVersion -ne 2) { throw 'INV windows/schema-version-refused: Unsupported state schema.' }
         # Schema 1 recorded no selection because none existed; it is read as a
         # full deployment rather than rejected.
         if ($state.schemaVersion -eq 2) {

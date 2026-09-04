@@ -63,10 +63,18 @@ BeforeAll {
 }
 
 Describe 'win-env manifest' {
-    It 'loads schema 4 and the desired-state compatibility version' {
+    It 'INV windows/schema-version-refused: loads schema 4 and the desired-state compatibility version' {
         $manifest = Get-WinEnvManifest -Path (Join-Path $desiredStateRoot 'manifest.json')
         $manifest.SchemaVersion | Should -Be 4
         $manifest.ProjectVersion | Should -Be '0.6.0'
+    }
+
+    It 'INV windows/schema-version-refused: refuses a manifest schema this module does not read' {
+        $path = Join-Path $TestDrive 'manifest-schema5.json'
+        [IO.File]::WriteAllText($path, '{"SchemaVersion":5,"ProjectVersion":"1.0.0"}')
+        $message = $null
+        try { Get-WinEnvManifest -Path $path | Out-Null } catch { $message = $_.Exception.Message }
+        $message | Should -Match 'INV windows/schema-version-refused'
     }
 
     It 'pins the v3.5.0 D2Koding asset and hashes' {
@@ -861,6 +869,14 @@ Describe 'state safety' {
         $path = Join-Path $TestDrive 'selectionless.json'
         [IO.File]::WriteAllText($path, '{"schemaVersion":2,"projectVersion":"0.1.0","appliedAtUtc":"2026-01-01T00:00:00+00:00","gitCommit":"0123456789abcdef"}')
         (Test-Throws { Get-WinEnvState -Path $path }) | Should -Be $true
+    }
+
+    It 'INV windows/schema-version-refused: refuses a state schema this module does not read' {
+        $path = Join-Path $TestDrive 'schema3.json'
+        [IO.File]::WriteAllText($path, '{"schemaVersion":3,"projectVersion":"0.1.0","appliedAtUtc":"2026-01-01T00:00:00+00:00","gitCommit":"0123456789abcdef","features":["core"]}')
+        $message = $null
+        try { Get-WinEnvState -Path $path | Out-Null } catch { $message = $_.Exception.Message }
+        $message | Should -Match 'INV windows/schema-version-refused'
     }
 
     It 'changes the desired-state hash when content changes' {
