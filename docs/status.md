@@ -11,8 +11,8 @@ the three-domain direction is `docs/architecture.md` § Decision.
 Unix-like Home Manager hosts are standalone Ubuntu WSL, NixOS-WSL, and
 nix-darwin, each importing `homeManager.shared`. `homeManager.wsl`,
 `homeManager.wslStandalone`, `homeManager.desktop`, and `homeManager.darwin`
-are the platform classes layered on top, as overlays rather than parallel
-implementations.
+are the platform classes layered on top
+(`docs/decisions/home-manager-platform-classes.md`).
 
 SDKMAN is adopted but not owned
 (`docs/decisions/sdkman-adopted-not-owned.md`).
@@ -24,7 +24,8 @@ explicitly, and Home Manager state version 25.11 uses
 `targets.darwin.copyApps`, so the WezTerm bundle sits under `~/Applications/
 Home Manager Apps` as a Spotlight-compatible copy rather than a Nix-store
 symlink. Alacritty is fully inactive: there is no Alacritty package, Home
-Manager module, or generated configuration.
+Manager module, or generated configuration. A future adoption should add its
+package, configuration, and Dock ownership together.
 
 ## Windows
 
@@ -43,8 +44,8 @@ PowerShell 7 is missing, or 1 under `REQUIRE_NATIVE=1`
 | Item | Documented boundary | Evidence state | Source |
 | --- | --- | --- | --- |
 | Default terminal delegation (`HKCU:\Console\%%Startup`) | Windows 11 22H2, or Windows 10 22H2 build 19045.3031 with KB5026435, plus Windows Terminal 1.17+ | Unverified: the read-back passes below the boundary although the setting does nothing (#53) | Group Policy for Windows Terminal; Windows Terminal installation |
-| PowerToys `Microsoft.CommandPalette` precondition (`Get-AppxPackage`) | Windows 11, or Windows 10 2004 (build 19041) or later | Unverified: `Appx` needs the PowerShell 7.1 compatibility layer this domain does not use (#37) | How to Install PowerToys; PowerShell 7 module compatibility |
-| Windows Terminal `Microsoft.WindowsTerminal` Appx detection | Windows 10 2004 (build 19041) or later | Unverified: same undetectable `Appx` route (#37) | Windows Terminal installation; PowerShell 7 module compatibility; Windows Terminal product repository |
+| PowerToys `Microsoft.CommandPalette` precondition (`Get-AppxPackage`) | Windows 11, or Windows 10 2004 (build 19041) or later | Reported unverified by `-Check` since #37 | How to Install PowerToys; PowerShell 7 module compatibility |
+| Windows Terminal `Microsoft.WindowsTerminal` Appx detection | Windows 10 2004 (build 19041) or later | Reported unverified by `-Check` since #37 | Windows Terminal installation; PowerShell 7 module compatibility; Windows Terminal product repository |
 
 Sources:
 
@@ -66,9 +67,7 @@ build can ever be checked
 Two hygiene gaps touch Windows payloads: a bare account name in free prose
 has no naming context to classify by and stays a manual invariant with named
 evidence, and the Windows-side hygiene assertion still matches one literal
-path inside one directory; generalising it is separate, planned work.
-
-No explicit `common/` component has yet been justified or created.
+path inside one directory; generalising it is separate work.
 
 ## Repository
 
@@ -77,26 +76,22 @@ current-branch checks are required, administrators are enforced,
 conversations must be resolved, force pushes and deletions are disabled, and
 both branches require only the `Required checks` gate.
 
-Only same-repository `dev` may open a pull request against `master`; the
-result is a merge commit. `dev` uses strict status checks, `master` uses
-non-strict, and the remote allows merge commits while disabling squash and
-rebase merging.
+`dev` requires a pull request and an up-to-date base; `master` accepts only
+`dev` through a pull request with a merge commit; squash and rebase merges
+are disabled.
 
 The merge gate is CI's `Required checks`, demanded whenever a change falls
 in a domain that check covers.
 
-The invariant registry holds 49 entries: 9 pending
-(`repository/no-cross-domain-dependency` #124,
-`unixlike/composition-in-one-place` #127, `unixlike/eval-covers-every-host`
-#131, `unixlike/import-order-independence` #128,
-`unixlike/package-ownership` #130, `unixlike/version-manager-last` #129,
-`windows/no-unix-host-required` #124, `windows/parser-declared` #135,
-`windows/unique-ids` #134), 0 fixture units untagged, and
-`tool/version-control/invariants` enforces C10 (no untagged fixture unit) by
-default.
+The invariant registry holds 49 entries: 9 pending, listed under Pending
+invariants, 0 fixture units untagged, and `tool/version-control/invariants`
+enforces C10 (no untagged fixture unit) by default.
 
 Content before a shell suite's first banner is in no fixture unit and
 invisible to C10 (`docs/decisions/fixture-tags-name-proven-invariants.md`).
+
+CI still parses the whole checkout in its own step, so the Windows tree is
+parsed twice there until #124 narrows that loop.
 
 ## Common
 
@@ -120,6 +115,10 @@ semantics across independent platform validation and release cycles.
   entry; #54 owns converting `-Check`'s exit status to express it, and a
   windows pending/manual entry is separate work.
 - Unix-like import-order independence is pending (#128).
+- One real-host capture run is still owed as evidence
+  (`docs/decisions/capture-moves-host-changes.md`).
+- `docs/decisions/hygiene-tool-owns-enforcement.md`: reopens when the same
+  four axes are decided from a typed declaration rather than from text.
 
 ## Pending invariants
 
