@@ -1601,7 +1601,7 @@ Describe 'font installation state' {
     }
 
     It 'INV windows/font-state-total: reports exactly one state for every fixture' {
-        # The four states are a partition, which is what lets the check and
+        # The five states are a partition, which is what lets the check and
         # Apply branch on them in any order.
         $fixtures = @(
             (New-FontFixture -Root $TestDrive -Present $MonoFaces -Registered $MonoFaces -DirectWrite $true),
@@ -3587,7 +3587,7 @@ exit 0
             @(Get-GhLog $fixture).Count | Should -Be 2
         }
 
-        It 'refuses an open pull request from this head against a base other than dev' {
+        It 'INV windows/capture-publishes-through-dev: refuses an open pull request from this head against a base other than dev' {
             $fixture = New-PublishRepository
             $listing = '[{"baseRefName":"master","isCrossRepository":false,' +
             '"url":"https://github.com/example/repo/pull/9"}]'
@@ -3700,7 +3700,7 @@ exit 0
             $body | Should -Not -Match ([regex]::Escape("(the pre-push hook's output, once the push runs)"))
         }
 
-        It 'arms the pull request already open against dev and opens no second one' {
+        It 'INV windows/capture-publishes-through-dev: arms the pull request already open against dev and opens no second one' {
             $fixture = New-PublishRepository
             & git -C $fixture.Repo switch -q -c feature/windows-capture-font | Out-Null
 
