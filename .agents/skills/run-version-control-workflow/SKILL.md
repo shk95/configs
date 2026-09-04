@@ -61,8 +61,9 @@ planning read-only unless the user explicitly authorizes a Git mutation.
 - **Release**: Run `tool/version-control/plan-release <domain> [commit]` first.
   Require the Definition of Done evidence and an annotated, new, immutable tag
   reachable from `master`. Creating and pushing the tag are separate mutations
-  and each requires explicit authorization. Never infer activation or Apply
-  from a release tag.
+  and each requires explicit authorization. Create no GitHub Release; the
+  annotation is the record. Never infer activation or Apply from a release
+  tag.
 
 ## Report evidence
 

@@ -59,6 +59,7 @@ decision` is the procedure.
 | 2026-08-31 | windows | Windows checks run only under the host's own pwsh | accepted | windows-checks-run-under-native-pwsh.md |
 | 2026-08-31 | windows | A JsonSubset payload is captured by projection | accepted | jsonsubset-captured-by-projection.md |
 | 2026-08-31 | repository | Hooks run under Git for Windows | accepted | hooks-run-under-git-for-windows.md |
+| 2026-08-31 | repository | The annotated tag is the only release record | accepted | annotated-tag-is-the-release-record.md |
 | 2026-09-03 | unixlike | A package is owned by the module that configures it | accepted | package-ownership-by-generating-module.md |
 | 2026-09-03 | repository | The invariant registry is created with pending entries | accepted | invariant-registry-created.md |
 | 2026-09-04 | repository | A fixture tag names only an invariant its case proves | accepted | fixture-tags-name-proven-invariants.md |
