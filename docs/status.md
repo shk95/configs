@@ -83,7 +83,7 @@ are disabled.
 The merge gate is CI's `Required checks`, demanded whenever a change falls
 in a domain that check covers.
 
-The invariant registry holds 49 entries: 9 pending, listed under Pending
+The invariant registry holds 49 entries: 6 pending, listed under Pending
 invariants, 0 fixture units untagged, and `tool/version-control/invariants`
 enforces C10 (no untagged fixture unit) by default.
 
@@ -128,6 +128,3 @@ semantics across independent platform validation and release cycles.
 - `unixlike/import-order-independence` — #128
 - `unixlike/package-ownership` — #130
 - `unixlike/version-manager-last` — #129
-- `windows/no-unix-host-required` — #124
-- `windows/parser-declared` — #135
-- `windows/unique-ids` — #134
