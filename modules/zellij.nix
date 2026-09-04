@@ -26,38 +26,34 @@
 # `homeManager.shared` keeps the pair alone because its extra reach is the WSL
 # homes, whose terminal is declared in the Windows domain and is still dark;
 # pinning light there would be the guess `modules/bat.nix` refuses to make.
+#
+# INV unixlike/composition-in-one-place — both classes write into one Home
+# Manager option, `programs.zellij.extraConfig`, which Home Manager renders
+# into config.kdl: `shared` contributes the asset at the default order and
+# `desktop` appends one node with `mkAfter`. Neither class forces the other's
+# value, so this file decides nothing about which class wins; the composition
+# file decides which classes a home gets, and the option's ordering does the
+# rest. The keymap stays in exactly one place and no second payload appears
+# under assets/; the file a host receives is Home Manager's rendering — a
+# blank line and an `// extraConfig` marker, then the asset — rather than a
+# link to the asset byte for byte, and tool/checks/payloads parses the asset,
+# which is what every rendering is built from. (Before #127 `desktop` forced
+# a second file over the one `shared` declared.)
 _: {
   modules.homeManager.shared = {pkgs, ...}: {
     programs.zellij = {
       enable = true;
       package = pkgs.zellij;
+      extraConfig = builtins.readFile ../assets/zellij/config.kdl;
     };
-
-    xdg.configFile."zellij/config.kdl".source = ../assets/zellij/config.kdl;
   };
 
-  modules.homeManager.desktop = {
-    lib,
-    pkgs,
-    ...
-  }: {
-    # INV unixlike/composition-in-one-place — this is the known leak (#127):
-    # `desktop` forces a file `shared` already declares, so this feature file
-    # decides which class wins. Until a class-level shape expresses it, the
-    # generated copy is the asset byte for byte with one node appended, so the
-    # keymap stays in exactly one place and no second payload appears under
-    # assets/.
-    xdg.configFile."zellij/config.kdl".source =
-      lib.mkForce
-      (pkgs.writeText "zellij-config.kdl" (
-        builtins.readFile ../assets/zellij/config.kdl
-        + ''
-
-          // Appended by modules/zellij.nix for `homeManager.desktop` only,
-          // because WezTerm never answers the colour-scheme query the pair
-          // above depends on. See that file for the full reasoning.
-          theme "flexoki-light"
-        ''
-      ));
+  modules.homeManager.desktop = {lib, ...}: {
+    programs.zellij.extraConfig = lib.mkAfter ''
+      // Appended by modules/zellij.nix for `homeManager.desktop` only,
+      // because WezTerm never answers the colour-scheme query the pair
+      // above depends on. See that file for the full reasoning.
+      theme "flexoki-light"
+    '';
   };
 }

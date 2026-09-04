@@ -1,0 +1,64 @@
+#!/bin/sh
+# Feature files contribute to classes; one file composes classes into hosts.
+#
+# INV unixlike/composition-in-one-place
+#
+# modules/flake/configurations.nix is the only place that decides which module
+# classes reach a Unix-like host. A feature file may write into a class, and
+# may lower its own priority with `mkDefault`, but it must not name a host
+# flavour (`homeConfigurations`, `nixosConfigurations`,
+# `darwinConfigurations`) and must not force a value another class declares
+# (`mkForce`, `mkOverride`, `mkVMOverride`), because either one moves the
+# class decision out of the composition file and into whichever feature file
+# happened to say so last.
+#
+# A lexical scan is enough for both: the names are literal, comments are
+# stripped first so a sentence about `mkForce` is not a use of it, and the
+# flake/ subtree is the composition file's own home and is not a feature
+# file. tool/checks/composition-test holds a positive and a negative case for
+# each rule. Two limits are accepted: a `#` at the start of a line or after
+# whitespace is read as a comment even inside a string, which can hide the
+# rest of that line, and a `/* … */` block comment is not stripped, which
+# can flag prose; the tree uses `#` comments and neither shape occurs.
+#
+# usage: tool/checks/composition [<modules directory>]
+#
+# Needs a POSIX shell and no Nix, so it reports no unverified state.
+
+set -eu
+
+repo=$(CDPATH= cd -- "$(dirname -- "$0")/../.." && pwd)
+cd "$repo"
+
+dir=${1:-modules}
+[ -d "$dir" ] || {
+  printf '\033[31m✗ no module directory at %s\033[0m\n' "$dir" >&2
+  exit 1
+}
+
+status=0
+listing=$(mktemp)
+trap 'rm -f "$listing"' EXIT
+
+find "$dir" -name '*.nix' -not -path "$dir/flake/*" | LC_ALL=C sort >"$listing"
+
+while IFS= read -r file; do
+  [ -n "$file" ] || continue
+  hits=$(sed -e 's/^#.*$//' -e 's/[[:space:]]#.*$//' "$file" \
+    | grep -nE '(^|[^A-Za-z0-9_])(homeConfigurations|nixosConfigurations|darwinConfigurations|mkForce|mkOverride|mkVMOverride)([^A-Za-z0-9_]|$)' \
+    || true)
+  [ -n "$hits" ] || continue
+  status=1
+  printf '%s\n' "$hits" | while IFS= read -r hit; do
+    printf '\033[31m✗ %s:%s\033[0m\n' "$file" "$hit" >&2
+  done
+done <"$listing"
+
+if [ "$status" -ne 0 ]; then
+  echo "  A feature file names a host flavour or forces another class's value;" >&2
+  echo "  only modules/flake/configurations.nix composes classes into hosts." >&2
+  exit 1
+fi
+
+count=$(wc -l <"$listing" | tr -d ' ')
+echo "✓ composition: $count feature files name no host and force no value"

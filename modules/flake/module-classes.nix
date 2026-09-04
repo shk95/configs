@@ -37,9 +37,27 @@
 #
 # INV unixlike/composition-in-one-place — a feature file writes into a class
 # and never names a host; `flake/configurations.nix` alone maps classes to
-# hosts. Pending #127 tracks a check.
+# hosts, and tool/checks/composition refuses a feature file that does either.
+#
+# INV unixlike/import-order-independence — the fragments a class collects are
+# imported in the order of the files that define them, not the order the walk
+# found them in. Without that key, every list-valued Home Manager option two
+# feature files contribute to — `home.packages` from the shared list and the
+# PowerShell module, for one — is concatenated in walk order, and the host's
+# toplevel derivation changes when the walk changes. tool/checks/import-order
+# composes every host in walk order and reversed and requires the same
+# toplevels; keying the imports is what makes that hold by construction. The
+# key is applied in `apply` below, on the merged value, because the module
+# system's `deferredModule` merge names each fragment after its file and that
+# name is the only thing here that survives the merge unchanged.
 {lib, ...}: let
-  inherit (lib) mapAttrs mkOption types;
+  inherit (lib) mapAttrs mkOption sort types;
+
+  keyedByFile = module:
+    module
+    // {
+      imports = sort (a: b: (a._file or "") < (b._file or "")) (module.imports or []);
+    };
 
   # Mirrors what flake-parts does for its own `flake.nixosModules`. `_class` makes
   # a module used against the wrong evaluator fail by name instead of failing
@@ -56,7 +74,7 @@
       apply = mapAttrs (name: module: {
         _class = class;
         _file = "modules.${class}.${name}";
-        imports = [module];
+        imports = [(keyedByFile module)];
       });
       description = "${class} module fragments, merged from every file that defines one.";
     };

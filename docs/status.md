@@ -87,7 +87,7 @@ are disabled.
 The merge gate is CI's `Required checks`, demanded whenever a change falls
 in a domain that check covers.
 
-The invariant registry holds 50 entries: 5 pending, listed under Pending
+The invariant registry holds 50 entries: 0 pending, listed under Pending
 invariants, 0 fixture units untagged, and `tool/version-control/invariants`
 enforces C10 (no untagged fixture unit) by default.
 
@@ -122,7 +122,6 @@ semantics across independent platform validation and release cycles.
   naming of the build and of each item's boundary state. #53 owns deciding
   the terminal delegation item against the boundary so `-Check` can report
   it unverified there, and #54 stays open for that conversion.
-- Unix-like import-order independence is pending (#128).
 - One real-host capture run is still owed as evidence
   (`docs/decisions/capture-moves-host-changes.md`).
 - `docs/decisions/hygiene-tool-owns-enforcement.md`: reopens when the same
@@ -130,8 +129,5 @@ semantics across independent platform validation and release cycles.
 
 ## Pending invariants
 
-- `unixlike/composition-in-one-place` — #127
-- `unixlike/eval-covers-every-host` — #131
-- `unixlike/import-order-independence` — #128
-- `unixlike/package-ownership` — #130
-- `unixlike/version-manager-last` — #129
+None since 2026-09-04: every registered invariant declares `schema`, `tool`,
+`fixture` or `manual` enforcement.
