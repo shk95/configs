@@ -21,8 +21,8 @@ The decision (#138) is to select the suite only for a change under one of
 those paths, the same narrowing the Unix-like arm has had since a payload
 edit stopped forcing a flake evaluation. The policy checks the hooks run
 unconditionally — hygiene, the invariant registry, the secret scan at
-pre-commit, the audit at pre-push — are unchanged, so a documentation or
-registry commit is still held to every rule that reads it. CI is unchanged
+pre-commit, the history audit at pre-push — are unchanged, so a documentation
+or registry commit is still held to every rule that reads it. CI is unchanged
 on purpose: the selector is the local gate's, and the merge gate runs a
 selected domain's whole suite. The remaining local-versus-CI duplication —
 a code change under those trees runs the suite at pre-push and again in
@@ -30,3 +30,10 @@ CI — is the "know before you push" lane and stays until the maintainer
 decides otherwise. The first documentation-only commit after the change is
 the proof: its pre-commit runs hygiene, the registry and the secret scan
 and no suite.
+
+2026-09-04: the pre-push audit is narrowed to `audit --history`, the form
+the merge gate runs. The full form also judges the clone — a local branch
+outside the name grammar, a lightweight `*-v*` tag — and blocked every push
+from a clone in that state although no push can change it; a review of the
+promotion range proved it with a throwaway clone. The clone-local half stays
+a read-only check by hand.

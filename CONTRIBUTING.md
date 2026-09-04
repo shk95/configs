@@ -164,7 +164,11 @@ procedure.
 4. Declare the enforcement. A `schema` or `tool` entry also declares a
    `fixture`; add the fixture in the same change and tag it with
    `INV <scope>/<slug>`. A `manual` entry names its evidence and is listed by
-   id in `docs/definition-of-done.md`. If nothing enforces it yet, open an
+   id in `docs/definition-of-done.md`; because the checker requires that
+   listing and refuses an unregistered tag in the same run, the entry and the
+   evidence item land in one commit that classifies as the entry's scope
+   and `repository` — the one accepted two-scope commit, as supporting
+   documentation. If nothing enforces it yet, open an
    issue and declare `pending #<n>` with an owner. Tag the fixture *unit* —
    the `Describe` or the banner section — or the pre-commit hook refuses the
    commit; `tool/version-control/invariants --untagged` names the unit.
@@ -344,6 +348,13 @@ tool/checks/payloads
 tool/checks/test
 ```
 
+The fixtures that prove the Unix-like checks refuse what they must —
+`tool/checks/payloads-test`, `flake-test`, `composition-test`,
+`eval-coverage-test`, `prerequisite-test` and `import-order-test` — run in
+the CI unix job. Run one by hand when its check or its fixtures change.
+`import-order-test` composes every host twice and is merge-gate only by
+design (`INV unixlike/import-order-independence`).
+
 `tool/checks/payloads` parses every source payload declared in
 `assets/payloads.json` with the tool that consumes it. Evaluation does not
 cover them: Nix copies a payload into the store without reading it.
@@ -378,9 +389,11 @@ tool/version-control/audit-remote  # when gh is authenticated
 tool/version-control/hook-evidence
 ```
 
-`tool/version-control/audit` now runs on every push and, as `audit --history`,
-in the repository-wide CI scan job; running it by hand is for a read-only look
-between pushes.
+`tool/version-control/audit --history` runs on every push and in the
+repository-wide CI scan job, and judges committed history alone. The full
+form, which also judges this clone — local branch names, tags, the hooks
+setting — is a read-only look by hand, because a clone's scratch branch is
+not a property of the change being pushed.
 
 ### Desired-state hygiene
 
