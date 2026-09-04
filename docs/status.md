@@ -682,6 +682,11 @@ in its summary but not in its status. The repository maintainer owns the
 decision and it is recorded on the issue that introduced it; the evidence is
 the Pester fixture over the whole ranking plus a native `-Check` on an
 already-applied Windows 10 host.
+As of 2026-09-04 the entry point honours the same protocol for its own
+prerequisites: `bootstrap.ps1 -Check` on a host without WinGet or PowerShell 7
+returns 69, or 1 under `REQUIRE_NATIVE=1`, where it used to return 1 and 2;
+the suite proves it by running the real script in a child shell with an
+empty PATH (`INV windows/check-exit-contract`).
 
 One Windows 10 sub-case survives that, and it is not Appx silence read as
 absence. When the module cannot answer, package detection keeps the WinGet
@@ -1010,12 +1015,18 @@ this section carried until then (`unixlike/typed-identity`,
 live in their entries. The `flake-test` suite's banner units are tagged, so
 the untagged baseline stays at the three repository units recorded below.
 
-One citation into the old `AGENTS.md` layout survives outside this scope:
-`windows/src/WinEnv.psm1` cites "AGENTS.md, Host safety" for the
-`.wslconfig` firewall rule, which now lives in the "Rules that are expensive
-to break" table. The Windows migration, which edits that module's messages
-anyway, updates the citation; a repository change does not reach into
-`windows/`.
+The Windows entries landed on 2026-09-04 under `invariants/windows/`: eleven
+entries, eight enforced (`INV windows/feature-owns-every-item`,
+`INV windows/sources-total-function`, `INV windows/compare-mode-declared`,
+`INV windows/schema-version-refused` by the loader and the suite;
+`INV windows/declared-list-has-content`, `INV windows/hash-covers-selection`,
+`INV windows/one-placeholder`, `INV windows/check-exit-contract` by the
+suite) and three `pending` (`INV windows/unique-ids` #134,
+`INV windows/parser-declared` #135, `INV windows/no-unix-host-required` #124).
+The same change corrected the one citation into the old `AGENTS.md` layout,
+in `windows/src/WinEnv.psm1`. Every scope has now mapped its fixtures; the
+Pester file contributes the untagged units the per-scope pruning change
+takes up before `INVARIANTS_ENFORCE_C10` becomes the default.
 
 The 2026-09-03 review of the verification suite led to four rulings, landed
 as the governance-hygiene change: `tool/version-control/audit` runs on every
