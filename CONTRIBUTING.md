@@ -166,8 +166,8 @@ procedure.
    `INV <scope>/<slug>`. A `manual` entry names its evidence and is listed by
    id in `docs/definition-of-done.md`. If nothing enforces it yet, open an
    issue and declare `pending #<n>` with an owner. Tag the fixture *unit* —
-   the `Describe` or the banner section — so
-   `tool/version-control/invariants --untagged` stops listing it.
+   the `Describe` or the banner section — or the pre-commit hook refuses the
+   commit; `tool/version-control/invariants --untagged` names the unit.
 5. Put the tag `INV <scope>/<slug>` in every declared locator: a header
    comment in a script, the test name or a comment above a fixture, the
    loader's refusal message.

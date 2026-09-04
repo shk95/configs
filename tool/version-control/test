@@ -3071,9 +3071,9 @@ fi
 
 # INV repository/fixtures-name-invariants
 # A fixture unit — a top-level Describe in a Pester file, a banner section
-# in a shell suite — names the invariant it proves. Report mode counts and
-# lists; INVARIANTS_ENFORCE_C10=1 fails, which is the mode PR 2 and PR 3
-# flip on.
+# in a shell suite — names the invariant it proves. The default fails an
+# untagged unit; INVARIANTS_ENFORCE_C10=0 is the report mode, which counts
+# and lists. Both directions are held here.
 inv_base
 inv_id=repository/base-rule
 inv_pester="$inv_repo/tests/Fixture.Tests.ps1"
@@ -3101,8 +3101,11 @@ enforced-by: tool tool/probe
 enforced-by: fixture tests/probe.sh
 enforced-by: fixture tests/Fixture.Tests.ps1
 ENTRY
-inv_expect_pass 'untagged units are reported, not failed' '2 fixture units untagged'
+INVARIANTS_ENFORCE_C10=0
+export INVARIANTS_ENFORCE_C10
+inv_expect_pass 'untagged units are reported, not failed, under INVARIANTS_ENFORCE_C10=0' '2 fixture units untagged'
 inv_untagged=$(cd "$inv_repo" && "$invariants" --untagged)
+unset INVARIANTS_ENFORCE_C10
 printf '%s\n' "$inv_untagged" | grep -q 'tests/Fixture.Tests.ps1:[0-9]*: untagged unit'
 printf '%s\n' "$inv_untagged" | grep -q 'tests/probe.sh:[0-9]*: untagged section'
 if printf '%s\n' "$inv_untagged" | grep -q ': tagged unit$\|: tagged section$'; then
@@ -3110,11 +3113,15 @@ if printf '%s\n' "$inv_untagged" | grep -q ': tagged unit$\|: tagged section$'; 
   echo "invariants --untagged listed a tagged unit" >&2
   exit 1
 fi
-if (cd "$inv_repo" && INVARIANTS_ENFORCE_C10=1 "$invariants") >/dev/null 2>&1; then
-  echo "invariants passed untagged units under INVARIANTS_ENFORCE_C10" >&2
+if (cd "$inv_repo" && "$invariants") >/dev/null 2>&1; then
+  echo "invariants passed untagged units by default" >&2
   exit 1
 fi
-(cd "$inv_repo" && INVARIANTS_ENFORCE_C10=1 "$invariants") 2>&1 | grep -q 'C10'
+(cd "$inv_repo" && "$invariants") 2>&1 | grep -q 'C10'
+if (cd "$inv_repo" && INVARIANTS_ENFORCE_C10=1 "$invariants") >/dev/null 2>&1; then
+  echo "invariants passed untagged units under INVARIANTS_ENFORCE_C10=1" >&2
+  exit 1
+fi
 
 # INV repository/fixtures-name-invariants
 # A tag line directly after a closing banner, with no bare `#` between them,

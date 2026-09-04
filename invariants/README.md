@@ -78,10 +78,10 @@ Every fixture unit in a file an entry declares as `fixture` names at least
 one registered invariant with its tag. A unit is a top-level `Describe` in
 a Pester file, or a banner section (`# ----------`, a title line,
 `# ----------`) in a shell suite. `tool/version-control/invariants`
-reports the untagged count in its summary and lists them with `--untagged`;
-`INVARIANTS_ENFORCE_C10=1` turns each into a failure, the mode the checker
-switches to once every scope has mapped its fixtures. A unit that proves
-no invariant is a deletion candidate, not a rule.
+fails on each such unit and lists them with `--untagged`;
+`INVARIANTS_ENFORCE_C10=0` restores the report mode, which only counts them
+in the summary. A unit that proves no invariant is a deletion candidate,
+not a rule.
 
 A shell unit runs from its title line to the next unit or the end of the
 file; when a tag follows a closing banner directly, put a bare `#` line
