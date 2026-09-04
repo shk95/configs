@@ -188,13 +188,13 @@ Describe 'version gate' {
 }
 
 Describe 'JSON ownership' {
-    It 'allows runtime properties in subset mode' {
+    It 'INV windows/subset-owns-declared-keys: allows runtime properties in subset mode' {
         $expected = '{"enabled":true,"nested":{"value":7}}' | ConvertFrom-Json
         $actual = '{"enabled":true,"nested":{"value":7,"runtime":"ignored"},"version":"dynamic"}' | ConvertFrom-Json
         (Test-WinEnvJsonSubset -Expected $expected -Actual $actual) | Should -Be $true
     }
 
-    It 'detects changed managed properties' {
+    It 'INV windows/subset-owns-declared-keys: detects changed managed properties' {
         $expected = '{"enabled":true,"items":[1,2]}' | ConvertFrom-Json
         $actual = '{"enabled":false,"items":[1,2]}' | ConvertFrom-Json
         (Test-WinEnvJsonSubset -Expected $expected -Actual $actual) | Should -Be $false
@@ -811,7 +811,7 @@ Describe 'Windows Terminal generated profiles' {
 }
 
 Describe 'PowerShell profile marker' {
-    It 'adds one block and preserves existing external blocks' {
+    It 'INV windows/external-profile-blocks-preserved: adds one block and preserves existing external blocks' {
         $profile = Join-Path $TestDrive 'profile.ps1'
         [IO.File]::WriteAllText($profile, "#region sysmon-banner`r`n'SysMon'`r`n#endregion sysmon-banner`r`n")
         Set-WinEnvProfileHook -ProfilePath $profile
@@ -822,14 +822,15 @@ Describe 'PowerShell profile marker' {
         (Test-WinEnvProfileHook -ProfilePath $profile) | Should -Be $true
     }
 
-    It 'refuses unmatched markers' {
+    It 'INV windows/external-profile-blocks-preserved: refuses unmatched markers' {
         $profile = Join-Path $TestDrive 'broken-profile.ps1'
         [IO.File]::WriteAllText($profile, "#region win-env`r`n")
         (Test-Throws { Set-WinEnvProfileHook -ProfilePath $profile }) | Should -Be $true
     }
-}
 
-Describe 'managed PowerShell profile' {
+    # A regression guard on the committed payload, not a rule: a profile that
+    # prints in a non-interactive process breaks any program that starts
+    # pwsh and reads its output. It names no invariant.
     It 'loads silently in a non-interactive PowerShell process' {
         $profile = Join-Path $desiredStateRoot 'files\powershell\profile.ps1'
         $pwsh = (Get-Process -Id $PID).Path
@@ -1025,7 +1026,7 @@ Describe 'managed sources' {
         (Test-Throws { $jsonContent | Should -Not -Match $WindowsHomePathPattern }) | Should -Be $true
     }
 
-    It 'declares every deployable desired-state payload exactly once' {
+    It 'INV windows/feature-owns-every-item: declares every deployable desired-state payload exactly once' {
         # Reworked for schema 3, not loosened. A managed file may now declare
         # alternative sources selected by the host's Windows build, so the
         # declared set is every variant of every entry rather than one scalar
@@ -1156,20 +1157,20 @@ Describe 'feature selection' {
         $selection.Excluded | Should -Contain 'terminal'
     }
 
-    It 'closes over declared dependencies and reports what it added' {
+    It 'INV windows/selection-closed-and-explicit: closes over declared dependencies and reports what it added' {
         $selection = Get-WinEnvFeatureSelection -Manifest (New-FeatureManifest) -Requested @('terminal')
         ($selection.Selected -join ',') | Should -Be 'core,font,zellij,terminal'
         (($selection.Implied | Sort-Object) -join ',') | Should -Be 'font,zellij'
         $selection.Excluded.Count | Should -Be 0
     }
 
-    It 'keeps a dependency selectable on its own' {
+    It 'INV windows/selection-closed-and-explicit: keeps a dependency selectable on its own' {
         $selection = Get-WinEnvFeatureSelection -Manifest (New-FeatureManifest) -Requested @('zellij')
         ($selection.Selected -join ',') | Should -Be 'core,zellij'
         $selection.Excluded | Should -Contain 'terminal'
     }
 
-    It 'rejects an unknown feature instead of silently ignoring it' {
+    It 'INV windows/selection-closed-and-explicit: rejects an unknown feature instead of silently ignoring it' {
         (Test-Throws { Get-WinEnvFeatureSelection -Manifest (New-FeatureManifest) -Requested @('ghost') }) | Should -Be $true
     }
 
@@ -1498,7 +1499,7 @@ Describe 'font installation state' {
             'TestFont-Regular.ttf', 'TestFont-Bold.ttf')
     }
 
-    It 'calls a valid registered subset of a grown manifest incomplete, not a conflict' {
+    It 'INV windows/font-state-total: calls a valid registered subset of a grown manifest incomplete, not a conflict' {
         # The reported regression: raising the manifest from two faces to four
         # turned every host that already had the two into a refused Apply. The
         # two files here are the manifest's own, byte for byte, and registered
@@ -1526,7 +1527,7 @@ Describe 'font installation state' {
         $status.InstalledFaceCount | Should -Be 2
     }
 
-    It 'still calls a file that is not the one the manifest pins a conflict' {
+    It 'INV windows/font-state-total: still calls a file that is not the one the manifest pins a conflict' {
         $fixture = New-FontFixture -Root $TestDrive `
             -Present @('TestFontMono-Regular.ttf', 'TestFont-Regular.ttf', 'TestFont-Bold.ttf') `
             -Corrupt @('TestFontMono-Bold.ttf') -Registered $AllFaces -DirectWrite $true
@@ -1564,7 +1565,7 @@ Describe 'font installation state' {
         $status.Installed | Should -Be $false
     }
 
-    It 'refuses a foreign registration even on a host holding every file' {
+    It 'INV windows/font-state-total: refuses a foreign registration even on a host holding every file' {
         # Every listed file is valid and only one registration is wrong, which
         # is the shape closest to a repair. Repairing it would overwrite a value
         # this repository did not write, so it is a conflict rather than the
@@ -1611,7 +1612,7 @@ Describe 'font installation state' {
         $status.InstalledFaceCount | Should -Be 4
     }
 
-    It 'reports exactly one state for every fixture' {
+    It 'INV windows/font-state-total: reports exactly one state for every fixture' {
         # The four states are a partition, which is what lets the check and
         # Apply branch on them in any order.
         $fixtures = @(
@@ -2738,7 +2739,7 @@ Describe 'capture branch' {
         }
     }
 
-    It 'refuses on master without reading the remote at all' {
+    It 'INV windows/capture-publishes-through-dev: refuses on master without reading the remote at all' {
         $fixture = New-BranchFixture
         & git -C $fixture.Repo switch -q master | Out-Null
         # No origin/dev ref at all would make a remote-reading refusal true by
@@ -2818,7 +2819,7 @@ Describe 'capture branch' {
         (& git -C $fixture.Repo rev-parse HEAD).Trim() | Should -Be $originDev
     }
 
-    It 'creates the named branch from origin/dev and leaves dev untouched' {
+    It 'INV windows/capture-publishes-through-dev: creates the named branch from origin/dev and leaves dev untouched' {
         $fixture = New-BranchFixture
         $plan = Get-WinEnvCaptureBranchPlan -RepositoryRoot $fixture.Repo -BranchName 'feature/windows-capture-font'
         $plan.Status | Should -Be 'Create'
@@ -2917,7 +2918,7 @@ Describe 'capture branch pruning' {
         }
     }
 
-    It 'deletes a local branch already merged into origin/dev' {
+    It 'INV windows/capture-publishes-through-dev: deletes a local branch already merged into origin/dev' {
         $fixture = New-PruneFixture
         & git -C $fixture.Repo branch -q feature/windows-old-capture | Out-Null
 
@@ -2941,7 +2942,7 @@ Describe 'capture branch pruning' {
         (Get-FixtureBranches -Repo $fixture.Repo) | Should -Contain 'feature/windows-unique'
     }
 
-    It 'never deletes the current branch, dev or master even when each is an ancestor of origin/dev' {
+    It 'INV windows/capture-publishes-through-dev: never deletes the current branch, dev or master even when each is an ancestor of origin/dev' {
         $fixture = New-PruneFixture
         # Cut from dev's own tip, so this branch, dev and master are all,
         # trivially, ancestors of origin/dev; only the name-based exclusion
@@ -3628,7 +3629,7 @@ exit 0
             $result.Detail | Should -Match ([regex]::Escape('https://github.com/example/repo/pull/9'))
         }
 
-        It 'reuses an open pull request from this head against dev instead of opening a second' {
+        It 'INV windows/capture-publishes-through-dev: reuses an open pull request from this head against dev instead of opening a second' {
             $fixture = New-PublishRepository
             $listing = '[{"baseRefName":"dev","isCrossRepository":false,' +
             '"url":"https://github.com/example/repo/pull/7"}]'
@@ -3697,7 +3698,7 @@ exit 0
             }
         }
 
-        It 'pushes, opens one pull request and arms auto-merge exactly once' {
+        It 'INV windows/capture-publishes-through-dev: pushes, opens one pull request and arms auto-merge exactly once' {
             $fixture = New-PublishRepository
             & git -C $fixture.Repo switch -q -c feature/windows-capture-font | Out-Null
 
@@ -3746,7 +3747,7 @@ exit 0
             (Test-Path -LiteralPath $fixture.Body) | Should -Be $false
         }
 
-        It 'stops at a rejected push with the commits local and nothing published' {
+        It 'INV windows/capture-publishes-through-dev: stops at a rejected push with the commits local and nothing published' {
             $fixture = New-PublishRepository
             & git -C $fixture.Repo switch -q -c feature/windows-capture-font | Out-Null
             [IO.File]::WriteAllText((Join-Path $fixture.Repo 'seed.txt'), 'a captured payload')
