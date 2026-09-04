@@ -46,6 +46,25 @@ Import-Module -FullyQualifiedName @{
 # The suite creates fixture repositories; it must never inherit the caller's.
 . (Join-Path $PSScriptRoot 'isolate-git.ps1')
 
+# Every script below windows/ must parse before the suite runs. The suite
+# imports the module and drives the entry points, but the end-to-end capture
+# cases are skipped without WIN_ENV_E2E, so a syntax error in capture.ps1
+# would otherwise reach CI unseen. This step sits after the Pester gate so a
+# host without Pester still exits 69 rather than reporting a parse result as
+# the suite's; a parse error is a failure of the tools, exit 1.
+$parseErrors = @(Get-ChildItem -Path $windowsRoot -Recurse -File |
+    Where-Object { $_.Extension -in '.ps1', '.psm1' } |
+    ForEach-Object {
+        $tokens = $null
+        $errors = $null
+        [void][System.Management.Automation.Language.Parser]::ParseFile($_.FullName, [ref]$tokens, [ref]$errors)
+        if ($errors.Count) { "$($_.FullName): $($errors[0].Message)" }
+    })
+if ($parseErrors.Count) {
+    $parseErrors | ForEach-Object { [Console]::Error.WriteLine("✗ $_") }
+    exit 1
+}
+
 $tests = Join-Path (Split-Path -Parent $PSScriptRoot) 'tests'
 $result = Invoke-Pester -Path $tests -PassThru
 if ($result.Result -ne 'Passed') { exit 1 }

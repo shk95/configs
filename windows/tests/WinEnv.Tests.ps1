@@ -4145,13 +4145,3 @@ Describe 'check entry points' {
         Invoke-BootstrapCheck -RequireNative '1' | Should -Be 1
     }
 }
-
-Describe 'script syntax' {
-    It 'parses all repository PowerShell files' {
-        foreach ($file in Get-ChildItem $repositoryRoot -Filter '*.ps1' -File -Recurse) {
-            $tokens = $null; $errors = $null
-            [void][System.Management.Automation.Language.Parser]::ParseFile($file.FullName, [ref]$tokens, [ref]$errors)
-            $errors.Count | Should -Be 0
-        }
-    }
-}
