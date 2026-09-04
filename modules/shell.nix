@@ -173,8 +173,8 @@ _: {
           # Standalone installers may place commands here. Append instead of
           # prepend so declarative packages keep precedence when names overlap.
           # INV unixlike/import-order-independence — this string sits at the
-          # default order; tool/checks/import-order proves that no other module
-          # contributes at the same order in a way the directory walk decides.
+          # default order; the class imports are keyed by file and
+          # tool/checks/import-order proves no host depends on the walk.
           typeset -U path
           path+=("$HOME/.local/bin")
         '')

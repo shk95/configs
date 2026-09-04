@@ -4,9 +4,11 @@
 # INV unixlike/import-order-independence
 #
 # The positive case is the real modules/ tree. The negative adds a pair of
-# files that contribute to one `lines` option at the same order, which is the
-# exact shape the rule forbids: the generated file, and so the host toplevel,
-# then depends on which of the two the walk found first.
+# files that contribute to one flake-level list at the same order and feed it
+# into a home, which is the shape the rule forbids: the generated file, and so
+# the host toplevel, then depends on which of the two the walk found first.
+# (A pair contributing to a class option is not enough: the class merge is
+# keyed by file, which is the fix this check guards.)
 
 set -e
 . "$(CDPATH= cd -- "$(dirname -- "$0")" && pwd)/prerequisite"
