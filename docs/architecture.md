@@ -139,7 +139,11 @@ it preserves every foreign block and refuses unpaired markers. A read-only
 check answers whether an Apply is needed: it returns 0 when converged, 2
 when anything drifted, and the unverified status only when its sole open
 question, or a prerequisite the host lacks, could not be decided there,
-with native evidence able to turn that into a failure. Finally, the Windows
+with native evidence able to turn that into a failure. A host observation is
+evidence only for the Windows builds the documented support boundary covers:
+an item the host accepts but does not honour below that boundary is reported
+unverified against its documentary source, never verified, and the build the
+observation came from is named beside it. Finally, the Windows
 checks and suite read only the Windows tree and need no Unix-like toolchain,
 because this domain must be authorable and checkable on its own host. They
 also drop any repository context their caller exported, so a suite run from
