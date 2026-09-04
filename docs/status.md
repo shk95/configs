@@ -87,15 +87,17 @@ are disabled.
 The merge gate is CI's `Required checks`, demanded whenever a change falls
 in a domain that check covers.
 
-The invariant registry holds 50 entries: 6 pending, listed under Pending
+The invariant registry holds 50 entries: 5 pending, listed under Pending
 invariants, 0 fixture units untagged, and `tool/version-control/invariants`
 enforces C10 (no untagged fixture unit) by default.
 
 Content before a shell suite's first banner is in no fixture unit and
 invisible to C10 (`docs/decisions/fixture-tags-name-proven-invariants.md`).
 
-CI still parses the whole checkout in its own step, so the Windows tree is
-parsed twice there until #124 narrows that loop.
+`tool/version-control/domain-reads` runs on every commit and in CI beside
+the hygiene scan; the Windows CI job no longer parses the checkout from its
+root, and `windows/tools/test.ps1` is the one place the Windows tree is
+parsed.
 
 ## Common
 
@@ -128,7 +130,6 @@ semantics across independent platform validation and release cycles.
 
 ## Pending invariants
 
-- `repository/no-cross-domain-dependency` — #124
 - `unixlike/composition-in-one-place` — #127
 - `unixlike/eval-covers-every-host` — #131
 - `unixlike/import-order-independence` — #128
