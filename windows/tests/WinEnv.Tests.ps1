@@ -1,6 +1,7 @@
 BeforeAll {
     $testsRoot = Split-Path -Parent $PSCommandPath
     $repositoryRoot = Split-Path -Parent $testsRoot
+    # INV windows/no-unix-host-required — pending #124: the only reason this suite knows the monorepo root is the WezTerm font-list comparison below.
     $monorepoRoot = Split-Path -Parent $repositoryRoot
     $desiredStateRoot = Join-Path $repositoryRoot 'desired'
     Import-Module (Join-Path $repositoryRoot 'src\WinEnv.psm1') -Force

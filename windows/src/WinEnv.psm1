@@ -78,6 +78,7 @@ function Assert-WinEnvFeatureModel {
     foreach ($feature in $Manifest.Features) {
         if (-not $feature.ContainsKey('Id')) { throw 'A feature is declared without an Id.' }
         $id = [string]$feature.Id
+        # INV windows/unique-ids — pending #134: feature ids are checked here; package and managed-file ids are not yet.
         if ($declared.Contains($id)) { throw "Feature '$id' is declared more than once." }
         $declared.Add($id)
     }
@@ -1729,6 +1730,7 @@ function Test-WinEnvSourceFile {
     )
 
     $path = Join-Path $RepositoryRoot $Definition.Source
+    # INV windows/parser-declared — pending #135: this switch has no default arm, so an unknown parser falls through as parsed.
     switch ($Definition.Parser) {
         'Json' { $null = Get-Content -LiteralPath $path -Raw | ConvertFrom-Json -ErrorAction Stop }
         'Ini' {
@@ -1850,8 +1852,8 @@ $script:WinEnvAccountPathPattern = '(?im)' +
         $script:WinEnvPathSeparator + $script:WinEnvAccountName +
         $script:WinEnvPathSeparator + 'home' + $script:WinEnvPathSeparator + $script:WinEnvAccountName + ')'
 
-# AGENTS.md, Host safety: a .wslconfig firewall value is never added without
-# explicit direction, and a capture is not direction.
+# AGENTS.md, "Rules that are expensive to break": a .wslconfig firewall value
+# is never added without explicit direction, and a capture is not direction.
 $script:WinEnvWslFirewallPattern = '(?im)^[ \t]*firewall[ \t]*='
 
 # Private, like Get-WinGetRegistration: the capture outcome's shape is this
