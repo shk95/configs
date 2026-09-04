@@ -14,8 +14,9 @@
 # INV repository/local-gate-selects-by-effect: a unit is selected only for a
 # change that can alter its result. The version-control fixture suite copies
 # .githooks, tool/dispatch and tool/version-control into its throwaway
-# repositories and greps the CI workflow, so only those paths select it; a
-# documentation or registry change keeps the policy checks the hooks run
+# repositories, copies and scans tool/setup, tool/doctor.sh and
+# tool/worktree.sh, and greps the CI workflow, so only those paths select it;
+# a documentation or registry change keeps the policy checks the hooks run
 # unconditionally and skips the suite.
 #
 # Reads `<status><TAB><path>` lines as `git diff --name-status` produces them,
@@ -67,7 +68,8 @@ tab=$(printf '\t')
 while IFS="$tab" read -r status path || [ -n "${status:-}" ]; do
   [ -n "${path:-}" ] || continue
   case "$path" in
-    .githooks/* | .github/* | tool/dispatch/* | tool/version-control/*)
+    .githooks/* | .github/workflows/* | tool/dispatch/* | tool/version-control/* \
+      | tool/setup | tool/doctor.sh | tool/worktree.sh)
       fixtures=1
       ;;
   esac
