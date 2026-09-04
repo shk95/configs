@@ -19,6 +19,11 @@ fail() {
   exit 1
 }
 
+# ---------------------------------------------------------------------------
+# Feature files name no host and force no value
+# ---------------------------------------------------------------------------
+#
+# INV unixlike/composition-in-one-place
 printf '→ accepts modules/\n'
 tool/checks/composition
 

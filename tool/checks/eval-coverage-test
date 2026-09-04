@@ -26,6 +26,11 @@ fail() {
 
 fixtures="$repo/tool/checks/fixtures/eval-coverage"
 
+# ---------------------------------------------------------------------------
+# The evaluation check reaches every configuration
+# ---------------------------------------------------------------------------
+#
+# INV unixlike/eval-covers-every-host
 printf '→ accepts a flake that exports one configuration\n'
 if ! output=$(CHECKS_FLAKE="path:$fixtures/probe" tool/checks/test 2>&1); then
   printf '%s\n' "$output" >&2

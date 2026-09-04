@@ -22,6 +22,11 @@ fail() {
   exit 1
 }
 
+# ---------------------------------------------------------------------------
+# Every host composes the same in either walk order
+# ---------------------------------------------------------------------------
+#
+# INV unixlike/import-order-independence
 printf '→ accepts modules/\n'
 tool/checks/import-order
 

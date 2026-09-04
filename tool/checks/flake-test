@@ -165,6 +165,10 @@ printf '→ refuses a PATH entry contributed after the version manager\n'
 failed_assertions "$home" '{lib, ...}: { programs.zsh.initContent = lib.mkOrder 2000 "path+=(\"/opt/late/bin\")"; }'
 expect_refusal 'INV unixlike/version-manager-last' 'a late PATH entry'
 
+printf '→ refuses a PATH element assigned after the version manager\n'
+failed_assertions "$home" '{lib, ...}: { programs.zsh.initContent = lib.mkOrder 2000 "path[1,0]=/opt/late/bin"; }'
+expect_refusal 'INV unixlike/version-manager-last' 'a late PATH entry'
+
 printf '→ refuses a JDK declared as a package\n'
 failed_assertions "$home" '{pkgs, ...}: { home.packages = [pkgs.openjdk]; }'
 expect_refusal 'INV unixlike/version-manager-last' 'a JDK package'

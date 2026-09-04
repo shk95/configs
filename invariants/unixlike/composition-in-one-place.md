@@ -10,6 +10,9 @@ are literal names: a host flavour (`homeConfigurations` and its two
 siblings) and a priority override (`mkForce`, `mkOverride`, `mkVMOverride`).
 Comments are stripped first, `mkDefault` stays allowed because lowering a
 file's own priority forces nothing, and the composition file's own subtree
-is not a feature file. The leak that motivated #127 — the desktop class
+is not a feature file. "Names a host" is read as naming a host flavour: a
+feature file that conditions on an identity value (`config.identity.…`,
+`config.home.username`) is not caught lexically, because feature files read
+identity legitimately, and is the reviewer's to notice. The leak that motivated #127 — the desktop class
 forcing a zellij file the shared class already declared — is gone: both
 classes write into one ordered Home Manager option instead.
