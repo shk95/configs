@@ -9,8 +9,9 @@
     # an output instead of being wired into one by hand; import-tree collects
     # every file under ./modules so there is no imports list to keep in sync.
     #
-    # Both are here on trial — see "M3's second experiment" in docs/status.md
-    # for the criteria this has to meet to stay, and what would send it back.
+    # Both are adopted; the one cost tracked so far is
+    # `INV unixlike/import-order-independence`, which tool/checks/import-order
+    # proves by composing every host in walk order and reversed.
     flake-parts.url = "github:hercules-ci/flake-parts";
     import-tree.url = "github:vic/import-tree";
 

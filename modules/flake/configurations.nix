@@ -1,5 +1,13 @@
 # The only place that decides which feature fragments reach each Unix-like
 # configuration. Feature files contribute modules; they do not name hosts.
+#
+# INV unixlike/desktop-not-wsl — `home.desktop` is composed below into the
+# Darwin home only; the WSL homes take `shared` and `wsl` and nothing
+# graphical. tool/checks/flake-test is the enforcement.
+#
+# INV unixlike/composition-in-one-place — this file is that place.
+# tool/checks/composition refuses a feature file that names a host flavour
+# or forces a class's decision.
 {
   config,
   inputs,

@@ -1,0 +1,406 @@
+#!/bin/sh
+#
+# Enforce INV repository/registry-coverage: every invariant registered under
+# invariants/ declares an enforcement that exists and names it, and every
+# enforcement that names an invariant is registered.
+#
+# An invariant is one file, invariants/<scope>/<slug>.md, with a header of
+# `key: value` lines up to the first blank line and free prose after it.
+# invariants/README.md is the format contract; this file is its check.
+#
+# Rules, as named in failure output:
+#
+#   C1  a tracked path under invariants/ is README.md or <scope>/<slug>.md
+#       with a known scope and a [a-z0-9-] slug
+#   C2  the header parses: `key: value` lines, known keys, one each of
+#       id, statement, rationale, at most one owner
+#   C3  id equals <scope>/<slug>
+#   C4  rationale and each decision are `<path> § <heading>` naming a
+#       tracked file and a heading it contains
+#   C5  each enforced-by locator satisfies its kind: schema and fixture are
+#       tracked files naming the id; tool is also executable; manual is
+#       listed by id in the definition of done; pending is `#<n>`
+#   C6  schema or tool needs a fixture; pending stands alone
+#   C7  manual or pending needs an owner
+#   C8  every `INV <scope>/<slug>` in a tracked file is registered
+#   C9  rationale points at AGENTS.md or docs/architecture.md
+#   C10 every fixture unit in a declared fixture file names an invariant
+#       (INVARIANTS_ENFORCE_C10=0 restores the report mode, which lists
+#       and counts instead of failing)
+#
+# A pending entry is reported in the summary and never fails the check; an
+# issue number is its enforcement owner until a check exists.
+#
+# usage: tool/version-control/invariants [--table | --untagged]
+#
+# Exit 0 verified, 69 unverified, any other status failed. See
+# docs/architecture.md, "Repository governance plane", and .githooks/evidence,
+# which is the one place that decides what each means.
+
+set -eu
+
+# Guards this script's sed/grep/awk calls from Git for Windows' MSYS argument
+# conversion (#79); see tool/version-control/hygiene. Inert elsewhere.
+MSYS_NO_PATHCONV=1
+MSYS2_ARG_CONV_EXCL='*'
+export MSYS_NO_PATHCONV MSYS2_ARG_CONV_EXCL
+
+# The three-state prerequisite contract, restated rather than sourced from
+# tool/checks/prerequisite for the same reason tool/version-control/hygiene
+# restates it: a repository check must not depend on a domain's plane.
+require_command() {
+  require_missing=
+  for require_name in "$@"; do
+    command -v "$require_name" >/dev/null 2>&1 ||
+      require_missing="$require_missing $require_name"
+  done
+  [ -n "$require_missing" ] || return 0
+
+  if [ "${REQUIRE_NATIVE:-0}" = 1 ]; then
+    printf '\033[31m✗ required tooling is missing:%s\033[0m\n' \
+      "$require_missing" >&2
+    exit 1
+  fi
+
+  printf '· unverified: this host has no%s\n' "$require_missing" >&2
+  exit 69
+}
+
+require_command git awk
+
+mode=check
+case "${1:-}" in
+  '') ;;
+  --table) mode=table ;;
+  --untagged) mode=untagged ;;
+  *)
+    echo "usage: tool/version-control/invariants [--table | --untagged]" >&2
+    exit 2
+    ;;
+esac
+
+# The repository being committed, not the one this file lives in, so the
+# fixtures in tool/version-control/test run this exact script against a
+# throwaway repository.
+root=$(git rev-parse --show-toplevel)
+cd "$root"
+
+registry=invariants
+dod=docs/definition-of-done.md
+
+work=$(mktemp -d)
+trap 'rm -rf "$work"' EXIT
+
+status=0
+fail() {
+  printf '\033[31m✗ %s\033[0m\n' "$1" >&2
+  status=1
+}
+
+tracked() {
+  git ls-files --error-unmatch -- "$1" >/dev/null 2>&1
+}
+
+# A locator names its invariant with the literal tag, so a loader message, a
+# test name, or a header comment is enough and no format is imposed on it.
+tagged() {
+  git -c color.grep=never grep --cached -q -F -e "INV $2" -- "$1" 2>/dev/null
+}
+
+# A Markdown heading line whose text, after the `#` run, equals the value.
+# Compared in awk rather than grep so a heading may contain regex characters.
+heading_exists() {
+  git show ":$1" 2>/dev/null | awk -v h="$2" '
+    /^#+ / { t = $0; sub(/^#+ /, "", t); if (t == h) found = 1 }
+    END { exit found ? 0 : 1 }
+  '
+}
+
+check_ref() {
+  ref_entry=$1
+  ref_key=$2
+  ref_value=$3
+  case "$ref_value" in
+    *' § '*) ;;
+    *)
+      fail "$ref_entry: C4 $ref_key must be '<path> § <heading>', got '$ref_value'"
+      return
+      ;;
+  esac
+  ref_path=${ref_value%% § *}
+  ref_heading=${ref_value#* § }
+  if ! tracked "$ref_path"; then
+    fail "$ref_entry: C4 $ref_key names an untracked path $ref_path"
+    return
+  fi
+  heading_exists "$ref_path" "$ref_heading" ||
+    fail "$ref_entry: C4 $ref_key names no heading '$ref_heading' in $ref_path"
+}
+
+git ls-files -- "$registry" >"$work/paths"
+: >"$work/ids"
+: >"$work/pending"
+: >"$work/table"
+: >"$work/fixtures"
+count=0
+tab=$(printf '\t')
+
+while IFS= read -r path; do
+  [ -n "$path" ] || continue
+  case "$path" in
+    "$registry"/README.md) continue ;;
+    "$registry"/*/*.md) ;;
+    *)
+      fail "$path: C1 not a registry path"
+      continue
+      ;;
+  esac
+  rest=${path#"$registry"/}
+  scope=${rest%%/*}
+  slug=${rest#*/}
+  slug=${slug%.md}
+  case "$scope" in
+    unixlike | windows | repository) ;;
+    *)
+      fail "$path: C1 unknown scope '$scope'"
+      continue
+      ;;
+  esac
+  case "$slug" in
+    */*)
+      fail "$path: C1 not a registry path"
+      continue
+      ;;
+  esac
+  if ! printf '%s\n' "$slug" | grep -qE '^[a-z0-9]+(-[a-z0-9]+)*$'; then
+    fail "$path: C1 slug '$slug' is not lowercase words joined by single hyphens"
+    continue
+  fi
+  expected_id="$scope/$slug"
+
+  # Header lines become `key<TAB>value`; anything else in the header becomes
+  # `!<TAB>line` so the shell can name it. Read from the index, like every
+  # other governance check, so the hook and CI agree about one commit.
+  git show ":$path" | awk '
+    /^$/ { exit }
+    /^[a-z-]+: .+$/ {
+      i = index($0, ": ")
+      print substr($0, 1, i - 1) "\t" substr($0, i + 2)
+      next
+    }
+    { print "!\t" $0 }
+  ' >"$work/header"
+
+  id=
+  statement=
+  rationale=
+  n_id=0
+  n_statement=0
+  n_rationale=0
+  n_owner=0
+  n_enforced=0
+  has_fixture=0
+  has_schema_tool=0
+  has_pending=0
+  needs_owner=0
+  kinds=
+
+  while IFS="$tab" read -r key value; do
+    case "$key" in
+      '!')
+        fail "$path: C2 malformed header line '$value'"
+        ;;
+      id)
+        n_id=$((n_id + 1))
+        id=$value
+        ;;
+      statement)
+        n_statement=$((n_statement + 1))
+        statement=$value
+        ;;
+      rationale)
+        n_rationale=$((n_rationale + 1))
+        rationale=$value
+        ;;
+      owner)
+        n_owner=$((n_owner + 1))
+        ;;
+      decision)
+        check_ref "$path" decision "$value"
+        ;;
+      enforced-by)
+        n_enforced=$((n_enforced + 1))
+        kind=${value%% *}
+        locator=${value#* }
+        if [ "$kind" = "$value" ] || [ -z "$locator" ]; then
+          fail "$path: C5 enforced-by needs '<kind> <locator>', got '$value'"
+          continue
+        fi
+        kinds="$kinds $kind"
+        case "$kind" in
+          schema | tool | fixture)
+            if [ "$kind" = fixture ]; then
+              has_fixture=1
+              printf '%s\n' "$locator" >>"$work/fixtures"
+            else
+              has_schema_tool=1
+            fi
+            if ! tracked "$locator"; then
+              fail "$path: C5 $kind locator $locator is not tracked"
+              continue
+            fi
+            if [ "$kind" = tool ] &&
+              [ "$(git ls-files -s -- "$locator" | cut -c1-6)" != 100755 ]; then
+              fail "$path: C5 tool locator $locator is not executable (index mode 100755)"
+            fi
+            tagged "$locator" "$expected_id" ||
+              fail "$path: C5 $kind locator $locator does not name INV $expected_id"
+            ;;
+          manual)
+            needs_owner=1
+            tagged "$dod" "$expected_id" ||
+              fail "$path: C5 manual invariant is not listed in $dod"
+            ;;
+          pending)
+            needs_owner=1
+            has_pending=1
+            printf '%s\n' "$locator" | grep -qE '^#[0-9]+$' ||
+              fail "$path: C5 pending locator must be an issue number '#<n>', got '$locator'"
+            printf '%s\n' "$expected_id" >>"$work/pending"
+            ;;
+          *)
+            fail "$path: C5 unknown enforcement kind '$kind'"
+            ;;
+        esac
+        ;;
+      *)
+        fail "$path: C2 unknown key '$key'"
+        ;;
+    esac
+  done <"$work/header"
+
+  [ "$n_id" -eq 1 ] || fail "$path: C2 expected exactly one id, found $n_id"
+  [ "$n_statement" -eq 1 ] ||
+    fail "$path: C2 expected exactly one statement, found $n_statement"
+  [ "$n_rationale" -eq 1 ] ||
+    fail "$path: C2 expected exactly one rationale, found $n_rationale"
+  [ "$n_owner" -le 1 ] || fail "$path: C2 expected at most one owner, found $n_owner"
+  [ "$id" = "$expected_id" ] ||
+    fail "$path: C3 id '$id' does not match path (expected $expected_id)"
+  [ "$n_enforced" -ge 1 ] || fail "$path: C5 no enforced-by declared"
+  if [ "$has_schema_tool" -eq 1 ] && [ "$has_fixture" -eq 0 ]; then
+    fail "$path: C6 schema or tool enforcement needs a fixture too"
+  fi
+  if [ "$has_pending" -eq 1 ] && [ "$n_enforced" -ne 1 ]; then
+    fail "$path: C6 pending cannot be combined with another enforcement"
+  fi
+  if [ "$needs_owner" -eq 1 ] && [ "$n_owner" -ne 1 ]; then
+    fail "$path: C7 manual or pending invariant needs an owner"
+  fi
+  if [ -n "$rationale" ]; then
+    case "${rationale%% § *}" in
+      AGENTS.md | docs/architecture.md) ;;
+      *) fail "$path: C9 rationale must point at AGENTS.md or docs/architecture.md" ;;
+    esac
+    check_ref "$path" rationale "$rationale"
+  fi
+
+  printf '%s\n' "$expected_id" >>"$work/ids"
+  kinds_text=$(printf '%s' "$kinds" | sed -e 's/^ //' -e 's/ /, /g')
+  printf '| `%s` | %s | %s |\n' "$expected_id" "$kinds_text" "$statement" \
+    >>"$work/table"
+  count=$((count + 1))
+done <"$work/paths"
+
+# ---------------------------------------------------------------------------
+# C8: every tag in the tree names a registered entry
+# ---------------------------------------------------------------------------
+
+# git grep exits 1 for "nothing matched" and more than 1 for "the scan did
+# not run"; only the second is an error. The status is captured with `||`
+# rather than inside `if !`, where `$?` would be the negation's status.
+tag_scan_status=0
+git -c color.grep=never grep --cached -I -n -o -E \
+  -e 'INV [a-z]+/[a-z0-9]+(-[a-z0-9]+)*' -- ':(exclude)notes/' >"$work/tags" ||
+  tag_scan_status=$?
+if [ "$tag_scan_status" -gt 1 ]; then
+  fail "tag scan did not run (git grep exited $tag_scan_status)"
+fi
+while IFS= read -r hit; do
+  [ -n "$hit" ] || continue
+  tag_id=${hit##*INV }
+  location=${hit%%:INV *}
+  grep -qxF -- "$tag_id" "$work/ids" ||
+    fail "$location: C8 names unregistered invariant $tag_id"
+done <"$work/tags"
+
+# ---------------------------------------------------------------------------
+# C10: every fixture unit names an invariant
+# ---------------------------------------------------------------------------
+#
+# INV repository/fixtures-name-invariants
+#
+# A unit is a top-level `Describe` in a Pester file, or a banner section
+# (`# ----------`, a title line, `# ----------`) in a shell suite. Enforced
+# since 2026-09-04, when every scope had mapped its fixtures;
+# INVARIANTS_ENFORCE_C10=0 restores the report mode, which lists and counts.
+: >"$work/untagged"
+sort -u "$work/fixtures" | while IFS= read -r fixture_file; do
+  [ -n "$fixture_file" ] || continue
+  tracked "$fixture_file" || continue
+  case "$fixture_file" in
+    *.Tests.ps1)
+      # \x27 is a gawk extension; the quote is passed in dynamically so the
+      # regex works on any POSIX awk.
+      git show ":$fixture_file" | awk -v file="$fixture_file" -v q="'" '
+        function flush() { if (open && !tagged) printf "%s:%d: %s\n", file, line, title; open = 0 }
+        /^Describe / { flush(); line = NR; title = $0; sub("^Describe +[" q "\"]?", "", title); sub("[" q "\"]? *\\{.*$", "", title); tagged = 0; open = 1; next }
+        open && /INV [a-z]+\/[a-z0-9]+(-[a-z0-9]+)*/ { tagged = 1 }
+        END { flush() }
+      ' >>"$work/untagged"
+      ;;
+    *)
+      git show ":$fixture_file" | awk -v file="$fixture_file" '
+        function flush() { if (open && !tagged) printf "%s:%d: %s\n", file, line, title; open = 0 }
+        /^# ----------/ { banner = NR; next }
+        NR > 1 && banner == NR - 1 && /^# [^-]/ && !/INV [a-z]+\// { flush(); line = NR; title = $0; sub(/^# /, "", title); tagged = 0; open = 1; next }
+        open && /INV [a-z]+\/[a-z0-9]+(-[a-z0-9]+)*/ { tagged = 1 }
+        END { flush() }
+      ' >>"$work/untagged"
+      ;;
+  esac
+done
+untagged_count=$(wc -l <"$work/untagged" | tr -d ' ')
+if [ "${INVARIANTS_ENFORCE_C10:-1}" = 1 ] && [ "$untagged_count" -gt 0 ]; then
+  while IFS= read -r unit; do
+    fail "$unit: C10 fixture unit names no invariant"
+  done <"$work/untagged"
+fi
+
+# ---------------------------------------------------------------------------
+
+if [ "$mode" = untagged ]; then
+  cat "$work/untagged"
+  exit 0
+fi
+
+if [ "$mode" = table ]; then
+  printf '| Invariant | Enforced by | Statement |\n|---|---|---|\n'
+  cat "$work/table"
+  exit 0
+fi
+
+if [ "$status" -ne 0 ]; then
+  printf '\033[31m✗ invariant registry failed\033[0m\n' >&2
+  exit 1
+fi
+
+pending_count=$(wc -l <"$work/pending" | tr -d ' ')
+if [ "$pending_count" -gt 0 ]; then
+  printf '✓ invariants: %s registered, %s pending (%s), %s fixture units untagged\n' \
+    "$count" "$pending_count" \
+    "$(paste -sd, "$work/pending" | sed 's/,/, /g')" "$untagged_count"
+else
+  printf '✓ invariants: %s registered, 0 pending, %s fixture units untagged\n' \
+    "$count" "$untagged_count"
+fi

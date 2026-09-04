@@ -1,0 +1,50 @@
+#!/bin/sh
+# Fixtures for the coverage rule in tool/checks/test.
+#
+# INV unixlike/eval-covers-every-host
+#
+# Evaluation is evidence only when it reached every configuration. The
+# positive case is a fixture flake exporting one configuration; the negatives
+# are a flavour the flake exports but that lists nothing, and a flake that
+# exports no flavour at all. The real flake is the other positive case, run by
+# CI as tool/checks/test itself.
+#
+# CHECKS_FLAKE points tool/checks/test at a fixture flake instead of this
+# repository; the fixtures carry no inputs, so nothing is fetched.
+
+set -e
+. "$(CDPATH= cd -- "$(dirname -- "$0")" && pwd)/prerequisite"
+require_command nix
+
+repo=$(CDPATH= cd -- "$(dirname "$0")/../.." && pwd)
+cd "$repo"
+
+fail() {
+  printf '\033[31m✗ %s\033[0m\n' "$1" >&2
+  exit 1
+}
+
+fixtures="$repo/tool/checks/fixtures/eval-coverage"
+
+# ---------------------------------------------------------------------------
+# The evaluation check reaches every configuration
+# ---------------------------------------------------------------------------
+#
+# INV unixlike/eval-covers-every-host
+printf '→ accepts a flake that exports one configuration\n'
+if ! output=$(CHECKS_FLAKE="path:$fixtures/probe" tool/checks/test 2>&1); then
+  printf '%s\n' "$output" >&2
+  fail "the evaluation check rejected the probe fixture"
+fi
+printf '%s\n' "$output" | grep -q 'homeConfigurations.probe' \
+  || fail "the evaluation check did not report the probe configuration"
+
+for case in empty-flavour no-flavour; do
+  printf '→ rejects %s\n' "$case"
+  if output=$(CHECKS_FLAKE="path:$fixtures/$case" tool/checks/test 2>&1); then
+    printf '%s\n' "$output" >&2
+    fail "the evaluation check passed the $case fixture"
+  fi
+done
+
+printf '✓ evaluation coverage fixtures behave\n'

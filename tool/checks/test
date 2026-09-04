@@ -24,14 +24,29 @@
 # Every configuration is evaluated. Configurations targeting the current
 # system are built when this host can activate them; foreign configurations
 # remain explicit evaluation-only evidence until a native runner builds them.
+#
+# INV unixlike/eval-covers-every-host — evaluation is evidence only when it
+# reached every configuration. A flavour the flake exports but that lists
+# nothing, a flavour whose attribute fails to evaluate, and a run that reached
+# no configuration at all are failures, not passes. So is a flavour this
+# repository's flake stops exporting: the composition file's outputs are
+# freeform attributes, so a misspelt one is only a warning to `nix flake
+# check`. A fixture flake, reached through CHECKS_FLAKE, may export fewer
+# flavours and has the missing ones reported as absent;
+# tool/checks/eval-coverage-test holds those fixtures.
 
 set -e
 . "$(CDPATH= cd -- "$(dirname -- "$0")" && pwd)/prerequisite"
 require_command nix
 
 root=$(CDPATH= cd -- "$(dirname "$0")/../.." && pwd)
-flake="path:$root"
+flake=${CHECKS_FLAKE:-path:$root}
 here=$(nix eval --raw --impure --expr 'builtins.currentSystem')
+
+# The flavours the flake exports, read once; each `builtins.getFlake` is a
+# full evaluation outside the flake cache.
+exported=$(nix eval --raw --impure --expr \
+  "builtins.concatStringsSep \" \" (builtins.attrNames (builtins.getFlake \"$flake\"))")
 
 report=$(mktemp)
 trap 'rm -f "$report"' EXIT
@@ -69,9 +84,32 @@ check_flavour() {
   output=$1
   attr=$(toplevel_attr "$output")
 
-  names=$(nix eval --raw "$flake#$output" \
-    --apply 'x: builtins.concatStringsSep "\n" (builtins.attrNames x)' 2>/dev/null) || return 0
-  [ -n "$names" ] || return 0
+  # INV unixlike/eval-covers-every-host: a flavour this repository's flake
+  # no longer exports is a failure; a fixture flake may leave one out and has
+  # it reported as absent. Empty and a failing flavour attribute are
+  # failures, and the summary refuses a report that reached no configuration.
+  case " $exported " in
+    *" $output "*) ;;
+    *)
+      if [ -n "${CHECKS_FLAKE:-}" ]; then
+        printf '→ skip  %s — the fixture flake exports no such flavour\n' "$output"
+      else
+        printf '%s|-|ABSENT\n' "$output" >> "$report"
+      fi
+      return 0
+      ;;
+  esac
+
+  if ! names=$(nix eval --raw "$flake#$output" \
+    --apply 'x: builtins.concatStringsSep "\n" (builtins.attrNames x)' 2>&1); then
+    printf '%s\n' "$names" >&2
+    printf '%s|-|FLAVOUR_FAIL\n' "$output" >> "$report"
+    return 0
+  fi
+  if [ -z "$names" ]; then
+    printf '%s|-|EMPTY\n' "$output" >> "$report"
+    return 0
+  fi
 
   echo "$names" | while IFS= read -r name; do
     [ -n "$name" ] || continue
@@ -117,12 +155,15 @@ printf '   host: %s\n\n' "$here"
 
 while IFS='|' read -r target system status detail; do
   case "$status" in
-    ok)         line="eval ✓ build ✓" ;;
-    EVAL_FAIL)  line="eval ✗" ;;
-    BUILD_FAIL) line="eval ✓ build ✗" ;;
-    SKIPPED)    line="eval ✓ build — not activatable here ($detail)" ;;
-    FOREIGN)    line="eval ✓ build — targets $system" ;;
-    *)          line="unknown" ;;
+    ok)           line="eval ✓ build ✓" ;;
+    EVAL_FAIL)    line="eval ✗" ;;
+    BUILD_FAIL)   line="eval ✓ build ✗" ;;
+    SKIPPED)      line="eval ✓ build — not activatable here ($detail)" ;;
+    FOREIGN)      line="eval ✓ build — targets $system" ;;
+    FLAVOUR_FAIL) line="eval ✗ — the flavour itself failed to evaluate" ;;
+    EMPTY)        line="eval ✗ — exported, but lists no configuration" ;;
+    ABSENT)       line="eval ✗ — the flake no longer exports this flavour" ;;
+    *)            line="unknown" ;;
   esac
   printf '   %-38s %s\n' "$target" "$line"
 done < "$report"
@@ -138,7 +179,14 @@ if grep -q '|SKIPPED|' "$report"; then
 EOF
 fi
 
-if grep -q 'FAIL' "$report"; then
+if grep -qE 'FAIL|EMPTY|ABSENT' "$report"; then
   printf '\033[31m✗ A configuration failed to evaluate or build.\033[0m\n' >&2
+  exit 1
+fi
+
+# INV unixlike/eval-covers-every-host: a check that found nothing to evaluate
+# has failed, not passed.
+if ! grep -qE '\|(ok|FOREIGN|SKIPPED)(\||$)' "$report"; then
+  printf '\033[31m✗ No configuration was evaluated; the flake exports none.\033[0m\n' >&2
   exit 1
 fi

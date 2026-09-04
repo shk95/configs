@@ -16,6 +16,12 @@ plan_promotion="$root/tool/version-control/plan-promotion"
 # `git -C` into the temporary repository below.
 unset GIT_INDEX_FILE
 
+# The fixtures own REQUIRE_NATIVE per case: each local-pass case expects it
+# unset and each merge-gate case sets it explicitly. CI hands the repository
+# job REQUIRE_NATIVE=1 for the checks it runs directly, and that must not
+# invert the cases here.
+unset REQUIRE_NATIVE
+
 # Git exports an absolute GIT_DIR (and, for some invocations, GIT_WORK_TREE)
 # to hooks it runs from a linked worktree. Left set, every `git -C "$fixture"`
 # below would resolve against the worktree's real git-dir instead of the
@@ -33,36 +39,202 @@ MSYS_NO_PATHCONV=1
 MSYS2_ARG_CONV_EXCL='*'
 export MSYS_NO_PATHCONV MSYS2_ARG_CONV_EXCL
 
-# Static fixture for #79: every governance script that passes a leading-`/`
-# argv element to a native binary must disable MSYS argument conversion, or a
-# hook-gated Windows commit can be rejected by a mangled argument instead of
-# the real check result. MSYS itself cannot run on this host, so this checks
-# the one thing a Unix host can: that the guard is actually declared in each
-# affected script's source, not that MSYS would leave it alone.
-for msys_guarded in tool/version-control/hygiene .githooks/commit-msg \
-  tool/version-control/check-promotion-queue tool/version-control/commit \
-  tool/version-control/test tool/worktree.sh; do
-  if ! grep -q '^MSYS_NO_PATHCONV=1$' "$root/$msys_guarded"; then
-    echo "$msys_guarded does not set MSYS_NO_PATHCONV=1 (#79)" >&2
-    exit 1
+# INV repository/msys-argument-guard
+# Git for Windows' sh rewrites a leading-`/` argument before a native binary
+# sees it (#79). The value can arrive through a variable, so the rule is not
+# "a literal appears" but "the script calls a text tool at all": every POSIX
+# shell script in the governance plane that invokes sed, grep or awk declares
+# the guard. Derived from the tree, so a new script is covered on arrival.
+# tool/checks/* is unixlike scope and outside this rule by the maintainer's
+# ruling.
+#
+# The scan is a function so the rule itself can be exercised, not only the
+# tree it happens to be run over: a derived check that silently matched
+# nothing would pass forever. Under a real work tree the list is the tracked
+# governance scripts; under a plain directory (the synthetic cases below) it
+# is that directory's files. Every offending script is reported before the
+# scan fails, so one push shows all of them.
+msys_scan() {
+  msys_root=$1
+  if git -C "$msys_root" rev-parse --git-dir >/dev/null 2>&1; then
+    msys_list=$(git -C "$msys_root" ls-files -- tool/version-control tool/dispatch \
+      tool/doctor.sh tool/setup tool/worktree.sh .githooks)
+  else
+    msys_list=$(cd "$msys_root" && find . -type f | sed 's|^\./||' | sort)
   fi
-  if ! grep -q "^MSYS2_ARG_CONV_EXCL='\\*'\$" "$root/$msys_guarded"; then
-    echo "$msys_guarded does not set MSYS2_ARG_CONV_EXCL='*' (#79)" >&2
-    exit 1
+  if [ -z "$msys_list" ]; then
+    echo "no governance scripts found under $msys_root" >&2
+    return 1
   fi
-  if ! grep -q '^export MSYS_NO_PATHCONV MSYS2_ARG_CONV_EXCL$' "$root/$msys_guarded"; then
-    echo "$msys_guarded does not export both MSYS guard variables (#79)" >&2
-    exit 1
-  fi
-done
+  msys_bad=0
+  msys_listing=$(mktemp)
+  printf '%s\n' "$msys_list" >"$msys_listing"
+  while IFS= read -r msys_script; do
+    [ -n "$msys_script" ] || continue
+    [ -f "$msys_root/$msys_script" ] || continue
+    case "$(head -1 "$msys_root/$msys_script")" in
+      '#!/bin/sh'*) ;;
+      *) continue ;;
+    esac
+    grep -qE '(^|[^A-Za-z_])(sed|grep|awk)([^A-Za-z_]|$)' "$msys_root/$msys_script" || continue
+    for guard_line in '^MSYS_NO_PATHCONV=1$' "^MSYS2_ARG_CONV_EXCL='\\*'\$" \
+      '^export MSYS_NO_PATHCONV MSYS2_ARG_CONV_EXCL$'; do
+      if ! grep -q "$guard_line" "$msys_root/$msys_script"; then
+        echo "$msys_script calls a text tool without the MSYS argument guard (#79): missing $guard_line" >&2
+        msys_bad=1
+      fi
+    done
+  done <"$msys_listing"
+  rm -f "$msys_listing"
+  [ "$msys_bad" -eq 0 ]
+}
+
+if ! msys_scan "$root"; then
+  echo "a governance script calls a text tool without the MSYS argument guard (#79)" >&2
+  exit 1
+fi
+
+# The scan's own positive and negative cases, over synthetic scripts, so a
+# rule that stopped catching anything is visible here rather than on a
+# Windows host.
+msys_fixture=$(mktemp -d)
+if msys_fixture_output=$(msys_scan "$msys_fixture" 2>&1); then
+  echo "the MSYS scan passed over a directory holding no script" >&2
+  exit 1
+fi
+if ! printf '%s\n' "$msys_fixture_output" | grep -q 'no governance scripts found under'; then
+  printf '%s\n' "$msys_fixture_output" >&2
+  echo "the MSYS scan did not report an empty script list" >&2
+  exit 1
+fi
+
+printf '#!/bin/sh\ngrep -q pattern "$1"\n' >"$msys_fixture/unguarded"
+if msys_fixture_output=$(msys_scan "$msys_fixture" 2>&1); then
+  echo "the MSYS scan accepted a script that calls grep without the guard" >&2
+  exit 1
+fi
+if ! printf '%s\n' "$msys_fixture_output" | grep -q '^unguarded calls a text tool'; then
+  printf '%s\n' "$msys_fixture_output" >&2
+  echo "the MSYS scan did not name the offending script" >&2
+  exit 1
+fi
+
+{
+  printf '#!/bin/sh\n'
+  printf 'MSYS_NO_PATHCONV=1\n'
+  printf "MSYS2_ARG_CONV_EXCL='*'\n"
+  printf 'export MSYS_NO_PATHCONV MSYS2_ARG_CONV_EXCL\n'
+  printf 'grep -q pattern "$1"\n'
+} >"$msys_fixture/unguarded"
+if ! msys_fixture_output=$(msys_scan "$msys_fixture" 2>&1); then
+  printf '%s\n' "$msys_fixture_output" >&2
+  echo "the MSYS scan rejected a script that declares the guard" >&2
+  exit 1
+fi
+
+# No text tool, no guard needed: the rule is about what a script calls.
+printf '#!/bin/sh\nexit 0\n' >"$msys_fixture/unguarded"
+if ! msys_fixture_output=$(msys_scan "$msys_fixture" 2>&1); then
+  printf '%s\n' "$msys_fixture_output" >&2
+  echo "the MSYS scan rejected a script that calls no text tool" >&2
+  exit 1
+fi
+case "$msys_fixture" in /tmp/*) rm -rf -- "$msys_fixture" ;; esac
 
 grep -q '^  required:$' "$root/.github/workflows/ci.yml"
 grep -q '^    name: Required checks$' "$root/.github/workflows/ci.yml"
-grep -q 'needs: \[classify, repository, unix, windows, common, secrets, promotion\]' \
+grep -q 'needs: \[classify, repository, unix, windows, secrets, promotion\]' \
   "$root/.github/workflows/ci.yml"
 grep -q 'run: tool/version-control/required-checks' \
   "$root/.github/workflows/ci.yml"
+# INV repository/local-gate-selects-by-effect: pre-push audits the pushed
+# history, never the clone's branches and tags, which no push can change.
+grep -q 'evidence_run audit tool/version-control/audit --history' "$root/.githooks/pre-push"
+grep -q 'run: tool/version-control/audit --history' "$root/.github/workflows/ci.yml"
+# INV repository/local-gate-selects-by-effect: the merge gate runs the whole
+# suite and never consults the local gate's selector.
+grep -q 'run: tool/version-control/test$' "$root/.github/workflows/ci.yml"
+if grep -q 'dispatch/select' "$root/.github/workflows/ci.yml"; then
+  echo "the CI workflow consults tool/dispatch/select, which is the local gate's" >&2
+  exit 1
+fi
 
+# INV repository/merge-gate-requires-native
+# Every job that runs a check converts unverified into failure; the two jobs
+# that produce no check evidence (classify, required — the gate only reads
+# results) are the only exemptions. Parsed job by job from the workflow's
+# two-space indentation rather than grepped for a literal, so a job added
+# without the variable is caught.
+#
+# A function, for the same reason the MSYS scan is one: the real workflow is
+# expected to pass, so only a synthetic workflow that omits the variable can
+# show that the parse still finds a job at all.
+gate_env_scan() {
+  awk '
+    /^jobs:$/ { in_jobs = 1; next }
+    !in_jobs { next }
+    /^  [a-z][a-z0-9_-]*:$/ { job = $1; sub(":", "", job); jobs[job] = 1; in_env = ""; next }
+    /^    env:$/ { in_env = job; next }
+    /^    [a-z-]+:/ { in_env = "" }
+    in_env != "" && /^      REQUIRE_NATIVE: "1"$/ { native[in_env] = 1 }
+    END {
+      for (j in jobs)
+        if (j != "classify" && j != "required" && !(j in native)) { print j; missing = 1 }
+      exit missing ? 1 : 0
+    }
+  ' "$1"
+}
+
+if ! gate_env_missing=$(gate_env_scan "$root/.github/workflows/ci.yml"); then
+  printf '%s\n' "$gate_env_missing" >&2
+  echo "a CI job that runs checks does not set REQUIRE_NATIVE=1 (listed above)" >&2
+  exit 1
+fi
+
+gate_fixture=$(mktemp -d)
+cat >"$gate_fixture/missing.yml" <<'GATEYML'
+name: Synthetic
+
+jobs:
+  foo-bar:
+    name: Runs a check
+    runs-on: ubuntu-latest
+    env:
+      SOMETHING_ELSE: "1"
+    steps:
+      - run: true
+GATEYML
+if gate_env_missing=$(gate_env_scan "$gate_fixture/missing.yml"); then
+  echo "the merge-gate scan accepted a job with no REQUIRE_NATIVE" >&2
+  exit 1
+fi
+if [ "$gate_env_missing" != foo-bar ]; then
+  printf 'expected <foo-bar>, got <%s>\n' "$gate_env_missing" >&2
+  echo "the merge-gate scan did not name the job that omits REQUIRE_NATIVE" >&2
+  exit 1
+fi
+
+cat >"$gate_fixture/present.yml" <<'GATEYML'
+name: Synthetic
+
+jobs:
+  foo-bar:
+    name: Runs a check
+    runs-on: ubuntu-latest
+    env:
+      REQUIRE_NATIVE: "1"
+      SOMETHING_ELSE: "1"
+    steps:
+      - run: true
+GATEYML
+if ! gate_env_missing=$(gate_env_scan "$gate_fixture/present.yml"); then
+  printf '%s\n' "$gate_env_missing" >&2
+  echo "the merge-gate scan rejected a job that sets REQUIRE_NATIVE" >&2
+  exit 1
+fi
+case "$gate_fixture" in /tmp/*) rm -rf -- "$gate_fixture" ;; esac
+
+# INV repository/required-checks-gate
 run_gate() {
   env \
     CLASSIFY_RESULT=${CLASSIFY_RESULT:-success} \
@@ -72,8 +244,6 @@ run_gate() {
     UNIXLIKE_RESULT=${UNIXLIKE_RESULT:-skipped} \
     WINDOWS_SCOPE=${WINDOWS_SCOPE:-false} \
     WINDOWS_RESULT=${WINDOWS_RESULT:-skipped} \
-    COMMON_SCOPE=${COMMON_SCOPE:-false} \
-    COMMON_RESULT=${COMMON_RESULT:-skipped} \
     SECRETS_RESULT=${SECRETS_RESULT:-success} \
     PROMOTION_SCOPE=${PROMOTION_SCOPE:-false} \
     PROMOTION_RESULT=${PROMOTION_RESULT:-skipped} \
@@ -84,7 +254,6 @@ run_gate >/dev/null
 REPOSITORY_SCOPE=true REPOSITORY_RESULT=success run_gate >/dev/null
 UNIXLIKE_SCOPE=true UNIXLIKE_RESULT=success run_gate >/dev/null
 WINDOWS_SCOPE=true WINDOWS_RESULT=success run_gate >/dev/null
-COMMON_SCOPE=true COMMON_RESULT=success run_gate >/dev/null
 PROMOTION_SCOPE=true PROMOTION_RESULT=success run_gate >/dev/null
 if REPOSITORY_SCOPE=true REPOSITORY_RESULT=failure run_gate >/dev/null 2>&1; then
   echo "required-checks accepted a failed selected job" >&2
@@ -99,6 +268,7 @@ if PROMOTION_SCOPE=true PROMOTION_RESULT=failure run_gate >/dev/null 2>&1; then
   exit 1
 fi
 
+# INV repository/promotion-source
 PROMOTION_BASE_REF=master \
 PROMOTION_HEAD_REF=dev \
 PROMOTION_BASE_REPOSITORY=owner/repo \
@@ -141,9 +311,25 @@ expect() {
 
 expect unixlike "$classify" --files modules/git.nix
 expect windows "$classify" --files windows/src/WinEnv.psm1
-expect common "$classify" --files common/example.txt
+expect unclassified "$classify" --files common/example.txt
 expect repository "$classify" --files .agents/skills/example/SKILL.md
 expect unclassified "$classify" --files unexpected.file
+# INV repository/scope-ownership
+# The invariant registry is per scope: an entry classifies as the scope that
+# owns it, the format contract as repository, and anything else under
+# invariants/ as nothing, so a misplaced file is refused at commit.
+expect repository "$classify" --files invariants/README.md
+expect repository "$classify" --files invariants/repository/registry-coverage.md
+expect unixlike "$classify" --files invariants/unixlike/import-order.md
+expect windows "$classify" --files invariants/windows/parser-declared.md
+# A common scope is restored together with the domain; until then its paths have no owner.
+expect unclassified "$classify" --files invariants/common/example.md
+# The removed scope's placeholder keeps an arm of its own: its deletion is
+# inside every pull-request range that spans it, and an unclassified path
+# cannot be pushed.
+expect repository "$classify" --files invariants/common/.gitkeep
+expect unclassified "$classify" --files invariants/stray.md
+expect unclassified "$classify" --files invariants/linux/x.md
 expect 'windows
 repository' "$classify" --files windows/setup.ps1 docs/status.md
 
@@ -184,16 +370,48 @@ expect_units 'unixlike:test' push "$module_modified"
 # A rename carries two paths on one line. Both have to reach classify, or a
 # payload moved into assets/ is never selected for the payload check.
 renamed_into_assets=$(printf 'R100\tdocs/note.md\tassets/moved.lua')
-expect_units 'repository:fixtures
-unixlike:format
+expect_units 'unixlike:format
 unixlike:lint
 unixlike:payloads' commit "$renamed_into_assets"
-expect_units 'repository:fixtures
-unixlike:test' push "$renamed_into_assets"
+expect_units 'unixlike:test' push "$renamed_into_assets"
 expect_units 'windows:desired-state
 windows:tests' push "$windows_modified"
-expect_units 'repository:fixtures' commit "$docs_modified"
+expect_units '' commit "$docs_modified"
 expect_units 'unclassified' commit "$unknown_modified"
+
+# INV repository/local-gate-selects-by-effect
+# The fixture suite copies .githooks, tool/dispatch and tool/version-control
+# and greps the CI workflow; a change under any of them selects it at both
+# stages, alone or beside a documentation path, and a change to documentation
+# or to the registry, which the suite never reads, selects nothing here (the
+# hooks run hygiene, invariants and audit unconditionally).
+hook_modified=$(printf 'M\t.githooks/pre-commit')
+workflow_modified=$(printf 'M\t.github/workflows/ci.yml')
+dispatch_modified=$(printf 'M\ttool/dispatch/select')
+vc_modified=$(printf 'M\ttool/version-control/audit')
+entry_modified=$(printf 'M\tinvariants/repository/scope-ownership.md')
+docs_and_hook=$(printf 'M\tdocs/status.md\nM\t.githooks/pre-push')
+expect_units 'repository:fixtures' commit "$hook_modified"
+expect_units 'repository:fixtures' push "$hook_modified"
+expect_units 'repository:fixtures' commit "$workflow_modified"
+expect_units 'repository:fixtures' commit "$dispatch_modified"
+expect_units 'repository:fixtures' push "$vc_modified"
+expect_units '' commit "$entry_modified"
+expect_units '' push "$docs_modified"
+expect_units 'repository:fixtures' commit "$docs_and_hook"
+# The three governance scripts the suite scans for the MSYS guard and copies
+# into the hooks-path fixtures select it too; a deletion under a trigger tree
+# is still a change to it; a file under .github/ that is not a workflow is not.
+doctor_modified=$(printf 'M\ttool/doctor.sh')
+setup_modified=$(printf 'M\ttool/setup')
+worktree_modified=$(printf 'M\ttool/worktree.sh')
+hook_deleted=$(printf 'D\t.githooks/evidence')
+codeowners_modified=$(printf 'M\t.github/CODEOWNERS')
+expect_units 'repository:fixtures' commit "$doctor_modified"
+expect_units 'repository:fixtures' push "$setup_modified"
+expect_units 'repository:fixtures' commit "$worktree_modified"
+expect_units 'repository:fixtures' push "$hook_deleted"
+expect_units '' commit "$codeowners_modified"
 
 test_root=$(mktemp -d)
 cleanup() {
@@ -205,8 +423,17 @@ git -C "$test_root" init -q -b master
 git -C "$test_root" config user.name Fixture
 git -C "$test_root" config user.email fixture@example.invalid
 git -C "$test_root" config core.hooksPath .githooks
+mkdir -p "$test_root/.githooks"
+# audit delegates subject judgment to .githooks/commit-msg (INV
+# repository/conventional-subject), so the fixture needs the real hook
+# available at that path for audit's own invocation. Only commit-msg is
+# copied (not pre-commit and the rest): those still run as no-ops here, and a
+# live pre-commit would need tooling this throwaway repository does not
+# carry. Tracked (not just copied to disk) so the audit-clone fixture below
+# inherits it through a normal clone.
+cp "$root/.githooks/commit-msg" "$test_root/.githooks/commit-msg"
 printf 'fixture\n' >"$test_root/file"
-git -C "$test_root" add file
+git -C "$test_root" add file .githooks
 git -C "$test_root" commit -q -m 'feat(repository): create fixture'
 git -C "$test_root" branch dev
 
@@ -272,7 +499,156 @@ git -C "$test_root" tag -a unixlike-v2030.01.02 \
 second_plan=$(cd "$test_root" && "$plan_release" unixlike master 2030.01.02)
 printf '%s\n' "$second_plan" | grep -q '^tag: unixlike-v2030.01.02.1$'
 
+# INV repository/flake-lock-isolated
+# INV repository/release-tag-contract
 (cd "$test_root" && "$audit") >/dev/null
+
+# core.hooksPath is read by resolution, not by string: an absolute value that
+# names the tracked hooks directory is the same setting as `.githooks`.
+git -C "$test_root" config core.hooksPath "$test_root/.githooks"
+(cd "$test_root" && "$audit") >/dev/null
+# An existing directory that is not the tracked hooks: rejected by comparison, not by absence.
+mkdir -p "$test_root/elsewhere"
+git -C "$test_root" config core.hooksPath "$test_root/elsewhere"
+if (cd "$test_root" && "$audit") >/dev/null 2>&1; then
+  echo "audit accepted a core.hooksPath that names no tracked hooks" >&2
+  exit 1
+fi
+git -C "$test_root" config --unset core.hooksPath
+if (cd "$test_root" && "$audit") >/dev/null 2>&1; then
+  echo "audit accepted an unset core.hooksPath" >&2
+  exit 1
+fi
+git -C "$test_root" config core.hooksPath .githooks
+
+# A commit subject Git writes itself is exempt in the hook and therefore in
+# audit, which delegates to .githooks/commit-msg rather than keeping a second
+# grammar (INV repository/conventional-subject).
+git -C "$test_root" switch -q dev
+printf 'fixup\n' >"$test_root/fixup-file"
+git -C "$test_root" add fixup-file
+git -C "$test_root" commit -q -m 'fixup! feat(repository): create fixture'
+(cd "$test_root" && "$audit") >/dev/null
+git -C "$test_root" reset -q --hard HEAD~1
+printf 'plain\n' >"$test_root/plain-file"
+git -C "$test_root" add plain-file
+# --no-verify: this case is about audit's own after-the-fact judgment, not
+# about the live commit-msg hook (that gate is exercised elsewhere in this
+# suite), so the commit must land regardless of what the hook would say.
+git -C "$test_root" commit -q -m 'Added a file' --no-verify
+if (cd "$test_root" && "$audit") >/dev/null 2>&1; then
+  echo "audit accepted a non-conventional subject on dev" >&2
+  exit 1
+fi
+git -C "$test_root" reset -q --hard HEAD~1
+git -C "$test_root" switch -q master
+
+# A clone that only fetched the integration branches reasons about
+# origin/dev and origin/master; a repository with neither is unverified.
+audit_bare="$test_root/audit-remote.git"
+audit_clone="$test_root/audit-clone"
+git clone -q --bare "$test_root" "$audit_bare"
+git clone -q "$audit_bare" "$audit_clone"
+git -C "$audit_clone" config user.name Fixture
+git -C "$audit_clone" config user.email fixture@example.invalid
+git -C "$audit_clone" config core.hooksPath .githooks
+mkdir -p "$audit_clone/.githooks"
+git -C "$audit_clone" switch -q -c feature/repository-audit-clone
+git -C "$audit_clone" branch -q -D master 2>/dev/null || true
+git -C "$audit_clone" branch -q -D dev 2>/dev/null || true
+if ! audit_clone_output=$(cd "$audit_clone" && "$audit" 2>&1); then
+  printf '%s\n' "$audit_clone_output" >&2
+  echo "audit failed on a clone with only origin/dev and origin/master" >&2
+  exit 1
+fi
+printf '%s\n' "$audit_clone_output" | grep -q 'origin/master'
+
+audit_norefs="$test_root/audit-norefs"
+git init -q -b feature/repository-norefs "$audit_norefs"
+git -C "$audit_norefs" config user.name Fixture
+git -C "$audit_norefs" config user.email fixture@example.invalid
+git -C "$audit_norefs" config core.hooksPath .githooks
+mkdir -p "$audit_norefs/.githooks"
+printf 'x\n' >"$audit_norefs/file"
+git -C "$audit_norefs" add file
+git -C "$audit_norefs" commit -q -m 'feat(repository): create norefs fixture'
+audit_status=0
+(cd "$audit_norefs" && "$audit") >/dev/null 2>&1 || audit_status=$?
+if [ "$audit_status" -ne 69 ]; then
+  echo "audit exited $audit_status without dev/master refs, expected 69" >&2
+  exit 1
+fi
+audit_status=0
+(cd "$audit_norefs" && REQUIRE_NATIVE=1 "$audit") >/dev/null 2>&1 || audit_status=$?
+if [ "$audit_status" -ne 1 ]; then
+  echo "audit exited $audit_status without refs under REQUIRE_NATIVE, expected 1" >&2
+  exit 1
+fi
+
+# The shape a CI runner checks out: a fresh clone, detached, carrying no local
+# branch and no core.hooksPath, because nothing configured it. `--history` is
+# the form the merge gate runs there, and it must pass under REQUIRE_NATIVE;
+# the full form must not, since the clone-local half has nothing to audit.
+audit_ci="$test_root/audit-ci"
+git clone -q "$audit_bare" "$audit_ci"
+git -C "$audit_ci" checkout -q --detach origin/dev
+for audit_ci_branch in $(git -C "$audit_ci" for-each-ref --format='%(refname:short)' refs/heads); do
+  git -C "$audit_ci" branch -q -D "$audit_ci_branch"
+done
+if ! audit_ci_output=$(cd "$audit_ci" && REQUIRE_NATIVE=1 "$audit" --history 2>&1); then
+  printf '%s\n' "$audit_ci_output" >&2
+  echo "audit --history failed on a CI-shaped checkout" >&2
+  exit 1
+fi
+audit_status=0
+audit_ci_full=$(cd "$audit_ci" && "$audit" 2>&1) || audit_status=$?
+if [ "$audit_status" -eq 0 ]; then
+  printf '%s\n' "$audit_ci_full" >&2
+  echo "the full audit passed on a checkout that configured no hooks" >&2
+  exit 1
+fi
+if ! printf '%s\n' "$audit_ci_full" | grep -q 'core.hooksPath'; then
+  printf '%s\n' "$audit_ci_full" >&2
+  echo "the full audit failed on a CI checkout for a reason other than hooks" >&2
+  exit 1
+fi
+audit_status=0
+"$audit" --bogus >/dev/null 2>&1 || audit_status=$?
+if [ "$audit_status" -ne 2 ]; then
+  echo "audit exited $audit_status for an unknown option, expected 2" >&2
+  exit 1
+fi
+
+# INV repository/flake-lock-isolated: a lock refresh mixed with a source
+# change, then one under the wrong subject, then the isolated form that
+# passes. Exercised on dev, not master: a commit landed straight on master
+# would itself trip the master-not-present-on-dev check above, which is not
+# what this case is testing.
+git -C "$test_root" switch -q dev
+printf 'lock\n' >"$test_root/flake.lock"
+printf 'src\n' >"$test_root/module.nix"
+git -C "$test_root" add flake.lock module.nix
+git -C "$test_root" commit -q -m 'chore(unixlike-deps): refresh flake.lock'
+if (cd "$test_root" && "$audit") >/dev/null 2>&1; then
+  echo "audit accepted a flake.lock refresh mixed with other files" >&2
+  exit 1
+fi
+git -C "$test_root" reset -q --hard HEAD~1
+
+printf 'lock\n' >"$test_root/flake.lock"
+git -C "$test_root" add flake.lock
+git -C "$test_root" commit -q -m 'feat(unixlike): bump the lock'
+if (cd "$test_root" && "$audit") >/dev/null 2>&1; then
+  echo "audit accepted a flake.lock change outside chore(unixlike-deps)" >&2
+  exit 1
+fi
+git -C "$test_root" reset -q --hard HEAD~1
+
+printf 'lock\n' >"$test_root/flake.lock"
+git -C "$test_root" add flake.lock
+git -C "$test_root" commit -q -m 'chore(unixlike-deps): refresh flake.lock'
+(cd "$test_root" && "$audit") >/dev/null
+git -C "$test_root" switch -q master
 
 git -C "$test_root" tag bad-v2030.01.02
 if (cd "$test_root" && "$audit") >/dev/null 2>&1; then
@@ -312,6 +688,9 @@ cp -R "$root/.githooks" "$hook_root/.githooks"
 mkdir -p "$hook_root/tool"
 cp -R "$root/tool/version-control" "$hook_root/tool/version-control"
 cp -R "$root/tool/dispatch" "$hook_root/tool/dispatch"
+# pre-push now runs audit unconditionally; a stand-in keeps these cases about dispatch.
+printf '#!/bin/sh\nexit 0\n' >"$hook_root/tool/version-control/audit"
+chmod +x "$hook_root/tool/version-control/audit"
 
 printf '#!/bin/sh\nexit 0\n' >"$hook_root/pwsh-only/pwsh"
 printf '#!/bin/sh\nexit 0\n' >"$hook_root/pwshexe-only/pwsh.exe"
@@ -453,6 +832,9 @@ mkdir -p "$protocol_root/tool/checks" "$protocol_root/modules"
 cp -R "$root/.githooks" "$protocol_root/.githooks"
 cp -R "$root/tool/version-control" "$protocol_root/tool/version-control"
 cp -R "$root/tool/dispatch" "$protocol_root/tool/dispatch"
+# pre-push now runs audit unconditionally; a stand-in keeps these cases about dispatch.
+printf '#!/bin/sh\nexit 0\n' >"$protocol_root/tool/version-control/audit"
+chmod +x "$protocol_root/tool/version-control/audit"
 
 git -C "$protocol_root" init -q -b dev
 git -C "$protocol_root" config user.name Fixture
@@ -466,6 +848,7 @@ git -C "$protocol_root" add modules/fixture.nix
 git -C "$protocol_root" commit -q -m 'feat(unixlike): change a module'
 protocol_head=$(git -C "$protocol_root" rev-parse HEAD)
 
+# INV repository/evidence-three-states
 stub_check() {
   printf '#!/bin/sh\nexit %s\n' "$1" >"$protocol_root/tool/checks/test"
   chmod +x "$protocol_root/tool/checks/test"
@@ -519,6 +902,11 @@ mkdir -p "$commit_root/tool/checks" "$commit_root/modules" "$commit_root/stub" \
 cp -R "$root/.githooks" "$commit_root/.githooks"
 cp -R "$root/tool/version-control" "$commit_root/tool/version-control"
 cp -R "$root/tool/dispatch" "$commit_root/tool/dispatch"
+# The pre-commit hook this fixture enables also runs
+# tool/version-control/invariants, whose own cases are below; here it is a
+# stand-in so only the behaviour under test decides the outcome.
+printf '#!/bin/sh\nexit 0\n' >"$commit_root/tool/version-control/invariants"
+chmod +x "$commit_root/tool/version-control/invariants"
 
 # The pre-commit hook this fixture enables also runs
 # tool/version-control/hygiene, which fails closed when it cannot read a
@@ -898,6 +1286,7 @@ fi
 # The guard is per list: casks is still readable and still editable.
 run_commit n --dry-run cask add readable >/dev/null
 
+# INV repository/publish-through-dev
 # AGENTS.md: only dev enters master, and there is no operational bypass.
 commit_git switch -q master
 if master_output=$(run_commit y cask add zzz); then
@@ -936,6 +1325,7 @@ if run_commit y cask add zzz >/dev/null; then
 fi
 commit_git checkout -q -- modules/darwin-homebrew.nix
 
+# INV repository/scope-ownership
 # An unclassified path is fatal at both gates, so the helper refuses before it
 # writes rather than after the hook rejects it.
 cp "$commit_root/tool/version-control/classify" "$test_root/classify.real"
@@ -948,6 +1338,7 @@ fi
 printf '%s\n' "$unclassified_output" | grep -q 'no owning scope'
 cp "$test_root/classify.real" "$commit_root/tool/version-control/classify"
 
+# INV repository/evidence-three-states
 # The hook decides. A failing check stops the helper, an unverified one does
 # not, and REQUIRE_NATIVE turns the second into the first the way CI does.
 commit_before=$(commit_count)
@@ -1018,6 +1409,7 @@ fi
 commit_git reset -q --hard HEAD
 stub_commit_check 0
 
+# INV repository/flake-lock-isolated
 # A flake refresh is its own command, never a side effect of another one, and
 # CONTRIBUTING.md keeps it in a dedicated chore(unixlike-deps) commit. The
 # homebrew assertions above already show it does not ride along with an edit.
@@ -1082,6 +1474,18 @@ if (
 fi
 commit_git config core.hooksPath .githooks
 
+# INV repository/hooks-are-the-tracked-ones
+# An absolute core.hooksPath naming the tracked directory is the same setting
+# as .githooks: the helper resolves it rather than comparing strings.
+commit_git config core.hooksPath "$commit_root/.githooks"
+resolved_output=$(run_commit n --dry-run cask add resolved)
+if printf '%s\n' "$resolved_output" | grep -q '^· pre-commit checks unverified'; then
+  echo "commit helper treated an absolute core.hooksPath naming .githooks as unhooked" >&2
+  exit 1
+fi
+printf '%s\n' "$resolved_output" | grep -q '^  unixlike:format$'
+commit_git config core.hooksPath .githooks
+
 # The helper refuses a bypass; it must also never take one. Its own refusal
 # names those flags, so this asserts an invocation rather than a mention.
 if grep -Eq 'git commit.*--no-verify|git push.*(--no-verify|--force|-f )|core\.hooksPath=|HUSKY=|GIT_DIR=' \
@@ -1136,6 +1540,14 @@ mkdir -p "$publish_root/tool/checks" "$publish_root/modules/flake" \
 cp -R "$root/.githooks" "$publish_root/.githooks"
 cp -R "$root/tool/version-control" "$publish_root/tool/version-control"
 cp -R "$root/tool/dispatch" "$publish_root/tool/dispatch"
+# The pre-commit hook this fixture enables also runs
+# tool/version-control/invariants, whose own cases are below; here it is a
+# stand-in so only the behaviour under test decides the outcome.
+printf '#!/bin/sh\nexit 0\n' >"$publish_root/tool/version-control/invariants"
+chmod +x "$publish_root/tool/version-control/invariants"
+# pre-push now runs audit unconditionally; a stand-in keeps these cases about dispatch.
+printf '#!/bin/sh\nexit 0\n' >"$publish_root/tool/version-control/audit"
+chmod +x "$publish_root/tool/version-control/audit"
 printf '_: {\n  identity = { %s = "%s"; };\n}\n' gitName Fixture \
   >"$publish_root/modules/flake/inventory.nix"
 : >"$publish_root/tool/version-control/hygiene.allow"
@@ -1325,6 +1737,7 @@ if [ "$(publish_git branch --show-current)" != feature/unixlike-cask-add-af ]; t
   echo "commit --publish did not create the branch it named" >&2
   exit 1
 fi
+# INV repository/publish-through-dev: the branch it creates starts at origin/dev.
 if [ "$(publish_git rev-parse HEAD^)" \
   != "$(publish_git rev-parse refs/remotes/origin/dev)" ]; then
   echo "commit --publish did not branch from origin/dev" >&2
@@ -1340,6 +1753,7 @@ if [ "$(publish_remote_git rev-parse refs/heads/feature/unixlike-cask-add-af)" \
   echo "commit --publish did not push the commit it made" >&2
   exit 1
 fi
+# INV repository/publish-through-dev
 # The pull request opens against dev, and auto-merge is armed once, on the
 # pull request that was just opened.
 if [ "$(grep -c '^pr create --base dev --head feature/unixlike-cask-add-af ' \
@@ -1393,6 +1807,7 @@ if printf '%s\n' "$reuse_out" | grep -q '^pull request body:$'; then
   echo "commit --publish showed a body it was never going to apply" >&2
   exit 1
 fi
+# INV repository/publish-through-dev: one pull request per branch, never a second.
 if grep -q '^pr create' "$publish_log"; then
   echo "commit --publish opened a second pull request for one branch" >&2
   exit 1
@@ -1406,6 +1821,7 @@ publish_git switch -q dev
 
 # An open pull request with a different base would be retargeted or duplicated
 # by gh pr create. Neither is this helper's call, so it refuses before writing.
+# INV repository/publish-through-dev
 publish_snapshot
 STUB_GH_OPEN_PULLS='master https://github.com/owner/repo/pull/9'
 export STUB_GH_OPEN_PULLS
@@ -1417,6 +1833,7 @@ unset STUB_GH_OPEN_PULLS
 printf '%s\n' "$base_out" | grep -q 'different base'
 publish_wrote_nothing "a pull request with another base was open"
 
+# INV repository/publish-through-dev
 # AGENTS.md: master is entered by promotion only. The refusal precedes the
 # publish preflight, so gh is never consulted at all.
 publish_git switch -q master
@@ -1617,6 +2034,7 @@ publish_wrote_nothing "the branch already existed"
 
 # The edit is computed against the tree of local dev, so a dev that is not
 # origin/dev is refused rather than branched from.
+# INV repository/publish-through-dev: a branch starts at the remote tip of dev or not at all.
 publish_snapshot
 publish_git update-ref refs/remotes/origin/dev \
   "$(publish_git rev-parse refs/heads/feature/unixlike-cask-add-hf)"
@@ -1628,6 +2046,7 @@ printf '%s\n' "$behind_out" | grep -q 'dev is not at origin/dev'
 publish_git update-ref refs/remotes/origin/dev "$(publish_git rev-parse refs/heads/dev)"
 publish_wrote_nothing "dev was behind origin/dev"
 
+# INV repository/publish-through-dev
 # A push the pre-push hook rejects leaves the commit local and says so. Nothing
 # is retried, and no pull request is opened for a commit the remote never got.
 publish_snapshot
@@ -1759,6 +2178,7 @@ if printf '%s\n' "$prune_branches_after" | grep -qx refs/heads/prune-merged; the
   echo "commit prune left a merged branch behind" >&2
   exit 1
 fi
+# INV repository/publish-through-dev: the current branch, dev and master survive.
 for prune_survivor in dev master prune-unique prune-current; do
   if ! printf '%s\n' "$prune_branches_after" | grep -qx "refs/heads/$prune_survivor"; then
     echo "commit prune deleted $prune_survivor, which it must never touch" >&2
@@ -1803,6 +2223,68 @@ publish_git branch -q -D prune-locked
 publish_git switch -q dev
 
 # ---------------------------------------------------------------------------
+# core.hooksPath resolution in tool/setup and tool/doctor.sh
+# ---------------------------------------------------------------------------
+#
+# Both scripts resolve their root from their own path, so each runs as a copy
+# inside the fixture repository rather than against it.
+
+# INV repository/hooks-are-the-tracked-ones
+hooks_root="$test_root/hooks-path"
+mkdir -p "$hooks_root/tool/version-control" "$hooks_root/.githooks"
+cp "$root/tool/setup" "$hooks_root/tool/setup"
+cp "$root/tool/doctor.sh" "$hooks_root/tool/doctor.sh"
+git -C "$hooks_root" init -q -b dev
+git -C "$hooks_root" config user.name Fixture
+git -C "$hooks_root" config user.email fixture@example.invalid
+
+git -C "$hooks_root" config core.hooksPath "$hooks_root/.githooks"
+if ! (cd "$hooks_root" && tool/setup) | grep -q '✓ core.hooksPath'; then
+  echo "tool/setup rejected an absolute core.hooksPath naming .githooks" >&2
+  exit 1
+fi
+if ! (cd "$hooks_root" && tool/doctor.sh repository 2>/dev/null) | grep -q 'git hooks enabled'; then
+  echo "tool/doctor.sh rejected an absolute core.hooksPath naming .githooks" >&2
+  exit 1
+fi
+
+git -C "$hooks_root" config --unset core.hooksPath
+if (cd "$hooks_root" && tool/setup) >/dev/null 2>&1; then
+  echo "tool/setup accepted an unset core.hooksPath" >&2
+  exit 1
+fi
+if (cd "$hooks_root" && tool/doctor.sh repository 2>/dev/null) | grep -q 'git hooks enabled'; then
+  echo "tool/doctor.sh reported hooks enabled with core.hooksPath unset" >&2
+  exit 1
+fi
+(cd "$hooks_root" && tool/setup --fix) >/dev/null
+if [ "$(git -C "$hooks_root" config --local --get core.hooksPath)" != .githooks ]; then
+  echo "tool/setup --fix did not set core.hooksPath" >&2
+  exit 1
+fi
+
+# A linked worktree shares the clone's absolute core.hooksPath, which names
+# the main worktree's .githooks; that is the tracked hooks and counts as enabled.
+git -C "$hooks_root" config core.hooksPath "$hooks_root/.githooks"
+printf 'seed\n' >"$hooks_root/seed"
+git -C "$hooks_root" add seed
+git -C "$hooks_root" commit -q -m 'feat(repository): seed hooks fixture'
+hooks_wt="$test_root/hooks-path-wt"
+git -C "$hooks_root" worktree add -q -b feature/repository-hooks-wt "$hooks_wt"
+mkdir -p "$hooks_wt/tool"
+cp "$root/tool/setup" "$hooks_wt/tool/setup"
+cp "$root/tool/doctor.sh" "$hooks_wt/tool/doctor.sh"
+if ! (cd "$hooks_wt" && tool/setup) | grep -q '✓ core.hooksPath'; then
+  echo "tool/setup rejected the main clone's .githooks from a linked worktree" >&2
+  exit 1
+fi
+if ! (cd "$hooks_wt" && tool/doctor.sh repository 2>/dev/null) | grep -q 'git hooks enabled'; then
+  echo "tool/doctor.sh rejected the main clone's .githooks from a linked worktree" >&2
+  exit 1
+fi
+git -C "$hooks_root" worktree remove --force "$hooks_wt"
+
+# ---------------------------------------------------------------------------
 # Desired-state hygiene
 # ---------------------------------------------------------------------------
 #
@@ -1818,6 +2300,8 @@ publish_git switch -q dev
 # one of the strings the check hunts and the scan of this repository stays
 # green without excluding this file from it.
 
+# INV repository/hygiene-home-paths, INV repository/hygiene-declared-names,
+# INV repository/hygiene-runtime-state, INV repository/hygiene-machine-identity
 hygiene="$root/tool/version-control/hygiene"
 
 grep -q 'evidence_run hygiene tool/version-control/hygiene' "$root/.githooks/pre-commit"
@@ -2054,6 +2538,7 @@ hygiene_new
 printf 'nothing to see here\n' >"$hygiene_repo/doc.md"
 printf 'doc.md\t/%s/programs/\n' home \
   >"$hygiene_repo/tool/version-control/hygiene.allow"
+# INV repository/hygiene-exclusion-symmetry
 hygiene_expect_fail 'exclusion, a stale entry' 'stale entry'
 
 # An entry forgives its literal at its own path and nowhere else. Without the
@@ -2144,9 +2629,19 @@ fi
 # stand-in check, in the style of the pre-push protocol fixture above.
 hygiene_hook_root="$test_root/hygiene-hook"
 mkdir -p "$hygiene_hook_root/tool" "$hygiene_hook_root/modules"
+mkdir -p "$hygiene_hook_root/tool/checks"
+for stub_check_name in format lint payloads; do
+  printf '#!/bin/sh\nexit 0\n' >"$hygiene_hook_root/tool/checks/$stub_check_name"
+  chmod +x "$hygiene_hook_root/tool/checks/$stub_check_name"
+done
 cp -R "$root/.githooks" "$hygiene_hook_root/.githooks"
 cp -R "$root/tool/version-control" "$hygiene_hook_root/tool/version-control"
 cp -R "$root/tool/dispatch" "$hygiene_hook_root/tool/dispatch"
+# The pre-commit hook this fixture enables also runs
+# tool/version-control/invariants, whose own cases are below; here it is a
+# stand-in so only the behaviour under test decides the outcome.
+printf '#!/bin/sh\nexit 0\n' >"$hygiene_hook_root/tool/version-control/invariants"
+chmod +x "$hygiene_hook_root/tool/version-control/invariants"
 
 git -C "$hygiene_hook_root" init -q -b dev
 git -C "$hygiene_hook_root" config user.name Fixture
@@ -2155,8 +2650,7 @@ printf 'fixture\n' >"$hygiene_hook_root/file"
 git -C "$hygiene_hook_root" add file
 git -C "$hygiene_hook_root" commit -q -m 'feat(repository): create hygiene hook fixture'
 # A Unix-like path, so the hook does not select repository:fixtures and re-enter
-# this script. tool/checks/ is absent, so the domain checks it does select are
-# skipped by the hook's own [ -x ] guard.
+# this script.
 printf '_: {}\n' >"$hygiene_hook_root/modules/fixture.nix"
 git -C "$hygiene_hook_root" add modules/fixture.nix
 
@@ -2203,6 +2697,716 @@ fi
 if ! printf '%s\n' "$hygiene_hook_output" | grep -q 'hygiene is unverified'; then
   printf '%s\n' "$hygiene_hook_output" >&2
   echo "pre-commit did not fail the unverified hygiene check under REQUIRE_NATIVE" >&2
+  exit 1
+fi
+
+# ---------------------------------------------------------------------------
+# Commit subjects
+# ---------------------------------------------------------------------------
+#
+# INV repository/conventional-subject
+# The hook is the owner of the grammar; these cases run the real hook on a
+# message file the way Git does.
+
+commit_msg="$root/.githooks/commit-msg"
+msg_file="$test_root/commit-msg-fixture"
+msg_case() {
+  printf '%s\n' "$1" >"$msg_file"
+  "$commit_msg" "$msg_file" >/dev/null 2>&1
+}
+msg_case 'feat(repository): add a rule' ||
+  { echo "commit-msg rejected a conventional subject" >&2; exit 1; }
+msg_case 'Merge branch dev into feature/x' ||
+  { echo "commit-msg rejected a merge subject Git wrote" >&2; exit 1; }
+if msg_case 'Added a rule'; then
+  echo "commit-msg accepted a subject without a type" >&2
+  exit 1
+fi
+long_subject="feat(repository): $(awk 'BEGIN { s = ""; for (i = 0; i < 60; i++) s = s "x"; print s }')"
+if msg_case "$long_subject"; then
+  echo "commit-msg accepted a subject over 72 characters" >&2
+  exit 1
+fi
+
+# The limit is exactly 72: one character either side of it decides.
+subject_72="feat(repository): $(awk 'BEGIN { s = ""; for (i = 0; i < 54; i++) s = s "x"; print s }')"
+subject_73="${subject_72}x"
+msg_case "$subject_72" ||
+  { echo "commit-msg rejected a 72-character subject" >&2; exit 1; }
+if msg_case "$subject_73"; then
+  echo "commit-msg accepted a 73-character subject" >&2
+  exit 1
+fi
+
+# ---------------------------------------------------------------------------
+# Secret scan wiring
+# ---------------------------------------------------------------------------
+#
+# INV repository/no-secret-in-history
+# The scanner's rule set is upstream's; what this repository owns is that a
+# scanner refusal blocks the commit. A stand-in scanner on PATH answers
+# `gitleaks git --help` (so the hook picks the `git --staged` form) and then
+# exits with the status under test. hygiene and invariants are stubbed to
+# pass so only the secret scan decides the outcome.
+
+secret_hook_root="$test_root/secret-hook"
+mkdir -p "$secret_hook_root/tool" "$secret_hook_root/modules" "$secret_hook_root/stub"
+mkdir -p "$secret_hook_root/tool/checks"
+for stub_check_name in format lint payloads; do
+  printf '#!/bin/sh\nexit 0\n' >"$secret_hook_root/tool/checks/$stub_check_name"
+  chmod +x "$secret_hook_root/tool/checks/$stub_check_name"
+done
+cp -R "$root/.githooks" "$secret_hook_root/.githooks"
+cp -R "$root/tool/version-control" "$secret_hook_root/tool/version-control"
+cp -R "$root/tool/dispatch" "$secret_hook_root/tool/dispatch"
+printf '#!/bin/sh\nexit 0\n' >"$secret_hook_root/tool/version-control/hygiene"
+printf '#!/bin/sh\nexit 0\n' >"$secret_hook_root/tool/version-control/domain-reads"
+printf '#!/bin/sh\nexit 0\n' >"$secret_hook_root/tool/version-control/invariants"
+chmod +x "$secret_hook_root/tool/version-control/hygiene" \
+  "$secret_hook_root/tool/version-control/domain-reads" \
+  "$secret_hook_root/tool/version-control/invariants"
+
+git -C "$secret_hook_root" init -q -b dev
+git -C "$secret_hook_root" config user.name Fixture
+git -C "$secret_hook_root" config user.email fixture@example.invalid
+printf 'fixture\n' >"$secret_hook_root/file"
+git -C "$secret_hook_root" add file
+git -C "$secret_hook_root" commit -q -m 'feat(repository): create secret hook fixture'
+printf '_: {}\n' >"$secret_hook_root/modules/fixture.nix"
+git -C "$secret_hook_root" add modules/fixture.nix
+
+stub_gitleaks() {
+  printf '#!/bin/sh\ncase "$*" in *--help*) exit 0 ;; esac\nexit %s\n' "$1" \
+    >"$secret_hook_root/stub/gitleaks"
+  chmod +x "$secret_hook_root/stub/gitleaks"
+}
+run_secret_pre_commit() {
+  (cd "$secret_hook_root" && PATH="$secret_hook_root/stub:$PATH" .githooks/pre-commit 2>&1)
+}
+
+stub_gitleaks 0
+if ! run_secret_pre_commit >/dev/null; then
+  echo "pre-commit rejected a commit the secret scan passed" >&2
+  exit 1
+fi
+
+stub_gitleaks 1
+if run_secret_pre_commit >/dev/null 2>&1; then
+  echo "pre-commit accepted a commit the secret scan refused" >&2
+  exit 1
+fi
+
+# ---------------------------------------------------------------------------
+# Invariant registry
+# ---------------------------------------------------------------------------
+#
+# INV repository/registry-coverage
+#
+# tool/version-control/invariants resolves its root with `git rev-parse
+# --show-toplevel`, so every case runs the real script against a throwaway
+# repository. Tags that name fixture-only ids are assembled from printf
+# arguments so this tracked file never carries an unregistered `INV` literal.
+
+invariants="$root/tool/version-control/invariants"
+grep -q 'evidence_run invariants tool/version-control/invariants' "$root/.githooks/pre-commit"
+grep -q 'run: tool/version-control/invariants' "$root/.github/workflows/ci.yml"
+inv_seq=0
+inv_new() {
+  inv_seq=$((inv_seq + 1))
+  inv_repo="$test_root/invariants-$inv_seq"
+  mkdir -p "$inv_repo/invariants/repository" "$inv_repo/docs" \
+    "$inv_repo/tool" "$inv_repo/tests"
+  git -C "$inv_repo" init -q -b dev
+  git -C "$inv_repo" config user.name Fixture
+  git -C "$inv_repo" config user.email fixture@example.invalid
+  printf '# Fixture\n\n## Rules\n\ntext\n' >"$inv_repo/AGENTS.md"
+  printf '# Architecture\n\n## Model\n\ntext\n' >"$inv_repo/docs/architecture.md"
+  printf '# Definition of done\n\n- [ ] read the diff\n' \
+    >"$inv_repo/docs/definition-of-done.md"
+  printf '# Status\n\n## Why\n\ntext\n' >"$inv_repo/docs/status.md"
+  : >"$inv_repo/.exec"
+}
+
+# A file that names an invariant. `INV` and the id reach the file through
+# separate printf arguments on purpose (see the group comment).
+inv_tag() {
+  printf '# %s %s\n' INV "$2" >"$inv_repo/$1"
+}
+inv_exec() {
+  printf '#!/bin/sh\n# %s %s\nexit 0\n' INV "$2" >"$inv_repo/$1"
+  chmod +x "$inv_repo/$1"
+  printf '%s\n' "$1" >>"$inv_repo/.exec"
+}
+inv_entry() {
+  cat >"$inv_repo/invariants/repository/$1.md"
+}
+inv_run() {
+  git -C "$inv_repo" add -A
+  # The executable bit must reach the index on every host, including a
+  # Git for Windows clone with core.fileMode=false.
+  while IFS= read -r exec_path; do
+    [ -n "$exec_path" ] || continue
+    git -C "$inv_repo" update-index --chmod=+x "$exec_path"
+  done <"$inv_repo/.exec"
+  (cd "$inv_repo" && "$invariants" 2>&1)
+}
+inv_expect_pass() {
+  if ! inv_output=$(inv_run); then
+    printf '%s\n' "$inv_output" >&2
+    echo "invariants rejected a clean registry: $1" >&2
+    exit 1
+  fi
+  if [ -n "${2:-}" ] && ! printf '%s\n' "$inv_output" | grep -qF "$2"; then
+    printf '%s\n' "$inv_output" >&2
+    echo "invariants did not report as expected: $1" >&2
+    exit 1
+  fi
+}
+inv_expect_fail() {
+  if inv_output=$(inv_run); then
+    printf '%s\n' "$inv_output" >&2
+    echo "invariants accepted a broken registry: $1" >&2
+    exit 1
+  fi
+  if ! printf '%s\n' "$inv_output" | grep -qF "$2"; then
+    printf '%s\n' "$inv_output" >&2
+    echo "invariants did not name the failure: $1" >&2
+    exit 1
+  fi
+}
+
+# The well-formed base: a tool and a fixture that both name the id, a
+# rationale heading that exists, a decision heading that exists.
+inv_base() {
+  inv_new
+  inv_exec tool/probe repository/base-rule
+  inv_tag tests/probe.sh repository/base-rule
+  inv_entry base-rule <<'ENTRY'
+id: repository/base-rule
+statement: The fixture holds.
+rationale: docs/architecture.md § Model
+enforced-by: tool tool/probe
+enforced-by: fixture tests/probe.sh
+decision: docs/status.md § Why
+
+Body text.
+ENTRY
+}
+
+inv_base
+inv_expect_pass 'a tool plus fixture entry' '1 registered, 0 pending'
+
+inv_base
+inv_entry base-rule <<'ENTRY'
+id: repository/base-rule
+statement: The fixture holds.
+rationale: docs/architecture.md § Model
+enforced-by: tool tool/probe
+enforced-by: fixture tests/probe.sh
+since: 2026-09-03
+
+Body.
+ENTRY
+inv_expect_fail 'C2 unknown key' "C2 unknown key 'since'"
+
+inv_base
+inv_entry base-rule <<'ENTRY'
+id: repository/base-rule
+statement: The fixture holds.
+statement: The fixture holds twice.
+rationale: docs/architecture.md § Model
+enforced-by: tool tool/probe
+enforced-by: fixture tests/probe.sh
+ENTRY
+inv_expect_fail 'C2 repeated statement' 'C2 expected exactly one statement'
+
+inv_base
+inv_entry base-rule <<'ENTRY'
+id: repository/base-rule
+statement: The fixture holds.
+rationale: docs/architecture.md § Model
+enforced-by: tool tool/probe
+enforced-by: fixture tests/probe.sh
+  a continuation line
+ENTRY
+inv_expect_fail 'C2 continuation line' 'C2 malformed header line'
+
+inv_base
+inv_entry other-name <<'ENTRY'
+id: repository/base-rule
+statement: The fixture holds.
+rationale: docs/architecture.md § Model
+enforced-by: tool tool/probe
+enforced-by: fixture tests/probe.sh
+ENTRY
+rm "$inv_repo/invariants/repository/base-rule.md"
+inv_expect_fail 'C3 id does not match the path' "C3 id 'repository/base-rule' does not match path"
+
+inv_base
+inv_entry base-rule <<'ENTRY'
+id: repository/base-rule
+statement: The fixture holds.
+rationale: docs/architecture.md § Missing
+enforced-by: tool tool/probe
+enforced-by: fixture tests/probe.sh
+ENTRY
+inv_expect_fail 'C4 rationale heading missing' "C4 rationale names no heading 'Missing'"
+
+inv_base
+inv_entry base-rule <<'ENTRY'
+id: repository/base-rule
+statement: The fixture holds.
+rationale: docs/status.md § Why
+enforced-by: tool tool/probe
+enforced-by: fixture tests/probe.sh
+ENTRY
+inv_expect_fail 'C9 rationale outside the two layer-2 files' 'C9 rationale must point at AGENTS.md or docs/architecture.md'
+
+inv_base
+inv_entry base-rule <<'ENTRY'
+id: repository/base-rule
+statement: The fixture holds.
+rationale: docs/architecture.md § Model
+enforced-by: tool tool/probe
+enforced-by: fixture tests/probe.sh
+decision: docs/status.md § Nowhere
+ENTRY
+inv_expect_fail 'C4 decision heading missing' "C4 decision names no heading 'Nowhere'"
+
+inv_base
+inv_entry base-rule <<'ENTRY'
+id: repository/base-rule
+statement: The fixture holds.
+rationale: docs/architecture.md § Model
+enforced-by: schema tool/absent.nix
+enforced-by: fixture tests/probe.sh
+ENTRY
+inv_expect_fail 'C5 schema locator untracked' 'C5 schema locator tool/absent.nix is not tracked'
+
+inv_base
+chmod -x "$inv_repo/tool/probe"
+: >"$inv_repo/.exec"
+inv_expect_fail 'C5 tool locator not executable' 'C5 tool locator tool/probe is not executable'
+
+inv_base
+printf '# no tag here\n' >"$inv_repo/tests/probe.sh"
+inv_expect_fail 'C5 fixture without the tag' 'C5 fixture locator tests/probe.sh does not name'
+
+inv_base
+inv_entry base-rule <<'ENTRY'
+id: repository/base-rule
+statement: The fixture holds.
+rationale: docs/architecture.md § Model
+enforced-by: tool tool/probe
+ENTRY
+inv_expect_fail 'C6 tool without fixture' 'C6 schema or tool enforcement needs a fixture too'
+
+inv_base
+inv_entry base-rule <<'ENTRY'
+id: repository/base-rule
+statement: The fixture holds.
+rationale: docs/architecture.md § Model
+enforced-by: pending #12
+enforced-by: tool tool/probe
+enforced-by: fixture tests/probe.sh
+owner: repository maintainer
+ENTRY
+inv_expect_fail 'C6 pending combined with tool' 'C6 pending cannot be combined'
+
+inv_base
+inv_entry base-rule <<'ENTRY'
+id: repository/base-rule
+statement: The fixture holds.
+rationale: docs/architecture.md § Model
+enforced-by: pending issue-12
+owner: repository maintainer
+ENTRY
+rm "$inv_repo/tool/probe" "$inv_repo/tests/probe.sh"
+: >"$inv_repo/.exec"
+inv_expect_fail 'C5 pending locator not an issue number' "C5 pending locator must be an issue number"
+
+inv_base
+inv_entry base-rule <<'ENTRY'
+id: repository/base-rule
+statement: The fixture holds.
+rationale: docs/architecture.md § Model
+enforced-by: pending #12
+ENTRY
+rm "$inv_repo/tool/probe" "$inv_repo/tests/probe.sh"
+: >"$inv_repo/.exec"
+inv_expect_fail 'C7 pending without owner' 'C7 manual or pending invariant needs an owner'
+
+inv_base
+inv_entry base-rule <<'ENTRY'
+id: repository/base-rule
+statement: The fixture holds.
+rationale: docs/architecture.md § Model
+enforced-by: pending #12
+owner: repository maintainer
+ENTRY
+rm "$inv_repo/tool/probe" "$inv_repo/tests/probe.sh"
+: >"$inv_repo/.exec"
+inv_expect_pass 'a pending entry is reported, not failed' '1 registered, 1 pending (repository/base-rule)'
+
+inv_base
+inv_entry base-rule <<'ENTRY'
+id: repository/base-rule
+statement: The fixture holds.
+rationale: docs/architecture.md § Model
+enforced-by: manual the reviewer reads the diff
+owner: repository maintainer
+ENTRY
+rm "$inv_repo/tool/probe" "$inv_repo/tests/probe.sh"
+: >"$inv_repo/.exec"
+inv_expect_fail 'C5 manual not in the definition of done' 'C5 manual invariant is not listed in docs/definition-of-done.md'
+
+inv_base
+inv_entry base-rule <<'ENTRY'
+id: repository/base-rule
+statement: The fixture holds.
+rationale: docs/architecture.md § Model
+enforced-by: manual the reviewer reads the diff
+owner: repository maintainer
+ENTRY
+rm "$inv_repo/tool/probe" "$inv_repo/tests/probe.sh"
+: >"$inv_repo/.exec"
+# The id reaches this printf through a variable, like inv_tag and inv_exec
+# above, so the tag and the fixture-only id never sit adjacent in this
+# tracked file even though the assembled line lands in the fixture repo's
+# own file.
+inv_dod_id=repository/base-rule
+printf -- '- [ ] read the diff (%s %s)\n' INV "$inv_dod_id" \
+  >>"$inv_repo/docs/definition-of-done.md"
+inv_expect_pass 'a manual entry listed in the definition of done'
+
+inv_base
+inv_tag tests/orphan.sh repository/never-registered
+inv_expect_fail 'C8 orphan tag' 'C8 names unregistered invariant repository/never-registered'
+
+inv_base
+printf 'id: repository/stray\n' >"$inv_repo/invariants/stray.md"
+inv_expect_fail 'C1 misplaced file' 'invariants/stray.md: C1 not a registry path'
+
+inv_base
+mkdir -p "$inv_repo/invariants/linux"
+cp "$inv_repo/invariants/repository/base-rule.md" "$inv_repo/invariants/linux/base-rule.md"
+inv_expect_fail 'C1 unknown scope directory' "C1 unknown scope 'linux'"
+
+inv_base
+mkdir -p "$inv_repo/invariants/repository/nested"
+cp "$inv_repo/invariants/repository/base-rule.md" \
+  "$inv_repo/invariants/repository/nested/base-rule.md"
+inv_expect_fail 'C1 nested entry' 'C1 not a registry path'
+
+inv_base
+cp "$inv_repo/invariants/repository/base-rule.md" \
+  "$inv_repo/invariants/repository/Base_Rule.md"
+inv_expect_fail 'C1 slug grammar' "C1 slug 'Base_Rule'"
+
+inv_base
+git -C "$inv_repo" add -A
+git -C "$inv_repo" update-index --chmod=+x tool/probe
+inv_table=$(cd "$inv_repo" && "$invariants" --table)
+if ! printf '%s\n' "$inv_table" | grep -qF '| `repository/base-rule` | tool, fixture | The fixture holds. |'; then
+  printf '%s\n' "$inv_table" >&2
+  echo "invariants --table did not render the entry" >&2
+  exit 1
+fi
+
+# INV repository/fixtures-name-invariants
+# A fixture unit — a top-level Describe in a Pester file, a banner section
+# in a shell suite — names the invariant it proves. The default fails an
+# untagged unit; INVARIANTS_ENFORCE_C10=0 is the report mode, which counts
+# and lists. Both directions are held here.
+inv_base
+inv_id=repository/base-rule
+inv_pester="$inv_repo/tests/Fixture.Tests.ps1"
+{
+  printf "Describe 'tagged unit' {\n"
+  printf "    It '%s %s: holds' { \$true | Should -BeTrue }\n" INV "$inv_id"
+  printf "}\n\n"
+  printf "Describe 'untagged unit' {\n"
+  printf "    It 'proves nothing registered' { \$true | Should -BeTrue }\n"
+  printf "}\n"
+} >"$inv_pester"
+{
+  printf '#!/bin/sh\n'
+  printf '# preamble\n\n'
+  printf '# %s\n# tagged section\n# %s\n#\n' "$(printf -- '-%.0s' 1 2 3 4 5 6 7 8 9 10 11 12)" "$(printf -- '-%.0s' 1 2 3 4 5 6 7 8 9 10 11 12)"
+  printf '# %s %s\n\n' INV "$inv_id"
+  printf '# %s\n# untagged section\n# %s\n' "$(printf -- '-%.0s' 1 2 3 4 5 6 7 8 9 10 11 12)" "$(printf -- '-%.0s' 1 2 3 4 5 6 7 8 9 10 11 12)"
+  printf 'true\n'
+} >"$inv_repo/tests/probe.sh"
+inv_entry base-rule <<'ENTRY'
+id: repository/base-rule
+statement: The fixture holds.
+rationale: docs/architecture.md § Model
+enforced-by: tool tool/probe
+enforced-by: fixture tests/probe.sh
+enforced-by: fixture tests/Fixture.Tests.ps1
+ENTRY
+INVARIANTS_ENFORCE_C10=0
+export INVARIANTS_ENFORCE_C10
+inv_expect_pass 'untagged units are reported, not failed, under INVARIANTS_ENFORCE_C10=0' '2 fixture units untagged'
+inv_untagged=$(cd "$inv_repo" && "$invariants" --untagged)
+unset INVARIANTS_ENFORCE_C10
+printf '%s\n' "$inv_untagged" | grep -q 'tests/Fixture.Tests.ps1:[0-9]*: untagged unit'
+printf '%s\n' "$inv_untagged" | grep -q 'tests/probe.sh:[0-9]*: untagged section'
+if printf '%s\n' "$inv_untagged" | grep -q ': tagged unit$\|: tagged section$'; then
+  printf '%s\n' "$inv_untagged" >&2
+  echo "invariants --untagged listed a tagged unit" >&2
+  exit 1
+fi
+if (cd "$inv_repo" && "$invariants") >/dev/null 2>&1; then
+  echo "invariants passed untagged units by default" >&2
+  exit 1
+fi
+(cd "$inv_repo" && "$invariants") 2>&1 | grep -q 'C10'
+if (cd "$inv_repo" && INVARIANTS_ENFORCE_C10=1 "$invariants") >/dev/null 2>&1; then
+  echo "invariants passed untagged units under INVARIANTS_ENFORCE_C10=1" >&2
+  exit 1
+fi
+
+# INV repository/fixtures-name-invariants
+# A tag line directly after a closing banner, with no bare `#` between them,
+# must be read as content of the section it tags, not as a phantom title.
+inv_base
+inv_id=repository/base-rule
+{
+  printf '#!/bin/sh\n'
+  printf '# %s\n# adjacent section\n# %s\n' "$(printf -- '-%.0s' 1 2 3 4 5 6 7 8 9 10 11 12)" "$(printf -- '-%.0s' 1 2 3 4 5 6 7 8 9 10 11 12)"
+  printf '# %s %s\n' INV "$inv_id"
+  printf 'true\n'
+} >"$inv_repo/tests/probe.sh"
+inv_expect_pass 'a tag directly after a closing banner is content, not a phantom title' \
+  '0 fixture units untagged'
+inv_adjacent=$(cd "$inv_repo" && "$invariants" --untagged)
+if printf '%s\n' "$inv_adjacent" | grep -q 'INV'; then
+  printf '%s\n' "$inv_adjacent" >&2
+  echo "invariants --untagged listed a phantom unit for a tag after a closing banner" >&2
+  exit 1
+fi
+
+inv_status=0
+(cd "$inv_repo" && "$invariants" --bogus) >/dev/null 2>&1 || inv_status=$?
+if [ "$inv_status" -ne 2 ]; then
+  echo "invariants exited $inv_status on bad usage, expected 2" >&2
+  exit 1
+fi
+
+# The pre-commit wiring, in the style of the hygiene hook fixture: a real hook
+# run with a stand-in checker returning each of the three states.
+inv_hook_root="$test_root/invariants-hook"
+mkdir -p "$inv_hook_root/tool" "$inv_hook_root/modules"
+mkdir -p "$inv_hook_root/tool/checks"
+for stub_check_name in format lint payloads; do
+  printf '#!/bin/sh\nexit 0\n' >"$inv_hook_root/tool/checks/$stub_check_name"
+  chmod +x "$inv_hook_root/tool/checks/$stub_check_name"
+done
+cp -R "$root/.githooks" "$inv_hook_root/.githooks"
+cp -R "$root/tool/version-control" "$inv_hook_root/tool/version-control"
+cp -R "$root/tool/dispatch" "$inv_hook_root/tool/dispatch"
+printf '#!/bin/sh\nexit 0\n' >"$inv_hook_root/tool/version-control/hygiene"
+chmod +x "$inv_hook_root/tool/version-control/hygiene"
+# A passing stand-in secret scanner, so the outcome does not depend on
+# whether this host has gitleaks or on REQUIRE_NATIVE.
+mkdir -p "$inv_hook_root/stub"
+printf '#!/bin/sh\nexit 0\n' >"$inv_hook_root/stub/gitleaks"
+chmod +x "$inv_hook_root/stub/gitleaks"
+
+git -C "$inv_hook_root" init -q -b dev
+git -C "$inv_hook_root" config user.name Fixture
+git -C "$inv_hook_root" config user.email fixture@example.invalid
+printf 'fixture\n' >"$inv_hook_root/file"
+git -C "$inv_hook_root" add file
+git -C "$inv_hook_root" commit -q -m 'feat(repository): create invariants hook fixture'
+printf '_: {}\n' >"$inv_hook_root/modules/fixture.nix"
+git -C "$inv_hook_root" add modules/fixture.nix
+
+stub_invariants() {
+  printf '#!/bin/sh\nexit %s\n' "$1" \
+    >"$inv_hook_root/tool/version-control/invariants"
+  chmod +x "$inv_hook_root/tool/version-control/invariants"
+}
+run_inv_pre_commit() {
+  (cd "$inv_hook_root" && PATH="$inv_hook_root/stub:$PATH" .githooks/pre-commit 2>&1)
+}
+
+stub_invariants 0
+if ! run_inv_pre_commit >/dev/null; then
+  echo "pre-commit rejected a passing invariant check" >&2
+  exit 1
+fi
+
+stub_invariants 1
+if run_inv_pre_commit >/dev/null 2>&1; then
+  echo "pre-commit accepted a failing invariant check" >&2
+  exit 1
+fi
+
+stub_invariants 69
+if ! inv_hook_output=$(run_inv_pre_commit); then
+  printf '%s\n' "$inv_hook_output" >&2
+  echo "pre-commit blocked an invariant check that reported unverified" >&2
+  exit 1
+fi
+if ! printf '%s\n' "$inv_hook_output" | grep -q 'invariants unverified'; then
+  printf '%s\n' "$inv_hook_output" >&2
+  echo "pre-commit did not report the unverified invariant check" >&2
+  exit 1
+fi
+
+# INV repository/evidence-three-states
+# A selected check whose script this host cannot run is unverified, not
+# silently passed: the hook says so, and REQUIRE_NATIVE turns it into failure.
+rm "$inv_hook_root/tool/checks/format"
+stub_invariants 0
+if ! inv_hook_output=$(run_inv_pre_commit); then
+  printf '%s\n' "$inv_hook_output" >&2
+  echo "pre-commit blocked a commit whose format check is absent" >&2
+  exit 1
+fi
+if ! printf '%s\n' "$inv_hook_output" | grep -q 'format unverified'; then
+  printf '%s\n' "$inv_hook_output" >&2
+  echo "pre-commit passed an absent format check silently" >&2
+  exit 1
+fi
+if inv_hook_output=$(REQUIRE_NATIVE=1; export REQUIRE_NATIVE; run_inv_pre_commit); then
+  printf '%s\n' "$inv_hook_output" >&2
+  echo "pre-commit accepted an absent format check under REQUIRE_NATIVE" >&2
+  exit 1
+fi
+if ! printf '%s\n' "$inv_hook_output" | grep -q 'format is unverified'; then
+  printf '%s\n' "$inv_hook_output" >&2
+  echo "pre-commit did not fail the absent format check under REQUIRE_NATIVE" >&2
+  exit 1
+fi
+printf '#!/bin/sh\nexit 0\n' >"$inv_hook_root/tool/checks/format"
+chmod +x "$inv_hook_root/tool/checks/format"
+
+# INV repository/hook-evidence-recorded
+inv_hook_log="$inv_hook_root/.git/hooks-evidence.log"
+if [ ! -f "$inv_hook_log" ]; then
+  echo "pre-commit recorded no hook evidence" >&2
+  exit 1
+fi
+if ! grep -q "$(printf 'pre-commit\tinvariants\tverified')" "$inv_hook_log"; then
+  cat "$inv_hook_log" >&2
+  echo "the hook log lacks the verified invariants outcome" >&2
+  exit 1
+fi
+if ! grep -q "$(printf 'pre-commit\tinvariants\tfailed')" "$inv_hook_log"; then
+  echo "the hook log lacks the failed invariants outcome" >&2
+  exit 1
+fi
+if ! grep -q "$(printf 'pre-commit\tinvariants\tunverified')" "$inv_hook_log"; then
+  echo "the hook log lacks the unverified invariants outcome" >&2
+  exit 1
+fi
+if git -C "$inv_hook_root" status --porcelain | grep -q hooks-evidence; then
+  echo "the hook log is visible to git status; it must live under .git/" >&2
+  exit 1
+fi
+hook_evidence="$root/tool/version-control/hook-evidence"
+if ! hook_summary=$(cd "$inv_hook_root" && "$hook_evidence"); then
+  echo "hook-evidence failed to read the log" >&2
+  exit 1
+fi
+printf '%s\n' "$hook_summary" | grep -q '^hook evidence: [0-9][0-9]* outcomes'
+printf '%s\n' "$hook_summary" | grep -q "$(printf '  invariants\tverified\t')"
+(cd "$inv_hook_root" && "$hook_evidence" --reset) >/dev/null
+if [ -s "$inv_hook_log" ]; then
+  echo "hook-evidence --reset left outcomes in the log" >&2
+  exit 1
+fi
+if ! (cd "$audit_norefs" && "$hook_evidence") | grep -q 'no hook evidence recorded yet'; then
+  echo "hook-evidence did not report an absent log" >&2
+  exit 1
+fi
+
+# ---------------------------------------------------------------------------
+# Domain trees are read only by their owners
+# ---------------------------------------------------------------------------
+#
+# INV repository/no-cross-domain-dependency
+# tool/version-control/domain-reads scans each domain's code in the index for
+# a path that names the other domain's tree. The real repository is the
+# positive case. The negative is a throwaway repository that reads across the
+# boundary in both directions; the scan must name each offending file and
+# line. A third repository only mentions the other tree in comments — a Nix
+# line comment, a PowerShell line comment, and PowerShell block comments over
+# several lines and inside one — plus `$#` and `${#x}`, which are not
+# comments, and a Windows payload that names a Unix-like path, which is data
+# and is not scanned; it must pass, because a read is code and prose is not.
+domain_reads="$root/tool/version-control/domain-reads"
+
+# Wired the way hygiene is: every commit, and the repository-wide CI scan
+# job. The Windows job's own parse loop from the checkout root was the
+# second known read across the boundary, so its absence is asserted too.
+grep -q 'evidence_run "domain reads" tool/version-control/domain-reads' "$root/.githooks/pre-commit"
+grep -q 'run: tool/version-control/domain-reads' "$root/.github/workflows/ci.yml"
+if grep -q 'Get-ChildItem -Recurse' "$root/.github/workflows/ci.yml"; then
+  echo "the CI workflow walks the checkout for PowerShell files; windows/tools/test.ps1 owns that parse" >&2
+  exit 1
+fi
+
+if ! domain_reads_output=$(cd "$root" && "$domain_reads" 2>&1); then
+  printf '%s\n' "$domain_reads_output" >&2
+  echo "the repository's own domains read across their boundary" >&2
+  exit 1
+fi
+# Both counts are positive, or a broken pathspec has retired the scan.
+printf '%s\n' "$domain_reads_output" | grep -q '^✓ domain reads: [1-9][0-9]* Unix-like and [1-9][0-9]* Windows' || {
+  printf '%s\n' "$domain_reads_output" >&2
+  echo "domain-reads did not report a positive count of files for both domains" >&2
+  exit 1
+}
+
+domain_reads_fixture=$(mktemp -d)
+git -C "$domain_reads_fixture" init -q
+mkdir -p "$domain_reads_fixture/tool/checks" "$domain_reads_fixture/windows/tools" "$domain_reads_fixture/modules"
+printf '#!/bin/sh\ncat windows/desired/manifest.json\n' >"$domain_reads_fixture/tool/checks/probe"
+printf '_: {\n  home.file."probe".source = ../windows/desired/files/probe;\n}\n' >"$domain_reads_fixture/modules/probe.nix"
+printf '$fonts = Get-Content (Join-Path $root %s)\n' "'assets\\wezterm\\fonts.json'" >"$domain_reads_fixture/windows/tools/probe.ps1"
+printf 'Import-Module (Join-Path $root %s)\n' "'modules/flake/probe.nix'" >"$domain_reads_fixture/windows/tools/module.psm1"
+git -C "$domain_reads_fixture" add -A
+if domain_reads_output=$(cd "$domain_reads_fixture" && "$domain_reads" 2>&1); then
+  printf '%s\n' "$domain_reads_output" >&2
+  echo "domain-reads accepted a repository that reads across the boundary" >&2
+  exit 1
+fi
+for domain_reads_hit in \
+  'tool/checks/probe:2:' \
+  'modules/probe.nix:2:' \
+  'windows/tools/probe.ps1:1:' \
+  'windows/tools/module.psm1:1:'; do
+  printf '%s\n' "$domain_reads_output" | grep -qF "$domain_reads_hit" || {
+    printf '%s\n' "$domain_reads_output" >&2
+    echo "domain-reads did not name $domain_reads_hit" >&2
+    exit 1
+  }
+done
+case "$domain_reads_fixture" in /tmp/*) rm -rf -- "$domain_reads_fixture" ;; esac
+
+domain_reads_fixture=$(mktemp -d)
+git -C "$domain_reads_fixture" init -q
+mkdir -p "$domain_reads_fixture/windows/src" "$domain_reads_fixture/windows/desired/files" "$domain_reads_fixture/modules"
+printf '# The Windows domain declares this terminal in windows/desired/files/terminal/settings.json.\n_: {\n  home.file."probe".text = "windows-terminal"; # not windows/\n}\n' >"$domain_reads_fixture/modules/probe.nix"
+printf '<#\n    .SYNOPSIS\n    Copied from assets/powershell/profile.ps1; see modules/powershell.nix and flake.nix.\n#>\n# tool/checks/payloads parses the Unix-like copy.\n$own = Join-Path $root %s <# not modules/ #>\nif ($args.Count -ne $#) { $x = ${#own} }\n' "'desired\\files\\profile.ps1'" >"$domain_reads_fixture/windows/src/probe.psm1"
+printf '$profile = %s\n' "'assets/powershell/profile.ps1'" >"$domain_reads_fixture/windows/desired/files/payload.ps1"
+git -C "$domain_reads_fixture" add -A
+if ! domain_reads_output=$(cd "$domain_reads_fixture" && "$domain_reads" 2>&1); then
+  printf '%s\n' "$domain_reads_output" >&2
+  echo "domain-reads read a comment as a cross-domain read" >&2
+  exit 1
+fi
+case "$domain_reads_fixture" in /tmp/*) rm -rf -- "$domain_reads_fixture" ;; esac
+
+# The repository's own registry, against the real index: this suite is the
+# fixture INV repository/registry-coverage names, so it proves itself here.
+if ! inv_real_output=$(cd "$root" && "$invariants" 2>&1); then
+  printf '%s\n' "$inv_real_output" >&2
+  echo "the repository's own invariant registry fails its coverage check" >&2
   exit 1
 fi
 

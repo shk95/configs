@@ -1,0 +1,85 @@
+#!/bin/sh
+# Module files are collected by a directory walk; nothing may depend on it.
+#
+# INV unixlike/import-order-independence
+#
+# import-tree gathers every file under modules/ in walk order and flake-parts
+# merges their contributions. A list-valued option two files contribute to at
+# the same priority is merged in that order, so a value that is correct only
+# because two files happen to sort a certain way breaks on a rename, silently.
+#
+# The proof is by evaluation rather than by reading the files: the flake's
+# outputs are composed twice, once in walk order and once reversed, and the
+# derivation path of every host's toplevel must be identical. A derivation
+# path is a hash of everything that reaches the output, so any order-sensitive
+# value that reaches a host shows up as a differing path; a value that reaches
+# no host cannot break a host.
+#
+# usage: tool/checks/import-order [<extra module directory>]
+#
+# The optional directory's files are added to the module set, which is how
+# tool/checks/import-order-test proves the check refuses an order-sensitive
+# pair. Evaluation only, no build; twice the cost of tool/checks/test's
+# evaluation tier, which is why the merge gate runs it and the local gate
+# does not.
+
+set -e
+. "$(CDPATH= cd -- "$(dirname -- "$0")" && pwd)/prerequisite"
+require_command nix
+
+repo=$(CDPATH= cd -- "$(dirname "$0")/../.." && pwd)
+cd "$repo"
+
+extra=
+if [ -n "${1:-}" ]; then
+  extra=$(CDPATH= cd -- "$1" && pwd)
+  extra_expr="++ tree.leafs \"$extra\""
+else
+  extra_expr=
+fi
+
+printf '→ composing every host in walk order and reversed%s\n' "${extra:+ (with $extra)}"
+
+# `self` is the real flake, so a module that read `inputs.self.<output>`
+# would see the walk-order composition in both runs; today only `outPath` is
+# read (modules/packages.nix), which is the same either way.
+result=$(nix eval --impure --json --expr "
+  let
+    flake = builtins.getFlake (toString ./.);
+    inputs = flake.inputs // { self = flake; };
+    lib = inputs.nixpkgs.lib;
+    tree = inputs.import-tree.withLib lib;
+    modules = tree.leafs (flake.outPath + \"/modules\") $extra_expr;
+    compose = files: inputs.flake-parts.lib.mkFlake { inherit inputs; } { imports = files; };
+    toplevels = outputs: {
+      homeConfigurations = lib.mapAttrs (_: c: c.activationPackage.drvPath) outputs.homeConfigurations;
+      nixosConfigurations = lib.mapAttrs (_: c: c.config.system.build.toplevel.drvPath) outputs.nixosConfigurations;
+      darwinConfigurations = lib.mapAttrs (_: c: c.config.system.build.toplevel.drvPath) outputs.darwinConfigurations;
+    };
+    forward = toplevels (compose modules);
+    reversed = toplevels (compose (lib.reverseList modules));
+    differing = lib.concatStringsSep \" \" (lib.concatLists (lib.mapAttrsToList (flavour: hosts:
+      lib.mapAttrsToList (host: _: \"\${flavour}.\${host}\")
+        (lib.filterAttrs (host: path: reversed.\${flavour}.\${host} != path) hosts)) forward));
+  in {
+    files = builtins.length modules;
+    same = forward == reversed;
+    inherit forward reversed differing;
+  }")
+
+files=$(printf '%s' "$result" | sed -n 's/.*"files":\([0-9]*\).*/\1/p')
+case "$result" in
+  *'"same":true'*)
+    echo "✓ import order: $files module files compose to the same toplevels in either order"
+    ;;
+  *)
+    differing=$(printf '%s' "$result" | sed -n 's/.*"differing":"\([^"]*\)".*/\1/p')
+    printf '\033[31m✗ a host toplevel differs when the module files are collected in reverse order: %s\033[0m\n' "$differing" >&2
+    printf '%s\n' "$result" | sed 's/,"/,\n  "/g' >&2
+    echo "  A list-valued option depends on the directory walk. The usual cause is two" >&2
+    echo "  files contributing to one ordered option at the same order; give the" >&2
+    echo "  contributions lib.mkOrder, or key the value. nix-diff on the two paths" >&2
+    echo "  above shows which generated file moved." >&2
+    exit 1
+    ;;
+esac

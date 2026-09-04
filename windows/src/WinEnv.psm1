@@ -13,6 +13,14 @@ $script:Utf8NoBom = [System.Text.UTF8Encoding]::new($false)
 # the file already written.
 $script:WinEnvComparisonMode = @('Text', 'ExactJson', 'JsonSubset', 'ExactJsonWithGeneratedProfiles')
 
+# Every parser a managed file may declare: the names Test-WinEnvSourceFile has
+# a case for, and nothing else. The manifest is validated against this list
+# when it loads for the same reason as the modes above, and the validator's
+# own default arm refuses any name that reaches it anyway, because a parser
+# that matched no case used to fall through and count as parsed.
+# INV windows/parser-declared
+$script:WinEnvParser = @('Json', 'Ini', 'PowerShell', 'Kdl', 'Lua', 'Text')
+
 # The two host queries this domain's detection depends on. They are script-
 # scope defaults rather than inline calls so that every outcome, including the
 # one a given host cannot produce, has a fixture. Nothing but a test passes
@@ -38,7 +46,7 @@ function Get-WinEnvManifest {
 
     $manifest = Get-Content -LiteralPath $Path -Raw -Encoding utf8 |
         ConvertFrom-Json -AsHashtable -ErrorAction Stop
-    if ($manifest.SchemaVersion -ne 4) { throw "Unsupported manifest schema: $($manifest.SchemaVersion)" }
+    if ($manifest.SchemaVersion -ne 4) { throw "INV windows/schema-version-refused: Unsupported manifest schema: $($manifest.SchemaVersion)" }
     [void][System.Management.Automation.SemanticVersion]$manifest.ProjectVersion
     # Every consumer reads the manifest through here, so the feature model is
     # validated once instead of separately in setup, the check tool, and tests.
@@ -76,10 +84,30 @@ function Assert-WinEnvFeatureModel {
 
     $declared = [System.Collections.Generic.List[string]]::new()
     foreach ($feature in $Manifest.Features) {
-        if (-not $feature.ContainsKey('Id')) { throw 'A feature is declared without an Id.' }
+        if (-not $feature.ContainsKey('Id') -or [string]::IsNullOrWhiteSpace([string]$feature.Id)) {
+            throw 'INV windows/unique-ids: A feature is declared without an Id.'
+        }
         $id = [string]$feature.Id
-        if ($declared.Contains($id)) { throw "Feature '$id' is declared more than once." }
+        if ($declared.Contains($id)) { throw "INV windows/unique-ids: Feature '$id' is declared more than once." }
         $declared.Add($id)
+    }
+
+    # INV windows/unique-ids — a plan and a state record name a package or a
+    # managed file by its Id, so a second declaration of one would let the
+    # name mean either item. Each kind is its own namespace: a package and a
+    # managed file may share a spelling, two packages may not.
+    foreach ($kind in @(@('Packages', 'package'), @('ManagedFiles', 'managed file'))) {
+        $key, $label = $kind
+        if (-not $Manifest.ContainsKey($key)) { continue }
+        $ids = [System.Collections.Generic.HashSet[string]]::new([System.StringComparer]::Ordinal)
+        foreach ($item in $Manifest[$key]) {
+            if (-not $item.ContainsKey('Id') -or [string]::IsNullOrWhiteSpace([string]$item.Id)) {
+                throw "INV windows/unique-ids: A $label is declared without an Id."
+            }
+            if (-not $ids.Add([string]$item.Id)) {
+                throw "INV windows/unique-ids: The $label '$($item.Id)' is declared more than once."
+            }
+        }
     }
 
     if (-not (Get-WinEnvRequiredFeatureId -Manifest $Manifest)) {
@@ -121,10 +149,10 @@ function Assert-WinEnvFeatureModel {
 
     foreach ($entry in $owned) {
         $kind, $name, $item = $entry
-        if (-not $item.ContainsKey('Feature')) { throw "The $kind '$name' declares no Feature." }
+        if (-not $item.ContainsKey('Feature')) { throw "INV windows/feature-owns-every-item: The $kind '$name' declares no Feature." }
         $feature = [string]$item.Feature
         if (-not $declared.Contains($feature)) {
-            throw "The $kind '$name' names undeclared feature '$feature'."
+            throw "INV windows/feature-owns-every-item: The $kind '$name' names undeclared feature '$feature'."
         }
     }
 
@@ -182,13 +210,20 @@ function Assert-WinEnvManagedFileModel {
 
         $compare = if ($definition.ContainsKey('Compare')) { [string]$definition.Compare } else { '' }
         if ($script:WinEnvComparisonMode -cnotcontains $compare) {
-            throw ("The managed file '$id' declares unknown comparison mode '$compare'; " +
+            throw ("INV windows/compare-mode-declared: The managed file '$id' declares unknown comparison mode '$compare'; " +
                 "the modes are: $($script:WinEnvComparisonMode -join ', ').")
         }
+        # The parser names the validator that will read the payload, so an
+        # unknown or missing one is refused here, where the entry at fault is
+        # named, rather than reaching the validator or a host.
+        $parser = if ($definition.ContainsKey('Parser')) { [string]$definition.Parser } else { '' }
+        if ($script:WinEnvParser -cnotcontains $parser) {
+            throw ("INV windows/parser-declared: The managed file '$id' declares unknown parser '$parser'; " +
+                "the parsers are: $($script:WinEnvParser -join ', ').")
+        }
         if ($compare -ceq 'ExactJsonWithGeneratedProfiles') {
-            $parser = if ($definition.ContainsKey('Parser')) { [string]$definition.Parser } else { '' }
             if ($parser -cne 'Json') {
-                throw ("The managed file '$id' declares comparison mode '$compare' with parser '$parser'; " +
+                throw ("INV windows/compare-mode-declared: The managed file '$id' declares comparison mode '$compare' with parser '$parser'; " +
                     'that mode reads both sides as JSON and can only be declared on a Json payload.')
             }
         }
@@ -205,7 +240,7 @@ function Assert-WinEnvManagedFileModel {
 
         $variants = @($definition.Sources)
         if ($variants.Count -lt 2) {
-            throw "The managed file '$id' declares fewer than two source variants; use a scalar Source."
+            throw "INV windows/sources-total-function: The managed file '$id' declares fewer than two source variants; use a scalar Source."
         }
 
         $previousBound = $null
@@ -219,37 +254,37 @@ function Assert-WinEnvManagedFileModel {
             # the entry alone.
             foreach ($key in $variant.Keys) {
                 if (@('Source', 'MinimumBuild') -notcontains [string]$key) {
-                    throw "A source variant of the managed file '$id' declares unknown key '$key'."
+                    throw "INV windows/sources-total-function: A source variant of the managed file '$id' declares unknown key '$key'."
                 }
             }
             if (-not $variant.ContainsKey('Source')) {
-                throw "A source variant of the managed file '$id' declares no Source."
+                throw "INV windows/sources-total-function: A source variant of the managed file '$id' declares no Source."
             }
             # Caught here rather than as 'Managed source is missing: <root>' from
             # check-desired-state.ps1, which names a path that is really the
             # desired-state root and says nothing about the entry at fault.
             if ([string]::IsNullOrWhiteSpace([string]$variant.Source)) {
-                throw "A source variant of the managed file '$id' declares an empty Source."
+                throw "INV windows/sources-total-function: A source variant of the managed file '$id' declares an empty Source."
             }
 
             $isLast = $index -eq $variants.Count - 1
             $hasBound = $variant.ContainsKey('MinimumBuild')
             if ($isLast -and $hasBound) {
-                throw ("The last source variant of the managed file '$id' declares MinimumBuild; " +
+                throw ("INV windows/sources-total-function: The last source variant of the managed file '$id' declares MinimumBuild; " +
                     'it must be unconditional so every host resolves to exactly one variant.')
             }
             if (-not $isLast -and -not $hasBound) {
-                throw ("A source variant of the managed file '$id' declares no MinimumBuild and is not last; " +
+                throw ("INV windows/sources-total-function: A source variant of the managed file '$id' declares no MinimumBuild and is not last; " +
                     'only the last variant may be unconditional.')
             }
             if (-not $hasBound) { continue }
 
             $bound = 0
             if (-not [int]::TryParse([string]$variant.MinimumBuild, [ref]$bound) -or $bound -le 0) {
-                throw "The managed file '$id' declares a MinimumBuild that is not a positive Windows build number."
+                throw "INV windows/sources-total-function: The managed file '$id' declares a MinimumBuild that is not a positive Windows build number."
             }
             if ($null -ne $previousBound -and $bound -ge $previousBound) {
-                throw ("The managed file '$id' declares MinimumBuild values that do not descend; " +
+                throw ("INV windows/sources-total-function: The managed file '$id' declares MinimumBuild values that do not descend; " +
                     'the first variant a host satisfies must be the highest bound it meets.')
             }
             $previousBound = $bound
@@ -516,15 +551,10 @@ function Test-WinEnvWindowsHost {
         .DESCRIPTION
         $IsWindows is PowerShell 7's own automatic variable; every caller of
         this module already requires version 7, so it is always defined. Read
-        through this function instead of inline, with an injectable override,
-        so a refusal on Unix-like pwsh -- macOS or WSL included -- has a
-        fixture without needing a foreign host to prove itself.
+        through this function instead of inline so the suite can find the one
+        guard call in capture.ps1 by name, ahead of the first host read.
     #>
-    param(
-        [bool] $IsWindows = $global:IsWindows
-    )
-
-    return $IsWindows
+    return $global:IsWindows
 }
 
 # Private, like Get-WinGetRegistration: a definition copy carrying a scalar
@@ -768,7 +798,7 @@ function Get-WinEnvState {
     if (-not (Test-Path -LiteralPath $Path -PathType Leaf)) { return $null }
     try {
         $state = Get-Content -LiteralPath $Path -Raw -Encoding utf8 | ConvertFrom-Json -ErrorAction Stop
-        if ($state.schemaVersion -ne 1 -and $state.schemaVersion -ne 2) { throw 'Unsupported state schema.' }
+        if ($state.schemaVersion -ne 1 -and $state.schemaVersion -ne 2) { throw 'INV windows/schema-version-refused: Unsupported state schema.' }
         # Schema 1 recorded no selection because none existed; it is read as a
         # full deployment rather than rejected.
         if ($state.schemaVersion -eq 2) {
@@ -1729,7 +1759,12 @@ function Test-WinEnvSourceFile {
     )
 
     $path = Join-Path $RepositoryRoot $Definition.Source
-    switch ($Definition.Parser) {
+    # INV windows/parser-declared — the loader refuses a parser outside
+    # $script:WinEnvParser, so a manifest-sourced definition never reaches
+    # the default arm; it exists for a definition built in code, whose
+    # unknown or missing parser used to fall through and count as parsed.
+    $parser = if ($Definition.ContainsKey('Parser')) { [string]$Definition.Parser } else { '' }
+    switch ($parser) {
         'Json' { $null = Get-Content -LiteralPath $path -Raw | ConvertFrom-Json -ErrorAction Stop }
         'Ini' {
             $section = $null
@@ -1768,6 +1803,9 @@ function Test-WinEnvSourceFile {
         }
         'Text' {
             # Existence and content are checked by the managed-file path.
+        }
+        default {
+            throw "INV windows/parser-declared: No validator exists for parser '$parser' declared on '$($Definition.Source)'."
         }
     }
 
@@ -1818,8 +1856,10 @@ $script:WinEnvRuntimeStateName = @(
 # An absolute account path, in every spelling this domain can meet. The axes
 # are the same three tool/version-control/hygiene enforces repository-wide, so
 # a capture cannot write a payload that the commit's own hygiene scan then
-# refuses, and the tool does not depend on that scan running: whether the POSIX
-# hooks execute under Git for Windows is recorded in docs/status.md as unknown.
+# refuses, and the tool does not depend on that scan running even though the
+# POSIX hooks do execute under Git for Windows (#77,
+# docs/decisions/hooks-run-under-git-for-windows.md): hooks stay opt-in per
+# clone regardless of platform.
 #
 #   - a drive-letter path, with either separator, singled or doubled: a text
 #     payload carries one backslash, a JSON payload doubles it, and WSL and
@@ -1850,8 +1890,8 @@ $script:WinEnvAccountPathPattern = '(?im)' +
         $script:WinEnvPathSeparator + $script:WinEnvAccountName +
         $script:WinEnvPathSeparator + 'home' + $script:WinEnvPathSeparator + $script:WinEnvAccountName + ')'
 
-# AGENTS.md, Host safety: a .wslconfig firewall value is never added without
-# explicit direction, and a capture is not direction.
+# AGENTS.md, "Rules that are expensive to break": a .wslconfig firewall value
+# is never added without explicit direction, and a capture is not direction.
 $script:WinEnvWslFirewallPattern = '(?im)^[ \t]*firewall[ \t]*='
 
 # Private, like Get-WinGetRegistration: the capture outcome's shape is this

@@ -78,5 +78,7 @@ new distribution and `rw` everywhere else.
 
 - `docs/troubleshooting.md` — the same thing filed under its literal error text,
   plus how to tell a flush from a deletion.
-- `docs/status.md` — the full investigation, including two fixes that looked
-  right and were not.
+- the investigation is under the
+  `cat: /proc/sys/fs/binfmt_misc/WSLInterop` entry in
+  `docs/troubleshooting.md`, and the two fixes that looked right and were
+  not are described in `modules/wsl.nix`.

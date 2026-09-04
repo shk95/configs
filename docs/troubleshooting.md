@@ -1,7 +1,8 @@
 # Things that already cost someone an afternoon
 
-Findings that recur. Not a changelog and not a diary — `docs/status.md` holds the
-current state and the decisions, this holds the things that will bite again.
+Findings that recur. Not a changelog and not a diary — `docs/status.md`
+holds the current state; decisions are under `docs/decisions/`. This holds
+the things that will bite again.
 
 **Search this file by the error text, not by reading it.** Headings are the
 literal message you will see, so `grep` finds the entry that matches what is in
@@ -94,11 +95,11 @@ Two consequences worth knowing before you go looking:
   open pull request's head branch is the cheapest one, since it fires
   `pull_request: synchronize` even when the branch itself is not in the
   workflow's `push` filter.
-- **It interacts badly with branch protection.** `setup-repo.sh` makes the
-  release branch require the `Secret and hygiene scan` check. With Actions off
-  that check never reports, so every pull request into it waits forever on
-  something that cannot arrive — and the branch protection settings look
-  perfectly correct while it happens.
+- **It interacts badly with branch protection.** Both `dev` and `master`
+  require the `Required checks` job, which reports only after the classify,
+  scan and selected domain jobs have run. With Actions off nothing reports, so
+  every pull request waits forever on something that cannot arrive — and the
+  branch protection settings look perfectly correct while it happens.
 
 ### `tool/doctor.sh`: `could not ask the flake whether nix-command works`
 
@@ -607,8 +608,7 @@ device node inside the namespace.
 
 `git status` **exits 0 here.** It is not failing; it is answering truthfully
 about a filesystem that only it can see. That is what makes this worse than a
-probe that errors — see *A green `git status` described a filesystem nobody
-had* in `docs/status.md`.
+probe that errors.
 
 ### `warning: unable to access '<repo>/.gitmodules': Permission denied`
 

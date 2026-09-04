@@ -1,0 +1,43 @@
+#!/bin/sh
+# Fixtures for tool/checks/composition.
+#
+# INV unixlike/composition-in-one-place
+#
+# The positive case is the real modules/ tree. The negatives are the two ways
+# a feature file can take the composition decision for itself — naming a host
+# flavour, forcing a value another class declares — and one case that must
+# pass: a comment that merely mentions either, so the scan reads code and not
+# prose.
+
+set -e
+
+repo=$(CDPATH= cd -- "$(dirname "$0")/../.." && pwd)
+cd "$repo"
+
+fail() {
+  printf '\033[31m✗ %s\033[0m\n' "$1" >&2
+  exit 1
+}
+
+# ---------------------------------------------------------------------------
+# Feature files name no host and force no value
+# ---------------------------------------------------------------------------
+#
+# INV unixlike/composition-in-one-place
+printf '→ accepts modules/\n'
+tool/checks/composition
+
+for case in forces names-host; do
+  printf '→ rejects %s\n' "$case"
+  if output=$(tool/checks/composition "tool/checks/fixtures/composition/$case" 2>&1); then
+    fail "the composition check accepted the $case fixture"
+  fi
+  printf '%s\n' "$output" | grep -q "fixtures/composition/$case/feature.nix:" \
+    || fail "the composition check did not name the offending file for $case"
+done
+
+printf '→ accepts a comment that mentions both\n'
+tool/checks/composition tool/checks/fixtures/composition/mentions-in-comment >/dev/null \
+  || fail "the composition check read a comment as a use"
+
+printf '✓ composition fixtures behave\n'

@@ -1,0 +1,41 @@
+#!/bin/sh
+# Fixtures for tool/checks/import-order.
+#
+# INV unixlike/import-order-independence
+#
+# The positive case is the real modules/ tree. The negative adds a pair of
+# files that contribute to one flake-level list at the same order and feed it
+# into a home, which is the shape the rule forbids: the generated file, and so
+# the host toplevel, then depends on which of the two the walk found first.
+# (A pair contributing to a class option is not enough: the class merge is
+# keyed by file, which is the fix this check guards.)
+
+set -e
+. "$(CDPATH= cd -- "$(dirname -- "$0")" && pwd)/prerequisite"
+require_command nix
+
+repo=$(CDPATH= cd -- "$(dirname "$0")/../.." && pwd)
+cd "$repo"
+
+fail() {
+  printf '\033[31m✗ %s\033[0m\n' "$1" >&2
+  exit 1
+}
+
+# ---------------------------------------------------------------------------
+# Every host composes the same in either walk order
+# ---------------------------------------------------------------------------
+#
+# INV unixlike/import-order-independence
+printf '→ accepts modules/\n'
+tool/checks/import-order
+
+printf '→ rejects an order-dependent pair\n'
+if output=$(tool/checks/import-order tool/checks/fixtures/import-order/order-dependent 2>&1); then
+  printf '%s\n' "$output" >&2
+  fail "the import-order check accepted an order-dependent pair"
+fi
+printf '%s\n' "$output" | grep -q 'differs when the module files are collected in reverse order' \
+  || fail "the import-order check failed for another reason"
+
+printf '✓ import-order fixtures behave\n'

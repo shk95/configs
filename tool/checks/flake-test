@@ -1,0 +1,209 @@
+#!/bin/sh
+# Fixtures for the flake's own schema: the typed identity contract in
+# modules/flake/identity.nix, the class composition in
+# modules/flake/configurations.nix, and the two assertion-backed rules in
+# modules/shell.nix and modules/packages.nix. All are enforced by evaluation,
+# so the fixtures are evaluations — a value the schema must accept, a value it
+# must refuse, a package that must reach one class of home and not another,
+# and a module that must make a configuration's assertions fail.
+#
+# `builtins.getFlake` needs --impure to read a path; the locked nixpkgs `lib`
+# is the one the flake evaluates with, so a module-system change in the input
+# shows up here first.
+
+set -e
+. "$(CDPATH= cd -- "$(dirname -- "$0")" && pwd)/prerequisite"
+require_command nix
+
+repo=$(CDPATH= cd -- "$(dirname -- "$0")/../.." && pwd)
+cd "$repo"
+
+fail() {
+  printf '\033[31m✗ %s\033[0m\n' "$1" >&2
+  exit 1
+}
+
+# Evaluates identity.nix against inventory.nix plus one override module and
+# prints the identity attribute asked for. `{ }` is the no-override case; a
+# refusal case forces its value with `lib.mkForce`, otherwise the override
+# collides with the inventory at equal priority and the merge error would
+# stand in for the type refusal being proved.
+identity_eval() {
+  nix eval --raw --impure --expr "
+    let
+      flake = builtins.getFlake (toString ./.);
+      lib = flake.inputs.nixpkgs.lib;
+      eval = lib.evalModules {
+        modules = [ ./modules/flake/identity.nix ./modules/flake/inventory.nix $1 ];
+      };
+    in eval.config.identity.$2"
+}
+
+# ---------------------------------------------------------------------------
+# Typed identity
+# ---------------------------------------------------------------------------
+#
+# INV unixlike/typed-identity
+# The schema is identity.nix. The inventory must satisfy it, and a wrong shape
+# must be refused at evaluation, before any host configuration is composed.
+
+printf '→ accepts the inventory\n'
+user=$(identity_eval '{ }' wsl.user)
+[ -n "$user" ] || fail "identity.nix evaluated the inventory to an empty WSL account"
+
+printf '→ refuses a platform outside the enum\n'
+if identity_eval '{ identity.darwin.system = lib.mkForce "x86_64-linux"; }' darwin.system >/dev/null 2>&1; then
+  fail "identity.nix accepted x86_64-linux as a Darwin platform"
+fi
+
+printf '→ refuses a non-string account\n'
+if identity_eval '{ identity.wsl.user = lib.mkForce 5; }' wsl.user >/dev/null 2>&1; then
+  fail "identity.nix accepted a number as the WSL account"
+fi
+
+# ---------------------------------------------------------------------------
+# The desktop class stays out of the WSL homes
+# ---------------------------------------------------------------------------
+#
+# INV unixlike/desktop-not-wsl
+# modules/flake/configurations.nix composes `homeManager.desktop` into the
+# Darwin home only. WezTerm is the marker: modules/wezterm.nix declares it in
+# the desktop class alone, so its presence in a WSL home's packages means a
+# graphical class reached a headless home. The Darwin arm proves the probe
+# sees the package where the class is composed, so an empty result is not a
+# pass by accident.
+
+packages_of() {
+  nix eval --raw "path:$repo#$1" \
+    --apply 'ps: builtins.concatStringsSep "\n" (map (p: p.pname or p.name) ps)'
+}
+
+wsl_user=$(identity_eval '{ }' wsl.user)
+darwin_user=$(identity_eval '{ }' darwin.user)
+darwin_host=$(identity_eval '{ }' darwin.hostName)
+
+for home in \
+  "homeConfigurations.\"$wsl_user\".config.home.packages" \
+  "nixosConfigurations.wsl.config.home-manager.users.\"$wsl_user\".home.packages"
+do
+  printf '→ %s carries no graphical program\n' "${home%%.config*}"
+  names=$(packages_of "$home")
+  if printf '%s\n' "$names" | grep -qx wezterm; then
+    fail "$home carries wezterm, a desktop-class program"
+  fi
+done
+
+printf '→ the Darwin home carries it\n'
+darwin_home="darwinConfigurations.\"$darwin_host\".config.home-manager.users.\"$darwin_user\".home.packages"
+names=$(packages_of "$darwin_home")
+if ! printf '%s\n' "$names" | grep -qx wezterm; then
+  fail "the Darwin home has no wezterm; the probe cannot see the desktop class"
+fi
+
+# Evaluates the failed assertions of a configuration extended with one more
+# module. The extension is `extendModules`, so the real configuration is
+# what is evaluated, plus the one definition each case adds. Two shapes of
+# refusal exist and both are kept apart from an unrelated evaluation error:
+# Home Manager turns a failed assertion into an evaluation error headed
+# `Failed assertions:` as soon as `config` is read, while NixOS and
+# nix-darwin report theirs through `config.assertions`, so a refusal there
+# is a clean evaluation whose output names the tag. Leaves the status, the
+# output and the diagnostics in three variables for the two checks below.
+failed_assertions() {
+  assertion_status=0
+  assertion_output=$(nix eval --raw --impure --expr "
+    let
+      flake = builtins.getFlake (toString ./.);
+      lib = flake.inputs.nixpkgs.lib;
+      configuration = flake.$1;
+      extended = configuration.extendModules { modules = [ ($2) ]; };
+      failed = builtins.filter (a: !a.assertion) extended.config.assertions;
+    in builtins.concatStringsSep \"\n\" (map (a: a.message) failed)" \
+    2>"$assertion_diagnostics") || assertion_status=$?
+}
+
+expect_refusal() {
+  tag=$1
+  what=$2
+  if [ "$assertion_status" -eq 0 ]; then
+    printf '%s\n' "$assertion_output" | grep -q "$tag" && return 0
+  elif grep -q 'Failed assertions:' "$assertion_diagnostics"; then
+    grep -q "$tag" "$assertion_diagnostics" && return 0
+  fi
+  printf '%s\n' "$assertion_output" >&2
+  cat "$assertion_diagnostics" >&2
+  fail "$what was not refused by $tag"
+}
+
+expect_clean() {
+  what=$1
+  if [ "$assertion_status" -ne 0 ] || [ -n "$assertion_output" ]; then
+    printf '%s\n' "$assertion_output" >&2
+    cat "$assertion_diagnostics" >&2
+    fail "$what fails an assertion or does not evaluate"
+  fi
+}
+
+assertion_diagnostics=$(mktemp)
+trap 'rm -f "$assertion_diagnostics"' EXIT
+
+home="homeConfigurations.\"$wsl_user\""
+nixos="nixosConfigurations.wsl"
+darwin="darwinConfigurations.\"$darwin_host\""
+
+# ---------------------------------------------------------------------------
+# The version manager runs last and owns its toolchain
+# ---------------------------------------------------------------------------
+#
+# INV unixlike/version-manager-last
+# modules/shell.nix contributes the SDKMAN hook at `mkAfter` and asserts on
+# the merged initialisation text, so a PATH line any module contributes later
+# is refused at evaluation; a JDK declared as a package is refused the same
+# way. The real home must pass both.
+
+printf '→ refuses a PATH entry contributed after the version manager\n'
+failed_assertions "$home" '{lib, ...}: { programs.zsh.initContent = lib.mkOrder 2000 "path+=(\"/opt/late/bin\")"; }'
+expect_refusal 'INV unixlike/version-manager-last' 'a late PATH entry'
+
+printf '→ refuses a PATH element assigned after the version manager\n'
+failed_assertions "$home" '{lib, ...}: { programs.zsh.initContent = lib.mkOrder 2000 "path[1,0]=/opt/late/bin"; }'
+expect_refusal 'INV unixlike/version-manager-last' 'a late PATH entry'
+
+printf '→ refuses a JDK declared as a package\n'
+failed_assertions "$home" '{pkgs, ...}: { home.packages = [pkgs.openjdk]; }'
+expect_refusal 'INV unixlike/version-manager-last' 'a JDK package'
+
+printf '→ the real home keeps the hook last and declares no toolchain\n'
+failed_assertions "$home" '{ }'
+expect_clean 'the WSL home'
+
+# ---------------------------------------------------------------------------
+# A package has one declaring module
+# ---------------------------------------------------------------------------
+#
+# INV unixlike/package-ownership
+# modules/packages.nix asserts, per home, that no package name is defined by
+# two owners, and per system layer that no name this repository declares is
+# in both the system packages and the managed home. `ripgrep` is already in
+# the shared list, so a second declaration of it is the violation; the real
+# configurations must pass.
+
+printf '→ refuses a package declared by a second module in a home\n'
+failed_assertions "$home" '{pkgs, ...}: { home.packages = [pkgs.ripgrep]; }'
+expect_refusal 'INV unixlike/package-ownership' 'a second ripgrep declaration'
+
+printf '→ refuses a home package declared again as a NixOS system package\n'
+failed_assertions "$nixos" '{pkgs, ...}: { environment.systemPackages = [pkgs.ripgrep]; }'
+expect_refusal 'INV unixlike/package-ownership' 'ripgrep in environment.systemPackages'
+
+printf '→ refuses a home package declared again as a Darwin system package\n'
+failed_assertions "$darwin" '{pkgs, ...}: { environment.systemPackages = [pkgs.ripgrep]; }'
+expect_refusal 'INV unixlike/package-ownership' 'ripgrep in environment.systemPackages'
+
+printf '→ the real NixOS and Darwin flavours declare nothing twice\n'
+failed_assertions "$nixos" '{ }'
+expect_clean 'the NixOS flavour'
+failed_assertions "$darwin" '{ }'
+expect_clean 'the Darwin flavour'
+
+echo "✓ flake schema fixtures behave"

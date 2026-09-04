@@ -13,9 +13,12 @@ tool/doctor.sh
 ```
 
 `tool/setup` changes only the clone-local hooks setting and only with `--fix`.
-`tool/doctor.sh` is read-only. Pass `unixlike`, `windows`, `common`, or
-`repository` to check only that scope; omit the scope for a complete host
-inventory. A missing foreign-platform capability does not block scoped work.
+`tool/doctor.sh` is read-only. `tool/doctor.sh` also prints a one-line
+summary of the outcomes the hooks have recorded on this clone;
+`tool/version-control/hook-evidence` prints the full count. Pass `unixlike`,
+`windows`, `common`, or `repository` to check only that scope; omit the
+scope for a complete host inventory. A missing foreign-platform capability
+does not block scoped work.
 
 ## Classify the change
 
@@ -146,6 +149,50 @@ Use `design-project-governance` from the sibling `skills` project to perform
 this decomposition. The skill owns only the generic method; this repository
 owns the result. A product-specific adapter must not own any part of either.
 
+## Add or change an invariant
+
+An invariant is a statement that must remain true of committed desired state
+or repository tooling. `invariants/README.md` is the format; this is the
+procedure.
+
+1. Classify the invariant's scope. Its file goes under
+   `invariants/<scope>/<slug>.md` and the change classifies as that scope.
+2. Write the statement as one sentence naming no command, product, or model.
+3. Point `rationale` at the section of `docs/architecture.md` or `AGENTS.md`
+   that justifies it. If none does, write that section first; a rule with no
+   rationale is not ready to register.
+4. Declare the enforcement. A `schema` or `tool` entry also declares a
+   `fixture`; add the fixture in the same change and tag it with
+   `INV <scope>/<slug>`. A `manual` entry names its evidence and is listed by
+   id in `docs/definition-of-done.md`; because the checker requires that
+   listing and refuses an unregistered tag in the same run, the entry and the
+   evidence item land in one commit that classifies as the entry's scope
+   and `repository` — the one accepted two-scope commit, as supporting
+   documentation. If nothing enforces it yet, open an
+   issue and declare `pending #<n>` with an owner. Tag the fixture *unit* —
+   the `Describe` or the banner section — or the pre-commit hook refuses the
+   commit; `tool/version-control/invariants --untagged` names the unit.
+5. Put the tag `INV <scope>/<slug>` in every declared locator: a header
+   comment in a script, the test name or a comment above a fixture, the
+   loader's refusal message.
+6. Run `tool/version-control/invariants`. It runs again on every commit.
+
+Removing an invariant removes its file and every tag that named it; the check
+refuses an orphan tag. Weakening a statement is a governance change and is
+reviewed as one.
+
+## Record a decision
+
+Write a record when a choice is expensive to reverse or a reviewer will ask
+why it was made. Add a file under `docs/decisions/` with the header and
+format `docs/decisions/README.md` defines, and add it to that file's index.
+Reversing a decision creates a new record, sets the old one to
+`status: superseded` with `superseded-by`, and moves every pointer to it in
+the same commit — the checker cannot tell a superseded record from a live
+one. Prose and code cite a record by path only; a quoted heading is checked
+by nothing and rots. Cite it from a registry entry with `decision:` when an
+invariant rests on it.
+
 ## Plan work with GitHub milestones
 
 GitHub milestones group planned work after its owning scope and outcome are
@@ -179,7 +226,8 @@ record for this intentionally manual policy.
 3. Keep host composition in `modules/flake/configurations.nix`.
 4. Run narrow formatting, lint, evaluation, and native build checks.
 5. Create a Unix-like release tag only after the required matching-host
-   evidence exists.
+   evidence exists, including a build of every configuration with
+   `CHECKS_BUILD_ALL=1 tool/checks/test` on a matching host.
 6. Activate only when explicitly requested, from the intended Unix-like
    release.
 
@@ -272,6 +320,10 @@ semantics.
 
 When common ownership is justified:
 
+Until the domain exists, no path under `common/` classifies; the change that
+creates it restores classification, dispatch and the gate job first, or the
+first commit is refused as having no owning scope.
+
 1. Put it under `common/`, not under either platform domain.
 2. Document its contract, supported consumers, and exclusions.
 3. Give it consumer-independent checks.
@@ -296,6 +348,13 @@ tool/checks/payloads
 tool/checks/test
 ```
 
+The fixtures that prove the Unix-like checks refuse what they must —
+`tool/checks/payloads-test`, `flake-test`, `composition-test`,
+`eval-coverage-test`, `prerequisite-test` and `import-order-test` — run in
+the CI unix job. Run one by hand when its check or its fixtures change.
+`import-order-test` composes every host twice and is merge-gate only by
+design (`INV unixlike/import-order-independence`).
+
 `tool/checks/payloads` parses every source payload declared in
 `assets/payloads.json` with the tool that consumes it. Evaluation does not
 cover them: Nix copies a payload into the store without reading it.
@@ -316,11 +375,25 @@ only the domain checks whose dispatch or enforcement behavior changed. Secret
 scanning remains repository-wide. A governance change does not receive a
 domain tag.
 
+`tool/version-control/invariants` checks the invariant registry in both
+directions and runs on every commit beside the hygiene scan, whatever the
+scope of the change, because a renamed fixture in any scope can orphan the tag
+an entry depends on.
+
 ```sh
 tool/version-control/test
+tool/version-control/invariants
+tool/version-control/domain-reads
 tool/version-control/audit
 tool/version-control/audit-remote  # when gh is authenticated
+tool/version-control/hook-evidence
 ```
+
+`tool/version-control/audit --history` runs on every push and in the
+repository-wide CI scan job, and judges committed history alone. The full
+form, which also judges this clone — local branch names, tags, the hooks
+setting — is a read-only look by hand, because a clone's scratch branch is
+not a property of the change being pushed.
 
 ### Desired-state hygiene
 
@@ -359,6 +432,24 @@ A bare account name written into prose is not detectable and is not covered.
 Reading prose in the diff for one is a manual obligation recorded in
 `docs/definition-of-done.md`.
 
+### Cross-domain reads
+
+`tool/version-control/domain-reads` scans each domain's code in the index —
+the flake, the modules and the Unix-like checks on one side, the Windows
+scripts on the other — for a path that names the other domain's tree, with
+comments stripped and payload trees left out. It runs on every commit beside
+the hygiene scan and in CI, because a read across the boundary is a property
+of two trees rather than of the domain being changed.
+
+```sh
+tool/version-control/domain-reads
+```
+
+When it reports something, copy what the other domain owns into the domain
+that reads it; the destination then owns the copy (`docs/architecture.md`,
+"Default rule: keep implementations separate"). There is no allow list: a
+read across the boundary has no legitimate form.
+
 Branch protection on `dev` and `master` requires the stable `Required checks`
 job. That job fails unless classification and secret scanning pass and every
 selected domain job succeeds. Conditional domain job names are deliberately
@@ -372,9 +463,11 @@ not branch-protection contexts because unselected domains are skipped.
 | `CONTRIBUTING.md` | Domain-scoped workflow and releases |
 | `AGENTS.md` | Stable judgement and safety boundaries |
 | `docs/architecture.md` | Domain authority and dependency policy |
-| `docs/status.md` | Current state and expensive decisions |
+| `docs/status.md` | Current state |
+| `docs/decisions/` | One record per expensive decision; `README.md` there is the index and format |
 | `docs/troubleshooting.md` | Recurring problems indexed by symptom |
 | `docs/definition-of-done.md` | Domain-specific evidence requirements |
+| `invariants/` | Enumerated invariants and how each one is enforced |
 | `.agents/skills/` | Model-neutral workflows specific to this repository |
 | `tool/`, hooks, CI | Executable policy |
 

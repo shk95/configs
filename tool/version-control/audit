@@ -1,8 +1,40 @@
 #!/bin/sh
 
 # Audit committed history and clone-local version-control policy. Read-only.
+#
+# usage: tool/version-control/audit [--history]
+#
+# `--history` is the merge-gate form, which audits committed history alone,
+# because a runner has no clone-local configuration to audit.
+#
+# INV repository/flake-lock-isolated, INV repository/release-tag-contract
+# INV repository/hooks-are-the-tracked-ones
+# INV repository/conventional-subject — subjects are judged by
+# .githooks/commit-msg, the grammar's only owner.
+#
+# Exit 0 verified, 69 unverified (no dev/master ref), any other status failed.
 
 set -eu
+
+# The clone-local half (working tree, core.hooksPath, local branch names) is
+# only answerable where a clone was configured by a person. A CI checkout is
+# a detached, hook-less, branch-less shape by construction, so the merge gate
+# asks for history alone rather than for findings it would have to ignore.
+mode=full
+if [ "$#" -gt 0 ]; then
+  if [ "$#" -eq 1 ] && [ "$1" = --history ]; then
+    mode=history
+  else
+    echo "usage: tool/version-control/audit [--history]" >&2
+    exit 2
+  fi
+fi
+
+# Guards this script's sed/grep/awk calls from Git for Windows' MSYS argument
+# conversion (#79); see tool/version-control/hygiene. Inert elsewhere.
+MSYS_NO_PATHCONV=1
+MSYS2_ARG_CONV_EXCL='*'
+export MSYS_NO_PATHCONV MSYS2_ARG_CONV_EXCL
 
 root=$(git rev-parse --show-toplevel)
 cd "$root"
@@ -27,53 +59,105 @@ fail() {
 branch=$(git symbolic-ref --quiet --short HEAD 2>/dev/null || echo detached)
 printf 'branch: %s\n' "$branch"
 
-if [ -n "$(git status --porcelain)" ]; then
-  warn "working tree has uncommitted changes"
-else
-  ok "working tree is clean"
-fi
-
-hooks=$(git config --local --get core.hooksPath 2>/dev/null || true)
-if [ "$hooks" = .githooks ]; then
-  ok "clone uses .githooks"
-else
-  fail "core.hooksPath is '${hooks:-unset}', expected .githooks"
-fi
-
-for required in dev master; do
-  if git show-ref --verify --quiet "refs/heads/$required"; then
-    ok "$required branch exists"
+if [ "$mode" = full ]; then
+  if [ -n "$(git status --porcelain)" ]; then
+    warn "working tree has uncommitted changes"
   else
-    fail "$required branch is unavailable"
+    ok "working tree is clean"
+  fi
+fi
+
+# The directory Git will run hooks from, canonical. Relative values are
+# relative to the worktree root; an unset value resolves to .git/hooks, which
+# is never the tracked directory. Comparing directories rather than strings
+# is what lets an absolute core.hooksPath naming .githooks count as enabled.
+# git rev-parse prints a relative value relative to the current directory, so
+# this helper is only correct after the script has changed to the toplevel,
+# which every caller here does first.
+hooks_actual() {
+  hooks_actual_dir=$(git rev-parse --git-path hooks 2>/dev/null) || return 1
+  case "$hooks_actual_dir" in
+    /*) ;;
+    *) hooks_actual_dir="$(git rev-parse --show-toplevel)/$hooks_actual_dir" ;;
+  esac
+  (CDPATH= cd -- "$hooks_actual_dir" 2>/dev/null && pwd -P)
+}
+# Enabled when Git's hooks directory is the tracked .githooks of any worktree
+# of this repository: a linked worktree shares the clone's absolute
+# core.hooksPath, which names the main worktree's copy of the same tracked
+# directory.
+hooks_enabled() {
+  hooks_enabled_actual=$(hooks_actual) || return 1
+  git worktree list --porcelain 2>/dev/null | sed -n 's/^worktree //p' |
+    while IFS= read -r hooks_enabled_root; do
+      hooks_enabled_expected=$(CDPATH= cd -- "$hooks_enabled_root/.githooks" 2>/dev/null && pwd -P) || continue
+      [ "$hooks_enabled_actual" = "$hooks_enabled_expected" ] && echo yes
+    done | grep -q yes
+}
+
+if [ "$mode" = full ]; then
+  if hooks_enabled; then
+    ok "clone runs the tracked hooks ($(git config --get core.hooksPath))"
+  else
+    fail "core.hooksPath is '$(git config --get core.hooksPath || echo unset)' and does not resolve to .githooks"
+  fi
+fi
+
+# The integration branches as this clone can see them: a local branch when it
+# exists, else the remote-tracking ref a fetch left behind. A clone with
+# neither cannot answer the history questions below and says so as
+# unverified, which CI turns into a failure.
+ref_of() {
+  if git show-ref --verify --quiet "refs/heads/$1"; then
+    printf '%s\n' "$1"
+  elif git show-ref --verify --quiet "refs/remotes/origin/$1"; then
+    printf 'origin/%s\n' "$1"
+  fi
+}
+dev_ref=$(ref_of dev)
+master_ref=$(ref_of master)
+unverified=0
+for required in dev master; do
+  eval "resolved=\$${required}_ref"
+  if [ -n "$resolved" ]; then
+    ok "$required resolves to $resolved"
+  else
+    printf '· unverified: no local or origin/%s ref in this clone\n' "$required"
+    unverified=1
   fi
 done
 
-for local_branch in $(git for-each-ref --format='%(refname:short)' refs/heads); do
-  case "$local_branch" in
-    dev|master) ;;
-    backup/*) warn "local backup branch remains: $local_branch" ;;
-    feature/*|fix/*)
-      if printf '%s\n' "$local_branch" | grep -Eq '^(feature|fix)/(unixlike|windows|common|repository)-[a-z0-9][a-z0-9-]*$'; then
-        ok "branch name follows policy: $local_branch"
-      else
-        fail "branch name does not follow policy: $local_branch"
-      fi
-      ;;
-    *) fail "unexpected local branch name: $local_branch" ;;
-  esac
-done
+if [ "$mode" = full ]; then
+  for local_branch in $(git for-each-ref --format='%(refname:short)' refs/heads); do
+    case "$local_branch" in
+      dev|master) ;;
+      backup/*) warn "local backup branch remains: $local_branch" ;;
+      feature/*|fix/*)
+        if printf '%s\n' "$local_branch" | grep -Eq '^(feature|fix)/(unixlike|windows|common|repository)-[a-z0-9][a-z0-9-]*$'; then
+          ok "branch name follows policy: $local_branch"
+        else
+          fail "branch name does not follow policy: $local_branch"
+        fi
+        ;;
+      *) fail "unexpected local branch name: $local_branch" ;;
+    esac
+  done
+fi
 
+commit_msg_hook="$root/.githooks/commit-msg"
 commits=$(mktemp)
-trap 'rm -f "$commits"' EXIT
-if git show-ref --verify --quiet refs/heads/dev; then
-  git log dev --no-merges --format='%H%x09%s' >"$commits"
+subject_file=$(mktemp)
+trap 'rm -f "$commits" "$subject_file"' EXIT
+if [ -n "$dev_ref" ]; then
+  git log "$dev_ref" --no-merges --format='%H%x09%s' >"$commits"
   tab=$(printf '\t')
   commit_failures=$failures
   while IFS="$tab" read -r sha subject; do
-    if printf '%s\n' "$subject" | grep -Eq '^(build|chore|ci|docs|feat|fix|perf|refactor|revert|style|test)(\([a-z0-9._/-]+\))?!?: .+$|^Revert .+'; then
+    printf '%s\n' "$subject" >"$subject_file"
+    if "$commit_msg_hook" "$subject_file" >/dev/null 2>&1; then
       :
     else
-      fail "non-conventional commit $sha: $subject"
+      fail "commit subject rejected by .githooks/commit-msg $sha: $subject"
     fi
   done <"$commits"
   if [ "$failures" -eq "$commit_failures" ]; then
@@ -81,8 +165,8 @@ if git show-ref --verify --quiet refs/heads/dev; then
   fi
 fi
 
-if git show-ref --verify --quiet refs/heads/master && git show-ref --verify --quiet refs/heads/dev; then
-  direct=$(git rev-list --no-merges master --not dev)
+if [ -n "$master_ref" ] && [ -n "$dev_ref" ]; then
+  direct=$(git rev-list --no-merges "$master_ref" --not "$dev_ref")
   if [ -n "$direct" ]; then
     fail "master contains non-merge commits not present on dev"
   else
@@ -90,10 +174,10 @@ if git show-ref --verify --quiet refs/heads/master && git show-ref --verify --qu
   fi
 
   invalid_promotions=0
-  for merge in $(git rev-list --first-parent --merges master); do
+  for merge in $(git rev-list --first-parent --merges "$master_ref"); do
     parents=$(git show -s --format='%P' "$merge")
     second_parent=$(printf '%s\n' "$parents" | awk '{print $2}')
-    if [ -z "$second_parent" ] || ! git merge-base --is-ancestor "$second_parent" dev; then
+    if [ -z "$second_parent" ] || ! git merge-base --is-ancestor "$second_parent" "$dev_ref"; then
       fail "master merge does not carry history accepted through dev: $merge"
       invalid_promotions=$((invalid_promotions + 1))
     fi
@@ -112,7 +196,10 @@ for tag in $(git tag); do
   fi
   if [ "$(git cat-file -t "refs/tags/$tag")" != tag ]; then
     fail "release tag is lightweight, expected annotated: $tag"
-  elif ! git merge-base --is-ancestor "$tag^{}" master; then
+  elif [ -z "$master_ref" ]; then
+    printf '· unverified: no local or origin/master ref to check tag reachability: %s\n' "$tag"
+    unverified=1
+  elif ! git merge-base --is-ancestor "$tag^{}" "$master_ref"; then
     fail "release tag target is not reachable from master: $tag"
   else
     annotation=$(git for-each-ref --format='%(contents)' "refs/tags/$tag")
@@ -149,4 +236,13 @@ for sha in $(git log --format='%H' -- flake.lock); do
 done
 
 printf 'summary: %s warning(s), %s failure(s)\n' "$warnings" "$failures"
-[ "$failures" -eq 0 ]
+if [ "$failures" -ne 0 ]; then
+  exit 1
+fi
+if [ "$unverified" -eq 1 ]; then
+  if [ "${REQUIRE_NATIVE:-0}" = 1 ]; then
+    printf 'failure: unverified under REQUIRE_NATIVE\n' >&2
+    exit 1
+  fi
+  exit 69
+fi

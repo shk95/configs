@@ -17,17 +17,31 @@ param(
 $ErrorActionPreference = 'Stop'
 $setupPath = Join-Path $PSScriptRoot 'setup.ps1'
 
+# INV windows/check-exit-contract — a prerequisite this host lacks is reported
+# under -Check as unverified (69), or as a failure (1) when REQUIRE_NATIVE asks
+# for native evidence; -Check never installs anything, so it can only report.
+# Without -Check a missing WinGet is the failure it always was, and a missing
+# pwsh is installed below.
+$requireNative = $env:REQUIRE_NATIVE -eq '1'
+function Exit-Unverified {
+    param([string] $Message)
+    if ($requireNative) {
+        [Console]::Error.WriteLine("$Message REQUIRE_NATIVE is set, so this counts as a failure.")
+        exit 1
+    }
+    Write-Host "unverified: $Message"
+    exit 69
+}
+
 if (-not (Get-Command winget.exe -ErrorAction SilentlyContinue)) {
+    if ($Check) { Exit-Unverified 'WinGet is missing; -Check never installs prerequisites.' }
     Write-Error 'WinGet is required. Install or repair Microsoft App Installer first.'
     exit 1
 }
 
 $pwsh = Get-Command pwsh.exe -ErrorAction SilentlyContinue
 if (-not $pwsh) {
-    if ($Check) {
-        Write-Warning 'PowerShell 7 is missing. -Check never installs prerequisites.'
-        exit 2
-    }
+    if ($Check) { Exit-Unverified 'PowerShell 7 is missing; -Check never installs prerequisites.' }
 
     & winget.exe install --id Microsoft.PowerShell --exact --source winget --accept-source-agreements --accept-package-agreements --disable-interactivity
     if ($LASTEXITCODE -ne 0) {

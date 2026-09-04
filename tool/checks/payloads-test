@@ -1,6 +1,8 @@
 #!/bin/sh
 # Negative fixtures for tool/checks/payloads.
 #
+# INV unixlike/payload-declared-and-parsed
+#
 # The positive case is the real assets/ tree. The negatives are the ways a
 # payload can escape validation — content that does not parse, a file no
 # declaration mentions, a declaration whose file is gone — plus the way a
@@ -11,6 +13,11 @@ set -e
 repo=$(CDPATH= cd -- "$(dirname "$0")/../.." && pwd)
 cd "$repo"
 
+# ---------------------------------------------------------------------------
+# Payloads are declared and parsed
+# ---------------------------------------------------------------------------
+#
+# INV unixlike/payload-declared-and-parsed
 printf '→ accepts assets\n'
 tool/checks/payloads
 

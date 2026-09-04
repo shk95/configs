@@ -1,12 +1,18 @@
 #!/bin/sh
 #
-# Enforce the desired-state hygiene invariant. `AGENTS.md`, "Durable
-# decisions", states it: keep secrets, undeclared usernames, absolute home
-# paths, and snapshots of runtime state out of every domain's committed desired
-# state. Secrets already have an enforcement owner in gitleaks and are
-# deliberately not duplicated here. The other three had no enforcement owner at
-# all, which is how two absolute home paths reached docs/troubleshooting.md and
-# stayed there for the document's whole history.
+# Enforce the desired-state hygiene invariant.
+#
+# INV repository/hygiene-home-paths, INV repository/hygiene-declared-names,
+# INV repository/hygiene-runtime-state, INV repository/hygiene-machine-identity,
+# INV repository/hygiene-exclusion-symmetry.
+#
+# The invariants registered as the four INV tags above state it: keep
+# secrets, undeclared usernames, absolute home paths, and snapshots of
+# runtime state out of every domain's committed desired state. Secrets
+# already have an enforcement owner in gitleaks and are deliberately not
+# duplicated here. The other three had no enforcement owner at all, which is
+# how two absolute home paths reached docs/troubleshooting.md and stayed
+# there for the document's whole history.
 #
 # The subject is the index rather than the working tree. The invariant is about
 # committed desired state, so `git grep --cached` is the authority, and `-I`

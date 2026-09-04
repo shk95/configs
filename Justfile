@@ -21,6 +21,8 @@ doctor:
     tool/doctor.sh
 
 # Run formatting, lint, payload parsing, and evaluation/native-build coverage.
+# The checks a change needs; the fixtures that prove each check refuses what it
+# must have recipes of their own below and run in CI.
 [group('repository')]
 check:
     tool/checks/format
@@ -50,6 +52,31 @@ payloads-test:
 [group('repository')]
 prerequisite-test:
     tool/checks/prerequisite-test
+
+# Prove the flake's typed identity and class composition refuse what they must.
+[group('repository')]
+flake-test:
+    tool/checks/flake-test
+
+# Prove a feature file names no host and forces no value, and that the check refuses one that does.
+[group('repository')]
+composition-test:
+    tool/checks/composition-test
+
+# Prove the evaluation check fails when it reaches no configuration.
+[group('repository')]
+eval-coverage-test:
+    tool/checks/eval-coverage-test
+
+# Compose every host in walk order and reversed; the toplevels must match.
+[group('repository')]
+import-order:
+    tool/checks/import-order
+
+# The same check plus the order-dependent pair it must refuse.
+[group('repository')]
+import-order-test:
+    tool/checks/import-order-test
 
 [group('repository')]
 test:

@@ -13,6 +13,10 @@ cross-platform build graph:
 
 See `docs/architecture.md` for the domain and release model.
 
+The invariants each domain must keep, and how each one is enforced, are
+enumerated under `invariants/`. The hooks record every outcome they
+produce, refusals included; `tool/doctor.sh` shows the count.
+
 ## Architecture
 
 ```text
@@ -170,16 +174,20 @@ because the manifest already installs the application itself.
 The checks run without that toolchain. A source whose parser is missing is
 reported as unverified rather than failing, and `check-desired-state.ps1` and
 `test.ps1` exit 69 to say so, which is why a clone without Lua or Pester can
-still push Windows work. CI supplies the missing evidence.
+still push Windows work. CI supplies the missing evidence. A Unix-like home
+this repository configures carries Pester itself, so `pre-push` there runs
+the suite under the host's own `pwsh` and reports a real result.
 
 `bootstrap.ps1 -Check` has a 69 of its own, and it means something else: a
 detection this host could not decide, such as an Appx package whose module will
-not load, which is named as unverified instead of read as missing. An unparsed
-source only appears in its summary and does not change what it returns. It
-exits 69 only when nothing else drifted, because drift outranks an undecided
-item, so a host with both exits 2 and still names the undecided items.
-`REQUIRE_NATIVE=1` turns an undecided item into a failure. `-Check` never
-installs or changes anything. Apply is explicit:
+not load, which is named as unverified instead of read as missing. A
+prerequisite this host lacks, WinGet or PowerShell 7, is the other case:
+`-Check` reports it as 69 rather than installing anything, and 1 under
+`REQUIRE_NATIVE=1`. An unparsed source only appears in its summary and does not
+change what it returns. It exits 69 only when nothing else drifted, because
+drift outranks an undecided item, so a host with both exits 2 and still names
+the undecided items. `REQUIRE_NATIVE=1` turns an undecided item into a failure.
+`-Check` never installs or changes anything. Apply is explicit:
 
 ```powershell
 .\windows\bootstrap.ps1
@@ -253,7 +261,8 @@ redeployed on its own: the desired state did not change, only the host did.
 `.wslconfig` is read by the WSL VM only when it starts, and these commands never
 restart it, so a passing check means the file on disk matches the payload this
 host's build should have. It is not evidence that mirrored networking is
-running. `docs/status.md` records the per-key gate table behind the split.
+running. `docs/decisions/wslconfig-selected-by-windows-build.md` records the
+per-key gate table behind the split.
 
 ### Capture a change made in the application
 

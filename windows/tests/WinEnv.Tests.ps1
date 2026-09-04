@@ -1,9 +1,15 @@
 BeforeAll {
     $testsRoot = Split-Path -Parent $PSCommandPath
     $repositoryRoot = Split-Path -Parent $testsRoot
-    $monorepoRoot = Split-Path -Parent $repositoryRoot
+    # INV windows/no-unix-host-required — the suite reads the Windows tree
+    # only. The one path it takes above it is the repository's own git
+    # metadata, for the applied-commit case, which is repository state
+    # rather than another domain's tree; the 'Windows tree isolation' cases
+    # below scan every script here for a read into a Unix-like tree.
     $desiredStateRoot = Join-Path $repositoryRoot 'desired'
     Import-Module (Join-Path $repositoryRoot 'src\WinEnv.psm1') -Force
+    # Invoke-Pester can be called without test.ps1; the suite defends itself.
+    . (Join-Path $repositoryRoot 'tools\isolate-git.ps1')
 
     function Test-Throws {
         param([scriptblock] $ScriptBlock)
@@ -63,10 +69,18 @@ BeforeAll {
 }
 
 Describe 'win-env manifest' {
-    It 'loads schema 4 and the desired-state compatibility version' {
+    It 'INV windows/schema-version-refused: loads schema 4 and the desired-state compatibility version' {
         $manifest = Get-WinEnvManifest -Path (Join-Path $desiredStateRoot 'manifest.json')
         $manifest.SchemaVersion | Should -Be 4
         $manifest.ProjectVersion | Should -Be '0.6.0'
+    }
+
+    It 'INV windows/schema-version-refused: refuses a manifest schema this module does not read' {
+        $path = Join-Path $TestDrive 'manifest-schema5.json'
+        [IO.File]::WriteAllText($path, '{"SchemaVersion":5,"ProjectVersion":"1.0.0"}')
+        $message = $null
+        try { Get-WinEnvManifest -Path $path | Out-Null } catch { $message = $_.Exception.Message }
+        $message | Should -Match 'INV windows/schema-version-refused'
     }
 
     It 'pins the v3.5.0 D2Koding asset and hashes' {
@@ -88,10 +102,13 @@ Describe 'win-env manifest' {
     }
 
     It 'installs a registered face for every family WezTerm''s font list names' {
-        # #67: the font list on Windows equals the Unix-like list, which names
-        # a Mono and a non-Mono D2Koding family. A fixture must fail if either
-        # family has no registered face, or the two copies could drift again
-        # without either domain's own checks noticing.
+        # #67: the Windows font list names a Mono and a non-Mono D2Koding
+        # family. A fixture must fail if either family has no registered
+        # face; the list is this domain's own copy and is held to this
+        # domain's manifest, not to the Unix-like copy it was taken from
+        # (INV windows/no-unix-host-required took the byte comparison out,
+        # and with it the guard against a `windowsChecks` addendum, a key
+        # nothing on Windows consumes).
         $manifest = Get-WinEnvManifest -Path (Join-Path $desiredStateRoot 'manifest.json')
         $fonts = Get-Content (Join-Path $desiredStateRoot 'files\wezterm\fonts.json') -Raw | ConvertFrom-Json
         $registeredFamilies = @($manifest.Font.Files | ForEach-Object { $_.FullName -replace ' Bold$', '' }) |
@@ -99,12 +116,6 @@ Describe 'win-env manifest' {
         foreach ($family in $fonts.families) {
             $registeredFamilies | Should -Contain $family
         }
-    }
-
-    It 'copies the Unix-like WezTerm font list without a Windows-only windowsChecks addendum' {
-        $unixFontsPath = Join-Path $monorepoRoot 'assets\wezterm\fonts.json'
-        $windowsFontsPath = Join-Path $desiredStateRoot 'files\wezterm\fonts.json'
-        (Get-Content $unixFontsPath -Raw) | Should -Be (Get-Content $windowsFontsPath -Raw)
     }
 
     It 'uses exact expected WinGet IDs' {
@@ -126,7 +137,8 @@ Describe 'win-env manifest' {
         # would now pin the wrong thing: three carry Microsoft's "require
         # Windows 11 version 22H2 or higher" footnote and one carries no
         # footnote at all. Every assertion below traces to a row of the per-key
-        # gate table in docs/status.md.
+        # gate table in
+        # docs/decisions/wslconfig-selected-by-windows-build.md.
         $manifest = Get-WinEnvManifest -Path (Join-Path $desiredStateRoot 'manifest.json')
         $wsl = $manifest.ManagedFiles | Where-Object Id -eq 'wslConfig'
         $wsl.Target | Should -Be '{USERPROFILE}\.wslconfig'
@@ -164,26 +176,14 @@ Describe 'win-env manifest' {
     }
 }
 
-Describe 'version gate' {
-    It 'orders repository versions correctly' {
-        (Compare-WinEnvVersion -RepositoryVersion '0.1.0' -AppliedVersion '0.0.0') | Should -BeGreaterThan 0
-        (Compare-WinEnvVersion -RepositoryVersion '0.1.0' -AppliedVersion '0.1.0') | Should -Be 0
-        (Compare-WinEnvVersion -RepositoryVersion '0.1.0' -AppliedVersion '0.2.0') | Should -BeLessThan 0
-    }
-
-    It 'rejects an invalid semantic version' {
-        (Test-Throws { Compare-WinEnvVersion -RepositoryVersion 'not-semver' -AppliedVersion '0.1.0' }) | Should -Be $true
-    }
-}
-
 Describe 'JSON ownership' {
-    It 'allows runtime properties in subset mode' {
+    It 'INV windows/subset-owns-declared-keys: allows runtime properties in subset mode' {
         $expected = '{"enabled":true,"nested":{"value":7}}' | ConvertFrom-Json
         $actual = '{"enabled":true,"nested":{"value":7,"runtime":"ignored"},"version":"dynamic"}' | ConvertFrom-Json
         (Test-WinEnvJsonSubset -Expected $expected -Actual $actual) | Should -Be $true
     }
 
-    It 'detects changed managed properties' {
+    It 'INV windows/subset-owns-declared-keys: detects changed managed properties' {
         $expected = '{"enabled":true,"items":[1,2]}' | ConvertFrom-Json
         $actual = '{"enabled":false,"items":[1,2]}' | ConvertFrom-Json
         (Test-WinEnvJsonSubset -Expected $expected -Actual $actual) | Should -Be $false
@@ -283,7 +283,7 @@ Describe 'JsonSubset projection' {
         $text | Should -Be '[{"a":2},{"z":4}]'
     }
 
-    It 'declares nothing by declaring an empty object, and everything by declaring an empty list' {
+    It 'INV windows/declared-list-has-content: declares nothing by declaring an empty object, and everything by declaring an empty list' {
         # Not a quirk of this direction but the read side's own asymmetry,
         # carried across unchanged: a declared object is a member subset, so an
         # empty one owns no member and can never drift; a declared list is
@@ -364,7 +364,7 @@ Describe 'PowerToys payload audit' {
         }
     }
 
-    It 'declares no empty list anywhere in a JsonSubset payload' {
+    It 'INV windows/declared-list-has-content: declares no empty list anywhere in a JsonSubset payload' {
         # The one shape in which a payload can silently absorb host state, and
         # the finding that review caught (#100). A declared list is exact --
         # the read side matches it by position and requires equal length -- so
@@ -720,7 +720,7 @@ Describe 'Windows Terminal generated profiles' {
         (Test-Throws { Test-WinEnvJsonWithGeneratedProfiles -Expected $repeated -Actual $repeated }) | Should -Be $true
     }
 
-    It 'rejects the generated-profile mode on an entry whose parser is not Json' {
+    It 'INV windows/compare-mode-declared: rejects the generated-profile mode on an entry whose parser is not Json' {
         # The mode reads both sides as JSON. Declared on a Lua or INI payload
         # it would load, read as meaningful, and throw on the first host that
         # compared the file.
@@ -762,7 +762,7 @@ Describe 'Windows Terminal generated profiles' {
         { Assert-WinEnvManagedFileModel -Manifest $json } | Should -Not -Throw
     }
 
-    It 'rejects a comparison mode no entry can be compared with' {
+    It 'INV windows/compare-mode-declared: rejects a comparison mode no entry can be compared with' {
         foreach ($compare in @('exactjsonwithgeneratedprofiles', 'JsonMerge', '')) {
             $manifest = New-FeatureManifest -Override @{
                 ManagedFiles = @(@{
@@ -783,7 +783,7 @@ Describe 'Windows Terminal generated profiles' {
         (Test-Throws { Assert-WinEnvManagedFileModel -Manifest $noCompare }) | Should -Be $true
     }
 
-    It 'gives the tolerance to the one file Windows Terminal co-owns' {
+    It 'INV windows/compare-mode-declared: gives the tolerance to the one file Windows Terminal co-owns' {
         # Apply still writes this payload whole. The tolerance is a read-side
         # statement about one application, so a second entry claiming it would
         # be a decision, not a detail.
@@ -800,7 +800,7 @@ Describe 'Windows Terminal generated profiles' {
 }
 
 Describe 'PowerShell profile marker' {
-    It 'adds one block and preserves existing external blocks' {
+    It 'INV windows/external-profile-blocks-preserved: adds one block and preserves existing external blocks' {
         $profile = Join-Path $TestDrive 'profile.ps1'
         [IO.File]::WriteAllText($profile, "#region sysmon-banner`r`n'SysMon'`r`n#endregion sysmon-banner`r`n")
         Set-WinEnvProfileHook -ProfilePath $profile
@@ -811,14 +811,15 @@ Describe 'PowerShell profile marker' {
         (Test-WinEnvProfileHook -ProfilePath $profile) | Should -Be $true
     }
 
-    It 'refuses unmatched markers' {
+    It 'INV windows/external-profile-blocks-preserved: refuses unmatched markers' {
         $profile = Join-Path $TestDrive 'broken-profile.ps1'
         [IO.File]::WriteAllText($profile, "#region win-env`r`n")
         (Test-Throws { Set-WinEnvProfileHook -ProfilePath $profile }) | Should -Be $true
     }
-}
 
-Describe 'managed PowerShell profile' {
+    # A regression guard on the committed payload, not a rule: a profile that
+    # prints in a non-interactive process breaks any program that starts
+    # pwsh and reads its output. It names no invariant.
     It 'loads silently in a non-interactive PowerShell process' {
         $profile = Join-Path $desiredStateRoot 'files\powershell\profile.ps1'
         $pwsh = (Get-Process -Id $PID).Path
@@ -830,7 +831,10 @@ Describe 'managed PowerShell profile' {
 
 Describe 'state safety' {
     It 'resolves the repository commit without trusting Windows Git safe-directory state' {
-        (Get-WinEnvGitCommit -RepositoryRoot $monorepoRoot) | Should -Match '^(unborn|[0-9a-f]{40})$'
+        # The repository root, the way setup.ps1 resolves it for
+        # Get-WinEnvGitCommit: git metadata is repository state, not a
+        # Unix-like tree (INV windows/no-unix-host-required).
+        (Get-WinEnvGitCommit -RepositoryRoot (Split-Path -Parent $repositoryRoot)) | Should -Match '^(unborn|[0-9a-f]{40})$'
     }
 
     It 'treats a missing state as uninitialized' {
@@ -863,7 +867,15 @@ Describe 'state safety' {
         (Test-Throws { Get-WinEnvState -Path $path }) | Should -Be $true
     }
 
-    It 'changes the desired-state hash when content changes' {
+    It 'INV windows/schema-version-refused: refuses a state schema this module does not read' {
+        $path = Join-Path $TestDrive 'schema3.json'
+        [IO.File]::WriteAllText($path, '{"schemaVersion":3,"projectVersion":"0.1.0","appliedAtUtc":"2026-01-01T00:00:00+00:00","gitCommit":"0123456789abcdef","features":["core"]}')
+        $message = $null
+        try { Get-WinEnvState -Path $path | Out-Null } catch { $message = $_.Exception.Message }
+        $message | Should -Match 'INV windows/schema-version-refused'
+    }
+
+    It 'INV windows/hash-covers-selection: changes the desired-state hash when content changes' {
         $manifest = New-FeatureManifest
         $root = Join-Path $TestDrive 'desired'
         [void](New-Item -ItemType Directory -Path (Join-Path $root 'files') -Force)
@@ -877,7 +889,7 @@ Describe 'state safety' {
         $after | Should -Not -Be $before
     }
 
-    It 'ignores a payload the selection excludes' {
+    It 'INV windows/hash-covers-selection: ignores a payload the selection excludes' {
         # A whole-tree hash reported drift for material this host never
         # deploys, and every such edit forced an Apply that could not change
         # anything on it.
@@ -891,6 +903,18 @@ Describe 'state safety' {
         [IO.File]::WriteAllText((Join-Path $root 'files\settings.json'), '{"changed":true}')
         (Get-WinEnvDesiredStateHash -Root $root -Manifest $manifest -Feature @('core')) | Should -Be $before
         (Get-WinEnvDesiredStateHash -Root $root -Manifest $manifest -Feature @('core', 'terminal')) | Should -Not -Be $before
+    }
+
+    It 'INV windows/hash-covers-selection: covers the manifest itself' {
+        $manifest = New-FeatureManifest
+        $root = Join-Path $TestDrive 'desired-manifest'
+        [void](New-Item -ItemType Directory -Path (Join-Path $root 'files') -Force)
+        [IO.File]::WriteAllText((Join-Path $root 'files\profile.ps1'), 'core')
+        [IO.File]::WriteAllText((Join-Path $root 'manifest.json'), '{}')
+        $before = Get-WinEnvDesiredStateHash -Root $root -Manifest $manifest -Feature @('core')
+        [IO.File]::WriteAllText((Join-Path $root 'manifest.json'), '{"changed":true}')
+        $after = Get-WinEnvDesiredStateHash -Root $root -Manifest $manifest -Feature @('core')
+        $after | Should -Not -Be $before
     }
 
     It 'reads a schema 1 state as the full feature set' {
@@ -994,7 +1018,7 @@ Describe 'managed sources' {
         (Test-Throws { $jsonContent | Should -Not -Match $WindowsHomePathPattern }) | Should -Be $true
     }
 
-    It 'declares every deployable desired-state payload exactly once' {
+    It 'INV windows/feature-owns-every-item: declares every deployable desired-state payload exactly once' {
         # Reworked for schema 3, not loosened. A managed file may now declare
         # alternative sources selected by the host's Windows build, so the
         # declared set is every variant of every entry rather than one scalar
@@ -1041,7 +1065,7 @@ Describe 'managed sources' {
 }
 
 Describe 'feature model' {
-    It 'owns every deployable item with a declared feature' {
+    It 'INV windows/feature-owns-every-item: owns every deployable item with a declared feature' {
         $manifest = Get-WinEnvManifest -Path (Join-Path $desiredStateRoot 'manifest.json')
         $declared = Get-WinEnvFeatureId -Manifest $manifest
         foreach ($package in $manifest.Packages) { $declared | Should -Contain $package.Feature }
@@ -1050,14 +1074,14 @@ Describe 'feature model' {
         $declared | Should -Contain $manifest.Terminal.Feature
     }
 
-    It 'rejects a deployable item that names no feature' {
+    It 'INV windows/feature-owns-every-item: rejects a deployable item that names no feature' {
         $manifest = New-FeatureManifest -Override @{
             ManagedFiles = @(@{ Id = 'orphan'; Source = 'files/orphan.txt'; Target = 'orphan'; Compare = 'Text'; Parser = 'Text' })
         }
         (Test-Throws { Assert-WinEnvFeatureModel -Manifest $manifest }) | Should -Be $true
     }
 
-    It 'rejects an item that names an undeclared feature' {
+    It 'INV windows/feature-owns-every-item: rejects an item that names an undeclared feature' {
         $manifest = New-FeatureManifest -Override @{
             Packages = @(@{ Id = 'Vendor.Ghost'; Feature = 'ghost'; Detection = 'WinGet' })
         }
@@ -1118,6 +1142,141 @@ Describe 'feature model' {
     }
 }
 
+Describe 'identifier uniqueness' {
+    BeforeAll {
+        function Get-FeatureModelRefusal {
+            param([hashtable] $Manifest)
+            $message = $null
+            try { Assert-WinEnvFeatureModel -Manifest $Manifest } catch { $message = $_.Exception.Message }
+            return $message
+        }
+    }
+
+    It 'INV windows/unique-ids: refuses a feature id declared twice' {
+        $manifest = New-FeatureManifest -Override @{
+            Features = @(
+                @{ Id = 'core'; Name = 'Core'; Required = $true },
+                @{ Id = 'font'; Name = 'Font' },
+                @{ Id = 'font'; Name = 'Font again' },
+                @{ Id = 'zellij'; Name = 'Zellij' },
+                @{ Id = 'terminal'; Name = 'Terminal'; Requires = @('font', 'zellij') }
+            )
+        }
+        (Get-FeatureModelRefusal -Manifest $manifest) | Should -Match 'INV windows/unique-ids'
+    }
+
+    It 'INV windows/unique-ids: refuses a package id declared twice' {
+        $manifest = New-FeatureManifest -Override @{
+            Packages = @(
+                @{ Id = 'Vendor.Shell'; Feature = 'core'; Bootstrap = $true; Detection = 'Command'; Command = 'pwsh.exe' },
+                @{ Id = 'Vendor.Shell'; Feature = 'font'; Detection = 'WinGet' }
+            )
+        }
+        (Get-FeatureModelRefusal -Manifest $manifest) | Should -Match "INV windows/unique-ids: The package 'Vendor.Shell' is declared more than once"
+    }
+
+    It 'INV windows/unique-ids: refuses a managed-file id declared twice' {
+        $manifest = New-FeatureManifest -Override @{
+            ManagedFiles = @(
+                @{ Id = 'profile'; Feature = 'core'; Source = 'files/profile.ps1'; Target = 'profile'; Compare = 'Text'; Parser = 'PowerShell' },
+                @{ Id = 'profile'; Feature = 'terminal'; Source = 'files/other.ps1'; Target = 'other'; Compare = 'Text'; Parser = 'PowerShell' }
+            )
+        }
+        (Get-FeatureModelRefusal -Manifest $manifest) | Should -Match "INV windows/unique-ids: The managed file 'profile' is declared more than once"
+    }
+
+    It 'INV windows/unique-ids: refuses a package or managed file declared without an Id' {
+        $package = New-FeatureManifest -Override @{
+            Packages = @(@{ Feature = 'core'; Detection = 'WinGet' })
+        }
+        (Get-FeatureModelRefusal -Manifest $package) | Should -Match 'INV windows/unique-ids: A package is declared without an Id'
+
+        $file = New-FeatureManifest -Override @{
+            ManagedFiles = @(@{ Id = ''; Feature = 'core'; Source = 'files/profile.ps1'; Target = 'profile'; Compare = 'Text'; Parser = 'PowerShell' })
+        }
+        (Get-FeatureModelRefusal -Manifest $file) | Should -Match 'INV windows/unique-ids: A managed file is declared without an Id'
+    }
+
+    It 'INV windows/unique-ids: keeps packages and managed files as separate namespaces' {
+        # A plan names a package or a managed file, never "an item", so one
+        # spelling in both lists is unambiguous; the same spelling twice in
+        # one list is what the rule refuses.
+        $manifest = New-FeatureManifest -Override @{
+            Packages     = @(@{ Id = 'profile'; Feature = 'core'; Bootstrap = $true; Detection = 'Command'; Command = 'pwsh.exe' })
+            ManagedFiles = @(@{ Id = 'profile'; Feature = 'core'; Source = 'files/profile.ps1'; Target = 'profile'; Compare = 'Text'; Parser = 'PowerShell' })
+        }
+        (Get-FeatureModelRefusal -Manifest $manifest) | Should -BeNullOrEmpty
+    }
+
+    It 'INV windows/unique-ids: loads the repository manifest, whose ids are distinct' {
+        $manifest = Get-WinEnvManifest -Path (Join-Path $desiredStateRoot 'manifest.json')
+        foreach ($list in @($manifest.Packages, $manifest.ManagedFiles)) {
+            $ids = @($list | ForEach-Object { [string]$_.Id })
+            @($ids | Sort-Object -Unique).Count | Should -Be $ids.Count
+        }
+    }
+}
+
+Describe 'parser declaration' {
+    BeforeAll {
+        function New-ParserManifest {
+            param([hashtable] $Entry)
+            $definition = @{ Id = 'payload'; Feature = 'core'; Source = 'files/payload'; Target = 'payload'; Compare = 'Text' }
+            foreach ($key in $Entry.Keys) { $definition[$key] = $Entry[$key] }
+            return New-FeatureManifest -Override @{ ManagedFiles = @($definition) }
+        }
+
+        function Get-ManagedFileRefusal {
+            param([hashtable] $Manifest)
+            $message = $null
+            try { Assert-WinEnvManagedFileModel -Manifest $Manifest } catch { $message = $_.Exception.Message }
+            return $message
+        }
+    }
+
+    It 'INV windows/parser-declared: refuses a parser the domain has no validator for when the manifest loads' {
+        # A misspelling and a case slip are the two ways a name that is
+        # almost right would have fallen through the validator as parsed.
+        foreach ($parser in @('Yaml', 'json', 'Powershell')) {
+            (Get-ManagedFileRefusal -Manifest (New-ParserManifest -Entry @{ Parser = $parser })) |
+                Should -Match "INV windows/parser-declared: The managed file 'payload' declares unknown parser '$parser'"
+        }
+    }
+
+    It 'INV windows/parser-declared: refuses a managed file that declares no parser' {
+        (Get-ManagedFileRefusal -Manifest (New-ParserManifest -Entry @{})) |
+            Should -Match "INV windows/parser-declared: The managed file 'payload' declares unknown parser ''"
+        (Get-ManagedFileRefusal -Manifest (New-ParserManifest -Entry @{ Parser = '' })) |
+            Should -Match 'INV windows/parser-declared'
+    }
+
+    It 'INV windows/parser-declared: accepts every parser the validator has a case for' {
+        # Listed here rather than read from the module on purpose: the case
+        # is an independent oracle for the declared list, so a name dropped
+        # from the module fails here instead of disappearing from both.
+        foreach ($parser in @('Json', 'Ini', 'PowerShell', 'Kdl', 'Lua', 'Text')) {
+            (Get-ManagedFileRefusal -Manifest (New-ParserManifest -Entry @{ Parser = $parser })) | Should -BeNullOrEmpty
+        }
+    }
+
+    It 'INV windows/parser-declared: the validator refuses an unknown or missing parser instead of counting the source as parsed' {
+        # Reaches the validator without the loader, the way a definition
+        # built in code would. Before the default arm this returned $null,
+        # which every caller reads as "parsed".
+        $root = Join-Path $TestDrive 'parser-declared'
+        [void](New-Item -ItemType Directory -Path $root -Force)
+        [IO.File]::WriteAllText((Join-Path $root 'payload.yaml'), "key: value`n")
+        foreach ($definition in @(
+                @{ Id = 'payload'; Source = 'payload.yaml'; Parser = 'Yaml' },
+                @{ Id = 'payload'; Source = 'payload.yaml' }
+            )) {
+            $message = $null
+            try { Test-WinEnvSourceFile -Definition $definition -RepositoryRoot $root | Out-Null } catch { $message = $_.Exception.Message }
+            $message | Should -Match "INV windows/parser-declared: No validator exists for parser '(Yaml|)' declared on 'payload.yaml'"
+        }
+    }
+}
+
 Describe 'feature selection' {
     It 'reduces a bare selection to the required features' {
         $selection = Get-WinEnvFeatureSelection -Manifest (New-FeatureManifest)
@@ -1125,20 +1284,20 @@ Describe 'feature selection' {
         $selection.Excluded | Should -Contain 'terminal'
     }
 
-    It 'closes over declared dependencies and reports what it added' {
+    It 'INV windows/selection-closed-and-explicit: closes over declared dependencies and reports what it added' {
         $selection = Get-WinEnvFeatureSelection -Manifest (New-FeatureManifest) -Requested @('terminal')
         ($selection.Selected -join ',') | Should -Be 'core,font,zellij,terminal'
         (($selection.Implied | Sort-Object) -join ',') | Should -Be 'font,zellij'
         $selection.Excluded.Count | Should -Be 0
     }
 
-    It 'keeps a dependency selectable on its own' {
+    It 'INV windows/selection-closed-and-explicit: keeps a dependency selectable on its own' {
         $selection = Get-WinEnvFeatureSelection -Manifest (New-FeatureManifest) -Requested @('zellij')
         ($selection.Selected -join ',') | Should -Be 'core,zellij'
         $selection.Excluded | Should -Contain 'terminal'
     }
 
-    It 'rejects an unknown feature instead of silently ignoring it' {
+    It 'INV windows/selection-closed-and-explicit: rejects an unknown feature instead of silently ignoring it' {
         (Test-Throws { Get-WinEnvFeatureSelection -Manifest (New-FeatureManifest) -Requested @('ghost') }) | Should -Be $true
     }
 
@@ -1331,7 +1490,7 @@ Describe 'Appx detection capability' {
         $status.Unverified | Should -Match 'undecidable on this host'
     }
 
-    It 'ranks drift above an undecidable item in the check exit contract' {
+    It 'INV windows/check-exit-contract: ranks drift above an undecidable item in the check exit contract' {
         (Get-WinEnvCheckStatus -DriftCount 0 -UnverifiedCount 0) | Should -Be 0
         (Get-WinEnvCheckStatus -DriftCount 1 -UnverifiedCount 0) | Should -Be 2
         (Get-WinEnvCheckStatus -DriftCount 0 -UnverifiedCount 1) | Should -Be 69
@@ -1356,7 +1515,7 @@ Describe 'Appx detection capability' {
         }
     }
 
-    It 'turns an undecidable item into a failure when native evidence is required' {
+    It 'INV windows/check-exit-contract: turns an undecidable item into a failure when native evidence is required' {
         # REQUIRE_NATIVE is the flag that says incompleteness must not pass,
         # and a failure outranks both drift and an unverified result.
         (Get-WinEnvCheckStatus -DriftCount 0 -UnverifiedCount 1 -RequireNative) | Should -Be 1
@@ -1467,7 +1626,7 @@ Describe 'font installation state' {
             'TestFont-Regular.ttf', 'TestFont-Bold.ttf')
     }
 
-    It 'calls a valid registered subset of a grown manifest incomplete, not a conflict' {
+    It 'INV windows/font-state-total: calls a valid registered subset of a grown manifest incomplete, not a conflict' {
         # The reported regression: raising the manifest from two faces to four
         # turned every host that already had the two into a refused Apply. The
         # two files here are the manifest's own, byte for byte, and registered
@@ -1495,7 +1654,7 @@ Describe 'font installation state' {
         $status.InstalledFaceCount | Should -Be 2
     }
 
-    It 'still calls a file that is not the one the manifest pins a conflict' {
+    It 'INV windows/font-state-total: still calls a file that is not the one the manifest pins a conflict' {
         $fixture = New-FontFixture -Root $TestDrive `
             -Present @('TestFontMono-Regular.ttf', 'TestFont-Regular.ttf', 'TestFont-Bold.ttf') `
             -Corrupt @('TestFontMono-Bold.ttf') -Registered $AllFaces -DirectWrite $true
@@ -1533,7 +1692,7 @@ Describe 'font installation state' {
         $status.Installed | Should -Be $false
     }
 
-    It 'refuses a foreign registration even on a host holding every file' {
+    It 'INV windows/font-state-total: refuses a foreign registration even on a host holding every file' {
         # Every listed file is valid and only one registration is wrong, which
         # is the shape closest to a repair. Repairing it would overwrite a value
         # this repository did not write, so it is a conflict rather than the
@@ -1580,8 +1739,8 @@ Describe 'font installation state' {
         $status.InstalledFaceCount | Should -Be 4
     }
 
-    It 'reports exactly one state for every fixture' {
-        # The four states are a partition, which is what lets the check and
+    It 'INV windows/font-state-total: reports exactly one state for every fixture' {
+        # The five states are a partition, which is what lets the check and
         # Apply branch on them in any order.
         $fixtures = @(
             (New-FontFixture -Root $TestDrive -Present $MonoFaces -Registered $MonoFaces -DirectWrite $true),
@@ -1702,7 +1861,7 @@ Describe 'Windows build condition' {
         }
     }
 
-    It 'hashes every declared variant so the desired state cannot depend on the host' {
+    It 'INV windows/hash-covers-selection: hashes every declared variant so the desired state cannot depend on the host' {
         $manifest = New-FeatureManifest -Override @{
             ManagedFiles = @(New-ConditionalFile -Sources @(
                     @{ MinimumBuild = 22621; Source = 'files/upper.ini' },
@@ -1753,7 +1912,7 @@ Describe 'Windows build condition' {
         }
     }
 
-    It 'refuses a variant list whose last entry is conditional' {
+    It 'INV windows/sources-total-function: refuses a variant list whose last entry is conditional' {
         # Negative fixture for the invariant the two-entry shape would have
         # needed and could not have enforced: on a host below every bound this
         # file would deploy nothing at all, silently.
@@ -1765,7 +1924,7 @@ Describe 'Windows build condition' {
         (Test-Throws { Assert-WinEnvManagedFileModel -Manifest $manifest }) | Should -Be $true
     }
 
-    It 'refuses bounds that do not descend' {
+    It 'INV windows/sources-total-function: refuses bounds that do not descend' {
         # An ascending list would let a 22631 host match the 19041 variant
         # first, so the highest bound a host meets would stop being the one it
         # resolves to.
@@ -1778,7 +1937,7 @@ Describe 'Windows build condition' {
         (Test-Throws { Assert-WinEnvManagedFileModel -Manifest $manifest }) | Should -Be $true
     }
 
-    It 'refuses an entry declaring both a scalar Source and alternatives' {
+    It 'INV windows/sources-total-function: refuses an entry declaring both a scalar Source and alternatives' {
         $definition = New-ConditionalFile -Sources @(
             @{ MinimumBuild = 22621; Source = 'files/upper.ini' },
             @{ Source = 'files/lower.ini' })
@@ -1787,14 +1946,14 @@ Describe 'Windows build condition' {
         (Test-Throws { Assert-WinEnvManagedFileModel -Manifest $manifest }) | Should -Be $true
     }
 
-    It 'refuses an entry that declares no source at all' {
+    It 'INV windows/sources-total-function: refuses an entry that declares no source at all' {
         $manifest = New-FeatureManifest -Override @{
             ManagedFiles = @(@{ Id = 'orphan'; Feature = 'core'; Target = 'target'; Compare = 'Text'; Parser = 'Ini' })
         }
         (Test-Throws { Assert-WinEnvManagedFileModel -Manifest $manifest }) | Should -Be $true
     }
 
-    It 'refuses a single-variant list and a non-positive bound' {
+    It 'INV windows/sources-total-function: refuses a single-variant list and a non-positive bound' {
         $single = New-FeatureManifest -Override @{
             ManagedFiles = @(New-ConditionalFile -Sources @(@{ Source = 'files/only.ini' }))
         }
@@ -1808,7 +1967,7 @@ Describe 'Windows build condition' {
         (Test-Throws { Assert-WinEnvManagedFileModel -Manifest $bogus }) | Should -Be $true
     }
 
-    It 'refuses a variant declaring any key but Source and MinimumBuild' {
+    It 'INV windows/sources-total-function: refuses a variant declaring any key but Source and MinimumBuild' {
         # A per-variant Compare, Parser, Feature or Target would load, read as
         # meaningful, and do nothing: New-ResolvedManagedFile copies those from
         # the entry alone. Silently dropping it is the exact class of error the
@@ -1831,7 +1990,7 @@ Describe 'Windows build condition' {
         (Test-Throws { Assert-WinEnvManagedFileModel -Manifest $manifest }) | Should -Be $true
     }
 
-    It 'refuses a variant whose Source is empty or blank' {
+    It 'INV windows/sources-total-function: refuses a variant whose Source is empty or blank' {
         # Caught at load, naming the entry, rather than later from
         # check-desired-state.ps1 as a missing path that is really the
         # desired-state root.
@@ -1852,7 +2011,7 @@ Describe 'Windows build condition' {
         (Test-Throws { Assert-WinEnvManagedFileModel -Manifest $manifest }) | Should -Be $true
     }
 
-    It 'accepts the shape the repository manifest uses' {
+    It 'INV windows/sources-total-function: accepts the shape the repository manifest uses' {
         # Positive fixture beside the four negative ones above.
         $manifest = New-FeatureManifest -Override @{
             ManagedFiles = @(New-ConditionalFile -Sources @(
@@ -1860,23 +2019,6 @@ Describe 'Windows build condition' {
                     @{ Source = 'files/lower.ini' }))
         }
         { Assert-WinEnvManagedFileModel -Manifest $manifest } | Should -Not -Throw
-    }
-}
-
-Describe 'Windows host guard' {
-    # capture.ps1's refusal calls this with no override, so its positive and
-    # negative branches are otherwise only reachable by actually being on, or
-    # off, Windows. The override exists so both are fixtures here instead.
-    It 'answers true when told this run is on Windows' {
-        (Test-WinEnvWindowsHost -IsWindows $true) | Should -Be $true
-    }
-
-    It 'answers false when told this run is not on Windows' {
-        (Test-WinEnvWindowsHost -IsWindows $false) | Should -Be $false
-    }
-
-    It 'defaults to the automatic $IsWindows variable' {
-        (Test-WinEnvWindowsHost) | Should -Be $global:IsWindows
     }
 }
 
@@ -1944,7 +2086,7 @@ Describe 'capture' {
         }
     }
 
-    It 'restores the one placeholder the deploy direction expands' {
+    It 'INV windows/one-placeholder: restores the one placeholder the deploy direction expands' {
         $content = '{"template":"' + $JsonLocalAppData + '\\NewPlus"}'
         $result = ConvertFrom-WinEnvTemplate -Content $content -HostPath $CaptureHost
 
@@ -1958,7 +2100,7 @@ Describe 'capture' {
         (Expand-WinEnvTemplate -Content $result.Content -HostPath $CaptureHost) | Should -Be $content
     }
 
-    It 'reports a spelling it cannot represent instead of inventing a placeholder' {
+    It 'INV windows/one-placeholder: reports a spelling it cannot represent instead of inventing a placeholder' {
         # Apply expands one token, to the JSON-escaped spelling of
         # LOCALAPPDATA. Writing `{USERPROFILE}` into a payload would deploy that
         # text literally to the host, so every other spelling is reported and
@@ -2527,8 +2669,9 @@ Describe 'capture' {
         # above through the functions it calls, and so is its branch rule now
         # (Describe 'capture branch', below) -- both against a throwaway
         # repository, never this one. What remains genuinely host-only is
-        # whether the commit's pre-commit hook actually ran, which is what
-        # docs/status.md records as an open question.
+        # whether the commit's pre-commit hook actually ran, which #77 has
+        # since shown happens under Git for Windows
+        # (docs/decisions/hooks-run-under-git-for-windows.md).
         $capturePath = Join-Path $repositoryRoot 'tools\capture.ps1'
         (Test-Path -LiteralPath $capturePath -PathType Leaf) | Should -Be $true
 
@@ -2550,10 +2693,10 @@ Describe 'capture' {
     }
 
     It 'guards every host read behind Test-WinEnvWindowsHost' {
-        # The predicate itself is fixtured in Describe 'Windows host guard'.
-        # What this suite can still assert on any platform, without running
-        # the script, is that the call happens exactly once, ahead of the
-        # first host read, and that finding it false is what stops the run.
+        # The predicate is one line over the automatic variable and has no
+        # fixture of its own. What this suite asserts on any platform without
+        # running the script is that the call happens exactly once, ahead of
+        # the first host read, and that finding it false is what stops the run.
         $capturePath = Join-Path $repositoryRoot 'tools\capture.ps1'
         $tokens = $null; $errors = $null
         $tree = [System.Management.Automation.Language.Parser]::ParseFile($capturePath, [ref]$tokens, [ref]$errors)
@@ -2588,8 +2731,8 @@ Describe 'capture' {
         # guard is the one thing in capture.ps1 that is safe to run for real,
         # anywhere, because it is the only code that runs before any host
         # read or write. On native Windows the real answer is the positive
-        # branch instead, which Describe 'Windows host guard' already covers
-        # directly; running the full script here would need a fixture
+        # branch instead, where the guard passes and the script would go on
+        # to read the host; running the full script here would need a fixture
         # repository this block does not build, and must never be this one.
         if ([Environment]::OSVersion.Platform -eq [System.PlatformID]::Win32NT) {
             Set-ItResult -Skipped -Because 'this host is Windows, where capture.ps1 does not refuse'
@@ -2707,7 +2850,7 @@ Describe 'capture branch' {
         }
     }
 
-    It 'refuses on master without reading the remote at all' {
+    It 'INV windows/capture-publishes-through-dev: refuses on master without reading the remote at all' {
         $fixture = New-BranchFixture
         & git -C $fixture.Repo switch -q master | Out-Null
         # No origin/dev ref at all would make a remote-reading refusal true by
@@ -2787,7 +2930,7 @@ Describe 'capture branch' {
         (& git -C $fixture.Repo rev-parse HEAD).Trim() | Should -Be $originDev
     }
 
-    It 'creates the named branch from origin/dev and leaves dev untouched' {
+    It 'INV windows/capture-publishes-through-dev: creates the named branch from origin/dev and leaves dev untouched' {
         $fixture = New-BranchFixture
         $plan = Get-WinEnvCaptureBranchPlan -RepositoryRoot $fixture.Repo -BranchName 'feature/windows-capture-font'
         $plan.Status | Should -Be 'Create'
@@ -2886,7 +3029,7 @@ Describe 'capture branch pruning' {
         }
     }
 
-    It 'deletes a local branch already merged into origin/dev' {
+    It 'INV windows/capture-publishes-through-dev: deletes a local branch already merged into origin/dev' {
         $fixture = New-PruneFixture
         & git -C $fixture.Repo branch -q feature/windows-old-capture | Out-Null
 
@@ -2910,7 +3053,7 @@ Describe 'capture branch pruning' {
         (Get-FixtureBranches -Repo $fixture.Repo) | Should -Contain 'feature/windows-unique'
     }
 
-    It 'never deletes the current branch, dev or master even when each is an ancestor of origin/dev' {
+    It 'INV windows/capture-publishes-through-dev: never deletes the current branch, dev or master even when each is an ancestor of origin/dev' {
         $fixture = New-PruneFixture
         # Cut from dev's own tip, so this branch, dev and master are all,
         # trivially, ancestors of origin/dev; only the name-based exclusion
@@ -3584,7 +3727,7 @@ exit 0
             @(Get-GhLog $fixture).Count | Should -Be 2
         }
 
-        It 'refuses an open pull request from this head against a base other than dev' {
+        It 'INV windows/capture-publishes-through-dev: refuses an open pull request from this head against a base other than dev' {
             $fixture = New-PublishRepository
             $listing = '[{"baseRefName":"master","isCrossRepository":false,' +
             '"url":"https://github.com/example/repo/pull/9"}]'
@@ -3597,7 +3740,7 @@ exit 0
             $result.Detail | Should -Match ([regex]::Escape('https://github.com/example/repo/pull/9'))
         }
 
-        It 'reuses an open pull request from this head against dev instead of opening a second' {
+        It 'INV windows/capture-publishes-through-dev: reuses an open pull request from this head against dev instead of opening a second' {
             $fixture = New-PublishRepository
             $listing = '[{"baseRefName":"dev","isCrossRepository":false,' +
             '"url":"https://github.com/example/repo/pull/7"}]'
@@ -3666,7 +3809,7 @@ exit 0
             }
         }
 
-        It 'pushes, opens one pull request and arms auto-merge exactly once' {
+        It 'INV windows/capture-publishes-through-dev: pushes, opens one pull request and arms auto-merge exactly once' {
             $fixture = New-PublishRepository
             & git -C $fixture.Repo switch -q -c feature/windows-capture-font | Out-Null
 
@@ -3697,7 +3840,7 @@ exit 0
             $body | Should -Not -Match ([regex]::Escape("(the pre-push hook's output, once the push runs)"))
         }
 
-        It 'arms the pull request already open against dev and opens no second one' {
+        It 'INV windows/capture-publishes-through-dev: arms the pull request already open against dev and opens no second one' {
             $fixture = New-PublishRepository
             & git -C $fixture.Repo switch -q -c feature/windows-capture-font | Out-Null
 
@@ -3715,7 +3858,7 @@ exit 0
             (Test-Path -LiteralPath $fixture.Body) | Should -Be $false
         }
 
-        It 'stops at a rejected push with the commits local and nothing published' {
+        It 'INV windows/capture-publishes-through-dev: stops at a rejected push with the commits local and nothing published' {
             $fixture = New-PublishRepository
             & git -C $fixture.Repo switch -q -c feature/windows-capture-font | Out-Null
             [IO.File]::WriteAllText((Join-Path $fixture.Repo 'seed.txt'), 'a captured payload')
@@ -4069,12 +4212,148 @@ exit 0
     }
 }
 
-Describe 'script syntax' {
-    It 'parses all repository PowerShell files' {
-        foreach ($file in Get-ChildItem $repositoryRoot -Filter '*.ps1' -File -Recurse) {
-            $tokens = $null; $errors = $null
-            [void][System.Management.Automation.Language.Parser]::ParseFile($file.FullName, [ref]$tokens, [ref]$errors)
-            $errors.Count | Should -Be 0
+Describe 'repository isolation' {
+    BeforeAll {
+        $isolate = Join-Path $repositoryRoot 'tools\isolate-git.ps1'
+        $pwshPath = (Get-Process -Id $PID).Path
+
+        # Runs one git command in a child pwsh whose environment names a decoy
+        # repository the way a hook run from a linked worktree would, and
+        # returns the git-dir that command resolved. With the isolation script
+        # dot-sourced first the probe repository answers; without it the decoy
+        # does, which is the failure this fixture exists to keep visible.
+        function Get-ResolvedGitDir {
+            param([bool] $Isolated)
+            $decoy = Join-Path $TestDrive 'decoy.git'
+            $probe = Join-Path $TestDrive ('probe-' + [guid]::NewGuid().ToString('N'))
+            & git init --bare -q $decoy 2>$null
+            [void](New-Item -ItemType Directory -Path $probe -Force)
+            $prelude = if ($Isolated) { ". '$isolate'; " } else { '' }
+            $command = $prelude + "git -C '$probe' init -q; git -C '$probe' rev-parse --absolute-git-dir"
+            $savedGitDir = $env:GIT_DIR
+            try {
+                $env:GIT_DIR = $decoy
+                return (& $pwshPath -NoProfile -Command $command 2>$null | Select-Object -Last 1)
+            }
+            finally {
+                $env:GIT_DIR = $savedGitDir
+            }
         }
+    }
+
+    It 'INV windows/no-inherited-git-context: a fixture repository is the only repository the suite reaches' {
+        $resolved = Get-ResolvedGitDir -Isolated $true
+        $resolved | Should -Match 'probe-[0-9a-f]{32}'
+        $resolved | Should -Not -Match 'decoy'
+    }
+
+    It 'INV windows/no-inherited-git-context: without the isolation script the inherited context wins' {
+        (Get-ResolvedGitDir -Isolated $false) | Should -Match 'decoy'
+    }
+}
+
+Describe 'Windows tree isolation' {
+    BeforeAll {
+        # INV windows/no-unix-host-required
+        # A read into a Unix-like tree is a path in a script, so the scan
+        # reads each script the way PowerShell does, as tokens, and looks at
+        # the tokens a path can be -- a string, a bare command argument, and
+        # the tokens nested inside an expandable string -- so a comment that
+        # mentions a Unix-like path is not a read. The pattern names the
+        # Unix-like roots -- the payload and module trees, the flake, its
+        # checks -- rather than every path above windows/, because the
+        # applied-commit code legitimately resolves the repository's own git
+        # metadata from the repository root. Case-sensitive on purpose:
+        # PowerShell's own 'Modules' directory is not the Nix module tree.
+        $UnixLikeTreePattern = '(^|[\\/''" ])(assets|modules)([\\/]|$)|flake\.(nix|lock)|tool[\\/]checks'
+        $StringTokenKinds = @('StringLiteral', 'StringExpandable', 'HereStringLiteral', 'HereStringExpandable')
+
+        function Get-UnixLikeTreeReference {
+            param([string] $Path)
+            $tokens = $null
+            $errors = $null
+            [void][System.Management.Automation.Language.Parser]::ParseFile($Path, [ref]$tokens, [ref]$errors)
+            $queue = [System.Collections.Generic.Queue[object]]::new()
+            foreach ($token in $tokens) { $queue.Enqueue($token) }
+            while ($queue.Count) {
+                $token = $queue.Dequeue()
+                if ($token -is [System.Management.Automation.Language.StringExpandableToken] -and $token.NestedTokens) {
+                    foreach ($nested in $token.NestedTokens) { $queue.Enqueue($nested) }
+                }
+                $kind = [string]$token.Kind
+                $text = if ($StringTokenKinds -contains $kind) { [string]$token.Value }
+                elseif ($kind -eq 'Generic') { [string]$token.Text }
+                else { continue }
+                if ($text -cmatch $UnixLikeTreePattern) {
+                    "$($Path):$($token.Extent.StartLineNumber): $($token.Text)"
+                }
+            }
+        }
+    }
+
+    It 'INV windows/no-unix-host-required: no script under windows/ reads a Unix-like tree' {
+        $scripts = @(Get-ChildItem -Path $repositoryRoot -Recurse -File |
+            Where-Object { $_.Extension -in '.ps1', '.psm1' })
+        $scripts.Count | Should -BeGreaterThan 0
+        $hits = @(foreach ($script in $scripts) { Get-UnixLikeTreeReference -Path $script.FullName })
+        ($hits -join "`n") | Should -BeNullOrEmpty
+    }
+
+    It 'INV windows/no-unix-host-required: the scan names a script that reads a Unix-like payload and passes a comment that mentions one' {
+        # The offending path is assembled from pieces so this file, which
+        # the case above scans, does not carry the shape it looks for. Three
+        # spellings of the same read: a quoted string, a bare argument, and
+        # a string nested inside an expandable one.
+        $unixPayload = 'as' + 'sets' + '\wezterm\fonts.json'
+        $unixRoot = 'as' + 'sets'
+        $offender = Join-Path $TestDrive 'reads-unixlike.ps1'
+        [IO.File]::WriteAllText($offender, (@(
+                    "`$fonts = Get-Content (Join-Path `$root '$unixPayload')"
+                    "`$fonts = Get-Content (Join-Path `$root $unixPayload)"
+                    "`$fonts = Get-Content `"`$root/`$(Join-Path '$unixRoot' 'wezterm')`""
+                ) -join "`n") + "`n")
+        $hit = @(Get-UnixLikeTreeReference -Path $offender)
+        $hit.Count | Should -Be 3
+        $hit[0] | Should -Match 'reads-unixlike\.ps1:1: '
+        $hit[1] | Should -Match 'reads-unixlike\.ps1:2: '
+        $hit[2] | Should -Match 'reads-unixlike\.ps1:3: '
+
+        $mention = Join-Path $TestDrive 'mentions-unixlike.ps1'
+        [IO.File]::WriteAllText($mention, "# The Unix-like copy lives under $($unixPayload.Replace('\', '/')).`n`$own = 'files\wezterm\fonts.json'`n")
+        @(Get-UnixLikeTreeReference -Path $mention).Count | Should -Be 0
+    }
+}
+
+Describe 'check entry points' {
+    BeforeAll {
+        $bootstrap = Join-Path $repositoryRoot 'bootstrap.ps1'
+        $pwshPath = (Get-Process -Id $PID).Path
+
+        # Runs the real entry point in a child pwsh with an empty PATH, so no
+        # winget.exe is reachable and the prerequisite branch is the one that
+        # answers. The same shape holds on Windows and on a Unix-like host.
+        function Invoke-BootstrapCheck {
+            param([string] $RequireNative)
+            $savedPath = $env:PATH
+            $savedNative = $env:REQUIRE_NATIVE
+            try {
+                $env:PATH = ''
+                $env:REQUIRE_NATIVE = $RequireNative
+                & $pwshPath -NoProfile -File $bootstrap -Check *> $null
+                return $LASTEXITCODE
+            }
+            finally {
+                $env:PATH = $savedPath
+                $env:REQUIRE_NATIVE = $savedNative
+            }
+        }
+    }
+
+    It 'INV windows/check-exit-contract: reports a missing prerequisite under -Check as unverified' {
+        Invoke-BootstrapCheck -RequireNative $null | Should -Be 69
+    }
+
+    It 'INV windows/check-exit-contract: turns a missing prerequisite into a failure when native evidence is required' {
+        Invoke-BootstrapCheck -RequireNative '1' | Should -Be 1
     }
 }

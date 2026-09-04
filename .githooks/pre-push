@@ -4,10 +4,18 @@
 # checks, and a check this host cannot run stays visible as unverified without
 # making one platform depend on another.
 #
+# INV repository/evidence-three-states — the hooks are the executables that source .githooks/evidence.
+#
 # .githooks/evidence owns what each outcome means. This hook decides which
 # checks are selected, never whether a missing tool is a failure.
 
 set -eu
+
+# Guards this script's sed/grep/awk calls from Git for Windows' MSYS argument
+# conversion (#79); see tool/version-control/hygiene. Inert elsewhere.
+MSYS_NO_PATHCONV=1
+MSYS2_ARG_CONV_EXCL='*'
+export MSYS_NO_PATHCONV MSYS2_ARG_CONV_EXCL
 
 hooks_dir=$(CDPATH= cd -- "$(dirname -- "$0")" && pwd)
 . "$hooks_dir/evidence"
@@ -110,14 +118,12 @@ if selected windows:desired-state || selected windows:tests; then
   fi
 fi
 
-if selected common:check; then
-  # Not a host capability: common material that arrives without its own check
-  # is an incomplete change, and no runner can supply the missing script.
-  if [ -x common/check ]; then
-    evidence_run "common check" common/check || exit 1
-  else
-    fail "Common content changed but common/check is unavailable."
-  fi
-fi
+# History policy is audited on every push, whatever the change touched: a
+# non-conventional subject or a lock refresh mixed into a source commit is a
+# property of the push, not of a scope. The merge-gate form, which reads
+# committed history alone: the full form also judges the clone — every local
+# branch name, every tag, the hooks setting — which no change can alter and
+# which blocked pushes over a scratch branch (INV repository/local-gate-selects-by-effect).
+evidence_run audit tool/version-control/audit --history || exit 1
 
 evidence_summary

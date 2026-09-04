@@ -1,16 +1,25 @@
 #!/bin/sh
 #
-# Domain-aware local checks plus the two repository-wide scans: desired-state
-# hygiene and secrets.
+# Domain-aware local checks plus the four repository-wide scans: desired-state
+# hygiene, cross-domain reads, the invariant registry, and secrets.
 #
 # Windows-only commits must not require Nix. The classifier is shared with the
 # pre-push hook, CI, and the version-control skill. What a check that could not
 # run means is decided in .githooks/evidence rather than here, so this hook
 # needs no knowledge of any domain's tooling.
 #
+# INV repository/hook-evidence-recorded: every check run through
+# .githooks/evidence is appended to a log outside the working tree.
+#
 # Bypass with `git commit --no-verify`.
 
 set -e
+
+# Guards this script's sed/grep/awk calls from Git for Windows' MSYS argument
+# conversion (#79); see tool/version-control/hygiene. Inert elsewhere.
+MSYS_NO_PATHCONV=1
+MSYS2_ARG_CONV_EXCL='*'
+export MSYS_NO_PATHCONV MSYS2_ARG_CONV_EXCL
 
 hooks_dir=$(CDPATH= cd -- "$(dirname -- "$0")" && pwd)
 . "$hooks_dir/evidence"
@@ -29,7 +38,12 @@ run_check() {
   name=$1
   hint=$2
   script="tool/checks/$name"
-  [ -x "$script" ] || return 0
+  if [ ! -x "$script" ]; then
+    # Not a pass: a selected check this host cannot run is unverified, and
+    # .githooks/evidence decides what that means here and in CI.
+    evidence_unavailable "$name" "$script is not runnable here" || exit 1
+    return 0
+  fi
   evidence_run "$name" "$script" || abort "$hint"
 }
 
@@ -67,11 +81,23 @@ fi
 # tool/checks/<name> and cannot reach a repository-scope check, so this calls
 # evidence_run directly.
 evidence_run hygiene tool/version-control/hygiene \
-  || abort "See AGENTS.md, Durable decisions, and tool/version-control/hygiene.allow."
+  || abort "See invariants/repository/hygiene-*.md and tool/version-control/hygiene.allow."
+
+# A read across a domain boundary is repository-wide for the same reason: it
+# is a property of two trees, and cheap to decide from the index.
+evidence_run "domain reads" tool/version-control/domain-reads \
+  || abort "See invariants/repository/no-cross-domain-dependency.md."
+
+# The invariant registry check is repository-wide for the same reason
+# hygiene is: a fixture renamed in any scope can orphan the tag an entry
+# depends on, so it runs unconditionally rather than through dispatch.
+evidence_run invariants tool/version-control/invariants \
+  || abort "See invariants/README.md."
 
 # Hooks are opt-in, so CI mirrors the secret check. A credential that reaches
 # history stays there after the file is deleted, making the staged state the
 # cheapest place to catch one.
+# INV repository/no-secret-in-history
 if command -v gitleaks >/dev/null 2>&1; then
   if gitleaks git --help >/dev/null 2>&1; then
     evidence_run gitleaks gitleaks git --staged --redact --no-banner \

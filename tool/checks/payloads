@@ -13,6 +13,8 @@
 # is stale. A declared format with no validator here is also a failure, so
 # adding a payload of a new kind cannot quietly widen the gap again.
 #
+# INV unixlike/payload-declared-and-parsed
+#
 # Validators are fetched with `nix shell` rather than assumed on PATH, matching
 # tool/checks/lint. Nix stays the only prerequisite, which keeps this check's
 # host requirements identical to the rest of the Unix-like suite.

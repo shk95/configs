@@ -11,6 +11,9 @@ native checks instead of treating them as passed.
 - [ ] Formatting, lint, and narrow checks relevant to the changed files pass.
 - [ ] User-facing behavior and expensive decisions are documented.
 - [ ] The final diff contains no unrelated changes.
+- [ ] A changed or added invariant has a registry entry under
+      `invariants/<scope>/` whose declared locators name it, and the tagged
+      fixture was read to confirm it exercises the statement.
 - [ ] Evaluation, build, native runtime check, and deployment evidence are
       reported separately where they apply.
 - [ ] No commit, push, tag, branch change, activation, or Apply occurred without
@@ -27,12 +30,17 @@ native checks instead of treating them as passed.
 - [ ] CI exposes the stable `Required checks` gate and branch protection
       requires it instead of conditional domain job names.
 - [ ] Model-specific skill locations only discover the canonical Agent Skills
-      workflow and do not duplicate its policy.
+      workflow and do not duplicate its policy (INV repository/adapters-pointer-only).
 - [ ] Committed desired state carries no undeclared user or host name, no
       absolute home path, no tracked runtime state, and no machine-unique
-      identifier, and every exclusion is declared with its reason.
+      identifier, and every exclusion is declared with its reason
+      (INV repository/hygiene-home-paths, INV repository/hygiene-declared-names,
+      INV repository/hygiene-runtime-state, INV repository/hygiene-machine-identity).
 - [ ] Prose in the diff was read for a bare account name, which no scanner
-      decides, and that reading is reported as the manual evidence.
+      decides, and that reading is reported as the manual evidence (INV repository/hygiene-prose-account-name).
+- [ ] Every fixture unit this change touches names an invariant
+      (INV repository/fixtures-name-invariants), and every gate job converts
+      unverified into failure (INV repository/merge-gate-requires-native).
 
 ## Governance rule design
 
@@ -74,8 +82,9 @@ native checks instead of treating them as passed.
       copies these files without reading them.
 - [ ] Activation is performed only when explicitly requested.
 - [ ] Runtime claims name the host on which they were observed.
-- [ ] A `unixlike-v...` tag is assigned only after required native evidence is
-      available.
+- [ ] A `unixlike-v...` tag is assigned only after required native evidence
+      is available, including `CHECKS_BUILD_ALL=1 tool/checks/test` on a
+      matching host.
 
 ## Windows domain
 
@@ -90,6 +99,10 @@ native checks instead of treating them as passed.
 - [ ] The feature selection that produced the observed evidence is named. A
       check that ran under a partial selection is evidence for that selection
       only and reports the rest as not selected, never as verified.
+- [ ] The Windows build the observation ran on is named beside it, and each
+      item of the Windows 10 support boundary table in `docs/status.md` is
+      reported in its boundary state — unverified below the boundary, never
+      verified there (INV windows/support-boundary-named).
 - [ ] Missing native tooling is reported as unverified rather than valid, and
       reaches its caller as exit status 69 rather than as a failure.
 - [ ] Apply is run only when explicitly requested, followed by another
@@ -127,8 +140,12 @@ native checks instead of treating them as passed.
 - [ ] Stable judgement belongs in `AGENTS.md`, not a model-specific adapter.
 - [ ] Domain ownership belongs in `docs/architecture.md`.
 - [ ] Procedure belongs in `CONTRIBUTING.md`.
-- [ ] A decision expensive to reverse or important current state belongs in
-      `docs/status.md`.
+- [ ] Important current state belongs in `docs/status.md`; a decision
+      expensive to reverse belongs in its own record under `docs/decisions/`.
+- [ ] A decision record's header carries `date`, `scope` (repeated for a
+      decision spanning domains) and `status`; a citation of a record names
+      an existing path; a `decision:` pointer names a record whose status is
+      `accepted`.
 - [ ] A recurring issue is indexed in `docs/troubleshooting.md` by its literal
       symptom.
 - [ ] A canonical skill lives in the owning project or an explicitly adopted
