@@ -7,7 +7,8 @@ enforced. `docs/architecture.md`, "Invariant registry", records why the
 registry exists and how it relates to the other documents.
 
 `tool/version-control/invariants` checks every entry and, in the other
-direction, every `INV <scope>/<slug>` tag in the tree. It runs on every commit
+direction, every `INV <scope>/<slug>` tag in the tree. A failure names its
+rule as `C1` to `C10`; the checker's header defines each. It runs on every commit
 and in CI. It reads the index, like the hygiene scan, so stage a new entry
 before running it by hand. `tool/version-control/invariants --table` prints
 the registry as a table; it still reports any failure on stderr but exits 0

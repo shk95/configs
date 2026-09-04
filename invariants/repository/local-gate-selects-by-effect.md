@@ -16,5 +16,7 @@ narrowed the same way since payload edits stopped forcing a flake
 evaluation. Its closing pass runs the real registry checker, which reads
 `docs/` and `invariants/`, but that is the same check the pre-commit hook
 runs unconditionally, so a documentation or registry change still meets
-it. The merge gate is outside the selector's rule and the suite holds that
+it. The pre-push audit is the history form: the clone's branches and tags
+are state no push can alter, so judging them there would block a push over
+nothing the push carries. The merge gate is outside the selector's rule and the suite holds that
 too: the workflow runs the whole suite and never names the selector.

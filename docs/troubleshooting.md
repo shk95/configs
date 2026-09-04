@@ -95,11 +95,11 @@ Two consequences worth knowing before you go looking:
   open pull request's head branch is the cheapest one, since it fires
   `pull_request: synchronize` even when the branch itself is not in the
   workflow's `push` filter.
-- **It interacts badly with branch protection.** `setup-repo.sh` makes the
-  release branch require the `Secret, hygiene, invariant and history scan`
-  check. With Actions off that check never reports, so every pull request into
-  it waits forever on something that cannot arrive — and the branch protection
-  settings look perfectly correct while it happens.
+- **It interacts badly with branch protection.** Both `dev` and `master`
+  require the `Required checks` job, which reports only after the classify,
+  scan and selected domain jobs have run. With Actions off nothing reports, so
+  every pull request waits forever on something that cannot arrive — and the
+  branch protection settings look perfectly correct while it happens.
 
 ### `tool/doctor.sh`: `could not ask the flake whether nix-command works`
 
