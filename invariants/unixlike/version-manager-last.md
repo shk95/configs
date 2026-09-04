@@ -3,7 +3,7 @@ statement: An imperative version manager is never declared as a package, and its
 rationale: docs/architecture.md § Unix-like domain
 enforced-by: pending #129
 owner: repository maintainer
-decision: docs/status.md § Unix-like Home Manager and package ownership
+decision: docs/decisions/sdkman-adopted-not-owned.md § SDKMAN is adopted but not owned
 
 The version manager rewrites PATH. Running it last is what lets declared
 packages keep precedence on a name collision, and not declaring its toolchain

@@ -3,7 +3,7 @@ statement: A package is declared by exactly one module: a feature module when th
 rationale: docs/architecture.md § Unix-like domain
 enforced-by: pending #130
 owner: repository maintainer
-decision: docs/status.md § Unix-like Home Manager and package ownership
+decision: docs/decisions/package-ownership-by-generating-module.md § A package is owned by the module that configures it
 
 Two declaring modules make precedence an accident of merge order. The rule
 follows the shared package list's own header rather than the availability of
