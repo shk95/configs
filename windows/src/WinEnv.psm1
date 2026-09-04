@@ -1815,8 +1815,10 @@ $script:WinEnvRuntimeStateName = @(
 # An absolute account path, in every spelling this domain can meet. The axes
 # are the same three tool/version-control/hygiene enforces repository-wide, so
 # a capture cannot write a payload that the commit's own hygiene scan then
-# refuses, and the tool does not depend on that scan running: whether the POSIX
-# hooks execute under Git for Windows is recorded in docs/status.md as unknown.
+# refuses, and the tool does not depend on that scan running even though the
+# POSIX hooks do execute under Git for Windows (#77,
+# docs/decisions/hooks-run-under-git-for-windows.md): hooks stay opt-in per
+# clone regardless of platform.
 #
 #   - a drive-letter path, with either separator, singled or doubled: a text
 #     payload carries one backslash, a JSON payload doubles it, and WSL and
