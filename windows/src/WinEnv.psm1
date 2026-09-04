@@ -38,7 +38,7 @@ function Get-WinEnvManifest {
 
     $manifest = Get-Content -LiteralPath $Path -Raw -Encoding utf8 |
         ConvertFrom-Json -AsHashtable -ErrorAction Stop
-    if ($manifest.SchemaVersion -ne 4) { throw "Unsupported manifest schema: $($manifest.SchemaVersion)" }
+    if ($manifest.SchemaVersion -ne 4) { throw "INV windows/schema-version-refused: Unsupported manifest schema: $($manifest.SchemaVersion)" }
     [void][System.Management.Automation.SemanticVersion]$manifest.ProjectVersion
     # Every consumer reads the manifest through here, so the feature model is
     # validated once instead of separately in setup, the check tool, and tests.
@@ -78,6 +78,7 @@ function Assert-WinEnvFeatureModel {
     foreach ($feature in $Manifest.Features) {
         if (-not $feature.ContainsKey('Id')) { throw 'A feature is declared without an Id.' }
         $id = [string]$feature.Id
+        # INV windows/unique-ids — pending #134: feature ids are checked here; package and managed-file ids are not yet.
         if ($declared.Contains($id)) { throw "Feature '$id' is declared more than once." }
         $declared.Add($id)
     }
@@ -121,10 +122,10 @@ function Assert-WinEnvFeatureModel {
 
     foreach ($entry in $owned) {
         $kind, $name, $item = $entry
-        if (-not $item.ContainsKey('Feature')) { throw "The $kind '$name' declares no Feature." }
+        if (-not $item.ContainsKey('Feature')) { throw "INV windows/feature-owns-every-item: The $kind '$name' declares no Feature." }
         $feature = [string]$item.Feature
         if (-not $declared.Contains($feature)) {
-            throw "The $kind '$name' names undeclared feature '$feature'."
+            throw "INV windows/feature-owns-every-item: The $kind '$name' names undeclared feature '$feature'."
         }
     }
 
@@ -182,13 +183,13 @@ function Assert-WinEnvManagedFileModel {
 
         $compare = if ($definition.ContainsKey('Compare')) { [string]$definition.Compare } else { '' }
         if ($script:WinEnvComparisonMode -cnotcontains $compare) {
-            throw ("The managed file '$id' declares unknown comparison mode '$compare'; " +
+            throw ("INV windows/compare-mode-declared: The managed file '$id' declares unknown comparison mode '$compare'; " +
                 "the modes are: $($script:WinEnvComparisonMode -join ', ').")
         }
         if ($compare -ceq 'ExactJsonWithGeneratedProfiles') {
             $parser = if ($definition.ContainsKey('Parser')) { [string]$definition.Parser } else { '' }
             if ($parser -cne 'Json') {
-                throw ("The managed file '$id' declares comparison mode '$compare' with parser '$parser'; " +
+                throw ("INV windows/compare-mode-declared: The managed file '$id' declares comparison mode '$compare' with parser '$parser'; " +
                     'that mode reads both sides as JSON and can only be declared on a Json payload.')
             }
         }
@@ -205,7 +206,7 @@ function Assert-WinEnvManagedFileModel {
 
         $variants = @($definition.Sources)
         if ($variants.Count -lt 2) {
-            throw "The managed file '$id' declares fewer than two source variants; use a scalar Source."
+            throw "INV windows/sources-total-function: The managed file '$id' declares fewer than two source variants; use a scalar Source."
         }
 
         $previousBound = $null
@@ -219,37 +220,37 @@ function Assert-WinEnvManagedFileModel {
             # the entry alone.
             foreach ($key in $variant.Keys) {
                 if (@('Source', 'MinimumBuild') -notcontains [string]$key) {
-                    throw "A source variant of the managed file '$id' declares unknown key '$key'."
+                    throw "INV windows/sources-total-function: A source variant of the managed file '$id' declares unknown key '$key'."
                 }
             }
             if (-not $variant.ContainsKey('Source')) {
-                throw "A source variant of the managed file '$id' declares no Source."
+                throw "INV windows/sources-total-function: A source variant of the managed file '$id' declares no Source."
             }
             # Caught here rather than as 'Managed source is missing: <root>' from
             # check-desired-state.ps1, which names a path that is really the
             # desired-state root and says nothing about the entry at fault.
             if ([string]::IsNullOrWhiteSpace([string]$variant.Source)) {
-                throw "A source variant of the managed file '$id' declares an empty Source."
+                throw "INV windows/sources-total-function: A source variant of the managed file '$id' declares an empty Source."
             }
 
             $isLast = $index -eq $variants.Count - 1
             $hasBound = $variant.ContainsKey('MinimumBuild')
             if ($isLast -and $hasBound) {
-                throw ("The last source variant of the managed file '$id' declares MinimumBuild; " +
+                throw ("INV windows/sources-total-function: The last source variant of the managed file '$id' declares MinimumBuild; " +
                     'it must be unconditional so every host resolves to exactly one variant.')
             }
             if (-not $isLast -and -not $hasBound) {
-                throw ("A source variant of the managed file '$id' declares no MinimumBuild and is not last; " +
+                throw ("INV windows/sources-total-function: A source variant of the managed file '$id' declares no MinimumBuild and is not last; " +
                     'only the last variant may be unconditional.')
             }
             if (-not $hasBound) { continue }
 
             $bound = 0
             if (-not [int]::TryParse([string]$variant.MinimumBuild, [ref]$bound) -or $bound -le 0) {
-                throw "The managed file '$id' declares a MinimumBuild that is not a positive Windows build number."
+                throw "INV windows/sources-total-function: The managed file '$id' declares a MinimumBuild that is not a positive Windows build number."
             }
             if ($null -ne $previousBound -and $bound -ge $previousBound) {
-                throw ("The managed file '$id' declares MinimumBuild values that do not descend; " +
+                throw ("INV windows/sources-total-function: The managed file '$id' declares MinimumBuild values that do not descend; " +
                     'the first variant a host satisfies must be the highest bound it meets.')
             }
             $previousBound = $bound
@@ -768,7 +769,7 @@ function Get-WinEnvState {
     if (-not (Test-Path -LiteralPath $Path -PathType Leaf)) { return $null }
     try {
         $state = Get-Content -LiteralPath $Path -Raw -Encoding utf8 | ConvertFrom-Json -ErrorAction Stop
-        if ($state.schemaVersion -ne 1 -and $state.schemaVersion -ne 2) { throw 'Unsupported state schema.' }
+        if ($state.schemaVersion -ne 1 -and $state.schemaVersion -ne 2) { throw 'INV windows/schema-version-refused: Unsupported state schema.' }
         # Schema 1 recorded no selection because none existed; it is read as a
         # full deployment rather than rejected.
         if ($state.schemaVersion -eq 2) {
@@ -1729,6 +1730,7 @@ function Test-WinEnvSourceFile {
     )
 
     $path = Join-Path $RepositoryRoot $Definition.Source
+    # INV windows/parser-declared — pending #135: this switch has no default arm, so an unknown parser falls through as parsed.
     switch ($Definition.Parser) {
         'Json' { $null = Get-Content -LiteralPath $path -Raw | ConvertFrom-Json -ErrorAction Stop }
         'Ini' {
@@ -1850,8 +1852,8 @@ $script:WinEnvAccountPathPattern = '(?im)' +
         $script:WinEnvPathSeparator + $script:WinEnvAccountName +
         $script:WinEnvPathSeparator + 'home' + $script:WinEnvPathSeparator + $script:WinEnvAccountName + ')'
 
-# AGENTS.md, Host safety: a .wslconfig firewall value is never added without
-# explicit direction, and a capture is not direction.
+# AGENTS.md, "Rules that are expensive to break": a .wslconfig firewall value
+# is never added without explicit direction, and a capture is not direction.
 $script:WinEnvWslFirewallPattern = '(?im)^[ \t]*firewall[ \t]*='
 
 # Private, like Get-WinGetRegistration: the capture outcome's shape is this

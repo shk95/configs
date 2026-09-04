@@ -18,6 +18,9 @@ param(
 )
 
 $ErrorActionPreference = 'Stop'
+# INV windows/check-exit-contract — Get-WinEnvCheckStatus ranks this run and
+# the non-apply path exits with what it returns; nothing else decides the
+# status of a -Check.
 $windowsRoot = $PSScriptRoot
 $repositoryRoot = Split-Path -Parent $windowsRoot
 $desiredStateRoot = Join-Path $windowsRoot 'desired'

@@ -1,9 +1,12 @@
 BeforeAll {
     $testsRoot = Split-Path -Parent $PSCommandPath
     $repositoryRoot = Split-Path -Parent $testsRoot
+    # INV windows/no-unix-host-required — pending #124: the only reason this suite knows the monorepo root is the WezTerm font-list comparison below.
     $monorepoRoot = Split-Path -Parent $repositoryRoot
     $desiredStateRoot = Join-Path $repositoryRoot 'desired'
     Import-Module (Join-Path $repositoryRoot 'src\WinEnv.psm1') -Force
+    # Invoke-Pester can be called without test.ps1; the suite defends itself.
+    . (Join-Path $repositoryRoot 'tools\isolate-git.ps1')
 
     function Test-Throws {
         param([scriptblock] $ScriptBlock)
@@ -63,10 +66,18 @@ BeforeAll {
 }
 
 Describe 'win-env manifest' {
-    It 'loads schema 4 and the desired-state compatibility version' {
+    It 'INV windows/schema-version-refused: loads schema 4 and the desired-state compatibility version' {
         $manifest = Get-WinEnvManifest -Path (Join-Path $desiredStateRoot 'manifest.json')
         $manifest.SchemaVersion | Should -Be 4
         $manifest.ProjectVersion | Should -Be '0.6.0'
+    }
+
+    It 'INV windows/schema-version-refused: refuses a manifest schema this module does not read' {
+        $path = Join-Path $TestDrive 'manifest-schema5.json'
+        [IO.File]::WriteAllText($path, '{"SchemaVersion":5,"ProjectVersion":"1.0.0"}')
+        $message = $null
+        try { Get-WinEnvManifest -Path $path | Out-Null } catch { $message = $_.Exception.Message }
+        $message | Should -Match 'INV windows/schema-version-refused'
     }
 
     It 'pins the v3.5.0 D2Koding asset and hashes' {
@@ -283,7 +294,7 @@ Describe 'JsonSubset projection' {
         $text | Should -Be '[{"a":2},{"z":4}]'
     }
 
-    It 'declares nothing by declaring an empty object, and everything by declaring an empty list' {
+    It 'INV windows/declared-list-has-content: declares nothing by declaring an empty object, and everything by declaring an empty list' {
         # Not a quirk of this direction but the read side's own asymmetry,
         # carried across unchanged: a declared object is a member subset, so an
         # empty one owns no member and can never drift; a declared list is
@@ -364,7 +375,7 @@ Describe 'PowerToys payload audit' {
         }
     }
 
-    It 'declares no empty list anywhere in a JsonSubset payload' {
+    It 'INV windows/declared-list-has-content: declares no empty list anywhere in a JsonSubset payload' {
         # The one shape in which a payload can silently absorb host state, and
         # the finding that review caught (#100). A declared list is exact --
         # the read side matches it by position and requires equal length -- so
@@ -720,7 +731,7 @@ Describe 'Windows Terminal generated profiles' {
         (Test-Throws { Test-WinEnvJsonWithGeneratedProfiles -Expected $repeated -Actual $repeated }) | Should -Be $true
     }
 
-    It 'rejects the generated-profile mode on an entry whose parser is not Json' {
+    It 'INV windows/compare-mode-declared: rejects the generated-profile mode on an entry whose parser is not Json' {
         # The mode reads both sides as JSON. Declared on a Lua or INI payload
         # it would load, read as meaningful, and throw on the first host that
         # compared the file.
@@ -762,7 +773,7 @@ Describe 'Windows Terminal generated profiles' {
         { Assert-WinEnvManagedFileModel -Manifest $json } | Should -Not -Throw
     }
 
-    It 'rejects a comparison mode no entry can be compared with' {
+    It 'INV windows/compare-mode-declared: rejects a comparison mode no entry can be compared with' {
         foreach ($compare in @('exactjsonwithgeneratedprofiles', 'JsonMerge', '')) {
             $manifest = New-FeatureManifest -Override @{
                 ManagedFiles = @(@{
@@ -783,7 +794,7 @@ Describe 'Windows Terminal generated profiles' {
         (Test-Throws { Assert-WinEnvManagedFileModel -Manifest $noCompare }) | Should -Be $true
     }
 
-    It 'gives the tolerance to the one file Windows Terminal co-owns' {
+    It 'INV windows/compare-mode-declared: gives the tolerance to the one file Windows Terminal co-owns' {
         # Apply still writes this payload whole. The tolerance is a read-side
         # statement about one application, so a second entry claiming it would
         # be a decision, not a detail.
@@ -863,7 +874,15 @@ Describe 'state safety' {
         (Test-Throws { Get-WinEnvState -Path $path }) | Should -Be $true
     }
 
-    It 'changes the desired-state hash when content changes' {
+    It 'INV windows/schema-version-refused: refuses a state schema this module does not read' {
+        $path = Join-Path $TestDrive 'schema3.json'
+        [IO.File]::WriteAllText($path, '{"schemaVersion":3,"projectVersion":"0.1.0","appliedAtUtc":"2026-01-01T00:00:00+00:00","gitCommit":"0123456789abcdef","features":["core"]}')
+        $message = $null
+        try { Get-WinEnvState -Path $path | Out-Null } catch { $message = $_.Exception.Message }
+        $message | Should -Match 'INV windows/schema-version-refused'
+    }
+
+    It 'INV windows/hash-covers-selection: changes the desired-state hash when content changes' {
         $manifest = New-FeatureManifest
         $root = Join-Path $TestDrive 'desired'
         [void](New-Item -ItemType Directory -Path (Join-Path $root 'files') -Force)
@@ -877,7 +896,7 @@ Describe 'state safety' {
         $after | Should -Not -Be $before
     }
 
-    It 'ignores a payload the selection excludes' {
+    It 'INV windows/hash-covers-selection: ignores a payload the selection excludes' {
         # A whole-tree hash reported drift for material this host never
         # deploys, and every such edit forced an Apply that could not change
         # anything on it.
@@ -891,6 +910,18 @@ Describe 'state safety' {
         [IO.File]::WriteAllText((Join-Path $root 'files\settings.json'), '{"changed":true}')
         (Get-WinEnvDesiredStateHash -Root $root -Manifest $manifest -Feature @('core')) | Should -Be $before
         (Get-WinEnvDesiredStateHash -Root $root -Manifest $manifest -Feature @('core', 'terminal')) | Should -Not -Be $before
+    }
+
+    It 'INV windows/hash-covers-selection: covers the manifest itself' {
+        $manifest = New-FeatureManifest
+        $root = Join-Path $TestDrive 'desired-manifest'
+        [void](New-Item -ItemType Directory -Path (Join-Path $root 'files') -Force)
+        [IO.File]::WriteAllText((Join-Path $root 'files\profile.ps1'), 'core')
+        [IO.File]::WriteAllText((Join-Path $root 'manifest.json'), '{}')
+        $before = Get-WinEnvDesiredStateHash -Root $root -Manifest $manifest -Feature @('core')
+        [IO.File]::WriteAllText((Join-Path $root 'manifest.json'), '{"changed":true}')
+        $after = Get-WinEnvDesiredStateHash -Root $root -Manifest $manifest -Feature @('core')
+        $after | Should -Not -Be $before
     }
 
     It 'reads a schema 1 state as the full feature set' {
@@ -1041,7 +1072,7 @@ Describe 'managed sources' {
 }
 
 Describe 'feature model' {
-    It 'owns every deployable item with a declared feature' {
+    It 'INV windows/feature-owns-every-item: owns every deployable item with a declared feature' {
         $manifest = Get-WinEnvManifest -Path (Join-Path $desiredStateRoot 'manifest.json')
         $declared = Get-WinEnvFeatureId -Manifest $manifest
         foreach ($package in $manifest.Packages) { $declared | Should -Contain $package.Feature }
@@ -1050,14 +1081,14 @@ Describe 'feature model' {
         $declared | Should -Contain $manifest.Terminal.Feature
     }
 
-    It 'rejects a deployable item that names no feature' {
+    It 'INV windows/feature-owns-every-item: rejects a deployable item that names no feature' {
         $manifest = New-FeatureManifest -Override @{
             ManagedFiles = @(@{ Id = 'orphan'; Source = 'files/orphan.txt'; Target = 'orphan'; Compare = 'Text'; Parser = 'Text' })
         }
         (Test-Throws { Assert-WinEnvFeatureModel -Manifest $manifest }) | Should -Be $true
     }
 
-    It 'rejects an item that names an undeclared feature' {
+    It 'INV windows/feature-owns-every-item: rejects an item that names an undeclared feature' {
         $manifest = New-FeatureManifest -Override @{
             Packages = @(@{ Id = 'Vendor.Ghost'; Feature = 'ghost'; Detection = 'WinGet' })
         }
@@ -1331,7 +1362,7 @@ Describe 'Appx detection capability' {
         $status.Unverified | Should -Match 'undecidable on this host'
     }
 
-    It 'ranks drift above an undecidable item in the check exit contract' {
+    It 'INV windows/check-exit-contract: ranks drift above an undecidable item in the check exit contract' {
         (Get-WinEnvCheckStatus -DriftCount 0 -UnverifiedCount 0) | Should -Be 0
         (Get-WinEnvCheckStatus -DriftCount 1 -UnverifiedCount 0) | Should -Be 2
         (Get-WinEnvCheckStatus -DriftCount 0 -UnverifiedCount 1) | Should -Be 69
@@ -1356,7 +1387,7 @@ Describe 'Appx detection capability' {
         }
     }
 
-    It 'turns an undecidable item into a failure when native evidence is required' {
+    It 'INV windows/check-exit-contract: turns an undecidable item into a failure when native evidence is required' {
         # REQUIRE_NATIVE is the flag that says incompleteness must not pass,
         # and a failure outranks both drift and an unverified result.
         (Get-WinEnvCheckStatus -DriftCount 0 -UnverifiedCount 1 -RequireNative) | Should -Be 1
@@ -1702,7 +1733,7 @@ Describe 'Windows build condition' {
         }
     }
 
-    It 'hashes every declared variant so the desired state cannot depend on the host' {
+    It 'INV windows/hash-covers-selection: hashes every declared variant so the desired state cannot depend on the host' {
         $manifest = New-FeatureManifest -Override @{
             ManagedFiles = @(New-ConditionalFile -Sources @(
                     @{ MinimumBuild = 22621; Source = 'files/upper.ini' },
@@ -1753,7 +1784,7 @@ Describe 'Windows build condition' {
         }
     }
 
-    It 'refuses a variant list whose last entry is conditional' {
+    It 'INV windows/sources-total-function: refuses a variant list whose last entry is conditional' {
         # Negative fixture for the invariant the two-entry shape would have
         # needed and could not have enforced: on a host below every bound this
         # file would deploy nothing at all, silently.
@@ -1765,7 +1796,7 @@ Describe 'Windows build condition' {
         (Test-Throws { Assert-WinEnvManagedFileModel -Manifest $manifest }) | Should -Be $true
     }
 
-    It 'refuses bounds that do not descend' {
+    It 'INV windows/sources-total-function: refuses bounds that do not descend' {
         # An ascending list would let a 22631 host match the 19041 variant
         # first, so the highest bound a host meets would stop being the one it
         # resolves to.
@@ -1778,7 +1809,7 @@ Describe 'Windows build condition' {
         (Test-Throws { Assert-WinEnvManagedFileModel -Manifest $manifest }) | Should -Be $true
     }
 
-    It 'refuses an entry declaring both a scalar Source and alternatives' {
+    It 'INV windows/sources-total-function: refuses an entry declaring both a scalar Source and alternatives' {
         $definition = New-ConditionalFile -Sources @(
             @{ MinimumBuild = 22621; Source = 'files/upper.ini' },
             @{ Source = 'files/lower.ini' })
@@ -1787,14 +1818,14 @@ Describe 'Windows build condition' {
         (Test-Throws { Assert-WinEnvManagedFileModel -Manifest $manifest }) | Should -Be $true
     }
 
-    It 'refuses an entry that declares no source at all' {
+    It 'INV windows/sources-total-function: refuses an entry that declares no source at all' {
         $manifest = New-FeatureManifest -Override @{
             ManagedFiles = @(@{ Id = 'orphan'; Feature = 'core'; Target = 'target'; Compare = 'Text'; Parser = 'Ini' })
         }
         (Test-Throws { Assert-WinEnvManagedFileModel -Manifest $manifest }) | Should -Be $true
     }
 
-    It 'refuses a single-variant list and a non-positive bound' {
+    It 'INV windows/sources-total-function: refuses a single-variant list and a non-positive bound' {
         $single = New-FeatureManifest -Override @{
             ManagedFiles = @(New-ConditionalFile -Sources @(@{ Source = 'files/only.ini' }))
         }
@@ -1808,7 +1839,7 @@ Describe 'Windows build condition' {
         (Test-Throws { Assert-WinEnvManagedFileModel -Manifest $bogus }) | Should -Be $true
     }
 
-    It 'refuses a variant declaring any key but Source and MinimumBuild' {
+    It 'INV windows/sources-total-function: refuses a variant declaring any key but Source and MinimumBuild' {
         # A per-variant Compare, Parser, Feature or Target would load, read as
         # meaningful, and do nothing: New-ResolvedManagedFile copies those from
         # the entry alone. Silently dropping it is the exact class of error the
@@ -1831,7 +1862,7 @@ Describe 'Windows build condition' {
         (Test-Throws { Assert-WinEnvManagedFileModel -Manifest $manifest }) | Should -Be $true
     }
 
-    It 'refuses a variant whose Source is empty or blank' {
+    It 'INV windows/sources-total-function: refuses a variant whose Source is empty or blank' {
         # Caught at load, naming the entry, rather than later from
         # check-desired-state.ps1 as a missing path that is really the
         # desired-state root.
@@ -1852,7 +1883,7 @@ Describe 'Windows build condition' {
         (Test-Throws { Assert-WinEnvManagedFileModel -Manifest $manifest }) | Should -Be $true
     }
 
-    It 'accepts the shape the repository manifest uses' {
+    It 'INV windows/sources-total-function: accepts the shape the repository manifest uses' {
         # Positive fixture beside the four negative ones above.
         $manifest = New-FeatureManifest -Override @{
             ManagedFiles = @(New-ConditionalFile -Sources @(
@@ -1944,7 +1975,7 @@ Describe 'capture' {
         }
     }
 
-    It 'restores the one placeholder the deploy direction expands' {
+    It 'INV windows/one-placeholder: restores the one placeholder the deploy direction expands' {
         $content = '{"template":"' + $JsonLocalAppData + '\\NewPlus"}'
         $result = ConvertFrom-WinEnvTemplate -Content $content -HostPath $CaptureHost
 
@@ -1958,7 +1989,7 @@ Describe 'capture' {
         (Expand-WinEnvTemplate -Content $result.Content -HostPath $CaptureHost) | Should -Be $content
     }
 
-    It 'reports a spelling it cannot represent instead of inventing a placeholder' {
+    It 'INV windows/one-placeholder: reports a spelling it cannot represent instead of inventing a placeholder' {
         # Apply expands one token, to the JSON-escaped spelling of
         # LOCALAPPDATA. Writing `{USERPROFILE}` into a payload would deploy that
         # text literally to the host, so every other spelling is reported and
@@ -4066,6 +4097,80 @@ exit 0
             @(& git -C $fixture.Remote for-each-ref --format='%(refname)' refs/heads) | Should -Be @('refs/heads/dev')
         }
 
+    }
+}
+
+Describe 'repository isolation' {
+    BeforeAll {
+        $isolate = Join-Path $repositoryRoot 'tools\isolate-git.ps1'
+        $pwshPath = (Get-Process -Id $PID).Path
+
+        # Runs one git command in a child pwsh whose environment names a decoy
+        # repository the way a hook run from a linked worktree would, and
+        # returns the git-dir that command resolved. With the isolation script
+        # dot-sourced first the probe repository answers; without it the decoy
+        # does, which is the failure this fixture exists to keep visible.
+        function Get-ResolvedGitDir {
+            param([bool] $Isolated)
+            $decoy = Join-Path $TestDrive 'decoy.git'
+            $probe = Join-Path $TestDrive ('probe-' + [guid]::NewGuid().ToString('N'))
+            & git init --bare -q $decoy 2>$null
+            [void](New-Item -ItemType Directory -Path $probe -Force)
+            $prelude = if ($Isolated) { ". '$isolate'; " } else { '' }
+            $command = $prelude + "git -C '$probe' init -q; git -C '$probe' rev-parse --absolute-git-dir"
+            $savedGitDir = $env:GIT_DIR
+            try {
+                $env:GIT_DIR = $decoy
+                return (& $pwshPath -NoProfile -Command $command 2>$null | Select-Object -Last 1)
+            }
+            finally {
+                $env:GIT_DIR = $savedGitDir
+            }
+        }
+    }
+
+    It 'INV windows/no-inherited-git-context: a fixture repository is the only repository the suite reaches' {
+        $resolved = Get-ResolvedGitDir -Isolated $true
+        $resolved | Should -Match 'probe-[0-9a-f]{32}'
+        $resolved | Should -Not -Match 'decoy'
+    }
+
+    It 'INV windows/no-inherited-git-context: without the isolation script the inherited context wins' {
+        (Get-ResolvedGitDir -Isolated $false) | Should -Match 'decoy'
+    }
+}
+
+Describe 'check entry points' {
+    BeforeAll {
+        $bootstrap = Join-Path $repositoryRoot 'bootstrap.ps1'
+        $pwshPath = (Get-Process -Id $PID).Path
+
+        # Runs the real entry point in a child pwsh with an empty PATH, so no
+        # winget.exe is reachable and the prerequisite branch is the one that
+        # answers. The same shape holds on Windows and on a Unix-like host.
+        function Invoke-BootstrapCheck {
+            param([string] $RequireNative)
+            $savedPath = $env:PATH
+            $savedNative = $env:REQUIRE_NATIVE
+            try {
+                $env:PATH = ''
+                $env:REQUIRE_NATIVE = $RequireNative
+                & $pwshPath -NoProfile -File $bootstrap -Check *> $null
+                return $LASTEXITCODE
+            }
+            finally {
+                $env:PATH = $savedPath
+                $env:REQUIRE_NATIVE = $savedNative
+            }
+        }
+    }
+
+    It 'INV windows/check-exit-contract: reports a missing prerequisite under -Check as unverified' {
+        Invoke-BootstrapCheck -RequireNative $null | Should -Be 69
+    }
+
+    It 'INV windows/check-exit-contract: turns a missing prerequisite into a failure when native evidence is required' {
+        Invoke-BootstrapCheck -RequireNative '1' | Should -Be 1
     }
 }
 

@@ -43,6 +43,9 @@ Import-Module -FullyQualifiedName @{
     RequiredVersion = $requiredVersion
 } -Force
 
+# The suite creates fixture repositories; it must never inherit the caller's.
+. (Join-Path $PSScriptRoot 'isolate-git.ps1')
+
 $tests = Join-Path (Split-Path -Parent $PSScriptRoot) 'tests'
 $result = Invoke-Pester -Path $tests -PassThru
 if ($result.Result -ne 'Passed') { exit 1 }

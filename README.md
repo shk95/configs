@@ -178,12 +178,14 @@ still push Windows work. CI supplies the missing evidence.
 
 `bootstrap.ps1 -Check` has a 69 of its own, and it means something else: a
 detection this host could not decide, such as an Appx package whose module will
-not load, which is named as unverified instead of read as missing. An unparsed
-source only appears in its summary and does not change what it returns. It
-exits 69 only when nothing else drifted, because drift outranks an undecided
-item, so a host with both exits 2 and still names the undecided items.
-`REQUIRE_NATIVE=1` turns an undecided item into a failure. `-Check` never
-installs or changes anything. Apply is explicit:
+not load, which is named as unverified instead of read as missing. A
+prerequisite this host lacks, WinGet or PowerShell 7, is the other case:
+`-Check` reports it as 69 rather than installing anything, and 1 under
+`REQUIRE_NATIVE=1`. An unparsed source only appears in its summary and does not
+change what it returns. It exits 69 only when nothing else drifted, because
+drift outranks an undecided item, so a host with both exits 2 and still names
+the undecided items. `REQUIRE_NATIVE=1` turns an undecided item into a failure.
+`-Check` never installs or changes anything. Apply is explicit:
 
 ```powershell
 .\windows\bootstrap.ps1
