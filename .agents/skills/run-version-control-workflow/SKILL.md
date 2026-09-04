@@ -38,7 +38,10 @@ planning read-only unless the user explicitly authorizes a Git mutation.
   documentation or enforcement.
 - **Start**: Propose `feature/<scope>-<topic>` or `fix/<scope>-<topic>` from
   `dev`. Fetch, create a branch, or add a worktree only after the user
-  explicitly requests that mutation.
+  explicitly requests that mutation. A worktree made for an implementer is kept,
+  with the ability to resume that implementer in it, until the pull request
+  from its branch has merged: review feedback returns to the same worktree,
+  and one removed earlier costs a fresh setup for every fix.
 - **Milestone**: Search open and closed GitHub milestones before creating one.
   Confirm one owning scope, the `<scope>: <outcome>` title, the required
   description sections, no due date unless the maintainer supplied one, and
@@ -51,7 +54,9 @@ planning read-only unless the user explicitly authorizes a Git mutation.
   request.
 - **Integrate**: Merge a topic branch into `dev`. Require relevant checks,
   preserve merge commits, and refuse squash or rebase of published work. Do
-  not merge, push, or change branches without explicit authorization.
+  not merge, push, or change branches without explicit authorization. Remove
+  an implementer's worktree only after its pull request has merged; the
+  publish helper prunes the merged branch, never the worktree.
 - **Promote**: Run `tool/version-control/plan-promotion`. Permit only a
   same-repository `dev` to `master` pull request, ensure no competing promotion
   is open, and introduce no fix in the promotion itself. Require `Required
