@@ -121,10 +121,10 @@ function Assert-WinEnvFeatureModel {
 
     foreach ($entry in $owned) {
         $kind, $name, $item = $entry
-        if (-not $item.ContainsKey('Feature')) { throw "The $kind '$name' declares no Feature." }
+        if (-not $item.ContainsKey('Feature')) { throw "INV windows/feature-owns-every-item: The $kind '$name' declares no Feature." }
         $feature = [string]$item.Feature
         if (-not $declared.Contains($feature)) {
-            throw "The $kind '$name' names undeclared feature '$feature'."
+            throw "INV windows/feature-owns-every-item: The $kind '$name' names undeclared feature '$feature'."
         }
     }
 
@@ -182,13 +182,13 @@ function Assert-WinEnvManagedFileModel {
 
         $compare = if ($definition.ContainsKey('Compare')) { [string]$definition.Compare } else { '' }
         if ($script:WinEnvComparisonMode -cnotcontains $compare) {
-            throw ("The managed file '$id' declares unknown comparison mode '$compare'; " +
+            throw ("INV windows/compare-mode-declared: The managed file '$id' declares unknown comparison mode '$compare'; " +
                 "the modes are: $($script:WinEnvComparisonMode -join ', ').")
         }
         if ($compare -ceq 'ExactJsonWithGeneratedProfiles') {
             $parser = if ($definition.ContainsKey('Parser')) { [string]$definition.Parser } else { '' }
             if ($parser -cne 'Json') {
-                throw ("The managed file '$id' declares comparison mode '$compare' with parser '$parser'; " +
+                throw ("INV windows/compare-mode-declared: The managed file '$id' declares comparison mode '$compare' with parser '$parser'; " +
                     'that mode reads both sides as JSON and can only be declared on a Json payload.')
             }
         }
@@ -205,7 +205,7 @@ function Assert-WinEnvManagedFileModel {
 
         $variants = @($definition.Sources)
         if ($variants.Count -lt 2) {
-            throw "The managed file '$id' declares fewer than two source variants; use a scalar Source."
+            throw "INV windows/sources-total-function: The managed file '$id' declares fewer than two source variants; use a scalar Source."
         }
 
         $previousBound = $null
@@ -219,37 +219,37 @@ function Assert-WinEnvManagedFileModel {
             # the entry alone.
             foreach ($key in $variant.Keys) {
                 if (@('Source', 'MinimumBuild') -notcontains [string]$key) {
-                    throw "A source variant of the managed file '$id' declares unknown key '$key'."
+                    throw "INV windows/sources-total-function: A source variant of the managed file '$id' declares unknown key '$key'."
                 }
             }
             if (-not $variant.ContainsKey('Source')) {
-                throw "A source variant of the managed file '$id' declares no Source."
+                throw "INV windows/sources-total-function: A source variant of the managed file '$id' declares no Source."
             }
             # Caught here rather than as 'Managed source is missing: <root>' from
             # check-desired-state.ps1, which names a path that is really the
             # desired-state root and says nothing about the entry at fault.
             if ([string]::IsNullOrWhiteSpace([string]$variant.Source)) {
-                throw "A source variant of the managed file '$id' declares an empty Source."
+                throw "INV windows/sources-total-function: A source variant of the managed file '$id' declares an empty Source."
             }
 
             $isLast = $index -eq $variants.Count - 1
             $hasBound = $variant.ContainsKey('MinimumBuild')
             if ($isLast -and $hasBound) {
-                throw ("The last source variant of the managed file '$id' declares MinimumBuild; " +
+                throw ("INV windows/sources-total-function: The last source variant of the managed file '$id' declares MinimumBuild; " +
                     'it must be unconditional so every host resolves to exactly one variant.')
             }
             if (-not $isLast -and -not $hasBound) {
-                throw ("A source variant of the managed file '$id' declares no MinimumBuild and is not last; " +
+                throw ("INV windows/sources-total-function: A source variant of the managed file '$id' declares no MinimumBuild and is not last; " +
                     'only the last variant may be unconditional.')
             }
             if (-not $hasBound) { continue }
 
             $bound = 0
             if (-not [int]::TryParse([string]$variant.MinimumBuild, [ref]$bound) -or $bound -le 0) {
-                throw "The managed file '$id' declares a MinimumBuild that is not a positive Windows build number."
+                throw "INV windows/sources-total-function: The managed file '$id' declares a MinimumBuild that is not a positive Windows build number."
             }
             if ($null -ne $previousBound -and $bound -ge $previousBound) {
-                throw ("The managed file '$id' declares MinimumBuild values that do not descend; " +
+                throw ("INV windows/sources-total-function: The managed file '$id' declares MinimumBuild values that do not descend; " +
                     'the first variant a host satisfies must be the highest bound it meets.')
             }
             $previousBound = $bound

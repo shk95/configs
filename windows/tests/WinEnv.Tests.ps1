@@ -720,7 +720,7 @@ Describe 'Windows Terminal generated profiles' {
         (Test-Throws { Test-WinEnvJsonWithGeneratedProfiles -Expected $repeated -Actual $repeated }) | Should -Be $true
     }
 
-    It 'rejects the generated-profile mode on an entry whose parser is not Json' {
+    It 'INV windows/compare-mode-declared: rejects the generated-profile mode on an entry whose parser is not Json' {
         # The mode reads both sides as JSON. Declared on a Lua or INI payload
         # it would load, read as meaningful, and throw on the first host that
         # compared the file.
@@ -762,7 +762,7 @@ Describe 'Windows Terminal generated profiles' {
         { Assert-WinEnvManagedFileModel -Manifest $json } | Should -Not -Throw
     }
 
-    It 'rejects a comparison mode no entry can be compared with' {
+    It 'INV windows/compare-mode-declared: rejects a comparison mode no entry can be compared with' {
         foreach ($compare in @('exactjsonwithgeneratedprofiles', 'JsonMerge', '')) {
             $manifest = New-FeatureManifest -Override @{
                 ManagedFiles = @(@{
@@ -783,7 +783,7 @@ Describe 'Windows Terminal generated profiles' {
         (Test-Throws { Assert-WinEnvManagedFileModel -Manifest $noCompare }) | Should -Be $true
     }
 
-    It 'gives the tolerance to the one file Windows Terminal co-owns' {
+    It 'INV windows/compare-mode-declared: gives the tolerance to the one file Windows Terminal co-owns' {
         # Apply still writes this payload whole. The tolerance is a read-side
         # statement about one application, so a second entry claiming it would
         # be a decision, not a detail.
@@ -1041,7 +1041,7 @@ Describe 'managed sources' {
 }
 
 Describe 'feature model' {
-    It 'owns every deployable item with a declared feature' {
+    It 'INV windows/feature-owns-every-item: owns every deployable item with a declared feature' {
         $manifest = Get-WinEnvManifest -Path (Join-Path $desiredStateRoot 'manifest.json')
         $declared = Get-WinEnvFeatureId -Manifest $manifest
         foreach ($package in $manifest.Packages) { $declared | Should -Contain $package.Feature }
@@ -1050,14 +1050,14 @@ Describe 'feature model' {
         $declared | Should -Contain $manifest.Terminal.Feature
     }
 
-    It 'rejects a deployable item that names no feature' {
+    It 'INV windows/feature-owns-every-item: rejects a deployable item that names no feature' {
         $manifest = New-FeatureManifest -Override @{
             ManagedFiles = @(@{ Id = 'orphan'; Source = 'files/orphan.txt'; Target = 'orphan'; Compare = 'Text'; Parser = 'Text' })
         }
         (Test-Throws { Assert-WinEnvFeatureModel -Manifest $manifest }) | Should -Be $true
     }
 
-    It 'rejects an item that names an undeclared feature' {
+    It 'INV windows/feature-owns-every-item: rejects an item that names an undeclared feature' {
         $manifest = New-FeatureManifest -Override @{
             Packages = @(@{ Id = 'Vendor.Ghost'; Feature = 'ghost'; Detection = 'WinGet' })
         }
@@ -1753,7 +1753,7 @@ Describe 'Windows build condition' {
         }
     }
 
-    It 'refuses a variant list whose last entry is conditional' {
+    It 'INV windows/sources-total-function: refuses a variant list whose last entry is conditional' {
         # Negative fixture for the invariant the two-entry shape would have
         # needed and could not have enforced: on a host below every bound this
         # file would deploy nothing at all, silently.
@@ -1765,7 +1765,7 @@ Describe 'Windows build condition' {
         (Test-Throws { Assert-WinEnvManagedFileModel -Manifest $manifest }) | Should -Be $true
     }
 
-    It 'refuses bounds that do not descend' {
+    It 'INV windows/sources-total-function: refuses bounds that do not descend' {
         # An ascending list would let a 22631 host match the 19041 variant
         # first, so the highest bound a host meets would stop being the one it
         # resolves to.
@@ -1778,7 +1778,7 @@ Describe 'Windows build condition' {
         (Test-Throws { Assert-WinEnvManagedFileModel -Manifest $manifest }) | Should -Be $true
     }
 
-    It 'refuses an entry declaring both a scalar Source and alternatives' {
+    It 'INV windows/sources-total-function: refuses an entry declaring both a scalar Source and alternatives' {
         $definition = New-ConditionalFile -Sources @(
             @{ MinimumBuild = 22621; Source = 'files/upper.ini' },
             @{ Source = 'files/lower.ini' })
@@ -1787,14 +1787,14 @@ Describe 'Windows build condition' {
         (Test-Throws { Assert-WinEnvManagedFileModel -Manifest $manifest }) | Should -Be $true
     }
 
-    It 'refuses an entry that declares no source at all' {
+    It 'INV windows/sources-total-function: refuses an entry that declares no source at all' {
         $manifest = New-FeatureManifest -Override @{
             ManagedFiles = @(@{ Id = 'orphan'; Feature = 'core'; Target = 'target'; Compare = 'Text'; Parser = 'Ini' })
         }
         (Test-Throws { Assert-WinEnvManagedFileModel -Manifest $manifest }) | Should -Be $true
     }
 
-    It 'refuses a single-variant list and a non-positive bound' {
+    It 'INV windows/sources-total-function: refuses a single-variant list and a non-positive bound' {
         $single = New-FeatureManifest -Override @{
             ManagedFiles = @(New-ConditionalFile -Sources @(@{ Source = 'files/only.ini' }))
         }
@@ -1808,7 +1808,7 @@ Describe 'Windows build condition' {
         (Test-Throws { Assert-WinEnvManagedFileModel -Manifest $bogus }) | Should -Be $true
     }
 
-    It 'refuses a variant declaring any key but Source and MinimumBuild' {
+    It 'INV windows/sources-total-function: refuses a variant declaring any key but Source and MinimumBuild' {
         # A per-variant Compare, Parser, Feature or Target would load, read as
         # meaningful, and do nothing: New-ResolvedManagedFile copies those from
         # the entry alone. Silently dropping it is the exact class of error the
@@ -1831,7 +1831,7 @@ Describe 'Windows build condition' {
         (Test-Throws { Assert-WinEnvManagedFileModel -Manifest $manifest }) | Should -Be $true
     }
 
-    It 'refuses a variant whose Source is empty or blank' {
+    It 'INV windows/sources-total-function: refuses a variant whose Source is empty or blank' {
         # Caught at load, naming the entry, rather than later from
         # check-desired-state.ps1 as a missing path that is really the
         # desired-state root.
@@ -1852,7 +1852,7 @@ Describe 'Windows build condition' {
         (Test-Throws { Assert-WinEnvManagedFileModel -Manifest $manifest }) | Should -Be $true
     }
 
-    It 'accepts the shape the repository manifest uses' {
+    It 'INV windows/sources-total-function: accepts the shape the repository manifest uses' {
         # Positive fixture beside the four negative ones above.
         $manifest = New-FeatureManifest -Override @{
             ManagedFiles = @(New-ConditionalFile -Sources @(
