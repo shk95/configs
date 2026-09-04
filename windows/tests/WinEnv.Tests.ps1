@@ -372,7 +372,7 @@ Describe 'PowerToys payload audit' {
         }
     }
 
-    It 'declares no empty list anywhere in a JsonSubset payload' {
+    It 'INV windows/declared-list-has-content: declares no empty list anywhere in a JsonSubset payload' {
         # The one shape in which a payload can silently absorb host state, and
         # the finding that review caught (#100). A declared list is exact --
         # the read side matches it by position and requires equal length -- so
@@ -879,7 +879,7 @@ Describe 'state safety' {
         $message | Should -Match 'INV windows/schema-version-refused'
     }
 
-    It 'changes the desired-state hash when content changes' {
+    It 'INV windows/hash-covers-selection: changes the desired-state hash when content changes' {
         $manifest = New-FeatureManifest
         $root = Join-Path $TestDrive 'desired'
         [void](New-Item -ItemType Directory -Path (Join-Path $root 'files') -Force)
@@ -893,7 +893,7 @@ Describe 'state safety' {
         $after | Should -Not -Be $before
     }
 
-    It 'ignores a payload the selection excludes' {
+    It 'INV windows/hash-covers-selection: ignores a payload the selection excludes' {
         # A whole-tree hash reported drift for material this host never
         # deploys, and every such edit forced an Apply that could not change
         # anything on it.
@@ -1718,7 +1718,7 @@ Describe 'Windows build condition' {
         }
     }
 
-    It 'hashes every declared variant so the desired state cannot depend on the host' {
+    It 'INV windows/hash-covers-selection: hashes every declared variant so the desired state cannot depend on the host' {
         $manifest = New-FeatureManifest -Override @{
             ManagedFiles = @(New-ConditionalFile -Sources @(
                     @{ MinimumBuild = 22621; Source = 'files/upper.ini' },
@@ -1960,7 +1960,7 @@ Describe 'capture' {
         }
     }
 
-    It 'restores the one placeholder the deploy direction expands' {
+    It 'INV windows/one-placeholder: restores the one placeholder the deploy direction expands' {
         $content = '{"template":"' + $JsonLocalAppData + '\\NewPlus"}'
         $result = ConvertFrom-WinEnvTemplate -Content $content -HostPath $CaptureHost
 
@@ -1974,7 +1974,7 @@ Describe 'capture' {
         (Expand-WinEnvTemplate -Content $result.Content -HostPath $CaptureHost) | Should -Be $content
     }
 
-    It 'reports a spelling it cannot represent instead of inventing a placeholder' {
+    It 'INV windows/one-placeholder: reports a spelling it cannot represent instead of inventing a placeholder' {
         # Apply expands one token, to the JSON-escaped spelling of
         # LOCALAPPDATA. Writing `{USERPROFILE}` into a payload would deploy that
         # text literally to the host, so every other spelling is reported and
