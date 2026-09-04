@@ -21,6 +21,8 @@ doctor:
     tool/doctor.sh
 
 # Run formatting, lint, payload parsing, and evaluation/native-build coverage.
+# The checks a change needs; the fixtures that prove each check refuses what it
+# must have recipes of their own below and run in CI.
 [group('repository')]
 check:
     tool/checks/format

@@ -16,10 +16,13 @@ _: {
     # first assertion reads the merged initialisation text, not this file's
     # own string, so a PATH line another module contributes at a later order
     # is refused at evaluation rather than found on a host. A PATH line is a
-    # `path+=(`, `path=(` or `PATH=` assignment, bare or behind `export`,
-    # `typeset` or `declare` and their flags; `fpath+=` is not one.
+    # declarative assignment — `path+=(`, `path=(`, `path[1,0]=` or `PATH=`,
+    # bare or behind `export`, `typeset` or `declare` and their flags;
+    # `fpath+=` is not one. A script sourced or `eval`ed at a later order
+    # may also rewrite PATH, and no lexical rule can read it; such a line is
+    # not a declarative entry and is the reviewer's to notice.
     initLines = lib.splitString "\n" config.programs.zsh.initContent;
-    isPathLine = line: builtins.match "[[:space:]]*((export|typeset|declare)([[:space:]]+-[A-Za-z]+)*[[:space:]]+)?(path|PATH)\\+?=.*" line != null;
+    isPathLine = line: builtins.match "[[:space:]]*((export|typeset|declare)([[:space:]]+-[A-Za-z]+)*[[:space:]]+)?(path|PATH)([[][0-9,]*[]])?\\+?=.*" line != null;
     isHookLine = line: builtins.match ".*sdkman-init\\.sh.*" line != null;
     positions =
       lib.foldl' (
