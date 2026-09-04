@@ -5,6 +5,8 @@ BeforeAll {
     $monorepoRoot = Split-Path -Parent $repositoryRoot
     $desiredStateRoot = Join-Path $repositoryRoot 'desired'
     Import-Module (Join-Path $repositoryRoot 'src\WinEnv.psm1') -Force
+    # Invoke-Pester can be called without test.ps1; the suite defends itself.
+    . (Join-Path $repositoryRoot 'tools\isolate-git.ps1')
 
     function Test-Throws {
         param([scriptblock] $ScriptBlock)
@@ -4095,6 +4097,46 @@ exit 0
             @(& git -C $fixture.Remote for-each-ref --format='%(refname)' refs/heads) | Should -Be @('refs/heads/dev')
         }
 
+    }
+}
+
+Describe 'repository isolation' {
+    BeforeAll {
+        $isolate = Join-Path $repositoryRoot 'tools\isolate-git.ps1'
+        $pwshPath = (Get-Process -Id $PID).Path
+
+        # Runs one git command in a child pwsh whose environment names a decoy
+        # repository the way a hook run from a linked worktree would, and
+        # returns the git-dir that command resolved. With the isolation script
+        # dot-sourced first the probe repository answers; without it the decoy
+        # does, which is the failure this fixture exists to keep visible.
+        function Get-ResolvedGitDir {
+            param([bool] $Isolated)
+            $decoy = Join-Path $TestDrive 'decoy.git'
+            $probe = Join-Path $TestDrive ('probe-' + [guid]::NewGuid().ToString('N'))
+            & git init --bare -q $decoy 2>$null
+            [void](New-Item -ItemType Directory -Path $probe -Force)
+            $prelude = if ($Isolated) { ". '$isolate'; " } else { '' }
+            $command = $prelude + "git -C '$probe' init -q; git -C '$probe' rev-parse --absolute-git-dir"
+            $savedGitDir = $env:GIT_DIR
+            try {
+                $env:GIT_DIR = $decoy
+                return (& $pwshPath -NoProfile -Command $command 2>$null | Select-Object -Last 1)
+            }
+            finally {
+                $env:GIT_DIR = $savedGitDir
+            }
+        }
+    }
+
+    It 'INV windows/no-inherited-git-context: a fixture repository is the only repository the suite reaches' {
+        $resolved = Get-ResolvedGitDir -Isolated $true
+        $resolved | Should -Match 'probe-[0-9a-f]{32}'
+        $resolved | Should -Not -Match 'decoy'
+    }
+
+    It 'INV windows/no-inherited-git-context: without the isolation script the inherited context wins' {
+        (Get-ResolvedGitDir -Isolated $false) | Should -Match 'decoy'
     }
 }
 
