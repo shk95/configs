@@ -1359,7 +1359,7 @@ Describe 'Appx detection capability' {
         $status.Unverified | Should -Match 'undecidable on this host'
     }
 
-    It 'ranks drift above an undecidable item in the check exit contract' {
+    It 'INV windows/check-exit-contract: ranks drift above an undecidable item in the check exit contract' {
         (Get-WinEnvCheckStatus -DriftCount 0 -UnverifiedCount 0) | Should -Be 0
         (Get-WinEnvCheckStatus -DriftCount 1 -UnverifiedCount 0) | Should -Be 2
         (Get-WinEnvCheckStatus -DriftCount 0 -UnverifiedCount 1) | Should -Be 69
@@ -1384,7 +1384,7 @@ Describe 'Appx detection capability' {
         }
     }
 
-    It 'turns an undecidable item into a failure when native evidence is required' {
+    It 'INV windows/check-exit-contract: turns an undecidable item into a failure when native evidence is required' {
         # REQUIRE_NATIVE is the flag that says incompleteness must not pass,
         # and a failure outranks both drift and an unverified result.
         (Get-WinEnvCheckStatus -DriftCount 0 -UnverifiedCount 1 -RequireNative) | Should -Be 1
@@ -4094,6 +4094,40 @@ exit 0
             @(& git -C $fixture.Remote for-each-ref --format='%(refname)' refs/heads) | Should -Be @('refs/heads/dev')
         }
 
+    }
+}
+
+Describe 'check entry points' {
+    BeforeAll {
+        $bootstrap = Join-Path $repositoryRoot 'bootstrap.ps1'
+        $pwshPath = (Get-Process -Id $PID).Path
+
+        # Runs the real entry point in a child pwsh with an empty PATH, so no
+        # winget.exe is reachable and the prerequisite branch is the one that
+        # answers. The same shape holds on Windows and on a Unix-like host.
+        function Invoke-BootstrapCheck {
+            param([string] $RequireNative)
+            $savedPath = $env:PATH
+            $savedNative = $env:REQUIRE_NATIVE
+            try {
+                $env:PATH = ''
+                $env:REQUIRE_NATIVE = $RequireNative
+                & $pwshPath -NoProfile -File $bootstrap -Check *> $null
+                return $LASTEXITCODE
+            }
+            finally {
+                $env:PATH = $savedPath
+                $env:REQUIRE_NATIVE = $savedNative
+            }
+        }
+    }
+
+    It 'INV windows/check-exit-contract: reports a missing prerequisite under -Check as unverified' {
+        Invoke-BootstrapCheck -RequireNative $null | Should -Be 69
+    }
+
+    It 'INV windows/check-exit-contract: turns a missing prerequisite into a failure when native evidence is required' {
+        Invoke-BootstrapCheck -RequireNative '1' | Should -Be 1
     }
 }
 
