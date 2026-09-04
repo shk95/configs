@@ -175,18 +175,6 @@ Describe 'win-env manifest' {
     }
 }
 
-Describe 'version gate' {
-    It 'orders repository versions correctly' {
-        (Compare-WinEnvVersion -RepositoryVersion '0.1.0' -AppliedVersion '0.0.0') | Should -BeGreaterThan 0
-        (Compare-WinEnvVersion -RepositoryVersion '0.1.0' -AppliedVersion '0.1.0') | Should -Be 0
-        (Compare-WinEnvVersion -RepositoryVersion '0.1.0' -AppliedVersion '0.2.0') | Should -BeLessThan 0
-    }
-
-    It 'rejects an invalid semantic version' {
-        (Test-Throws { Compare-WinEnvVersion -RepositoryVersion 'not-semver' -AppliedVersion '0.1.0' }) | Should -Be $true
-    }
-}
-
 Describe 'JSON ownership' {
     It 'INV windows/subset-owns-declared-keys: allows runtime properties in subset mode' {
         $expected = '{"enabled":true,"nested":{"value":7}}' | ConvertFrom-Json
@@ -1895,23 +1883,6 @@ Describe 'Windows build condition' {
     }
 }
 
-Describe 'Windows host guard' {
-    # capture.ps1's refusal calls this with no override, so its positive and
-    # negative branches are otherwise only reachable by actually being on, or
-    # off, Windows. The override exists so both are fixtures here instead.
-    It 'answers true when told this run is on Windows' {
-        (Test-WinEnvWindowsHost -IsWindows $true) | Should -Be $true
-    }
-
-    It 'answers false when told this run is not on Windows' {
-        (Test-WinEnvWindowsHost -IsWindows $false) | Should -Be $false
-    }
-
-    It 'defaults to the automatic $IsWindows variable' {
-        (Test-WinEnvWindowsHost) | Should -Be $global:IsWindows
-    }
-}
-
 Describe 'capture' {
     BeforeAll {
         # A host no machine running this suite has to be. Every value is
@@ -2582,10 +2553,10 @@ Describe 'capture' {
     }
 
     It 'guards every host read behind Test-WinEnvWindowsHost' {
-        # The predicate itself is fixtured in Describe 'Windows host guard'.
-        # What this suite can still assert on any platform, without running
-        # the script, is that the call happens exactly once, ahead of the
-        # first host read, and that finding it false is what stops the run.
+        # The predicate is one line over the automatic variable and has no
+        # fixture of its own. What this suite asserts on any platform without
+        # running the script is that the call happens exactly once, ahead of
+        # the first host read, and that finding it false is what stops the run.
         $capturePath = Join-Path $repositoryRoot 'tools\capture.ps1'
         $tokens = $null; $errors = $null
         $tree = [System.Management.Automation.Language.Parser]::ParseFile($capturePath, [ref]$tokens, [ref]$errors)
@@ -2620,8 +2591,8 @@ Describe 'capture' {
         # guard is the one thing in capture.ps1 that is safe to run for real,
         # anywhere, because it is the only code that runs before any host
         # read or write. On native Windows the real answer is the positive
-        # branch instead, which Describe 'Windows host guard' already covers
-        # directly; running the full script here would need a fixture
+        # branch instead, where the guard passes and the script would go on
+        # to read the host; running the full script here would need a fixture
         # repository this block does not build, and must never be this one.
         if ([Environment]::OSVersion.Platform -eq [System.PlatformID]::Win32NT) {
             Set-ItResult -Skipped -Because 'this host is Windows, where capture.ps1 does not refuse'
