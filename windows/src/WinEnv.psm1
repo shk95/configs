@@ -517,15 +517,10 @@ function Test-WinEnvWindowsHost {
         .DESCRIPTION
         $IsWindows is PowerShell 7's own automatic variable; every caller of
         this module already requires version 7, so it is always defined. Read
-        through this function instead of inline, with an injectable override,
-        so a refusal on Unix-like pwsh -- macOS or WSL included -- has a
-        fixture without needing a foreign host to prove itself.
+        through this function instead of inline so the suite can find the one
+        guard call in capture.ps1 by name, ahead of the first host read.
     #>
-    param(
-        [bool] $IsWindows = $global:IsWindows
-    )
-
-    return $IsWindows
+    return $global:IsWindows
 }
 
 # Private, like Get-WinGetRegistration: a definition copy carrying a scalar

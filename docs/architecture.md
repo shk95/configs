@@ -101,41 +101,49 @@ PowerShell reads that source directly; there is no Nix-rendered Windows
 consumer tree.
 
 The manifest declares features, and every package, managed file, font, and
-registry delegation is owned by exactly one of them. A feature may declare that
-it requires another when its payload cannot be honest without it. Which
-features a host deploys is host state recorded in that host's `state.json`, not
-desired state: the repository declares what exists and a host records how much
-of it it took. A minimal deployment is therefore a supported outcome rather
-than an incomplete one, and drift is only ever computed against the selected
-set. Deselection stops management; it never uninstalls or deletes what an
-earlier Apply deployed.
+registry delegation is owned by exactly one of them. A feature may declare
+that it requires another when its payload cannot be honest without it, and
+a host's selection is closed over those declarations and refuses a feature
+the manifest does not declare rather than ignoring it. Which features
+a host deploys is host state recorded in that host's `state.json`, not
+desired state: the repository declares what exists and a host records how
+much of it it took. A minimal deployment is therefore a supported outcome
+rather than an incomplete one, and drift is only ever computed against the
+selected set. Deselection stops management; it never uninstalls or deletes
+what an earlier Apply deployed.
 
 The manifest is held to a few more rules because a host reads it with no
 evaluator in front of it. Every identifier is unique, so a plan and a state
 record can name an item without ambiguity. A file that varies by Windows
 build declares its variants as a strictly descending list ending in an
 unconditional one, so every host resolves to exactly one payload and none
-falls through. A managed file names a parser the domain actually has and a
-comparison mode the domain declares, and a mode that reads both sides in one
-format is refused on any other parser, because a check that cannot parse
-what it compares reports nothing. An unsupported manifest or state schema is
-refused before any comparison, so an older module never misreads a newer
-shape as drift. A subset payload declares a list only when it has content,
-because an empty declared list would claim whatever the host holds there and
-absorb host state silently. The desired-state hash covers the manifest, the
-selected features, and every variant of a selected file, and nothing a host
-did not select, so drift is never reported for a payload a host never
-deploys. Deployment expands exactly one content placeholder and capture
-restores exactly that one; any other host-specific spelling is refused
-rather than invented. A read-only check answers whether an Apply is needed:
-it returns 0 when converged, 2 when anything drifted, and the unverified
-status only when its sole open question, or a prerequisite the host lacks,
-could not be decided there, with native evidence able to turn that into a
-failure. Finally, the Windows checks and suite read only the Windows tree
-and need no Unix-like toolchain, because this domain must be authorable and
-checkable on its own host. They also drop any repository context their caller
-exported, so a suite run from a hook acts only on the fixture repositories it
-creates.
+falls through. A managed file names a parser the domain actually has and
+a comparison mode the domain declares, and a mode that reads both sides
+in one format is refused on any other parser, because a check that cannot
+parse what it compares reports nothing. An unsupported manifest or state
+schema is refused before any comparison, so an older module never misreads
+a newer shape as drift. A subset-compared file drifts only on a property
+its payload declares; whatever else the host keeps in that file is runtime
+and never drift. A subset payload declares a list only when it has content,
+because an empty declared list would claim whatever the host holds there
+and absorb host state silently. The desired-state hash covers the manifest,
+the selected features, and every variant of a selected file, and nothing a
+host did not select, so drift is never reported for a payload a host never
+deploys. A font is in exactly one declared install state on any host, and
+a state that could only be finished by overwriting a file or registration
+this repository did not write is a conflict rather than a repair. Deployment
+expands exactly one content placeholder and capture restores exactly that
+one; any other host-specific spelling is refused rather than invented. The
+managed profile is one marked block in a file other owners also write: writing
+it preserves every foreign block and refuses unpaired markers. A read-only
+check answers whether an Apply is needed: it returns 0 when converged, 2
+when anything drifted, and the unverified status only when its sole open
+question, or a prerequisite the host lacks, could not be decided there,
+with native evidence able to turn that into a failure. Finally, the Windows
+checks and suite read only the Windows tree and need no Unix-like toolchain,
+because this domain must be authorable and checkable on its own host. They
+also drop any repository context their caller exported, so a suite run from
+a hook acts only on the fixture repositories it creates.
 
 ## Common domain
 
@@ -355,6 +363,12 @@ its current base, while `master` protection may evaluate the pull request merge
 without requiring `dev` to contain the previous promotion merge commit. The
 single allowed source, one-open-promotion rule, and CI source gate preserve
 serialization.
+
+A helper that publishes a change follows the same flow: it commits only on
+a topic branch, cutting one from the remote tip of `dev` when it stands on
+`dev`, opens one pull request against `dev`, never commits on `master`,
+leaves a rejected push local, and never deletes `dev`, `master` or the
+branch it stands on.
 
 ## Why the repository remains a monorepo
 

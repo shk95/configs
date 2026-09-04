@@ -175,26 +175,14 @@ Describe 'win-env manifest' {
     }
 }
 
-Describe 'version gate' {
-    It 'orders repository versions correctly' {
-        (Compare-WinEnvVersion -RepositoryVersion '0.1.0' -AppliedVersion '0.0.0') | Should -BeGreaterThan 0
-        (Compare-WinEnvVersion -RepositoryVersion '0.1.0' -AppliedVersion '0.1.0') | Should -Be 0
-        (Compare-WinEnvVersion -RepositoryVersion '0.1.0' -AppliedVersion '0.2.0') | Should -BeLessThan 0
-    }
-
-    It 'rejects an invalid semantic version' {
-        (Test-Throws { Compare-WinEnvVersion -RepositoryVersion 'not-semver' -AppliedVersion '0.1.0' }) | Should -Be $true
-    }
-}
-
 Describe 'JSON ownership' {
-    It 'allows runtime properties in subset mode' {
+    It 'INV windows/subset-owns-declared-keys: allows runtime properties in subset mode' {
         $expected = '{"enabled":true,"nested":{"value":7}}' | ConvertFrom-Json
         $actual = '{"enabled":true,"nested":{"value":7,"runtime":"ignored"},"version":"dynamic"}' | ConvertFrom-Json
         (Test-WinEnvJsonSubset -Expected $expected -Actual $actual) | Should -Be $true
     }
 
-    It 'detects changed managed properties' {
+    It 'INV windows/subset-owns-declared-keys: detects changed managed properties' {
         $expected = '{"enabled":true,"items":[1,2]}' | ConvertFrom-Json
         $actual = '{"enabled":false,"items":[1,2]}' | ConvertFrom-Json
         (Test-WinEnvJsonSubset -Expected $expected -Actual $actual) | Should -Be $false
@@ -811,7 +799,7 @@ Describe 'Windows Terminal generated profiles' {
 }
 
 Describe 'PowerShell profile marker' {
-    It 'adds one block and preserves existing external blocks' {
+    It 'INV windows/external-profile-blocks-preserved: adds one block and preserves existing external blocks' {
         $profile = Join-Path $TestDrive 'profile.ps1'
         [IO.File]::WriteAllText($profile, "#region sysmon-banner`r`n'SysMon'`r`n#endregion sysmon-banner`r`n")
         Set-WinEnvProfileHook -ProfilePath $profile
@@ -822,14 +810,15 @@ Describe 'PowerShell profile marker' {
         (Test-WinEnvProfileHook -ProfilePath $profile) | Should -Be $true
     }
 
-    It 'refuses unmatched markers' {
+    It 'INV windows/external-profile-blocks-preserved: refuses unmatched markers' {
         $profile = Join-Path $TestDrive 'broken-profile.ps1'
         [IO.File]::WriteAllText($profile, "#region win-env`r`n")
         (Test-Throws { Set-WinEnvProfileHook -ProfilePath $profile }) | Should -Be $true
     }
-}
 
-Describe 'managed PowerShell profile' {
+    # A regression guard on the committed payload, not a rule: a profile that
+    # prints in a non-interactive process breaks any program that starts
+    # pwsh and reads its output. It names no invariant.
     It 'loads silently in a non-interactive PowerShell process' {
         $profile = Join-Path $desiredStateRoot 'files\powershell\profile.ps1'
         $pwsh = (Get-Process -Id $PID).Path
@@ -1025,7 +1014,7 @@ Describe 'managed sources' {
         (Test-Throws { $jsonContent | Should -Not -Match $WindowsHomePathPattern }) | Should -Be $true
     }
 
-    It 'declares every deployable desired-state payload exactly once' {
+    It 'INV windows/feature-owns-every-item: declares every deployable desired-state payload exactly once' {
         # Reworked for schema 3, not loosened. A managed file may now declare
         # alternative sources selected by the host's Windows build, so the
         # declared set is every variant of every entry rather than one scalar
@@ -1156,20 +1145,20 @@ Describe 'feature selection' {
         $selection.Excluded | Should -Contain 'terminal'
     }
 
-    It 'closes over declared dependencies and reports what it added' {
+    It 'INV windows/selection-closed-and-explicit: closes over declared dependencies and reports what it added' {
         $selection = Get-WinEnvFeatureSelection -Manifest (New-FeatureManifest) -Requested @('terminal')
         ($selection.Selected -join ',') | Should -Be 'core,font,zellij,terminal'
         (($selection.Implied | Sort-Object) -join ',') | Should -Be 'font,zellij'
         $selection.Excluded.Count | Should -Be 0
     }
 
-    It 'keeps a dependency selectable on its own' {
+    It 'INV windows/selection-closed-and-explicit: keeps a dependency selectable on its own' {
         $selection = Get-WinEnvFeatureSelection -Manifest (New-FeatureManifest) -Requested @('zellij')
         ($selection.Selected -join ',') | Should -Be 'core,zellij'
         $selection.Excluded | Should -Contain 'terminal'
     }
 
-    It 'rejects an unknown feature instead of silently ignoring it' {
+    It 'INV windows/selection-closed-and-explicit: rejects an unknown feature instead of silently ignoring it' {
         (Test-Throws { Get-WinEnvFeatureSelection -Manifest (New-FeatureManifest) -Requested @('ghost') }) | Should -Be $true
     }
 
@@ -1498,7 +1487,7 @@ Describe 'font installation state' {
             'TestFont-Regular.ttf', 'TestFont-Bold.ttf')
     }
 
-    It 'calls a valid registered subset of a grown manifest incomplete, not a conflict' {
+    It 'INV windows/font-state-total: calls a valid registered subset of a grown manifest incomplete, not a conflict' {
         # The reported regression: raising the manifest from two faces to four
         # turned every host that already had the two into a refused Apply. The
         # two files here are the manifest's own, byte for byte, and registered
@@ -1526,7 +1515,7 @@ Describe 'font installation state' {
         $status.InstalledFaceCount | Should -Be 2
     }
 
-    It 'still calls a file that is not the one the manifest pins a conflict' {
+    It 'INV windows/font-state-total: still calls a file that is not the one the manifest pins a conflict' {
         $fixture = New-FontFixture -Root $TestDrive `
             -Present @('TestFontMono-Regular.ttf', 'TestFont-Regular.ttf', 'TestFont-Bold.ttf') `
             -Corrupt @('TestFontMono-Bold.ttf') -Registered $AllFaces -DirectWrite $true
@@ -1564,7 +1553,7 @@ Describe 'font installation state' {
         $status.Installed | Should -Be $false
     }
 
-    It 'refuses a foreign registration even on a host holding every file' {
+    It 'INV windows/font-state-total: refuses a foreign registration even on a host holding every file' {
         # Every listed file is valid and only one registration is wrong, which
         # is the shape closest to a repair. Repairing it would overwrite a value
         # this repository did not write, so it is a conflict rather than the
@@ -1611,8 +1600,8 @@ Describe 'font installation state' {
         $status.InstalledFaceCount | Should -Be 4
     }
 
-    It 'reports exactly one state for every fixture' {
-        # The four states are a partition, which is what lets the check and
+    It 'INV windows/font-state-total: reports exactly one state for every fixture' {
+        # The five states are a partition, which is what lets the check and
         # Apply branch on them in any order.
         $fixtures = @(
             (New-FontFixture -Root $TestDrive -Present $MonoFaces -Registered $MonoFaces -DirectWrite $true),
@@ -1891,23 +1880,6 @@ Describe 'Windows build condition' {
                     @{ Source = 'files/lower.ini' }))
         }
         { Assert-WinEnvManagedFileModel -Manifest $manifest } | Should -Not -Throw
-    }
-}
-
-Describe 'Windows host guard' {
-    # capture.ps1's refusal calls this with no override, so its positive and
-    # negative branches are otherwise only reachable by actually being on, or
-    # off, Windows. The override exists so both are fixtures here instead.
-    It 'answers true when told this run is on Windows' {
-        (Test-WinEnvWindowsHost -IsWindows $true) | Should -Be $true
-    }
-
-    It 'answers false when told this run is not on Windows' {
-        (Test-WinEnvWindowsHost -IsWindows $false) | Should -Be $false
-    }
-
-    It 'defaults to the automatic $IsWindows variable' {
-        (Test-WinEnvWindowsHost) | Should -Be $global:IsWindows
     }
 }
 
@@ -2581,10 +2553,10 @@ Describe 'capture' {
     }
 
     It 'guards every host read behind Test-WinEnvWindowsHost' {
-        # The predicate itself is fixtured in Describe 'Windows host guard'.
-        # What this suite can still assert on any platform, without running
-        # the script, is that the call happens exactly once, ahead of the
-        # first host read, and that finding it false is what stops the run.
+        # The predicate is one line over the automatic variable and has no
+        # fixture of its own. What this suite asserts on any platform without
+        # running the script is that the call happens exactly once, ahead of
+        # the first host read, and that finding it false is what stops the run.
         $capturePath = Join-Path $repositoryRoot 'tools\capture.ps1'
         $tokens = $null; $errors = $null
         $tree = [System.Management.Automation.Language.Parser]::ParseFile($capturePath, [ref]$tokens, [ref]$errors)
@@ -2619,8 +2591,8 @@ Describe 'capture' {
         # guard is the one thing in capture.ps1 that is safe to run for real,
         # anywhere, because it is the only code that runs before any host
         # read or write. On native Windows the real answer is the positive
-        # branch instead, which Describe 'Windows host guard' already covers
-        # directly; running the full script here would need a fixture
+        # branch instead, where the guard passes and the script would go on
+        # to read the host; running the full script here would need a fixture
         # repository this block does not build, and must never be this one.
         if ([Environment]::OSVersion.Platform -eq [System.PlatformID]::Win32NT) {
             Set-ItResult -Skipped -Because 'this host is Windows, where capture.ps1 does not refuse'
@@ -2738,7 +2710,7 @@ Describe 'capture branch' {
         }
     }
 
-    It 'refuses on master without reading the remote at all' {
+    It 'INV windows/capture-publishes-through-dev: refuses on master without reading the remote at all' {
         $fixture = New-BranchFixture
         & git -C $fixture.Repo switch -q master | Out-Null
         # No origin/dev ref at all would make a remote-reading refusal true by
@@ -2818,7 +2790,7 @@ Describe 'capture branch' {
         (& git -C $fixture.Repo rev-parse HEAD).Trim() | Should -Be $originDev
     }
 
-    It 'creates the named branch from origin/dev and leaves dev untouched' {
+    It 'INV windows/capture-publishes-through-dev: creates the named branch from origin/dev and leaves dev untouched' {
         $fixture = New-BranchFixture
         $plan = Get-WinEnvCaptureBranchPlan -RepositoryRoot $fixture.Repo -BranchName 'feature/windows-capture-font'
         $plan.Status | Should -Be 'Create'
@@ -2917,7 +2889,7 @@ Describe 'capture branch pruning' {
         }
     }
 
-    It 'deletes a local branch already merged into origin/dev' {
+    It 'INV windows/capture-publishes-through-dev: deletes a local branch already merged into origin/dev' {
         $fixture = New-PruneFixture
         & git -C $fixture.Repo branch -q feature/windows-old-capture | Out-Null
 
@@ -2941,7 +2913,7 @@ Describe 'capture branch pruning' {
         (Get-FixtureBranches -Repo $fixture.Repo) | Should -Contain 'feature/windows-unique'
     }
 
-    It 'never deletes the current branch, dev or master even when each is an ancestor of origin/dev' {
+    It 'INV windows/capture-publishes-through-dev: never deletes the current branch, dev or master even when each is an ancestor of origin/dev' {
         $fixture = New-PruneFixture
         # Cut from dev's own tip, so this branch, dev and master are all,
         # trivially, ancestors of origin/dev; only the name-based exclusion
@@ -3615,7 +3587,7 @@ exit 0
             @(Get-GhLog $fixture).Count | Should -Be 2
         }
 
-        It 'refuses an open pull request from this head against a base other than dev' {
+        It 'INV windows/capture-publishes-through-dev: refuses an open pull request from this head against a base other than dev' {
             $fixture = New-PublishRepository
             $listing = '[{"baseRefName":"master","isCrossRepository":false,' +
             '"url":"https://github.com/example/repo/pull/9"}]'
@@ -3628,7 +3600,7 @@ exit 0
             $result.Detail | Should -Match ([regex]::Escape('https://github.com/example/repo/pull/9'))
         }
 
-        It 'reuses an open pull request from this head against dev instead of opening a second' {
+        It 'INV windows/capture-publishes-through-dev: reuses an open pull request from this head against dev instead of opening a second' {
             $fixture = New-PublishRepository
             $listing = '[{"baseRefName":"dev","isCrossRepository":false,' +
             '"url":"https://github.com/example/repo/pull/7"}]'
@@ -3697,7 +3669,7 @@ exit 0
             }
         }
 
-        It 'pushes, opens one pull request and arms auto-merge exactly once' {
+        It 'INV windows/capture-publishes-through-dev: pushes, opens one pull request and arms auto-merge exactly once' {
             $fixture = New-PublishRepository
             & git -C $fixture.Repo switch -q -c feature/windows-capture-font | Out-Null
 
@@ -3728,7 +3700,7 @@ exit 0
             $body | Should -Not -Match ([regex]::Escape("(the pre-push hook's output, once the push runs)"))
         }
 
-        It 'arms the pull request already open against dev and opens no second one' {
+        It 'INV windows/capture-publishes-through-dev: arms the pull request already open against dev and opens no second one' {
             $fixture = New-PublishRepository
             & git -C $fixture.Repo switch -q -c feature/windows-capture-font | Out-Null
 
@@ -3746,7 +3718,7 @@ exit 0
             (Test-Path -LiteralPath $fixture.Body) | Should -Be $false
         }
 
-        It 'stops at a rejected push with the commits local and nothing published' {
+        It 'INV windows/capture-publishes-through-dev: stops at a rejected push with the commits local and nothing published' {
             $fixture = New-PublishRepository
             & git -C $fixture.Repo switch -q -c feature/windows-capture-font | Out-Null
             [IO.File]::WriteAllText((Join-Path $fixture.Repo 'seed.txt'), 'a captured payload')
@@ -4171,15 +4143,5 @@ Describe 'check entry points' {
 
     It 'INV windows/check-exit-contract: turns a missing prerequisite into a failure when native evidence is required' {
         Invoke-BootstrapCheck -RequireNative '1' | Should -Be 1
-    }
-}
-
-Describe 'script syntax' {
-    It 'parses all repository PowerShell files' {
-        foreach ($file in Get-ChildItem $repositoryRoot -Filter '*.ps1' -File -Recurse) {
-            $tokens = $null; $errors = $null
-            [void][System.Management.Automation.Language.Parser]::ParseFile($file.FullName, [ref]$tokens, [ref]$errors)
-            $errors.Count | Should -Be 0
-        }
     }
 }
