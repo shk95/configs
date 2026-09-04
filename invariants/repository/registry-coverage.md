@@ -3,7 +3,7 @@ statement: Every registered invariant's declared enforcement exists and names it
 rationale: docs/architecture.md § Invariant registry
 enforced-by: tool tool/version-control/invariants
 enforced-by: fixture tool/version-control/test
-decision: docs/status.md § Invariant registry
+decision: docs/decisions/invariant-registry-created.md § The invariant registry is created with pending entries
 owner: repository maintainer
 
 The registry is only worth having if it cannot drift from the things it

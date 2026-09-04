@@ -3,7 +3,7 @@ statement: Runtime state is observed, never committed; a tracked path that an ig
 rationale: docs/architecture.md § Desired-state hygiene
 enforced-by: tool tool/version-control/hygiene
 enforced-by: fixture tool/version-control/test
-decision: docs/status.md § Desired-state hygiene had no enforcement owner
+decision: docs/decisions/hygiene-tool-owns-enforcement.md § The hygiene tool owns desired-state hygiene
 
 Axis 3 of the hygiene scan, plus a basename denylist for artefacts no ignore
 rule covers.

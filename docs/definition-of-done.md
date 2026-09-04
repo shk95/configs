@@ -136,8 +136,12 @@ native checks instead of treating them as passed.
 - [ ] Stable judgement belongs in `AGENTS.md`, not a model-specific adapter.
 - [ ] Domain ownership belongs in `docs/architecture.md`.
 - [ ] Procedure belongs in `CONTRIBUTING.md`.
-- [ ] A decision expensive to reverse or important current state belongs in
-      `docs/status.md`.
+- [ ] Important current state belongs in `docs/status.md`; a decision
+      expensive to reverse belongs in its own record under `docs/decisions/`.
+- [ ] A decision record's header carries `date`, `scope` (repeated for a
+      decision spanning domains) and `status`; a citation of a record names
+      an existing path; a `decision:` pointer names a record whose status is
+      `accepted`.
 - [ ] A recurring issue is indexed in `docs/troubleshooting.md` by its literal
       symptom.
 - [ ] A canonical skill lives in the owning project or an explicitly adopted

@@ -322,8 +322,8 @@ at the enforcement point is what lets `tool/version-control/invariants`
 verify coverage in both directions.
 
 The registry does not replace the decision record. An entry may point at a
-`docs/status.md` section with `decision:`; the pointer is checked, so a
-renamed section fails the check rather than leaving a dangling citation.
+decision record under `docs/decisions/` with `decision:`; the pointer is
+checked, so a record cited by an entry cannot be renamed silently.
 
 The rule runs in both directions. A fixture unit — a top-level `Describe` in
 a Pester file, a banner section in a shell suite — names the invariant it

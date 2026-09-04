@@ -3,7 +3,6 @@ statement: A clone that opted into local hooks runs the tracked hooks directory 
 rationale: docs/architecture.md § Repository governance plane
 enforced-by: tool tool/version-control/audit
 enforced-by: fixture tool/version-control/test
-decision: docs/status.md § Invariant registry
 
 The setting is compared as a directory, not as a string: an absolute value,
 a relative one, and a linked worktree's shared value all name the same

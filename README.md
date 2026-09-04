@@ -259,7 +259,8 @@ redeployed on its own: the desired state did not change, only the host did.
 `.wslconfig` is read by the WSL VM only when it starts, and these commands never
 restart it, so a passing check means the file on disk matches the payload this
 host's build should have. It is not evidence that mirrored networking is
-running. `docs/status.md` records the per-key gate table behind the split.
+running. `docs/decisions/wslconfig-selected-by-windows-build.md` records the
+per-key gate table behind the split.
 
 ### Capture a change made in the application
 

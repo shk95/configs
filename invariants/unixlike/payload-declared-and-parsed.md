@@ -3,6 +3,7 @@ statement: Every source payload declares its format and is parsed by the tool th
 rationale: docs/architecture.md § Unix-like domain
 enforced-by: tool tool/checks/payloads
 enforced-by: fixture tool/checks/payloads-test
+decision: docs/decisions/payloads-declared-and-parsed.md § Every payload declares its format and is parsed
 
 Nix delivers payloads with `.source`, which copies without reading, so
 evaluation and build evidence say nothing about payload content. The
