@@ -292,7 +292,7 @@ Describe 'JsonSubset projection' {
         $text | Should -Be '[{"a":2},{"z":4}]'
     }
 
-    It 'declares nothing by declaring an empty object, and everything by declaring an empty list' {
+    It 'INV windows/declared-list-has-content: declares nothing by declaring an empty object, and everything by declaring an empty list' {
         # Not a quirk of this direction but the read side's own asymmetry,
         # carried across unchanged: a declared object is a member subset, so an
         # empty one owns no member and can never drift; a declared list is

@@ -29,7 +29,7 @@ function Exit-Unverified {
         [Console]::Error.WriteLine("$Message REQUIRE_NATIVE is set, so this counts as a failure.")
         exit 1
     }
-    Write-Host "· unverified: $Message"
+    Write-Host "unverified: $Message"
     exit 69
 }
 
