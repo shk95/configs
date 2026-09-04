@@ -3,7 +3,7 @@ statement: An absolute path into a home directory is never desired state, in any
 rationale: docs/architecture.md § Desired-state hygiene
 enforced-by: tool tool/version-control/hygiene
 enforced-by: fixture tool/version-control/test
-decision: docs/status.md § Desired-state hygiene had no enforcement owner
+decision: docs/decisions/hygiene-tool-owns-enforcement.md § The hygiene tool owns desired-state hygiene
 
 Axis 1 of the hygiene scan: POSIX, Windows drive-letter, and WSL UNC forms,
 including the JSON-escaped spelling a Windows payload carries.

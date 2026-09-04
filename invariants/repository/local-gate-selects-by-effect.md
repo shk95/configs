@@ -3,7 +3,7 @@ statement: A local gate runs a check unit only for a change that can alter that 
 rationale: docs/architecture.md § Repository governance plane
 enforced-by: tool tool/dispatch/select
 enforced-by: fixture tool/version-control/test
-decision: docs/status.md § Local gate selection
+decision: docs/decisions/local-gate-selects-by-effect.md § The local gate selects checks by effect
 
 The selector is the local gate's answer to "which checks does this change
 need"; ownership is a different question and stays with the classifier.

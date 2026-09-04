@@ -3,7 +3,7 @@ statement: Every fixture unit names an invariant it proves, and a unit that prov
 rationale: AGENTS.md § Governance design
 enforced-by: tool tool/version-control/invariants
 enforced-by: fixture tool/version-control/test
-decision: docs/status.md § Invariant registry
+decision: docs/decisions/fixture-tags-name-proven-invariants.md § A fixture tag names only an invariant its case proves
 owner: repository maintainer
 
 Enforced since 2026-09-04, when the Unix-like and Windows migrations and the

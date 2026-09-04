@@ -3,7 +3,7 @@ statement: A check reports verified, failed, or unverified and nothing else; a f
 rationale: docs/architecture.md § Repository governance plane
 enforced-by: tool .githooks/pre-push
 enforced-by: fixture tool/version-control/test
-decision: docs/status.md § Check evidence states
+decision: docs/decisions/check-evidence-three-states.md § A check reports verified, failed or unverified
 
 Exit 0, 69 and any other status carry the three answers. `.githooks/evidence`
 is the one library that decides what each means; the hooks that source it

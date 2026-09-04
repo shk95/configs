@@ -3,7 +3,7 @@ statement: An account or host name appears in committed desired state only when 
 rationale: docs/architecture.md § Desired-state hygiene
 enforced-by: tool tool/version-control/hygiene
 enforced-by: fixture tool/version-control/test
-decision: docs/status.md § Desired-state hygiene had no enforcement owner
+decision: docs/decisions/hygiene-tool-owns-enforcement.md § The hygiene tool owns desired-state hygiene
 
 Axis 2 of the hygiene scan. Decidable only inside a naming context, so the
 axis is defined as one; the bare-name-in-prose half is

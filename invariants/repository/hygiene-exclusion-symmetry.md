@@ -3,7 +3,7 @@ statement: Whatever forgives a hygiene finding is declared with its reason, forg
 rationale: docs/architecture.md § Desired-state hygiene
 enforced-by: tool tool/version-control/hygiene
 enforced-by: fixture tool/version-control/test
-decision: docs/status.md § Desired-state hygiene had no enforcement owner
+decision: docs/decisions/hygiene-tool-owns-enforcement.md § The hygiene tool owns desired-state hygiene
 
 An allow entry is the one place a violation can be forgiven, so it is held
 to the same standard as the scan: a stale entry is a failure, and an entry
