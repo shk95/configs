@@ -55,7 +55,7 @@ repeated key. No other syntax is parsed.
 | `rationale` | 1 | Where layer 2 justifies it. Only `AGENTS.md` or `docs/architecture.md`; the heading must exist. |
 | `enforced-by` | 1+ | How it is kept. See kinds. |
 | `owner` | 0–1 | Required for `manual` and `pending`. |
-| `decision` | 0+ | A decision record the entry rests on; the heading must exist. |
+| `decision` | 0+ | A decision record the entry rests on, usually under `docs/decisions/`; the heading must exist. |
 
 ## Kinds of enforcement
 

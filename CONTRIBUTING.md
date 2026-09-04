@@ -177,6 +177,18 @@ Removing an invariant removes its file and every tag that named it; the check
 refuses an orphan tag. Weakening a statement is a governance change and is
 reviewed as one.
 
+## Record a decision
+
+Write a record when a choice is expensive to reverse or a reviewer will ask
+why it was made. Add a file under `docs/decisions/` with the header and
+format `docs/decisions/README.md` defines, and add it to that file's index.
+Reversing a decision creates a new record, sets the old one to
+`status: superseded` with `superseded-by`, and moves every pointer to it in
+the same commit — the checker cannot tell a superseded record from a live
+one. Prose and code cite a record by path only; a quoted heading is checked
+by nothing and rots. Cite it from a registry entry with `decision:` when an
+invariant rests on it.
+
 ## Plan work with GitHub milestones
 
 GitHub milestones group planned work after its owning scope and outcome are
@@ -419,7 +431,8 @@ not branch-protection contexts because unselected domains are skipped.
 | `CONTRIBUTING.md` | Domain-scoped workflow and releases |
 | `AGENTS.md` | Stable judgement and safety boundaries |
 | `docs/architecture.md` | Domain authority and dependency policy |
-| `docs/status.md` | Current state and expensive decisions |
+| `docs/status.md` | Current state |
+| `docs/decisions/` | One record per expensive decision; `README.md` there is the index and format |
 | `docs/troubleshooting.md` | Recurring problems indexed by symptom |
 | `docs/definition-of-done.md` | Domain-specific evidence requirements |
 | `invariants/` | Enumerated invariants and how each one is enforced |

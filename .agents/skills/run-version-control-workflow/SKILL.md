@@ -12,10 +12,10 @@ planning read-only unless the user explicitly authorizes a Git mutation.
 
 1. Resolve the repository root with `git rev-parse --show-toplevel` and work
    from it.
-2. Read `AGENTS.md`, `CONTRIBUTING.md`, `docs/architecture.md`, the relevant
-   section of `docs/status.md`, `docs/definition-of-done.md`, and
-   `invariants/<scope>/` for the classified scope, completely enough to apply
-   the requested workflow.
+2. Read `AGENTS.md`, `CONTRIBUTING.md`, `docs/architecture.md`, the scope's
+   current state in `docs/status.md` and the decision records it cites,
+   `docs/definition-of-done.md`, and `invariants/<scope>/` for the classified
+   scope, completely enough to apply the requested workflow.
 3. Classify the intended scope, then run `tool/doctor.sh <scope>` before relying
    on host-local capabilities. Use the unscoped form only for cross-domain
    inventory. Treat a missing foreign-domain capability as unavailable

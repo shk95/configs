@@ -92,9 +92,9 @@ When adding a repository rule, separate its concerns before implementation:
 - Put repeatable agent orchestration in a canonical `.agents/skills/` skill.
 - Put deterministic classification and enforcement in `tool/`, hooks, CI, and
   remote repository settings.
-- Put current adoption state, migration gaps, and expensive choices in
-  `docs/status.md`; put per-run proof in CI, pull requests, and release
-  evidence.
+- Put current adoption state and migration gaps in `docs/status.md` and
+  expensive choices in `docs/decisions/`; put per-run proof in CI, pull
+  requests, and release evidence.
 
 Each obligation has one authoritative source. Procedures and tools implement
 policy but must not silently create new policy. Model-specific adapters only
@@ -129,8 +129,9 @@ milestone description and final evidence issue providing the manual evidence.
 
 ## Working contract
 
-1. Read `CONTRIBUTING.md`, `docs/architecture.md`, the relevant part of
-   `docs/status.md`, and `invariants/<scope>/` for the classified scope.
+1. Read `CONTRIBUTING.md`, `docs/architecture.md`, `invariants/<scope>/` for
+   the classified scope, the scope's current state in `docs/status.md`, and
+   every decision record those entries and that state cite.
 2. Classify the task as `unixlike`, `windows`, `common`, `repository`, or an
    explicit transfer.
 3. Use `tool/doctor.sh` before relying on host-local capabilities.
@@ -142,8 +143,8 @@ milestone description and final evidence issue providing the manual evidence.
    evidence separately for each affected domain.
 
 User-facing usage belongs in `README.md`, workflow in `CONTRIBUTING.md`,
-architecture and ownership in `docs/architecture.md`, expensive decisions and
-current state in `docs/status.md`, recurring symptoms in
+architecture and ownership in `docs/architecture.md`, current state in
+`docs/status.md`, decisions in `docs/decisions/`, recurring symptoms in
 `docs/troubleshooting.md`, invariants in `invariants/`, and executable policy
 in `tool/`, hooks, and CI. Canonical project-specific agent workflows live
 under `.agents/skills/` and follow the Agent Skills open standard. Reusable

@@ -1,7 +1,8 @@
 # Things that already cost someone an afternoon
 
-Findings that recur. Not a changelog and not a diary — `docs/status.md` holds the
-current state and the decisions, this holds the things that will bite again.
+Findings that recur. Not a changelog and not a diary — `docs/status.md`
+holds the current state; decisions are under `docs/decisions/`. This holds
+the things that will bite again.
 
 **Search this file by the error text, not by reading it.** Headings are the
 literal message you will see, so `grep` finds the entry that matches what is in
@@ -607,8 +608,7 @@ device node inside the namespace.
 
 `git status` **exits 0 here.** It is not failing; it is answering truthfully
 about a filesystem that only it can see. That is what makes this worse than a
-probe that errors — see *A green `git status` described a filesystem nobody
-had* in `docs/status.md`.
+probe that errors.
 
 ### `warning: unable to access '<repo>/.gitmodules': Permission denied`
 
