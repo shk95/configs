@@ -1033,8 +1033,11 @@ and the fixtures rewrote the clone; the Windows domain now carries the same
 defence the repository suite has had since #45.
 
 The Windows half of the fixture pruning landed on 2026-09-04. Of the twelve
-Pester units that named no invariant, eight proved rules the architecture
-stated but the registry lacked, and five entries now hold them:
+Pester units that named no invariant, seven proved rules that neither the
+architecture nor the registry stated, and an eighth, the one-case check
+that the committed profile is silent in a non-interactive process, folded
+into the profile unit as an untagged regression guard. Four architecture
+sentences and five entries now hold the rules:
 `INV windows/external-profile-blocks-preserved`,
 `INV windows/subset-owns-declared-keys`,
 `INV windows/selection-closed-and-explicit`, `INV windows/font-state-total`
@@ -1046,10 +1049,14 @@ with no schema and no message, and `Windows host guard` fixtured an override
 that existed only for it. The parse gate moved out of the suite into
 `windows/tools/test.ps1`, where it runs after the Pester gate and before the
 suite; CI still parses the whole checkout in its own step, so the Windows
-tree is parsed twice there until #124 narrows that loop. Three tags
-proposed in the first draft were dropped on review because their cases
-would have passed the exact violation the entry describes; the rule used
-was that a tag names an invariant only if the case fails on that violation.
+tree is parsed twice there until #124 narrows that loop. Three candidate
+tags were dropped on review because their cases would have passed the exact
+violation the entry describes: `unique-ids` on the payload-declared-once
+case, which checks source paths rather than ids; `parser-declared` on the
+parser-missing cases, which are about a parser the host lacks rather than an
+undeclared name; and `schema-version-refused` on a semantic-version cast
+with no schema and no message. The rule used was that a tag names an
+invariant only if the case fails on that violation.
 The untagged count is three, all in the repository suite, which the
 repository half of the pruning takes up together with the flip.
 

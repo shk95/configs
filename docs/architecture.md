@@ -364,6 +364,12 @@ without requiring `dev` to contain the previous promotion merge commit. The
 single allowed source, one-open-promotion rule, and CI source gate preserve
 serialization.
 
+A helper that publishes a change follows the same flow: it commits only on
+a topic branch, cutting one from the remote tip of `dev` when it stands on
+`dev`, opens one pull request against `dev`, never commits on `master`,
+leaves a rejected push local, and never deletes `dev`, `master` or the
+branch it stands on.
+
 ## Why the repository remains a monorepo
 
 Independent ownership does not require separate repositories. Keeping the
