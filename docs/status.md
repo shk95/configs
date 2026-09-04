@@ -1013,7 +1013,7 @@ eight entries, three enforced (`INV unixlike/typed-identity` and
 this section carried until then (`unixlike/typed-identity`,
 `unixlike/import-order-independence`, `unixlike/version-manager-last`) now
 live in their entries. The `flake-test` suite's banner units are tagged, so
-the untagged baseline stays at the three repository units recorded below.
+the untagged baseline stayed at the three repository units recorded below.
 
 The Windows entries landed on 2026-09-04 under `invariants/windows/`: eleven
 entries, eight enforced (`INV windows/feature-owns-every-item`,
