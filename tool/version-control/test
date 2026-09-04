@@ -147,7 +147,9 @@ grep -q 'needs: \[classify, repository, unix, windows, secrets, promotion\]' \
   "$root/.github/workflows/ci.yml"
 grep -q 'run: tool/version-control/required-checks' \
   "$root/.github/workflows/ci.yml"
-grep -q 'evidence_run audit tool/version-control/audit' "$root/.githooks/pre-push"
+# INV repository/local-gate-selects-by-effect: pre-push audits the pushed
+# history, never the clone's branches and tags, which no push can change.
+grep -q 'evidence_run audit tool/version-control/audit --history' "$root/.githooks/pre-push"
 grep -q 'run: tool/version-control/audit --history' "$root/.github/workflows/ci.yml"
 # INV repository/local-gate-selects-by-effect: the merge gate runs the whole
 # suite and never consults the local gate's selector.
