@@ -909,6 +909,18 @@ Describe 'state safety' {
         (Get-WinEnvDesiredStateHash -Root $root -Manifest $manifest -Feature @('core', 'terminal')) | Should -Not -Be $before
     }
 
+    It 'INV windows/hash-covers-selection: covers the manifest itself' {
+        $manifest = New-FeatureManifest
+        $root = Join-Path $TestDrive 'desired-manifest'
+        [void](New-Item -ItemType Directory -Path (Join-Path $root 'files') -Force)
+        [IO.File]::WriteAllText((Join-Path $root 'files\profile.ps1'), 'core')
+        [IO.File]::WriteAllText((Join-Path $root 'manifest.json'), '{}')
+        $before = Get-WinEnvDesiredStateHash -Root $root -Manifest $manifest -Feature @('core')
+        [IO.File]::WriteAllText((Join-Path $root 'manifest.json'), '{"changed":true}')
+        $after = Get-WinEnvDesiredStateHash -Root $root -Manifest $manifest -Feature @('core')
+        $after | Should -Not -Be $before
+    }
+
     It 'reads a schema 1 state as the full feature set' {
         # Schema 1 predates selection and could only have been written by a
         # full deployment, so an already applied host keeps what it has.
