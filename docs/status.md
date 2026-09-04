@@ -1025,8 +1025,8 @@ suite) and three `pending` (`INV windows/unique-ids` #134,
 `INV windows/parser-declared` #135, `INV windows/no-unix-host-required` #124).
 The same change corrected the one citation into the old `AGENTS.md` layout,
 in `windows/src/WinEnv.psm1`. Every scope has now mapped its fixtures; the
-Pester file contributes the untagged units the per-scope pruning change
-takes up before `INVARIANTS_ENFORCE_C10` becomes the default. A twelfth
+Pester file contributed the untagged units the per-scope pruning change
+took up before `INVARIANTS_ENFORCE_C10` became the default. A twelfth
 Windows entry, `INV windows/no-inherited-git-context`, landed in the same
 change after its first push ran the suite from a hook in a linked worktree
 and the fixtures rewrote the clone; the Windows domain now carries the same
@@ -1057,8 +1057,28 @@ parser-missing cases, which are about a parser the host lacks rather than an
 undeclared name; and `schema-version-refused` on a semantic-version cast
 with no schema and no message. The rule used was that a tag names an
 invariant only if the case fails on that violation.
-The untagged count is three, all in the repository suite, which the
-repository half of the pruning takes up together with the flip.
+The untagged count was three, all in the repository suite, which the
+repository half of the pruning took up together with the flip.
+
+The repository half of the fixture pruning landed on 2026-09-04 and made
+C10 the default. The three remaining untagged units were sections of the
+commit-helper suite. `INV repository/publish-through-dev` now holds what the
+`--publish` and `prune` cases prove — one pull request against `dev` from a
+topic branch, never a commit on `dev` or `master`, a created branch starts
+at `origin/dev`, a rejected push stays local, protected branches are never
+pruned — with the same narrowed wording as its Windows twin, because both
+helpers commit where they stand on a topic branch. The mas section's
+negative cases name `INV repository/scope-ownership`,
+`INV repository/evidence-three-states`, `INV repository/flake-lock-isolated`
+and `INV repository/hooks-are-the-tracked-ones`, which they had proved
+untagged. With the count at zero, `tool/version-control/invariants` fails an
+untagged unit on every commit and in CI; `INVARIANTS_ENFORCE_C10=0` restores
+the report mode for a local survey. Known limit: content before a shell
+suite's first banner is in no unit and invisible to C10 — in the repository
+suite that is everything before the `commit mas add/remove` banner: the
+index and `GIT_DIR` guards, the gate, promotion, evidence and flake cases,
+the pwsh detection cases and the brew/cask half of the commit-helper cases,
+most already tagged but unchecked; a follow-up may give that span banners.
 
 The 2026-09-03 review of the verification suite led to four rulings, landed
 as the governance-hygiene change: `tool/version-control/audit` runs on every
@@ -1066,10 +1086,10 @@ push and in CI and delegates commit subjects to the commit-message hook;
 the `common` job, dispatch unit and classifier arm are removed until a
 common component exists (restored by the change that creates it); every
 fixture unit names an invariant (`INV repository/fixtures-name-invariants`,
-reported by `tool/version-control/invariants --untagged` and enforced once
-the Unix-like and Windows migrations have mapped their suites — the flip is
-one line, `INVARIANTS_ENFORCE_C10` becoming the default, and is recorded
-here when it happens); and hooks record their outcomes under the git common
+reported by `tool/version-control/invariants --untagged` and, since
+2026-09-04, enforced by default — the flip was one line,
+`INVARIANTS_ENFORCE_C10` becoming the default, recorded in the paragraph
+above); and hooks record their outcomes under the git common
 directory (`INV repository/hook-evidence-recorded`). The untagged baseline at
 this change was 3 units. The same review made the MSYS guard a derived rule
 (`INV repository/msys-argument-guard`) rather than hand-maintained text, and

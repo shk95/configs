@@ -25,7 +25,8 @@
 #   C8  every `INV <scope>/<slug>` in a tracked file is registered
 #   C9  rationale points at AGENTS.md or docs/architecture.md
 #   C10 every fixture unit in a declared fixture file names an invariant
-#       (report mode unless INVARIANTS_ENFORCE_C10=1)
+#       (INVARIANTS_ENFORCE_C10=0 restores the report mode, which lists
+#       and counts instead of failing)
 #
 # A pending entry is reported in the summary and never fails the check; an
 # issue number is its enforcement owner until a check exists.
@@ -340,9 +341,9 @@ done <"$work/tags"
 # INV repository/fixtures-name-invariants
 #
 # A unit is a top-level `Describe` in a Pester file, or a banner section
-# (`# ----------`, a title line, `# ----------`) in a shell suite. Report
-# mode lists and counts; enforcement is a one-line flip once every scope
-# has mapped its fixtures.
+# (`# ----------`, a title line, `# ----------`) in a shell suite. Enforced
+# since 2026-09-04, when every scope had mapped its fixtures;
+# INVARIANTS_ENFORCE_C10=0 restores the report mode, which lists and counts.
 : >"$work/untagged"
 sort -u "$work/fixtures" | while IFS= read -r fixture_file; do
   [ -n "$fixture_file" ] || continue
@@ -370,7 +371,7 @@ sort -u "$work/fixtures" | while IFS= read -r fixture_file; do
   esac
 done
 untagged_count=$(wc -l <"$work/untagged" | tr -d ' ')
-if [ "${INVARIANTS_ENFORCE_C10:-0}" = 1 ] && [ "$untagged_count" -gt 0 ]; then
+if [ "${INVARIANTS_ENFORCE_C10:-1}" = 1 ] && [ "$untagged_count" -gt 0 ]; then
   while IFS= read -r unit; do
     fail "$unit: C10 fixture unit names no invariant"
   done <"$work/untagged"

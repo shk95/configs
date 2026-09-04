@@ -1245,6 +1245,7 @@ fi
 # The guard is per list: casks is still readable and still editable.
 run_commit n --dry-run cask add readable >/dev/null
 
+# INV repository/publish-through-dev
 # AGENTS.md: only dev enters master, and there is no operational bypass.
 commit_git switch -q master
 if master_output=$(run_commit y cask add zzz); then
@@ -1283,6 +1284,7 @@ if run_commit y cask add zzz >/dev/null; then
 fi
 commit_git checkout -q -- modules/darwin-homebrew.nix
 
+# INV repository/scope-ownership
 # An unclassified path is fatal at both gates, so the helper refuses before it
 # writes rather than after the hook rejects it.
 cp "$commit_root/tool/version-control/classify" "$test_root/classify.real"
@@ -1295,6 +1297,7 @@ fi
 printf '%s\n' "$unclassified_output" | grep -q 'no owning scope'
 cp "$test_root/classify.real" "$commit_root/tool/version-control/classify"
 
+# INV repository/evidence-three-states
 # The hook decides. A failing check stops the helper, an unverified one does
 # not, and REQUIRE_NATIVE turns the second into the first the way CI does.
 commit_before=$(commit_count)
@@ -1365,6 +1368,7 @@ fi
 commit_git reset -q --hard HEAD
 stub_commit_check 0
 
+# INV repository/flake-lock-isolated
 # A flake refresh is its own command, never a side effect of another one, and
 # CONTRIBUTING.md keeps it in a dedicated chore(unixlike-deps) commit. The
 # homebrew assertions above already show it does not ride along with an edit.
@@ -1429,6 +1433,7 @@ if (
 fi
 commit_git config core.hooksPath .githooks
 
+# INV repository/hooks-are-the-tracked-ones
 # An absolute core.hooksPath naming the tracked directory is the same setting
 # as .githooks: the helper resolves it rather than comparing strings.
 commit_git config core.hooksPath "$commit_root/.githooks"
@@ -1691,6 +1696,7 @@ if [ "$(publish_git branch --show-current)" != feature/unixlike-cask-add-af ]; t
   echo "commit --publish did not create the branch it named" >&2
   exit 1
 fi
+# INV repository/publish-through-dev: the branch it creates starts at origin/dev.
 if [ "$(publish_git rev-parse HEAD^)" \
   != "$(publish_git rev-parse refs/remotes/origin/dev)" ]; then
   echo "commit --publish did not branch from origin/dev" >&2
@@ -1706,6 +1712,7 @@ if [ "$(publish_remote_git rev-parse refs/heads/feature/unixlike-cask-add-af)" \
   echo "commit --publish did not push the commit it made" >&2
   exit 1
 fi
+# INV repository/publish-through-dev
 # The pull request opens against dev, and auto-merge is armed once, on the
 # pull request that was just opened.
 if [ "$(grep -c '^pr create --base dev --head feature/unixlike-cask-add-af ' \
@@ -1759,6 +1766,7 @@ if printf '%s\n' "$reuse_out" | grep -q '^pull request body:$'; then
   echo "commit --publish showed a body it was never going to apply" >&2
   exit 1
 fi
+# INV repository/publish-through-dev: one pull request per branch, never a second.
 if grep -q '^pr create' "$publish_log"; then
   echo "commit --publish opened a second pull request for one branch" >&2
   exit 1
@@ -1772,6 +1780,7 @@ publish_git switch -q dev
 
 # An open pull request with a different base would be retargeted or duplicated
 # by gh pr create. Neither is this helper's call, so it refuses before writing.
+# INV repository/publish-through-dev
 publish_snapshot
 STUB_GH_OPEN_PULLS='master https://github.com/owner/repo/pull/9'
 export STUB_GH_OPEN_PULLS
@@ -1783,6 +1792,7 @@ unset STUB_GH_OPEN_PULLS
 printf '%s\n' "$base_out" | grep -q 'different base'
 publish_wrote_nothing "a pull request with another base was open"
 
+# INV repository/publish-through-dev
 # AGENTS.md: master is entered by promotion only. The refusal precedes the
 # publish preflight, so gh is never consulted at all.
 publish_git switch -q master
@@ -1983,6 +1993,7 @@ publish_wrote_nothing "the branch already existed"
 
 # The edit is computed against the tree of local dev, so a dev that is not
 # origin/dev is refused rather than branched from.
+# INV repository/publish-through-dev: a branch starts at the remote tip of dev or not at all.
 publish_snapshot
 publish_git update-ref refs/remotes/origin/dev \
   "$(publish_git rev-parse refs/heads/feature/unixlike-cask-add-hf)"
@@ -1994,6 +2005,7 @@ printf '%s\n' "$behind_out" | grep -q 'dev is not at origin/dev'
 publish_git update-ref refs/remotes/origin/dev "$(publish_git rev-parse refs/heads/dev)"
 publish_wrote_nothing "dev was behind origin/dev"
 
+# INV repository/publish-through-dev
 # A push the pre-push hook rejects leaves the commit local and says so. Nothing
 # is retried, and no pull request is opened for a commit the remote never got.
 publish_snapshot
@@ -2125,6 +2137,7 @@ if printf '%s\n' "$prune_branches_after" | grep -qx refs/heads/prune-merged; the
   echo "commit prune left a merged branch behind" >&2
   exit 1
 fi
+# INV repository/publish-through-dev: the current branch, dev and master survive.
 for prune_survivor in dev master prune-unique prune-current; do
   if ! printf '%s\n' "$prune_branches_after" | grep -qx "refs/heads/$prune_survivor"; then
     echo "commit prune deleted $prune_survivor, which it must never touch" >&2
@@ -3059,9 +3072,9 @@ fi
 
 # INV repository/fixtures-name-invariants
 # A fixture unit — a top-level Describe in a Pester file, a banner section
-# in a shell suite — names the invariant it proves. Report mode counts and
-# lists; INVARIANTS_ENFORCE_C10=1 fails, which is the mode PR 2 and PR 3
-# flip on.
+# in a shell suite — names the invariant it proves. The default fails an
+# untagged unit; INVARIANTS_ENFORCE_C10=0 is the report mode, which counts
+# and lists. Both directions are held here.
 inv_base
 inv_id=repository/base-rule
 inv_pester="$inv_repo/tests/Fixture.Tests.ps1"
@@ -3089,8 +3102,11 @@ enforced-by: tool tool/probe
 enforced-by: fixture tests/probe.sh
 enforced-by: fixture tests/Fixture.Tests.ps1
 ENTRY
-inv_expect_pass 'untagged units are reported, not failed' '2 fixture units untagged'
+INVARIANTS_ENFORCE_C10=0
+export INVARIANTS_ENFORCE_C10
+inv_expect_pass 'untagged units are reported, not failed, under INVARIANTS_ENFORCE_C10=0' '2 fixture units untagged'
 inv_untagged=$(cd "$inv_repo" && "$invariants" --untagged)
+unset INVARIANTS_ENFORCE_C10
 printf '%s\n' "$inv_untagged" | grep -q 'tests/Fixture.Tests.ps1:[0-9]*: untagged unit'
 printf '%s\n' "$inv_untagged" | grep -q 'tests/probe.sh:[0-9]*: untagged section'
 if printf '%s\n' "$inv_untagged" | grep -q ': tagged unit$\|: tagged section$'; then
@@ -3098,11 +3114,15 @@ if printf '%s\n' "$inv_untagged" | grep -q ': tagged unit$\|: tagged section$'; 
   echo "invariants --untagged listed a tagged unit" >&2
   exit 1
 fi
-if (cd "$inv_repo" && INVARIANTS_ENFORCE_C10=1 "$invariants") >/dev/null 2>&1; then
-  echo "invariants passed untagged units under INVARIANTS_ENFORCE_C10" >&2
+if (cd "$inv_repo" && "$invariants") >/dev/null 2>&1; then
+  echo "invariants passed untagged units by default" >&2
   exit 1
 fi
-(cd "$inv_repo" && INVARIANTS_ENFORCE_C10=1 "$invariants") 2>&1 | grep -q 'C10'
+(cd "$inv_repo" && "$invariants") 2>&1 | grep -q 'C10'
+if (cd "$inv_repo" && INVARIANTS_ENFORCE_C10=1 "$invariants") >/dev/null 2>&1; then
+  echo "invariants passed untagged units under INVARIANTS_ENFORCE_C10=1" >&2
+  exit 1
+fi
 
 # INV repository/fixtures-name-invariants
 # A tag line directly after a closing banner, with no bare `#` between them,

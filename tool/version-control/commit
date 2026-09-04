@@ -25,6 +25,7 @@
 # selected automatically, because modules/* classifies unixlike, so a host
 # without Nix reports it unverified rather than skipping the question.
 #
+# INV repository/publish-through-dev
 # --publish carries the same commit the rest of the way: a branch from
 # origin/dev, a push, a pull request against dev, and auto-merge. It removes
 # ceremony rather than a gate. The pre-push hook still runs, branch protection
@@ -171,6 +172,8 @@ refuse() {
 # share this one sweep rather than each re-deriving when a branch is safe to
 # lose.
 #
+# INV repository/publish-through-dev: the current branch, dev and master are
+# never pruned.
 # A branch is a candidate only once it is an ancestor of origin/dev: that is
 # the proof that nothing unique would be lost, checked against the freshly
 # fetched remote ref rather than local dev, so a stale local dev can never
