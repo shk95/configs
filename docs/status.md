@@ -15,7 +15,22 @@ are the platform classes layered on top
 (`docs/decisions/home-manager-platform-classes.md`).
 
 SDKMAN is adopted but not owned
-(`docs/decisions/sdkman-adopted-not-owned.md`).
+(`docs/decisions/sdkman-adopted-not-owned.md`). Its hook is the last
+thing the generated zsh initialisation runs: since 2026-09-04 it sits after
+Home Manager's own late pieces (starship, direnv, syntax highlighting),
+where before it ran inside the repository's default-order block ahead of
+them, and an assertion refuses a PATH assignment placed later.
+
+Three other generated things changed on 2026-09-04 and reach a home on its
+next activation: `~/.config/zellij/config.kdl` is Home Manager's rendering
+of the asset (a blank line and an `// extraConfig` marker, then the keymap,
+plus the theme node in the desktop class) rather than a link to it; every
+home carries Pester 5.7.1 under `~/.local/share/powershell/Modules`, fetched
+from the PowerShell Gallery at build time, so `pre-push` can run the Windows
+suite from a Unix-like clone; and every generation's hash moved once,
+because the fragments a class collects are now imported in the order of
+their defining files rather than the directory walk
+(`INV unixlike/import-order-independence`). `flake.lock` is unchanged.
 
 WezTerm and Ghostty are the desktop terminals; Home Manager installs the
 D2Coding Nerd Font package and configures `D2KodingLigature Nerd Font Mono`
@@ -87,17 +102,21 @@ are disabled.
 The merge gate is CI's `Required checks`, demanded whenever a change falls
 in a domain that check covers.
 
-The invariant registry holds 50 entries: 0 pending, listed under Pending
-invariants, 0 fixture units untagged, and `tool/version-control/invariants`
-enforces C10 (no untagged fixture unit) by default.
+The invariant registry holds 50 entries, none pending and no fixture unit
+untagged, and `tool/version-control/invariants` enforces C10 (no untagged
+fixture unit) by default. Enforced is not the same as held: the manual
+`INV windows/support-boundary-named` records that the terminal delegation
+item still passes its read-back below the Windows 10 boundary (#53).
 
 Content before a shell suite's first banner is in no fixture unit and
 invisible to C10 (`docs/decisions/fixture-tags-name-proven-invariants.md`).
 
 `tool/version-control/domain-reads` runs on every commit and in CI beside
-the hygiene scan; the Windows CI job no longer parses the checkout from its
-root, and `windows/tools/test.ps1` is the one place the Windows tree is
-parsed.
+the hygiene scan; the Windows CI job no longer walks the checkout for
+PowerShell files, and `windows/tools/test.ps1` is the one place every script
+under the Windows tree is parsed for syntax (`check-desired-state.ps1`
+still parses the PowerShell payload it validates). `pre-push` audits the
+pushed history only.
 
 ## Common
 
@@ -129,5 +148,4 @@ semantics across independent platform validation and release cycles.
 
 ## Pending invariants
 
-None since 2026-09-04: every registered invariant declares `schema`, `tool`,
-`fixture` or `manual` enforcement.
+None since 2026-09-04. The registry summary above is the count.

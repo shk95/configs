@@ -14,8 +14,8 @@ cross-platform build graph:
 See `docs/architecture.md` for the domain and release model.
 
 The invariants each domain must keep, and how each one is enforced, are
-enumerated under `invariants/`. The hooks record what they refused;
-`tool/doctor.sh` shows the count.
+enumerated under `invariants/`. The hooks record every outcome they
+produce, refusals included; `tool/doctor.sh` shows the count.
 
 ## Architecture
 
@@ -174,7 +174,9 @@ because the manifest already installs the application itself.
 The checks run without that toolchain. A source whose parser is missing is
 reported as unverified rather than failing, and `check-desired-state.ps1` and
 `test.ps1` exit 69 to say so, which is why a clone without Lua or Pester can
-still push Windows work. CI supplies the missing evidence.
+still push Windows work. CI supplies the missing evidence. A Unix-like home
+this repository configures carries Pester itself, so `pre-push` there runs
+the suite under the host's own `pwsh` and reports a real result.
 
 `bootstrap.ps1 -Check` has a 69 of its own, and it means something else: a
 detection this host could not decide, such as an Appx package whose module will

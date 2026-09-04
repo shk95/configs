@@ -23,3 +23,12 @@ Latte's foreground already runs a moderate ~7:1 contrast against its background
 spend on an unpredictable blend. `windows/desired/files/terminal/settings.json`
 is plain JSON and carries no comment syntax, so this reasoning is recorded here
 rather than beside the setting.
+
+2026-09-04 (#119): the scheme named above is history, not current state.
+#88 (Unix-like) and #89 (Windows) replaced Catppuccin Latte with Flexoki
+Light in both domains — the upstream kepano ports taken verbatim, Windows
+Terminal's ANSI 5 and 13 mapped to magenta, the Windows Zellij payload
+themed for the first time — and the payloads carry Flexoki Light today. What
+this record decides survives that: the adoption is by copying, each copy is
+Windows-owned, and acrylic stays off, because the reasoning against an
+unpredictable blend does not depend on which light scheme sits behind it.
