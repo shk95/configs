@@ -2,7 +2,7 @@ id: windows/subset-owns-declared-keys
 statement: A subset-compared file drifts only on a property its payload declares; whatever else the host keeps in that file is runtime and is never reported as drift.
 rationale: docs/architecture.md § Windows domain
 enforced-by: fixture windows/tests/WinEnv.Tests.ps1
-decision: docs/status.md § A JsonSubset payload is captured by projection
+decision: docs/decisions/jsonsubset-captured-by-projection.md § A JsonSubset payload is captured by projection
 
 A subset payload declares the keys it owns and tolerates every other key the
 application keeps in the same file. Reporting an undeclared key as drift

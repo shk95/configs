@@ -2,7 +2,7 @@ id: windows/font-state-total
 statement: A font on a host is in exactly one of the declared install states, and a state that could only be finished by overwriting a file or registration this repository did not write is a conflict, never a repair.
 rationale: docs/architecture.md § Windows domain
 enforced-by: fixture windows/tests/WinEnv.Tests.ps1
-decision: docs/status.md § Font install states
+decision: docs/decisions/font-install-states.md § Font install states
 
 The states form a partition so the check and Apply can branch on them in
 any order; a host that satisfied two would be acted on twice. The decision
