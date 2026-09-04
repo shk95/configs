@@ -361,16 +361,35 @@ expect_units 'unixlike:test' push "$module_modified"
 # A rename carries two paths on one line. Both have to reach classify, or a
 # payload moved into assets/ is never selected for the payload check.
 renamed_into_assets=$(printf 'R100\tdocs/note.md\tassets/moved.lua')
-expect_units 'repository:fixtures
-unixlike:format
+expect_units 'unixlike:format
 unixlike:lint
 unixlike:payloads' commit "$renamed_into_assets"
-expect_units 'repository:fixtures
-unixlike:test' push "$renamed_into_assets"
+expect_units 'unixlike:test' push "$renamed_into_assets"
 expect_units 'windows:desired-state
 windows:tests' push "$windows_modified"
-expect_units 'repository:fixtures' commit "$docs_modified"
+expect_units '' commit "$docs_modified"
 expect_units 'unclassified' commit "$unknown_modified"
+
+# INV repository/local-gate-selects-by-effect
+# The fixture suite copies .githooks, tool/dispatch and tool/version-control
+# and greps the CI workflow; a change under any of them selects it at both
+# stages, alone or beside a documentation path, and a change to documentation
+# or to the registry, which the suite never reads, selects nothing here (the
+# hooks run hygiene, invariants and audit unconditionally).
+hook_modified=$(printf 'M\t.githooks/pre-commit')
+workflow_modified=$(printf 'M\t.github/workflows/ci.yml')
+dispatch_modified=$(printf 'M\ttool/dispatch/select')
+vc_modified=$(printf 'M\ttool/version-control/audit')
+entry_modified=$(printf 'M\tinvariants/repository/scope-ownership.md')
+docs_and_hook=$(printf 'M\tdocs/status.md\nM\t.githooks/pre-push')
+expect_units 'repository:fixtures' commit "$hook_modified"
+expect_units 'repository:fixtures' push "$hook_modified"
+expect_units 'repository:fixtures' commit "$workflow_modified"
+expect_units 'repository:fixtures' commit "$dispatch_modified"
+expect_units 'repository:fixtures' push "$vc_modified"
+expect_units '' commit "$entry_modified"
+expect_units '' push "$docs_modified"
+expect_units 'repository:fixtures' commit "$docs_and_hook"
 
 test_root=$(mktemp -d)
 cleanup() {

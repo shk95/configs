@@ -11,6 +11,13 @@
 # point. CI deliberately does not use it: a merge gate optimises for
 # completeness and runs a domain's whole suite.
 #
+# INV repository/local-gate-selects-by-effect: a unit is selected only for a
+# change that can alter its result. The version-control fixture suite copies
+# .githooks, tool/dispatch and tool/version-control into its throwaway
+# repositories and greps the CI workflow, so only those paths select it; a
+# documentation or registry change keeps the policy checks the hooks run
+# unconditionally and skips the suite.
+#
 # Reads `<status><TAB><path>` lines as `git diff --name-status` produces them,
 # and writes one `<domain>:<check>` unit per line.
 #
@@ -55,9 +62,15 @@ has_scope() { printf '%s\n' "$scopes" | grep -qx "$1"; }
 # can change what a module references, and a rename shows up as both, so only a
 # tree of modified payloads is allowed to skip evaluation.
 narrow=1
+fixtures=0
 tab=$(printf '\t')
 while IFS="$tab" read -r status path || [ -n "${status:-}" ]; do
   [ -n "${path:-}" ] || continue
+  case "$path" in
+    .githooks/* | .github/* | tool/dispatch/* | tool/version-control/*)
+      fixtures=1
+      ;;
+  esac
   case "$path" in
     assets/*)
       case "$status" in
@@ -75,7 +88,7 @@ if has_scope unclassified; then
   echo unclassified
 fi
 
-if has_scope repository; then
+if has_scope repository && [ "$fixtures" -eq 1 ]; then
   echo repository:fixtures
 fi
 
