@@ -26,6 +26,12 @@ Windows Terminal, or disagrees with the WinGet registration and reports a
 detection conflict that blocks Apply. An unavailable route must report
 unverified, never absence.
 
+Declining `terminal` and `powertoys` at selection time removes all three items
+from a host's check: `setup.ps1` evaluates the delegation only when `terminal`
+is selected and a feature's preconditions only when that feature is selected,
+so `-Minimal` reaches none of them. That is a mitigation available today rather
+than a fix, and a `-Minimal` run is evidence for none of these three items.
+
 2026-08-30: `setup.ps1` reports the undecidable case as unverified (#37 closed).
 
 Windows version detection (#38) owns the mechanism the delegation condition

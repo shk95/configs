@@ -8,7 +8,11 @@ issue: #139
 source: 9f1e8ce:docs/status.md § Invariant registry
 
 The rule used was that a tag names an invariant only if the case fails on
-that violation. Four architecture sentences and five entries now hold the
+that violation. Of the twelve Pester units that named no invariant, seven proved
+rules that neither the architecture nor the registry stated, and an eighth, the
+one-case check that the committed profile is silent in a non-interactive
+process, folded into the profile unit as an untagged regression guard. Four
+architecture sentences and five entries now hold the
 rules: `INV windows/external-profile-blocks-preserved`,
 `INV windows/subset-owns-declared-keys`,
 `INV windows/selection-closed-and-explicit`, `INV windows/font-state-total`

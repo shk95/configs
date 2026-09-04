@@ -38,7 +38,7 @@ The Unix-like Zellij keymap was adopted by copying the Windows implementation.
 The copies intentionally differ in platform-owned shell and session values and
 have no synchronization dependency.
 
-2026-09-04: Windows tests target Pester 5.7.1 through `windows/tools/test.ps1`.
+2026-08-13: Windows tests target Pester 5.7.1 through `windows/tools/test.ps1`.
 The exact version is shared by local native verification and CI so Pester
 discovery, scope, and assertion behavior cannot silently change with a runner
 image. Test setup runs in `BeforeAll`, and assertions use the parameterized

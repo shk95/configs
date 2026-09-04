@@ -77,9 +77,10 @@ still refused. Reversed, every capture from a real PowerToys host would be
 refused for a path in a key desired state does not manage.
 
 **No `SchemaVersion` bump, and this is a departure from the three earlier schema
-bumps (`docs/decisions/wslconfig-selected-by-windows-build.md`,
-`docs/decisions/terminal-generated-profiles-tolerated.md`,
-`docs/decisions/feature-selection-closed.md`) that needs its reason stated.**
+bumps (`docs/decisions/feature-selection-closed.md`,
+`docs/decisions/wslconfig-selected-by-windows-build.md`,
+`docs/decisions/terminal-generated-profiles-tolerated.md`) that needs its
+reason stated.**
 Those bumps each declared something no earlier loader could honour — a
 `Features` array, a `Sources` variant list, a new `Compare` mode — so the schema
 number is what makes an old module say the schema is unsupported instead of

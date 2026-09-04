@@ -11,5 +11,8 @@ twenty-one prose statements of which seven had no enforcement and four were
 violated; the registry records each such statement as `pending` with an
 issue rather than fixing it, so the gap is visible in
 `tool/version-control/invariants` output on every commit. The repository
-entries landed first; the Unix-like and Windows entries follow in their own
+entries landed first; the Unix-like and Windows entries followed in their own
 scopes.
+
+2026-09-03: the Unix-like entries landed. 2026-09-04: the Windows entries
+landed.

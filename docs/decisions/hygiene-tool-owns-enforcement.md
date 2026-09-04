@@ -3,6 +3,7 @@
 date: 2026-08-30
 scope: repository
 status: accepted
+reopen-when: This implementation is superseded when the same four axes are decided from a typed declaration rather than from text.
 source: 9f1e8ce:docs/status.md § Desired-state hygiene had no enforcement owner
 
 `AGENTS.md` has asked since the three-domain split that secrets, undeclared
@@ -37,8 +38,6 @@ Git and stays correct when the inventory grows fields. It over-accepts, which
 is the safe direction for an allowlist, and it fails closed when the extraction
 comes back empty, so a reformat cannot retire the axis quietly.
 
-This implementation is superseded when the same four axes are decided from a
-typed declaration rather than from text. The condition for removing it is the
-one the payload declaration already sets: coverage enforced in both directions,
-positive and negative fixtures for every axis, and no host prerequisite beyond
-those the governance plane already has.
+The condition for removing it is the one the payload declaration already sets:
+coverage enforced in both directions, positive and negative fixtures for every
+axis, and no host prerequisite beyond those the governance plane already has.

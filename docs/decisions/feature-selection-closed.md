@@ -29,6 +29,6 @@ stays one feature because `files/powertoys/settings.json` already owns the
 per-module enable map; a second selection axis over the same modules would
 have two sources.
 
-2026-08-18: The desired-state hash is scoped to the selected features plus
+The desired-state hash is scoped to the selected features plus
 `manifest.json`. A whole-tree hash reported drift for payloads a host never
 deploys and forced an Apply that could not change anything on it.

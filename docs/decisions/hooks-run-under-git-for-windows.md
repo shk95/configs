@@ -23,3 +23,6 @@ native binary now disables that conversion (`MSYS_NO_PATHCONV` and
 commit through the hooks reaches the same verdict a Unix-like one does.
 `capture.ps1` still reports whether `core.hooksPath` is `.githooks` rather than
 assuming it, because hooks stay opt-in per clone regardless of platform.
+
+2026-09-03: the guard is a derived rule keyed on the call rather than
+hand-maintained text (`INV repository/msys-argument-guard`).

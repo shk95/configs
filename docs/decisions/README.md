@@ -17,7 +17,7 @@ entries are (`invariants/README.md`); a list is a repeated key. Then prose.
 | Key | Count | Meaning |
 |---|---|---|
 | `date` | 1 | `YYYY-MM-DD` of the decision; later elaborations carry their own date in prose. |
-| `scope` | 1+ | `unixlike`, `windows`, `repository` or `common`; repeated for a decision spanning domains. |
+| `scope` | 1+ | `unixlike`, `windows`, `repository` or `common`; repeated for a decision spanning domains; a record with two scopes lists both in the index, comma-separated. |
 | `status` | 1 | `accepted` or `superseded`. |
 | `issue` | 0+ | `#<n>`. |
 | `reopen-when` | 0–1 | One sentence naming the condition under which the decision is revisited. |

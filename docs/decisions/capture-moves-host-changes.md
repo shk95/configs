@@ -38,15 +38,15 @@ the payload variant by `Resolve-WinEnvManagedFile`. A second comparison
 implementation would eventually disagree with the first, and the failure would
 be a capture that reports as changed what the check reports as clean.
 
-A ranking decision is worth recording. A build-conditional entry on a host whose
-build is undetermined is refused outright, which is stricter than Apply: Apply
-reads a null build as the variant every supported build honours, and that is
-safe because it deploys the lower payload, while capture writing host content
-into a payload no host selected would put one machine's state into a file
-another machine deploys.
+2026-08-31: A ranking decision is worth recording. A build-conditional entry on
+a host whose build is undetermined is refused outright, which is stricter than
+Apply: Apply reads a null build as the variant every supported build honours,
+and that is safe because it deploys the lower payload, while capture writing
+host content into a payload no host selected would put one machine's state into
+a file another machine deploys.
 
-2026-08-31: Three rules earned their shape from review rather than from design
-(`docs/decisions/hooks-run-under-git-for-windows.md`). The account-path refusal
+2026-08-30: Three rules earned their shape from review rather than from
+design. The account-path refusal
 carries the same three axes `tool/version-control/hygiene` enforces
 repository-wide -- a drive-letter path in either separator, the POSIX form, and
 the WSL UNC form -- because a Windows Terminal starting directory or a WezTerm
