@@ -10,5 +10,5 @@ hold the ranking function to all four outcomes and run the real entry point
 in a child shell with no prerequisites reachable, so the process exit code,
 not only the function, is what is proved. The entry-point scripts are not
 declared as tool locators because the repository tracks them without the
-executable bit; each carries the tag as a comment beside the code that decides its exit,
-for the reader.
+executable bit; each carries the tag as a comment beside the code that
+decides its exit, for the reader.
