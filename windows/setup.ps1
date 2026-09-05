@@ -41,9 +41,9 @@ $changed = [System.Collections.Generic.List[string]]::new()
 # tracked separately.
 $unverified = [System.Collections.Generic.List[string]]::new()
 # Detections this host could not decide, as opposed to sources it could not
-# parse. Today this is the Appx module failing to load, which says nothing
-# about whether the package is installed. These do rank: with no drift they
-# make the check unverified rather than verified.
+# parse: the Appx module failing to load, which says nothing about whether the
+# package is installed, and the terminal delegation's documented boundary
+# when the host is below it or an observation it needs could not be made.
 $unverifiedDetection = [System.Collections.Generic.List[string]]::new()
 # CI sets this so the merge gate never accepts an undecided item; hooks and
 # hosts leave it unset so a host that cannot decide one is not blocked.
@@ -226,8 +226,14 @@ try {
     }
     $hostProfile = Get-WinEnvPowerShellProfilePath
     if (-not (Test-WinEnvProfileHook -ProfilePath $hostProfile)) { $drift.Add('PowerShell profile hook') }
-    if ($terminalSelected -and -not (Test-WinEnvTerminalDelegation -Terminal $manifest.Terminal)) {
-        $drift.Add('default terminal delegation')
+    if ($terminalSelected) {
+        # INV windows/support-boundary-named — decided against the documented
+        # condition, not the write: a read-back the host accepts below the
+        # boundary is undecided, never verified. A mismatch is drift on either
+        # side, because Apply writes the values regardless.
+        $delegation = Test-WinEnvTerminalDelegation -Terminal $manifest.Terminal -Build $hostBuild
+        if (-not $delegation.Matches) { $drift.Add('default terminal delegation') }
+        if ($delegation.Unverified) { $unverifiedDetection.Add("default terminal delegation: $($delegation.Unverified)") }
     }
 
     # One place decides what this run's status is, so Apply and the check rank
@@ -312,7 +318,7 @@ try {
         if (-not (Test-WinEnvManagedFile -Definition $definition -RepositoryRoot $desiredStateRoot)) { $drift.Add($definition.Id) }
     }
     if (-not (Test-WinEnvProfileHook -ProfilePath $hostProfile)) { $drift.Add('PowerShell profile hook') }
-    if ($terminalSelected -and -not (Test-WinEnvTerminalDelegation -Terminal $manifest.Terminal)) {
+    if ($terminalSelected -and -not (Test-WinEnvTerminalDelegation -Terminal $manifest.Terminal -Build $hostBuild).Matches) {
         $drift.Add('default terminal delegation')
     }
     if ($drift.Count) { throw "Post-apply validation failed: $($drift -join ', ')" }

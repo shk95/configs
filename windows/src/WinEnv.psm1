@@ -28,6 +28,33 @@ $script:WinEnvParser = @('Json', 'Ini', 'PowerShell', 'Kdl', 'Lua', 'Text')
 $script:DefaultAppxQuery = { param([string] $PackageName) Get-AppxPackage -Name $PackageName -ErrorAction SilentlyContinue }
 $script:DefaultRegistrationQuery = { param([string] $PackageId) Get-WinGetRegistration -Id $PackageId }
 
+# The three host observations the default terminal delegation is decided
+# from, as seams for the same reason: the documented condition is an OS
+# build and revision plus an application version, no single host can be put
+# on every side of it, and the same read-back passes on both sides.
+$script:DefaultDelegationReadBack = { Get-ItemProperty -Path 'HKCU:\Console\%%Startup' -ErrorAction SilentlyContinue }
+# The revision (UBR) is read from the registry, the one place it is
+# published; a hive this process cannot read throws, and the caller treats
+# that as undecided rather than as a side of the boundary.
+$script:DefaultRevisionQuery = {
+    (Get-ItemProperty -Path 'HKLM:\SOFTWARE\Microsoft\Windows NT\CurrentVersion' -Name UBR -ErrorAction Stop).UBR
+}
+
+# INV windows/support-boundary-named — the condition under which the default
+# terminal delegation is honoured, from Microsoft's Group Policy for Windows
+# Terminal: Windows 11 22H2, or Windows 10 22H2 at build 19045 with revision
+# 3031 (KB5026435), and Windows Terminal 1.17 or later. Below either half the
+# host accepts the write and the read-back passes while the setting does
+# nothing, so the item is decided against this condition and never against
+# the write (docs/decisions/terminal-delegation-unverified-below-boundary.md).
+$script:TerminalDelegationBoundary = @{
+    Windows11Build    = 22621
+    Windows10Build    = 19045
+    Windows10Revision = 3031
+    TerminalVersion   = [version]'1.17'
+    TerminalAppxName  = 'Microsoft.WindowsTerminal'
+}
+
 # The three host observations the font state is derived from, as seams for the
 # same reason as the two above: the states a font can be in outnumber the ones
 # any single host can be put into, and the one this repository got wrong is a
@@ -427,6 +454,37 @@ function Get-WinEnvAppxPresence {
             Name    = $Name
             Usable  = $false
             Present = $null
+            Reason  = $_.Exception.Message
+        }
+    }
+}
+
+function Get-WinEnvAppxVersion {
+    # The same three answers as Get-WinEnvAppxPresence, for the one question
+    # that needs the package's version rather than its presence. An absent
+    # package is Usable with no Version; a module that could not be loaded is
+    # not Usable, and Version is not representable then.
+    param(
+        [Parameter(Mandatory, Position = 0)][string] $Name,
+        [scriptblock] $Query = $script:DefaultAppxQuery
+    )
+
+    try {
+        $package = & $Query $Name | Select-Object -First 1
+        $version = $null
+        if ($package) { $version = [version][string]$package.Version }
+        return [pscustomobject]@{
+            Name    = $Name
+            Usable  = $true
+            Version = $version
+            Reason  = $null
+        }
+    }
+    catch {
+        return [pscustomobject]@{
+            Name    = $Name
+            Usable  = $false
+            Version = $null
             Reason  = $_.Exception.Message
         }
     }
@@ -3288,10 +3346,99 @@ function Get-WinEnvPowerShellProfilePath {
     return $PROFILE.CurrentUserAllHosts
 }
 
+function Get-WinEnvTerminalDelegationSupport {
+    # Decides the documented condition from three observations and answers
+    # with one of three values: $true when the host is at or above the
+    # boundary, $false when it is below it, and $null when an observation the
+    # decision needs could not be made. Reason names which, in the words the
+    # summary prints. The revision matters only at build 19045: every later
+    # build is Windows 11 and the condition there is the build alone, and no
+    # earlier build is supported at any revision, so an unreadable revision
+    # can only make a Windows 10 22H2 host undecided, never a supported one.
+    param(
+        [AllowNull()][Nullable[int]] $Build,
+        [AllowNull()][Nullable[int]] $Revision,
+        [AllowNull()][version] $TerminalVersion
+    )
+    $boundary = $script:TerminalDelegationBoundary
+
+    if ($null -eq $Build) {
+        return [pscustomobject]@{ Supported = $null; Reason = 'the Windows build could not be determined' }
+    }
+    if ($Build -lt $boundary.Windows11Build) {
+        if ($Build -ne $boundary.Windows10Build) {
+            return [pscustomobject]@{
+                Supported = $false
+                Reason    = "Windows build $Build is below the documented boundary (Windows 11 22H2 or Windows 10 22H2 at 19045.3031)"
+            }
+        }
+        if ($null -eq $Revision) {
+            return [pscustomobject]@{ Supported = $null; Reason = 'the Windows 10 revision could not be read' }
+        }
+        if ($Revision -lt $boundary.Windows10Revision) {
+            return [pscustomobject]@{
+                Supported = $false
+                Reason    = "Windows 10 build $Build.$Revision is below 19045.3031 (KB5026435)"
+            }
+        }
+    }
+
+    if ($null -eq $TerminalVersion) {
+        return [pscustomobject]@{ Supported = $null; Reason = 'the Windows Terminal version could not be determined' }
+    }
+    if ($TerminalVersion -lt $boundary.TerminalVersion) {
+        return [pscustomobject]@{
+            Supported = $false
+            Reason    = "Windows Terminal $TerminalVersion is below $($boundary.TerminalVersion)"
+        }
+    }
+    return [pscustomobject]@{ Supported = $true; Reason = $null }
+}
+
 function Test-WinEnvTerminalDelegation {
-    param([Parameter(Mandatory)][hashtable] $Terminal)
-    $key = Get-ItemProperty -Path 'HKCU:\Console\%%Startup' -ErrorAction SilentlyContinue
-    return [bool]($key -and $key.DelegationTerminal -eq $Terminal.DelegationTerminal -and $key.DelegationConsole -eq $Terminal.DelegationConsole)
+    # Two answers, because they rank differently. Matches is the read-back:
+    # the declared values are present under the key, or they are not, and a
+    # mismatch is drift on either side of the boundary since Apply writes the
+    # values regardless. Unverified is the boundary: set whenever the host
+    # is below the documented condition or an observation it needs could not
+    # be made, so a read-back the host accepts but does not honour is never
+    # reported as verified (INV windows/support-boundary-named). Above the
+    # boundary the read-back is still a read-back; it observes the documented
+    # values, not a handoff.
+    param(
+        [Parameter(Mandatory)][hashtable] $Terminal,
+        [scriptblock] $ReadBack = $script:DefaultDelegationReadBack,
+        [Nullable[int]] $Build = (Get-WinEnvWindowsBuild),
+        [scriptblock] $RevisionQuery = $script:DefaultRevisionQuery,
+        [scriptblock] $AppxQuery = $script:DefaultAppxQuery
+    )
+    $boundary = $script:TerminalDelegationBoundary
+
+    $key = & $ReadBack
+    $matches = [bool]($key -and $key.DelegationTerminal -eq $Terminal.DelegationTerminal -and $key.DelegationConsole -eq $Terminal.DelegationConsole)
+
+    $revision = $null
+    if ($Build -eq $boundary.Windows10Build) {
+        try { $revision = [int](& $RevisionQuery) } catch { $revision = $null }
+    }
+    $terminalVersion = $null
+    $probe = Get-WinEnvAppxVersion -Name $boundary.TerminalAppxName -Query $AppxQuery
+    if ($probe.Usable) { $terminalVersion = $probe.Version }
+    $support = Get-WinEnvTerminalDelegationSupport -Build $Build -Revision $revision -TerminalVersion $terminalVersion
+
+    $unverified = $null
+    if ($support.Supported -ne $true) {
+        $unverified = $support.Reason
+        if (-not $probe.Usable -and $null -eq $support.Supported -and $support.Reason -match 'Windows Terminal') {
+            $unverified = "$($support.Reason): $($probe.Reason)"
+        }
+    }
+
+    return [pscustomobject]@{
+        Matches    = $matches
+        Supported  = $support.Supported
+        Unverified = $unverified
+    }
 }
 
 function Set-WinEnvTerminalDelegation {
