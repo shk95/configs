@@ -36,3 +36,17 @@ than closed as works.
 2026-09-04: `-Check` returns 69 for an undecidable item and for a missing
 prerequisite (`docs/decisions/drift-outranks-unverified.md`); #54 remains
 open for the terminal item's own conversion.
+
+2026-09-05: `-Check` decides the item against the condition (#53, #54).
+`Test-WinEnvTerminalDelegation` answers two things apart: `Matches`, the
+read-back, and `Unverified`, the boundary. The build comes from
+`Get-WinEnvWindowsBuild`; at build 19045 only, the revision comes from the
+registry's `UBR`, because the documented condition names it (KB5026435 is
+19045.3031) and no other build needs it, which is why this differs from the
+`.wslconfig` bound that is stated in builds alone; the Windows Terminal
+version comes through the same Appx route the package detection uses, so a
+host whose module will not load reports the item undecided rather than
+passing. Below the boundary a matching read-back is unverified, and a
+mismatch is drift on either side, since Apply writes the values regardless.
+The native observations the issue asked for, a Windows 10 22H2 host on each
+side of revision 3031, are still owed.
