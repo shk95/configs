@@ -10,7 +10,7 @@
 #
 # That answer is a `theme_dark`/`theme_light` pair, which zellij switches
 # between from the host terminal's own colour-scheme report (CSI 2031 /
-# DSR 997), plus a static `theme "flexoki-light"` for the terminals that never
+# DSR 997), plus a static `theme "modus-operandi"` for the terminals that never
 # send one. A static `theme` is authoritative only until a report arrives, so
 # the two do not fight: Ghostty answers the query and drives its own palette
 # through the pair, while WezTerm — which has no colour-scheme private mode in
@@ -21,10 +21,11 @@
 # Pinning light for every class rather than for one is honest because every
 # home this repository composes renders in a terminal whose scheme the
 # repository itself declares, the WSL homes included: their Windows Terminal is
-# set to Flexoki Light by windows/desired/files/terminal/settings.json, in the
-# Windows domain. Reading that file is a cross-domain read by a person and not
-# by code; nothing here imports or opens it. The premise and the condition that
-# would reopen it are recorded in
+# set to a light scheme by windows/desired/files/terminal/settings.json, in the
+# Windows domain, which names the family it adopts on its own schedule and has
+# no obligation to move when this side does. Reading that file is a
+# cross-domain read by a person and not by code; nothing here imports or opens
+# it. The premise and the condition that would reopen it are recorded in
 # docs/decisions/composed-homes-render-in-declared-terminals.md.
 #
 # INV unixlike/composition-in-one-place — this file contributes one definition

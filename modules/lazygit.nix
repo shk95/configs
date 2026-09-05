@@ -53,10 +53,12 @@ _: {
           theme = {
             # lazygit's own default paints the selected row with a `blue`
             # background under the terminal's default foreground; under
-            # Flexoki Light that background is #205EA6 and the foreground is
-            # #100F0F, which works out to a contrast of roughly 2.9:1 by the
-            # WCAG relative-luminance formula, below the 3:1 floor even for
-            # large text. `reverse` sidesteps the question rather than
+            # Modus Operandi that background is #0031a9 and the foreground is
+            # #000000, which works out to a contrast of 2.01:1 by the WCAG
+            # relative-luminance formula, below the 3:1 floor even for large
+            # text — and worse than the 2.9:1 the previous Flexoki Light
+            # background produced, so changing the scheme did not retire the
+            # problem. `reverse` sidesteps the question rather than
             # answering it with another guess: it swaps the terminal's own
             # foreground and background for the row instead of naming a
             # colour of its own, the same bargain modules/skim.nix makes with

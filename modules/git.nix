@@ -60,12 +60,16 @@ in {
             br = "branch";
             co = "checkout";
             st = "status";
-            # The hash is `%C(bold cyan)` rather than `%C(yellow)`. A yellow
-            # legible on a dark terminal is by construction a pale tint, and
-            # this format string now has to survive a light one as well —
-            # Catppuccin Latte's yellow is #df8e1d on a #eff1f5 page. Cyan is a
-            # mid-tone in both directions and stays distinct from the `%Cred`
-            # refs and the `%Cblue` author beside it.
+            # The hash is `%C(bold cyan)` rather than `%C(yellow)`. Both
+            # names resolve through the terminal's own palette, so the
+            # question is what each one means at both ends of it, and yellow
+            # means almost nothing in common: a yellow legible on a dark
+            # terminal is by construction a pale tint (Modus Vivendi's ANSI 3
+            # is #d0bc00), while the light half reaches its own page by
+            # abandoning the hue's brightness altogether (Modus Operandi's is
+            # #6f5500, 7.06:1 against #ffffff and nearer brown than yellow).
+            # Cyan is a mid-tone in both directions and stays distinct from
+            # the `%Cred` refs and the `%Cblue` author beside it.
             ls = ''log --pretty=format:"%C(bold cyan)%h%Cred%d\\ %Creset%s%Cblue\\ [%cn]" --decorate'';
             cm = "commit -m";
             ca = "commit -am";
@@ -144,7 +148,7 @@ in {
   };
 
   # The graphical Unix-like homes, where the background is a value this flake
-  # declares two files away: WezTerm on Flexoki Light and Ghostty on the light
+  # declares two files away: WezTerm on Modus Operandi and Ghostty on the light
   # half of the same family. That is why the light-tuned pager landed here
   # first, and it is no longer what makes it legal only here — the WSL homes'
   # terminal is declared light too, by the Windows domain
@@ -162,12 +166,12 @@ in {
 
       # The syntax colours that sit on top of those bands used to name a
       # bundled bat theme from the same family as the two terminals, the way
-      # `light` above still does for the diff bands. Flexoki has no such
-      # bundled delta/bat theme to name, and modules/bat.nix already declines
-      # to guess a named theme for the same reason: `ansi` defers to the
-      # terminal's own sixteen colours instead, which on this class is Flexoki
-      # Light because WezTerm and Ghostty declare it, and needs no bundled
-      # theme to track it.
+      # `light` above still does for the diff bands. Modus has no such bundled
+      # delta/bat theme to name — no more than Flexoki did before it — and
+      # modules/bat.nix already declines to guess a named theme for the same
+      # reason: `ansi` defers to the terminal's own sixteen colours instead,
+      # which on this class is Modus Operandi because WezTerm and Ghostty
+      # declare it, and needs no bundled theme to track it.
       syntax-theme = "ansi";
     };
   };
