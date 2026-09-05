@@ -3459,6 +3459,10 @@ fi
 # registry would have to hold an entry for.
 
 provisional="$root/tool/version-control/provisional"
+# The wiring the two-way check depends on, asserted the way the invariant
+# section above asserts its own, so it cannot silently disappear.
+grep -q 'evidence_run provisional tool/version-control/provisional' "$root/.githooks/pre-commit"
+grep -q 'run: tool/version-control/provisional' "$root/.github/workflows/ci.yml"
 prov_seq=0
 prov_now=2026-09-05
 prov_new() {

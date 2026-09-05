@@ -40,7 +40,7 @@ Each scope owns the entries under its directory. A Windows entry is a
 ```text
 id: <scope>/<slug>
 kind: experiment | workaround | upstream-pending
-statement: <one sentence: what the measure is, naming no command output or model>
+statement: <one sentence: what the measure is>
 since: <YYYY-MM-DD the measure entered the tree>
 exit-when: <one sentence: the condition that ends it>
 watch: <a tracked path whose change is the signal, or `manual`>
@@ -64,7 +64,7 @@ parsed. A `reviewed:` line lives in the prose, one per extension.
 | `kind` | 1 | `experiment` (kept while it is being judged), `workaround` (kept while the defect stands), or `upstream-pending` (kept until an upstream change lands). |
 | `statement` | 1 | What the measure is, in one sentence. Reviewers hold it to that; the checker does not. |
 | `since` | 1 | `YYYY-MM-DD` the measure entered the tree. |
-| `exit-when` | 1 | The condition that ends the measure, in one sentence. It must be observable by someone other than its author. |
+| `exit-when` | 1 | The condition that ends the measure, in one sentence. |
 | `watch` | 0–1 | A tracked path whose change is the signal, or `manual` when only a person can tell. |
 | `review-by` | 1 | `YYYY-MM-DD`, after `since` and at most 180 days after the later of `since` and the last `reviewed:` date. |
 | `issue` | 1 | `#<n>`, where the measure and its exit are tracked. |
@@ -94,7 +94,7 @@ scanner reads no explanation as a measure.
 | Outcome | What it means | What changes |
 |---|---|---|
 | Retirement | `exit-when` came true and the measure is no longer needed. | Delete the entry, the tagged lines, and the scope directory if it is now empty — all in one commit. |
-| Extension | `exit-when` has not come true and the measure is still the best option. | Move `review-by` forward by at most 180 days and add a `reviewed:` line saying why. |
+| Extension | `exit-when` has not come true and the measure is still the best option. | Add a `reviewed:` line saying why, and move `review-by` to at most 180 days after that line's date. |
 | Promotion | The measure turned out to be the answer and is no longer temporary. | Write a decision record, delete the entry and the tags, and keep the code. |
 
 Retirement and promotion both empty the registry entry; the difference is

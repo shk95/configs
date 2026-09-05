@@ -1,7 +1,8 @@
 #!/bin/sh
 #
-# Domain-aware local checks plus the four repository-wide scans: desired-state
-# hygiene, cross-domain reads, the invariant registry, and secrets.
+# Domain-aware local checks plus the five repository-wide scans: desired-state
+# hygiene, cross-domain reads, the invariant registry, the provisional
+# registry, and secrets.
 #
 # Windows-only commits must not require Nix. The classifier is shared with the
 # pre-push hook, CI, and the version-control skill. What a check that could not
@@ -93,6 +94,16 @@ evidence_run "domain reads" tool/version-control/domain-reads \
 # depends on, so it runs unconditionally rather than through dispatch.
 evidence_run invariants tool/version-control/invariants \
   || abort "See invariants/README.md."
+
+# The provisional registry is repository-wide for the same reason: a tagged
+# line deleted in any scope can orphan an entry, and an entry added anywhere
+# can name no measure. Only its overdue rule is scope-selective, so the
+# classifier — which answers ownership — supplies the scopes an overdue entry
+# may fail here; `none` (nothing staged) leaves that list empty.
+provisional_scopes=$(tool/version-control/classify --staged \
+  | grep -vx none | tr '\n' ',' | sed 's/,$//')
+evidence_run provisional tool/version-control/provisional --scopes "$provisional_scopes" \
+  || abort "See provisional/README.md."
 
 # Hooks are opt-in, so CI mirrors the secret check. A credential that reaches
 # history stays there after the file is deleted, making the staged state the

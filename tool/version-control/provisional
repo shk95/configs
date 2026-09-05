@@ -414,6 +414,7 @@ done <"$work/tags"
 
 # ---------------------------------------------------------------------------
 
+# --table is a renderer: it has reported every failure on stderr but exits 0, as its sibling does.
 if [ "$mode" = table ]; then
   printf '| Measure | Kind | Review by | Statement |\n|---|---|---|---|\n'
   cat "$work/table"
