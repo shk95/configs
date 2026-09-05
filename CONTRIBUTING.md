@@ -258,6 +258,14 @@ Native read-only verification is:
 .\windows\bootstrap.ps1 -Check
 ```
 
+A branch that has not been pushed yet can still reach a native Windows
+clone of this repository through the filesystem: in that clone, fetch the
+branch from the Unix-like session's main checkout — never from a linked
+worktree, whose `gitdir` file names a path Git for Windows cannot resolve —
+check it out, run the commands above under that host's own `pwsh`, and
+switch the clone back to its previous branch afterwards. Once the branch is
+pushed, `origin` is the transport and no path across the boundary is needed.
+
 `setup-dev.ps1` installs the contributor toolchain declared in
 `windows/toolchain.json`, which is also what CI installs from, so local Windows
 and CI use the same Pester discovery, scope, and assertion semantics and the
