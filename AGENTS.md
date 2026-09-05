@@ -95,6 +95,9 @@ When adding a repository rule, separate its concerns before implementation:
 - Put current adoption state and migration gaps in `docs/status.md` and
   expensive choices in `docs/decisions/`; put per-run proof in CI, pull
   requests, and release evidence.
+- Put a rule that has been observed but not accepted, and a document or tool
+  judged stale, in `docs/candidates/` until recurrence or silence decides it.
+  A candidate is an observation and never a source of authority.
 
 Each obligation has one authoritative source. Procedures and tools implement
 policy but must not silently create new policy. Model-specific adapters only

@@ -194,6 +194,30 @@ one. Prose and code cite a record by path only; a quoted heading is checked
 by nothing and rots. Cite it from a registry entry with `decision:` when an
 invariant rests on it.
 
+## Observe before adding or removing
+
+A sentence added to a policy document without a check behind it rots, and a
+deletion is as easy to get wrong as an addition. Both pass through
+`docs/candidates/` first. `docs/candidates/README.md` is the format; this is
+the procedure.
+
+1. Record the observation as `docs/candidates/<slug>.md` with `kind:
+   addition` or `kind: deletion`, the target it would change, the criterion
+   that promotes it and the date or event that drops it. Write what was met
+   and where, not the rule you would like to exist.
+2. Add a dated line under `Occurrences` each time the same thing is met
+   again, with the evidence.
+3. Promote when the criterion is met: make the change in its owning scope
+   through the flows above and delete the candidate in the same pull
+   request. The commit message names the candidate it promotes.
+4. Drop when the date passes or the event occurs without promotion: delete
+   the file. History is the record either way.
+
+Two things do not wait: a change that is fatal on a host and invisible to
+every gate, and the correction of tracked text that is false today. A
+candidate is an observation. Nothing cites it as authority, and an agent
+does not follow one as a rule.
+
 ## Plan work with GitHub milestones
 
 GitHub milestones group planned work after its owning scope and outcome are
@@ -481,6 +505,7 @@ not branch-protection contexts because unselected domains are skipped.
 | `docs/architecture.md` | Domain authority and dependency policy |
 | `docs/status.md` | Current state |
 | `docs/decisions/` | One record per expensive decision; `README.md` there is the index and format |
+| `docs/candidates/` | Observed candidates for adding a rule or removing text; `README.md` there is the index and format |
 | `docs/troubleshooting.md` | Recurring problems indexed by symptom |
 | `docs/definition-of-done.md` | Domain-specific evidence requirements |
 | `invariants/` | Enumerated invariants and how each one is enforced |
