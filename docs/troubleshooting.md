@@ -513,8 +513,8 @@ editor asks the terminal for its colours with an OSC query at startup and
 waits 100 ms for the reply; a reply that lands after that, or in fragments,
 is consumed as typed input. Diagnosed 2026-08-31: the fragment was the tail
 of the background `#2b2b2b`, Zellij's dark fallback theme before Flexoki
-landed (#89), so the visible text may differ, or the symptom may vanish,
-now that the payloads carry a theme. No change is made here; the defect is
+landed (#88 on Unix-like, #89 on Windows), so the visible text may differ,
+or the symptom may vanish, now that the payloads carry a theme. No change is made here; the defect is
 upstream and was unchanged as of that date.
 
 ---

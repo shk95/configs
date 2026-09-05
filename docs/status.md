@@ -145,6 +145,9 @@ semantics across independent platform validation and release cycles.
   (`docs/decisions/capture-moves-host-changes.md`).
 - `docs/decisions/hygiene-tool-owns-enforcement.md`: reopens when the same
   four axes are decided from a typed declaration rather than from text.
+- `docs/decisions/annotated-tag-is-the-release-record.md`: reopens when a
+  consumer needs a release artifact or a note the tag annotation cannot
+  carry.
 
 ## Pending invariants
 

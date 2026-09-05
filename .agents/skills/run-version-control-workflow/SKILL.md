@@ -54,9 +54,10 @@ planning read-only unless the user explicitly authorizes a Git mutation.
   request.
 - **Integrate**: Merge a topic branch into `dev`. Require relevant checks,
   preserve merge commits, and refuse squash or rebase of published work. Do
-  not merge, push, or change branches without explicit authorization. Remove
-  an implementer's worktree only after its pull request has merged; the
-  publish helper prunes the merged branch, never the worktree.
+  not merge, push, or change branches without explicit authorization.
+  `tool/worktree.sh done` removes an implementer's worktree and runs only at
+  the point Start names; the publish helper prunes the merged branch, never
+  the worktree.
 - **Promote**: Run `tool/version-control/plan-promotion`. Permit only a
   same-repository `dev` to `master` pull request, ensure no competing promotion
   is open, and introduce no fix in the promotion itself. Require `Required

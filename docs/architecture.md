@@ -363,7 +363,7 @@ from the tag.
 The annotated tag is the only release record; the repository creates no
 GitHub Releases. A Release is a second surface for the same event, editable
 and deletable without touching the tag, so two records could disagree and the
-mutable one would be the more visible
+mutable one would be the more visible of the pair
 (`docs/decisions/annotated-tag-is-the-release-record.md`).
 
 Commit subjects on the integration branches are Conventional Commits, and a
