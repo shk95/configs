@@ -13,6 +13,14 @@
 #
 # They share .git, so `core.hooksPath` carries over — a new worktree has working
 # hooks with no setup.
+#
+# A worktree made for an implementer is due for removal only after the pull
+# request from its branch has merged: review feedback returns to the same
+# worktree, and one removed earlier costs a fresh setup for every fix. That
+# rule is the skill's (.agents/skills/run-version-control-workflow/SKILL.md,
+# Start and Integrate). `done` performs the removal and does not check the
+# merge, because whether a pull request has merged is a remote question this
+# tool does not ask; it says when the removal was due instead.
 
 set -e
 
@@ -33,7 +41,7 @@ integration=${INTEGRATION_BRANCH:-dev}
 usage() {
   echo "usage: tool/worktree.sh new <name> [feature|fix]"
   echo "       tool/worktree.sh list"
-  echo "       tool/worktree.sh done <name>"
+  echo "       tool/worktree.sh done <name>    (once its pull request has merged)"
   exit 1
 }
 
@@ -94,6 +102,7 @@ case "${1:-}" in
     git worktree remove "$dir"
     echo "Removed $dir"
     echo "The branch is kept; delete it once its pull request has merged."
+    echo "That merge is also when this removal was due (run-version-control-workflow, Integrate)."
     ;;
 
   *) usage ;;

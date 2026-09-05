@@ -96,8 +96,9 @@ Domain releases use immutable annotated tags. The target commit must be
 reachable from `master`. The annotation records the domain and reports
 evaluation, build, and native-runtime evidence separately, including explicit
 `unavailable` or `not applicable` values. Create and push a tag only when the
-user explicitly requests those mutations. Activation and Windows Apply happen
-after release and are not implied by a tag.
+user explicitly requests those mutations. Create no GitHub Release: the
+annotation is the whole record. Activation and Windows Apply happen after
+release and are not implied by a tag.
 
 For agent-assisted work, invoke `run-version-control-workflow`. Its canonical
 Agent Skills implementation is under `.agents/skills/`; model-specific

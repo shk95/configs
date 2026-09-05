@@ -52,7 +52,10 @@ schema 2; `ProjectVersion` is 0.6.0. Schema 4 declares seven features —
 
 As of 2026-09-04, `bootstrap.ps1 -Check` returns 69 when WinGet or
 PowerShell 7 is missing, or 1 under `REQUIRE_NATIVE=1`
-(`INV windows/check-exit-contract`).
+(`INV windows/check-exit-contract`). Since 2026-09-05 a selected source no
+parser here could read, and a default terminal delegation the host is below
+the documented boundary for or cannot be decided against it, rank the same
+way (#53, #54).
 
 ### Windows 10 support boundary
 
@@ -62,7 +65,7 @@ the observation ran on.
 
 | Item | Documented boundary | Evidence state | Source |
 | --- | --- | --- | --- |
-| Default terminal delegation (`HKCU:\Console\%%Startup`) | Windows 11 22H2, or Windows 10 22H2 build 19045.3031 with KB5026435, plus Windows Terminal 1.17+ | Unverified: the read-back passes below the boundary although the setting does nothing (#53) | Group Policy for Windows Terminal; Windows Terminal installation |
+| Default terminal delegation (`HKCU:\Console\%%Startup`) | Windows 11 22H2, or Windows 10 22H2 build 19045.3031 with KB5026435, plus Windows Terminal 1.17+ | Reported unverified by `-Check` below the boundary, or when the build, the Windows 10 revision or the Windows Terminal version cannot be read, since #53; observed 2026-09-05 on build 19044.7663 (Windows 10 21H2, full selection) as "below the documented boundary"; above it the pass is a read-back of the documented values, not an observed handoff, and no host at or above 19045.3031 has been observed | Group Policy for Windows Terminal; Windows Terminal installation |
 | PowerToys `Microsoft.CommandPalette` precondition (`Get-AppxPackage`) | Windows 11, or Windows 10 2004 (build 19041) or later | Reported unverified by `-Check` since #37 | How to Install PowerToys; PowerShell 7 module compatibility |
 | Windows Terminal `Microsoft.WindowsTerminal` Appx detection | Windows 10 2004 (build 19041) or later | Reported unverified by `-Check` since #37 | Windows Terminal installation; PowerShell 7 module compatibility; Windows Terminal product repository |
 
@@ -136,15 +139,19 @@ semantics across independent platform validation and release cycles.
 - Milestone naming, issue membership, and closure stay a manual maintainer
   review; automated remote enforcement is deferred until that workflow shows
   a recurring failure.
-- The Windows 10 support boundary is registered as the manual
-  `INV windows/support-boundary-named`; its evidence is the reviewer's
-  naming of the build and of each item's boundary state. #53 owns deciding
-  the terminal delegation item against the boundary so `-Check` can report
-  it unverified there, and #54 stays open for that conversion.
+- The Windows 10 support boundary is `INV windows/support-boundary-named`.
+  Since #53 the terminal delegation item decides itself against the
+  boundary and the fixtures hold that; naming the build an observation ran
+  on stays the reviewer's manual evidence. The lower side is observed
+  (build 19044.7663); no host at or above 19045.3031 has been, so the
+  item's evidence above the boundary is still owed.
 - One real-host capture run is still owed as evidence
   (`docs/decisions/capture-moves-host-changes.md`).
 - `docs/decisions/hygiene-tool-owns-enforcement.md`: reopens when the same
   four axes are decided from a typed declaration rather than from text.
+- `docs/decisions/annotated-tag-is-the-release-record.md`: reopens when a
+  consumer needs a release artifact or a note the tag annotation cannot
+  carry.
 
 ## Pending invariants
 
