@@ -259,6 +259,12 @@ record for this intentionally manual policy.
 Do not add Windows desired state to a Nix module merely because the same tool
 also runs on Windows.
 
+### Capture Karabiner drift
+
+On the Mac, `just karabiner-check` reports whether the host still holds the
+members `assets/karabiner/` declares, and `just karabiner-capture` reads drift
+that belongs in desired state back into the payloads and commits it.
+
 ## Windows changes
 
 Windows declarations, payloads, checks, and Apply logic live inside `windows/`

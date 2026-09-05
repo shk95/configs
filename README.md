@@ -131,6 +131,7 @@ just darwin-build
 just darwin-check
 
 just karabiner-check   # target Mac only; compares the Karabiner payloads
+just karabiner-capture # target Mac only; reads the drift back and commits it
 just karabiner-test
 ```
 

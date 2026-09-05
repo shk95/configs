@@ -917,6 +917,14 @@ mkdir -p "$commit_root/tool/checks" "$commit_root/modules" "$commit_root/stub" \
 cp -R "$root/.githooks" "$commit_root/.githooks"
 cp -R "$root/tool/version-control" "$commit_root/tool/version-control"
 cp -R "$root/tool/dispatch" "$commit_root/tool/dispatch"
+# `capture karabiner` runs the real projection tool over the real payloads: the
+# command under test is the one that decides a capture is a commit, and a
+# stand-in for either side would leave that decision proving nothing. The host
+# it reads is faked through --host and --hotkeys-host, which is the whole
+# reason those flags exist.
+cp -R "$root/tool/darwin" "$commit_root/tool/darwin"
+mkdir -p "$commit_root/assets"
+cp -R "$root/assets/karabiner" "$commit_root/assets/karabiner"
 # The pre-commit hook this fixture enables also runs
 # tool/version-control/invariants, whose own cases are below; here it is a
 # stand-in so only the behaviour under test decides the outcome.
@@ -1560,6 +1568,131 @@ fi
   unset GIT_DIR GIT_WORK_TREE GIT_INDEX_FILE
   cd "$commit_root" && "$audit"
 ) >/dev/null
+
+# ---------------------------------------------------------------------------
+# tool/version-control/commit capture karabiner
+# ---------------------------------------------------------------------------
+#
+# INV unixlike/host-written-payload-projected
+#
+# The capture direction of the same projection modules/karabiner.nix applies:
+# what the payloads declare decides what is read back, and what else the host
+# keeps in that file is runtime that is neither reported as drift nor captured.
+# The real tool/darwin/karabiner and the real payloads are in the throwaway
+# repository above; only the host is faked, through the flags that exist for
+# it, so the two directions of the rule are the fixture's subject rather than a
+# stand-in's.
+capture_host="$test_root/karabiner-host.json"
+capture_hotkeys_host="$test_root/karabiner-hotkeys-host.json"
+
+run_capture() {
+  capture_answer=$1
+  shift
+  printf '%s\n' "$capture_answer" | (
+    unset GIT_DIR GIT_WORK_TREE GIT_INDEX_FILE
+    cd "$commit_root" || exit 1
+    KARABINER_PLATFORM=darwin
+    export KARABINER_PLATFORM
+    PATH="$commit_stub_path:$PATH" tool/version-control/commit "$@" 2>&1
+  )
+}
+
+capture_payloads_untouched() {
+  for capture_payload in karabiner.json symbolic-hotkeys.json; do
+    if ! cmp -s "$commit_root/assets/karabiner/$capture_payload" \
+      "$root/assets/karabiner/$capture_payload"; then
+      echo "capture karabiner rewrote assets/karabiner/$capture_payload while $1" >&2
+      exit 1
+    fi
+  done
+  if [ -n "$(commit_git status --porcelain --untracked-files=no)" ] \
+    || [ "$(commit_count)" != "$capture_before" ]; then
+    echo "capture karabiner wrote something while $1" >&2
+    exit 1
+  fi
+}
+
+# A host that matches both payloads and holds one top-level key beside them.
+# `machine_specific` is the host's own runtime state: a capture that read it
+# back would put a per-machine identifier into desired state.
+{
+  printf '{\n'
+  printf '  "machine_specific": {},\n'
+  tail -n +2 "$root/assets/karabiner/karabiner.json"
+} >"$capture_host"
+cp "$root/assets/karabiner/symbolic-hotkeys.json" "$capture_hotkeys_host"
+
+capture_before=$(commit_count)
+capture_status=0
+capture_output=$(run_capture n --dry-run --host "$capture_host" \
+  --hotkeys-host "$capture_hotkeys_host" capture karabiner) || capture_status=$?
+if [ "$capture_status" -eq 0 ]; then
+  echo "capture karabiner planned a commit against a host that matches the payloads" >&2
+  exit 1
+fi
+if ! printf '%s\n' "$capture_output" | grep -q 'nothing to capture'; then
+  printf '%s\n' "$capture_output" >&2
+  echo "capture karabiner did not refuse with nothing to capture" >&2
+  exit 1
+fi
+capture_payloads_untouched "the host matched the payloads"
+
+# The same command on a host that is not a Mac refuses before it reads
+# anything: the projection of a host that holds no Karabiner state would
+# capture the payloads away.
+capture_status=0
+capture_output=$(
+  printf 'n\n' | (
+    unset GIT_DIR GIT_WORK_TREE GIT_INDEX_FILE KARABINER_PLATFORM
+    cd "$commit_root" || exit 1
+    PATH="$commit_stub_path:$PATH" tool/version-control/commit --dry-run \
+      --host "$capture_host" --hotkeys-host "$capture_hotkeys_host" \
+      capture karabiner 2>&1
+  )
+) || capture_status=$?
+if [ "$capture_status" -eq 0 ]; then
+  echo "capture karabiner ran on a host that is not a Mac" >&2
+  exit 1
+fi
+printf '%s\n' "$capture_output" | grep -q 'runs on a Mac only'
+capture_payloads_untouched "the host was not a Mac"
+
+# A host that differs in one declared member of each payload, and still holds
+# the undeclared one. The dry run answers the same four questions the other
+# commands answer and writes nothing.
+{
+  printf '{\n'
+  printf '  "machine_specific": {},\n'
+  tail -n +2 "$root/assets/karabiner/karabiner.json"
+} | sed 's/"check_for_updates": false/"check_for_updates": true/' >"$capture_host"
+sed 's/"enabled": false/"enabled": true/' \
+  "$root/assets/karabiner/symbolic-hotkeys.json" >"$capture_hotkeys_host"
+
+capture_before=$(commit_count)
+if ! capture_output=$(run_capture n --dry-run --host "$capture_host" \
+  --hotkeys-host "$capture_hotkeys_host" capture karabiner); then
+  printf '%s\n' "$capture_output" >&2
+  echo "capture karabiner refused a host that drifted from the payloads" >&2
+  exit 1
+fi
+printf '%s\n' "$capture_output" | grep -q '^edit: assets/karabiner/karabiner.json$'
+printf '%s\n' "$capture_output" | grep -q '^edit: assets/karabiner/symbolic-hotkeys.json$'
+printf '%s\n' "$capture_output" | grep -q '^-    "check_for_updates": false$'
+printf '%s\n' "$capture_output" | grep -q '^+    "check_for_updates": true$'
+printf '%s\n' "$capture_output" | grep -q '^-      "enabled": false,$'
+printf '%s\n' "$capture_output" | grep -q '^+      "enabled": true,$'
+printf '%s\n' "$capture_output" | grep -q '^classification: unixlike$'
+printf '%s\n' "$capture_output" | grep -q '^  unixlike:payloads$'
+printf '%s\n' "$capture_output" \
+  | grep -q '^message: feat(unixlike): capture karabiner desired state$'
+# The runtime key is in the host this run read and in neither diff.
+if printf '%s\n' "$capture_output" | grep -q 'machine_specific'; then
+  printf '%s\n' "$capture_output" >&2
+  echo "capture karabiner offered to read an undeclared top-level key back" >&2
+  exit 1
+fi
+capture_payloads_untouched "a dry run described a drifted host"
+
 # ---------------------------------------------------------------------------
 # tool/version-control/commit --publish
 # ---------------------------------------------------------------------------

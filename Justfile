@@ -213,6 +213,11 @@ darwin-generations:
 karabiner-check:
     tool/darwin/karabiner check
 
+# Read this Mac's Karabiner drift back into the payloads and commit it.
+[group('darwin')]
+karabiner-capture *args:
+    tool/version-control/commit {{args}} capture karabiner
+
 # Prove the Karabiner projection tolerates runtime members and refuses drift.
 [group('darwin')]
 karabiner-test:
