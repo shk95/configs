@@ -6,7 +6,7 @@ param(
     [Parameter(ParameterSetName = 'Force')]
     [switch] $Force,
 
-    # Feature selection is resolved by setup.ps1; this entry point only forwards
+    # Feature selection is resolved by setup.ps1; this script only forwards
     # it, so a host cannot be told one thing here and another there.
     [string[]] $Feature,
     [string[]] $Add,

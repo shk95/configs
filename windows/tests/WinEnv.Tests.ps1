@@ -4514,7 +4514,7 @@ Describe 'Windows tree isolation' {
 
 Describe 'check entry points' {
     BeforeAll {
-        $bootstrap = Join-Path $repositoryRoot 'bootstrap.ps1'
+        $bootstrap = Join-Path $repositoryRoot 'tools\bootstrap.ps1'
         $pwshPath = (Get-Process -Id $PID).Path
 
         # Runs the real entry point in a child pwsh with an empty PATH, so no
@@ -4551,7 +4551,7 @@ Describe 'check entry points' {
         # setup.ps1: the one call that ranks the run counts both lists, the
         # sources nobody here could parse and the detections nobody here could
         # decide, and the clean line is suppressed by either (#54).
-        $setup = Join-Path $repositoryRoot 'setup.ps1'
+        $setup = Join-Path $repositoryRoot 'tools\setup.ps1'
         $tokens = $null
         $errors = $null
         $ast = [System.Management.Automation.Language.Parser]::ParseFile($setup, [ref]$tokens, [ref]$errors)
