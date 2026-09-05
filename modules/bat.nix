@@ -29,10 +29,14 @@ _: {
         #
         # `ansi` stays anyway, for the reason that does not depend on any of
         # that: deferral needs no theme at all. It resolves to whatever palette
-        # the terminal declares — Flexoki Light in WezTerm and in the WSL
-        # homes' Windows Terminal, and whichever half of its pair Ghostty is
-        # currently on — so it cannot disagree with a declared terminal, and it
-        # needs no revision when one of them changes. A named theme would.
+        # the terminal declares — Modus Operandi in WezTerm, whatever light
+        # scheme the Windows domain has declared for the WSL homes' Windows
+        # Terminal, and whichever half of its pair Ghostty is currently on —
+        # so it cannot disagree with a declared terminal, and it needs no
+        # revision when one of them changes. A named theme would; the move
+        # from Flexoki Light to Modus Operandi on 2026-09-05 touched every
+        # file that names a scheme and left this line alone, which is the
+        # argument for `ansi` making itself.
         theme = "ansi";
 
         # Default is `full`, which adds a grid, a file header and a line-number

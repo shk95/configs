@@ -174,7 +174,7 @@ in {
 
           # session / monitoring
           tmux
-          btop
+          # btop is modules/btop.nix, which generates its configuration.
           pstree
 
           tree
