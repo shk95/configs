@@ -36,9 +36,9 @@ $drift = [System.Collections.Generic.List[string]]::new()
 $changed = [System.Collections.Generic.List[string]]::new()
 # Sources this host has no parser for. Not drift and not a failure: Apply is a
 # deployment, and refusing it because a validator is absent would make the
-# missing tool look like broken desired state. This list is reported and does
-# not rank; widening the exit contract to cover every undecidable item is
-# tracked separately.
+# missing tool look like broken desired state. They rank the same way the
+# detections below do: with no drift, a source nobody here could parse makes
+# the check unverified rather than verified (#54).
 $unverified = [System.Collections.Generic.List[string]]::new()
 # Detections this host could not decide, as opposed to sources it could not
 # parse: the Appx module failing to load, which says nothing about whether the
@@ -96,7 +96,7 @@ function Write-Summary {
             (($conditionalFiles | ForEach-Object { "$($_.Id) from $($_.Source)" }) -join ', '))
     }
     # An undecided item is not a clean run, so it suppresses the clean line.
-    if (-not $changed.Count -and -not $drift.Count -and -not $unverifiedDetection.Count) {
+    if (-not $changed.Count -and -not $drift.Count -and -not $unverified.Count -and -not $unverifiedDetection.Count) {
         Write-Host '  no changes or drift detected'
     }
 }
@@ -239,14 +239,14 @@ try {
     # One place decides what this run's status is, so Apply and the check rank
     # drift, undecided items, and REQUIRE_NATIVE the same way. Everything that
     # can drift or go undecided has been collected by here.
-    $runStatus = Get-WinEnvCheckStatus -DriftCount $drift.Count -UnverifiedCount $unverifiedDetection.Count -RequireNative:$requireNative
+    $runStatus = Get-WinEnvCheckStatus -DriftCount $drift.Count -UnverifiedCount ($unverified.Count + $unverifiedDetection.Count) -RequireNative:$requireNative
     $mode = if ($Check) { 'check' } else { 'verification' }
     if ($runStatus -eq 1) {
         # The summary comes first on the one path where completeness is the
         # point: the operator loses the selection and the drift list otherwise.
         Write-Summary -Mode $mode
         throw ('Detection could not be completed on this host and REQUIRE_NATIVE is set: ' +
-            ($unverifiedDetection -join '; ') + '.')
+            (@($unverified) + @($unverifiedDetection) -join '; ') + '.')
     }
 
     if (-not $shouldApply) {
