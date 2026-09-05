@@ -80,6 +80,11 @@ native checks instead of treating them as passed.
 - [ ] Every source payload is declared in `assets/payloads.json` and parsed by
       the tool that will consume it. Evaluation is not payload evidence: Nix
       copies these files without reading them.
+- [ ] A key written into a generated configuration exists in the pinned
+      tool's schema at the locked version, and a tool that rewrites its own
+      configuration in place was started once against the rendered file —
+      Home Manager installs that file as a read-only store symlink, so an
+      in-place migration fails closed (INV unixlike/generated-config-key-in-schema).
 - [ ] Activation is performed only when explicitly requested.
 - [ ] Runtime claims name the host on which they were observed.
 - [ ] A `unixlike-v...` tag is assigned only after required native evidence
