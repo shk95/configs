@@ -69,7 +69,7 @@ stays one until that Mac's own `check` confirms it. Because an activation
 replaces the declared top-level keys wholesale, this branch requires
 `just karabiner-check` and, on drift, `just karabiner-capture` before the
 first activation, so that desired state holds the host's own values first. No
-Darwin build, no `check` against a real host and no activation has been
+Darwin build, no `check` against a real host and no activation have been
 performed here. The `INV unixlike/generated-config-key-in-schema` item —
 Karabiner observed reading the delivered file once — is possible only after
 activation and is owed with #178.

@@ -285,6 +285,14 @@ done
 group=$1
 shift
 
+# --host and --hotkeys-host describe a read only capture karabiner performs.
+# Accepting them silently elsewhere would let a run look configured when
+# nothing consulted them. Asked here, above prune's early exit below, so that
+# every command answers it rather than only the ones that fall through.
+if [ "$group" != capture ] && { [ -n "$karabiner_host" ] || [ -n "$karabiner_hotkeys_host" ]; }; then
+  usage
+fi
+
 # prune has no templated edit, no owning scope, and no branch of its own: it
 # is a standalone maintenance sweep sharing prune_branches with --publish's
 # preflight, so none of the machinery below (topic, scope, the master and
@@ -340,13 +348,6 @@ case $group in
     ;;
   *) usage ;;
 esac
-
-# --host and --hotkeys-host describe a read only capture karabiner performs.
-# Accepting them silently elsewhere would let a run look configured when
-# nothing consulted them.
-if [ "$group" != capture ] && { [ -n "$karabiner_host" ] || [ -n "$karabiner_hotkeys_host" ]; }; then
-  usage
-fi
 
 # A name reaches a Nix string literal and a shell argument list. Keep it to what
 # Homebrew and flake inputs actually spell.
@@ -443,14 +444,22 @@ esac
 # one scope, has no single branch to be published from. capture writes two
 # payloads rather than one, so both are asked at once: two scopes would print
 # two lines and be refused below, which is the right answer.
+# scope_paths is what the refusal below names: every path the question was
+# asked about, not just the first of them.
 case $group in
-  capture) scope=$("$classify" --files "$karabiner_payload" "$karabiner_hotkeys") ;;
-  *) scope=$("$classify" --files "$target") ;;
+  capture)
+    scope_paths="$karabiner_payload $karabiner_hotkeys"
+    scope=$("$classify" --files "$karabiner_payload" "$karabiner_hotkeys")
+    ;;
+  *)
+    scope_paths=$target
+    scope=$("$classify" --files "$target")
+    ;;
 esac
 case $scope in
   unixlike | windows | common | repository) ;;
   *)
-    refuse "$target has no owning scope: $(printf '%s' "$scope" | tr '\n' ' ')" \
+    refuse "$scope_paths has no owning scope: $(printf '%s' "$scope" | tr '\n' ' ')" \
       "Update tool/version-control/classify before committing it. Both gates reject an unclassified path, and a path owned by more than one scope has no single branch to publish from."
     ;;
 esac

@@ -1569,6 +1569,25 @@ fi
   cd "$commit_root" && "$audit"
 ) >/dev/null
 
+# A uname stub proves a platform guard without depending on which platform
+# runs this suite, which is the only way a guard's own case can hold on both
+# sides of it. It answers `-s` and nothing else, because that is all the helper
+# ever asks. Two guards use it: capture karabiner's Darwin guard below, and
+# --publish's refusal on native Windows further down.
+uname_stub() {
+  # $1: directory to create the stub in. $2: what `uname -s` reports there.
+  mkdir -p "$1"
+  cat >"$1/uname" <<STUB
+#!/bin/sh
+if [ "\$1" = -s ]; then
+  printf '%s\n' '$2'
+else
+  exit 1
+fi
+STUB
+  chmod +x "$1/uname"
+}
+
 # ---------------------------------------------------------------------------
 # tool/version-control/commit capture karabiner
 # ---------------------------------------------------------------------------
@@ -1639,22 +1658,33 @@ capture_payloads_untouched "the host matched the payloads"
 
 # The same command on a host that is not a Mac refuses before it reads
 # anything: the projection of a host that holds no Karabiner state would
-# capture the payloads away.
+# capture the payloads away. The platform comes from a uname stub rather than
+# from whatever runs this suite, so the case holds on the Mac this feature
+# targets as well; on that host the real uname would pass the guard, the run
+# would reach the still-matching host above, and this would be asserting the
+# refusal of the case before it.
+uname_stub "$commit_root/stub-uname" Linux
 capture_status=0
 capture_output=$(
   printf 'n\n' | (
     unset GIT_DIR GIT_WORK_TREE GIT_INDEX_FILE KARABINER_PLATFORM
     cd "$commit_root" || exit 1
-    PATH="$commit_stub_path:$PATH" tool/version-control/commit --dry-run \
+    PATH="$commit_root/stub-uname:$commit_stub_path:$PATH" \
+      tool/version-control/commit --dry-run \
       --host "$capture_host" --hotkeys-host "$capture_hotkeys_host" \
       capture karabiner 2>&1
   )
 ) || capture_status=$?
 if [ "$capture_status" -eq 0 ]; then
+  printf '%s\n' "$capture_output" >&2
   echo "capture karabiner ran on a host that is not a Mac" >&2
   exit 1
 fi
-printf '%s\n' "$capture_output" | grep -q 'runs on a Mac only'
+if ! printf '%s\n' "$capture_output" | grep -q 'runs on a Mac only'; then
+  printf '%s\n' "$capture_output" >&2
+  echo "capture karabiner refused a host that is not a Mac for another reason" >&2
+  exit 1
+fi
 capture_payloads_untouched "the host was not a Mac"
 
 # A host that differs in one declared member of each payload, and still holds
@@ -2029,27 +2059,13 @@ publish_wrote_nothing "refusing on master"
 publish_git switch -q dev
 
 # #90: --publish is a Unix-like flow with a PowerShell counterpart in
-# windows/tools/capture.ps1. A uname stub proves the platform guard without
-# depending on which platform runs this suite. It only ever answers `-s`,
-# which is all the helper asks it.
-publish_uname_stub() {
-  # $1: directory to create the stub in. $2: what `uname -s` reports there.
-  mkdir -p "$1"
-  cat >"$1/uname" <<STUB
-#!/bin/sh
-if [ "\$1" = -s ]; then
-  printf '%s\n' '$2'
-else
-  exit 1
-fi
-STUB
-  chmod +x "$1/uname"
-}
+# windows/tools/capture.ps1, and uname_stub above proves that guard the same
+# way the capture cases prove theirs.
 
 # Positive: a Unix-like uname still reaches the ordinary preflight, gh
 # included.
 for publish_uname_os in Linux Darwin; do
-  publish_uname_stub "$publish_root/stub-uname-ok" "$publish_uname_os"
+  uname_stub "$publish_root/stub-uname-ok" "$publish_uname_os"
   publish_snapshot
   publish_path="$publish_root/stub-uname-ok:$publish_root/stub:$PATH"
   if ! ok_out=$(run_publish n --dry-run --publish cask add "of$publish_uname_os"); then
@@ -2066,7 +2082,7 @@ done
 # Negative: every kernel string the guard's case pattern names refuses before
 # gh is consulted at all, with a message pointing at the Windows counterpart.
 for publish_uname_win in MINGW64_NT-10.0-19045 MSYS_NT-10.0-19045 CYGWIN_NT-10.0; do
-  publish_uname_stub "$publish_root/stub-uname-win" "$publish_uname_win"
+  uname_stub "$publish_root/stub-uname-win" "$publish_uname_win"
   publish_snapshot
   publish_path="$publish_root/stub-uname-win:$publish_root/stub:$PATH"
   if win_out=$(run_publish y --publish cask add "wf${publish_uname_win%%_*}"); then

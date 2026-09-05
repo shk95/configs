@@ -3,6 +3,7 @@ statement: A payload the host application rewrites in place is compared, applied
 rationale: docs/architecture.md § Unix-like domain
 enforced-by: tool tool/darwin/karabiner
 enforced-by: fixture tool/checks/karabiner-test
+enforced-by: fixture tool/version-control/test
 decision: docs/decisions/karabiner-desired-state-by-projection.md § Karabiner desired state is compared and applied by projection
 
 Most Unix-like payloads are delivered as a link into the Nix store, so the
@@ -21,7 +22,9 @@ beneath it, and an undeclared member of the same document is left where it is.
 The fixture holds both directions, because either half alone is useless. A
 projection that reported the host's own runtime members would make every
 application save a drift; one that missed a changed declared member would make
-the payload decorative.
+the payload decorative. The capture direction has a fixture of its own in
+`tool/version-control/test`, because the command that reads a projection back
+into the payloads is the commit helper rather than the projection tool.
 
 The first payload under this rule is Karabiner's, and the same rule covers the
 symbolic hotkey entries the input-source toggle depends on: there the declared
