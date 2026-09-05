@@ -460,10 +460,10 @@ function Get-WinEnvAppxPresence {
 }
 
 function Get-WinEnvAppxVersion {
-    # The same three answers as Get-WinEnvAppxPresence, for the one question
-    # that needs the package's version rather than its presence. An absent
-    # package is Usable with no Version; a module that could not be loaded is
-    # not Usable, and Version is not representable then.
+    # Get-WinEnvAppxPresence's three answers, for the one question that needs
+    # the package's version as well: Present and Version are $null when the
+    # module could not be loaded, and an absent package is Usable, not
+    # Present, with no Version.
     param(
         [Parameter(Mandatory, Position = 0)][string] $Name,
         [scriptblock] $Query = $script:DefaultAppxQuery
@@ -476,6 +476,7 @@ function Get-WinEnvAppxVersion {
         return [pscustomobject]@{
             Name    = $Name
             Usable  = $true
+            Present = [bool]$package
             Version = $version
             Reason  = $null
         }
@@ -484,6 +485,7 @@ function Get-WinEnvAppxVersion {
         return [pscustomobject]@{
             Name    = $Name
             Usable  = $false
+            Present = $null
             Version = $null
             Reason  = $_.Exception.Message
         }
@@ -3358,6 +3360,10 @@ function Get-WinEnvTerminalDelegationSupport {
     param(
         [AllowNull()][Nullable[int]] $Build,
         [AllowNull()][Nullable[int]] $Revision,
+        # $true or $false when the Appx route answered, $null when it could
+        # not: an absent Windows Terminal is a decided side of the boundary,
+        # a module that would not load is not.
+        [AllowNull()][Nullable[bool]] $TerminalPresent,
         [AllowNull()][version] $TerminalVersion
     )
     $boundary = $script:TerminalDelegationBoundary
@@ -3383,6 +3389,12 @@ function Get-WinEnvTerminalDelegationSupport {
         }
     }
 
+    if ($null -eq $TerminalPresent) {
+        return [pscustomobject]@{ Supported = $null; Reason = 'the Windows Terminal version could not be determined' }
+    }
+    if (-not $TerminalPresent) {
+        return [pscustomobject]@{ Supported = $false; Reason = 'Windows Terminal is not installed' }
+    }
     if ($null -eq $TerminalVersion) {
         return [pscustomobject]@{ Supported = $null; Reason = 'the Windows Terminal version could not be determined' }
     }
@@ -3408,23 +3420,30 @@ function Test-WinEnvTerminalDelegation {
     param(
         [Parameter(Mandatory)][hashtable] $Terminal,
         [scriptblock] $ReadBack = $script:DefaultDelegationReadBack,
-        [Nullable[int]] $Build = (Get-WinEnvWindowsBuild),
+        [AllowNull()][Nullable[int]] $Build = (Get-WinEnvWindowsBuild),
         [scriptblock] $RevisionQuery = $script:DefaultRevisionQuery,
         [scriptblock] $AppxQuery = $script:DefaultAppxQuery
     )
     $boundary = $script:TerminalDelegationBoundary
 
-    $key = & $ReadBack
+    # A read-back that throws is a key that could not be read, which is not
+    # the declared values: drift, the same as an absent key.
+    try { $key = & $ReadBack } catch { $key = $null }
     $matches = [bool]($key -and $key.DelegationTerminal -eq $Terminal.DelegationTerminal -and $key.DelegationConsole -eq $Terminal.DelegationConsole)
 
     $revision = $null
     if ($Build -eq $boundary.Windows10Build) {
         try { $revision = [int](& $RevisionQuery) } catch { $revision = $null }
     }
+    $terminalPresent = $null
     $terminalVersion = $null
     $probe = Get-WinEnvAppxVersion -Name $boundary.TerminalAppxName -Query $AppxQuery
-    if ($probe.Usable) { $terminalVersion = $probe.Version }
-    $support = Get-WinEnvTerminalDelegationSupport -Build $Build -Revision $revision -TerminalVersion $terminalVersion
+    if ($probe.Usable) {
+        $terminalPresent = $probe.Present
+        $terminalVersion = $probe.Version
+    }
+    $support = Get-WinEnvTerminalDelegationSupport -Build $Build -Revision $revision `
+        -TerminalPresent $terminalPresent -TerminalVersion $terminalVersion
 
     $unverified = $null
     if ($support.Supported -ne $true) {

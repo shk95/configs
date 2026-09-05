@@ -2088,39 +2088,44 @@ Describe 'terminal delegation boundary' {
     }
 
     It 'INV windows/support-boundary-named: decides the documented condition, not the write' {
-        (Get-WinEnvTerminalDelegationSupport -Build $Windows11_24H2 -Revision $null -TerminalVersion $Terminal117).Supported | Should -Be $true
+        (Get-WinEnvTerminalDelegationSupport -Build $Windows11_24H2 -Revision $null -TerminalPresent $true -TerminalVersion $Terminal117).Supported | Should -Be $true
         # The bound is inclusive: Windows 11 22H2 itself is supported.
-        (Get-WinEnvTerminalDelegationSupport -Build $Windows11_22H2 -Revision $null -TerminalVersion $Terminal117).Supported | Should -Be $true
+        (Get-WinEnvTerminalDelegationSupport -Build $Windows11_22H2 -Revision $null -TerminalPresent $true -TerminalVersion $Terminal117).Supported | Should -Be $true
         # Windows 11, and still below it: the condition is a build, not a release name.
-        $win11_21h2 = Get-WinEnvTerminalDelegationSupport -Build $Windows11_21H2 -Revision $null -TerminalVersion $Terminal117
+        $win11_21h2 = Get-WinEnvTerminalDelegationSupport -Build $Windows11_21H2 -Revision $null -TerminalPresent $true -TerminalVersion $Terminal117
         $win11_21h2.Supported | Should -Be $false
         $win11_21h2.Reason | Should -Match 'below'
 
         # Windows 10 22H2 is supported only from revision 3031 (KB5026435).
-        (Get-WinEnvTerminalDelegationSupport -Build $Windows10_22H2 -Revision 3031 -TerminalVersion $Terminal117).Supported | Should -Be $true
-        $behind = Get-WinEnvTerminalDelegationSupport -Build $Windows10_22H2 -Revision 3030 -TerminalVersion $Terminal117
+        (Get-WinEnvTerminalDelegationSupport -Build $Windows10_22H2 -Revision 3031 -TerminalPresent $true -TerminalVersion $Terminal117).Supported | Should -Be $true
+        $behind = Get-WinEnvTerminalDelegationSupport -Build $Windows10_22H2 -Revision 3030 -TerminalPresent $true -TerminalVersion $Terminal117
         $behind.Supported | Should -Be $false
         $behind.Reason | Should -Match '19045\.3031'
-        (Get-WinEnvTerminalDelegationSupport -Build $Windows10_21H2 -Revision 9999 -TerminalVersion $Terminal117).Supported | Should -Be $false
+        (Get-WinEnvTerminalDelegationSupport -Build $Windows10_21H2 -Revision 9999 -TerminalPresent $true -TerminalVersion $Terminal117).Supported | Should -Be $false
 
         # Windows Terminal below 1.17 is below the boundary on any build.
-        $old = Get-WinEnvTerminalDelegationSupport -Build $Windows11_24H2 -Revision $null -TerminalVersion $Terminal116
+        $old = Get-WinEnvTerminalDelegationSupport -Build $Windows11_24H2 -Revision $null -TerminalPresent $true -TerminalVersion $Terminal116
         $old.Supported | Should -Be $false
         $old.Reason | Should -Match '1\.17'
     }
 
     It 'INV windows/support-boundary-named: an observation it cannot make is undecided, not a side' {
-        $noBuild = Get-WinEnvTerminalDelegationSupport -Build $null -Revision $null -TerminalVersion $Terminal117
+        $noBuild = Get-WinEnvTerminalDelegationSupport -Build $null -Revision $null -TerminalPresent $true -TerminalVersion $Terminal117
         ($null -eq $noBuild.Supported) | Should -Be $true
         $noBuild.Reason | Should -Match 'build'
 
-        $noRevision = Get-WinEnvTerminalDelegationSupport -Build $Windows10_22H2 -Revision $null -TerminalVersion $Terminal117
+        $noRevision = Get-WinEnvTerminalDelegationSupport -Build $Windows10_22H2 -Revision $null -TerminalPresent $true -TerminalVersion $Terminal117
         ($null -eq $noRevision.Supported) | Should -Be $true
         $noRevision.Reason | Should -Match 'revision'
 
-        $noTerminal = Get-WinEnvTerminalDelegationSupport -Build $Windows11_24H2 -Revision $null -TerminalVersion $null
+        $noTerminal = Get-WinEnvTerminalDelegationSupport -Build $Windows11_24H2 -Revision $null -TerminalPresent $null -TerminalVersion $null
         ($null -eq $noTerminal.Supported) | Should -Be $true
         $noTerminal.Reason | Should -Match 'Windows Terminal'
+
+        # An absent Windows Terminal is decided, and it is the lower side.
+        $absent = Get-WinEnvTerminalDelegationSupport -Build $Windows11_24H2 -Revision $null -TerminalPresent $false -TerminalVersion $null
+        $absent.Supported | Should -Be $false
+        $absent.Reason | Should -Match 'not installed'
     }
 
     It 'INV windows/support-boundary-named: a read-back the host accepts below the boundary is unverified, never verified' {
@@ -2160,21 +2165,31 @@ Describe 'terminal delegation boundary' {
         (Test-Delegation -Build $Windows10_21H2 -RevisionQuery $RevisionUnreadable).Unverified | Should -Match 'below'
     }
 
-    It 'reports an undecidable or absent Windows Terminal version as undecided and an old one as below' {
+    It 'reports an undecidable Windows Terminal as undecided, and an absent or old one as below' {
         $unusable = Test-Delegation -AppxQuery $TerminalUnusableQuery
+        ($null -eq $unusable.Supported) | Should -Be $true
         $unusable.Unverified | Should -Match 'Windows Terminal'
         $unusable.Unverified | Should -Match 'could not be loaded'
-        (Test-Delegation -AppxQuery $TerminalAbsentQuery).Unverified | Should -Match 'Windows Terminal'
+        $absent = Test-Delegation -AppxQuery $TerminalAbsentQuery
+        $absent.Supported | Should -Be $false
+        $absent.Unverified | Should -Match 'not installed'
         (Test-Delegation -AppxQuery $Terminal116Query).Unverified | Should -Match '1\.17'
+    }
+
+    It 'treats a read-back that throws as drift rather than aborting' {
+        $result = Test-Delegation -ReadBack { throw 'Requested registry access is not allowed.' }
+        $result.Matches | Should -Be $false
     }
 
     It 'distinguishes a version, an absent package and an unusable module' {
         $present = Get-WinEnvAppxVersion -Name 'Microsoft.WindowsTerminal' -Query $Terminal117Query
         $present.Usable | Should -Be $true
         $present.Version | Should -Be ([version]'1.17.11461.0')
+        $present.Present | Should -Be $true
 
         $absent = Get-WinEnvAppxVersion -Name 'Microsoft.WindowsTerminal' -Query $TerminalAbsentQuery
         $absent.Usable | Should -Be $true
+        $absent.Present | Should -Be $false
         ($null -eq $absent.Version) | Should -Be $true
 
         $unusable = Get-WinEnvAppxVersion -Name 'Microsoft.WindowsTerminal' -Query $TerminalUnusableQuery
@@ -4528,5 +4543,38 @@ Describe 'check entry points' {
 
     It 'INV windows/check-exit-contract: turns a missing prerequisite into a failure when native evidence is required' {
         Invoke-BootstrapCheck -RequireNative '1' | Should -Be 1
+    }
+
+    It 'INV windows/check-exit-contract: ranks a source no parser could read beside an undecided detection' {
+        # The check path past the prerequisites needs a Windows host (the
+        # registry, the font store, WinGet), so the wiring is held by reading
+        # setup.ps1: the one call that ranks the run counts both lists, the
+        # sources nobody here could parse and the detections nobody here could
+        # decide, and the clean line is suppressed by either (#54).
+        $setup = Join-Path $repositoryRoot 'setup.ps1'
+        $tokens = $null
+        $errors = $null
+        $ast = [System.Management.Automation.Language.Parser]::ParseFile($setup, [ref]$tokens, [ref]$errors)
+        $errors.Count | Should -Be 0
+        $calls = @($ast.FindAll({
+                    param($node)
+                    $node -is [System.Management.Automation.Language.CommandAst] -and
+                    $node.GetCommandName() -eq 'Get-WinEnvCheckStatus'
+                }, $true))
+        $calls.Count | Should -Be 1
+        $arguments = $calls[0].CommandElements | ForEach-Object { $_.Extent.Text }
+        $unverifiedCount = $arguments[([array]::IndexOf($arguments, '-UnverifiedCount') + 1)]
+        $unverifiedCount | Should -Match '\$unverified\.Count'
+        $unverifiedCount | Should -Match '\$unverifiedDetection\.Count'
+
+        $cleanLine = @($ast.FindAll({
+                    param($node)
+                    $node -is [System.Management.Automation.Language.IfStatementAst] -and
+                    $node.Extent.Text -match "no changes or drift detected"
+                }, $true))
+        $cleanLine.Count | Should -Be 1
+        $condition = $cleanLine[0].Clauses[0].Item1.Extent.Text
+        $condition | Should -Match '\$unverified\.Count'
+        $condition | Should -Match '\$unverifiedDetection\.Count'
     }
 }
