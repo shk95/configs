@@ -26,8 +26,10 @@ unixlike
   assets/                     Unix-like source payloads
 
 windows
+  windows/win-env.ps1         the one entry point: check, apply, capture, validate, test, setup-dev, font
   windows/desired/            native manifest and owned payloads
   windows/src/                PowerShell reconciliation engine
+  windows/tools/              the scripts the entry point runs
   windows/tests/              native Windows tests
 
 common
@@ -157,14 +159,23 @@ repeats the names so a maintainer can find them without opening a Nix module.
 
 ## Windows
 
-From native Windows:
+From native Windows, `windows\win-env.ps1` is the one entry point. Each verb
+runs one script under `windows\tools\` and returns that script's exit status
+unchanged; `win-env.ps1 help` prints the table.
 
 ```powershell
-.\windows\tools\setup-dev.ps1
-.\windows\tools\check-desired-state.ps1
-.\windows\tools\test.ps1
-.\windows\bootstrap.ps1 -Check
+.\windows\win-env.ps1 setup-dev    # tools\setup-dev.ps1: install the contributor toolchain
+.\windows\win-env.ps1 validate     # tools\check-desired-state.ps1: parse every declared payload
+.\windows\win-env.ps1 test         # tools\test.ps1: the Pester suite
+.\windows\win-env.ps1 check        # tools\bootstrap.ps1 -Check: read-only, is an Apply needed
+.\windows\win-env.ps1 font         # tools\Test-FontRendering.ps1: the glyph check
 ```
+
+Arguments after the verb reach the script unchanged, so `check -Feature
+terminal` and `capture -Feature powertoys -Publish` mean what the sections
+below say. A verb it does not know is refused with exit status 64, which no
+check outcome uses. CI and the hooks call the scripts under `windows\tools\`
+directly; the entry point forwards to the same files.
 
 `setup-dev.ps1` installs the contributor toolchain once, from
 `windows/toolchain.json`. CI installs from the same declaration, so local
@@ -194,7 +205,7 @@ item into a failure.
 `-Check` never installs or changes anything. Apply is explicit:
 
 ```powershell
-.\windows\bootstrap.ps1
+.\windows\win-env.ps1 apply
 ```
 
 Apply remains idempotent, preserves first-original-file backups under
@@ -208,11 +219,11 @@ declares features, every package and managed file belongs to exactly one of
 them, and a host picks how many it deploys:
 
 ```powershell
-.\windows\bootstrap.ps1 -Minimal              # core only: PowerShell 7 and the managed profile
-.\windows\bootstrap.ps1 -Feature terminal     # exactly this set, plus what it declares it needs
-.\windows\bootstrap.ps1 -Add powertoys        # union with what this host already applied
-.\windows\bootstrap.ps1 -All                  # everything the manifest declares
-.\windows\bootstrap.ps1 -Check                # verify the selection this host recorded
+.\windows\win-env.ps1 apply -Minimal              # core only: PowerShell 7 and the managed profile
+.\windows\win-env.ps1 apply -Feature terminal     # exactly this set, plus what it declares it needs
+.\windows\win-env.ps1 apply -Add powertoys        # union with what this host already applied
+.\windows\win-env.ps1 apply -All                  # everything the manifest declares
+.\windows\win-env.ps1 check                       # verify the selection this host recorded
 ```
 
 The features are `core` (required), `font`, `zellij`, `terminal`, `wezterm`,
@@ -260,7 +271,7 @@ version is `10` on Windows 10 and Windows 11 alike and is never compared.
 A host that crosses the bound later, because Windows Update moved it, is not
 redeployed on its own: the desired state did not change, only the host did.
 `-Check` reports it as `wslConfig settings` drift and exits 2, and
-`.\windows\bootstrap.ps1 -Force` writes the payload the new build honours.
+`.\windows\win-env.ps1 apply -Force` writes the payload the new build honours.
 
 `.wslconfig` is read by the WSL VM only when it starts, and these commands never
 restart it, so a passing check means the file on disk matches the payload this
@@ -276,12 +287,12 @@ PowerShell profile, `.wslconfig` or Zellij becomes desired state with one
 command and one confirmation:
 
 ```powershell
-.\windows\tools\capture.ps1                          # every feature this host applied
-.\windows\tools\capture.ps1 -Feature powertoys       # one feature
-.\windows\tools\capture.ps1 -Id windowsTerminal      # one managed file
-.\windows\tools\capture.ps1 -Publish                  # commit it and take it to dev
-.\windows\tools\capture.ps1 -Branch fix/windows-font # override the branch name below
-.\windows\tools\capture.ps1 -WhatIf                  # decide and diff, write nothing
+.\windows\win-env.ps1 capture                          # every feature this host applied
+.\windows\win-env.ps1 capture -Feature powertoys       # one feature
+.\windows\win-env.ps1 capture -Id windowsTerminal      # one managed file
+.\windows\win-env.ps1 capture -Publish                 # commit it and take it to dev
+.\windows\win-env.ps1 capture -Branch fix/windows-font # override the branch name below
+.\windows\win-env.ps1 capture -WhatIf                  # decide and diff, write nothing
 ```
 
 Drift is decided by the comparison `-Check` already uses. Each drifted managed
