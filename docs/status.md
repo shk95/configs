@@ -78,7 +78,9 @@ PowerShell 7 is missing, or 1 under `REQUIRE_NATIVE=1`
 (`INV windows/check-exit-contract`). Since 2026-09-05 a selected source no
 parser here could read, and a default terminal delegation the host is below
 the documented boundary for or cannot be decided against it, rank the same
-way (#53, #54).
+way (#53, #54). Since 2026-09-05 `windows/win-env.ps1` is the domain's one
+entry point, and `bootstrap.ps1` and `setup.ps1` sit under `windows/tools/`
+(`docs/decisions/windows-entry-point-in-domain.md`).
 
 ### Windows 10 support boundary
 

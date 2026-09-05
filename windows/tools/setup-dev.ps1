@@ -65,3 +65,4 @@ $userPath = [Environment]::GetEnvironmentVariable('Path', 'User')
 $env:Path = "$machinePath;$userPath;$env:Path"
 
 Write-Host 'Contributor toolchain is ready.'
+exit 0

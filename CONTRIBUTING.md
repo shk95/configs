@@ -252,11 +252,17 @@ and are validated on native Windows.
 Native read-only verification is:
 
 ```powershell
-.\windows\tools\setup-dev.ps1
-.\windows\tools\check-desired-state.ps1
-.\windows\tools\test.ps1
-.\windows\bootstrap.ps1 -Check
+.\windows\win-env.ps1 setup-dev
+.\windows\win-env.ps1 validate
+.\windows\win-env.ps1 test
+.\windows\win-env.ps1 check
 ```
+
+`win-env.ps1` is the domain's one entry point: each verb runs one script under
+`windows/tools/` (`setup-dev.ps1`, `check-desired-state.ps1`, `test.ps1`,
+`bootstrap.ps1 -Check`) and returns that script's exit status unchanged, so
+the evidence a verb produces is the script's; a command the script refuses
+ends the run at 1. CI and the hooks run those scripts directly.
 
 A branch that has not been pushed yet can still reach a native Windows
 clone of this repository through the filesystem: in that clone, fetch the
@@ -276,7 +282,7 @@ remains pushable from a clone that has not installed anything.
 Apply is a deployment, not verification, and requires an explicit request:
 
 ```powershell
-.\windows\bootstrap.ps1
+.\windows\win-env.ps1 apply
 ```
 
 A host may deploy part of the manifest with `-Minimal`, `-Feature`, `-Add`, or
@@ -287,7 +293,8 @@ produced any `-Check` or Apply evidence, because a check that passed under a
 minimal selection says nothing about the features it excluded.
 
 A change made in an application's own UI moves back into desired state with
-`.\windows\tools\capture.ps1`, which reads the managed targets, writes only
+`.\windows\win-env.ps1 capture` (`windows/tools/capture.ps1`), which reads the
+managed targets, writes only
 this repository's payloads — a JSON payload pretty-printed to this
 repository's two-space style — and ends at one confirmation before committing.
 Preview it with `-WhatIf` first. It restates the guards of
