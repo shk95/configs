@@ -1150,8 +1150,30 @@ if ! awk '/zzz = 999999999;/ { getline; if ($0 == "") found = 1 } END { exit !fo
   exit 1
 fi
 
+# Removal matches a whole name, never a substring (#99). With "page" declared
+# beside "pages", removing either leaves the other: removing "page" catches a
+# matcher that asks whether the item is inside the name, and removing "pages"
+# below catches the reversed question. The presence guard cannot prove either,
+# because it answers before the editor runs.
+if ! run_commit y mas add page 100000001 >/dev/null; then
+  echo "the commit helper refused a mas addition whose name prefixes a live one" >&2
+  exit 1
+fi
+if ! run_commit y mas remove page >/dev/null; then
+  echo "the commit helper refused to remove a mas app whose name prefixes a live one" >&2
+  exit 1
+fi
+if [ "$(masapps_main_now)" != 'keynote microsoft-onedrive pages zzz ' ]; then
+  echo "commit helper removed more than the named mas app: $(masapps_main_now)" >&2
+  exit 1
+fi
+if ! run_commit y mas add page 100000001 >/dev/null; then
+  echo "the commit helper refused to re-add a removed mas app" >&2
+  exit 1
+fi
+
 # A removed entry leaves the section it was in; both the main block and the
-# safari section are candidates.
+# safari section are candidates. "page" survives the removal of "pages".
 if ! run_commit y mas remove pages >/dev/null; then
   echo "the commit helper refused a valid mas removal from the main block" >&2
   exit 1
@@ -1161,8 +1183,16 @@ if [ "$(commit_git show -s --format=%s HEAD)" \
   echo "commit helper used an unexpected message for a mas removal" >&2
   exit 1
 fi
-if [ "$(masapps_main_now)" != 'keynote microsoft-onedrive zzz ' ]; then
+if [ "$(masapps_main_now)" != 'keynote microsoft-onedrive page zzz ' ]; then
   echo "commit helper did not remove the expected mas app: $(masapps_main_now)" >&2
+  exit 1
+fi
+if ! run_commit y mas remove page >/dev/null; then
+  echo "the commit helper refused to remove the surviving mas app" >&2
+  exit 1
+fi
+if [ "$(masapps_main_now)" != 'keynote microsoft-onedrive zzz ' ]; then
+  echo "commit helper left the main block in an unexpected state: $(masapps_main_now)" >&2
   exit 1
 fi
 
@@ -2148,6 +2178,16 @@ run_prune() {
   )
 }
 
+# The same run with only stdout kept: `pruned: <name>` lines are stdout, a
+# warning is stderr, and a script reading the first must never meet the second.
+run_prune_stdout() {
+  (
+    unset GIT_DIR GIT_WORK_TREE GIT_INDEX_FILE
+    cd "$publish_root" || exit 1
+    PATH="$publish_path" tool/version-control/commit "$@" 2>/dev/null
+  )
+}
+
 publish_git switch -q dev
 # Identical to dev's tip, so trivially an ancestor of origin/dev: exactly the
 # shape a merged pull request leaves behind once its remote branch is gone.
@@ -2174,6 +2214,10 @@ if [ "$(printf '%s\n' "$prune_out" | grep -c '^pruned: ')" != 1 ]; then
   exit 1
 fi
 printf '%s\n' "$prune_out" | grep -q '^pruned: prune-merged$'
+if printf '%s\n' "$prune_out" | grep -q 'could not be fetched'; then
+  echo "commit prune warned about a fetch that succeeded" >&2
+  exit 1
+fi
 if printf '%s\n' "$prune_branches_after" | grep -qx refs/heads/prune-merged; then
   echo "commit prune left a merged branch behind" >&2
   exit 1
@@ -2221,6 +2265,50 @@ fi
 publish_git worktree remove -f "$publish_worktree"
 publish_git branch -q -D prune-locked
 publish_git switch -q dev
+
+# A fetch that fails (#108): the standalone prune says so in one line and
+# still exits 0, because a manual sweep that found nothing to prune and one
+# that could not look are otherwise the same silence. It deletes nothing on
+# that ground, even a branch the stale origin/dev already contains. --publish
+# keeps the same failure silent: its sweep is opportunistic, and the fetch of
+# origin/dev that follows refuses with the remote's own error before anything
+# is written.
+publish_git branch prune-unfetched dev
+publish_git remote set-url origin "$test_root/no-such-remote"
+if ! prune_unfetched_out=$(run_prune prune); then
+  echo "commit prune failed outright when origin could not be fetched" >&2
+  exit 1
+fi
+printf '%s\n' "$prune_unfetched_out" | grep -q 'origin could not be fetched'
+if printf '%s\n' "$prune_unfetched_out" | grep -q '^pruned: '; then
+  echo "commit prune deleted a branch on a fetch it could not make" >&2
+  exit 1
+fi
+if ! publish_git show-ref --verify --quiet refs/heads/prune-unfetched; then
+  echo "commit prune deleted a branch without a fresh origin/dev to prove it against" >&2
+  exit 1
+fi
+if [ -n "$(run_prune_stdout prune)" ]; then
+  echo "commit prune wrote its warning to stdout, where pruned: lines are read" >&2
+  exit 1
+fi
+publish_snapshot
+if publish_unfetched_out=$(run_publish y --publish cask add uf); then
+  echo "commit --publish reached a remote that does not exist" >&2
+  exit 1
+fi
+if printf '%s\n' "$publish_unfetched_out" | grep -q 'could not be fetched'; then
+  echo "commit --publish warned about a fetch its sweep keeps silent" >&2
+  exit 1
+fi
+printf '%s\n' "$publish_unfetched_out" | grep -q 'git fetch origin dev failed'
+publish_wrote_nothing "origin could not be fetched"
+if ! publish_git show-ref --verify --quiet refs/heads/prune-unfetched; then
+  echo "commit --publish deleted a branch without a fresh origin/dev to prove it against" >&2
+  exit 1
+fi
+publish_git remote set-url origin "$publish_remote"
+publish_git branch -q -D prune-unfetched
 
 # ---------------------------------------------------------------------------
 # core.hooksPath resolution in tool/setup and tool/doctor.sh

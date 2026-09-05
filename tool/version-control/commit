@@ -144,9 +144,9 @@ its own.
 
 prune deletes a local branch only once it is an ancestor of origin/dev, and
 never the current branch, dev, or master; a failed delete (checked out in
-another worktree, for instance) is skipped rather than reported. --publish
-runs the same sweep first, so a merged branch does not wait for a manual
-prune.
+another worktree, for instance) is skipped rather than reported. When origin
+cannot be fetched, prune says so and deletes nothing. --publish runs the same
+sweep first, silently, so a merged branch does not wait for a manual prune.
 
 On dev the helper first creates feature/<scope>-<topic> from origin/dev; on any
 other branch it commits where it is. The change is always confirmed
@@ -181,15 +181,26 @@ refuse() {
 # current branch, dev and master are refused by name before that question is
 # even asked, so switching HEAD or losing either is never on the table.
 #
-# This is maintenance, not a gate: a fetch that fails, an ancestor check that
-# comes back false, or a delete git refuses are all left alone without a
-# word, never reported and never fatal. git branch -d checks a branch's own
+# This is maintenance, not a gate: an ancestor check that comes back false or
+# a delete git refuses is left alone without a word, never reported and never
+# fatal. A fetch that fails ends the sweep before any branch is judged, since
+# the proof above needs a fresh origin/dev. On --publish that too is silent:
+# the sweep is opportunistic there, and create_publish_branch's own fetch of
+# origin/dev refuses with the remote's error a step later, before any write.
+# The standalone prune says so in one line and still exits 0 (#108),
+# because a manual sweep that found nothing to prune and one that could not
+# look are otherwise the same silence. git branch -d checks a branch's own
 # upstream (or HEAD, absent one), which is not the origin/dev proof this
 # already did, so it is not trusted here; -D deletes on that proof alone. A
 # worktree checkout is the one thing neither flag overrides, and that failure
 # is exactly the kind this must swallow rather than escalate.
 prune_branches() {
-  git fetch --quiet --prune origin 2>/dev/null || return 0
+  if ! git fetch --quiet --prune origin 2>/dev/null; then
+    if [ "${1-}" = report ]; then
+      printf '\033[33m! origin could not be fetched; nothing was pruned.\033[0m\n' >&2
+    fi
+    return 0
+  fi
   git rev-parse --verify --quiet refs/remotes/origin/dev >/dev/null 2>&1 || return 0
 
   prune_current=$(git symbolic-ref --quiet --short HEAD 2>/dev/null || echo detached)
@@ -249,7 +260,7 @@ if [ "$group" = prune ]; then
   [ "$#" -eq 0 ] || usage
   [ "$dry_run" -eq 0 ] || usage
   [ "$publish" -eq 0 ] || usage
-  prune_branches
+  prune_branches report
   exit 0
 fi
 
