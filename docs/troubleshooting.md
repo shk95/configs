@@ -505,6 +505,18 @@ Nothing answering at all is a real gap, and it is the NixOS-WSL case:
 `fonts.enableDefaultPackages` is `false` and `fonts.packages` is empty there, so
 that flavour has no font of any kind until one is declared.
 
+### `msedit` opens with `b2b` already typed into the buffer
+
+Upstream, not this repository:
+[microsoft/edit#243](https://github.com/microsoft/edit/issues/243). The
+editor asks the terminal for its colours with an OSC query at startup and
+waits 100 ms for the reply; a reply that lands after that, or in fragments,
+is consumed as typed input. Diagnosed 2026-08-31: the fragment was the tail
+of the background `#2b2b2b`, Zellij's dark fallback theme before Flexoki
+landed (#88 on Unix-like, #89 on Windows), so the visible text may differ,
+or the symptom may vanish, now that the payloads carry a theme. No change is made here; the defect is
+upstream and was unchanged as of that date.
+
 ---
 
 ## Checks
