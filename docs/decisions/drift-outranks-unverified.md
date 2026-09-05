@@ -21,3 +21,8 @@ but not in its status. The repository maintainer owns the decision and it is
 recorded on the issue that introduced it; the evidence is the Pester fixture
 over the whole ranking plus a native `-Check` on an already-applied Windows 10
 host.
+
+2026-09-05: a selected source this host has no parser for ranks the same way
+(#54). It was reported and never ranked before, so a host without
+`zellij.exe` or a Lua compiler now answers 69 rather than 0 when nothing
+drifted; Apply is unaffected, since 69 never blocks it.

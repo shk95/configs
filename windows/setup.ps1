@@ -36,14 +36,14 @@ $drift = [System.Collections.Generic.List[string]]::new()
 $changed = [System.Collections.Generic.List[string]]::new()
 # Sources this host has no parser for. Not drift and not a failure: Apply is a
 # deployment, and refusing it because a validator is absent would make the
-# missing tool look like broken desired state. This list is reported and does
-# not rank; widening the exit contract to cover every undecidable item is
-# tracked separately.
+# missing tool look like broken desired state. They rank the same way the
+# detections below do: with no drift, a source nobody here could parse makes
+# the check unverified rather than verified (#54).
 $unverified = [System.Collections.Generic.List[string]]::new()
 # Detections this host could not decide, as opposed to sources it could not
-# parse. Today this is the Appx module failing to load, which says nothing
-# about whether the package is installed. These do rank: with no drift they
-# make the check unverified rather than verified.
+# parse: the Appx module failing to load, which says nothing about whether the
+# package is installed, and the terminal delegation's documented boundary
+# when the host is below it or an observation it needs could not be made.
 $unverifiedDetection = [System.Collections.Generic.List[string]]::new()
 # CI sets this so the merge gate never accepts an undecided item; hooks and
 # hosts leave it unset so a host that cannot decide one is not blocked.
@@ -96,7 +96,7 @@ function Write-Summary {
             (($conditionalFiles | ForEach-Object { "$($_.Id) from $($_.Source)" }) -join ', '))
     }
     # An undecided item is not a clean run, so it suppresses the clean line.
-    if (-not $changed.Count -and -not $drift.Count -and -not $unverifiedDetection.Count) {
+    if (-not $changed.Count -and -not $drift.Count -and -not $unverified.Count -and -not $unverifiedDetection.Count) {
         Write-Host '  no changes or drift detected'
     }
 }
@@ -226,21 +226,27 @@ try {
     }
     $hostProfile = Get-WinEnvPowerShellProfilePath
     if (-not (Test-WinEnvProfileHook -ProfilePath $hostProfile)) { $drift.Add('PowerShell profile hook') }
-    if ($terminalSelected -and -not (Test-WinEnvTerminalDelegation -Terminal $manifest.Terminal)) {
-        $drift.Add('default terminal delegation')
+    if ($terminalSelected) {
+        # INV windows/support-boundary-named — decided against the documented
+        # condition, not the write: a read-back the host accepts below the
+        # boundary is undecided, never verified. A mismatch is drift on either
+        # side, because Apply writes the values regardless.
+        $delegation = Test-WinEnvTerminalDelegation -Terminal $manifest.Terminal -Build $hostBuild
+        if (-not $delegation.Matches) { $drift.Add('default terminal delegation') }
+        if ($delegation.Unverified) { $unverifiedDetection.Add("default terminal delegation: $($delegation.Unverified)") }
     }
 
     # One place decides what this run's status is, so Apply and the check rank
     # drift, undecided items, and REQUIRE_NATIVE the same way. Everything that
     # can drift or go undecided has been collected by here.
-    $runStatus = Get-WinEnvCheckStatus -DriftCount $drift.Count -UnverifiedCount $unverifiedDetection.Count -RequireNative:$requireNative
+    $runStatus = Get-WinEnvCheckStatus -DriftCount $drift.Count -UnverifiedCount ($unverified.Count + $unverifiedDetection.Count) -RequireNative:$requireNative
     $mode = if ($Check) { 'check' } else { 'verification' }
     if ($runStatus -eq 1) {
         # The summary comes first on the one path where completeness is the
         # point: the operator loses the selection and the drift list otherwise.
         Write-Summary -Mode $mode
         throw ('Detection could not be completed on this host and REQUIRE_NATIVE is set: ' +
-            ($unverifiedDetection -join '; ') + '.')
+            (@($unverified) + @($unverifiedDetection) -join '; ') + '.')
     }
 
     if (-not $shouldApply) {
@@ -312,7 +318,7 @@ try {
         if (-not (Test-WinEnvManagedFile -Definition $definition -RepositoryRoot $desiredStateRoot)) { $drift.Add($definition.Id) }
     }
     if (-not (Test-WinEnvProfileHook -ProfilePath $hostProfile)) { $drift.Add('PowerShell profile hook') }
-    if ($terminalSelected -and -not (Test-WinEnvTerminalDelegation -Terminal $manifest.Terminal)) {
+    if ($terminalSelected -and -not (Test-WinEnvTerminalDelegation -Terminal $manifest.Terminal -Build $hostBuild).Matches) {
         $drift.Add('default terminal delegation')
     }
     if ($drift.Count) { throw "Post-apply validation failed: $($drift -join ', ')" }
