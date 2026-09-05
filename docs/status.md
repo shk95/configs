@@ -23,14 +23,21 @@ them, and an assertion refuses a PATH assignment placed later.
 
 Three other generated things changed on 2026-09-04 and reach a home on its
 next activation: `~/.config/zellij/config.kdl` is Home Manager's rendering
-of the asset (a blank line and an `// extraConfig` marker, then the keymap,
-plus the theme node in the desktop class) rather than a link to it; every
-home carries Pester 5.7.1 under `~/.local/share/powershell/Modules`, fetched
-from the PowerShell Gallery at build time, so `pre-push` can run the Windows
-suite from a Unix-like clone; and every generation's hash moved once,
-because the fragments a class collects are now imported in the order of
-their defining files rather than the directory walk
-(`INV unixlike/import-order-independence`). `flake.lock` is unchanged.
+of the asset (a blank line and an `// extraConfig` marker, then the asset)
+rather than a link to it; every home carries Pester 5.7.1 under
+`~/.local/share/powershell/Modules`, fetched from the PowerShell Gallery at
+build time, so `pre-push` can run the Windows suite from a Unix-like clone;
+and every generation's hash moved once, because the fragments a class
+collects are now imported in the order of their defining files rather than
+the directory walk (`INV unixlike/import-order-independence`).
+`flake.lock` is unchanged.
+
+Since 2026-09-05 that rendering is the asset alone for every class: the
+keymap, the `theme_dark`/`theme_light` pair, and a static
+`theme "flexoki-light"` no class overrides. Windows Terminal 1.23 was probed
+on 2026-09-05 and does not answer the colour-scheme query the pair depends
+on, and every terminal this repository declares for a composed home is light
+(`docs/decisions/composed-homes-render-in-declared-terminals.md`).
 
 WezTerm and Ghostty are the desktop terminals; Home Manager installs the
 D2Coding Nerd Font package and configures `D2KodingLigature Nerd Font Mono`

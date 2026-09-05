@@ -58,9 +58,16 @@ _: {
         # Default is `bold yellow`. Magenta was legible but thin once the
         # background went light — Catppuccin Latte's is #ea76cb on a #eff1f5
         # page — and yellow is worse, because a yellow that reads on black is
-        # by construction a pale tint. Cyan is a mid-tone in both directions:
-        # #179299 on Latte, and bright enough on the dark Windows Terminal the
-        # WSL homes still render in, which this class also reaches.
+        # by construction a pale tint. Cyan is a mid-tone in both directions —
+        # #179299 on Latte, dark enough to read against a light page and bright
+        # enough against a dark one — which is what a style in
+        # `homeManager.shared` has to be. The premise has since narrowed: the
+        # WSL homes this class also reaches render inside a Windows Terminal
+        # the Windows domain declares light
+        # (`docs/decisions/composed-homes-render-in-declared-terminals.md`).
+        # `bold cyan` stands on the same reason it always did — a mid-tone
+        # needs no declaration to be right — rather than on a terminal being
+        # dark.
         cmd_duration.style = "bold cyan";
 
         # This module was configured, dead, *and* wrong — two independent defects
