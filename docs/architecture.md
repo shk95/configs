@@ -104,6 +104,12 @@ script fails the run, and a verb it does not know is refused with a status
 no check outcome uses, because the entry point names the scripts and decides
 nothing they decide.
 
+Two shells serve the domain: the one the host ships, which runs the entry
+point and the bootstrap that installs the newer one, and the newer one, which
+runs everything after. A script that can run before the newer shell exists
+stays within the older one, because a host that needs bootstrap is by
+definition a host without it.
+
 The source manifest and every owned payload live below `windows/desired/`.
 PowerShell reads that source directly; there is no Nix-rendered Windows
 consumer tree.
