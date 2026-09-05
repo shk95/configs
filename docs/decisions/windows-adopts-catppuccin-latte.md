@@ -2,8 +2,9 @@
 
 date: 2026-08-30
 scope: windows
-status: accepted
+status: superseded
 issue: #39
+superseded-by: docs/decisions/windows-adopts-modus-operandi.md
 source: 9f1e8ce:docs/status.md § Windows authority split
 
 `windows/desired/files/terminal/settings.json` and
@@ -32,3 +33,10 @@ themed for the first time — and the payloads carry Flexoki Light today. What
 this record decides survives that: the adoption is by copying, each copy is
 Windows-owned, and acrylic stays off, because the reasoning against an
 unpredictable blend does not depend on which light scheme sits behind it.
+
+2026-09-05 (#164): superseded by
+`docs/decisions/windows-adopts-modus-operandi.md`, which names Modus Operandi
+as the scheme the three Windows terminal payloads select and carries forward
+what this record decided about adoption by copying, Windows ownership of each
+copy, acrylic and the font. Read that record for current state; this one is
+history.
