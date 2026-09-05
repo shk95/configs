@@ -505,6 +505,34 @@ Nothing answering at all is a real gap, and it is the NixOS-WSL case:
 `fonts.enableDefaultPackages` is `false` and `fonts.packages` is empty there, so
 that flavour has no font of any kind until one is declared.
 
+### Hangul jamo vanish inside zellij on macOS
+
+Composed Korean disappears as it is typed inside a zellij pane and reappears
+outside one; the leading consonant arrives and the vowel and final consonant do
+not. Not an IME, a font or a locale problem, and not WezTerm's:
+`normalize_output_to_unicode_nfc` never sees the missing code points. zellij's
+`Grid::add_character` drops every zero-width code point, and the conjoining
+jamo of a decomposed syllable are zero-width combining marks
+([zellij-org/zellij#3667](https://github.com/zellij-org/zellij/issues/3667),
+[#1538](https://github.com/zellij-org/zellij/issues/1538)).
+
+Read back what the grid kept rather than what the screen looks like — the
+missing bytes are the evidence:
+
+```sh
+zellij -s repro action new-pane -- \
+  sh -c 'printf "NFD:[\341\204\222\341\205\241\341\206\253]\n"; sleep 60'
+zellij -s repro action dump-screen | grep -a 'NFD:\[' | head -1 | hexdump -C
+```
+
+An unpatched zellij 0.45.0 answers `4e 46 44 3a 5b e1 84 92 5d`; a fixed one
+answers `4e 46 44 3a 5b e1 84 92 e1 85 a1 e1 86 ab 5d`. This repository patches
+Darwin's zellij with upstream PR
+[zellij-org/zellij#5500](https://github.com/zellij-org/zellij/pull/5500) while
+that PR is unmerged; `provisional/unixlike/zellij-combining-marks.md` says
+until when, and `docs/decisions/zellij-patched-on-darwin-until-upstream.md` says
+why. On a host the overlay does not reach, there is no local fix.
+
 ### `msedit` opens with `b2b` already typed into the buffer
 
 Upstream, not this repository:

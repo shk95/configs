@@ -106,6 +106,46 @@ discovery files are adapters only. Audit and release planning are read-only by
 default. This document remains the human fallback and the contract the skill
 executes.
 
+### zellij overlay
+
+This subsection is disposable and carries the tag
+`PROV unixlike/zellij-combining-marks`, so it is deleted with the measure it
+describes.
+
+`modules/zellij.nix` carries upstream zellij-org/zellij#5500 for Darwin until
+nixpkgs ships a zellij whose source already has the fix;
+`provisional/unixlike/zellij-combining-marks.md` registers the measure and
+names the condition that ends it. The overlay is pinned to one zellij version
+and refuses to evaluate against any other, so a `flake.lock` refresh that moves
+zellij takes two commits, in this order:
+
+1. `just zellij-patch-check v<ver>` for the version the refresh will bring in.
+   On a conflict, rebase the upstream commit in a fork and repoint the
+   overlay's `url` and `hash` before going on.
+2. Commit `chore(unixlike-deps): refresh flake.lock` with `flake.lock` alone —
+   `tool/version-control/commit flake refresh`, with no `--publish`. Helper
+   flags precede its command, so `--publish` would be
+   `tool/version-control/commit --publish flake refresh`; it is not used here
+   because it pushes as soon as this commit is made.
+3. Commit `fix(unixlike): re-pin the zellij overlay to <ver>` with `appliesTo`,
+   the `fetchpatch` hash if the commit was rebased, and the new `cargoDeps`
+   hash.
+4. `just darwin-build` on the Mac, then the reproduction in
+   `docs/decisions/zellij-patched-on-darwin-until-upstream.md`.
+5. Push only after step 3.
+
+Between steps 2 and 3 the Darwin configuration refuses to evaluate, by design:
+that refusal is the overlay's report that its patch no longer matches the
+pinned zellij. Nothing selects evaluation for a lock-only change, so the
+refusal blocks no commit, but it does block a push, which is why step 5 waits
+for the re-pin.
+
+`.github/workflows/zellij-upstream-5500.yml` watches the pull request and
+reports a bump or a merge as an issue. GitHub runs a `schedule` only from the
+default branch, so the watcher does nothing until this file reaches `master`
+through the next promotion; before that its shell body is run by hand with
+`DRY_RUN=1`.
+
 ## Promote dev to master
 
 Promotion is a deliberate source-acceptance operation, not a release. The only
