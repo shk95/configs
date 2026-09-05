@@ -15,3 +15,4 @@ Write-Host ("Boxes : {0} {1} {2}" -f $boxTop, $boxMiddle, $boxBottom)
 Write-Host ("Icons : {0}" -f $icons)
 Write-Host 'Ligatures: => != <= ->'
 Write-Host 'Expected Terminal face: D2KodingLigature Nerd Font Mono'
+exit 0

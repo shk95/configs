@@ -66,3 +66,4 @@ decision` is the procedure.
 | 2026-09-04 | repository | The local gate selects checks by effect | accepted | local-gate-selects-by-effect.md |
 | 2026-09-05 | unixlike | Every composed home renders in a terminal the repository declares | accepted | composed-homes-render-in-declared-terminals.md |
 | 2026-09-05 | windows | Windows adopts Modus Operandi by copying | accepted | windows-adopts-modus-operandi.md |
+| 2026-09-05 | windows | The Windows entry point is one script inside the domain | accepted | windows-entry-point-in-domain.md |

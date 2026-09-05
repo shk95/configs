@@ -68,3 +68,7 @@ if ($parseErrors.Count) {
 $tests = Join-Path (Split-Path -Parent $PSScriptRoot) 'tests'
 $result = Invoke-Pester -Path $tests -PassThru
 if ($result.Result -ne 'Passed') { exit 1 }
+# Explicit, because win-env.ps1 runs this in-process and returns
+# $LASTEXITCODE, which the suite's own child pwsh runs would otherwise have
+# left at 69.
+exit 0

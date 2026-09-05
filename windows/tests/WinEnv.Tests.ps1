@@ -4515,6 +4515,7 @@ Describe 'Windows tree isolation' {
 Describe 'check entry points' {
     BeforeAll {
         $bootstrap = Join-Path $repositoryRoot 'tools\bootstrap.ps1'
+        $entryPoint = Join-Path $repositoryRoot 'win-env.ps1'
         $pwshPath = (Get-Process -Id $PID).Path
 
         # Runs the real entry point in a child pwsh with an empty PATH, so no
@@ -4529,6 +4530,25 @@ Describe 'check entry points' {
                 $env:REQUIRE_NATIVE = $RequireNative
                 & $pwshPath -NoProfile -File $bootstrap -Check *> $null
                 return $LASTEXITCODE
+            }
+            finally {
+                $env:PATH = $savedPath
+                $env:REQUIRE_NATIVE = $savedNative
+            }
+        }
+
+        # The entry point under the same empty PATH. A forwarded check ends
+        # where bootstrap.ps1 -Check ends, at 69, so any other status is
+        # proof that nothing was forwarded.
+        function Invoke-EntryPoint {
+            param([AllowEmptyCollection()][string[]] $Arguments = @(), [string] $RequireNative)
+            $savedPath = $env:PATH
+            $savedNative = $env:REQUIRE_NATIVE
+            try {
+                $env:PATH = ''
+                $env:REQUIRE_NATIVE = $RequireNative
+                $output = @(& $pwshPath -NoProfile -File $entryPoint @Arguments 2>&1 | ForEach-Object { "$_" })
+                return [pscustomobject]@{ ExitCode = $LASTEXITCODE; Output = ($output -join "`n") }
             }
             finally {
                 $env:PATH = $savedPath
@@ -4576,5 +4596,60 @@ Describe 'check entry points' {
         $condition = $cleanLine[0].Clauses[0].Item1.Extent.Text
         $condition | Should -Match '\$unverified\.Count'
         $condition | Should -Match '\$unverifiedDetection\.Count'
+    }
+
+    It 'INV windows/entry-point-forwards-status: check returns the status bootstrap.ps1 -Check returned' {
+        (Invoke-EntryPoint -Arguments @('check') -RequireNative $null).ExitCode | Should -Be 69
+        (Invoke-EntryPoint -Arguments @('check') -RequireNative '1').ExitCode | Should -Be 1
+    }
+
+    It 'INV windows/entry-point-forwards-status: refuses an unknown verb, and no verb, with 64 and forwards nothing' {
+        $unknown = Invoke-EntryPoint -Arguments @('frobnicate')
+        $unknown.ExitCode | Should -Be 64
+        $unknown.Output | Should -Match "unknown verb 'frobnicate'"
+        $unknown.Output | Should -Match 'usage: win-env\.ps1'
+        $none = Invoke-EntryPoint
+        $none.ExitCode | Should -Be 64
+        $none.Output | Should -Match 'usage: win-env\.ps1'
+    }
+
+    It 'INV windows/entry-point-forwards-status: a script that refuses its arguments makes the run fail rather than pass' {
+        # bootstrap.ps1's parameter sets refuse -Check beside -Force. Without
+        # the catch in win-env.ps1 that refusal is a non-terminating error in
+        # the caller, $LASTEXITCODE stays unset and the entry point exits 0.
+        $refused = Invoke-EntryPoint -Arguments @('check', '-Force')
+        $refused.ExitCode | Should -Be 1
+        $refused.Output | Should -Match 'Parameter set cannot be resolved'
+    }
+
+    It 'INV windows/entry-point-forwards-status: every verb names a script under tools that ends in an explicit exit' {
+        $tokens = $null
+        $errors = $null
+        $ast = [System.Management.Automation.Language.Parser]::ParseFile($entryPoint, [ref]$tokens, [ref]$errors)
+        $errors.Count | Should -Be 0
+        $scripts = @($ast.FindAll({ param($node) $node -is [System.Management.Automation.Language.HashtableAst] }, $true) |
+            ForEach-Object { $_.KeyValuePairs } |
+            Where-Object { $_.Item1.Extent.Text -eq 'Script' } |
+            ForEach-Object { $_.Item2.Extent.Text.Trim("'") })
+        $scripts.Count | Should -Be 7
+        foreach ($script in $scripts) {
+            $path = Join-Path (Join-Path $repositoryRoot 'tools') $script
+            $path | Should -Exist
+            # In-process, the status the entry point returns is $LASTEXITCODE,
+            # which a script that falls off its end leaves at whatever its last
+            # child process set. Every target therefore ends in an explicit
+            # exit, and this holds it there.
+            $targetAst = [System.Management.Automation.Language.Parser]::ParseFile($path, [ref]$tokens, [ref]$errors)
+            $errors.Count | Should -Be 0
+            $targetAst.EndBlock.Statements[-1] | Should -BeOfType ([System.Management.Automation.Language.ExitStatementAst]) -Because "$script must end in an explicit exit"
+        }
+    }
+
+    It 'help lists every verb and exits 0' {
+        $help = Invoke-EntryPoint -Arguments @('help')
+        $help.ExitCode | Should -Be 0
+        foreach ($verb in 'check', 'apply', 'capture', 'validate', 'test', 'setup-dev', 'font') {
+            $help.Output | Should -Match "(?m)^  $([regex]::Escape($verb))\s"
+        }
     }
 }
