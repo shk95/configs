@@ -46,7 +46,7 @@ decision` is the procedure.
 | 2026-08-16 | repository | A check reports verified, failed or unverified | accepted | check-evidence-three-states.md |
 | 2026-08-16 | repository | CI runs the suites and adds no hosted runner | accepted | ci-evidence-without-hosted-runners.md |
 | 2026-08-18 | windows | Feature selection is closed over declared dependencies | accepted | feature-selection-closed.md |
-| 2026-08-30 | windows | Windows adopts Catppuccin Latte by copying | accepted | windows-adopts-catppuccin-latte.md |
+| 2026-08-30 | windows | Windows adopts Catppuccin Latte by copying | superseded | windows-adopts-catppuccin-latte.md |
 | 2026-08-30 | windows | Windows Terminal's generated profiles are tolerated on read | accepted | terminal-generated-profiles-tolerated.md |
 | 2026-08-30 | windows | Font install states | accepted | font-install-states.md |
 | 2026-08-30 | windows | Terminal delegation is unverified below the documented boundary | accepted | terminal-delegation-unverified-below-boundary.md |
@@ -65,3 +65,4 @@ decision` is the procedure.
 | 2026-09-04 | repository | A fixture tag names only an invariant its case proves | accepted | fixture-tags-name-proven-invariants.md |
 | 2026-09-04 | repository | The local gate selects checks by effect | accepted | local-gate-selects-by-effect.md |
 | 2026-09-05 | unixlike | Every composed home renders in a terminal the repository declares | accepted | composed-homes-render-in-declared-terminals.md |
+| 2026-09-05 | windows | Windows adopts Modus Operandi by copying | accepted | windows-adopts-modus-operandi.md |

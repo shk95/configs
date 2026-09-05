@@ -57,6 +57,18 @@ schema 2; `ProjectVersion` is 0.6.0. Schema 4 declares seven features —
 `terminal` depends on `zellij`, `wezterm` depends on `font`
 (`docs/decisions/feature-selection-closed.md`).
 
+Since 2026-09-05 the three terminal payloads — Windows Terminal's
+`settings.json`, WezTerm's `appearance.lua` and zellij's `config.kdl` — select
+Modus Operandi, copied from the Unix-like domain's adoption of it (#163) and
+owned here from that point (`docs/decisions/windows-adopts-modus-operandi.md`,
+which supersedes the Catppuccin Latte record). Windows Terminal carries the
+scheme as an inline `schemes` entry and keeps `theme` at `light`; zellij pins
+the static `modus-operandi` theme rather than the `theme_light`/`theme_dark`
+pair, because Windows Terminal 1.23, probed on 2026-09-05, does not answer the
+colour-scheme query that pair depends on, so this copy carries the light member
+only. Acrylic stays off and the font stays `D2KodingLigature Nerd Font Mono` at
+size 13, unchanged from the superseded record.
+
 As of 2026-09-04, `bootstrap.ps1 -Check` returns 69 when WinGet or
 PowerShell 7 is missing, or 1 under `REQUIRE_NATIVE=1`
 (`INV windows/check-exit-contract`). Since 2026-09-05 a selected source no
