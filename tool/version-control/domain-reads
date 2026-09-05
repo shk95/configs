@@ -17,7 +17,8 @@
 # domain declares this terminal" and a Windows script cite a Nix file for the
 # reader. Payload trees are not scanned; a payload is data and reads nothing.
 #
-#   Unix-like code   flake.nix, Justfile, .envrc, modules/, tool/checks/
+#   Unix-like code   flake.nix, Justfile, .envrc, modules/, tool/checks/,
+#                    tool/darwin/
 #                    must not name  windows/
 #   Windows code     windows/ *.ps1 and *.psm1, outside windows/desired/files
 #                    must not name  assets/  modules/  flake.nix  flake.lock
@@ -150,7 +151,7 @@ scan() {
 open='(^|[^A-Za-z0-9_-])'
 
 scan 'Unix-like' "${open}windows[/\\\\]" \
-  flake.nix Justfile .envrc 'modules/*' 'tool/checks/*'
+  flake.nix Justfile .envrc 'modules/*' 'tool/checks/*' 'tool/darwin/*'
 unixlike_count=$count
 scan Windows \
   "${open}(assets|modules)[/\\\\]|${open}flake\\.(nix|lock)([^A-Za-z0-9_]|\$)|${open}tool[/\\\\]checks" \

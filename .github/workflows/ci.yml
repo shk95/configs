@@ -80,6 +80,7 @@ jobs:
       - run: tool/checks/format
       - run: tool/checks/lint
       - run: tool/checks/payloads-test
+      - run: tool/checks/karabiner-test
       - run: tool/checks/flake-test
       - run: tool/checks/composition-test
       - run: tool/checks/eval-coverage-test

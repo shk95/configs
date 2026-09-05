@@ -129,6 +129,9 @@ just home-build
 just darwin-eval
 just darwin-build
 just darwin-check
+
+just karabiner-check   # target Mac only; compares the Karabiner payloads
+just karabiner-test
 ```
 
 The `*-eval`, `*-build`, and `*-check` commands do not activate a configuration.

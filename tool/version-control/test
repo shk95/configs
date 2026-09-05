@@ -310,6 +310,11 @@ expect() {
 }
 
 expect unixlike "$classify" --files modules/git.nix
+# INV repository/scope-ownership
+# tool/darwin/ is the Unix-like domain's own Mac tooling: it reads and writes
+# a Unix-like payload, its evidence lane is a Mac, and no governance host can
+# produce it. Owned by unixlike, like modules/ and tool/checks/.
+expect unixlike "$classify" --files tool/darwin/karabiner
 expect windows "$classify" --files windows/src/WinEnv.psm1
 expect unclassified "$classify" --files common/example.txt
 expect repository "$classify" --files .agents/skills/example/SKILL.md
@@ -366,6 +371,16 @@ unixlike:payloads' commit "$kdl_added"
 expect_units 'unixlike:test' push "$kdl_added"
 
 expect_units 'unixlike:test' push "$module_modified"
+
+# INV repository/local-gate-selects-by-effect
+# tool/darwin/ holds the projection the Karabiner payloads are compared and
+# applied by, so a change to it can alter what the Unix-like suite says; it
+# selects the same units a module does.
+darwin_tool_modified=$(printf 'M\ttool/darwin/karabiner')
+expect_units 'unixlike:format
+unixlike:lint
+unixlike:payloads' commit "$darwin_tool_modified"
+expect_units 'unixlike:test' push "$darwin_tool_modified"
 
 # A rename carries two paths on one line. Both have to reach classify, or a
 # payload moved into assets/ is never selected for the payload check.
@@ -3452,8 +3467,10 @@ printf '%s\n' "$domain_reads_output" | grep -q '^✓ domain reads: [1-9][0-9]* U
 
 domain_reads_fixture=$(mktemp -d)
 git -C "$domain_reads_fixture" init -q
-mkdir -p "$domain_reads_fixture/tool/checks" "$domain_reads_fixture/windows/tools" "$domain_reads_fixture/modules"
+mkdir -p "$domain_reads_fixture/tool/checks" "$domain_reads_fixture/tool/darwin" \
+  "$domain_reads_fixture/windows/tools" "$domain_reads_fixture/modules"
 printf '#!/bin/sh\ncat windows/desired/manifest.json\n' >"$domain_reads_fixture/tool/checks/probe"
+printf '#!/bin/sh\ncat windows/desired/files/probe.json\n' >"$domain_reads_fixture/tool/darwin/probe"
 printf '_: {\n  home.file."probe".source = ../windows/desired/files/probe;\n}\n' >"$domain_reads_fixture/modules/probe.nix"
 printf '$fonts = Get-Content (Join-Path $root %s)\n' "'assets\\wezterm\\fonts.json'" >"$domain_reads_fixture/windows/tools/probe.ps1"
 printf 'Import-Module (Join-Path $root %s)\n' "'modules/flake/probe.nix'" >"$domain_reads_fixture/windows/tools/module.psm1"
@@ -3465,6 +3482,7 @@ if domain_reads_output=$(cd "$domain_reads_fixture" && "$domain_reads" 2>&1); th
 fi
 for domain_reads_hit in \
   'tool/checks/probe:2:' \
+  'tool/darwin/probe:2:' \
   'modules/probe.nix:2:' \
   'windows/tools/probe.ps1:1:' \
   'windows/tools/module.psm1:1:'; do

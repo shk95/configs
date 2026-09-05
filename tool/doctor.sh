@@ -197,6 +197,29 @@ fi
 
   [ "$found" -eq 1 ] || warn "no Unix-like host configurations in the flake sources" \
        "tool/checks/test has nothing to verify."
+
+  echo
+  echo "Karabiner (Darwin only)"
+# Karabiner-Elements is a Homebrew cask that rewrites its own configuration
+# file, so tool/darwin/karabiner compares that file rather than delivering it.
+# These say whether this machine can run that comparison at all; they are
+# warnings everywhere, because a clone that is not a Mac is not broken.
+  if [ "$(uname -s)" = Darwin ]; then
+    [ -d /Applications/Karabiner-Elements.app ] \
+      && ok "Karabiner-Elements.app installed" \
+      || warn "Karabiner-Elements.app is not installed" \
+             "The cask is declared in modules/darwin-homebrew.nix; 'just karabiner-check' reports drift until it is installed."
+    command -v karabiner_cli >/dev/null 2>&1 && ok "karabiner_cli" \
+      || warn "karabiner_cli is not on PATH" \
+             "Optional. The projection needs only the configuration file; karabiner_cli is the app's own CLI."
+    [ -r "$HOME/.config/karabiner/karabiner.json" ] \
+      && ok "host karabiner.json present" \
+      || warn "no karabiner.json in this account" \
+             "'just karabiner-check' reports that as drift, not as unverified. Start Karabiner-Elements once, or apply the desired state."
+  else
+    warn "Karabiner probes are Darwin-only" \
+         "tool/darwin/karabiner reports unverified here; the Mac supplies that evidence."
+  fi
 fi
 
 echo

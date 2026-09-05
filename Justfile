@@ -208,6 +208,16 @@ darwin-switch:
 darwin-generations:
     darwin-rebuild --list-generations
 
+# Compare this Mac's Karabiner file and symbolic hotkeys with the payloads.
+[group('darwin')]
+karabiner-check:
+    tool/darwin/karabiner check
+
+# Prove the Karabiner projection tolerates runtime members and refuses drift.
+[group('darwin')]
+karabiner-test:
+    tool/checks/karabiner-test
+
 # Garbage collect unused nix store entries older than 7 days
 [group('nix')]
 gc:

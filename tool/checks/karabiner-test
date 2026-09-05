@@ -1,0 +1,269 @@
+#!/bin/sh
+# Fixtures for tool/darwin/karabiner, the projection that owns the Karabiner
+# desired state.
+#
+# The tool reads a Mac. These cases give it files instead, through --host,
+# --hotkeys-host and --target, and pass KARABINER_PLATFORM=darwin so the
+# platform guard lets them through, which is what makes the projection
+# checkable from any clone. The hotkey write path calls `defaults`, `plutil`
+# and `activateSettings`; a directory of shims that record their arguments is
+# prepended to PATH for the one case that exercises it. The real write is Mac
+# evidence and is not claimed here.
+#
+# Every case holds in both directions: what the projection must tolerate and
+# what it must refuse.
+
+set -e
+
+repo=$(CDPATH= cd -- "$(dirname -- "$0")/../.." && pwd)
+cd "$repo"
+
+. "$(CDPATH= cd -- "$(dirname -- "$0")" && pwd)/prerequisite"
+
+tool=tool/darwin/karabiner
+payload=assets/karabiner/karabiner.json
+hotkeys=assets/karabiner/symbolic-hotkeys.json
+
+# The fixtures build their host documents with jq, resolved the way the tool
+# resolves it, so this check has the same host requirements as the rest of the
+# Unix-like suite: jq if it is there, Nix otherwise, unverified if neither.
+if [ -n "${JQ:-}" ] && [ -x "$JQ" ]; then
+  run_jq() { "$JQ" "$@"; }
+elif command -v jq >/dev/null 2>&1; then
+  run_jq() { jq "$@"; }
+else
+  command -v nix >/dev/null 2>&1 || require_command jq
+  run_jq() { nix shell nixpkgs#jq -c jq "$@"; }
+fi
+
+work=$(mktemp -d)
+trap 'rm -rf "$work"' EXIT
+
+bad() {
+  printf '\033[31m✗ %s\033[0m\n' "$1" >&2
+  exit 1
+}
+
+# Every invocation under test runs as if on a Mac.
+karabiner() {
+  KARABINER_PLATFORM=darwin "$tool" "$@"
+}
+
+# The host as Karabiner keeps it: the declared members plus a top-level key
+# this repository never declares.
+run_jq -S --indent 2 '. + {machine_specific: {fixture: {note: "runtime"}}}' \
+  "$payload" >"$work/host.json"
+cp "$hotkeys" "$work/hotkeys-host.json"
+
+# ---------------------------------------------------------------------------
+# An undeclared top-level key is runtime, a changed declared member is drift
+# ---------------------------------------------------------------------------
+#
+# INV unixlike/host-written-payload-projected
+# The two directions of the same rule. `machine_specific` is the key the host
+# actually keeps beside the declared ones, and reporting it would make every
+# Karabiner save a drift; failing to report a changed keyboard type would make
+# the payload decorative.
+
+printf '→ tolerates an undeclared top-level key\n'
+karabiner check --host "$work/host.json" --hotkeys-host "$work/hotkeys-host.json" \
+  >/dev/null || bad "the projection reported an undeclared top-level key as drift"
+
+run_jq -S --indent 2 '.profiles[0].virtual_hid_keyboard.keyboard_type_v2 = "iso"' \
+  "$work/host.json" >"$work/host-changed.json"
+
+printf '→ refuses a changed declared member\n'
+status=0
+karabiner check --host "$work/host-changed.json" \
+  --hotkeys-host "$work/hotkeys-host.json" >"$work/out" 2>&1 || status=$?
+[ "$status" -eq 1 ] ||
+  bad "a changed declared member exited $status, expected 1"
+grep -q 'karabiner:' "$work/out" || bad "the drift did not name the karabiner side"
+
+# ---------------------------------------------------------------------------
+# A declared member is projected whole
+# ---------------------------------------------------------------------------
+#
+# INV unixlike/host-written-payload-projected
+# `profiles` is declared, so everything beneath it belongs to desired state. A
+# rule the host has and the payload has not must appear in `project` entire,
+# or a capture built on this projection would silently drop it.
+
+run_jq -S --indent 2 '.profiles[0].complex_modifications.rules += [{
+    description: "fixture rule",
+    manipulators: [{type: "basic", from: {key_code: "f13"}, to: [{key_code: "f14"}]}]
+  }]' "$work/host.json" >"$work/host-rule.json"
+
+printf '→ projects a rule the payload does not declare\n'
+karabiner project --host "$work/host-rule.json" \
+  --hotkeys-host "$work/hotkeys-host.json" >"$work/projection"
+for fragment in 'fixture rule' 'f13' 'f14'; do
+  grep -q "$fragment" "$work/projection" ||
+    bad "the projection dropped '$fragment' from a declared member"
+done
+
+printf '→ invents nothing the host does not hold\n'
+karabiner project --host "$work/host.json" \
+  --hotkeys-host "$work/hotkeys-host.json" >"$work/projection-plain"
+grep -q 'fixture rule' "$work/projection-plain" &&
+  bad "the projection printed a rule the host does not hold"
+grep -q 'machine_specific' "$work/projection-plain" &&
+  bad "the projection printed an undeclared top-level key"
+
+# ---------------------------------------------------------------------------
+# The hotkey projection compares the declared entry numbers
+# ---------------------------------------------------------------------------
+#
+# INV unixlike/host-written-payload-projected
+# The Korean toggle depends on entries 60 and 61 of a dictionary the host
+# holds dozens of entries in. A changed 60 is drift; an entry the payload does
+# not declare is not this repository's business either way.
+
+run_jq -S --indent 2 '.AppleSymbolicHotKeys["60"].enabled = false' \
+  "$hotkeys" >"$work/hotkeys-changed.json"
+run_jq -S --indent 2 '.AppleSymbolicHotKeys["7"] = {enabled: true, value: null}' \
+  "$hotkeys" >"$work/hotkeys-extra.json"
+
+printf '→ refuses a changed hotkey 60\n'
+status=0
+karabiner check --host "$work/host.json" \
+  --hotkeys-host "$work/hotkeys-changed.json" >"$work/out" 2>&1 || status=$?
+[ "$status" -eq 1 ] || bad "a changed hotkey 60 exited $status, expected 1"
+grep -q 'symbolic hotkeys:' "$work/out" ||
+  bad "the drift did not name the symbolic hotkey side"
+
+printf '→ tolerates an undeclared hotkey entry\n'
+karabiner check --host "$work/host.json" \
+  --hotkeys-host "$work/hotkeys-extra.json" >/dev/null ||
+  bad "the projection reported an undeclared hotkey entry as drift"
+
+# ---------------------------------------------------------------------------
+# Apply preserves the host's runtime keys and converges
+# ---------------------------------------------------------------------------
+#
+# INV unixlike/host-written-payload-projected
+# Apply writes the payload over the host's undeclared keys rather than over the
+# file, so `machine_specific` survives; and a second apply has nothing left to
+# do, which is what makes the projection the same rule read and written.
+
+cp "$work/host-changed.json" "$work/target.json"
+
+printf '→ applies the declared members and keeps the rest\n'
+karabiner apply --host "$work/target.json" --target "$work/target.json" \
+  --hotkeys-host "$work/hotkeys-host.json" >"$work/apply-1"
+grep -q "karabiner: wrote $work/target.json" "$work/apply-1" ||
+  bad "apply did not report the document it wrote"
+run_jq -e '.machine_specific.fixture.note == "runtime"' "$work/target.json" \
+  >/dev/null || bad "apply discarded the host's undeclared top-level key"
+[ "$(ls -l "$work/target.json" | cut -c1-10)" = "-rw-------" ] ||
+  bad "apply did not leave the document at mode 600"
+karabiner check --host "$work/target.json" \
+  --hotkeys-host "$work/hotkeys-host.json" >/dev/null ||
+  bad "the host still drifts after apply"
+
+printf '→ a second apply changes nothing\n'
+before=$(cat "$work/target.json")
+karabiner apply --host "$work/target.json" --target "$work/target.json" \
+  --hotkeys-host "$work/hotkeys-host.json" >"$work/apply-2"
+[ -s "$work/apply-2" ] && bad "a converged apply printed a change"
+[ "$before" = "$(cat "$work/target.json")" ] ||
+  bad "a converged apply rewrote the document"
+
+# ---------------------------------------------------------------------------
+# Apply writes only the hotkey entries that differ
+# ---------------------------------------------------------------------------
+#
+# INV unixlike/host-written-payload-projected
+# `defaults`, `plutil` and `activateSettings` are macOS commands. The shims
+# here record their arguments so the write path can be exercised from any
+# clone; that the real commands behave is Mac evidence (#178) and is not
+# claimed by this case. One entry differs, so exactly one entry is merged with
+# `-dict-add` and the settings are reloaded once; when none differs, neither
+# command runs at all.
+
+shims=$work/shims
+mkdir -p "$shims"
+cat >"$shims/defaults" <<'SHIM'
+#!/bin/sh
+{ printf 'defaults'; for a; do printf ' %s' "$a"; done; printf '\n'; } \
+  >>"$KARABINER_FIXTURE_LOG"
+SHIM
+cat >"$shims/plutil" <<'SHIM'
+#!/bin/sh
+{ printf 'plutil'; for a; do printf ' %s' "$a"; done; printf '\n'; } \
+  >>"$KARABINER_FIXTURE_LOG"
+cat >/dev/null
+printf '<?xml version="1.0" encoding="UTF-8"?>\n<plist version="1.0"><dict/></plist>\n'
+SHIM
+cat >"$shims/activateSettings" <<'SHIM'
+#!/bin/sh
+{ printf 'activateSettings'; for a; do printf ' %s' "$a"; done; printf '\n'; } \
+  >>"$KARABINER_FIXTURE_LOG"
+SHIM
+chmod 755 "$shims/defaults" "$shims/plutil" "$shims/activateSettings"
+
+printf '→ merges only the hotkey entry that differs\n'
+: >"$work/calls"
+PATH="$shims:$PATH" KARABINER_FIXTURE_LOG="$work/calls" \
+  karabiner apply --host "$work/target.json" --target "$work/target.json" \
+  --hotkeys-host "$work/hotkeys-changed.json" >"$work/apply-3"
+grep -q 'symbolic hotkey 60: wrote the declared entry' "$work/apply-3" ||
+  bad "apply did not report the hotkey it wrote"
+written=$(grep -c -- '-dict-add 60 ' "$work/calls" || true)
+[ "$written" -eq 1 ] ||
+  bad "apply ran 'defaults write … -dict-add 60' $written times, expected 1"
+grep -q -- '-dict-add 61 ' "$work/calls" &&
+  bad "apply rewrote hotkey 61, which the host already holds"
+grep -q '^plutil -convert xml1 ' "$work/calls" ||
+  bad "apply did not convert the entry with 'plutil -convert xml1'"
+grep -q '^activateSettings -u$' "$work/calls" ||
+  bad "apply did not reload the settings after writing an entry"
+
+printf '→ writes no hotkey when none differs\n'
+: >"$work/calls"
+PATH="$shims:$PATH" KARABINER_FIXTURE_LOG="$work/calls" \
+  karabiner apply --host "$work/target.json" --target "$work/target.json" \
+  --hotkeys-host "$work/hotkeys-host.json" >/dev/null
+[ -s "$work/calls" ] &&
+  bad "apply invoked a macOS command for a hotkey that already matches"
+
+# ---------------------------------------------------------------------------
+# A host that cannot answer is unverified, not failed
+# ---------------------------------------------------------------------------
+#
+# INV unixlike/host-written-payload-projected
+# Exit 69 is the repository's unverified state, and the tool reserves it for
+# the two questions this clone cannot answer: the platform is not a Mac, or no
+# jq can be resolved. Reproduced under `env -i` the way
+# tool/checks/prerequisite-test is, so this host's own environment cannot
+# decide the case.
+
+bare='PATH=/usr/bin:/bin'
+
+if [ "$(uname -s)" = Darwin ]; then
+  echo "· this host is a Mac; the platform guard cannot be exercised here"
+else
+  printf '→ a host that is not a Mac is unverified\n'
+  status=0
+  env -i $bare HOME="$HOME" "$tool" check --host "$work/host.json" \
+    --hotkeys-host "$work/hotkeys-host.json" >/dev/null 2>&1 || status=$?
+  [ "$status" -eq 69 ] ||
+    bad "a host that is not a Mac exited $status, expected 69"
+fi
+
+if env -i $bare sh -c 'command -v jq' >/dev/null 2>&1; then
+  echo "· jq is reachable from the minimal PATH here, skipping"
+else
+  printf '→ a host with no jq is unverified\n'
+  status=0
+  env -i $bare HOME="$HOME" KARABINER_PLATFORM=darwin "$tool" check \
+    --host "$work/host.json" --hotkeys-host "$work/hotkeys-host.json" \
+    >/dev/null 2>&1 || status=$?
+  [ "$status" -eq 69 ] || bad "a host with no jq exited $status, expected 69"
+fi
+
+printf '→ a host that can answer does not report unverified\n'
+karabiner check --host "$work/host.json" --hotkeys-host "$work/hotkeys-host.json" \
+  >/dev/null || bad "the projection reported unverified on a host that can answer"
+
+echo "✓ the Karabiner projection tolerates runtime members and refuses drift"
