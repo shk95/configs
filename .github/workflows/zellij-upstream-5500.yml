@@ -120,9 +120,11 @@ jobs:
              zellij whose source already contains the fix.
           2. One commit that deletes the overlay block in `modules/zellij.nix`, this
              workflow, the `CONTRIBUTING.md` subsection, the `README.md` line, the
-             `Justfile` recipe, `provisional/unixlike/zellij-combining-marks.md` and
-             the `docs/status.md` open condition, and adds a dated line to the
-             decision record and to the `docs/troubleshooting.md` entry.
+             `Justfile` recipe, `provisional/unixlike/zellij-combining-marks.md`, and
+             all three of `docs/status.md`'s mentions of the measure -- the Unix-like
+             paragraph, the provisional registry count, and the tagged open
+             condition -- and adds a dated line to the decision record and to the
+             `docs/troubleshooting.md` entry.
           3. `git grep zellij-combining-marks` finds only the decision record and the
              troubleshooting entry.
           CHECKLIST

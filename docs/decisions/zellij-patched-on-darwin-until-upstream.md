@@ -40,6 +40,9 @@ zellij -s repro action new-pane -- \
 zellij -s repro action dump-screen | grep -a 'NFD:\[' | head -1 | hexdump -C
 ```
 
+The first line is GNU `script`; macOS `script` takes no `-c`, so on the Mac the
+control is `script -q /dev/null sh -c 'printf "NFD:[\341\204\222\341\205\241\341\206\253]\n"'`.
+
 A patched zellij should make the second command's output equal the first's,
 `4e 46 44 3a 5b e1 84 92 e1 85 a1 e1 86 ab 5d`. That half is a prediction, not
 an observation: no patched zellij has been built on either host yet, and #178
@@ -83,8 +86,9 @@ reach; the overlay therefore overrides `cargoDeps` itself with
 reproduces the same derivation name. The `zellij` wrapper takes
 `zellij-unwrapped` as a function argument, so overriding the unwrapped package
 is enough for the wrapper the home installs. Both hashes were discovered on
-x86_64-linux and are sound there because the unpatched `src` and `cargoDeps`
-fixed-output hashes are identical on x86_64-linux and aarch64-darwin.
+x86_64-linux and hold for aarch64-darwin because the unpatched `src` and
+`cargoDeps` fixed-output hashes are identical on the two systems, which is the
+direction that matters: the overlay only ever builds on Darwin.
 
 The overlay pins `appliesTo` to the zellij version the patch was verified
 against and `throw`s on any other version rather than warning or passing the
@@ -124,10 +128,13 @@ so the bump is two commits and their order is fixed:
 Once nixpkgs ships a zellij whose source already contains the merged fix:
 commit `chore(unixlike-deps): refresh flake.lock` alone, then one commit that
 deletes the overlay block, the workflow, the `CONTRIBUTING.md` subsection, the
-`README.md` line, the `Justfile` recipe, the registry entry and the
-`docs/status.md` open condition, and adds a dated line to this record and to
-the `docs/troubleshooting.md` entry. `git grep zellij-combining-marks` then
-finds only those two documents.
+`README.md` line, the `Justfile` recipe, the registry entry and all three of
+`docs/status.md`'s mentions of the measure — the Unix-like paragraph, the
+provisional registry count, and the tagged open condition — and adds a dated
+line to this record and to the `docs/troubleshooting.md` entry. Only the open
+condition carries the tag; the other two are current state, so they stop being
+true at that same commit and go with it. `git grep zellij-combining-marks`
+then finds only those two documents.
 
 The refresh must come first, and the two commits must not be swapped or
 merged, because of what happens when a patched source meets a fixed one. Three
