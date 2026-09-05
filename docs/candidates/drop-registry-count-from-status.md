@@ -17,4 +17,4 @@ drop-when: the count is made a checked value
 
 ## Occurrences
 
-- 2026-09-05: stale by one, corrected in the same pull request that records this candidate.
+- 2026-09-05: stale by one after PR #170; corrected by the pull request that registers the next entry, which is the only kind of change that can keep it true.
