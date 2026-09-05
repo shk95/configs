@@ -40,8 +40,10 @@ zellij -s repro action new-pane -- \
 zellij -s repro action dump-screen | grep -a 'NFD:\[' | head -1 | hexdump -C
 ```
 
-A patched zellij makes the second command's output equal the first's:
-`4e 46 44 3a 5b e1 84 92 e1 85 a1 e1 86 ab 5d`.
+A patched zellij should make the second command's output equal the first's,
+`4e 46 44 3a 5b e1 84 92 e1 85 a1 e1 86 ab 5d`. That half is a prediction, not
+an observation: no patched zellij has been built on either host yet, and #178
+records the reading once the Darwin build exists.
 
 ## The measure
 

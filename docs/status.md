@@ -41,8 +41,9 @@ on, and every terminal this repository declares for a composed home is light
 
 Also since 2026-09-05, Darwin's zellij carries upstream PR
 zellij-org/zellij#5500, which attaches combining marks instead of dropping
-them, so a decomposed Hangul syllable survives a pane; without it only the
-leading jamo arrives. The patch is an overlay in `modules/zellij.nix`, is
+them, so a decomposed Hangul syllable is expected to survive a pane; without
+it only the leading jamo arrives, which was reproduced on Linux against the
+pinned unpatched build. The patch is an overlay in `modules/zellij.nix`, is
 pinned to zellij 0.45.0 and refuses to evaluate against any other version,
 and yields nothing on Linux, where every toplevel derivation path is
 unchanged. The measure is registered as temporary in

@@ -525,8 +525,9 @@ zellij -s repro action new-pane -- \
 zellij -s repro action dump-screen | grep -a 'NFD:\[' | head -1 | hexdump -C
 ```
 
-An unpatched zellij 0.45.0 answers `4e 46 44 3a 5b e1 84 92 5d`; a fixed one
-answers `4e 46 44 3a 5b e1 84 92 e1 85 a1 e1 86 ab 5d`. This repository patches
+An unpatched zellij 0.45.0 answers `4e 46 44 3a 5b e1 84 92 5d`; a fixed one is
+expected to answer `4e 46 44 3a 5b e1 84 92 e1 85 a1 e1 86 ab 5d`, which #178
+records once a patched binary is built. This repository patches
 Darwin's zellij with upstream PR
 [zellij-org/zellij#5500](https://github.com/zellij-org/zellij/pull/5500) while
 that PR is unmerged; `provisional/unixlike/zellij-combining-marks.md` says

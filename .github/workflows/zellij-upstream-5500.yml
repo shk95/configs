@@ -103,9 +103,13 @@ jobs:
             gh workflow disable "$WORKFLOW_FILE" --repo "$REPO"
           }
 
+          # One awk that reads to EOF and prints the first match, rather than
+          # a `head -1` or a `sed ... q` at the end of the pipe: under
+          # `pipefail` any stage that exits early SIGPIPEs the one feeding it
+          # and aborts the step on a file that parsed perfectly well.
           nixpkgs_version() {
             curl -fsSL "https://raw.githubusercontent.com/NixOS/nixpkgs/nixos-unstable/pkgs/by-name/ze/zellij-unwrapped/package.nix" |
-              sed -n 's/^ *version = "\(.*\)";$/\1/p' | head -1
+              awk -F'"' '/^ *version = "/ && !seen { print $2; seen = 1 }'
           }
 
           retirement_checklist() {
@@ -137,8 +141,12 @@ jobs:
             # earliest release that contains the merge commit rather than
             # merely the newest one that does. `behind` means the merge commit
             # is behind the tag, which is to say the tag contains it.
+            # Assigned on its own line, not inside the `for` list: a command
+            # substitution in a `for` list escapes `set -e`, so a failed API
+            # call would quietly leave `containing=unreleased`.
+            releases=$(gh api "repos/$upstream/releases?per_page=20" --jq '.[].tag_name' | tac)
             containing=unreleased
-            for tag in $(gh api "repos/$upstream/releases?per_page=20" --jq '.[].tag_name' | tac); do
+            for tag in $releases; do
               status=$(gh api "repos/$upstream/compare/$tag...$merge_sha" --jq .status 2>/dev/null || echo unknown)
               if [[ "$status" == behind || "$status" == identical ]]; then
                 containing=$tag
@@ -173,7 +181,11 @@ jobs:
           # every changelog commit, so a head comparison would report a force
           # push that never happened. Whether the pinned commit is still in
           # the pull request's commit list is the test that does not.
-          if ! printf '%s\n' "$commits" | grep -qx "$PINNED_COMMIT"; then
+          # A here-string rather than a pipe into grep: `grep -q` exits at the
+          # first match, and under `pipefail` the SIGPIPE that gives the
+          # upstream `printf` would invert through the `!` into a false
+          # "was rewritten" issue.
+          if ! grep -qx "$PINNED_COMMIT" <<<"$commits"; then
             body=$(printf '%s\n\n%s\n\n%s\n' \
               "$PINNED_COMMIT is no longer in the commit list of zellij-org/zellij#$pr, so the branch was rewritten and the overlay fetches a commit the pull request no longer claims." \
               "Re-read the pull request, pick the commit that now carries the fix, and repoint the overlay's url and hash in modules/zellij.nix." \
