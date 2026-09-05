@@ -144,20 +144,30 @@ on_force_close "detach"
 show_startup_tips false
 show_release_notes false
 
-// Colours follow the host terminal rather than being fixed here. Zellij's
+// Colours are named here rather than left to the host, because zellij's
 // built-in fallback palette is dark — `default_palette()` in zellij-utils is
 // literally `theme_hue: ThemeHue::Dark` — so declaring nothing keeps the pane
-// frames, tab bar and status line dark inside a light terminal. Naming one
-// light theme instead is not right either: modules/zellij.nix copies this file
-// into every Unix-like home, and the WSL homes render inside Windows Terminal,
-// whose scheme is declared in the Windows domain and is still dark.
+// frames, tab bar and status line dark inside a light terminal. Naming a light
+// theme is no longer the guess it once was: every home
+// modules/flake/configurations.nix composes renders inside a terminal whose
+// colour scheme a file of this repository declares, and the two that never
+// report that scheme — WezTerm and Windows Terminal — are both set to Flexoki
+// Light, so the static line at the end of this file tells them what is already
+// true rather than guessing at it. Ghostty reports and drives the pair itself.
+// The premise is recorded once, with the declaring files and the condition
+// that would reopen it, in
+// docs/decisions/composed-homes-render-in-declared-terminals.md.
 //
-// Setting both `theme_dark` and `theme_light` is what this file can do. With
-// the pair configured, zellij swaps palettes from the host terminal's own
-// colour-scheme report (CSI 2031 / DSR 997); with only one of them it ignores
-// both. `flexoki-light` is the light member of the family the graphical
-// terminals are set to, and `flexoki-dark` is named here as the other branch
-// of a terminal-driven pair, not as a theme this repository selects.
+// Two settings carry it, and they do not fight. `theme_dark` and `theme_light`
+// are the terminal-driven pair: with both configured, zellij swaps palettes
+// from the host terminal's own colour-scheme report (CSI 2031 / DSR 997), and
+// with only one of them it ignores both. The plain `theme` at the end of this
+// file is the static answer for a terminal that never sends that report, and
+// it is authoritative only until one arrives, so it costs a reporting terminal
+// nothing. `flexoki-light` is the light member of the family every declaring
+// terminal is set to; `flexoki-dark` is named as the other branch of the pair,
+// the palette a terminal reporting dark would be given, not as a theme this
+// repository selects.
 //
 // Unlike the Catppuccin pair this replaces, only one half resolves against a
 // zellij built-in: the pinned zellij-utils ships `flexoki-dark` (checked in
@@ -177,24 +187,30 @@ show_release_notes false
 // since Flexoki names no accent family darker than 600. See
 // https://github.com/kepano/flexoki for the source palette.
 //
-// Which terminals actually answer that query is the part to be exact about,
-// because the pair is inert without an answer:
+// Which terminals actually answer that query is the part to be exact about:
+// the pair is inert without an answer, and the static `theme` is what every
+// silent terminal ends up rendering.
 //
 //   Ghostty            answers — its binary carries the `[?996` / `[?997`
-//                      sequences and a `color_scheme_updates` mode.
+//                      sequences and a `color_scheme_updates` mode, so the
+//                      pair takes over as soon as its reply lands.
 //   WezTerm            does not. The pinned build has no colour-scheme private
 //                      mode in its `DecPrivateModeCode` list at all, so the
 //                      query goes unanswered.
-//   Windows Terminal   unverified from here. If it answers, the WSL homes
-//                      follow it for free once #39 turns that scheme light.
+//   Windows Terminal   does not either, as of 1.23.20211.0 — installed as
+//                      the package
+//                      `Microsoft.WindowsTerminal_1.23.20211.0_x64__8wekyb3d8bbwe`.
+//                      Probed on 2026-09-05 from a plain tab outside zellij,
+//                      which would otherwise intercept the reply:
+//                      `printf '\033[?996n\033[c'` came back with the DA1
+//                      answer `?61;4;6;7;14;21;22;23;24;28;32;42;52c` alone
+//                      and no `?997;1n` or `?997;2n` in front of it.
 //
-// An unanswered query leaves zellij on its dark fallback, which is the right
-// outcome for a terminal that is still dark and the wrong one inside the light
-// WezTerm this repository now declares. That is why modules/zellij.nix pins a
-// static `theme` for `homeManager.desktop` on top of this file rather than
-// relying on the pair there. A static `theme` is authoritative only until a
-// report arrives, so the two settings do not fight: Ghostty still drives its
-// own palette, and WezTerm gets a light one without having to ask.
+// Two of the three are silent, so the static `theme` below is what the WezTerm
+// desktops and the WSL homes actually render. It lives in this file rather
+// than in modules/zellij.nix because every composed home now needs the same
+// line for the same reason, and this is the one place the keymap and the
+// palettes already live.
 themes {
     flexoki-light {
         text_unselected {
@@ -451,3 +467,4 @@ themes {
 }
 theme_dark "flexoki-dark"
 theme_light "flexoki-light"
+theme "flexoki-light"
