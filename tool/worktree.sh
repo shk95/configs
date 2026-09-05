@@ -101,8 +101,8 @@ case "${1:-}" in
 
     git worktree remove "$dir"
     echo "Removed $dir"
-    echo "The branch is kept; delete it once its pull request has merged, which is"
-    echo "also when this removal was due (run-version-control-workflow, Integrate)."
+    echo "The branch is kept; delete it once its pull request has merged."
+    echo "That merge is also when this removal was due (run-version-control-workflow, Integrate)."
     ;;
 
   *) usage ;;
