@@ -1150,8 +1150,28 @@ if ! awk '/zzz = 999999999;/ { getline; if ($0 == "") found = 1 } END { exit !fo
   exit 1
 fi
 
+# Removal matches a whole name, never a substring (#99). With "page" declared
+# beside "pages", removing either leaves the other; the presence guard cannot
+# prove this on its own, because it answers before the editor runs.
+if ! run_commit y mas add page 100000001 >/dev/null; then
+  echo "the commit helper refused a mas addition whose name prefixes a live one" >&2
+  exit 1
+fi
+if ! run_commit y mas remove page >/dev/null; then
+  echo "the commit helper refused to remove a mas app whose name prefixes a live one" >&2
+  exit 1
+fi
+if [ "$(masapps_main_now)" != 'keynote microsoft-onedrive pages zzz ' ]; then
+  echo "commit helper removed more than the named mas app: $(masapps_main_now)" >&2
+  exit 1
+fi
+if ! run_commit y mas add page 100000001 >/dev/null; then
+  echo "the commit helper refused to re-add a removed mas app" >&2
+  exit 1
+fi
+
 # A removed entry leaves the section it was in; both the main block and the
-# safari section are candidates.
+# safari section are candidates. "page" survives the removal of "pages".
 if ! run_commit y mas remove pages >/dev/null; then
   echo "the commit helper refused a valid mas removal from the main block" >&2
   exit 1
@@ -1161,8 +1181,16 @@ if [ "$(commit_git show -s --format=%s HEAD)" \
   echo "commit helper used an unexpected message for a mas removal" >&2
   exit 1
 fi
-if [ "$(masapps_main_now)" != 'keynote microsoft-onedrive zzz ' ]; then
+if [ "$(masapps_main_now)" != 'keynote microsoft-onedrive page zzz ' ]; then
   echo "commit helper did not remove the expected mas app: $(masapps_main_now)" >&2
+  exit 1
+fi
+if ! run_commit y mas remove page >/dev/null; then
+  echo "the commit helper refused to remove the surviving mas app" >&2
+  exit 1
+fi
+if [ "$(masapps_main_now)" != 'keynote microsoft-onedrive zzz ' ]; then
+  echo "commit helper left the main block in an unexpected state: $(masapps_main_now)" >&2
   exit 1
 fi
 
