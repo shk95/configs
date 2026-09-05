@@ -100,7 +100,11 @@ evidence_run invariants tool/version-control/invariants \
 # can name no measure. Only its overdue rule is scope-selective, so the
 # classifier — which answers ownership — supplies the scopes an overdue entry
 # may fail here; `none` (nothing staged) leaves that list empty.
-provisional_scopes=$(tool/version-control/classify --staged \
+# Two steps, not one pipeline: a pipeline's status is its last command's, so
+# a classifier that failed would reach the checker as an empty scope list.
+provisional_scopes_raw=$(tool/version-control/classify --staged) \
+  || fail "The classifier could not read the staged paths."
+provisional_scopes=$(printf '%s\n' "$provisional_scopes_raw" \
   | grep -vx none | tr '\n' ',' | sed 's/,$//')
 evidence_run provisional tool/version-control/provisional --scopes "$provisional_scopes" \
   || abort "See provisional/README.md."

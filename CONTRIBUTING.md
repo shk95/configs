@@ -223,8 +223,9 @@ Retire it when `exit-when` came true:
 1. Delete the measure itself and every line tagged `PROV <scope>/<slug>`.
 2. Delete `provisional/<scope>/<slug>.md`, and the scope directory if that was
    its last entry.
-3. Do both in one commit, classified as the entry's scope. The check refuses
-   an entry no tag names and a tag no entry names, so half of this fails.
+3. Do both in one commit, classified as the entry's scope, with `repository`
+   alongside for the supporting documents it deletes. The check refuses an
+   entry no tag names and a tag no entry names, so half of this fails.
 
 Extend it when `exit-when` has not come true and the measure is still the best
 option:

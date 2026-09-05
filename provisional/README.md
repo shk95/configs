@@ -56,7 +56,9 @@ reviewed: <YYYY-MM-DD> <why the horizon moved>
 
 The header is every line up to the first blank line, each `key: value`.
 Keys are lowercase; a value runs to the end of its line. No other syntax is
-parsed. A `reviewed:` line lives in the prose, one per extension.
+parsed. A `reviewed:` line lives in the prose, one per extension; its date
+is the day the review happened, so it is never after `review-by`, which is
+the day the next one is due.
 
 | Key | Count | Meaning |
 |---|---|---|

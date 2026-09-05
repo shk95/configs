@@ -142,10 +142,10 @@ invisible to C10 (`docs/decisions/fixture-tags-name-proven-invariants.md`).
 The provisional registry holds 0 entries: `provisional/README.md` is the
 contract and nothing in the tree is registered as temporary yet.
 `tool/version-control/provisional` checks it in both directions on every
-commit and in the CI scan job, where an empty registry passes; #175 registers
-the first measure. The exit criteria `flake.nix` states in comments are the
-known gap: moving them into the registry is a separate decision and has not
-been made.
+commit and in the CI scan job; an empty registry passes the check. #175
+registers the first measure. The exit criteria `flake.nix` states in comments
+are the known gap: moving them into the registry is a separate decision and
+has not been made.
 
 `tool/version-control/domain-reads` runs on every commit and in CI beside
 the hygiene scan; the Windows CI job no longer walks the checkout for

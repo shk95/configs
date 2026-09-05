@@ -21,9 +21,9 @@
 #       owner, at most one watch, and a watch that is an indexed path or the
 #       word `manual`
 #   P3  kind is experiment, workaround or upstream-pending
-#   P4  since, review-by and each `reviewed:` date are YYYY-MM-DD; review-by
-#       is after since; review-by minus the later of since and the last
-#       `reviewed:` date is at most 180 days
+#   P4  since, review-by and each `reviewed:` date are real calendar dates
+#       written YYYY-MM-DD; review-by is after since; review-by minus the
+#       later of since and the last `reviewed:` date is at most 180 days
 #   P5  issue is `#<n>`; decision is `<path> § <heading>` naming a tracked
 #       file and a heading it contains
 #   P6  every entry is named by at least one `PROV <scope>/<slug>` tag in a
@@ -80,9 +80,25 @@ usage() {
   exit 2
 }
 
+# A real date, not only the shape: 2026-02-30 parses as 2 March in every
+# arithmetic below, so it is refused here instead. Month lengths and the
+# Gregorian leap rule are cheaper to write out than to explain away. The
+# regex is spelled without an interval so any POSIX awk accepts it.
 date_valid() {
-  printf '%s\n' "$1" |
-    grep -qE '^[0-9]{4}-(0[1-9]|1[0-2])-(0[1-9]|[12][0-9]|3[01])$'
+  printf '%s\n' "$1" | awk -F- '
+    $0 ~ /^[0-9][0-9][0-9][0-9]-[0-9][0-9]-[0-9][0-9]$/ {
+      y = $1 + 0
+      m = $2 + 0
+      d = $3 + 0
+      split("31 28 31 30 31 30 31 31 30 31 30 31", month_days, " ")
+      if (m >= 1 && m <= 12) {
+        last = month_days[m]
+        if (m == 2 && y % 4 == 0 && (y % 100 != 0 || y % 400 == 0)) last = 29
+        if (d >= 1 && d <= last) ok = 1
+      }
+    }
+    END { exit ok ? 0 : 1 }
+  '
 }
 
 mode=check
@@ -342,7 +358,7 @@ while IFS= read -r path; do
       continue
     fi
     if ! date_valid "$date_value"; then
-      fail "$path: P4 $date_key must be YYYY-MM-DD, got '$date_value'"
+      fail "$path: P4 $date_key must be a real YYYY-MM-DD date, got '$date_value'"
       dates_valid=0
     fi
   done
@@ -352,7 +368,7 @@ while IFS= read -r path; do
     reviewed_rest=${reviewed_line#reviewed: }
     reviewed_date=${reviewed_rest%% *}
     if ! date_valid "$reviewed_date"; then
-      fail "$path: P4 reviewed date must be YYYY-MM-DD, got '$reviewed_date'"
+      fail "$path: P4 reviewed date must be a real YYYY-MM-DD date, got '$reviewed_date'"
       dates_valid=0
       continue
     fi
@@ -379,8 +395,11 @@ while IFS= read -r path; do
   fi
 
   # P6: the registration is worthless if nothing in the tree points back at
-  # it, so the measure itself carries the tag.
-  git -c color.grep=never grep --cached -q -F -e "PROV $expected_id" \
+  # it, so the measure itself carries the tag. The id must end where the tag
+  # does: a fixed-string search would let a longer slug stand in for a
+  # shorter one it starts with, registering a measure nothing carries. An id
+  # is [a-z0-9/-] throughout, so it needs no escaping inside the pattern.
+  git -c color.grep=never grep --cached -q -E -e "PROV $expected_id(\$|[^a-z0-9-])" \
     -- ':(exclude)provisional/' ':(exclude)notes/' 2>/dev/null ||
     fail "$path: P6 no tracked file outside $registry/ names $expected_id"
 

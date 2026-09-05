@@ -3488,6 +3488,16 @@ prov_tag() {
 prov_entry() {
   cat >"$prov_repo/provisional/$1.md"
 }
+# The base entry with one header line replaced, so a case about one key is
+# one line rather than another copy of the entry.
+prov_replace() {
+  prov_file="$prov_repo/provisional/unixlike/probe-measure.md"
+  awk -v key="$1" -v value="$2" '
+    $0 ~ "^" key ": " { print key ": " value; next }
+    { print }
+  ' "$prov_file" >"$prov_file.new"
+  mv "$prov_file.new" "$prov_file"
+}
 prov_run() {
   git -C "$prov_repo" add -A
   (cd "$prov_repo" && "$provisional" "$@" 2>&1)
@@ -3561,6 +3571,54 @@ prov_base
 prov_tag modules/orphan.nix unixlike/never-registered
 prov_expect_fail 'P7 tag without an entry' \
   'P7 names unregistered provisional measure unixlike/never-registered' \
+  --date "$prov_now"
+
+# P6 again: a tag names an id, not a prefix of one. A fixed-string search
+# would let the longer slug's tag stand in for the shorter entry, which is a
+# registration nothing in the tree carries.
+prov_base
+prov_entry unixlike/probe <<'ENTRY'
+id: unixlike/probe
+kind: workaround
+statement: A second measure whose slug the first one starts with.
+since: 2026-09-01
+exit-when: The longer measure is retired.
+watch: modules/upstream.nix
+review-by: 2026-12-01
+issue: #175
+decision: docs/decisions/measure.md § Measure accepted
+owner: repository maintainer
+
+Body text.
+ENTRY
+prov_expect_fail 'P6 a longer slug does not tag a shorter one' \
+  'P6 no tracked file outside provisional/ names unixlike/probe' \
+  --date "$prov_now"
+
+# P1, P3 and P5: the path, the kind and the decision pointer, one case each.
+prov_base
+cp "$prov_repo/provisional/unixlike/probe-measure.md" \
+  "$prov_repo/provisional/unixlike/Probe_Measure.md"
+prov_expect_fail 'P1 slug grammar' "P1 slug 'Probe_Measure'" --date "$prov_now"
+
+prov_base
+prov_replace kind temporary
+prov_expect_fail 'P3 kind outside the three' \
+  "P3 kind 'temporary' is not experiment, workaround or upstream-pending" \
+  --date "$prov_now"
+
+prov_base
+prov_replace decision 'docs/decisions/measure.md § Nowhere'
+prov_expect_fail 'P5 decision heading missing' \
+  "P5 decision names no heading 'Nowhere' in docs/decisions/measure.md" \
+  --date "$prov_now"
+
+# P4: a date with the right shape and no such day. Every arithmetic below
+# would read it as the first of the next month.
+prov_base
+prov_replace since 2026-02-30
+prov_expect_fail 'P4 a shape that is not a day' \
+  "P4 since must be a real YYYY-MM-DD date, got '2026-02-30'" \
   --date "$prov_now"
 
 # P2: a required key the entry does not carry.
