@@ -2250,6 +2250,46 @@ publish_git worktree remove -f "$publish_worktree"
 publish_git branch -q -D prune-locked
 publish_git switch -q dev
 
+# A fetch that fails (#108): the standalone prune says so in one line and
+# still exits 0, because a manual sweep that found nothing to prune and one
+# that could not look are otherwise the same silence. It deletes nothing on
+# that ground, even a branch the stale origin/dev already contains. --publish
+# keeps the same failure silent: its sweep is opportunistic, and the fetch of
+# origin/dev that follows refuses with the remote's own error before anything
+# is written.
+publish_git branch prune-unfetched dev
+publish_git remote set-url origin "$test_root/no-such-remote"
+if ! prune_unfetched_out=$(run_prune prune); then
+  echo "commit prune failed outright when origin could not be fetched" >&2
+  exit 1
+fi
+printf '%s\n' "$prune_unfetched_out" | grep -q 'origin could not be fetched'
+if printf '%s\n' "$prune_unfetched_out" | grep -q '^pruned: '; then
+  echo "commit prune deleted a branch on a fetch it could not make" >&2
+  exit 1
+fi
+if ! publish_git show-ref --verify --quiet refs/heads/prune-unfetched; then
+  echo "commit prune deleted a branch without a fresh origin/dev to prove it against" >&2
+  exit 1
+fi
+publish_snapshot
+if publish_unfetched_out=$(run_publish y --publish cask add uf); then
+  echo "commit --publish reached a remote that does not exist" >&2
+  exit 1
+fi
+if printf '%s\n' "$publish_unfetched_out" | grep -q 'could not be fetched'; then
+  echo "commit --publish warned about a fetch its sweep keeps silent" >&2
+  exit 1
+fi
+printf '%s\n' "$publish_unfetched_out" | grep -q 'git fetch origin dev failed'
+publish_wrote_nothing "origin could not be fetched"
+if ! publish_git show-ref --verify --quiet refs/heads/prune-unfetched; then
+  echo "commit --publish deleted a branch without a fresh origin/dev to prove it against" >&2
+  exit 1
+fi
+publish_git remote set-url origin "$publish_remote"
+publish_git branch -q -D prune-unfetched
+
 # ---------------------------------------------------------------------------
 # core.hooksPath resolution in tool/setup and tool/doctor.sh
 # ---------------------------------------------------------------------------
