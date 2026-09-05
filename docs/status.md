@@ -65,7 +65,7 @@ the observation ran on.
 
 | Item | Documented boundary | Evidence state | Source |
 | --- | --- | --- | --- |
-| Default terminal delegation (`HKCU:\Console\%%Startup`) | Windows 11 22H2, or Windows 10 22H2 build 19045.3031 with KB5026435, plus Windows Terminal 1.17+ | Reported unverified by `-Check` below the boundary, or when the build, the Windows 10 revision or the Windows Terminal version cannot be read, since #53; above it the pass is a read-back of the documented values, not an observed handoff | Group Policy for Windows Terminal; Windows Terminal installation |
+| Default terminal delegation (`HKCU:\Console\%%Startup`) | Windows 11 22H2, or Windows 10 22H2 build 19045.3031 with KB5026435, plus Windows Terminal 1.17+ | Reported unverified by `-Check` below the boundary, or when the build, the Windows 10 revision or the Windows Terminal version cannot be read, since #53; observed 2026-09-05 on build 19044.7663 (Windows 10 21H2, full selection) as "below the documented boundary"; above it the pass is a read-back of the documented values, not an observed handoff, and no host at or above 19045.3031 has been observed | Group Policy for Windows Terminal; Windows Terminal installation |
 | PowerToys `Microsoft.CommandPalette` precondition (`Get-AppxPackage`) | Windows 11, or Windows 10 2004 (build 19041) or later | Reported unverified by `-Check` since #37 | How to Install PowerToys; PowerShell 7 module compatibility |
 | Windows Terminal `Microsoft.WindowsTerminal` Appx detection | Windows 10 2004 (build 19041) or later | Reported unverified by `-Check` since #37 | Windows Terminal installation; PowerShell 7 module compatibility; Windows Terminal product repository |
 
@@ -142,9 +142,9 @@ semantics across independent platform validation and release cycles.
 - The Windows 10 support boundary is `INV windows/support-boundary-named`.
   Since #53 the terminal delegation item decides itself against the
   boundary and the fixtures hold that; naming the build an observation ran
-  on stays the reviewer's manual evidence. No Windows 10 22H2 host has been
-  observed on either side of revision 3031, so the item's native evidence
-  is still owed.
+  on stays the reviewer's manual evidence. The lower side is observed
+  (build 19044.7663); no host at or above 19045.3031 has been, so the
+  item's evidence above the boundary is still owed.
 - One real-host capture run is still owed as evidence
   (`docs/decisions/capture-moves-host-changes.md`).
 - `docs/decisions/hygiene-tool-owns-enforcement.md`: reopens when the same

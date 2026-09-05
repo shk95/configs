@@ -48,5 +48,12 @@ version comes through the same Appx route the package detection uses, so a
 host whose module will not load reports the item undecided rather than
 passing. Below the boundary a matching read-back is unverified, and a
 mismatch is drift on either side, since Apply writes the values regardless.
-The native observations the issue asked for, a Windows 10 22H2 host on each
-side of revision 3031, are still owed.
+Observed the same day on the maintainer's host, Windows 10 21H2 build
+19044.7663 under PowerShell 7.6.5 with every feature selected: `-Check`
+named the item "default terminal delegation: Windows build 19044 is below
+the documented boundary" under its undecided detections, beside the Appx
+route's, and exited 2 for an unrelated `windowsTerminal settings` drift, so
+the 69 itself was not observable there (`drift-outranks-unverified.md`).
+The native Pester suite passed (219, 11 skipped) and
+`check-desired-state.ps1` was valid. A host at or above 19045.3031 has not
+been observed; the issue's upper-side evidence is still owed.
