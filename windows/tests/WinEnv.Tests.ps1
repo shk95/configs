@@ -4614,9 +4614,12 @@ Describe 'check entry points' {
     }
 
     It 'INV windows/entry-point-forwards-status: a script that refuses its arguments makes the run fail rather than pass' {
-        # bootstrap.ps1's parameter sets refuse -Check beside -Force. Without
-        # the catch in win-env.ps1 that refusal is a non-terminating error in
-        # the caller, $LASTEXITCODE stays unset and the entry point exits 0.
+        # bootstrap.ps1's parameter sets refuse -Check beside -Force, so the
+        # script never runs. win-env.ps1's own $ErrorActionPreference = 'Stop'
+        # is what turns that binding refusal into a failure: without it the
+        # refusal is a non-terminating error in the caller and the run ends at
+        # the 0 the entry point pre-set. The catch only gives it a one-line
+        # message in place of a stack.
         $refused = Invoke-EntryPoint -Arguments @('check', '-Force')
         $refused.ExitCode | Should -Be 1
         $refused.Output | Should -Match 'Parameter set cannot be resolved'
@@ -4631,7 +4634,7 @@ Describe 'check entry points' {
             ForEach-Object { $_.KeyValuePairs } |
             Where-Object { $_.Item1.Extent.Text -eq 'Script' } |
             ForEach-Object { $_.Item2.Extent.Text.Trim("'") })
-        $scripts.Count | Should -Be 7
+        $scripts.Count | Should -Be 7 -Because 'the table names check, apply, capture, validate, test, setup-dev and font; a new verb updates this count'
         foreach ($script in $scripts) {
             $path = Join-Path (Join-Path $repositoryRoot 'tools') $script
             $path | Should -Exist

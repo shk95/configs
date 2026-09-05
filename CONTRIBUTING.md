@@ -261,8 +261,8 @@ Native read-only verification is:
 `win-env.ps1` is the domain's one entry point: each verb runs one script under
 `windows/tools/` (`setup-dev.ps1`, `check-desired-state.ps1`, `test.ps1`,
 `bootstrap.ps1 -Check`) and returns that script's exit status unchanged, so
-the evidence a verb produces is the script's. CI and the hooks run those
-scripts directly.
+the evidence a verb produces is the script's; a command the script refuses
+ends the run at 1. CI and the hooks run those scripts directly.
 
 `setup-dev.ps1` installs the contributor toolchain declared in
 `windows/toolchain.json`, which is also what CI installs from, so local Windows

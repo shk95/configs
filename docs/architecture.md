@@ -96,6 +96,14 @@ runtime behavior.
 Windows deployment consumes a Windows domain release tag. Native Pester and
 read-only `bootstrap.ps1 -Check` evidence precede any explicit Apply.
 
+The domain presents one entry point. Each of its verbs runs one of the
+domain's own scripts and hands back that script's exit status unchanged, so
+check evidence reaches an operator through the entry point exactly as it
+does through the script; a command the entry point could not hand to its
+script fails the run, and a verb it does not know is refused with a status
+no check outcome uses, because the entry point names the scripts and decides
+nothing they decide.
+
 The source manifest and every owned payload live below `windows/desired/`.
 PowerShell reads that source directly; there is no Nix-rendered Windows
 consumer tree.

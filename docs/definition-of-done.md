@@ -89,9 +89,10 @@ native checks instead of treating them as passed.
 ## Windows domain
 
 - [ ] The change is owned and semantically validated by the Windows domain.
-- [ ] `windows/tools/check-desired-state.ps1` validates the manifest and every
-      PowerShell, JSON, INI, KDL, and Lua source with native tooling, and names
-      any source it had no parser for instead of failing or skipping it.
+- [ ] `windows/win-env.ps1 validate` (`windows/tools/check-desired-state.ps1`)
+      validates the manifest and every PowerShell, JSON, INI, KDL, and Lua
+      source with native tooling, and names any source it had no parser for
+      instead of failing or skipping it.
 - [ ] Pester passes under native PowerShell when reconciliation behavior changed.
 - [ ] `windows/win-env.ps1 check` (`windows/tools/bootstrap.ps1 -Check`) is
       observed on native Windows when package detection, target paths,

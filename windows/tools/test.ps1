@@ -27,7 +27,7 @@ $module = Get-Module Pester -ListAvailable |
 
 if (-not $module) {
     $message = "Pester $requiredVersion is not installed. " +
-        "Install the contributor toolchain with: .\windows\tools\setup-dev.ps1"
+        "Install the contributor toolchain with: .\windows\win-env.ps1 setup-dev"
 
     if ($requireNative) {
         [Console]::Error.WriteLine($message)
@@ -69,6 +69,8 @@ $tests = Join-Path (Split-Path -Parent $PSScriptRoot) 'tests'
 $result = Invoke-Pester -Path $tests -PassThru
 if ($result.Result -ne 'Passed') { exit 1 }
 # Explicit, because win-env.ps1 runs this in-process and returns
-# $LASTEXITCODE, which the suite's own child pwsh runs would otherwise have
-# left at 69.
+# $LASTEXITCODE, which a script that falls off its end leaves at whatever its
+# last native call set. Nothing above sets it (Pester keeps its cases' child
+# processes out of this scope), so this makes the status deterministic rather
+# than incidental; the entry point's fixture holds every target to a final exit.
 exit 0

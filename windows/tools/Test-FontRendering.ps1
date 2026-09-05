@@ -1,6 +1,8 @@
 [CmdletBinding()]
 param()
 
+$ErrorActionPreference = 'Stop'
+
 $hangul = -join (0xAC00, 0xB098, 0xB2E4, 0xB77C, 0xB9C8 | ForEach-Object { [char]$_ })
 $horizontal = -join (1..8 | ForEach-Object { [char]0x2500 })
 $boxTop = [char]0x250C + $horizontal + [char]0x2510

@@ -8,7 +8,7 @@ reopen-when: a caller outside the Windows domain needs a Windows verb without a 
 
 The Unix-like domain has one entry point, the `Justfile`, whose verbs name
 what a person does: `home-build`, `home-switch`. The Windows domain had five
-scripts a person would run, at three paths, each with its own argument
+scripts a person would run, in two directories, each with its own argument
 convention, and one more nobody had documented. It read as a collection of
 scripts rather than a tool.
 
@@ -23,10 +23,12 @@ records were written.
 
 The target runs in the entry point's own process, so the status handed back
 is what the script exits with, and a script that falls off its end leaves
-that at whatever its last child process set. Every script the table names
-therefore ends in an explicit `exit`, which the same fixture holds; the
-test suite's own runner was the case that found it, because its fixtures
-end child shells at 69 on purpose.
+that at whatever its last native call set. Every script the table names
+therefore ends in an explicit `exit`, which the same fixture holds. No
+target leaked when the rule was written; the fixture is what keeps a later
+native call near the end of one from changing that. A command the script
+refuses to bind ends the run at 1, by the entry point's own error preference
+rather than by anything the script does.
 
 Rejected:
 
