@@ -330,6 +330,15 @@ expect unclassified "$classify" --files invariants/common/example.md
 expect repository "$classify" --files invariants/common/.gitkeep
 expect unclassified "$classify" --files invariants/stray.md
 expect unclassified "$classify" --files invariants/linux/x.md
+# INV repository/scope-ownership
+# The provisional registry is per scope for the same reason: the scope that
+# carries a temporary measure owns its registration and is the scope an
+# overdue review blocks.
+expect repository "$classify" --files provisional/README.md
+expect unixlike "$classify" --files provisional/unixlike/zellij-overlay.md
+expect windows "$classify" --files provisional/windows/appx-detection.md
+expect repository "$classify" --files provisional/repository/hook-shim.md
+expect unclassified "$classify" --files provisional/stray.md
 expect 'windows
 repository' "$classify" --files windows/setup.ps1 docs/status.md
 
@@ -390,6 +399,7 @@ workflow_modified=$(printf 'M\t.github/workflows/ci.yml')
 dispatch_modified=$(printf 'M\ttool/dispatch/select')
 vc_modified=$(printf 'M\ttool/version-control/audit')
 entry_modified=$(printf 'M\tinvariants/repository/scope-ownership.md')
+measure_modified=$(printf 'M\tprovisional/unixlike/zellij-overlay.md')
 docs_and_hook=$(printf 'M\tdocs/status.md\nM\t.githooks/pre-push')
 expect_units 'repository:fixtures' commit "$hook_modified"
 expect_units 'repository:fixtures' push "$hook_modified"
@@ -397,6 +407,10 @@ expect_units 'repository:fixtures' commit "$workflow_modified"
 expect_units 'repository:fixtures' commit "$dispatch_modified"
 expect_units 'repository:fixtures' push "$vc_modified"
 expect_units '' commit "$entry_modified"
+# A provisional entry is owned by the scope that carries the measure, so a
+# Unix-like one selects that domain's payload check exactly as an invariant
+# entry under invariants/unixlike/ does.
+expect_units 'unixlike:payloads' commit "$measure_modified"
 expect_units '' push "$docs_modified"
 expect_units 'repository:fixtures' commit "$docs_and_hook"
 # The three governance scripts the suite scans for the MSYS guard and copies
@@ -907,6 +921,10 @@ cp -R "$root/tool/dispatch" "$commit_root/tool/dispatch"
 # stand-in so only the behaviour under test decides the outcome.
 printf '#!/bin/sh\nexit 0\n' >"$commit_root/tool/version-control/invariants"
 chmod +x "$commit_root/tool/version-control/invariants"
+# The hook runs tool/version-control/provisional beside it, whose own
+# cases are below; a stand-in here for the same reason.
+printf '#!/bin/sh\nexit 0\n' >"$commit_root/tool/version-control/provisional"
+chmod +x "$commit_root/tool/version-control/provisional"
 
 # The pre-commit hook this fixture enables also runs
 # tool/version-control/hygiene, which fails closed when it cannot read a
@@ -1575,6 +1593,10 @@ cp -R "$root/tool/dispatch" "$publish_root/tool/dispatch"
 # stand-in so only the behaviour under test decides the outcome.
 printf '#!/bin/sh\nexit 0\n' >"$publish_root/tool/version-control/invariants"
 chmod +x "$publish_root/tool/version-control/invariants"
+# The hook runs tool/version-control/provisional beside it, whose own
+# cases are below; a stand-in here for the same reason.
+printf '#!/bin/sh\nexit 0\n' >"$publish_root/tool/version-control/provisional"
+chmod +x "$publish_root/tool/version-control/provisional"
 # pre-push now runs audit unconditionally; a stand-in keeps these cases about dispatch.
 printf '#!/bin/sh\nexit 0\n' >"$publish_root/tool/version-control/audit"
 chmod +x "$publish_root/tool/version-control/audit"
@@ -2730,6 +2752,10 @@ cp -R "$root/tool/dispatch" "$hygiene_hook_root/tool/dispatch"
 # stand-in so only the behaviour under test decides the outcome.
 printf '#!/bin/sh\nexit 0\n' >"$hygiene_hook_root/tool/version-control/invariants"
 chmod +x "$hygiene_hook_root/tool/version-control/invariants"
+# The hook runs tool/version-control/provisional beside it, whose own
+# cases are below; a stand-in here for the same reason.
+printf '#!/bin/sh\nexit 0\n' >"$hygiene_hook_root/tool/version-control/provisional"
+chmod +x "$hygiene_hook_root/tool/version-control/provisional"
 
 git -C "$hygiene_hook_root" init -q -b dev
 git -C "$hygiene_hook_root" config user.name Fixture
@@ -2850,9 +2876,11 @@ cp -R "$root/tool/dispatch" "$secret_hook_root/tool/dispatch"
 printf '#!/bin/sh\nexit 0\n' >"$secret_hook_root/tool/version-control/hygiene"
 printf '#!/bin/sh\nexit 0\n' >"$secret_hook_root/tool/version-control/domain-reads"
 printf '#!/bin/sh\nexit 0\n' >"$secret_hook_root/tool/version-control/invariants"
+printf '#!/bin/sh\nexit 0\n' >"$secret_hook_root/tool/version-control/provisional"
 chmod +x "$secret_hook_root/tool/version-control/hygiene" \
   "$secret_hook_root/tool/version-control/domain-reads" \
-  "$secret_hook_root/tool/version-control/invariants"
+  "$secret_hook_root/tool/version-control/invariants" \
+  "$secret_hook_root/tool/version-control/provisional"
 
 git -C "$secret_hook_root" init -q -b dev
 git -C "$secret_hook_root" config user.name Fixture
@@ -3296,6 +3324,10 @@ cp -R "$root/tool/version-control" "$inv_hook_root/tool/version-control"
 cp -R "$root/tool/dispatch" "$inv_hook_root/tool/dispatch"
 printf '#!/bin/sh\nexit 0\n' >"$inv_hook_root/tool/version-control/hygiene"
 chmod +x "$inv_hook_root/tool/version-control/hygiene"
+# The hook runs tool/version-control/provisional beside the check under
+# test; a stand-in keeps these cases about the invariant check.
+printf '#!/bin/sh\nexit 0\n' >"$inv_hook_root/tool/version-control/provisional"
+chmod +x "$inv_hook_root/tool/version-control/provisional"
 # A passing stand-in secret scanner, so the outcome does not depend on
 # whether this host has gitleaks or on REQUIRE_NATIVE.
 mkdir -p "$inv_hook_root/stub"
@@ -3409,6 +3441,237 @@ if [ -s "$inv_hook_log" ]; then
 fi
 if ! (cd "$audit_norefs" && "$hook_evidence") | grep -q 'no hook evidence recorded yet'; then
   echo "hook-evidence did not report an absent log" >&2
+  exit 1
+fi
+
+# ---------------------------------------------------------------------------
+# Provisional registry
+# ---------------------------------------------------------------------------
+#
+# INV repository/provisional-registry-coverage
+#
+# tool/version-control/provisional resolves its root with `git rev-parse
+# --show-toplevel`, so every case runs the real script against a throwaway
+# repository. Every case passes an explicit --date: the check is
+# time-dependent by design, and a suite whose verdict changed with the
+# calendar would prove nothing. Tags naming fixture-only ids are assembled
+# from printf arguments so this tracked file never carries a literal the
+# registry would have to hold an entry for.
+
+provisional="$root/tool/version-control/provisional"
+prov_seq=0
+prov_now=2026-09-05
+prov_new() {
+  prov_seq=$((prov_seq + 1))
+  prov_repo="$test_root/provisional-$prov_seq"
+  mkdir -p "$prov_repo/provisional/unixlike" "$prov_repo/docs/decisions" \
+    "$prov_repo/modules"
+  git -C "$prov_repo" init -q -b dev
+  git -C "$prov_repo" config user.name Fixture
+  git -C "$prov_repo" config user.email fixture@example.invalid
+  printf '# Provisional\n\ntext\n' >"$prov_repo/provisional/README.md"
+  printf '# Measure accepted\n\ntext\n' >"$prov_repo/docs/decisions/measure.md"
+  # The watched path and the tagged measure are different files, so a case
+  # that deletes the measure exercises P6 alone.
+  printf '_: {}\n' >"$prov_repo/modules/upstream.nix"
+}
+
+# A file that carries a measure's tag. `PROV` and the id reach the file
+# through separate printf arguments on purpose (see the group comment).
+prov_tag() {
+  printf '_: {\n  # %s %s\n}\n' PROV "$2" >"$prov_repo/$1"
+}
+prov_entry() {
+  cat >"$prov_repo/provisional/$1.md"
+}
+prov_run() {
+  git -C "$prov_repo" add -A
+  (cd "$prov_repo" && "$provisional" "$@" 2>&1)
+}
+prov_expect_pass() {
+  prov_label=$1
+  prov_expected=$2
+  shift 2
+  if ! prov_output=$(prov_run "$@"); then
+    printf '%s\n' "$prov_output" >&2
+    echo "provisional rejected a clean registry: $prov_label" >&2
+    exit 1
+  fi
+  if [ -n "$prov_expected" ] &&
+    ! printf '%s\n' "$prov_output" | grep -qF "$prov_expected"; then
+    printf '%s\n' "$prov_output" >&2
+    echo "provisional did not report as expected: $prov_label" >&2
+    exit 1
+  fi
+}
+prov_expect_fail() {
+  prov_label=$1
+  prov_expected=$2
+  shift 2
+  if prov_output=$(prov_run "$@"); then
+    printf '%s\n' "$prov_output" >&2
+    echo "provisional accepted a broken registry: $prov_label" >&2
+    exit 1
+  fi
+  if ! printf '%s\n' "$prov_output" | grep -qF "$prov_expected"; then
+    printf '%s\n' "$prov_output" >&2
+    echo "provisional did not name the failure: $prov_label" >&2
+    exit 1
+  fi
+}
+
+# The well-formed base: one entry, a tagged measure outside the registry, a
+# decision heading that exists, and a review date ahead of the reference.
+prov_base() {
+  prov_new
+  prov_tag modules/probe.nix unixlike/probe-measure
+  prov_entry unixlike/probe-measure <<'ENTRY'
+id: unixlike/probe-measure
+kind: upstream-pending
+statement: The Unix-like tree carries a patch upstream has not merged.
+since: 2026-09-01
+exit-when: Upstream merges the change this patch anticipates.
+watch: modules/upstream.nix
+review-by: 2026-12-01
+issue: #175
+decision: docs/decisions/measure.md § Measure accepted
+owner: repository maintainer
+
+Body text.
+ENTRY
+}
+
+prov_base
+prov_expect_pass 'a registered measure with a tag' '1 registered, 0 overdue' \
+  --date "$prov_now"
+
+# P6: a registration whose measure nothing in the tree carries.
+prov_base
+rm "$prov_repo/modules/probe.nix"
+prov_expect_fail 'P6 entry without a tag' \
+  'P6 no tracked file outside provisional/ names unixlike/probe-measure' \
+  --date "$prov_now"
+
+# P7: a tagged line whose registration was deleted, or never written.
+prov_base
+prov_tag modules/orphan.nix unixlike/never-registered
+prov_expect_fail 'P7 tag without an entry' \
+  'P7 names unregistered provisional measure unixlike/never-registered' \
+  --date "$prov_now"
+
+# P2: a required key the entry does not carry.
+prov_base
+prov_entry unixlike/probe-measure <<'ENTRY'
+id: unixlike/probe-measure
+kind: upstream-pending
+statement: The Unix-like tree carries a patch upstream has not merged.
+since: 2026-09-01
+exit-when: Upstream merges the change this patch anticipates.
+review-by: 2026-12-01
+issue: #175
+decision: docs/decisions/measure.md § Measure accepted
+
+Body text.
+ENTRY
+prov_expect_fail 'P2 missing owner' 'P2 expected exactly one owner, found 0' \
+  --date "$prov_now"
+
+# P4: the review horizon is bounded, and a reviewed: line is what moves it.
+prov_base
+prov_entry unixlike/probe-measure <<'ENTRY'
+id: unixlike/probe-measure
+kind: upstream-pending
+statement: The Unix-like tree carries a patch upstream has not merged.
+since: 2026-09-01
+exit-when: Upstream merges the change this patch anticipates.
+review-by: 2027-06-01
+issue: #175
+decision: docs/decisions/measure.md § Measure accepted
+owner: repository maintainer
+
+Body text.
+ENTRY
+prov_expect_fail 'P4 horizon over 180 days' \
+  'P4 review-by 2027-06-01 is more than 180 days after 2026-09-01' \
+  --date "$prov_now"
+
+prov_base
+prov_entry unixlike/probe-measure <<'ENTRY'
+id: unixlike/probe-measure
+kind: upstream-pending
+statement: The Unix-like tree carries a patch upstream has not merged.
+since: 2026-09-01
+exit-when: Upstream merges the change this patch anticipates.
+review-by: 2027-06-01
+issue: #175
+decision: docs/decisions/measure.md § Measure accepted
+owner: repository maintainer
+
+Body text.
+
+reviewed: 2027-01-15 upstream has not merged the change; the patch still applies.
+ENTRY
+prov_expect_pass 'P4 a reviewed line moves the horizon' '1 registered, 0 overdue' \
+  --date "$prov_now"
+
+# P8: an overdue entry fails the scopes the change touches and is reported
+# everywhere else, so a Windows commit is not blocked by a Unix-like measure.
+prov_overdue() {
+  prov_base
+  prov_entry unixlike/probe-measure <<'ENTRY'
+id: unixlike/probe-measure
+kind: upstream-pending
+statement: The Unix-like tree carries a patch upstream has not merged.
+since: 2026-03-01
+exit-when: Upstream merges the change this patch anticipates.
+review-by: 2026-08-01
+issue: #175
+decision: docs/decisions/measure.md § Measure accepted
+owner: repository maintainer
+
+Body text.
+ENTRY
+}
+
+prov_overdue
+prov_expect_fail 'P8 overdue in a selected scope' \
+  'P8 review-by 2026-08-01 is overdue at 2026-09-05' \
+  --date "$prov_now" --scopes unixlike,repository
+
+prov_overdue
+prov_expect_pass 'P8 overdue outside the selected scopes is reported' \
+  '1 overdue outside the changed scopes (unixlike/probe-measure)' \
+  --date "$prov_now" --scopes windows
+
+prov_overdue
+prov_expect_pass 'P8 an unselected scope list fails nothing' \
+  '1 overdue outside the changed scopes' --date "$prov_now"
+
+# A tree with no registry at all is zero entries and passes: the registry
+# exists to be emptied.
+prov_base
+rm -r "$prov_repo/provisional" "$prov_repo/modules/probe.nix"
+prov_expect_pass 'an absent registry' '0 registered, 0 overdue' --date "$prov_now"
+
+prov_base
+prov_table=$(prov_run --table --date "$prov_now")
+if ! printf '%s\n' "$prov_table" |
+  grep -qF '| `unixlike/probe-measure` | upstream-pending | 2026-12-01 |'; then
+  printf '%s\n' "$prov_table" >&2
+  echo "provisional --table did not render the entry" >&2
+  exit 1
+fi
+
+prov_status=0
+(cd "$prov_repo" && "$provisional" --bogus) >/dev/null 2>&1 || prov_status=$?
+if [ "$prov_status" -ne 2 ]; then
+  echo "provisional exited $prov_status on bad usage, expected 2" >&2
+  exit 1
+fi
+prov_status=0
+(cd "$prov_repo" && "$provisional" --date 2026-13-01) >/dev/null 2>&1 || prov_status=$?
+if [ "$prov_status" -ne 2 ]; then
+  echo "provisional exited $prov_status on a malformed reference date, expected 2" >&2
   exit 1
 fi
 

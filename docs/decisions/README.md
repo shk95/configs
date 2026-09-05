@@ -68,3 +68,4 @@ decision` is the procedure.
 | 2026-09-05 | windows | Windows adopts Modus Operandi by copying | accepted | windows-adopts-modus-operandi.md |
 | 2026-09-05 | windows | The Windows entry point is one script inside the domain | accepted | windows-entry-point-in-domain.md |
 | 2026-09-05 | repository | A rule or a deletion is observed before it is adopted | accepted | candidates-observed-before-adoption.md |
+| 2026-09-05 | repository | The provisional registry records what must become false | accepted | provisional-registry-created.md |
