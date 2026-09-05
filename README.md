@@ -174,8 +174,9 @@ unchanged; `win-env.ps1 help` prints the table.
 Arguments after the verb reach the script unchanged, so `check -Feature
 terminal` and `capture -Feature powertoys -Publish` mean what the sections
 below say, and a command the script refuses ends the run at 1. A verb it does
-not know is refused with exit status 64, which no check outcome uses. CI and the hooks call the scripts under `windows\tools\`
-directly; the entry point forwards to the same files.
+not know is refused with exit status 64, which no check outcome uses. CI and
+the hooks call the scripts under `windows\tools\` directly; the entry point
+forwards to the same files.
 
 `setup-dev.ps1` installs the contributor toolchain once, from
 `windows/toolchain.json`. CI installs from the same declaration, so local

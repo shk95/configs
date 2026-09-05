@@ -54,7 +54,7 @@ validates them with the parser that will consume them. The two declarations are
 independent copies of one idea, not a shared authority, and neither imports the
 other.
 
-Composition, identity, and ownership in this domain rest on seven rules, each
+Composition, identity, and ownership in this domain rest on nine rules, each
 registered under `invariants/unixlike/`. One file maps module classes to
 hosts, and a feature file writes into a class without naming a host or
 forcing another class's decision, so where a program reaches is read in one
