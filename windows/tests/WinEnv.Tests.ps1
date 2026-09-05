@@ -4518,6 +4518,34 @@ Describe 'check entry points' {
         $entryPoint = Join-Path $repositoryRoot 'win-env.ps1'
         $pwshPath = (Get-Process -Id $PID).Path
 
+        # The two scripts that can run before pwsh 7 exists: bootstrap.ps1
+        # installs it, and win-env.ps1 stands in front of bootstrap. The
+        # older shell is asked directly where the host has one; elsewhere
+        # the static half of the rule still holds.
+        $preBootstrapScripts = @($entryPoint, $bootstrap)
+        $windowsPowerShell = if ($env:SystemRoot) {
+            Join-Path $env:SystemRoot 'System32\WindowsPowerShell\v1.0\powershell.exe'
+        }
+        # REQUIRE_NATIVE is managed like the two helpers above: the CI job
+        # exports it, and bootstrap.ps1 -Check turns a missing prerequisite
+        # into 1 under it, so the child must see exactly the value the case
+        # asks for rather than whatever the caller's environment holds.
+        function Invoke-WindowsPowerShell {
+            param([string[]] $Arguments, [string] $RequireNative)
+            $savedPath = $env:PATH
+            $savedNative = $env:REQUIRE_NATIVE
+            try {
+                $env:PATH = ''
+                $env:REQUIRE_NATIVE = $RequireNative
+                $output = @(& $windowsPowerShell -NoProfile -NonInteractive -ExecutionPolicy Bypass @Arguments 2>&1 | ForEach-Object { "$_" })
+                return [pscustomobject]@{ ExitCode = $LASTEXITCODE; Output = ($output -join "`n") }
+            }
+            finally {
+                $env:PATH = $savedPath
+                $env:REQUIRE_NATIVE = $savedNative
+            }
+        }
+
         # Runs the real entry point in a child pwsh with an empty PATH, so no
         # winget.exe is reachable and the prerequisite branch is the one that
         # answers. The same shape holds on Windows and on a Unix-like host.
@@ -4654,5 +4682,50 @@ Describe 'check entry points' {
         foreach ($verb in 'check', 'apply', 'capture', 'validate', 'test', 'setup-dev', 'font') {
             $help.Output | Should -Match "(?m)^  $([regex]::Escape($verb))\s"
         }
+    }
+
+    It 'INV windows/pre-bootstrap-shell-compatible: the scripts that run before pwsh 7 exists declare no newer shell' {
+        foreach ($script in $preBootstrapScripts) {
+            $tokens = $null
+            $errors = $null
+            $ast = [System.Management.Automation.Language.Parser]::ParseFile($script, [ref]$tokens, [ref]$errors)
+            $errors.Count | Should -Be 0
+            # A floor at or below the older shell's version is compliant; a
+            # higher floor, an edition, or a module requirement is what the
+            # statement forbids, because the host has only the older shell.
+            $requirements = $ast.ScriptRequirements
+            if ($requirements.RequiredPSVersion) {
+                $requirements.RequiredPSVersion | Should -BeLessOrEqual ([version]'5.1') -Because "$script runs before the newer shell is installed"
+            }
+            $requirements.RequiredPSEditions | Should -BeNullOrEmpty -Because "$script must not pin an edition the older shell is not"
+            $requirements.RequiredModules | Should -BeNullOrEmpty -Because "$script imports nothing the older shell lacks"
+        }
+    }
+
+    It 'INV windows/pre-bootstrap-shell-compatible: help and check run under the shell the host ships' {
+        if (-not $windowsPowerShell -or -not (Test-Path -LiteralPath $windowsPowerShell)) {
+            Set-ItResult -Skipped -Because 'this host has no Windows PowerShell; the windows-latest CI job runs this case'
+            return
+        }
+        (Invoke-WindowsPowerShell -Arguments @('-File', $entryPoint, 'help')).ExitCode | Should -Be 0
+        # With no winget.exe reachable, bootstrap.ps1 -Check answers 69 before
+        # it would need pwsh 7, so the whole path runs under the older shell;
+        # under REQUIRE_NATIVE it answers 1 the same way, which is the value
+        # the CI job would otherwise have leaked into this case.
+        (Invoke-WindowsPowerShell -Arguments @('-File', $entryPoint, 'check') -RequireNative $null).ExitCode | Should -Be 69
+        (Invoke-WindowsPowerShell -Arguments @('-File', $entryPoint, 'check') -RequireNative '1').ExitCode | Should -Be 1
+    }
+
+    It 'INV windows/pre-bootstrap-shell-compatible: the older shell refuses a script that needs the newer one' {
+        if (-not $windowsPowerShell -or -not (Test-Path -LiteralPath $windowsPowerShell)) {
+            Set-ItResult -Skipped -Because 'this host has no Windows PowerShell; the windows-latest CI job runs this case'
+            return
+        }
+        # The null-coalescing operator arrived with PowerShell 7; the older
+        # shell refuses the file at parse time, which is the failure the rule
+        # keeps out of the two scripts above.
+        $offender = Join-Path $TestDrive 'needs-newer-shell.ps1'
+        [IO.File]::WriteAllText($offender, "`$value = `$null ?? 'fallback'`r`nexit 0`r`n")
+        (Invoke-WindowsPowerShell -Arguments @('-File', $offender)).ExitCode | Should -Not -Be 0
     }
 }
