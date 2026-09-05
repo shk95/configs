@@ -17,16 +17,19 @@ _: {
 
         font-family = "D2KodingLigature Nerd Font Mono";
         font-size = 14;
-        # Flexoki Light is the light member of the same family WezTerm
+        # Modus Operandi is the light member of the same family WezTerm
         # selects in assets/wezterm/config/appearance.lua; keeping both
         # terminals in one family is what stops a graphical host from looking
-        # like two different machines. Ghostty ships both "Flexoki Light" and
-        # "Flexoki Dark" as built-in themes (verified in the pinned nixpkgs
-        # ghostty package's share/ghostty/themes/), so the dual form here
-        # needs no extra file: Ghostty answers the terminal's own light/dark
-        # appearance rather than the colour-scheme query modules/zellij.nix
-        # describes, and switches between the two names on its own.
-        theme = "light:Flexoki Light,dark:Flexoki Dark";
+        # like two different machines. Ghostty ships both "Modus Operandi"
+        # and "Modus Vivendi" as built-in themes; both names were verified in
+        # the pinned nixpkgs ghostty package's share/ghostty/themes/. That
+        # same directory is where WezTerm's inline copy of the light half is
+        # transcribed from, which is what makes the two terminals exact
+        # rather than merely similar. So the dual form here needs no extra
+        # file: Ghostty answers the terminal's own light/dark appearance
+        # rather than the colour-scheme query modules/zellij.nix describes,
+        # and switches between the two names on its own.
+        theme = "light:Modus Operandi,dark:Modus Vivendi";
         minimum-contrast = 1.1;
 
         cursor-style = "block";

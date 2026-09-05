@@ -34,7 +34,7 @@ the directory walk (`INV unixlike/import-order-independence`).
 
 Since 2026-09-05 that rendering is the asset alone for every class: the
 keymap, the `theme_dark`/`theme_light` pair, and a static
-`theme "flexoki-light"` no class overrides. Windows Terminal 1.23 was probed
+`theme "modus-operandi"` no class overrides. Windows Terminal 1.23 was probed
 on 2026-09-05 and does not answer the colour-scheme query the pair depends
 on, and every terminal this repository declares for a composed home is light
 (`docs/decisions/composed-homes-render-in-declared-terminals.md`).
