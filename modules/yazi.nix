@@ -125,7 +125,7 @@ _: {
       # exists, recorded after activation, and only then is `theme` or
       # `flavors` worth revisiting.
       #
-      # Also deliberately absent: a Flexoki flavor (none is packaged in the
+      # Also deliberately absent: a Modus flavor (none is packaged in the
       # pinned nixpkgs, and nothing should be fetched from the network at
       # evaluation time), openers, previewers, `vfs`, the `lazygit` yazi
       # plugin (lazygit is its own issue), and any image-preview

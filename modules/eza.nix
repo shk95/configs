@@ -16,7 +16,8 @@ _: {
       # renders in whatever colours the terminal declares — the same deference
       # `modules/bat.nix` makes with its `ansi` theme. The familiar "dark blue
       # directories on white" complaint is about a terminal whose ANSI blue is
-      # #0000ee; under Catppuccin Latte it is #1e66f5.
+      # #0000ee; under Modus Operandi it is #0031a9, which reaches 10.4:1
+      # against that scheme's #ffffff page.
       #
       # `programs.eza.theme` would write $XDG_CONFIG_HOME/eza/theme.yml with
       # fixed values and end that deference, which is precisely what a module
