@@ -31,7 +31,9 @@
 #             payload's top-level keys, then the host hotkey dictionary
 #             restricted to the payload's entry numbers. Each is introduced by
 #             a `=== <name> ===` line, which is the whole contract a caller
-#             that splits the output may rely on.
+#             that splits the output may rely on. The marker lines belong to
+#             neither payload: on a host that matches, each section between
+#             them reproduces its payload byte for byte.
 #   check     compare each projection with its payload after `jq -S`.
 #   apply     write the payload merged over the host's undeclared top-level
 #             keys, and write each hotkey entry that differs.
@@ -283,8 +285,12 @@ if [ "$document_have" != "$document_want" ]; then
   target_dir=$(dirname "$target")
   [ -d "$target_dir" ] || mkdir -p "$target_dir"
   # Written beside the target and moved into place, so Karabiner never sees a
-  # half-written file and no state is lost when the write fails.
-  scratch="$target_dir/.karabiner.json.$$"
+  # half-written file and no state is lost when the write fails. mktemp rather
+  # than a name built from the pid: it creates the file at mode 600 before
+  # anything is written to it, so the merged document is never briefly
+  # world-readable, and it cannot collide with a leftover from an earlier run.
+  scratch=$(mktemp "$target_dir/.karabiner.json.XXXXXX") ||
+    fail "could not create a temporary file in $target_dir"
   merge_document >"$scratch" || fail "could not merge $payload over $host"
   chmod 600 "$scratch"
   mv "$scratch" "$target"

@@ -69,6 +69,19 @@ printf '→ tolerates an undeclared top-level key\n'
 karabiner check --host "$work/host.json" --hotkeys-host "$work/hotkeys-host.json" \
   >/dev/null || bad "the projection reported an undeclared top-level key as drift"
 
+# A Mac with Karabiner installed and no configuration file yet is a host this
+# check can read and disagree with, so the answer is drift rather than
+# unverified; `docs/decisions/drift-outranks-unverified.md` is the rule. The
+# opposite direction is the case above: a file that is there and matches.
+printf '→ reports a missing host file as drift, not as unverified\n'
+status=0
+karabiner check --host "$work/absent.json" \
+  --hotkeys-host "$work/hotkeys-host.json" >"$work/out" 2>&1 || status=$?
+[ "$status" -eq 1 ] ||
+  bad "a missing host file exited $status, expected 1"
+grep -q "karabiner: this host has no $work/absent.json" "$work/out" ||
+  bad "the drift did not name the file the host does not have"
+
 run_jq -S --indent 2 '.profiles[0].virtual_hid_keyboard.keyboard_type_v2 = "iso"' \
   "$work/host.json" >"$work/host-changed.json"
 
@@ -236,9 +249,14 @@ PATH="$shims:$PATH" KARABINER_FIXTURE_LOG="$work/calls" \
 # the two questions this clone cannot answer: the platform is not a Mac, or no
 # jq can be resolved. Reproduced under `env -i` the way
 # tool/checks/prerequisite-test is, so this host's own environment cannot
-# decide the case.
+# decide the case. Each half isolates one guard, which is why the two use
+# different PATHs: the platform half keeps the ordinary system utilities, so
+# only the platform can be the reason; the jq half points PATH at an empty
+# directory, which removes jq and nix together and cannot be skipped on a
+# host that happens to ship jq in /usr/bin.
 
 bare='PATH=/usr/bin:/bin'
+mkdir -p "$work/empty"
 
 if [ "$(uname -s)" = Darwin ]; then
   echo "· this host is a Mac; the platform guard cannot be exercised here"
@@ -251,16 +269,12 @@ else
     bad "a host that is not a Mac exited $status, expected 69"
 fi
 
-if env -i $bare sh -c 'command -v jq' >/dev/null 2>&1; then
-  echo "· jq is reachable from the minimal PATH here, skipping"
-else
-  printf '→ a host with no jq is unverified\n'
-  status=0
-  env -i $bare HOME="$HOME" KARABINER_PLATFORM=darwin "$tool" check \
-    --host "$work/host.json" --hotkeys-host "$work/hotkeys-host.json" \
-    >/dev/null 2>&1 || status=$?
-  [ "$status" -eq 69 ] || bad "a host with no jq exited $status, expected 69"
-fi
+printf '→ a host with no jq and no nix is unverified\n'
+status=0
+env -i PATH="$work/empty" HOME="$HOME" KARABINER_PLATFORM=darwin "$tool" check \
+  --host "$work/host.json" --hotkeys-host "$work/hotkeys-host.json" \
+  >/dev/null 2>&1 || status=$?
+[ "$status" -eq 69 ] || bad "a host with no jq and no nix exited $status, expected 69"
 
 printf '→ a host that can answer does not report unverified\n'
 karabiner check --host "$work/host.json" --hotkeys-host "$work/hotkeys-host.json" \

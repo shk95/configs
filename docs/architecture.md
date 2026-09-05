@@ -56,7 +56,7 @@ other. A payload the host application rewrites in place cannot be delivered as
 a link into the store at all, so its desired state declares the members it owns
 and one projection onto those members decides drift, what is written and what
 may be captured, leaving whatever the application keeps beside them as runtime
-(#177, 2026-09-05; `docs/decisions/karabiner-desired-state-by-projection.md`).
+(`docs/decisions/karabiner-desired-state-by-projection.md`).
 
 Composition, identity, and ownership in this domain rest on ten rules, each
 registered under `invariants/unixlike/`. One file maps module classes to
