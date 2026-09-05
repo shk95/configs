@@ -33,6 +33,16 @@
 # instead of running it, and under nix-darwin the activation runs as the user
 # whose Karabiner file this is. `JQ` hands the script the jq it already has,
 # so the activation resolves nothing from PATH.
+#
+# That matters beyond jq. The PATH an activation script runs under is Home
+# Manager's own inputs — bash, coreutils, diffutils, findutils, gettext,
+# gnugrep, gnused, jq, ncurses and Nix — and the caller's PATH is appended only
+# when `home.emptyActivationPath` is false, which on this home it is not. So
+# /usr/bin is absent, and `defaults`, `plutil` and `activateSettings` would not
+# resolve by name. Nothing is added to PATH here: `tool/darwin/karabiner`
+# resolves those three itself, from PATH first and from their absolute macOS
+# location second, so the fixtures can still shim them and the activation still
+# finds them.
 _: {
   modules.homeManager.darwin = {
     pkgs,

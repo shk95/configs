@@ -1705,16 +1705,22 @@ if ! capture_output=$(run_capture n --dry-run --host "$capture_host" \
   echo "capture karabiner refused a host that drifted from the payloads" >&2
   exit 1
 fi
-printf '%s\n' "$capture_output" | grep -q '^edit: assets/karabiner/karabiner.json$'
-printf '%s\n' "$capture_output" | grep -q '^edit: assets/karabiner/symbolic-hotkeys.json$'
-printf '%s\n' "$capture_output" | grep -q '^-    "check_for_updates": false$'
-printf '%s\n' "$capture_output" | grep -q '^+    "check_for_updates": true$'
-printf '%s\n' "$capture_output" | grep -q '^-      "enabled": false,$'
-printf '%s\n' "$capture_output" | grep -q '^+      "enabled": true,$'
-printf '%s\n' "$capture_output" | grep -q '^classification: unixlike$'
-printf '%s\n' "$capture_output" | grep -q '^  unixlike:payloads$'
-printf '%s\n' "$capture_output" \
-  | grep -q '^message: feat(unixlike): capture karabiner desired state$'
+for capture_line in \
+  '^edit: assets/karabiner/karabiner.json$' \
+  '^edit: assets/karabiner/symbolic-hotkeys.json$' \
+  '^-    "check_for_updates": false$' \
+  '^+    "check_for_updates": true$' \
+  '^-      "enabled": false,$' \
+  '^+      "enabled": true,$' \
+  '^classification: unixlike$' \
+  '^  unixlike:payloads$' \
+  '^message: feat(unixlike): capture karabiner desired state$'; do
+  if ! printf '%s\n' "$capture_output" | grep -q "$capture_line"; then
+    printf '%s\n' "$capture_output" >&2
+    echo "the capture dry run did not report a line matching $capture_line" >&2
+    exit 1
+  fi
+done
 # The runtime key is in the host this run read and in neither diff.
 if printf '%s\n' "$capture_output" | grep -q 'machine_specific'; then
   printf '%s\n' "$capture_output" >&2

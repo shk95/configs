@@ -209,8 +209,12 @@ fi
       && ok "Karabiner-Elements.app installed" \
       || warn "Karabiner-Elements.app is not installed" \
              "The cask is declared in modules/darwin-homebrew.nix; 'just karabiner-check' reports drift until it is installed."
-    command -v karabiner_cli >/dev/null 2>&1 && ok "karabiner_cli" \
-      || warn "karabiner_cli is not on PATH" \
+    # The cask installs it below the application's own support directory and
+    # puts nothing on PATH, so the absolute path is the only probe that can
+    # answer.
+    karabiner_cli="/Library/Application Support/org.pqrs/Karabiner-Elements/bin/karabiner_cli"
+    [ -x "$karabiner_cli" ] && ok "karabiner_cli installed" \
+      || warn "karabiner_cli is not installed" \
              "Optional. The projection needs only the configuration file; karabiner_cli is the app's own CLI."
     [ -r "$HOME/.config/karabiner/karabiner.json" ] \
       && ok "host karabiner.json present" \

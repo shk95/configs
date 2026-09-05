@@ -240,6 +240,28 @@ PATH="$shims:$PATH" KARABINER_FIXTURE_LOG="$work/calls" \
 [ -s "$work/calls" ] &&
   bad "apply invoked a macOS command for a hotkey that already matches"
 
+# Without the shims the commands are not on PATH at all, which is the PATH a
+# Home Manager activation gives this script: Home Manager's own inputs and no
+# /usr/bin. The tool must reach for the absolute macOS location rather than
+# giving up on a bare name, and naming it in the failure is how this clone can
+# see which path it took. That the command at that path then works is Mac
+# evidence (#178); Linux can only prove the fallback was reached, never that
+# it succeeded. Skipped on a Mac, where the fallback resolves to the real
+# `plutil` and `defaults` and this case would write to the account's own
+# preferences.
+if [ "$(uname -s)" = Darwin ]; then
+  echo "· this host is a Mac; the fallback would reach the real defaults database"
+else
+  printf '→ reaches the macOS tools at their absolute path when PATH has none\n'
+  status=0
+  karabiner apply --host "$work/target.json" --target "$work/target.json" \
+    --hotkeys-host "$work/hotkeys-changed.json" >"$work/out" 2>&1 || status=$?
+  [ "$status" -eq 1 ] ||
+    bad "apply with no macOS tools on PATH exited $status, expected 1"
+  grep -q '/usr/bin/plutil failed on symbolic hotkey 60' "$work/out" ||
+    bad "apply did not name the absolute path it fell back to"
+fi
+
 # ---------------------------------------------------------------------------
 # A host that cannot answer is unverified, not failed
 # ---------------------------------------------------------------------------

@@ -58,7 +58,9 @@
 # `docs/decisions/drift-outranks-unverified.md` states for the other domain.
 #
 # The hotkey write path calls `defaults`, `plutil` and `activateSettings`,
-# which exist only on macOS. tool/checks/karabiner-test exercises it through
+# which exist only on macOS and are each resolved from PATH first and from
+# their absolute macOS location second, because a Home Manager activation runs
+# with Home Manager's own inputs on PATH and no /usr/bin. tool/checks/karabiner-test exercises it through
 # shims on PATH that record their arguments; the real write is exercised only
 # on the Mac (#178). `activateSettings` is private and best effort: a failure
 # is a warning, because the entries are already written and a logout applies
@@ -71,9 +73,6 @@
 # usage: tool/darwin/karabiner <project|check|apply> [options]
 
 set -eu
-
-here=$(CDPATH= cd -- "$(dirname -- "$0")" && pwd)
-root=$(CDPATH= cd -- "$here/../.." && pwd)
 
 usage() {
   echo "usage: tool/darwin/karabiner <project|check|apply> [--payload FILE]" >&2
@@ -120,11 +119,6 @@ while [ "$#" -gt 0 ]; do
   shift 2
 done
 
-[ -n "$payload" ] || payload="$root/assets/karabiner/karabiner.json"
-[ -n "$hotkeys" ] || hotkeys="$root/assets/karabiner/symbolic-hotkeys.json"
-[ -n "$host" ] || host="${HOME:-}/.config/karabiner/karabiner.json"
-[ -n "$target" ] || target=$host
-
 # ---------------------------------------------------------------------------
 # Guards
 # ---------------------------------------------------------------------------
@@ -157,6 +151,29 @@ run_jq() {
     nix shell nixpkgs#jq -c jq "$@"
   fi
 }
+
+# `defaults` and `plutil` are macOS commands in /usr/bin, and the PATH this
+# script runs under during a Home Manager activation is Home Manager's own
+# inputs — bash, coreutils, diffutils, findutils, gettext, gnugrep, gnused, jq,
+# ncurses and Nix — with the caller's PATH appended only when
+# `home.emptyActivationPath` is false, which on the Darwin home it is not. So
+# both are resolved here the way `activateSettings` is below: PATH first, so
+# tool/checks/karabiner-test can shim them, then the absolute path macOS puts
+# them at. /usr/bin is deliberately not appended to PATH instead: that would
+# hand this script a jq the fixtures remove on purpose, and the unverified
+# case proves its answer by having no jq at all.
+defaults_bin=$(command -v defaults 2>/dev/null || echo /usr/bin/defaults)
+plutil_bin=$(command -v plutil 2>/dev/null || echo /usr/bin/plutil)
+
+# Resolved after the guards, so a host that cannot answer says so rather than
+# printing a missing-utility error from the path arithmetic first.
+here=$(CDPATH= cd -- "$(dirname -- "$0")" && pwd)
+root=$(CDPATH= cd -- "$here/../.." && pwd)
+
+[ -n "$payload" ] || payload="$root/assets/karabiner/karabiner.json"
+[ -n "$hotkeys" ] || hotkeys="$root/assets/karabiner/symbolic-hotkeys.json"
+[ -n "$host" ] || host="${HOME:-}/.config/karabiner/karabiner.json"
+[ -n "$target" ] || target=$host
 
 [ -r "$payload" ] || fail "no Karabiner payload at $payload"
 [ -r "$hotkeys" ] || fail "no symbolic hotkey payload at $hotkeys"
@@ -191,12 +208,13 @@ read_hotkeys_host() {
   if [ -n "$hotkeys_host" ]; then
     cat "$hotkeys_host"
   else
-    defaults export com.apple.symbolichotkeys - | plutil -convert json -o - -
+    "$defaults_bin" export com.apple.symbolichotkeys - |
+      "$plutil_bin" -convert json -o - -
   fi
 }
 
 hotkeys_json=$(read_hotkeys_host) ||
-  fail "could not read this host's symbolic hotkey dictionary"
+  fail "could not read this host's symbolic hotkey dictionary with $defaults_bin and $plutil_bin"
 
 # ---------------------------------------------------------------------------
 # The projection
@@ -309,11 +327,11 @@ for number in $(run_jq -r '.AppleSymbolicHotKeys | keys[]' "$hotkeys"); do
   if [ "$entry_want" = "$entry_have" ]; then
     continue
   fi
-  entry_plist=$(printf '%s\n' "$entry_want" | plutil -convert xml1 -o - -) ||
-    fail "plutil refused symbolic hotkey $number"
-  defaults write com.apple.symbolichotkeys AppleSymbolicHotKeys \
+  entry_plist=$(printf '%s\n' "$entry_want" | "$plutil_bin" -convert xml1 -o - -) ||
+    fail "$plutil_bin failed on symbolic hotkey $number"
+  "$defaults_bin" write com.apple.symbolichotkeys AppleSymbolicHotKeys \
     -dict-add "$number" "$entry_plist" ||
-    fail "defaults refused symbolic hotkey $number"
+    fail "$defaults_bin failed on symbolic hotkey $number"
   printf 'symbolic hotkey %s: wrote the declared entry\n' "$number"
   hotkeys_written=1
 done
