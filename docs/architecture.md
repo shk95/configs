@@ -54,7 +54,7 @@ validates them with the parser that will consume them. The two declarations are
 independent copies of one idea, not a shared authority, and neither imports the
 other.
 
-Composition, identity, and ownership in this domain rest on seven rules, each
+Composition, identity, and ownership in this domain rest on nine rules, each
 registered under `invariants/unixlike/`. One file maps module classes to
 hosts, and a feature file writes into a class without naming a host or
 forcing another class's decision, so where a program reaches is read in one
@@ -95,6 +95,20 @@ runtime behavior.
 
 Windows deployment consumes a Windows domain release tag. Native Pester and
 read-only `bootstrap.ps1 -Check` evidence precede any explicit Apply.
+
+The domain presents one entry point. Each of its verbs runs one of the
+domain's own scripts and hands back that script's exit status unchanged, so
+check evidence reaches an operator through the entry point exactly as it
+does through the script; a command the entry point could not hand to its
+script fails the run, and a verb it does not know is refused with a status
+no check outcome uses, because the entry point names the scripts and decides
+nothing they decide.
+
+Two shells serve the domain: the one the host ships, which runs the entry
+point and the bootstrap that installs the newer one, and the newer one, which
+runs everything after. A script that can run before the newer shell exists
+stays within the older one, because a host that needs bootstrap is by
+definition a host without it.
 
 The source manifest and every owned payload live below `windows/desired/`.
 PowerShell reads that source directly; there is no Nix-rendered Windows

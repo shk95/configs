@@ -194,6 +194,30 @@ one. Prose and code cite a record by path only; a quoted heading is checked
 by nothing and rots. Cite it from a registry entry with `decision:` when an
 invariant rests on it.
 
+## Observe before adding or removing
+
+A sentence added to a policy document without a check behind it rots, and a
+deletion is as easy to get wrong as an addition. Both pass through
+`docs/candidates/` first. `docs/candidates/README.md` is the format; this is
+the procedure.
+
+1. Record the observation as `docs/candidates/<slug>.md` with `kind:
+   addition` or `kind: deletion`, the target it would change, the criterion
+   that promotes it and the date or event that drops it. Write what was met
+   and where, not the rule you would like to exist.
+2. Add a dated line under `Occurrences` each time the same thing is met
+   again, with the evidence.
+3. Promote when the criterion is met: make the change in its owning scope
+   through the flows above and delete the candidate in the same pull
+   request. The commit message names the candidate it promotes.
+4. Drop when the date passes or the event occurs without promotion: delete
+   the file. History is the record either way.
+
+Two things do not wait: a change that is fatal on a host and invisible to
+every gate, and the correction of tracked text that is false today. A
+candidate is an observation. Nothing cites it as authority, and an agent
+does not follow one as a rule.
+
 ## Plan work with GitHub milestones
 
 GitHub milestones group planned work after its owning scope and outcome are
@@ -252,11 +276,25 @@ and are validated on native Windows.
 Native read-only verification is:
 
 ```powershell
-.\windows\tools\setup-dev.ps1
-.\windows\tools\check-desired-state.ps1
-.\windows\tools\test.ps1
-.\windows\bootstrap.ps1 -Check
+.\windows\win-env.ps1 setup-dev
+.\windows\win-env.ps1 validate
+.\windows\win-env.ps1 test
+.\windows\win-env.ps1 check
 ```
+
+`win-env.ps1` is the domain's one entry point: each verb runs one script under
+`windows/tools/` (`setup-dev.ps1`, `check-desired-state.ps1`, `test.ps1`,
+`bootstrap.ps1 -Check`) and returns that script's exit status unchanged, so
+the evidence a verb produces is the script's; a command the script refuses
+ends the run at 1. CI and the hooks run those scripts directly.
+
+A branch that has not been pushed yet can still reach a native Windows
+clone of this repository through the filesystem: in that clone, fetch the
+branch from the Unix-like session's main checkout — never from a linked
+worktree, whose `gitdir` file names a path Git for Windows cannot resolve —
+check it out, run the commands above under that host's own `pwsh`, and
+switch the clone back to its previous branch afterwards. Once the branch is
+pushed, `origin` is the transport and no path across the boundary is needed.
 
 `setup-dev.ps1` installs the contributor toolchain declared in
 `windows/toolchain.json`, which is also what CI installs from, so local Windows
@@ -268,7 +306,7 @@ remains pushable from a clone that has not installed anything.
 Apply is a deployment, not verification, and requires an explicit request:
 
 ```powershell
-.\windows\bootstrap.ps1
+.\windows\win-env.ps1 apply
 ```
 
 A host may deploy part of the manifest with `-Minimal`, `-Feature`, `-Add`, or
@@ -279,7 +317,8 @@ produced any `-Check` or Apply evidence, because a check that passed under a
 minimal selection says nothing about the features it excluded.
 
 A change made in an application's own UI moves back into desired state with
-`.\windows\tools\capture.ps1`, which reads the managed targets, writes only
+`.\windows\win-env.ps1 capture` (`windows/tools/capture.ps1`), which reads the
+managed targets, writes only
 this repository's payloads — a JSON payload pretty-printed to this
 repository's two-space style — and ends at one confirmation before committing.
 Preview it with `-WhatIf` first. It restates the guards of
@@ -466,6 +505,7 @@ not branch-protection contexts because unselected domains are skipped.
 | `docs/architecture.md` | Domain authority and dependency policy |
 | `docs/status.md` | Current state |
 | `docs/decisions/` | One record per expensive decision; `README.md` there is the index and format |
+| `docs/candidates/` | Observed candidates for adding a rule or removing text; `README.md` there is the index and format |
 | `docs/troubleshooting.md` | Recurring problems indexed by symptom |
 | `docs/definition-of-done.md` | Domain-specific evidence requirements |
 | `invariants/` | Enumerated invariants and how each one is enforced |

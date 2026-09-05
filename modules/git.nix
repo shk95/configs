@@ -60,12 +60,16 @@ in {
             br = "branch";
             co = "checkout";
             st = "status";
-            # The hash is `%C(bold cyan)` rather than `%C(yellow)`. A yellow
-            # legible on a dark terminal is by construction a pale tint, and
-            # this format string now has to survive a light one as well —
-            # Catppuccin Latte's yellow is #df8e1d on a #eff1f5 page. Cyan is a
-            # mid-tone in both directions and stays distinct from the `%Cred`
-            # refs and the `%Cblue` author beside it.
+            # The hash is `%C(bold cyan)` rather than `%C(yellow)`. Both
+            # names resolve through the terminal's own palette, so the
+            # question is what each one means at both ends of it, and yellow
+            # means almost nothing in common: a yellow legible on a dark
+            # terminal is by construction a pale tint (Modus Vivendi's ANSI 3
+            # is #d0bc00), while the light half reaches its own page by
+            # abandoning the hue's brightness altogether (Modus Operandi's is
+            # #6f5500, 7.06:1 against #ffffff and nearer brown than yellow).
+            # Cyan is a mid-tone in both directions and stays distinct from
+            # the `%Cred` refs and the `%Cblue` author beside it.
             ls = ''log --pretty=format:"%C(bold cyan)%h%Cred%d\\ %Creset%s%Cblue\\ [%cn]" --decorate'';
             cm = "commit -m";
             ca = "commit -am";
@@ -125,23 +129,32 @@ in {
           # because its subject is a background.
           true-color = "always";
 
-          # Deliberately no `light` and no `syntax-theme` in this class.
-          # `programs.delta` is in `homeManager.shared`, which also reaches the
-          # WSL homes, and those render inside Windows Terminal — a scheme
-          # declared in the Windows domain, unreadable from here, and still
-          # dark. delta's own defaults are tuned for a dark background, so they
-          # remain the honest choice for this class. The light half is declared
-          # in `homeManager.desktop` below, where the terminal is one this
-          # repository sets.
+          # Still no `light` and no `syntax-theme` in this class, but no
+          # longer because the premise forbids it. `programs.delta` is in
+          # `homeManager.shared`, which also reaches the WSL homes, and those
+          # render inside Windows Terminal — a scheme declared in the Windows
+          # domain, which code here may not read but which has selected a
+          # light one since #97. The WSL homes are therefore no longer the
+          # class that keeps `light` out of `homeManager.shared`
+          # (`docs/decisions/composed-homes-render-in-declared-terminals.md`),
+          # which makes moving `light = true` up here legal. It is not done
+          # here: it changes what every WSL home's `git diff`, `git show` and
+          # `git log -p` paint, which is a behaviour change with its own issue
+          # rather than a consequence of recording a premise. Until that issue
+          # lands, the split below stays exactly as it is today.
         };
       };
     };
   };
 
-  # The graphical Unix-like homes. Here the background is a value this flake
-  # declares — WezTerm and Ghostty are both set to Flexoki Light — rather than
-  # one it has to guess, which is what makes a light-tuned pager legal here
-  # and not in `shared`.
+  # The graphical Unix-like homes, where the background is a value this flake
+  # declares two files away: WezTerm on Modus Operandi and Ghostty on the light
+  # half of the same family. That is why the light-tuned pager landed here
+  # first, and it is no longer what makes it legal only here — the WSL homes'
+  # terminal is declared light too, by the Windows domain
+  # (`docs/decisions/composed-homes-render-in-declared-terminals.md`). This
+  # split is where the option sits today, not a boundary the reasoning still
+  # requires.
   modules.homeManager.desktop = {
     programs.delta.options = {
       # Not cosmetic: `light` is how delta picks the backgrounds it paints for
@@ -153,12 +166,12 @@ in {
 
       # The syntax colours that sit on top of those bands used to name a
       # bundled bat theme from the same family as the two terminals, the way
-      # `light` above still does for the diff bands. Flexoki has no such
-      # bundled delta/bat theme to name, and modules/bat.nix already declines
-      # to guess a named theme for the same reason: `ansi` defers to the
-      # terminal's own sixteen colours instead, which on this class is Flexoki
-      # Light because WezTerm and Ghostty declare it, and needs no bundled
-      # theme to track it.
+      # `light` above still does for the diff bands. Modus has no such bundled
+      # delta/bat theme to name — no more than Flexoki did before it — and
+      # modules/bat.nix already declines to guess a named theme for the same
+      # reason: `ansi` defers to the terminal's own sixteen colours instead,
+      # which on this class is Modus Operandi because WezTerm and Ghostty
+      # declare it, and needs no bundled theme to track it.
       syntax-theme = "ansi";
     };
   };

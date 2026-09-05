@@ -21,7 +21,7 @@ $ErrorActionPreference = 'Stop'
 # INV windows/check-exit-contract — Get-WinEnvCheckStatus ranks this run and
 # the non-apply path exits with what it returns; nothing else decides the
 # status of a -Check.
-$windowsRoot = $PSScriptRoot
+$windowsRoot = Split-Path -Parent $PSScriptRoot
 $repositoryRoot = Split-Path -Parent $windowsRoot
 $desiredStateRoot = Join-Path $windowsRoot 'desired'
 Import-Module (Join-Path $windowsRoot 'src\WinEnv.psm1') -Force

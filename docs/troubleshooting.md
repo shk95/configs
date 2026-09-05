@@ -517,6 +517,19 @@ landed (#88 on Unix-like, #89 on Windows), so the visible text may differ,
 or the symptom may vanish, now that the payloads carry a theme. No change is made here; the defect is
 upstream and was unchanged as of that date.
 
+### `The user config file <path>/config.yml must be migrated. Attempting to do this automatically.`
+
+lazygit then exits 1 with `permission denied`. A key the pinned lazygit has
+retired (`git.paging`, now `git.diffRenderers`) makes it migrate the file by
+writing it back; under Home Manager the file is a symlink into the read-only
+store, so the write-back fails and the tool never starts — while evaluation,
+build and `tool/checks/test` all pass, because nothing in the pipeline reads
+a tool's schema. Use the pinned version's key and start the built binary once
+against the rendered home:
+`XDG_CONFIG_HOME=<built home>/home-files/.config timeout 3 <built home>/home-path/bin/lazygit`
+(exit 124 is the pass). Any tool that migrates its own configuration in place
+fails the same way here (INV unixlike/generated-config-key-in-schema).
+
 ---
 
 ## Checks
@@ -579,6 +592,18 @@ Fixed, but worth knowing why it was possible. Nix delivers those files with
 covered their content and no check parsed them. `tool/checks/payloads` does
 now, driven by `assets/payloads.json`. A payload added without a declaration
 fails the check rather than escaping it.
+
+### `warning: in the working copy of '<file>', LF will be replaced by CRLF the next time Git touches it`
+
+`.gitattributes` pins `*.ps1` and `*.psm1` to `eol=crlf`: the checkout is
+CRLF, the stored blob is LF. An editor or script that rewrites such a file
+with LF endings — Python's `Path.write_text()` does — changes nothing that
+can be committed: `git diff` is empty and the staged blob is identical, so
+no hook has anything to refuse. Only `git status` and this warning show it,
+until the next add or diff refreshes the stat cache. `git checkout --
+windows/` restores the working tree; there is nothing to commit. Edit these
+files with a tool that keeps `\r` (`sed -i` does; Python needs
+`open(..., newline='')`).
 
 ## The agent sandbox
 

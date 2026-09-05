@@ -8,26 +8,35 @@ _: {
 
       config = {
         # `ansi` renders with the terminal's own sixteen colours instead of a
-        # palette bat carries itself. That is the right default here rather than a
-        # taste: the colour scheme is a Windows Terminal setting this flake cannot
-        # read, so any named theme is a guess about a value declared somewhere
-        # else, and it is wrong in exactly the case that hurts — a light scheme
-        # under a theme built for a dark one. `ansi` cannot disagree with the
-        # terminal because it has no opinion of its own.
+        # palette bat carries itself. It was chosen rather than a named theme
+        # because the colour scheme was a Windows Terminal setting this flake
+        # could not read, so any named theme was a guess about a value declared
+        # somewhere else, and it was wrong in exactly the case that hurts — a
+        # light scheme under a theme built for a dark one. `ansi` cannot
+        # disagree with the terminal because it has no opinion of its own.
         #
-        # That premise survived this repository adopting a light default; it was
-        # not removed by it. `programs.bat` is in `homeManager.shared`, so it
-        # reaches both WSL homes, and their shells render inside Windows
-        # Terminal — `windows/desired/files/terminal/settings.json`, owned by
-        # the Windows domain and still selecting a dark scheme. Setting WezTerm
-        # and Ghostty to Catppuccin Latte says nothing about those hosts, so a
-        # named light theme here would be the same guess it always was. If one
-        # is ever wanted it belongs in a class that excludes the WSL homes, not
-        # in this one.
+        # The premise moved; the conclusion did not move with it. `programs.bat`
+        # is in `homeManager.shared`, so it reaches both WSL homes, and their
+        # shells render inside Windows Terminal —
+        # `windows/desired/files/terminal/settings.json`, owned by the Windows
+        # domain, which has declared a light scheme since #97. Every home this
+        # repository composes now renders in a terminal it declares itself, and
+        # every one of those is light
+        # (`docs/decisions/composed-homes-render-in-declared-terminals.md`), so
+        # a named light theme here would no longer be the guess the paragraph
+        # above calls it, and `homeManager.desktop` — the class that excludes
+        # the WSL homes — is no longer where it would have to go.
         #
-        # It is also still the right answer on the terminals this change does
-        # fix: `ansi` resolves to whatever palette the terminal declares, which
-        # on Latte is Latte. Deferring costs nothing here.
+        # `ansi` stays anyway, for the reason that does not depend on any of
+        # that: deferral needs no theme at all. It resolves to whatever palette
+        # the terminal declares — Modus Operandi in WezTerm, whatever light
+        # scheme the Windows domain has declared for the WSL homes' Windows
+        # Terminal, and whichever half of its pair Ghostty is currently on —
+        # so it cannot disagree with a declared terminal, and it needs no
+        # revision when one of them changes. A named theme would; the move
+        # from Flexoki Light to Modus Operandi on 2026-09-05 touched every
+        # file that names a scheme and left this line alone, which is the
+        # argument for `ansi` making itself.
         theme = "ansi";
 
         # Default is `full`, which adds a grid, a file header and a line-number

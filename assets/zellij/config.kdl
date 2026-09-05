@@ -144,310 +144,389 @@ on_force_close "detach"
 show_startup_tips false
 show_release_notes false
 
-// Colours follow the host terminal rather than being fixed here. Zellij's
+// Colours are named here rather than left to the host, because zellij's
 // built-in fallback palette is dark — `default_palette()` in zellij-utils is
 // literally `theme_hue: ThemeHue::Dark` — so declaring nothing keeps the pane
-// frames, tab bar and status line dark inside a light terminal. Naming one
-// light theme instead is not right either: modules/zellij.nix copies this file
-// into every Unix-like home, and the WSL homes render inside Windows Terminal,
-// whose scheme is declared in the Windows domain and is still dark.
+// frames, tab bar and status line dark inside a light terminal. Naming a light
+// theme is no longer the guess it once was: every home
+// modules/flake/configurations.nix composes renders inside a terminal whose
+// colour scheme a file of this repository declares, and the two that never
+// report that scheme are both declared light — WezTerm on Modus Operandi in
+// assets/wezterm/config/appearance.lua, and Windows Terminal in the Windows
+// domain's own payload, which adopts this family by copy on that domain's
+// schedule rather than from here. So the static line at the end of this file
+// tells them what is already true rather than guessing at it — true about
+// lightness, which is the only thing it claims. The blocks below bake literal
+// values (#ffffff, #bdbdbd and the rest) rather than reading the host's own
+// palette, so until #164 lands the WSL homes paint this white-page theme
+// inside a Windows Terminal still on Flexoki Light's #FFFCF0 paper: both are
+// light, the rule holds, and the two whites simply do not match until that
+// copy is applied. Ghostty reports and drives the pair itself. The premise is
+// recorded once, with the declaring files and the condition that would reopen
+// it, in
+// docs/decisions/composed-homes-render-in-declared-terminals.md.
 //
-// Setting both `theme_dark` and `theme_light` is what this file can do. With
-// the pair configured, zellij swaps palettes from the host terminal's own
-// colour-scheme report (CSI 2031 / DSR 997); with only one of them it ignores
-// both. `flexoki-light` is the light member of the family the graphical
-// terminals are set to, and `flexoki-dark` is named here as the other branch
-// of a terminal-driven pair, not as a theme this repository selects.
+// Two settings carry it, and they do not fight. `theme_dark` and `theme_light`
+// are the terminal-driven pair: with both configured, zellij swaps palettes
+// from the host terminal's own colour-scheme report (CSI 2031 / DSR 997), and
+// with only one of them it ignores both. The plain `theme` at the end of this
+// file is the static answer for a terminal that never sends that report, and
+// it is authoritative only until one arrives, so it costs a reporting terminal
+// nothing. `modus-operandi` is the light member of the family
+// assets/wezterm/config/appearance.lua and modules/ghostty.nix select;
+// `modus-vivendi` is named as the other branch of the pair, the palette a
+// terminal reporting dark would be given, not as a theme this repository
+// selects.
 //
-// Unlike the Catppuccin pair this replaces, only one half resolves against a
-// zellij built-in: the pinned zellij-utils ships `flexoki-dark` (checked in
-// its `assets/themes/`) but no `flexoki-light` counterpart, so both are
-// defined explicitly below rather than leaving one to a builtin that may not
-// keep shipping and the other to one that does not exist yet. `flexoki-dark`
-// below is copied byte-for-byte from that builtin so the pair stays visually
-// consistent; `flexoki-light` is derived from it by the same rule applied to
-// every field: each neutral (`base-900`, `base-200`, ...) is swapped for its
-// mirror position in Flexoki's fifteen-stop scale (black/paper at the poles,
-// `base-500` at the centre — e.g. `base-900` <-> `base-100`), and each accent
-// is swapped from Flexoki's 400 (dark-normal) family to its same-hue 600
-// (light-normal) family. The two ribbon components' `emphasis_1..3` push past
-// their own family (to a 600-family accent) for contrast against an already
-// bright ribbon background in `flexoki-dark`; `flexoki-light` mirrors that
-// push the only way the palette allows, by using the black pole outright,
-// since Flexoki names no accent family darker than 600. See
-// https://github.com/kepano/flexoki for the source palette.
+// Unlike the Flexoki pair this replaces, neither half resolves against a
+// zellij built-in: the pinned zellij-utils `assets/themes/` ships no Modus
+// theme at all, and the one built-in that would defer to the terminal, `ansi`,
+// assumes a black background. So both halves are written out below, each
+// derived from its own terminal palette — the pinned nixpkgs ghostty package's
+// `share/ghostty/themes/Modus Operandi` and `Modus Vivendi`, which trace to
+// https://github.com/protesilaos/modus-themes — by one rule, recorded here so
+// a later scheme can be built the same way.
 //
-// Which terminals actually answer that query is the part to be exact about,
-// because the pair is inert without an answer:
+// The text, table-cell and list components are foregrounds on the page, so
+// they take the terminal foreground as `base` and the terminal background as
+// `background`, and their `_selected` variants swap in the terminal's own
+// selection colour as the background (#bdbdbd light, #5a5a5a dark) rather than
+// inventing a highlight. Their `emphasis_0` through `emphasis_3` are ANSI 9,
+// 6, 2 and 5 — four hues far enough apart to stay distinguishable from each
+// other and from `base` on either page.
+//
+// The two ribbons are filled blocks rather than foregrounds, so the rule
+// inverts there: `ribbon_selected` takes ANSI 2 as its background and
+// `ribbon_unselected` takes ANSI 8. What goes on top of them is never a third
+// accent — an accent picked to read against the page sits at the page's
+// opposite end, and dropped onto a coloured block it has nothing left to be
+// distinct from — but whichever neutral pole clears the ribbon underneath it.
+// Which pole that is has to be decided per ribbon, not per theme, because the
+// two ribbons do not always fall on the same side.
+//
+// In `modus-operandi` both are dark enough that the page colour wins
+// throughout: `base` and `emphasis_0`/`emphasis_2` are #ffffff (7.05:1 on the
+// green ribbon, 7.0:1 on the grey one) and `emphasis_1`/`emphasis_3` are the
+// selection grey #bdbdbd (3.75:1 and 3.73:1). In `modus-vivendi` the two split.
+// The green #44bc44 is bright, so that ribbon keeps `base` and the even
+// emphases on #000000 (8.52:1) with the odd ones on the selection grey #5a5a5a
+// (2.80:1). The grey #595959 is not bright: black on it reaches only 3.0:1 and
+// the selection grey lands at 1.02:1, which is not a colour so much as the
+// absence of one. That ribbon therefore takes the other pole — the foreground
+// #ffffff (7.0:1) — with ANSI 7 #a6a6a6 as its odd emphases. #a6a6a6 measures
+// 2.88:1 there and is the one value in either half that does not clear 3:1; it
+// separates two accent runs inside a ribbon rather than drawing a boundary,
+// and this palette offers no lighter neutral between #a6a6a6 and #ffffff to
+// use instead, so it is recorded rather than invented around.
+//
+// Frames are the component with a hard floor, because a frame the eye cannot
+// find is a pane boundary that is not there. `frame_selected` takes ANSI 2,
+// `frame_unselected` ANSI 8 and `frame_highlight` ANSI 9. In `modus-operandi`
+// those clear the 3:1 floor by a wide margin against the #ffffff page —
+// 7.05:1 (#006800), 7.0:1 (#595959) and 8.14:1 (#972500) by the WCAG
+// relative-luminance formula. The claim is scoped to that half rather than
+// repeated for both, because `modus-vivendi` is not as comfortable: #44bc44
+// reaches 8.52:1 and #ff7f9f 8.79:1 on black, but `frame_unselected`'s #595959
+// is exactly 3.00:1 — at the floor, not above it. That is the palette's own
+// ANSI 8 and a derivation rule does not get to invent a lighter one, so the
+// number is recorded here rather than corrected.
+//
+// The remaining components follow from the same palette: `table_title` and
+// `exit_code_success` take ANSI 2 as `base`, `exit_code_error` takes ANSI 1
+// with ANSI 3 as its `emphasis_0`, and the eight multiplayer cursors are
+// ANSI 5, 4, 6, 3, 2, 13, 1 and 11 in that order, with players 9 and 10 left
+// at 0 the way zellij's own bundled themes leave them.
+//
+// Two `background` fields have to be stated rather than left implied, because
+// a bare `0` in this file is not "unset". KDL reads it as a number and zellij
+// resolves a number to `EightBit(0)`, which is ANSI black — a value, not an
+// absence. `table_title` is painted with its own background by the table
+// component in zellij-server whenever a cell is opaque or selected, so a `0`
+// there would put a black block behind a title on a white page; both halves
+// therefore carry the page colour (255 255 255 and 0 0 0). The `exit_code_*`
+// components keep their `0`, because their ui components read only `base` and
+// `emphasis_0` and never paint that field at all: the value is inert rather
+// than wrong, and it is left as zellij's own bundled themes leave it. Frames
+// keep `0` for the same reason.
+//
+// Which terminals actually answer that query is the part to be exact about:
+// the pair is inert without an answer, and the static `theme` is what every
+// silent terminal ends up rendering.
 //
 //   Ghostty            answers — its binary carries the `[?996` / `[?997`
-//                      sequences and a `color_scheme_updates` mode.
+//                      sequences and a `color_scheme_updates` mode, so the
+//                      pair takes over as soon as its reply lands.
 //   WezTerm            does not. The pinned build has no colour-scheme private
 //                      mode in its `DecPrivateModeCode` list at all, so the
 //                      query goes unanswered.
-//   Windows Terminal   unverified from here. If it answers, the WSL homes
-//                      follow it for free once #39 turns that scheme light.
+//   Windows Terminal   does not either, as of 1.23.20211.0 — installed as
+//                      the package
+//                      `Microsoft.WindowsTerminal_1.23.20211.0_x64__8wekyb3d8bbwe`.
+//                      Probed on 2026-09-05 from a plain tab outside zellij,
+//                      which would otherwise intercept the reply:
+//                      `printf '\033[?996n\033[c'` came back with the DA1
+//                      answer `?61;4;6;7;14;21;22;23;24;28;32;42;52c` alone
+//                      and no `?997;1n` or `?997;2n` in front of it.
 //
-// An unanswered query leaves zellij on its dark fallback, which is the right
-// outcome for a terminal that is still dark and the wrong one inside the light
-// WezTerm this repository now declares. That is why modules/zellij.nix pins a
-// static `theme` for `homeManager.desktop` on top of this file rather than
-// relying on the pair there. A static `theme` is authoritative only until a
-// report arrives, so the two settings do not fight: Ghostty still drives its
-// own palette, and WezTerm gets a light one without having to ask.
+// Two of the three are silent, so the static `theme` below is what the WezTerm
+// desktops and the WSL homes actually render. It lives in this file rather
+// than in modules/zellij.nix because every composed home now needs the same
+// line for the same reason, and this is the one place the keymap and the
+// palettes already live.
 themes {
-    flexoki-light {
+    modus-operandi {
         text_unselected {
-            base 28 27 26
-            background 255 252 240
-            emphasis_0 218 112 44
-            emphasis_1 36 131 123
-            emphasis_2 102 128 11
-            emphasis_3 206 93 151
+            base 0 0 0
+            background 255 255 255
+            emphasis_0 151 37 0
+            emphasis_1 0 94 139
+            emphasis_2 0 104 0
+            emphasis_3 114 16 69
         }
         text_selected {
-            base 28 27 26
-            background 206 205 195
-            emphasis_0 218 112 44
-            emphasis_1 36 131 123
-            emphasis_2 102 128 11
-            emphasis_3 206 93 151
+            base 0 0 0
+            background 189 189 189
+            emphasis_0 151 37 0
+            emphasis_1 0 94 139
+            emphasis_2 0 104 0
+            emphasis_3 114 16 69
         }
         ribbon_selected {
-            base 255 252 240
-            background 102 128 11
-            emphasis_0 209 77 65
-            emphasis_1 218 112 44
-            emphasis_2 160 47 111
-            emphasis_3 58 169 159
+            base 255 255 255
+            background 0 104 0
+            emphasis_0 255 255 255
+            emphasis_1 189 189 189
+            emphasis_2 255 255 255
+            emphasis_3 189 189 189
         }
         ribbon_unselected {
-            base 87 86 83
-            background 230 228 217
-            emphasis_0 218 112 44
-            emphasis_1 183 181 172
-            emphasis_2 102 128 11
-            emphasis_3 206 93 151
+            base 255 255 255
+            background 89 89 89
+            emphasis_0 255 255 255
+            emphasis_1 189 189 189
+            emphasis_2 255 255 255
+            emphasis_3 189 189 189
         }
         table_title {
-            base 102 128 11
-            background 52 51 49
-            emphasis_0 218 112 44
-            emphasis_1 36 131 123
-            emphasis_2 102 128 11
-            emphasis_3 206 93 151
+            base 0 104 0
+            background 255 255 255
+            emphasis_0 151 37 0
+            emphasis_1 0 94 139
+            emphasis_2 0 104 0
+            emphasis_3 114 16 69
         }
         table_cell_selected {
-            base 28 27 26
-            background 206 205 195
-            emphasis_0 218 112 44
-            emphasis_1 36 131 123
-            emphasis_2 102 128 11
-            emphasis_3 206 93 151
+            base 0 0 0
+            background 189 189 189
+            emphasis_0 151 37 0
+            emphasis_1 0 94 139
+            emphasis_2 0 104 0
+            emphasis_3 114 16 69
         }
         table_cell_unselected {
-            base 28 27 26
-            background 255 252 240
-            emphasis_0 218 112 44
-            emphasis_1 36 131 123
-            emphasis_2 102 128 11
-            emphasis_3 206 93 151
+            base 0 0 0
+            background 255 255 255
+            emphasis_0 151 37 0
+            emphasis_1 0 94 139
+            emphasis_2 0 104 0
+            emphasis_3 114 16 69
         }
         list_selected {
-            base 28 27 26
-            background 206 205 195
-            emphasis_0 175 48 41
-            emphasis_1 188 82 21
-            emphasis_2 36 131 123
-            emphasis_3 160 47 111
+            base 0 0 0
+            background 189 189 189
+            emphasis_0 151 37 0
+            emphasis_1 0 94 139
+            emphasis_2 0 104 0
+            emphasis_3 114 16 69
         }
         list_unselected {
-            base 28 27 26
-            background 255 252 240
-            emphasis_0 175 48 41
-            emphasis_1 188 82 21
-            emphasis_2 36 131 123
-            emphasis_3 160 47 111
+            base 0 0 0
+            background 255 255 255
+            emphasis_0 151 37 0
+            emphasis_1 0 94 139
+            emphasis_2 0 104 0
+            emphasis_3 114 16 69
         }
         frame_selected {
-            base 102 128 11
-            background 255 252 240
-            emphasis_0 175 48 41
-            emphasis_1 188 82 21
-            emphasis_2 36 131 123
-            emphasis_3 0 0 0
-        }
-        frame_highlight {
-            base 188 82 21
-            background 255 252 240
-            emphasis_0 175 48 41
-            emphasis_1 160 47 111
-            emphasis_2 36 131 123
-            emphasis_3 32 94 166
-        }
-        frame_unselected {
-            base 183 181 172
+            base 0 104 0
             background 0
-            emphasis_0 239 159 118
-            emphasis_1 153 209 219
-            emphasis_2 244 184 228
-            emphasis_3 0
-        }
-        exit_code_success {
-            base 102 128 11
-            background 255 252 240
-            emphasis_0 36 131 123
-            emphasis_1 255 252 240
-            emphasis_2 160 47 111
-            emphasis_3 32 94 166
-        }
-        exit_code_error {
-            base 175 48 41
-            background 255 252 240
-            emphasis_0 188 82 21
-            emphasis_1 0 0 0
-            emphasis_2 0 0 0
-            emphasis_3 0 0 0
-        }
-        multiplayer_user_colors {
-            player_1 160 47 111
-            player_2 32 94 166
-            player_3 36 131 123
-            player_4 188 82 21
-            player_5 102 128 11
-            player_6 94 64 157
-            player_7 175 48 41
-            player_8 173 131 1
-            player_9 0 0 0
-            player_10 0 0 0
-        }
-    }
-    flexoki-dark {
-        text_unselected {
-            base 206 205 195
-            background 40 39 38
-            emphasis_0 218 112 44
-            emphasis_1 58 169 159
-            emphasis_2 135 154 57
-            emphasis_3 139 126 200
-        }
-        text_selected {
-            base 255 252 240
-            background 52 51 49
-            emphasis_0 218 112 44
-            emphasis_1 58 169 159
-            emphasis_2 135 154 57
-            emphasis_3 139 126 200
-        }
-        ribbon_selected {
-            base 40 39 38
-            background 208 162 21
-            emphasis_0 16 15 15
-            emphasis_1 175 48 41
-            emphasis_2 94 64 157
-            emphasis_3 32 94 166
-        }
-        ribbon_unselected {
-            base 40 39 38
-            background 183 181 172
-            emphasis_0 64 62 60
-            emphasis_1 175 48 41
-            emphasis_2 32 94 166
-            emphasis_3 175 48 41
-        }
-        table_title {
-            base 208 162 21
-            background 0
-            emphasis_0 218 112 44
-            emphasis_1 58 169 159
-            emphasis_2 135 154 57
-            emphasis_3 139 126 200
-        }
-        table_cell_selected {
-            base 206 205 195
-            background 52 51 49
-            emphasis_0 218 112 44
-            emphasis_1 58 169 159
-            emphasis_2 135 154 57
-            emphasis_3 139 126 200
-        }
-        table_cell_unselected {
-            base 206 205 195
-            background 40 39 38
-            emphasis_0 218 112 44
-            emphasis_1 58 169 159
-            emphasis_2 135 154 57
-            emphasis_3 139 126 200
-        }
-        list_selected {
-            base 206 205 195
-            background 52 51 49
-            emphasis_0 218 112 44
-            emphasis_1 58 169 159
-            emphasis_2 135 154 57
-            emphasis_3 139 126 200
-        }
-        list_unselected {
-            base 206 205 195
-            background 40 39 38
-            emphasis_0 218 112 44
-            emphasis_1 58 169 159
-            emphasis_2 135 154 57
-            emphasis_3 139 126 200
-        }
-        frame_unselected {
-            base 87 86 83
-            background 0
-            emphasis_0 218 112 44
-            emphasis_1 58 169 159
-            emphasis_2 139 126 200
-            emphasis_3 0
-        }
-        frame_selected {
-            base 208 162 21
-            background 0
-            emphasis_0 218 112 44
-            emphasis_1 58 169 159
-            emphasis_2 139 126 200
+            emphasis_0 151 37 0
+            emphasis_1 0 94 139
+            emphasis_2 114 16 69
             emphasis_3 0
         }
         frame_highlight {
-            base 218 112 44
+            base 151 37 0
             background 0
-            emphasis_0 139 126 200
-            emphasis_1 218 112 44
-            emphasis_2 218 112 44
-            emphasis_3 218 112 44
+            emphasis_0 166 0 0
+            emphasis_1 83 26 182
+            emphasis_2 151 37 0
+            emphasis_3 151 37 0
+        }
+        frame_unselected {
+            base 89 89 89
+            background 0
+            emphasis_0 151 37 0
+            emphasis_1 0 94 139
+            emphasis_2 114 16 69
+            emphasis_3 0
         }
         exit_code_success {
-            base 135 154 57
+            base 0 104 0
             background 0
-            emphasis_0 58 169 159
-            emphasis_1 40 39 38
-            emphasis_2 139 126 200
-            emphasis_3 67 133 190
+            emphasis_0 0 94 139
+            emphasis_1 255 255 255
+            emphasis_2 114 16 69
+            emphasis_3 0 49 169
         }
         exit_code_error {
-            base 209 77 65
+            base 166 0 0
             background 0
-            emphasis_0 208 162 21
+            emphasis_0 111 85 0
             emphasis_1 0
             emphasis_2 0
             emphasis_3 0
         }
         multiplayer_user_colors {
-            player_1 139 126 200
-            player_2 67 133 190
-            player_3 0
-            player_4 208 162 21
-            player_5 58 169 159
-            player_6 0
-            player_7 209 77 65
-            player_8 0
+            player_1 114 16 69
+            player_2 0 49 169
+            player_3 0 94 139
+            player_4 111 85 0
+            player_5 0 104 0
+            player_6 83 26 182
+            player_7 166 0 0
+            player_8 136 73 0
+            player_9 0
+            player_10 0
+        }
+    }
+    modus-vivendi {
+        text_unselected {
+            base 255 255 255
+            background 0 0 0
+            emphasis_0 255 127 159
+            emphasis_1 0 211 208
+            emphasis_2 68 188 68
+            emphasis_3 254 172 208
+        }
+        text_selected {
+            base 255 255 255
+            background 90 90 90
+            emphasis_0 255 127 159
+            emphasis_1 0 211 208
+            emphasis_2 68 188 68
+            emphasis_3 254 172 208
+        }
+        ribbon_selected {
+            base 0 0 0
+            background 68 188 68
+            emphasis_0 0 0 0
+            emphasis_1 90 90 90
+            emphasis_2 0 0 0
+            emphasis_3 90 90 90
+        }
+        ribbon_unselected {
+            base 255 255 255
+            background 89 89 89
+            emphasis_0 255 255 255
+            emphasis_1 166 166 166
+            emphasis_2 255 255 255
+            emphasis_3 166 166 166
+        }
+        table_title {
+            base 68 188 68
+            background 0 0 0
+            emphasis_0 255 127 159
+            emphasis_1 0 211 208
+            emphasis_2 68 188 68
+            emphasis_3 254 172 208
+        }
+        table_cell_selected {
+            base 255 255 255
+            background 90 90 90
+            emphasis_0 255 127 159
+            emphasis_1 0 211 208
+            emphasis_2 68 188 68
+            emphasis_3 254 172 208
+        }
+        table_cell_unselected {
+            base 255 255 255
+            background 0 0 0
+            emphasis_0 255 127 159
+            emphasis_1 0 211 208
+            emphasis_2 68 188 68
+            emphasis_3 254 172 208
+        }
+        list_selected {
+            base 255 255 255
+            background 90 90 90
+            emphasis_0 255 127 159
+            emphasis_1 0 211 208
+            emphasis_2 68 188 68
+            emphasis_3 254 172 208
+        }
+        list_unselected {
+            base 255 255 255
+            background 0 0 0
+            emphasis_0 255 127 159
+            emphasis_1 0 211 208
+            emphasis_2 68 188 68
+            emphasis_3 254 172 208
+        }
+        frame_selected {
+            base 68 188 68
+            background 0
+            emphasis_0 255 127 159
+            emphasis_1 0 211 208
+            emphasis_2 254 172 208
+            emphasis_3 0
+        }
+        frame_highlight {
+            base 255 127 159
+            background 0
+            emphasis_0 255 95 89
+            emphasis_1 182 160 255
+            emphasis_2 255 127 159
+            emphasis_3 255 127 159
+        }
+        frame_unselected {
+            base 89 89 89
+            background 0
+            emphasis_0 255 127 159
+            emphasis_1 0 211 208
+            emphasis_2 254 172 208
+            emphasis_3 0
+        }
+        exit_code_success {
+            base 68 188 68
+            background 0
+            emphasis_0 0 211 208
+            emphasis_1 0 0 0
+            emphasis_2 254 172 208
+            emphasis_3 47 175 255
+        }
+        exit_code_error {
+            base 255 95 89
+            background 0
+            emphasis_0 208 188 0
+            emphasis_1 0
+            emphasis_2 0
+            emphasis_3 0
+        }
+        multiplayer_user_colors {
+            player_1 254 172 208
+            player_2 47 175 255
+            player_3 0 211 208
+            player_4 208 188 0
+            player_5 68 188 68
+            player_6 182 160 255
+            player_7 255 95 89
+            player_8 254 196 63
             player_9 0
             player_10 0
         }
     }
 }
-theme_dark "flexoki-dark"
-theme_light "flexoki-light"
+theme_dark "modus-vivendi"
+theme_light "modus-operandi"
+theme "modus-operandi"

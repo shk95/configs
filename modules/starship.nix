@@ -55,12 +55,26 @@ _: {
           stashed = "\\$$count";
         };
 
-        # Default is `bold yellow`. Magenta was legible but thin once the
-        # background went light — Catppuccin Latte's is #ea76cb on a #eff1f5
-        # page — and yellow is worse, because a yellow that reads on black is
-        # by construction a pale tint. Cyan is a mid-tone in both directions:
-        # #179299 on Latte, and bright enough on the dark Windows Terminal the
-        # WSL homes still render in, which this class also reaches.
+        # Default is `bold yellow`, and yellow is the worst of the three
+        # candidates, because a yellow that reads on black is by construction
+        # a pale tint and the light half of a pair fixes that only by
+        # abandoning the hue's brightness — Modus Vivendi's ANSI 3 is #d0bc00,
+        # Modus Operandi's is #6f5500, and a name whose two halves agree that
+        # little is not a style. Magenta was rejected as legible but thin
+        # under the palette in force at the time (Catppuccin Latte's #ea76cb
+        # on a #eff1f5 page); that particular objection does not survive the
+        # move to Modus, whose ANSI 5 is #721045 and reaches 11.2:1 on
+        # #ffffff. Cyan is kept because its reason never rested on that
+        # objection: it is the mid-tone in both directions — #005e8b on the
+        # light page, 7.06:1 against #ffffff by the WCAG relative-luminance
+        # formula, and #00d3d0 on the dark one — which is what a style in
+        # `homeManager.shared` has to be. The premise has since narrowed: the
+        # WSL homes this class also reaches render inside a Windows Terminal
+        # the Windows domain declares light
+        # (`docs/decisions/composed-homes-render-in-declared-terminals.md`).
+        # `bold cyan` stands on the same reason it always did — a mid-tone
+        # needs no declaration to be right — rather than on a terminal being
+        # dark.
         cmd_duration.style = "bold cyan";
 
         # This module was configured, dead, *and* wrong — two independent defects
@@ -73,7 +87,8 @@ _: {
         #
         # A third defect, and the one this repository's light default exposes:
         # the style was a bold `white`, which is invisible on a light
-        # background — Latte's ANSI white is #acb0be on a #eff1f5 page — and
+        # background — Modus Operandi's ANSI 7 is #a6a6a6, 2.43:1 against its
+        # own #ffffff page, well under the 4.5:1 that small text needs — and
         # starship's own default here, `bold yellow`, is barely better. `bold`
         # with no colour is the fix rather than a half-written style: it uses
         # the terminal's own foreground, which is the one colour guaranteed to

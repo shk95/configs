@@ -19,8 +19,12 @@ _: {
       # The three overrides are the components base `16` gets wrong at one end
       # or the other. `info` is ANSI white, invisible on a light background —
       # the same defect `modules/starship.nix` carried in its clock — while
-      # `border` and `scrollbar` are ANSI black, invisible on a dark one. ANSI
-      # 6 (cyan) and ANSI 8 (bright black) are mid-tones in both directions.
+      # `border` and `scrollbar` are ANSI black, invisible on a dark one. A
+      # scheme designed to a WCAG AAA target does not rescue ANSI white
+      # either: Modus Operandi's is #a6a6a6, only 2.43:1 against its own
+      # #ffffff page, so the override earns its place under the current
+      # palette as much as under the last one. ANSI 6 (cyan) and ANSI 8
+      # (bright black) are mid-tones in both directions.
       defaultOptions = ["--color=16,info:6,border:8,scrollbar:8"];
     };
   };
