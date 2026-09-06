@@ -90,3 +90,27 @@ not match the host would discard whatever the description got wrong. The
 requirement this branch therefore carries is that the Mac runs `just
 karabiner-check` before any activation and, on drift, `just karabiner-capture`,
 so that desired state is the host's own values before anything is written back.
+
+2026-09-06, on the Mac, #178. The precondition ran as written. `just
+karabiner-check` against the reconstruction reported drift on the document and
+none on the hotkeys; `just karabiner-capture --dry-run` showed the drift
+confined to `global` — one key, `ask_for_confirmation_before_quitting` — and
+`profiles`, where the host holds the four manipulators as one rule under one
+description, each carrying the Remote Desktop `frontmost_application_unless`
+condition, rather than the four rules the description had suggested; nothing
+per-machine appeared. `just karabiner-capture` committed `331417e`, merged to
+`dev` through #183, and the check then exited 0. `tool/darwin/karabiner
+project`, split on its two marker lines, compared byte for byte with both
+payloads, which closes #177's round-trip criterion. Activation, generation 34
+at 14:33, wrote nothing: the document already matched, so `apply` printed no
+`karabiner: wrote` line and the file kept its modification time of 2026-08-30,
+mode 600 and its `machine_specific` key, and both hotkey entries already
+matched, so no `symbolic hotkey N: wrote` line either. `defaults read
+com.apple.symbolichotkeys AppleSymbolicHotKeys` shows entry 60 enabled with
+parameters 65535, 79, 8388608 and entry 61 disabled, as declared. Karabiner's
+`core_service` and `console_user_server` logs show the file loaded at 07:42
+that day, before activation, and no load after it, because nothing was
+rewritten. The `INV unixlike/generated-config-key-in-schema` item is observed
+in that form: Karabiner runs a file whose declared members are the payload's
+own bytes. A load provoked by an activation that does rewrite the file has
+not been observed, because no activation has yet had a reason to write.

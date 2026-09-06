@@ -517,22 +517,31 @@ jamo of a decomposed syllable are zero-width combining marks
 [#1538](https://github.com/zellij-org/zellij/issues/1538)).
 
 Read back what the grid kept rather than what the screen looks like — the
-missing bytes are the evidence:
+missing bytes are the evidence. Read them from the bytes zellij sends an
+attached client, not from `zellij action dump-screen`, which prints each
+cell's base character alone and so cannot tell a grid that attached a mark
+from one that dropped it:
 
 ```sh
+zellij attach --create-background repro
 zellij -s repro action new-pane -- \
   sh -c 'printf "NFD:[\341\204\222\341\205\241\341\206\253]\n"; sleep 60'
-zellij -s repro action dump-screen | grep -a 'NFD:\[' | head -1 | hexdump -C
+timeout 6 script -q /tmp/repro.ts zellij attach repro </dev/null >/dev/null
+grep -a -o 'NFD:\[[^]]*\]' /tmp/repro.ts | grep -av '…' | head -1 | hexdump -C
 ```
 
-An unpatched zellij 0.45.0 answers `4e 46 44 3a 5b e1 84 92 5d`, observed on
-Linux against the pinned build; a fixed one is expected to answer `4e 46 44 3a 5b e1 84 92 e1 85 a1 e1 86 ab 5d`, which #178
-records once a patched binary is built. This repository patches
+That `script` line is macOS's; GNU `script` spells it
+`script -q -c 'zellij attach repro' /tmp/repro.ts`. An unpatched zellij 0.45.0
+answers `4e 46 44 3a 5b e1 84 92 5d`; a grid that keeps the jamo answers
+`4e 46 44 3a 5b e1 84 92 e1 85 a1 e1 86 ab 5d`. This repository patches
 Darwin's zellij with upstream PR
 [zellij-org/zellij#5500](https://github.com/zellij-org/zellij/pull/5500) while
 that PR is unmerged; `provisional/unixlike/zellij-combining-marks.md` says
 until when, and `docs/decisions/zellij-patched-on-darwin-until-upstream.md` says
-why. On a host the overlay does not reach, there is no local fix.
+why. On 2026-09-06 the patched Darwin build still answered the short form: the
+PR attaches general-category Mark code points and Hangul jamo are letters, so
+the overlay needs the jamo ranges added; the decision record's Evidence has
+the reading. On a host the overlay does not reach, there is no local fix.
 
 ### `msedit` opens with `b2b` already typed into the buffer
 

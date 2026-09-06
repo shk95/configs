@@ -35,18 +35,30 @@ reads back what the grid kept:
 script -qc 'printf "NFD:[\341\204\222\341\205\241\341\206\253]\n"' /dev/null |
   tr -d '\r' | grep -a 'NFD:\[' | hexdump -C
 
+zellij attach --create-background repro
 zellij -s repro action new-pane -- \
   sh -c 'printf "NFD:[\341\204\222\341\205\241\341\206\253]\n"; sleep 60'
-zellij -s repro action dump-screen | grep -a 'NFD:\[' | head -1 | hexdump -C
+timeout 6 script -q /tmp/repro.ts zellij attach repro </dev/null >/dev/null
+grep -a -o 'NFD:\[[^]]*\]' /tmp/repro.ts | grep -av '…' | head -1 | hexdump -C
 ```
 
 The first line is GNU `script`; macOS `script` takes no `-c`, so on the Mac the
-control is `script -q /dev/null sh -c 'printf "NFD:[\341\204\222\341\205\241\341\206\253]\n"'`.
+control is `script -q /dev/null sh -c 'printf "NFD:[\341\204\222\341\205\241\341\206\253]\n"'`
+and the attach capture is written as shown; on Linux it is
+`script -q -c 'zellij attach repro' /tmp/repro.ts`.
 
-A patched zellij should make the second command's output equal the first's,
-`4e 46 44 3a 5b e1 84 92 e1 85 a1 e1 86 ab 5d`. That half is a prediction, not
-an observation: no patched zellij has been built on either host yet, and #178
-records the reading once the Darwin build exists.
+The reading is taken from the bytes zellij sends an attached client, not from
+`zellij action dump-screen`. The Linux row above was read through
+`dump-screen`, and that was corrected on 2026-09-06: the `dump_screen!` macro
+in `grid.rs` pushes only each cell's base character, so a dump answers
+`e1 84 92` from a grid that attached the jamo and from one that dropped them
+alike, and on the Mac it showed Thai marks absent that the same pane's client
+stream showed attached. For an unpatched grid the two readings agree, because
+a dropped code point reaches neither, so the Linux observation stands.
+
+A grid that attaches the jamo makes the capture's bytes equal the control's,
+`4e 46 44 3a 5b e1 84 92 e1 85 a1 e1 86 ab 5d`. The patched Darwin build of
+2026-09-06 did not (§ Evidence).
 
 ## The measure
 
@@ -145,13 +157,16 @@ mixing hazards decide it:
 - Where upstream merged them changed — a rebase, a review edit, a
   follow-up — the hunks either fail to apply or apply into code that no longer
   compiles.
-- The PR carries its own grid tests, which run inside the build's `cargo test`,
-  so a semantic mismatch that still compiles is caught there rather than on a
-  Mac at runtime.
+- The PR carries its own grid tests. They do not run inside the build: pinned
+  nixpkgs' `buildRustPackage` runs `cargo test` in the root crate alone (the
+  Darwin log of 2026-09-06 shows 15 `tests::cli` cases and the ignored e2e
+  cases, nothing from `zellij-server`), so a semantic mismatch that still
+  compiles is caught only by the reproduction above on the Mac, which is why
+  CONTRIBUTING § zellij overlay makes that reproduction part of every bump.
 
-All three are build failures rather than silent breakage, which is why the
+The first two are build failures rather than silent breakage, which is why the
 `appliesTo` `throw` is the guard that matters: it stops the evaluation before
-any of them costs a compile.
+either of them costs a compile.
 
 ## Rejected alternatives
 
@@ -171,7 +186,37 @@ any of them costs a compile.
 
 ## Evidence
 
-Evaluation, the two fixed-output hashes and the reproduction above are from an
-x86_64-linux host. The Darwin build (`just darwin-build`), the reproduction
-against the built Darwin binary and the in-WezTerm observation on macOS are
-owed to #178; no Mac evidence is claimed here. Activation is not performed.
+Evaluation, the two fixed-output hashes and the Linux row of the reproduction
+above are from an x86_64-linux host, 2026-09-05.
+
+2026-09-06, aarch64-darwin, #178. Build: `just darwin-build` on the Mac
+completed with both fixed-output hashes as pinned — no `hash mismatch` at
+`zellij-unwrapped-0.45.0-vendor-staging`, which is the platform-independence
+claim under § The measure holding — and `just zellij-patch-check v0.45.1`
+exited 0. The build's `checkPhase` ran 15 tests, all in the root crate, none
+from `grid_tests.rs` (§ Retiring the overlay). Activation: generation 34 at
+14:33; `/run/current-system` and the zellij server that the restarted WezTerm
+started both run `zellij-unwrapped-0.45.0` from the patched derivation.
+Native runtime: the reproduction, read from the client stream, answered
+`4e 46 44 3a 5b e1 84 92 5d` for the NFD syllable, and `ls` of a directory
+named with the same three jamo showed the leading consonant alone; the control
+answered `4e 46 44 3a 5b e1 84 92 e1 85 a1 e1 86 ab 5d`. Thai `กั`
+(U+0E01 U+0E31) printed in the same pane came back as `e0 b8 81 e0 b8 b1`, so
+the patch attaches marks; it does not attach Hangul jamo.
+
+The cause is in the patch, not the build. Its `is_combining_mark` accepts
+Unicode general category Mark (Mn, Mc, Me) only. The medial vowels and final
+consonants of a decomposed syllable — U+1160–U+11FF, with the extensions
+U+D7B0–U+D7C6 and U+D7CB–U+D7FB — are general category Lo, letters that
+`unicode-width` gives zero width because they conjoin with the leading
+consonant before them, so `Grid::add_character` still drops them on the
+zero-width path exactly as before the patch. The patch's own tests cover Latin
+marks, Thai, the variation selector and a wide base character; none covers
+Hangul, which was the symptom that motivated the measure. The measure
+therefore stands and has not delivered its outcome on the host: the pinned
+commit needs those jamo ranges accepted beside category Mark and a Hangul grid
+test, first as an addition carried by the overlay and then proposed on
+zellij-org/zellij#5500. Seen at the same time and not fixed by the PR as
+pinned: `dump_screen!`, selection and `serialize` in `grid.rs` push only the
+base character, so text read back out of a patched zellij loses the marks the
+screen now keeps.

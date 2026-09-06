@@ -48,8 +48,14 @@ pinned to zellij 0.45.0 and refuses to evaluate against any other version,
 and yields nothing on Linux, where every toplevel derivation path is
 unchanged. The measure is registered as temporary in
 `provisional/unixlike/zellij-combining-marks.md`. Evaluation and the two
-fixed-output hashes are Linux evidence; the Darwin build and the reproduction
-against the built binary are owed to #178 and have not been performed.
+fixed-output hashes are Linux evidence. On 2026-09-06 the Mac built it with
+both hashes holding and activated it as generation 34, and the reproduction
+against the running binary showed the jamo still dropped: the patch attaches
+general-category Mark code points, and a syllable's medial vowel and final
+consonant are letters that `unicode-width` gives zero width, so the measure
+stands and does not yet deliver its outcome on the host. The dated paragraph
+in `docs/decisions/zellij-patched-on-darwin-until-upstream.md` records the
+observation and the addition the patch needs.
 
 WezTerm and Ghostty are the desktop terminals; Home Manager installs the
 D2Coding Nerd Font package and configures `D2KodingLigature Nerd Font Mono`
@@ -75,16 +81,16 @@ projection onto those members (`INV unixlike/host-written-payload-projected`,
 than 60 and 61 are unmanaged; the host dictionary holds dozens of entries and
 each declared one is written on its own.
 
-`assets/karabiner/karabiner.json` is a reconstruction of the host file from
-the description in #177, dated 2026-09-05, rather than a capture of it, and
-stays one until that Mac's own `check` confirms it. Because an activation
-replaces the declared top-level keys wholesale, this branch requires
-`just karabiner-check` and, on drift, `just karabiner-capture` before the
-first activation, so that desired state holds the host's own values first. No
-Darwin build, no `check` against a real host and no activation have been
-performed here. The `INV unixlike/generated-config-key-in-schema` item —
-Karabiner observed reading the delivered file once — is possible only after
-activation and is owed with #178.
+`assets/karabiner/karabiner.json` was a reconstruction of the host file from
+the description in #177 until 2026-09-06, when the Mac's own `check` reported
+drift, `just karabiner-capture` wrote the host's values back (#183), and the
+check exited 0 with `project` reproducing both payloads byte for byte.
+Generation 34 the same day delivered the module without rewriting the file,
+because the host already matched, so Karabiner's last load of the file
+predates the activation. The `INV unixlike/generated-config-key-in-schema`
+item is observed as Karabiner running a file whose declared members are the
+payload's bytes; a load after an activation that rewrites the file is not yet
+observed (`docs/decisions/karabiner-desired-state-by-projection.md`).
 
 ## Windows
 
