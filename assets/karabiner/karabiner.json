@@ -1,5 +1,6 @@
 {
   "global": {
+    "ask_for_confirmation_before_quitting": false,
     "check_for_updates": false
   },
   "profiles": [
@@ -7,9 +8,17 @@
       "complex_modifications": {
         "rules": [
           {
-            "description": "Caps Lock to Escape when tapped, Left Control when held",
+            "description": "Caps tap=Esc hold=Ctrl, Esc=Caps, RightCmd tap=F18; RDP LeftCmd<=>LeftOption",
             "manipulators": [
               {
+                "conditions": [
+                  {
+                    "bundle_identifiers": [
+                      "^com\\.microsoft\\.rdc\\.macos$"
+                    ],
+                    "type": "frontmost_application_unless"
+                  }
+                ],
                 "from": {
                   "key_code": "caps_lock",
                   "modifiers": {
@@ -29,13 +38,16 @@
                   }
                 ],
                 "type": "basic"
-              }
-            ]
-          },
-          {
-            "description": "Escape to Caps Lock",
-            "manipulators": [
+              },
               {
+                "conditions": [
+                  {
+                    "bundle_identifiers": [
+                      "^com\\.microsoft\\.rdc\\.macos$"
+                    ],
+                    "type": "frontmost_application_unless"
+                  }
+                ],
                 "from": {
                   "key_code": "escape",
                   "modifiers": {
@@ -50,13 +62,16 @@
                   }
                 ],
                 "type": "basic"
-              }
-            ]
-          },
-          {
-            "description": "Right Command to F18 for the input source toggle",
-            "manipulators": [
+              },
               {
+                "conditions": [
+                  {
+                    "bundle_identifiers": [
+                      "^com\\.microsoft\\.rdc\\.macos$"
+                    ],
+                    "type": "frontmost_application_unless"
+                  }
+                ],
                 "from": {
                   "key_code": "right_command",
                   "modifiers": {
@@ -71,12 +86,7 @@
                   }
                 ],
                 "type": "basic"
-              }
-            ]
-          },
-          {
-            "description": "Swap Left Command and Left Option in Microsoft Remote Desktop",
-            "manipulators": [
+              },
               {
                 "conditions": [
                   {
