@@ -99,6 +99,31 @@ item is observed as Karabiner running a file whose declared members are the
 payload's bytes; a load after an activation that rewrites the file is not yet
 observed (`docs/decisions/karabiner-desired-state-by-projection.md`).
 
+The NixOS-WSL host is headless and its system layer is a decided boundary
+since 2026-09-06 rather than the experiment `modules/wsl.nix` described:
+`modules.nixos.wsl` declares the WSL integration, the account's UID, login
+shell and sudo password requirement, the binfmt protection, the Nix
+daemon's settings, the host name from the typed identity, the system
+`EDITOR` and time zone, key-only sshd on 2223, and the state version — and
+nothing a standalone home can declare
+(`docs/decisions/nixos-wsl-system-layer-ownership.md`). Its output is
+`nixosConfigurations.<identity.wsl.hostName>`, and `tool/checks/flake-test`
+proves the host answers to that name (#191). GUI options are set off
+explicitly; #21 owns WSLg and `INV unixlike/desktop-not-wsl` stands. The
+distribution was imported on 2026-09-06 from the toplevel the Ubuntu clone
+built at `dev` 92c5986, and generation 2 the same day is the first to carry
+these declarations. It was read back on that host: `tool/doctor.sh unixlike`
+reports ready, the account logs into zsh with a complete `PATH`, sudo asks
+for a password, the zone is `Asia/Seoul`, and sshd answers on 2223 and
+refuses anything but a key. The kernel-global resources came through the
+activation untouched — the binfmt registry is still read-only here,
+`WSLInterop` still carries the registration Ubuntu made before this
+distribution booted, `.exe` still runs, and both managers report `running`.
+One declaration does not take effect until the distribution restarts: WSL
+reads `/etc/wsl.conf` at start, so Windows drives still show the owner
+nixos-wsl's default named. The milestone's evidence issue (#192) carries the
+readings.
+
 ## Windows
 
 `windows/desired/manifest.json` is at schema 4; `windows/state.json` is at

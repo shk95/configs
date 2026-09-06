@@ -5,7 +5,10 @@ _: {
   identity = {
     gitName = "shk";
     gitEmail = "101378576+shk95@users.noreply.github.com";
-    wsl.user = "user1";
+    wsl = {
+      user = "user1";
+      hostName = "nixos";
+    };
     darwin = {
       user = "shk";
       hostName = "shk-macbook";

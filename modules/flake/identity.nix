@@ -23,6 +23,10 @@ in {
         type = types.str;
         description = "Account managed in the WSL configurations.";
       };
+      hostName = mkOption {
+        type = types.str;
+        description = "NixOS-WSL host name, and the name of its nixosConfigurations output.";
+      };
     };
 
     darwin = {

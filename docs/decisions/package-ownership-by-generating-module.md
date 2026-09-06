@@ -20,3 +20,12 @@ HM-owned. The only identical derivations remaining in both final profiles are
 shell initialization while HM contributes them for the portable per-user zsh
 configuration. They are evaluator-owned requirements rather than duplicate
 package-list entries.
+
+Extended 2026-09-06 (#190): NixOS contributes `zsh` to its system profile for
+the same evaluator-owned reason nix-darwin does, reached from the other
+direction — declaring an account's login shell is what installs that shell
+system-wide, and the NixOS-WSL host declares one (`modules/wsl-shell.nix`),
+while Home Manager contributes zsh for the per-user configuration. Only the
+shell is duplicated there; `nix-zsh-completions` is not, because nothing on
+that host enables the NixOS zsh module. Read back on the host after the
+first activation.

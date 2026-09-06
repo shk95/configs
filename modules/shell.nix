@@ -85,16 +85,15 @@ _: {
     # repository to explain the change. `defaultKeymap` below makes the
     # choice structural instead of an accident of $EDITOR's spelling.
     #
-    # zsh only edits zsh, and this repository never chooses a login shell:
-    # `git grep -nE 'defaultUserShell|users\.users\..*\.shell|programs\.bash'`
-    # over `modules/` is empty, and `modules/darwin-shell.nix` only registers
-    # zsh as a permitted shell — it does not select it. Choosing the login
-    # shell is `chsh`, run out-of-band by `Justfile`'s `switch-shell` recipe
-    # (see docs/troubleshooting.md); this repository does not own that act.
-    # Until it has run, `nixosConfigurations.wsl` logs into NixOS's default
-    # `bashInteractive` and the Ubuntu standalone host logs into whatever bash
-    # the account already had, so the zsh keymap alone would not reach every
-    # host. `programs.readline` below is the one declaration that reaches
+    # zsh only edits zsh, and which shell a host logs into is decided per
+    # evaluator: the NixOS-WSL system layer selects zsh
+    # (modules/wsl-shell.nix), `modules/darwin-shell.nix` registers zsh as a
+    # permitted shell and leaves the selection to macOS, and the standalone
+    # Ubuntu home cannot select at all — there the choice is `chsh`, run
+    # out-of-band by `Justfile`'s `switch-shell` recipe (see
+    # docs/troubleshooting.md). Until that has run, the Ubuntu host logs into
+    # whatever bash the account already had, so the zsh keymap alone would
+    # not reach every host. `programs.readline` below is the one declaration that reaches
     # bash — and every other readline-linked program, such as python3, psql,
     # sqlite3, gdb, and bc — regardless of which shell a host happens to log
     # into, which is why it is declared next to the zsh keymap rather than in

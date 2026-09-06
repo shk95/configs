@@ -40,7 +40,7 @@ common
 The current Unix-like outputs are:
 
 - `homeConfigurations.user1`: standalone Home Manager for WSL.
-- `nixosConfigurations.wsl`: NixOS-WSL configuration.
+- `nixosConfigurations.nixos`: NixOS-WSL configuration, headless.
 - `darwinConfigurations.shk-macbook`: nix-darwin configuration.
 
 Graphical Unix-like applications are a separate Home Manager composition
