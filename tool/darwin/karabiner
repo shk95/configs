@@ -1,0 +1,354 @@
+#!/bin/sh
+#
+# Compare, apply and print the Karabiner desired state as one projection onto
+# the members its payloads declare.
+#
+# INV unixlike/host-written-payload-projected
+#
+# Karabiner-Elements is a Homebrew cask and owns its own configuration file: it
+# unlinks and rewrites `~/.config/karabiner/karabiner.json` on every save, so
+# the file cannot be a link into the Nix store and desired state cannot be the
+# whole file either. The payload therefore declares the top-level keys it owns,
+# and this script is the one place that reads the host through that
+# declaration. Everything the host keeps beside the declared keys is runtime:
+# it survives an apply and is never printed by `project`.
+# `docs/decisions/karabiner-desired-state-by-projection.md` records the choice
+# and what was rejected.
+#
+# The Korean input-source toggle depends on two macOS symbolic hotkeys rather
+# than on Karabiner, so the second payload declares those entry numbers and is
+# projected the same way out of `com.apple.symbolichotkeys`.
+#
+# Nothing here reads or writes `automatic_backups/` or
+# `assets/complex_modifications/` beside the host file. The first is
+# Karabiner's own history of the file and the second is a library the
+# application imports from; neither is desired state, and neither is this
+# script's to touch.
+#
+# Subcommands
+#
+#   project   print both projections: the host document restricted to the
+#             payload's top-level keys, then the host hotkey dictionary
+#             restricted to the payload's entry numbers. Each is introduced by
+#             a `=== <name> ===` line, which is the whole contract a caller
+#             that splits the output may rely on. The marker lines belong to
+#             neither payload: on a host that matches, each section between
+#             them reproduces its payload byte for byte.
+#   check     compare each projection with its payload after `jq -S`.
+#   apply     write the payload merged over the host's undeclared top-level
+#             keys, and write each hotkey entry that differs.
+#
+# Options, all optional; the host reads are overridable so the fixtures in
+# tool/checks/karabiner-test can run on a machine that is not a Mac.
+#
+#   --payload FILE       default assets/karabiner/karabiner.json
+#   --hotkeys FILE       default assets/karabiner/symbolic-hotkeys.json
+#   --host FILE          default ~/.config/karabiner/karabiner.json
+#   --hotkeys-host FILE  default `defaults export com.apple.symbolichotkeys -`
+#                        piped through `plutil -convert json -o - -`
+#   --target FILE        where apply writes the document; default --host
+#
+# KARABINER_PLATFORM=darwin passes the platform guard on a machine that is not
+# a Mac; it changes nothing else.
+#
+# Exit 0 verified, 1 drift or failure, 69 unverified. Unverified is reserved
+# for the two states in which no answer exists here: the platform is not
+# Darwin, or no jq can be resolved. A Karabiner installation with no
+# `karabiner.json` is drift rather than unverified, which is the rule
+# `docs/decisions/drift-outranks-unverified.md` states for the other domain.
+#
+# The hotkey write path calls `defaults`, `plutil` and `activateSettings`,
+# which exist only on macOS and are each resolved from PATH first and from
+# their absolute macOS location second, because a Home Manager activation runs
+# with Home Manager's own inputs on PATH and no /usr/bin. tool/checks/karabiner-test exercises it through
+# shims on PATH that record their arguments; the real write is exercised only
+# on the Mac (#178). `activateSettings` is private and best effort: a failure
+# is a warning, because the entries are already written and a logout applies
+# them anyway.
+#
+# jq is resolved from $JQ, then PATH, then `nix shell nixpkgs#jq`, so a Home
+# Manager activation can hand in the store path it already has and a clone can
+# run this with nothing installed beyond Nix.
+#
+# usage: tool/darwin/karabiner <project|check|apply> [options]
+
+set -eu
+
+usage() {
+  echo "usage: tool/darwin/karabiner <project|check|apply> [--payload FILE]" >&2
+  echo "         [--hotkeys FILE] [--host FILE] [--hotkeys-host FILE] [--target FILE]" >&2
+  exit 2
+}
+
+fail() {
+  printf '\033[31m✗ %s\033[0m\n' "$1" >&2
+  exit 1
+}
+
+drift() {
+  printf '\033[31m✗ drift: %s\033[0m\n' "$1" >&2
+}
+
+unverified() {
+  printf '· unverified: %s\n' "$1" >&2
+  exit 69
+}
+
+subcommand=${1:-}
+case "$subcommand" in
+  project | check | apply) shift ;;
+  *) usage ;;
+esac
+
+payload=
+hotkeys=
+host=
+hotkeys_host=
+target=
+
+while [ "$#" -gt 0 ]; do
+  [ "$#" -ge 2 ] || usage
+  case "$1" in
+    --payload) payload=$2 ;;
+    --hotkeys) hotkeys=$2 ;;
+    --host) host=$2 ;;
+    --hotkeys-host) hotkeys_host=$2 ;;
+    --target) target=$2 ;;
+    *) usage ;;
+  esac
+  shift 2
+done
+
+# ---------------------------------------------------------------------------
+# Guards
+# ---------------------------------------------------------------------------
+
+platform=${KARABINER_PLATFORM:-}
+[ -n "$platform" ] || platform=$(uname -s)
+case "$platform" in
+  Darwin | darwin) ;;
+  *) unverified "this host is $platform; Karabiner state is Darwin evidence" ;;
+esac
+
+jq_mode=
+jq_bin=
+if [ -n "${JQ:-}" ] && [ -x "$JQ" ]; then
+  jq_mode=direct
+  jq_bin=$JQ
+elif command -v jq >/dev/null 2>&1; then
+  jq_mode=direct
+  jq_bin=jq
+elif command -v nix >/dev/null 2>&1; then
+  jq_mode=nix
+else
+  unverified "this host has no jq and no nix to fetch one"
+fi
+
+run_jq() {
+  if [ "$jq_mode" = direct ]; then
+    "$jq_bin" "$@"
+  else
+    nix shell nixpkgs#jq -c jq "$@"
+  fi
+}
+
+# `defaults` and `plutil` are macOS commands in /usr/bin, and the PATH this
+# script runs under during a Home Manager activation is Home Manager's own
+# inputs — bash, coreutils, diffutils, findutils, gettext, gnugrep, gnused, jq,
+# ncurses and Nix — with the caller's PATH appended only when
+# `home.emptyActivationPath` is false, which on the Darwin home it is not. So
+# both are resolved here the way `activateSettings` is below: PATH first, so
+# tool/checks/karabiner-test can shim them, then the absolute path macOS puts
+# them at. /usr/bin is deliberately not appended to PATH instead: that would
+# hand this script a jq the fixtures remove on purpose, and the unverified
+# case proves its answer by having no jq at all.
+defaults_bin=$(command -v defaults 2>/dev/null || echo /usr/bin/defaults)
+plutil_bin=$(command -v plutil 2>/dev/null || echo /usr/bin/plutil)
+
+# Resolved after the guards, so a host that cannot answer says so rather than
+# printing a missing-utility error from the path arithmetic first.
+here=$(CDPATH= cd -- "$(dirname -- "$0")" && pwd)
+root=$(CDPATH= cd -- "$here/../.." && pwd)
+
+[ -n "$payload" ] || payload="$root/assets/karabiner/karabiner.json"
+[ -n "$hotkeys" ] || hotkeys="$root/assets/karabiner/symbolic-hotkeys.json"
+[ -n "$host" ] || host="${HOME:-}/.config/karabiner/karabiner.json"
+[ -n "$target" ] || target=$host
+
+[ -r "$payload" ] || fail "no Karabiner payload at $payload"
+[ -r "$hotkeys" ] || fail "no symbolic hotkey payload at $hotkeys"
+if [ -n "$hotkeys_host" ] && [ ! -r "$hotkeys_host" ]; then
+  fail "no host hotkey document at $hotkeys_host"
+fi
+
+work=$(mktemp -d)
+scratch=
+cleanup() {
+  rm -rf "$work"
+  [ -z "$scratch" ] || rm -f "$scratch"
+}
+trap cleanup EXIT
+
+# ---------------------------------------------------------------------------
+# Reading the host
+# ---------------------------------------------------------------------------
+
+# A missing file is an empty document rather than an error. Its projection is
+# then empty, which differs from the payload, which is the drift the check
+# must report.
+host_document() {
+  if [ -r "$host" ]; then
+    cat "$host"
+  else
+    echo '{}'
+  fi
+}
+
+read_hotkeys_host() {
+  if [ -n "$hotkeys_host" ]; then
+    cat "$hotkeys_host"
+  else
+    "$defaults_bin" export com.apple.symbolichotkeys - |
+      "$plutil_bin" -convert json -o - -
+  fi
+}
+
+hotkeys_json=$(read_hotkeys_host) ||
+  fail "could not read this host's symbolic hotkey dictionary with $defaults_bin and $plutil_bin"
+
+# ---------------------------------------------------------------------------
+# The projection
+# ---------------------------------------------------------------------------
+
+canonical() {
+  run_jq -S --indent 2 . "$1"
+}
+
+# The host document restricted to the payload's top-level keys. A declared key
+# the host does not hold is simply absent, so it reads as drift rather than as
+# a key with a made-up value.
+project_document() {
+  project_keys=$(run_jq -c 'keys' "$payload")
+  host_document | run_jq -S --indent 2 --argjson keys "$project_keys" \
+    'with_entries(select(.key as $k | $keys | index($k)))'
+}
+
+# The host hotkey dictionary restricted to the payload's entry numbers, in the
+# payload's own shape so the two sides compare directly.
+project_hotkeys() {
+  project_numbers=$(run_jq -c '.AppleSymbolicHotKeys | keys' "$hotkeys")
+  printf '%s\n' "$hotkeys_json" |
+    run_jq -S --indent 2 --argjson keys "$project_numbers" \
+      '{AppleSymbolicHotKeys: ((.AppleSymbolicHotKeys // {})
+         | with_entries(select(.key as $k | $keys | index($k))))}'
+}
+
+case "$subcommand" in
+  project)
+    echo '=== karabiner ==='
+    project_document
+    echo '=== symbolic-hotkeys ==='
+    project_hotkeys
+    exit 0
+    ;;
+esac
+
+document_have=$(project_document) || fail "could not project $host"
+document_want=$(canonical "$payload") || fail "could not read $payload"
+hotkeys_have=$(project_hotkeys) || fail "could not project the hotkey dictionary"
+hotkeys_want=$(canonical "$hotkeys") || fail "could not read $hotkeys"
+
+# ---------------------------------------------------------------------------
+# check
+# ---------------------------------------------------------------------------
+
+if [ "$subcommand" = check ]; then
+  status=0
+  if [ ! -r "$host" ]; then
+    drift "karabiner: this host has no $host"
+    status=1
+  elif [ "$document_have" != "$document_want" ]; then
+    drift "karabiner: the host document differs from $payload"
+    status=1
+  fi
+  if [ "$hotkeys_have" != "$hotkeys_want" ]; then
+    drift "symbolic hotkeys: the host dictionary differs from $hotkeys"
+    status=1
+  fi
+  if [ "$status" -eq 0 ]; then
+    echo "✓ karabiner: the declared members match this host"
+  fi
+  exit "$status"
+fi
+
+# ---------------------------------------------------------------------------
+# apply
+# ---------------------------------------------------------------------------
+
+# The payload owns the keys it declares and nothing else, so the document
+# written is the host's undeclared keys with the payload's keys placed over
+# them. `+` on two objects lets the right side win, and the left side has
+# already had the declared keys removed, so no declared subtree is merged.
+merge_document() {
+  host_document >"$work/host.json"
+  run_jq -n -S --indent 2 \
+    --slurpfile host "$work/host.json" --slurpfile payload "$payload" '
+      ($host[0] // {}) as $h
+      | $payload[0] as $p
+      | ($h | with_entries(select(.key as $k | ($p | keys) | index($k) | not))) + $p
+    '
+}
+
+if [ "$document_have" != "$document_want" ]; then
+  target_dir=$(dirname "$target")
+  [ -d "$target_dir" ] || mkdir -p "$target_dir"
+  # Written beside the target and moved into place, so Karabiner never sees a
+  # half-written file and no state is lost when the write fails. mktemp rather
+  # than a name built from the pid: it creates the file at mode 600 before
+  # anything is written to it, so the merged document is never briefly
+  # world-readable, and it cannot collide with a leftover from an earlier run.
+  scratch=$(mktemp "$target_dir/.karabiner.json.XXXXXX") ||
+    fail "could not create a temporary file in $target_dir"
+  merge_document >"$scratch" || fail "could not merge $payload over $host"
+  chmod 600 "$scratch"
+  mv "$scratch" "$target"
+  scratch=
+  printf 'karabiner: wrote %s\n' "$target"
+fi
+
+# `defaults write … -dict-add` merges one entry into a dictionary the host
+# holds seventy-odd entries in; a writer that takes the whole key would
+# replace every entry this repository does not declare.
+hotkeys_written=0
+for number in $(run_jq -r '.AppleSymbolicHotKeys | keys[]' "$hotkeys"); do
+  entry_want=$(run_jq -S -c --arg n "$number" '.AppleSymbolicHotKeys[$n]' "$hotkeys")
+  entry_have=$(printf '%s\n' "$hotkeys_json" |
+    run_jq -S -c --arg n "$number" '.AppleSymbolicHotKeys[$n] // null')
+  if [ "$entry_want" = "$entry_have" ]; then
+    continue
+  fi
+  entry_plist=$(printf '%s\n' "$entry_want" | "$plutil_bin" -convert xml1 -o - -) ||
+    fail "$plutil_bin failed on symbolic hotkey $number"
+  "$defaults_bin" write com.apple.symbolichotkeys AppleSymbolicHotKeys \
+    -dict-add "$number" "$entry_plist" ||
+    fail "$defaults_bin failed on symbolic hotkey $number"
+  printf 'symbolic hotkey %s: wrote the declared entry\n' "$number"
+  hotkeys_written=1
+done
+
+# Private, undocumented and best effort: the entries are already written, and
+# a logout applies them with or without this.
+activate_settings=/System/Library/PrivateFrameworks/SystemAdministration.framework/Resources/activateSettings
+if [ "$hotkeys_written" -eq 1 ]; then
+  if command -v activateSettings >/dev/null 2>&1; then
+    activateSettings -u ||
+      printf 'warning: activateSettings -u failed; log out to apply\n' >&2
+  elif [ -x "$activate_settings" ]; then
+    "$activate_settings" -u ||
+      printf 'warning: activateSettings -u failed; log out to apply\n' >&2
+  else
+    printf 'warning: activateSettings is not on PATH; log out to apply\n' >&2
+  fi
+fi
+
+exit 0

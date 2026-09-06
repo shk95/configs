@@ -310,6 +310,11 @@ expect() {
 }
 
 expect unixlike "$classify" --files modules/git.nix
+# INV repository/scope-ownership
+# tool/darwin/ is the Unix-like domain's own Mac tooling: it reads and writes
+# a Unix-like payload, its evidence lane is a Mac, and no governance host can
+# produce it. Owned by unixlike, like modules/ and tool/checks/.
+expect unixlike "$classify" --files tool/darwin/karabiner
 expect windows "$classify" --files windows/src/WinEnv.psm1
 expect unclassified "$classify" --files common/example.txt
 expect repository "$classify" --files .agents/skills/example/SKILL.md
@@ -375,6 +380,16 @@ unixlike:payloads' commit "$kdl_added"
 expect_units 'unixlike:test' push "$kdl_added"
 
 expect_units 'unixlike:test' push "$module_modified"
+
+# INV repository/local-gate-selects-by-effect
+# tool/darwin/ holds the projection the Karabiner payloads are compared and
+# applied by, so a change to it can alter what the Unix-like suite says; it
+# selects the same units a module does.
+darwin_tool_modified=$(printf 'M\ttool/darwin/karabiner')
+expect_units 'unixlike:format
+unixlike:lint
+unixlike:payloads' commit "$darwin_tool_modified"
+expect_units 'unixlike:test' push "$darwin_tool_modified"
 
 # A rename carries two paths on one line. Both have to reach classify, or a
 # payload moved into assets/ is never selected for the payload check.
@@ -916,6 +931,14 @@ mkdir -p "$commit_root/tool/checks" "$commit_root/modules" "$commit_root/stub" \
 cp -R "$root/.githooks" "$commit_root/.githooks"
 cp -R "$root/tool/version-control" "$commit_root/tool/version-control"
 cp -R "$root/tool/dispatch" "$commit_root/tool/dispatch"
+# `capture karabiner` runs the real projection tool over the real payloads: the
+# command under test is the one that decides a capture is a commit, and a
+# stand-in for either side would leave that decision proving nothing. The host
+# it reads is faked through --host and --hotkeys-host, which is the whole
+# reason those flags exist.
+cp -R "$root/tool/darwin" "$commit_root/tool/darwin"
+mkdir -p "$commit_root/assets"
+cp -R "$root/assets/karabiner" "$commit_root/assets/karabiner"
 # The pre-commit hook this fixture enables also runs
 # tool/version-control/invariants, whose own cases are below; here it is a
 # stand-in so only the behaviour under test decides the outcome.
@@ -1563,6 +1586,167 @@ fi
   unset GIT_DIR GIT_WORK_TREE GIT_INDEX_FILE
   cd "$commit_root" && "$audit"
 ) >/dev/null
+
+# A uname stub proves a platform guard without depending on which platform
+# runs this suite, which is the only way a guard's own case can hold on both
+# sides of it. It answers `-s` and nothing else, because that is all the helper
+# ever asks. Two guards use it: capture karabiner's Darwin guard below, and
+# --publish's refusal on native Windows further down.
+uname_stub() {
+  # $1: directory to create the stub in. $2: what `uname -s` reports there.
+  mkdir -p "$1"
+  cat >"$1/uname" <<STUB
+#!/bin/sh
+if [ "\$1" = -s ]; then
+  printf '%s\n' '$2'
+else
+  exit 1
+fi
+STUB
+  chmod +x "$1/uname"
+}
+
+# ---------------------------------------------------------------------------
+# tool/version-control/commit capture karabiner
+# ---------------------------------------------------------------------------
+#
+# INV unixlike/host-written-payload-projected
+#
+# The capture direction of the same projection modules/karabiner.nix applies:
+# what the payloads declare decides what is read back, and what else the host
+# keeps in that file is runtime that is neither reported as drift nor captured.
+# The real tool/darwin/karabiner and the real payloads are in the throwaway
+# repository above; only the host is faked, through the flags that exist for
+# it, so the two directions of the rule are the fixture's subject rather than a
+# stand-in's.
+capture_host="$test_root/karabiner-host.json"
+capture_hotkeys_host="$test_root/karabiner-hotkeys-host.json"
+
+run_capture() {
+  capture_answer=$1
+  shift
+  printf '%s\n' "$capture_answer" | (
+    unset GIT_DIR GIT_WORK_TREE GIT_INDEX_FILE
+    cd "$commit_root" || exit 1
+    KARABINER_PLATFORM=darwin
+    export KARABINER_PLATFORM
+    PATH="$commit_stub_path:$PATH" tool/version-control/commit "$@" 2>&1
+  )
+}
+
+capture_payloads_untouched() {
+  for capture_payload in karabiner.json symbolic-hotkeys.json; do
+    if ! cmp -s "$commit_root/assets/karabiner/$capture_payload" \
+      "$root/assets/karabiner/$capture_payload"; then
+      echo "capture karabiner rewrote assets/karabiner/$capture_payload while $1" >&2
+      exit 1
+    fi
+  done
+  if [ -n "$(commit_git status --porcelain --untracked-files=no)" ] \
+    || [ "$(commit_count)" != "$capture_before" ]; then
+    echo "capture karabiner wrote something while $1" >&2
+    exit 1
+  fi
+}
+
+# A host that matches both payloads and holds one top-level key beside them.
+# `machine_specific` is the host's own runtime state: a capture that read it
+# back would put a per-machine identifier into desired state.
+{
+  printf '{\n'
+  printf '  "machine_specific": {},\n'
+  tail -n +2 "$root/assets/karabiner/karabiner.json"
+} >"$capture_host"
+cp "$root/assets/karabiner/symbolic-hotkeys.json" "$capture_hotkeys_host"
+
+capture_before=$(commit_count)
+capture_status=0
+capture_output=$(run_capture n --dry-run --host "$capture_host" \
+  --hotkeys-host "$capture_hotkeys_host" capture karabiner) || capture_status=$?
+if [ "$capture_status" -eq 0 ]; then
+  echo "capture karabiner planned a commit against a host that matches the payloads" >&2
+  exit 1
+fi
+if ! printf '%s\n' "$capture_output" | grep -q 'nothing to capture'; then
+  printf '%s\n' "$capture_output" >&2
+  echo "capture karabiner did not refuse with nothing to capture" >&2
+  exit 1
+fi
+capture_payloads_untouched "the host matched the payloads"
+
+# The same command on a host that is not a Mac refuses before it reads
+# anything: the projection of a host that holds no Karabiner state would
+# capture the payloads away. The platform comes from a uname stub rather than
+# from whatever runs this suite, so the case holds on the Mac this feature
+# targets as well; on that host the real uname would pass the guard, the run
+# would reach the still-matching host above, and this would be asserting the
+# refusal of the case before it.
+uname_stub "$commit_root/stub-uname" Linux
+capture_status=0
+capture_output=$(
+  printf 'n\n' | (
+    unset GIT_DIR GIT_WORK_TREE GIT_INDEX_FILE KARABINER_PLATFORM
+    cd "$commit_root" || exit 1
+    PATH="$commit_root/stub-uname:$commit_stub_path:$PATH" \
+      tool/version-control/commit --dry-run \
+      --host "$capture_host" --hotkeys-host "$capture_hotkeys_host" \
+      capture karabiner 2>&1
+  )
+) || capture_status=$?
+if [ "$capture_status" -eq 0 ]; then
+  printf '%s\n' "$capture_output" >&2
+  echo "capture karabiner ran on a host that is not a Mac" >&2
+  exit 1
+fi
+if ! printf '%s\n' "$capture_output" | grep -q 'runs on a Mac only'; then
+  printf '%s\n' "$capture_output" >&2
+  echo "capture karabiner refused a host that is not a Mac for another reason" >&2
+  exit 1
+fi
+capture_payloads_untouched "the host was not a Mac"
+
+# A host that differs in one declared member of each payload, and still holds
+# the undeclared one. The dry run answers the same four questions the other
+# commands answer and writes nothing.
+{
+  printf '{\n'
+  printf '  "machine_specific": {},\n'
+  tail -n +2 "$root/assets/karabiner/karabiner.json"
+} | sed 's/"check_for_updates": false/"check_for_updates": true/' >"$capture_host"
+sed 's/"enabled": false/"enabled": true/' \
+  "$root/assets/karabiner/symbolic-hotkeys.json" >"$capture_hotkeys_host"
+
+capture_before=$(commit_count)
+if ! capture_output=$(run_capture n --dry-run --host "$capture_host" \
+  --hotkeys-host "$capture_hotkeys_host" capture karabiner); then
+  printf '%s\n' "$capture_output" >&2
+  echo "capture karabiner refused a host that drifted from the payloads" >&2
+  exit 1
+fi
+for capture_line in \
+  '^edit: assets/karabiner/karabiner.json$' \
+  '^edit: assets/karabiner/symbolic-hotkeys.json$' \
+  '^-    "check_for_updates": false$' \
+  '^+    "check_for_updates": true$' \
+  '^-      "enabled": false,$' \
+  '^+      "enabled": true,$' \
+  '^classification: unixlike$' \
+  '^  unixlike:payloads$' \
+  '^message: feat(unixlike): capture karabiner desired state$'; do
+  if ! printf '%s\n' "$capture_output" | grep -q "$capture_line"; then
+    printf '%s\n' "$capture_output" >&2
+    echo "the capture dry run did not report a line matching $capture_line" >&2
+    exit 1
+  fi
+done
+# The runtime key is in the host this run read and in neither diff.
+if printf '%s\n' "$capture_output" | grep -q 'machine_specific'; then
+  printf '%s\n' "$capture_output" >&2
+  echo "capture karabiner offered to read an undeclared top-level key back" >&2
+  exit 1
+fi
+capture_payloads_untouched "a dry run described a drifted host"
+
 # ---------------------------------------------------------------------------
 # tool/version-control/commit --publish
 # ---------------------------------------------------------------------------
@@ -1903,27 +2087,13 @@ publish_wrote_nothing "refusing on master"
 publish_git switch -q dev
 
 # #90: --publish is a Unix-like flow with a PowerShell counterpart in
-# windows/tools/capture.ps1. A uname stub proves the platform guard without
-# depending on which platform runs this suite. It only ever answers `-s`,
-# which is all the helper asks it.
-publish_uname_stub() {
-  # $1: directory to create the stub in. $2: what `uname -s` reports there.
-  mkdir -p "$1"
-  cat >"$1/uname" <<STUB
-#!/bin/sh
-if [ "\$1" = -s ]; then
-  printf '%s\n' '$2'
-else
-  exit 1
-fi
-STUB
-  chmod +x "$1/uname"
-}
+# windows/tools/capture.ps1, and uname_stub above proves that guard the same
+# way the capture cases prove theirs.
 
 # Positive: a Unix-like uname still reaches the ordinary preflight, gh
 # included.
 for publish_uname_os in Linux Darwin; do
-  publish_uname_stub "$publish_root/stub-uname-ok" "$publish_uname_os"
+  uname_stub "$publish_root/stub-uname-ok" "$publish_uname_os"
   publish_snapshot
   publish_path="$publish_root/stub-uname-ok:$publish_root/stub:$PATH"
   if ! ok_out=$(run_publish n --dry-run --publish cask add "of$publish_uname_os"); then
@@ -1940,7 +2110,7 @@ done
 # Negative: every kernel string the guard's case pattern names refuses before
 # gh is consulted at all, with a message pointing at the Windows counterpart.
 for publish_uname_win in MINGW64_NT-10.0-19045 MSYS_NT-10.0-19045 CYGWIN_NT-10.0; do
-  publish_uname_stub "$publish_root/stub-uname-win" "$publish_uname_win"
+  uname_stub "$publish_root/stub-uname-win" "$publish_uname_win"
   publish_snapshot
   publish_path="$publish_root/stub-uname-win:$publish_root/stub:$PATH"
   if win_out=$(run_publish y --publish cask add "wf${publish_uname_win%%_*}"); then
@@ -3777,8 +3947,10 @@ printf '%s\n' "$domain_reads_output" | grep -q '^✓ domain reads: [1-9][0-9]* U
 
 domain_reads_fixture=$(mktemp -d)
 git -C "$domain_reads_fixture" init -q
-mkdir -p "$domain_reads_fixture/tool/checks" "$domain_reads_fixture/windows/tools" "$domain_reads_fixture/modules"
+mkdir -p "$domain_reads_fixture/tool/checks" "$domain_reads_fixture/tool/darwin" \
+  "$domain_reads_fixture/windows/tools" "$domain_reads_fixture/modules"
 printf '#!/bin/sh\ncat windows/desired/manifest.json\n' >"$domain_reads_fixture/tool/checks/probe"
+printf '#!/bin/sh\ncat windows/desired/files/probe.json\n' >"$domain_reads_fixture/tool/darwin/probe"
 printf '_: {\n  home.file."probe".source = ../windows/desired/files/probe;\n}\n' >"$domain_reads_fixture/modules/probe.nix"
 printf '$fonts = Get-Content (Join-Path $root %s)\n' "'assets\\wezterm\\fonts.json'" >"$domain_reads_fixture/windows/tools/probe.ps1"
 printf 'Import-Module (Join-Path $root %s)\n' "'modules/flake/probe.nix'" >"$domain_reads_fixture/windows/tools/module.psm1"
@@ -3790,6 +3962,7 @@ if domain_reads_output=$(cd "$domain_reads_fixture" && "$domain_reads" 2>&1); th
 fi
 for domain_reads_hit in \
   'tool/checks/probe:2:' \
+  'tool/darwin/probe:2:' \
   'modules/probe.nix:2:' \
   'windows/tools/probe.ps1:1:' \
   'windows/tools/module.psm1:1:'; do

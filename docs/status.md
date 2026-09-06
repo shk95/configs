@@ -65,6 +65,27 @@ package, configuration, and Dock ownership together.
 theme and takes effect on each host's next activation; on the WSL host the
 existing hand-written `~/.config/btop/btop.conf` must be moved aside first.
 
+Karabiner's configuration is desired state and the application is not:
+`assets/karabiner/karabiner.json` and `assets/karabiner/symbolic-hotkeys.json`
+declare the members this repository owns, `modules/karabiner.nix` delivers
+them from `homeManager.darwin` through an activation script rather than a
+link, and `tool/darwin/karabiner` compares and reads them back through one
+projection onto those members (`INV unixlike/host-written-payload-projected`,
+`just karabiner-check` and `just karabiner-capture`). Symbolic hotkeys other
+than 60 and 61 are unmanaged; the host dictionary holds dozens of entries and
+each declared one is written on its own.
+
+`assets/karabiner/karabiner.json` is a reconstruction of the host file from
+the description in #177, dated 2026-09-05, rather than a capture of it, and
+stays one until that Mac's own `check` confirms it. Because an activation
+replaces the declared top-level keys wholesale, this branch requires
+`just karabiner-check` and, on drift, `just karabiner-capture` before the
+first activation, so that desired state holds the host's own values first. No
+Darwin build, no `check` against a real host and no activation have been
+performed here. The `INV unixlike/generated-config-key-in-schema` item —
+Karabiner observed reading the delivered file once — is possible only after
+activation and is owed with #178.
+
 ## Windows
 
 `windows/desired/manifest.json` is at schema 4; `windows/state.json` is at
@@ -142,7 +163,7 @@ are disabled.
 The merge gate is CI's `Required checks`, demanded whenever a change falls
 in a domain that check covers.
 
-The invariant registry holds 54 entries, none pending and no fixture unit
+The invariant registry holds 55 entries, none pending and no fixture unit
 untagged, and `tool/version-control/invariants` enforces C10 (no untagged
 fixture unit) by default. Enforced is not the same as held: the manual
 `INV windows/support-boundary-named` records that the terminal delegation

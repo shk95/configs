@@ -52,9 +52,13 @@ declares its payloads and their formats — `assets/payloads.json` for Unix-like
 the `Parser` field of `windows/desired/manifest.json` for Windows — and
 validates them with the parser that will consume them. The two declarations are
 independent copies of one idea, not a shared authority, and neither imports the
-other.
+other. A payload the host application rewrites in place cannot be delivered as
+a link into the store at all, so its desired state declares the members it owns
+and one projection onto those members decides drift, what is written and what
+may be captured, leaving whatever the application keeps beside them as runtime
+(`docs/decisions/karabiner-desired-state-by-projection.md`).
 
-Composition, identity, and ownership in this domain rest on nine rules, each
+Composition, identity, and ownership in this domain rest on ten rules, each
 registered under `invariants/unixlike/`. One file maps module classes to
 hosts, and a feature file writes into a class without naming a host or
 forcing another class's decision, so where a program reaches is read in one
