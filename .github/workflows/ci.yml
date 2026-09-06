@@ -126,15 +126,18 @@ jobs:
 
   # The job key stays `secrets`: the required-checks gate, its SECRETS_RESULT
   # input, and the `needs:` list below all key off it. Only the display name
-  # widens, because the job carries the five repository-wide scans.
+  # widens, because the job carries the six repository-wide scans.
   secrets:
-    name: Secret, hygiene, domain-read, invariant and history scan
+    name: Secret, hygiene, domain-read, invariant, provisional and history scan
+    # Only for the classifier's scope outputs: the provisional check fails an
+    # overdue entry solely in a scope this change touches.
+    needs: classify
     runs-on: ubuntu-latest
     # The merge gate is the one place where a check that could not run must not
-    # pass. tool/version-control/hygiene and tool/version-control/invariants
-    # need nothing but a POSIX shell, awk and Git today, as does
-    # tool/version-control/domain-reads; this is what keeps a future
-    # prerequisite from passing through the gate unverified.
+    # pass. tool/version-control/hygiene, tool/version-control/invariants and
+    # tool/version-control/provisional need nothing but a POSIX shell, awk and
+    # Git today, as does tool/version-control/domain-reads; this is what keeps
+    # a future prerequisite from passing through the gate unverified.
     env:
       REQUIRE_NATIVE: "1"
     steps:
@@ -151,6 +154,40 @@ jobs:
       - run: tool/version-control/hygiene
       - run: tool/version-control/domain-reads
       - run: tool/version-control/invariants
+      # An overdue entry fails only the scopes this change owns, so the scope
+      # list comes from the classify job rather than from this one.
+      #
+      # A pull request is checked out as a synthetic merge commit whose date is
+      # the run time, so the reference date is the head commit's; a push has no
+      # head sha and github.sha is the commit itself. Reading the date from the
+      # commit under test is what makes a re-run of an old commit answer the
+      # same way twice.
+      - id: provisional
+        name: Resolve the provisional scopes and reference date
+        env:
+          UNIXLIKE: ${{ needs.classify.outputs.unixlike }}
+          WINDOWS: ${{ needs.classify.outputs.windows }}
+          REPOSITORY: ${{ needs.classify.outputs.repository }}
+          HEAD_SHA: ${{ github.event.pull_request.head.sha }}
+          PUSH_SHA: ${{ github.sha }}
+        run: |
+          scopes=
+          for scope in unixlike windows repository; do
+            case $scope in
+              unixlike) selected=$UNIXLIKE ;;
+              windows) selected=$WINDOWS ;;
+              repository) selected=$REPOSITORY ;;
+            esac
+            [ "$selected" = true ] || continue
+            scopes=${scopes:+$scopes,}$scope
+          done
+          echo "scopes=$scopes" >>"$GITHUB_OUTPUT"
+          echo "date=$(git show -s --format=%cs "${HEAD_SHA:-$PUSH_SHA}")" >>"$GITHUB_OUTPUT"
+      - name: Check the provisional registry
+        env:
+          SCOPES: ${{ steps.provisional.outputs.scopes }}
+          REFERENCE_DATE: ${{ steps.provisional.outputs.date }}
+        run: tool/version-control/provisional --scopes "$SCOPES" --date "$REFERENCE_DATE"
       # The clone-local half of the audit has nothing to say about a runner,
       # which configures no hooks and checks out no branch; history is what a
       # merge gate can and must judge. Unconditional because a badly named

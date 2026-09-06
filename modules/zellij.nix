@@ -45,4 +45,51 @@ _: {
       extraConfig = builtins.readFile ../assets/zellij/config.kdl;
     };
   };
+
+  # PROV unixlike/zellij-combining-marks
+  #
+  # zellij's `Grid::add_character` drops every zero-width code point, so the
+  # conjoining jamo of a decomposed Hangul syllable never reach the pane and
+  # composed Korean disappears inside zellij (zellij-org/zellij#3667, #1538).
+  # Upstream PR zellij-org/zellij#5500 attaches combining marks instead of
+  # dropping them; it is unmerged, so this overlay carries its commit until a
+  # nixpkgs zellij already contains the fix. Darwin only: the symptom was
+  # reported there and the Linux homes stay on the unpatched package, so
+  # `optionalAttrs` yields `{}` for them.
+  #
+  # The patch adds the crate `unicode-properties` to `Cargo.lock`, so the
+  # vendored dependency set changes with it. Pinned nixpkgs' `buildRustPackage`
+  # computes `cargoDeps` at call time from `args.cargoHash`, which
+  # `overrideAttrs` cannot reach; overriding `cargoDeps` itself with
+  # `rustPlatform.fetchCargoVendor` — which takes `src` and `patches` — is what
+  # takes effect. The `zellij` wrapper takes `zellij-unwrapped` as a function
+  # argument, so overriding the unwrapped package propagates to it.
+  #
+  # `appliesTo` is the zellij version the patch was verified against. A
+  # different version is a `throw` rather than a silent passthrough because an
+  # unpatched Darwin zellij is indistinguishable from a patched one until
+  # someone types Korean into it; refusing to evaluate is the only signal that
+  # arrives before that.
+  nixpkgsOverlays.zellij = _final: prev: let
+    appliesTo = "0.45.0";
+    patch = prev.fetchpatch {
+      name = "zellij-pr5500-combining-marks.patch";
+      url = "https://github.com/zellij-org/zellij/commit/8e02033f0bb8bdb53acf1484cb81605d0f3671dc.patch";
+      hash = "sha256-2l8tJEnvVnc18idfjIvXvCxw6sJ4rfX9Fk5q2F6HE74=";
+    };
+    patched = prev.zellij-unwrapped.overrideAttrs (old: {
+      patches = (old.patches or []) ++ [patch];
+      cargoDeps = prev.rustPlatform.fetchCargoVendor {
+        inherit (old) pname version src;
+        patches = [patch];
+        hash = "sha256-YDlaeHEXGXExbJVB31A/QuYDQbsQ+c8T576h3DYb/gE=";
+      };
+    });
+  in
+    prev.lib.optionalAttrs prev.stdenv.hostPlatform.isDarwin {
+      zellij-unwrapped =
+        if prev.zellij-unwrapped.version == appliesTo
+        then patched
+        else throw "modules/zellij.nix: zellij ${prev.zellij-unwrapped.version} is not ${appliesTo}; re-check zellij-org/zellij#5500 (provisional/unixlike/zellij-combining-marks.md, CONTRIBUTING § zellij overlay)";
+    };
 }

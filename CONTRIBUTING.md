@@ -106,6 +106,46 @@ discovery files are adapters only. Audit and release planning are read-only by
 default. This document remains the human fallback and the contract the skill
 executes.
 
+### zellij overlay
+
+This subsection is disposable and carries the tag
+`PROV unixlike/zellij-combining-marks`, so it is deleted with the measure it
+describes.
+
+`modules/zellij.nix` carries upstream zellij-org/zellij#5500 for Darwin until
+nixpkgs ships a zellij whose source already has the fix;
+`provisional/unixlike/zellij-combining-marks.md` registers the measure and
+names the condition that ends it. The overlay is pinned to one zellij version
+and refuses to evaluate against any other, so a `flake.lock` refresh that moves
+zellij takes two commits, in this order:
+
+1. `just zellij-patch-check v<ver>` for the version the refresh will bring in.
+   On a conflict, rebase the upstream commit in a fork and repoint the
+   overlay's `url` and `hash` before going on.
+2. Commit `chore(unixlike-deps): refresh flake.lock` with `flake.lock` alone —
+   `tool/version-control/commit flake refresh`, with no `--publish`. Helper
+   flags precede its command, so `--publish` would be
+   `tool/version-control/commit --publish flake refresh`; it is not used here
+   because it pushes as soon as this commit is made.
+3. Commit `fix(unixlike): re-pin the zellij overlay to <ver>` with `appliesTo`,
+   the `fetchpatch` hash if the commit was rebased, and the new `cargoDeps`
+   hash.
+4. `just darwin-build` on the Mac, then the reproduction in
+   `docs/decisions/zellij-patched-on-darwin-until-upstream.md`.
+5. Push only after step 3.
+
+Between steps 2 and 3 the Darwin configuration refuses to evaluate, by design:
+that refusal is the overlay's report that its patch no longer matches the
+pinned zellij. Nothing selects evaluation for a lock-only change, so the
+refusal blocks no commit, but it does block a push, which is why step 5 waits
+for the re-pin.
+
+`.github/workflows/zellij-upstream-5500.yml` watches the pull request and
+reports a bump or a merge as an issue. GitHub runs a `schedule` only from the
+default branch, so the watcher does nothing until this file reaches `master`
+through the next promotion; before that its shell body is run by hand with
+`DRY_RUN=1`.
+
 ## Promote dev to master
 
 Promotion is a deliberate source-acceptance operation, not a release. The only
@@ -181,6 +221,77 @@ procedure.
 Removing an invariant removes its file and every tag that named it; the check
 refuses an orphan tag. Weakening a statement is a governance change and is
 reviewed as one.
+
+## Register a provisional measure
+
+A provisional measure is an experiment, a workaround, or a patch carried until
+upstream ships a fix — anything the tree is meant to stop carrying.
+`provisional/README.md` is the format; this is the procedure. Register it in
+the same change that adds it, not afterwards.
+
+1. Classify the measure's scope. Its file goes under
+   `provisional/<scope>/<slug>.md` and the change classifies as that scope.
+   Create the scope directory only if the measure needs it.
+2. Write `statement` and `exit-when` as one sentence each: what the measure is,
+   and the condition that ends it.
+3. Set `watch` to the tracked path whose change is the signal, or to `manual`
+   when only a person can tell. Leave the key out when neither applies.
+4. Set `since` to the date the measure enters the tree and `review-by` to a
+   date after it and at most 180 days later. Pick the date by which someone
+   could tell whether `exit-when` came true, not the longest one allowed.
+5. Open or name the issue where the measure and its exit are tracked, and
+   point `decision` at the record that accepted it, `<path> § <heading>`. If
+   no record accepted it, write one first through "Record a decision" below;
+   a measure nothing decided is not ready to register. Name the `owner` who decides
+   whether it is retired, extended or promoted.
+6. Put the tag `PROV <scope>/<slug>` on every disposable line: the header
+   comment above the block in a script or a Nix file, the comment above the
+   PowerShell block, the running text of a document. A document explaining the
+   registry writes the placeholder form and never a literal id.
+7. Stage the entry and the tagged lines, then run
+   `tool/version-control/provisional`. It reads the index, so an unstaged
+   entry is invisible to it. It runs again on every commit and in CI.
+
+## Retire, extend or promote a provisional measure
+
+Every entry ends one of three ways, and `review-by` is the date the choice is
+made rather than deferred. `tool/version-control/provisional --table` prints
+what is registered and when each entry is next due.
+
+Retire it when `exit-when` came true:
+
+1. Delete the measure itself and every line tagged `PROV <scope>/<slug>`.
+2. Delete `provisional/<scope>/<slug>.md`, and the scope directory if that was
+   its last entry.
+3. Do both in one commit, classified as the entry's scope, with `repository`
+   alongside for the supporting documents it deletes. The check refuses an
+   entry no tag names and a tag no entry names, so half of this fails.
+
+Extend it when `exit-when` has not come true and the measure is still the best
+option:
+
+1. Add a `reviewed: <YYYY-MM-DD> <why the horizon moved>` line to the prose,
+   dated the day the review happened.
+2. Move `review-by` to a date at most 180 days after that `reviewed:` date.
+   The check measures the horizon from the later of `since` and the last
+   `reviewed:` line, so an extension buys 180 days from the review, not from
+   the original registration.
+3. Say what changed since the last review. The `reviewed:` lines are the
+   record of how long the measure has been about to end.
+
+Promote it when the measure turned out to be the answer and is no longer
+temporary:
+
+1. Write a decision record through "Record a decision" below, saying what was
+   learned and why the measure stays.
+2. Delete the entry and every tag, as retirement does, and keep the code.
+3. Whatever must now remain true of that code is an invariant, not a
+   provisional entry; register it through "Add or change an invariant".
+
+An overdue entry fails the check for a change in its own scope only, so a
+change in another domain is never blocked by it. That is not a reprieve: the
+next change to the owning scope stops until the entry is retired, extended or
+promoted.
 
 ## Record a decision
 
@@ -436,6 +547,7 @@ an entry depends on.
 ```sh
 tool/version-control/test
 tool/version-control/invariants
+tool/version-control/provisional
 tool/version-control/domain-reads
 tool/version-control/audit
 tool/version-control/audit-remote  # when gh is authenticated
@@ -522,6 +634,7 @@ not branch-protection contexts because unselected domains are skipped.
 | `docs/troubleshooting.md` | Recurring problems indexed by symptom |
 | `docs/definition-of-done.md` | Domain-specific evidence requirements |
 | `invariants/` | Enumerated invariants and how each one is enforced |
+| `provisional/` | Registered temporary measures and the condition that ends each |
 | `.agents/skills/` | Model-neutral workflows specific to this repository |
 | `tool/`, hooks, CI | Executable policy |
 

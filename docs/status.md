@@ -39,6 +39,18 @@ on 2026-09-05 and does not answer the colour-scheme query the pair depends
 on, and every terminal this repository declares for a composed home is light
 (`docs/decisions/composed-homes-render-in-declared-terminals.md`).
 
+Also since 2026-09-05, Darwin's zellij carries upstream PR
+zellij-org/zellij#5500, which attaches combining marks instead of dropping
+them, so a decomposed Hangul syllable is expected to survive a pane; without
+it only the leading jamo arrives, which was reproduced on Linux against the
+pinned unpatched build. The patch is an overlay in `modules/zellij.nix`, is
+pinned to zellij 0.45.0 and refuses to evaluate against any other version,
+and yields nothing on Linux, where every toplevel derivation path is
+unchanged. The measure is registered as temporary in
+`provisional/unixlike/zellij-combining-marks.md`. Evaluation and the two
+fixed-output hashes are Linux evidence; the Darwin build and the reproduction
+against the built binary are owed to #178 and have not been performed.
+
 WezTerm and Ghostty are the desktop terminals; Home Manager installs the
 D2Coding Nerd Font package and configures `D2KodingLigature Nerd Font Mono`
 for both. On Darwin, WezTerm also reads Home Manager's nested font directory
@@ -151,7 +163,7 @@ are disabled.
 The merge gate is CI's `Required checks`, demanded whenever a change falls
 in a domain that check covers.
 
-The invariant registry holds 54 entries, none pending and no fixture unit
+The invariant registry holds 55 entries, none pending and no fixture unit
 untagged, and `tool/version-control/invariants` enforces C10 (no untagged
 fixture unit) by default. Enforced is not the same as held: the manual
 `INV windows/support-boundary-named` records that the terminal delegation
@@ -159,6 +171,13 @@ item still passes its read-back below the Windows 10 boundary (#53).
 
 Content before a shell suite's first banner is in no fixture unit and
 invisible to C10 (`docs/decisions/fixture-tags-name-proven-invariants.md`).
+
+The provisional registry holds 1 entry, `unixlike/zellij-combining-marks`,
+registered on 2026-09-05 by #175; `provisional/README.md` is the contract.
+`tool/version-control/provisional` checks it in both directions on every
+commit and in the CI scan job. The exit criteria `flake.nix` states in
+comments are the known gap: moving them into the registry is a separate
+decision and has not been made.
 
 `tool/version-control/domain-reads` runs on every commit and in CI beside
 the hygiene scan; the Windows CI job no longer walks the checkout for
@@ -198,6 +217,10 @@ semantics across independent platform validation and release cycles.
 - `docs/decisions/annotated-tag-is-the-release-record.md`: reopens when a
   consumer needs a release artifact or a note the tag annotation cannot
   carry.
+- The Darwin zellij overlay (`PROV unixlike/zellij-combining-marks`) stands
+  until a nixpkgs zellij whose source already contains
+  zellij-org/zellij#5500 reaches `flake.lock`; review by 2026-12-04
+  (`provisional/unixlike/zellij-combining-marks.md`).
 
 ## Pending invariants
 

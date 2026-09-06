@@ -159,6 +159,24 @@ upp input:
 fmt:
     nix fmt .
 
+# PROV unixlike/zellij-combining-marks
+# Check that the zellij combining-marks patch still applies to a tag, e.g. `just zellij-patch-check v0.45.1`.
+[group('nix')]
+zellij-patch-check tag:
+    #!/usr/bin/env bash
+    set -euo pipefail
+    commit=$(sed -n 's|.*/zellij/commit/\([0-9a-f]\{40\}\)\.patch.*|\1|p' modules/zellij.nix)
+    if [[ -z "${commit}" ]]; then
+      echo "modules/zellij.nix carries no pinned zellij commit" >&2
+      exit 1
+    fi
+    work=$(mktemp -d)
+    trap 'rm -rf "${work}"' EXIT
+    git -c advice.detachedHead=false clone --quiet --depth 1 --branch '{{ tag }}' https://github.com/zellij-org/zellij "${work}/zellij"
+    curl -fsSL "https://github.com/zellij-org/zellij/commit/${commit}.patch" >"${work}/pr.patch"
+    git -C "${work}/zellij" apply --check "${work}/pr.patch"
+    printf '%s applies cleanly to %s\n' "${commit}" '{{ tag }}'
+
 ############################################################################
 #
 #  nix-darwin

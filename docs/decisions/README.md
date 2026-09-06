@@ -65,7 +65,10 @@ decision` is the procedure.
 | 2026-09-04 | repository | A fixture tag names only an invariant its case proves | accepted | fixture-tags-name-proven-invariants.md |
 | 2026-09-04 | repository | The local gate selects checks by effect | accepted | local-gate-selects-by-effect.md |
 | 2026-09-05 | unixlike | Every composed home renders in a terminal the repository declares | accepted | composed-homes-render-in-declared-terminals.md |
+| 2026-09-05 | unixlike | nixpkgs overlays are declared once for every flavour | accepted | nixpkgs-overlays-declared-once.md |
+| 2026-09-05 | unixlike | zellij is patched on Darwin until upstream ships the combining-mark fix | accepted | zellij-patched-on-darwin-until-upstream.md |
 | 2026-09-05 | unixlike | Karabiner desired state is compared and applied by projection | accepted | karabiner-desired-state-by-projection.md |
 | 2026-09-05 | windows | Windows adopts Modus Operandi by copying | accepted | windows-adopts-modus-operandi.md |
 | 2026-09-05 | windows | The Windows entry point is one script inside the domain | accepted | windows-entry-point-in-domain.md |
 | 2026-09-05 | repository | A rule or a deletion is observed before it is adopted | accepted | candidates-observed-before-adoption.md |
+| 2026-09-05 | repository | The provisional registry records what must become false | accepted | provisional-registry-created.md |
