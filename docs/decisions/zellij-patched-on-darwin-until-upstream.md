@@ -220,3 +220,21 @@ zellij-org/zellij#5500. Seen at the same time and not fixed by the PR as
 pinned: `dump_screen!`, selection and `serialize` in `grid.rs` push only the
 base character, so text read back out of a patched zellij loses the marks the
 screen now keeps.
+
+Later on 2026-09-06, aarch64-darwin, #178. The overlay gained a `postPatch`
+that accepts the Hangul jamo ranges beside category Mark and appends a Hangul
+grid test, and `cargoTestFlags` and `checkFlags` that point the build's check
+at `zellij-server`'s combining-mark tests. `just darwin-build` completed with
+the `cargoDeps` hash unchanged, and the check ran five tests — the PR's four
+and the Hangul one — all passing, the first grid tests to run inside this
+build. Against the built binary before activation, and again through the
+installed one in a session created after generation 35 at 15:18, the
+reproduction answered `4e 46 44 3a 5b e1 84 92 e1 85 a1 e1 86 ab 5d`, equal
+to the control; `ls` of the jamo-named directory came back
+`6e 66 64 2d e1 84 92 e1 85 a1 e1 86 ab`; Thai `กั` stayed
+`e0 b8 81 e0 b8 b1`. A zellij server started before the switch keeps serving
+the previous binary until its session ends, which is why the reading was
+taken in a new session. The measure delivers its outcome on the host from
+generation 35. The addition is carried by the overlay until
+zellij-org/zellij#5500 includes it; CONTRIBUTING § zellij overlay says how a
+re-pin retires it.
