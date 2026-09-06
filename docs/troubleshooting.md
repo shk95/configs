@@ -538,10 +538,11 @@ Darwin's zellij with upstream PR
 [zellij-org/zellij#5500](https://github.com/zellij-org/zellij/pull/5500) while
 that PR is unmerged; `provisional/unixlike/zellij-combining-marks.md` says
 until when, and `docs/decisions/zellij-patched-on-darwin-until-upstream.md` says
-why. On 2026-09-06 the patched Darwin build still answered the short form: the
-PR attaches general-category Mark code points and Hangul jamo are letters, so
-the overlay needs the jamo ranges added; the decision record's Evidence has
-the reading. On a host the overlay does not reach, there is no local fix.
+why. On 2026-09-06 the pull request's commit alone still answered the short
+form — it attaches general-category Mark code points and Hangul jamo are
+letters — so the overlay adds the jamo ranges in a `postPatch`; with that,
+generation 35 answers the full form. The decision record's Evidence has both
+readings. On a host the overlay does not reach, there is no local fix.
 
 ### `msedit` opens with `b2b` already typed into the buffer
 

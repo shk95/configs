@@ -48,14 +48,17 @@ pinned to zellij 0.45.0 and refuses to evaluate against any other version,
 and yields nothing on Linux, where every toplevel derivation path is
 unchanged. The measure is registered as temporary in
 `provisional/unixlike/zellij-combining-marks.md`. Evaluation and the two
-fixed-output hashes are Linux evidence. On 2026-09-06 the Mac built it with
-both hashes holding and activated it as generation 34, and the reproduction
-against the running binary showed the jamo still dropped: the patch attaches
-general-category Mark code points, and a syllable's medial vowel and final
-consonant are letters that `unicode-width` gives zero width, so the measure
-stands and does not yet deliver its outcome on the host. The dated paragraph
-in `docs/decisions/zellij-patched-on-darwin-until-upstream.md` records the
-observation and the addition the patch needs.
+fixed-output hashes are Linux evidence. On 2026-09-06 the Mac built and
+activated it twice. Generation 34 showed the jamo still dropped, because the
+pull request attaches general-category Mark code points and a syllable's
+medial vowel and final consonant are letters that `unicode-width` gives zero
+width; the overlay then gained a `postPatch` that accepts those jamo ranges
+and a Hangul grid test, and generation 35 renders a decomposed syllable whole
+in a real session, with the build's check now running the combining-mark
+tests in `zellij-server`. The addition is carried until zellij-org/zellij#5500
+includes it; the dated paragraphs in
+`docs/decisions/zellij-patched-on-darwin-until-upstream.md` record both
+readings.
 
 WezTerm and Ghostty are the desktop terminals; Home Manager installs the
 D2Coding Nerd Font package and configures `D2KodingLigature Nerd Font Mono`
