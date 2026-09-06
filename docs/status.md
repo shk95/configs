@@ -55,9 +55,11 @@ medial vowel and final consonant are letters that `unicode-width` gives zero
 width; the overlay then gained a `postPatch` that accepts those jamo ranges
 and a Hangul grid test, and generation 35 renders a decomposed syllable whole
 in a real session, with the build's check now running the combining-mark
-tests in `zellij-server`. The addition is carried until zellij-org/zellij#5500
-includes it; the dated paragraphs in
-`docs/decisions/zellij-patched-on-darwin-until-upstream.md` record both
+tests in `zellij-server`. The pull request's author folded that addition
+into the branch the same day, with a fix to the readback paths (`dump-screen`,
+copy, serialize) found on the way, and the overlay now pins the branch's
+commit range instead of its first commit; the dated paragraphs in
+`docs/decisions/zellij-patched-on-darwin-until-upstream.md` record the
 readings.
 
 WezTerm and Ghostty are the desktop terminals; Home Manager installs the

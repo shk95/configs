@@ -42,7 +42,6 @@ v<the lock's zellij version>` for whether the commit still applies, the three
 flavours' toplevel derivation paths for whether anything but Darwin moved, and
 the reproduction in the decision record against the built Darwin binary. The
 Darwin build and its reproduction were observed on 2026-09-06 (#178):
-generation 35 renders a decomposed syllable whole. The overlay's `postPatch`
-addition — the Hangul jamo ranges and their grid test — is part of this
-measure and goes with it, or earlier, when the pinned commit carries it
-(CONTRIBUTING § zellij overlay).
+generation 35 renders a decomposed syllable whole. The Hangul jamo ranges
+that generation carried as a local addition are on the pull request's branch
+since the same day, and the overlay pins the branch's commit range.

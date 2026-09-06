@@ -10,11 +10,15 @@ reopen-when: zellij-org/zellij#5500 is merged, or is closed unmerged.
 ## The defect
 
 zellij's `Grid::add_character` drops every code point of zero width. The
-conjoining jamo of a decomposed Hangul syllable are zero-width combining
-marks, so a syllable written as U+1112 U+1161 U+11AB arrives at a pane as its
-leading consonant alone and composed Korean disappears while it is typed.
-Upstream has the defect twice over as zellij-org/zellij#3667 and #1538. It is
-not an IME, font or locale problem, and WezTerm's
+medial vowel and final consonant of a decomposed Hangul syllable are zero
+width — letters that conjoin with the leading consonant, not marks, which is
+what the first Darwin reading found on 2026-09-06 (§ Evidence) — so a
+syllable written as U+1112 U+1161 U+11AB arrives at a pane as its leading
+consonant alone and composed Korean disappears while it is typed. Upstream
+has the defect as zellij-org/zellij#1538, and #3667 is the same defect seen
+through decomposed Latin `é` on WSL; the tracker holds no Korean report, a
+correction the PR's author made on 2026-09-06 after this record had cited
+#3667 as one. It is not an IME, font or locale problem, and WezTerm's
 `normalize_output_to_unicode_nfc` cannot reach it because the jamo are dropped
 before WezTerm ever renders them.
 
@@ -54,7 +58,10 @@ in `grid.rs` pushes only each cell's base character, so a dump answers
 `e1 84 92` from a grid that attached the jamo and from one that dropped them
 alike, and on the Mac it showed Thai marks absent that the same pane's client
 stream showed attached. For an unpatched grid the two readings agree, because
-a dropped code point reaches neither, so the Linux observation stands.
+a dropped code point reaches neither, so the Linux observation stands. Since
+the range pin of 2026-09-06 the branch's readback fix makes `dump-screen`
+keep the marks too, and the two readings agree again; the client stream
+remains the reference because it is what the terminal renders.
 
 A grid that attaches the jamo makes the capture's bytes equal the control's,
 `4e 46 44 3a 5b e1 84 92 e1 85 a1 e1 86 ab 5d`. The patched Darwin build of
@@ -64,9 +71,16 @@ A grid that attaches the jamo makes the capture's bytes equal the control's,
 
 Upstream PR zellij-org/zellij#5500, "attach combining marks instead of
 dropping them", was opened on 2026-08-20 and is unreviewed and unmerged. Its
-code commit `8e02033f0bb8bdb53acf1484cb81605d0f3671dc` applies to the v0.45.0
-and v0.45.1 tags without rejects (#175, 2026-09-05). `modules/zellij.nix`
-carries that commit as an overlay contributed to `nixpkgsOverlays`
+first commit `8e02033f0bb8bdb53acf1484cb81605d0f3671dc` applied to the
+v0.45.0 and v0.45.1 tags without rejects (#175, 2026-09-05) and was the pin
+until 2026-09-06, when the branch gained the Hangul jamo ranges and a fix to
+the readback paths (§ Evidence). The pin is now the branch's commit range,
+`bf8d23a4…...cbb7b165…`, fetched as one patch from the compare URL with
+`CHANGELOG.md` excluded: the later commits build on the first one's cells,
+so the set is one unit, and the release notes are the one file in it that
+does not apply to v0.45.1. `just zellij-patch-check` and the watcher read
+the head of that range as the pin. `modules/zellij.nix`
+carries that range as an overlay contributed to `nixpkgsOverlays`
 (`docs/decisions/nixpkgs-overlays-declared-once.md`), and the measure is
 registered as temporary in `provisional/unixlike/zellij-combining-marks.md`,
 which names the condition that ends it.
@@ -235,6 +249,19 @@ to the control; `ls` of the jamo-named directory came back
 `e0 b8 81 e0 b8 b1`. A zellij server started before the switch keeps serving
 the previous binary until its session ends, which is why the reading was
 taken in a new session. The measure delivers its outcome on the host from
-generation 35. The addition is carried by the overlay until
-zellij-org/zellij#5500 includes it; CONTRIBUTING § zellij overlay says how a
-re-pin retires it.
+generation 35. The addition was carried by the overlay until
+zellij-org/zellij#5500 included it, which happened the same day.
+
+Later still on 2026-09-06, aarch64-darwin. The PR's author folded the Hangul
+commit into the branch as `f9805a15` (with this repository's maintainer as
+author), corrected the #3667 citation, and fixed the readback paths in
+`c4d16579`; the branch head became `cbb7b165`. The overlay was re-pinned to
+the commit range `bf8d23a4…...cbb7b165…` with `CHANGELOG.md` excluded and
+the `postPatch` deleted; `just zellij-patch-check` passed against v0.45.0 and
+v0.45.1 with the range. `just darwin-build` completed with the `cargoDeps`
+hash unchanged, and the check ran nine tests — the PR's four, the Hangul one
+and the four readback ones — all passing. Against the built binary, before
+activation: the client stream answered `4e 46 44 3a 5b e1 84 92 e1 85 a1 e1
+86 ab 5d`, and so did `dump-screen` for the first time; Thai
+`e0 b8 81 e0 b8 b1` on both readings; the jamo-named directory listed whole.
+Activation of this generation is a separate request.

@@ -511,10 +511,13 @@ Composed Korean disappears as it is typed inside a zellij pane and reappears
 outside one; the leading consonant arrives and the vowel and final consonant do
 not. Not an IME, a font or a locale problem, and not WezTerm's:
 `normalize_output_to_unicode_nfc` never sees the missing code points. zellij's
-`Grid::add_character` drops every zero-width code point, and the conjoining
-jamo of a decomposed syllable are zero-width combining marks
-([zellij-org/zellij#3667](https://github.com/zellij-org/zellij/issues/3667),
-[#1538](https://github.com/zellij-org/zellij/issues/1538)).
+`Grid::add_character` drops every zero-width code point
+([zellij-org/zellij#1538](https://github.com/zellij-org/zellij/issues/1538);
+[#3667](https://github.com/zellij-org/zellij/issues/3667) is the same defect
+seen through decomposed Latin), and the medial vowel and final consonant of a
+decomposed syllable are zero width — letters that conjoin with the leading
+consonant rather than marks, which is why a fix that attaches only marks
+still drops them.
 
 Read back what the grid kept rather than what the screen looks like — the
 missing bytes are the evidence. Read them from the bytes zellij sends an
@@ -538,11 +541,11 @@ Darwin's zellij with upstream PR
 [zellij-org/zellij#5500](https://github.com/zellij-org/zellij/pull/5500) while
 that PR is unmerged; `provisional/unixlike/zellij-combining-marks.md` says
 until when, and `docs/decisions/zellij-patched-on-darwin-until-upstream.md` says
-why. On 2026-09-06 the pull request's commit alone still answered the short
-form — it attaches general-category Mark code points and Hangul jamo are
-letters — so the overlay adds the jamo ranges in a `postPatch`; with that,
-generation 35 answers the full form. The decision record's Evidence has both
-readings. On a host the overlay does not reach, there is no local fix.
+why. On 2026-09-06 the pull request's first commit alone still answered the
+short form — it attached general-category Mark code points and Hangul jamo
+are letters — and the branch gained the jamo ranges the same day; generation
+35 answers the full form. The decision record's Evidence has the readings.
+On a host the overlay does not reach, there is no local fix.
 
 ### `msedit` opens with `b2b` already typed into the buffer
 
