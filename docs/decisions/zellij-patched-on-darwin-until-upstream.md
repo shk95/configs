@@ -264,4 +264,7 @@ and the four readback ones — all passing. Against the built binary, before
 activation: the client stream answered `4e 46 44 3a 5b e1 84 92 e1 85 a1 e1
 86 ab 5d`, and so did `dump-screen` for the first time; Thai
 `e0 b8 81 e0 b8 b1` on both readings; the jamo-named directory listed whole.
-Activation of this generation is a separate request.
+Activated as generation 36 at 19:37 on the maintainer's request; in a session
+created after the switch, served by the installed binary, both readings
+answered the same bytes again, and `just karabiner-check` still exited 0
+with the Karabiner file untouched.
