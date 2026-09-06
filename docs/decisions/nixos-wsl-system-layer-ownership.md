@@ -5,6 +5,7 @@ scope: unixlike
 status: accepted
 issue: #190
 issue: #191
+issue: #195
 reopen-when: the NixOS-WSL host gains a display, or a second NixOS host composes `modules.nixos.wsl`.
 
 `modules/wsl.nix` was written as an experiment: a system layer kept almost
@@ -117,7 +118,14 @@ is a later change.
 Refused by the test: moving interactive packages or fonts into the system
 layer (Home Manager declares them, `useUserPackages` folds them into the
 system generation, and the standalone flavour keeps them); declaring the
-authorized keys or a password hash; and `programs.zsh.enable`, above.
+authorized keys or a password hash; and `programs.zsh.enable`, above. The
+coding agents are not a system-layer question at all: `modules/agents.nix`
+is a Home Manager class the composition file gives to the NixOS-WSL home
+and to no other, the mechanism that keeps `homeManager.desktop` out of the
+WSL homes used the other way round (#195;
+`docs/decisions/home-manager-platform-classes.md` records the new kind of
+class, `docs/decisions/package-ownership-by-generating-module.md` what it
+means for the shared list).
 
 What it costs. The NixOS host is now read in seven files rather than one,
 each holding one feature across the classes that need it. The automount

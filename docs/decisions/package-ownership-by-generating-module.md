@@ -29,3 +29,11 @@ while Home Manager contributes zsh for the per-user configuration. Only the
 shell is duplicated there; `nix-zsh-completions` is not, because nothing on
 that host enables the NixOS zsh module. Read back on the host after the
 first activation.
+
+Extended 2026-09-06 (#195): "the shared package list" names the class through
+which a package with nothing to configure reaches every home. A package meant
+for one home only is declared once, in a class the composition file gives
+that home alone (`homeManager.agents`, `modules/agents.nix`). The rule's
+substance — one declaring module — is unchanged; the class, not a second
+list, decides where the package reaches
+(`docs/decisions/home-manager-platform-classes.md`).

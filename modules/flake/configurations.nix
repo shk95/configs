@@ -9,9 +9,11 @@
 # tool/checks/composition refuses a feature file that names a host flavour
 # or forces a class's decision.
 #
-# The NixOS output is named by the typed identity's host name, as the Darwin
-# one is, so `networking.hostName` and the output attribute cannot drift
-# (modules/wsl-host.nix, #191).
+# `home.agents` — the coding agents — is composed into the NixOS-WSL home
+# only; the standalone Ubuntu home and the Darwin home are unchanged by it
+# (modules/agents.nix). The NixOS output is named by the typed identity's
+# host name, as the Darwin one is, so `networking.hostName` and the output
+# attribute cannot drift (modules/wsl-host.nix, #191).
 {
   lib,
   config,
@@ -50,6 +52,7 @@ in {
             users.${wsl.user}.imports = [
               home.shared
               home.wsl
+              home.agents
             ];
           };
         }
