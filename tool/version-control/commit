@@ -93,6 +93,14 @@ hooks_enabled() {
 
 homebrew_module=modules/darwin-homebrew.nix
 
+# The two payloads `capture karabiner` reads back, and the tool that knows how
+# to read them off a host. tool/darwin/karabiner owns the projection, the
+# platform guard and the host defaults; this command only decides that a
+# capture is a commit.
+karabiner_tool=tool/darwin/karabiner
+karabiner_payload=assets/karabiner/karabiner.json
+karabiner_hotkeys=assets/karabiner/symbolic-hotkeys.json
+
 # One scratch directory for the candidate edit, the pull-request body and the
 # copy of the hook's output. Trapped on the signals a prompt is interrupted
 # with as well as on EXIT, because a helper that stops at a question is exactly
@@ -109,6 +117,8 @@ invocation="tool/version-control/commit $*"
 
 publish=0
 dry_run=0
+karabiner_host=
+karabiner_hotkeys_host=
 create_branch=0
 publish_branch=
 existing_pr_url=
@@ -126,6 +136,10 @@ options:
   --dry-run                show everything that would happen and write nothing
   --publish                after committing, push, open a pull request against
                            dev, and arm auto-merge
+  --host <file>            capture karabiner only: read this file instead of
+                           the Karabiner document in the home directory
+  --hotkeys-host <file>    capture karabiner only: read this JSON file instead
+                           of the host's symbolic hotkey dictionary
 
 commands:
   brew add <formula>       declare a Homebrew formula in modules/darwin-homebrew.nix
@@ -135,12 +149,21 @@ commands:
   mas add <name> <id>      declare a Mac App Store app in modules/darwin-homebrew.nix
   mas remove <name>        remove a Mac App Store app
   flake refresh [<input>]  refresh flake.lock, every input or one
+  capture karabiner        read this Mac's Karabiner state back into
+                           assets/karabiner/
   prune                    delete local branches already merged into origin/dev
 
 mas add/remove edit the masApps attrset: <name> is the Nix attribute and <id>
 is the numeric App Store id the maintainer supplies (no lookup here); the mas
 CLI itself is already a declared Homebrew formula, so it needs no command of
 its own.
+
+capture karabiner is the reverse of the activation: tool/darwin/karabiner
+projects this host onto the members the two payloads declare, and each
+projection that differs becomes the payload's new content. Runtime keys the
+host also holds are neither read nor written. It runs on a Mac only, refuses
+when neither payload changed, and commits nothing the other commands would
+not: one confirmation, the same hook, no bypass.
 
 prune deletes a local branch only once it is an ancestor of origin/dev, and
 never the current branch, dev, or master; a failed delete (checked out in
@@ -227,6 +250,16 @@ while [ "$#" -gt 0 ]; do
       publish=1
       shift
       ;;
+    --host)
+      [ "$#" -ge 2 ] || usage
+      karabiner_host=$2
+      shift 2
+      ;;
+    --hotkeys-host)
+      [ "$#" -ge 2 ] || usage
+      karabiner_hotkeys_host=$2
+      shift 2
+      ;;
     -h | --help)
       usage_text
       exit 0
@@ -251,6 +284,14 @@ done
 [ "$#" -gt 0 ] || usage
 group=$1
 shift
+
+# --host and --hotkeys-host describe a read only capture karabiner performs.
+# Accepting them silently elsewhere would let a run look configured when
+# nothing consulted them. Asked here, above prune's early exit below, so that
+# every command answers it rather than only the ones that fall through.
+if [ "$group" != capture ] && { [ -n "$karabiner_host" ] || [ -n "$karabiner_hotkeys_host" ]; }; then
+  usage
+fi
 
 # prune has no templated edit, no owning scope, and no branch of its own: it
 # is a standalone maintenance sweep sharing prune_branches with --publish's
@@ -299,6 +340,11 @@ case $group in
     shift
     [ "$action" = refresh ] || usage
     input=${1:-}
+    ;;
+  capture)
+    [ "$#" -eq 1 ] || usage
+    action=$1
+    [ "$action" = karabiner ] || usage
     ;;
   *) usage ;;
 esac
@@ -379,6 +425,10 @@ case $group in
       topic=deps-refresh
     fi
     ;;
+  capture)
+    target=$karabiner_payload
+    topic=capture-karabiner
+    ;;
 esac
 
 # A name of nothing but punctuation slugifies to nothing and would spell
@@ -391,12 +441,25 @@ case $topic in
 esac
 
 # classify still owns ownership. A path it cannot place, or places in more than
-# one scope, has no single branch to be published from.
-scope=$("$classify" --files "$target")
+# one scope, has no single branch to be published from. capture writes two
+# payloads rather than one, so both are asked at once: two scopes would print
+# two lines and be refused below, which is the right answer.
+# scope_paths is what the refusal below names: every path the question was
+# asked about, not just the first of them.
+case $group in
+  capture)
+    scope_paths="$karabiner_payload $karabiner_hotkeys"
+    scope=$("$classify" --files "$karabiner_payload" "$karabiner_hotkeys")
+    ;;
+  *)
+    scope_paths=$target
+    scope=$("$classify" --files "$target")
+    ;;
+esac
 case $scope in
   unixlike | windows | common | repository) ;;
   *)
-    refuse "$target has no owning scope: $(printf '%s' "$scope" | tr '\n' ' ')" \
+    refuse "$scope_paths has no owning scope: $(printf '%s' "$scope" | tr '\n' ' ')" \
       "Update tool/version-control/classify before committing it. Both gates reject an unclassified path, and a path owned by more than one scope has no single branch to publish from."
     ;;
 esac
@@ -521,14 +584,19 @@ require_untouched() {
 }
 
 # Ownership and check selection come from the tools that own those questions.
+#
+# A command may hold more than one path: capture karabiner writes two payloads
+# in one commit. POSIX sh has no arrays, so the convention here and in
+# commit_staged is the message first and one or more paths as the trailing
+# variadic parameters.
 report_plan() {
-  plan_path=$1
-  plan_message=$2
+  plan_message=$1
+  shift
 
   printf '\nclassification: %s\n' "$scope"
   printf 'checks:\n'
   if hooks_enabled; then
-    plan_units=$(selected_units "$plan_path")
+    plan_units=$(selected_units "$@")
     printf '%s\n' "$plan_units" | sed 's/^/  /'
     plan_units_line=$(printf '%s' "$plan_units" | tr '\n' ',' | sed 's/,/, /g')
   else
@@ -544,7 +612,9 @@ report_plan() {
 }
 
 selected_units() {
-  printf 'M\t%s\n' "$1" | "$select_checks" commit
+  for units_path in "$@"; do
+    printf 'M\t%s\n' "$units_path"
+  done | "$select_checks" commit
 }
 
 require_classified() {
@@ -737,13 +807,18 @@ commit_rejected() {
     printf '  You are now on %s, which this run created.\n' "$publish_branch" >&2
   fi
   printf '  The edit is left staged. Fix what the hook reported, or discard it with:\n' >&2
-  printf '    git restore --staged --worktree -- %s\n' "$1" >&2
+  printf '    git restore --staged --worktree --' >&2
+  for rejected_path in "$@"; do
+    printf ' %s' "$rejected_path" >&2
+  done
+  printf '\n' >&2
   exit 1
 }
 
+# Message first, then every path this commit holds; see report_plan for why.
 commit_staged() {
-  commit_path=$1
-  commit_message=$2
+  commit_message=$1
+  shift
 
   if [ "$publish" -eq 0 ]; then
     # No capture, no pipe, no redirection: the hook's evidence lines and its
@@ -751,7 +826,7 @@ commit_staged() {
     if git commit -m "$commit_message"; then
       return 0
     fi
-    commit_rejected "$commit_path"
+    commit_rejected "$@"
   fi
 
   # Publishing gives those lines a second reader, and nobody reviews a pull
@@ -769,7 +844,7 @@ commit_staged() {
   if [ "$(cat "$commit_status")" = 0 ]; then
     return 0
   fi
-  commit_rejected "$commit_path"
+  commit_rejected "$@"
 }
 
 # The entries of one Nix string list, in file order. The pattern is strict, and
@@ -938,7 +1013,7 @@ homebrew_command() {
   printf 'edit: %s\n' "$homebrew_module"
   git --no-pager diff --no-index --no-color -- "$homebrew_module" "$candidate" \
     | sed -n '/^@@/,$p'
-  report_plan "$homebrew_module" "$message"
+  report_plan "$message" "$homebrew_module"
   report_publish_plan
 
   [ "$dry_run" -eq 0 ] || exit 0
@@ -956,7 +1031,7 @@ homebrew_command() {
   # Written in place so the file keeps its mode and identity.
   cat "$candidate" >"$homebrew_module"
   git add -- "$homebrew_module"
-  commit_staged "$homebrew_module" "$message"
+  commit_staged "$message" "$homebrew_module"
   publish_commit
 }
 
@@ -1133,7 +1208,7 @@ mas_command() {
   printf 'edit: %s\n' "$homebrew_module"
   git --no-pager diff --no-index --no-color -- "$homebrew_module" "$candidate" \
     | sed -n '/^@@/,$p'
-  report_plan "$homebrew_module" "$message"
+  report_plan "$message" "$homebrew_module"
   report_publish_plan
 
   [ "$dry_run" -eq 0 ] || exit 0
@@ -1151,7 +1226,7 @@ mas_command() {
   # Written in place so the file keeps its mode and identity.
   cat "$candidate" >"$homebrew_module"
   git add -- "$homebrew_module"
-  commit_staged "$homebrew_module" "$message"
+  commit_staged "$message" "$homebrew_module"
   publish_commit
 }
 
@@ -1173,7 +1248,7 @@ flake_command() {
 
   printf 'edit: flake.lock\n'
   printf 'action: %s\n' "$action_line"
-  report_plan flake.lock "$message"
+  report_plan "$message" flake.lock
   report_publish_plan
 
   [ "$dry_run" -eq 0 ] || exit 0
@@ -1222,7 +1297,145 @@ flake_command() {
   # CONTRIBUTING.md: flake.lock refreshes go in dedicated chore(unixlike-deps)
   # commits, so nothing else may join this one.
   git add -- flake.lock
-  commit_staged flake.lock "$message"
+  commit_staged "$message" flake.lock
+  publish_commit
+}
+
+# INV unixlike/host-written-payload-projected
+#
+# The reverse direction of the activation modules/karabiner.nix declares: the
+# same projection that decides what `apply` writes decides what a capture reads
+# back. tool/darwin/karabiner owns it, so nothing here reads the host document,
+# names a runtime key, or re-derives which members the payloads own.
+#
+# `project` prints the two projections introduced by `=== <name> ===` marker
+# lines, and that script's header names those lines as the whole contract a
+# caller may rely on. Splitting on them is all this does; it invents no second
+# convention.
+#
+# Each section is already `jq -S --indent 2` output, because project_document
+# and project_hotkeys both render through it, so a section is the payload's new
+# content verbatim. Canonicalising it a second time here would resolve a second
+# jq and give the repository a second opinion about payload layout.
+capture_command() {
+  # Only a Mac holds the state this reads. The tool's own guard would report
+  # unverified, which is the right answer for a check and the wrong one for a
+  # command that writes: a projection of nothing would capture the payloads
+  # away.
+  capture_platform=${KARABINER_PLATFORM:-}
+  [ -n "$capture_platform" ] || capture_platform=$(uname -s)
+  case $capture_platform in
+    Darwin | darwin) ;;
+    *)
+      refuse "capture karabiner runs on a Mac only; this host is $capture_platform." \
+        "Karabiner state is Darwin evidence. Run this on the Mac whose state the payloads describe."
+      ;;
+  esac
+
+  [ -x "$karabiner_tool" ] \
+    || refuse "$karabiner_tool is missing or not executable." \
+      "That script owns the projection this command commits."
+
+  # The default tool/darwin/karabiner documents, restated only so that a
+  # missing file is a refusal rather than a capture of an empty document.
+  # --host overrides it, which is how a fixture hands in a host of its own.
+  capture_host=$karabiner_host
+  [ -n "$capture_host" ] || capture_host="${HOME:-}/.config/karabiner/karabiner.json"
+  [ -r "$capture_host" ] \
+    || refuse "This host has no readable $capture_host." \
+      "There is nothing to read back. Karabiner writes that file the first time it saves."
+
+  set -- project
+  [ -z "$karabiner_host" ] || set -- "$@" --host "$karabiner_host"
+  [ -z "$karabiner_hotkeys_host" ] || set -- "$@" --hotkeys-host "$karabiner_hotkeys_host"
+  "$karabiner_tool" "$@" >"$work/projection" \
+    || refuse "$karabiner_tool project failed." \
+      "Nothing was written. Read what it reported and run this again."
+
+  capture_document_candidate="$work/candidate-${karabiner_payload##*/}"
+  capture_hotkeys_candidate="$work/candidate-${karabiner_hotkeys##*/}"
+  awk -v document="$capture_document_candidate" -v hotkeys="$capture_hotkeys_candidate" '
+    /^=== / {
+      section = $0
+      sub(/^=== /, "", section)
+      sub(/ ===$/, "", section)
+      out = ""
+      if (section == "karabiner") out = document
+      else if (section == "symbolic-hotkeys") out = hotkeys
+      next
+    }
+    out != "" { print >out }
+  ' "$work/projection"
+
+  # A section that did not arrive means this command and the tool disagree
+  # about the marker lines. Guessing would commit half a capture.
+  for capture_payload in "$karabiner_payload" "$karabiner_hotkeys"; do
+    capture_candidate="$work/candidate-${capture_payload##*/}"
+    [ -s "$capture_candidate" ] \
+      || refuse "$karabiner_tool project printed no section for $capture_payload." \
+        "Its marker lines are the contract this reads, and the two no longer agree."
+  done
+
+  capture_changed=0
+  for capture_payload in "$karabiner_payload" "$karabiner_hotkeys"; do
+    capture_candidate="$work/candidate-${capture_payload##*/}"
+    if ! cmp -s "$capture_payload" "$capture_candidate"; then
+      capture_changed=1
+    fi
+  done
+  if [ "$capture_changed" -eq 0 ]; then
+    refuse "There is nothing to capture." \
+      "Both payloads already hold this host's projection, which is what tool/darwin/karabiner check reports in one line."
+  fi
+
+  for capture_payload in "$karabiner_payload" "$karabiner_hotkeys"; do
+    require_untouched "$capture_payload"
+  done
+
+  message="feat(unixlike): capture karabiner desired state"
+
+  for capture_payload in "$karabiner_payload" "$karabiner_hotkeys"; do
+    require_classified "$capture_payload"
+  done
+
+  # One sequence over the two payloads rather than the inline pair the older
+  # commands each write once: the diff a reviewer reads and the write that
+  # follows the confirmation are the same steps twice over.
+  for capture_payload in "$karabiner_payload" "$karabiner_hotkeys"; do
+    capture_candidate="$work/candidate-${capture_payload##*/}"
+    if cmp -s "$capture_payload" "$capture_candidate"; then
+      continue
+    fi
+    printf 'edit: %s\n' "$capture_payload"
+    git --no-pager diff --no-index --no-color -- "$capture_payload" "$capture_candidate" \
+      | sed -n '/^@@/,$p'
+  done
+
+  report_plan "$message" "$karabiner_payload" "$karabiner_hotkeys"
+  report_publish_plan
+
+  [ "$dry_run" -eq 0 ] || exit 0
+
+  if [ "$publish" -eq 1 ]; then
+    confirm "Capture this host's Karabiner state, then commit and publish?"
+  else
+    confirm "Capture this host's Karabiner state and commit it?"
+  fi
+
+  # The branch comes first, while the tree still matches HEAD, so switching
+  # cannot disturb an edit that has not been made yet.
+  create_publish_branch
+
+  for capture_payload in "$karabiner_payload" "$karabiner_hotkeys"; do
+    capture_candidate="$work/candidate-${capture_payload##*/}"
+    if cmp -s "$capture_payload" "$capture_candidate"; then
+      continue
+    fi
+    # Written in place so the file keeps its mode and identity.
+    cat "$capture_candidate" >"$capture_payload"
+    git add -- "$capture_payload"
+  done
+  commit_staged "$message" "$karabiner_payload" "$karabiner_hotkeys"
   publish_commit
 }
 
@@ -1230,4 +1443,5 @@ case $group in
   brew | cask) homebrew_command ;;
   mas) mas_command ;;
   flake) flake_command ;;
+  capture) capture_command ;;
 esac

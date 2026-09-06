@@ -505,6 +505,48 @@ Nothing answering at all is a real gap, and it is the NixOS-WSL case:
 `fonts.enableDefaultPackages` is `false` and `fonts.packages` is empty there, so
 that flavour has no font of any kind until one is declared.
 
+### Hangul jamo vanish inside zellij on macOS
+
+Composed Korean disappears as it is typed inside a zellij pane and reappears
+outside one; the leading consonant arrives and the vowel and final consonant do
+not. Not an IME, a font or a locale problem, and not WezTerm's:
+`normalize_output_to_unicode_nfc` never sees the missing code points. zellij's
+`Grid::add_character` drops every zero-width code point
+([zellij-org/zellij#1538](https://github.com/zellij-org/zellij/issues/1538);
+[#3667](https://github.com/zellij-org/zellij/issues/3667) is the same defect
+seen through decomposed Latin), and the medial vowel and final consonant of a
+decomposed syllable are zero width — letters that conjoin with the leading
+consonant rather than marks, which is why a fix that attaches only marks
+still drops them.
+
+Read back what the grid kept rather than what the screen looks like — the
+missing bytes are the evidence. Read them from the bytes zellij sends an
+attached client, not from `zellij action dump-screen`, which prints each
+cell's base character alone and so cannot tell a grid that attached a mark
+from one that dropped it:
+
+```sh
+zellij attach --create-background repro
+zellij -s repro action new-pane -- \
+  sh -c 'printf "NFD:[\341\204\222\341\205\241\341\206\253]\n"; sleep 60'
+timeout 6 script -q /tmp/repro.ts zellij attach repro </dev/null >/dev/null
+grep -a -o 'NFD:\[[^]]*\]' /tmp/repro.ts | grep -av '…' | head -1 | hexdump -C
+```
+
+That `script` line is macOS's; GNU `script` spells it
+`script -q -c 'zellij attach repro' /tmp/repro.ts`. An unpatched zellij 0.45.0
+answers `4e 46 44 3a 5b e1 84 92 5d`; a grid that keeps the jamo answers
+`4e 46 44 3a 5b e1 84 92 e1 85 a1 e1 86 ab 5d`. This repository patches
+Darwin's zellij with upstream PR
+[zellij-org/zellij#5500](https://github.com/zellij-org/zellij/pull/5500) while
+that PR is unmerged; `provisional/unixlike/zellij-combining-marks.md` says
+until when, and `docs/decisions/zellij-patched-on-darwin-until-upstream.md` says
+why. On 2026-09-06 the pull request's first commit alone still answered the
+short form — it attached general-category Mark code points and Hangul jamo
+are letters — and the branch gained the jamo ranges the same day; generation
+35 answers the full form. The decision record's Evidence has the readings.
+On a host the overlay does not reach, there is no local fix.
+
 ### `msedit` opens with `b2b` already typed into the buffer
 
 Upstream, not this repository:

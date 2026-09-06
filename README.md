@@ -106,6 +106,13 @@ policy, prepare work, or plan a domain release. The canonical model-neutral
 skill lives under `.agents/skills/`; `.claude/skills/` contains only Claude's
 discovery adapter. Audit and release planning are read-only by default.
 
+Codex reads `AGENTS.md` as [project instructions](https://learn.chatgpt.com/docs/agent-configuration/agents-md)
+and [discovers skills](https://learn.chatgpt.com/docs/build-skills) directly from
+`.agents/skills/`. Invoke this workflow in a Codex prompt with
+`$run-version-control-workflow`. External plugin distribution and installation
+may differ between Codex and Claude Code; this shared workflow needs no
+additional plugin.
+
 The separate sibling `skills` project provides `design-project-governance` for
 introducing a project rule. It separates durable policy, human procedure, agent
 orchestration, executable enforcement, current adoption, and per-run evidence
@@ -129,6 +136,11 @@ just home-build
 just darwin-eval
 just darwin-build
 just darwin-check
+
+just zellij-patch-check v0.45.1
+just karabiner-check   # target Mac only; compares the Karabiner payloads
+just karabiner-capture # target Mac only; reads the drift back and commits it
+just karabiner-test
 ```
 
 The `*-eval`, `*-build`, and `*-check` commands do not activate a configuration.

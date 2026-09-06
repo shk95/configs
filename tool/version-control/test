@@ -250,20 +250,26 @@ run_gate() {
     "$required_checks"
 }
 
+# Each case runs in a subshell. macOS /bin/sh is bash in POSIX mode, where an
+# assignment written before a function call persists after it and is
+# exported, so without the subshell `SECRETS_RESULT=failure` would outlive
+# its case, reach the GIT_DIR regression child through the environment and
+# fail that child's first positive case; dash, the Linux /bin/sh, does not
+# persist it, which is why CI never saw this.
 run_gate >/dev/null
-REPOSITORY_SCOPE=true REPOSITORY_RESULT=success run_gate >/dev/null
-UNIXLIKE_SCOPE=true UNIXLIKE_RESULT=success run_gate >/dev/null
-WINDOWS_SCOPE=true WINDOWS_RESULT=success run_gate >/dev/null
-PROMOTION_SCOPE=true PROMOTION_RESULT=success run_gate >/dev/null
-if REPOSITORY_SCOPE=true REPOSITORY_RESULT=failure run_gate >/dev/null 2>&1; then
+(REPOSITORY_SCOPE=true REPOSITORY_RESULT=success run_gate) >/dev/null
+(UNIXLIKE_SCOPE=true UNIXLIKE_RESULT=success run_gate) >/dev/null
+(WINDOWS_SCOPE=true WINDOWS_RESULT=success run_gate) >/dev/null
+(PROMOTION_SCOPE=true PROMOTION_RESULT=success run_gate) >/dev/null
+if (REPOSITORY_SCOPE=true REPOSITORY_RESULT=failure run_gate) >/dev/null 2>&1; then
   echo "required-checks accepted a failed selected job" >&2
   exit 1
 fi
-if SECRETS_RESULT=failure run_gate >/dev/null 2>&1; then
+if (SECRETS_RESULT=failure run_gate) >/dev/null 2>&1; then
   echo "required-checks accepted a failed secret scan" >&2
   exit 1
 fi
-if PROMOTION_SCOPE=true PROMOTION_RESULT=failure run_gate >/dev/null 2>&1; then
+if (PROMOTION_SCOPE=true PROMOTION_RESULT=failure run_gate) >/dev/null 2>&1; then
   echo "required-checks accepted a failed promotion gate" >&2
   exit 1
 fi
@@ -310,9 +316,21 @@ expect() {
 }
 
 expect unixlike "$classify" --files modules/git.nix
+# INV repository/scope-ownership
+# tool/darwin/ is the Unix-like domain's own Mac tooling: it reads and writes
+# a Unix-like payload, its evidence lane is a Mac, and no governance host can
+# produce it. Owned by unixlike, like modules/ and tool/checks/.
+expect unixlike "$classify" --files tool/darwin/karabiner
 expect windows "$classify" --files windows/src/WinEnv.psm1
 expect unclassified "$classify" --files common/example.txt
 expect repository "$classify" --files .agents/skills/example/SKILL.md
+# INV repository/scope-ownership
+# Product-specific project paths have repository ownership; a similar prefix
+# outside the product directory still has no owner.
+expect repository "$classify" --files .claude/settings.json
+expect repository "$classify" --files .codex/config.toml
+expect repository "$classify" --files .codex/rules/example.rules
+expect unclassified "$classify" --files .codex-extra/config.toml
 expect unclassified "$classify" --files unexpected.file
 # INV repository/scope-ownership
 # The invariant registry is per scope: an entry classifies as the scope that
@@ -330,6 +348,15 @@ expect unclassified "$classify" --files invariants/common/example.md
 expect repository "$classify" --files invariants/common/.gitkeep
 expect unclassified "$classify" --files invariants/stray.md
 expect unclassified "$classify" --files invariants/linux/x.md
+# INV repository/scope-ownership
+# The provisional registry is per scope for the same reason: the scope that
+# carries a temporary measure owns its registration and is the scope an
+# overdue review blocks.
+expect repository "$classify" --files provisional/README.md
+expect unixlike "$classify" --files provisional/unixlike/zellij-overlay.md
+expect windows "$classify" --files provisional/windows/appx-detection.md
+expect repository "$classify" --files provisional/repository/hook-shim.md
+expect unclassified "$classify" --files provisional/stray.md
 expect 'windows
 repository' "$classify" --files windows/setup.ps1 docs/status.md
 
@@ -367,6 +394,16 @@ expect_units 'unixlike:test' push "$kdl_added"
 
 expect_units 'unixlike:test' push "$module_modified"
 
+# INV repository/local-gate-selects-by-effect
+# tool/darwin/ holds the projection the Karabiner payloads are compared and
+# applied by, so a change to it can alter what the Unix-like suite says; it
+# selects the same units a module does.
+darwin_tool_modified=$(printf 'M\ttool/darwin/karabiner')
+expect_units 'unixlike:format
+unixlike:lint
+unixlike:payloads' commit "$darwin_tool_modified"
+expect_units 'unixlike:test' push "$darwin_tool_modified"
+
 # A rename carries two paths on one line. Both have to reach classify, or a
 # payload moved into assets/ is never selected for the payload check.
 renamed_into_assets=$(printf 'R100\tdocs/note.md\tassets/moved.lua')
@@ -390,6 +427,7 @@ workflow_modified=$(printf 'M\t.github/workflows/ci.yml')
 dispatch_modified=$(printf 'M\ttool/dispatch/select')
 vc_modified=$(printf 'M\ttool/version-control/audit')
 entry_modified=$(printf 'M\tinvariants/repository/scope-ownership.md')
+measure_modified=$(printf 'M\tprovisional/unixlike/zellij-overlay.md')
 docs_and_hook=$(printf 'M\tdocs/status.md\nM\t.githooks/pre-push')
 expect_units 'repository:fixtures' commit "$hook_modified"
 expect_units 'repository:fixtures' push "$hook_modified"
@@ -397,6 +435,10 @@ expect_units 'repository:fixtures' commit "$workflow_modified"
 expect_units 'repository:fixtures' commit "$dispatch_modified"
 expect_units 'repository:fixtures' push "$vc_modified"
 expect_units '' commit "$entry_modified"
+# A provisional entry is owned by the scope that carries the measure, so a
+# Unix-like one selects that domain's payload check exactly as an invariant
+# entry under invariants/unixlike/ does.
+expect_units 'unixlike:payloads' commit "$measure_modified"
 expect_units '' push "$docs_modified"
 expect_units 'repository:fixtures' commit "$docs_and_hook"
 # The three governance scripts the suite scans for the MSYS guard and copies
@@ -412,6 +454,20 @@ expect_units 'repository:fixtures' push "$setup_modified"
 expect_units 'repository:fixtures' commit "$worktree_modified"
 expect_units 'repository:fixtures' push "$hook_deleted"
 expect_units '' commit "$codeowners_modified"
+
+# INV repository/local-gate-selects-by-effect
+# Codex project paths select no local units; the hooks' unconditional scans
+# still apply. A similar unknown prefix stays refused, while changes to the
+# classifier or its fixtures keep selecting the repository suite.
+for stage in commit push; do
+  for codex_path in .codex/config.toml .codex/rules/example.rules; do
+    expect_units '' "$stage" "$(printf 'A\t%s' "$codex_path")"
+  done
+  expect_units 'unclassified' "$stage" "$(printf 'A\t.codex-extra/config.toml')"
+  for vc_path in tool/version-control/classify tool/version-control/test; do
+    expect_units 'repository:fixtures' "$stage" "$(printf 'M\t%s' "$vc_path")"
+  done
+done
 
 test_root=$(mktemp -d)
 cleanup() {
@@ -902,11 +958,23 @@ mkdir -p "$commit_root/tool/checks" "$commit_root/modules" "$commit_root/stub" \
 cp -R "$root/.githooks" "$commit_root/.githooks"
 cp -R "$root/tool/version-control" "$commit_root/tool/version-control"
 cp -R "$root/tool/dispatch" "$commit_root/tool/dispatch"
+# `capture karabiner` runs the real projection tool over the real payloads: the
+# command under test is the one that decides a capture is a commit, and a
+# stand-in for either side would leave that decision proving nothing. The host
+# it reads is faked through --host and --hotkeys-host, which is the whole
+# reason those flags exist.
+cp -R "$root/tool/darwin" "$commit_root/tool/darwin"
+mkdir -p "$commit_root/assets"
+cp -R "$root/assets/karabiner" "$commit_root/assets/karabiner"
 # The pre-commit hook this fixture enables also runs
 # tool/version-control/invariants, whose own cases are below; here it is a
 # stand-in so only the behaviour under test decides the outcome.
 printf '#!/bin/sh\nexit 0\n' >"$commit_root/tool/version-control/invariants"
 chmod +x "$commit_root/tool/version-control/invariants"
+# The hook runs tool/version-control/provisional beside it, whose own
+# cases are below; a stand-in here for the same reason.
+printf '#!/bin/sh\nexit 0\n' >"$commit_root/tool/version-control/provisional"
+chmod +x "$commit_root/tool/version-control/provisional"
 
 # The pre-commit hook this fixture enables also runs
 # tool/version-control/hygiene, which fails closed when it cannot read a
@@ -1545,6 +1613,167 @@ fi
   unset GIT_DIR GIT_WORK_TREE GIT_INDEX_FILE
   cd "$commit_root" && "$audit"
 ) >/dev/null
+
+# A uname stub proves a platform guard without depending on which platform
+# runs this suite, which is the only way a guard's own case can hold on both
+# sides of it. It answers `-s` and nothing else, because that is all the helper
+# ever asks. Two guards use it: capture karabiner's Darwin guard below, and
+# --publish's refusal on native Windows further down.
+uname_stub() {
+  # $1: directory to create the stub in. $2: what `uname -s` reports there.
+  mkdir -p "$1"
+  cat >"$1/uname" <<STUB
+#!/bin/sh
+if [ "\$1" = -s ]; then
+  printf '%s\n' '$2'
+else
+  exit 1
+fi
+STUB
+  chmod +x "$1/uname"
+}
+
+# ---------------------------------------------------------------------------
+# tool/version-control/commit capture karabiner
+# ---------------------------------------------------------------------------
+#
+# INV unixlike/host-written-payload-projected
+#
+# The capture direction of the same projection modules/karabiner.nix applies:
+# what the payloads declare decides what is read back, and what else the host
+# keeps in that file is runtime that is neither reported as drift nor captured.
+# The real tool/darwin/karabiner and the real payloads are in the throwaway
+# repository above; only the host is faked, through the flags that exist for
+# it, so the two directions of the rule are the fixture's subject rather than a
+# stand-in's.
+capture_host="$test_root/karabiner-host.json"
+capture_hotkeys_host="$test_root/karabiner-hotkeys-host.json"
+
+run_capture() {
+  capture_answer=$1
+  shift
+  printf '%s\n' "$capture_answer" | (
+    unset GIT_DIR GIT_WORK_TREE GIT_INDEX_FILE
+    cd "$commit_root" || exit 1
+    KARABINER_PLATFORM=darwin
+    export KARABINER_PLATFORM
+    PATH="$commit_stub_path:$PATH" tool/version-control/commit "$@" 2>&1
+  )
+}
+
+capture_payloads_untouched() {
+  for capture_payload in karabiner.json symbolic-hotkeys.json; do
+    if ! cmp -s "$commit_root/assets/karabiner/$capture_payload" \
+      "$root/assets/karabiner/$capture_payload"; then
+      echo "capture karabiner rewrote assets/karabiner/$capture_payload while $1" >&2
+      exit 1
+    fi
+  done
+  if [ -n "$(commit_git status --porcelain --untracked-files=no)" ] \
+    || [ "$(commit_count)" != "$capture_before" ]; then
+    echo "capture karabiner wrote something while $1" >&2
+    exit 1
+  fi
+}
+
+# A host that matches both payloads and holds one top-level key beside them.
+# `machine_specific` is the host's own runtime state: a capture that read it
+# back would put a per-machine identifier into desired state.
+{
+  printf '{\n'
+  printf '  "machine_specific": {},\n'
+  tail -n +2 "$root/assets/karabiner/karabiner.json"
+} >"$capture_host"
+cp "$root/assets/karabiner/symbolic-hotkeys.json" "$capture_hotkeys_host"
+
+capture_before=$(commit_count)
+capture_status=0
+capture_output=$(run_capture n --dry-run --host "$capture_host" \
+  --hotkeys-host "$capture_hotkeys_host" capture karabiner) || capture_status=$?
+if [ "$capture_status" -eq 0 ]; then
+  echo "capture karabiner planned a commit against a host that matches the payloads" >&2
+  exit 1
+fi
+if ! printf '%s\n' "$capture_output" | grep -q 'nothing to capture'; then
+  printf '%s\n' "$capture_output" >&2
+  echo "capture karabiner did not refuse with nothing to capture" >&2
+  exit 1
+fi
+capture_payloads_untouched "the host matched the payloads"
+
+# The same command on a host that is not a Mac refuses before it reads
+# anything: the projection of a host that holds no Karabiner state would
+# capture the payloads away. The platform comes from a uname stub rather than
+# from whatever runs this suite, so the case holds on the Mac this feature
+# targets as well; on that host the real uname would pass the guard, the run
+# would reach the still-matching host above, and this would be asserting the
+# refusal of the case before it.
+uname_stub "$commit_root/stub-uname" Linux
+capture_status=0
+capture_output=$(
+  printf 'n\n' | (
+    unset GIT_DIR GIT_WORK_TREE GIT_INDEX_FILE KARABINER_PLATFORM
+    cd "$commit_root" || exit 1
+    PATH="$commit_root/stub-uname:$commit_stub_path:$PATH" \
+      tool/version-control/commit --dry-run \
+      --host "$capture_host" --hotkeys-host "$capture_hotkeys_host" \
+      capture karabiner 2>&1
+  )
+) || capture_status=$?
+if [ "$capture_status" -eq 0 ]; then
+  printf '%s\n' "$capture_output" >&2
+  echo "capture karabiner ran on a host that is not a Mac" >&2
+  exit 1
+fi
+if ! printf '%s\n' "$capture_output" | grep -q 'runs on a Mac only'; then
+  printf '%s\n' "$capture_output" >&2
+  echo "capture karabiner refused a host that is not a Mac for another reason" >&2
+  exit 1
+fi
+capture_payloads_untouched "the host was not a Mac"
+
+# A host that differs in one declared member of each payload, and still holds
+# the undeclared one. The dry run answers the same four questions the other
+# commands answer and writes nothing.
+{
+  printf '{\n'
+  printf '  "machine_specific": {},\n'
+  tail -n +2 "$root/assets/karabiner/karabiner.json"
+} | sed 's/"check_for_updates": false/"check_for_updates": true/' >"$capture_host"
+sed 's/"enabled": false/"enabled": true/' \
+  "$root/assets/karabiner/symbolic-hotkeys.json" >"$capture_hotkeys_host"
+
+capture_before=$(commit_count)
+if ! capture_output=$(run_capture n --dry-run --host "$capture_host" \
+  --hotkeys-host "$capture_hotkeys_host" capture karabiner); then
+  printf '%s\n' "$capture_output" >&2
+  echo "capture karabiner refused a host that drifted from the payloads" >&2
+  exit 1
+fi
+for capture_line in \
+  '^edit: assets/karabiner/karabiner.json$' \
+  '^edit: assets/karabiner/symbolic-hotkeys.json$' \
+  '^-    "check_for_updates": false$' \
+  '^+    "check_for_updates": true$' \
+  '^-      "enabled": false,$' \
+  '^+      "enabled": true,$' \
+  '^classification: unixlike$' \
+  '^  unixlike:payloads$' \
+  '^message: feat(unixlike): capture karabiner desired state$'; do
+  if ! printf '%s\n' "$capture_output" | grep -q "$capture_line"; then
+    printf '%s\n' "$capture_output" >&2
+    echo "the capture dry run did not report a line matching $capture_line" >&2
+    exit 1
+  fi
+done
+# The runtime key is in the host this run read and in neither diff.
+if printf '%s\n' "$capture_output" | grep -q 'machine_specific'; then
+  printf '%s\n' "$capture_output" >&2
+  echo "capture karabiner offered to read an undeclared top-level key back" >&2
+  exit 1
+fi
+capture_payloads_untouched "a dry run described a drifted host"
+
 # ---------------------------------------------------------------------------
 # tool/version-control/commit --publish
 # ---------------------------------------------------------------------------
@@ -1575,6 +1804,10 @@ cp -R "$root/tool/dispatch" "$publish_root/tool/dispatch"
 # stand-in so only the behaviour under test decides the outcome.
 printf '#!/bin/sh\nexit 0\n' >"$publish_root/tool/version-control/invariants"
 chmod +x "$publish_root/tool/version-control/invariants"
+# The hook runs tool/version-control/provisional beside it, whose own
+# cases are below; a stand-in here for the same reason.
+printf '#!/bin/sh\nexit 0\n' >"$publish_root/tool/version-control/provisional"
+chmod +x "$publish_root/tool/version-control/provisional"
 # pre-push now runs audit unconditionally; a stand-in keeps these cases about dispatch.
 printf '#!/bin/sh\nexit 0\n' >"$publish_root/tool/version-control/audit"
 chmod +x "$publish_root/tool/version-control/audit"
@@ -1881,27 +2114,13 @@ publish_wrote_nothing "refusing on master"
 publish_git switch -q dev
 
 # #90: --publish is a Unix-like flow with a PowerShell counterpart in
-# windows/tools/capture.ps1. A uname stub proves the platform guard without
-# depending on which platform runs this suite. It only ever answers `-s`,
-# which is all the helper asks it.
-publish_uname_stub() {
-  # $1: directory to create the stub in. $2: what `uname -s` reports there.
-  mkdir -p "$1"
-  cat >"$1/uname" <<STUB
-#!/bin/sh
-if [ "\$1" = -s ]; then
-  printf '%s\n' '$2'
-else
-  exit 1
-fi
-STUB
-  chmod +x "$1/uname"
-}
+# windows/tools/capture.ps1, and uname_stub above proves that guard the same
+# way the capture cases prove theirs.
 
 # Positive: a Unix-like uname still reaches the ordinary preflight, gh
 # included.
 for publish_uname_os in Linux Darwin; do
-  publish_uname_stub "$publish_root/stub-uname-ok" "$publish_uname_os"
+  uname_stub "$publish_root/stub-uname-ok" "$publish_uname_os"
   publish_snapshot
   publish_path="$publish_root/stub-uname-ok:$publish_root/stub:$PATH"
   if ! ok_out=$(run_publish n --dry-run --publish cask add "of$publish_uname_os"); then
@@ -1918,7 +2137,7 @@ done
 # Negative: every kernel string the guard's case pattern names refuses before
 # gh is consulted at all, with a message pointing at the Windows counterpart.
 for publish_uname_win in MINGW64_NT-10.0-19045 MSYS_NT-10.0-19045 CYGWIN_NT-10.0; do
-  publish_uname_stub "$publish_root/stub-uname-win" "$publish_uname_win"
+  uname_stub "$publish_root/stub-uname-win" "$publish_uname_win"
   publish_snapshot
   publish_path="$publish_root/stub-uname-win:$publish_root/stub:$PATH"
   if win_out=$(run_publish y --publish cask add "wf${publish_uname_win%%_*}"); then
@@ -2730,6 +2949,10 @@ cp -R "$root/tool/dispatch" "$hygiene_hook_root/tool/dispatch"
 # stand-in so only the behaviour under test decides the outcome.
 printf '#!/bin/sh\nexit 0\n' >"$hygiene_hook_root/tool/version-control/invariants"
 chmod +x "$hygiene_hook_root/tool/version-control/invariants"
+# The hook runs tool/version-control/provisional beside it, whose own
+# cases are below; a stand-in here for the same reason.
+printf '#!/bin/sh\nexit 0\n' >"$hygiene_hook_root/tool/version-control/provisional"
+chmod +x "$hygiene_hook_root/tool/version-control/provisional"
 
 git -C "$hygiene_hook_root" init -q -b dev
 git -C "$hygiene_hook_root" config user.name Fixture
@@ -2850,9 +3073,11 @@ cp -R "$root/tool/dispatch" "$secret_hook_root/tool/dispatch"
 printf '#!/bin/sh\nexit 0\n' >"$secret_hook_root/tool/version-control/hygiene"
 printf '#!/bin/sh\nexit 0\n' >"$secret_hook_root/tool/version-control/domain-reads"
 printf '#!/bin/sh\nexit 0\n' >"$secret_hook_root/tool/version-control/invariants"
+printf '#!/bin/sh\nexit 0\n' >"$secret_hook_root/tool/version-control/provisional"
 chmod +x "$secret_hook_root/tool/version-control/hygiene" \
   "$secret_hook_root/tool/version-control/domain-reads" \
-  "$secret_hook_root/tool/version-control/invariants"
+  "$secret_hook_root/tool/version-control/invariants" \
+  "$secret_hook_root/tool/version-control/provisional"
 
 git -C "$secret_hook_root" init -q -b dev
 git -C "$secret_hook_root" config user.name Fixture
@@ -3296,6 +3521,10 @@ cp -R "$root/tool/version-control" "$inv_hook_root/tool/version-control"
 cp -R "$root/tool/dispatch" "$inv_hook_root/tool/dispatch"
 printf '#!/bin/sh\nexit 0\n' >"$inv_hook_root/tool/version-control/hygiene"
 chmod +x "$inv_hook_root/tool/version-control/hygiene"
+# The hook runs tool/version-control/provisional beside the check under
+# test; a stand-in keeps these cases about the invariant check.
+printf '#!/bin/sh\nexit 0\n' >"$inv_hook_root/tool/version-control/provisional"
+chmod +x "$inv_hook_root/tool/version-control/provisional"
 # A passing stand-in secret scanner, so the outcome does not depend on
 # whether this host has gitleaks or on REQUIRE_NATIVE.
 mkdir -p "$inv_hook_root/stub"
@@ -3413,6 +3642,299 @@ if ! (cd "$audit_norefs" && "$hook_evidence") | grep -q 'no hook evidence record
 fi
 
 # ---------------------------------------------------------------------------
+# Provisional registry
+# ---------------------------------------------------------------------------
+#
+# INV repository/provisional-registry-coverage
+#
+# tool/version-control/provisional resolves its root with `git rev-parse
+# --show-toplevel`, so every case runs the real script against a throwaway
+# repository. Every case passes an explicit --date: the check is
+# time-dependent by design, and a suite whose verdict changed with the
+# calendar would prove nothing. Tags naming fixture-only ids are assembled
+# from printf arguments so this tracked file never carries a literal the
+# registry would have to hold an entry for.
+
+provisional="$root/tool/version-control/provisional"
+# The wiring the two-way check depends on, asserted the way the invariant
+# section above asserts its own, so it cannot silently disappear.
+grep -q 'evidence_run provisional tool/version-control/provisional' "$root/.githooks/pre-commit"
+grep -q 'run: tool/version-control/provisional' "$root/.github/workflows/ci.yml"
+prov_seq=0
+prov_now=2026-09-05
+prov_new() {
+  prov_seq=$((prov_seq + 1))
+  prov_repo="$test_root/provisional-$prov_seq"
+  mkdir -p "$prov_repo/provisional/unixlike" "$prov_repo/docs/decisions" \
+    "$prov_repo/modules"
+  git -C "$prov_repo" init -q -b dev
+  git -C "$prov_repo" config user.name Fixture
+  git -C "$prov_repo" config user.email fixture@example.invalid
+  printf '# Provisional\n\ntext\n' >"$prov_repo/provisional/README.md"
+  printf '# Measure accepted\n\ntext\n' >"$prov_repo/docs/decisions/measure.md"
+  # The watched path and the tagged measure are different files, so a case
+  # that deletes the measure exercises P6 alone.
+  printf '_: {}\n' >"$prov_repo/modules/upstream.nix"
+}
+
+# A file that carries a measure's tag. `PROV` and the id reach the file
+# through separate printf arguments on purpose (see the group comment).
+prov_tag() {
+  printf '_: {\n  # %s %s\n}\n' PROV "$2" >"$prov_repo/$1"
+}
+prov_entry() {
+  cat >"$prov_repo/provisional/$1.md"
+}
+# The base entry with one header line replaced, so a case about one key is
+# one line rather than another copy of the entry.
+prov_replace() {
+  prov_file="$prov_repo/provisional/unixlike/probe-measure.md"
+  awk -v key="$1" -v value="$2" '
+    $0 ~ "^" key ": " { print key ": " value; next }
+    { print }
+  ' "$prov_file" >"$prov_file.new"
+  mv "$prov_file.new" "$prov_file"
+}
+prov_run() {
+  git -C "$prov_repo" add -A
+  (cd "$prov_repo" && "$provisional" "$@" 2>&1)
+}
+prov_expect_pass() {
+  prov_label=$1
+  prov_expected=$2
+  shift 2
+  if ! prov_output=$(prov_run "$@"); then
+    printf '%s\n' "$prov_output" >&2
+    echo "provisional rejected a clean registry: $prov_label" >&2
+    exit 1
+  fi
+  if [ -n "$prov_expected" ] &&
+    ! printf '%s\n' "$prov_output" | grep -qF "$prov_expected"; then
+    printf '%s\n' "$prov_output" >&2
+    echo "provisional did not report as expected: $prov_label" >&2
+    exit 1
+  fi
+}
+prov_expect_fail() {
+  prov_label=$1
+  prov_expected=$2
+  shift 2
+  if prov_output=$(prov_run "$@"); then
+    printf '%s\n' "$prov_output" >&2
+    echo "provisional accepted a broken registry: $prov_label" >&2
+    exit 1
+  fi
+  if ! printf '%s\n' "$prov_output" | grep -qF "$prov_expected"; then
+    printf '%s\n' "$prov_output" >&2
+    echo "provisional did not name the failure: $prov_label" >&2
+    exit 1
+  fi
+}
+
+# The well-formed base: one entry, a tagged measure outside the registry, a
+# decision heading that exists, and a review date ahead of the reference.
+prov_base() {
+  prov_new
+  prov_tag modules/probe.nix unixlike/probe-measure
+  prov_entry unixlike/probe-measure <<'ENTRY'
+id: unixlike/probe-measure
+kind: upstream-pending
+statement: The Unix-like tree carries a patch upstream has not merged.
+since: 2026-09-01
+exit-when: Upstream merges the change this patch anticipates.
+watch: modules/upstream.nix
+review-by: 2026-12-01
+issue: #175
+decision: docs/decisions/measure.md § Measure accepted
+owner: repository maintainer
+
+Body text.
+ENTRY
+}
+
+prov_base
+prov_expect_pass 'a registered measure with a tag' '1 registered, 0 overdue' \
+  --date "$prov_now"
+
+# P6: a registration whose measure nothing in the tree carries.
+prov_base
+rm "$prov_repo/modules/probe.nix"
+prov_expect_fail 'P6 entry without a tag' \
+  'P6 no tracked file outside provisional/ names unixlike/probe-measure' \
+  --date "$prov_now"
+
+# P7: a tagged line whose registration was deleted, or never written.
+prov_base
+prov_tag modules/orphan.nix unixlike/never-registered
+prov_expect_fail 'P7 tag without an entry' \
+  'P7 names unregistered provisional measure unixlike/never-registered' \
+  --date "$prov_now"
+
+# P6 again: a tag names an id, not a prefix of one. A fixed-string search
+# would let the longer slug's tag stand in for the shorter entry, which is a
+# registration nothing in the tree carries.
+prov_base
+prov_entry unixlike/probe <<'ENTRY'
+id: unixlike/probe
+kind: workaround
+statement: A second measure whose slug the first one starts with.
+since: 2026-09-01
+exit-when: The longer measure is retired.
+watch: modules/upstream.nix
+review-by: 2026-12-01
+issue: #175
+decision: docs/decisions/measure.md § Measure accepted
+owner: repository maintainer
+
+Body text.
+ENTRY
+prov_expect_fail 'P6 a longer slug does not tag a shorter one' \
+  'P6 no tracked file outside provisional/ names unixlike/probe' \
+  --date "$prov_now"
+
+# P1, P3 and P5: the path, the kind and the decision pointer, one case each.
+prov_base
+cp "$prov_repo/provisional/unixlike/probe-measure.md" \
+  "$prov_repo/provisional/unixlike/Probe_Measure.md"
+prov_expect_fail 'P1 slug grammar' "P1 slug 'Probe_Measure'" --date "$prov_now"
+
+prov_base
+prov_replace kind temporary
+prov_expect_fail 'P3 kind outside the three' \
+  "P3 kind 'temporary' is not experiment, workaround or upstream-pending" \
+  --date "$prov_now"
+
+prov_base
+prov_replace decision 'docs/decisions/measure.md § Nowhere'
+prov_expect_fail 'P5 decision heading missing' \
+  "P5 decision names no heading 'Nowhere' in docs/decisions/measure.md" \
+  --date "$prov_now"
+
+# P4: a date with the right shape and no such day. Every arithmetic below
+# would read it as the first of the next month.
+prov_base
+prov_replace since 2026-02-30
+prov_expect_fail 'P4 a shape that is not a day' \
+  "P4 since must be a real YYYY-MM-DD date, got '2026-02-30'" \
+  --date "$prov_now"
+
+# P2: a required key the entry does not carry.
+prov_base
+prov_entry unixlike/probe-measure <<'ENTRY'
+id: unixlike/probe-measure
+kind: upstream-pending
+statement: The Unix-like tree carries a patch upstream has not merged.
+since: 2026-09-01
+exit-when: Upstream merges the change this patch anticipates.
+review-by: 2026-12-01
+issue: #175
+decision: docs/decisions/measure.md § Measure accepted
+
+Body text.
+ENTRY
+prov_expect_fail 'P2 missing owner' 'P2 expected exactly one owner, found 0' \
+  --date "$prov_now"
+
+# P4: the review horizon is bounded, and a reviewed: line is what moves it.
+prov_base
+prov_entry unixlike/probe-measure <<'ENTRY'
+id: unixlike/probe-measure
+kind: upstream-pending
+statement: The Unix-like tree carries a patch upstream has not merged.
+since: 2026-09-01
+exit-when: Upstream merges the change this patch anticipates.
+review-by: 2027-06-01
+issue: #175
+decision: docs/decisions/measure.md § Measure accepted
+owner: repository maintainer
+
+Body text.
+ENTRY
+prov_expect_fail 'P4 horizon over 180 days' \
+  'P4 review-by 2027-06-01 is more than 180 days after 2026-09-01' \
+  --date "$prov_now"
+
+prov_base
+prov_entry unixlike/probe-measure <<'ENTRY'
+id: unixlike/probe-measure
+kind: upstream-pending
+statement: The Unix-like tree carries a patch upstream has not merged.
+since: 2026-09-01
+exit-when: Upstream merges the change this patch anticipates.
+review-by: 2027-06-01
+issue: #175
+decision: docs/decisions/measure.md § Measure accepted
+owner: repository maintainer
+
+Body text.
+
+reviewed: 2027-01-15 upstream has not merged the change; the patch still applies.
+ENTRY
+prov_expect_pass 'P4 a reviewed line moves the horizon' '1 registered, 0 overdue' \
+  --date "$prov_now"
+
+# P8: an overdue entry fails the scopes the change touches and is reported
+# everywhere else, so a Windows commit is not blocked by a Unix-like measure.
+prov_overdue() {
+  prov_base
+  prov_entry unixlike/probe-measure <<'ENTRY'
+id: unixlike/probe-measure
+kind: upstream-pending
+statement: The Unix-like tree carries a patch upstream has not merged.
+since: 2026-03-01
+exit-when: Upstream merges the change this patch anticipates.
+review-by: 2026-08-01
+issue: #175
+decision: docs/decisions/measure.md § Measure accepted
+owner: repository maintainer
+
+Body text.
+ENTRY
+}
+
+prov_overdue
+prov_expect_fail 'P8 overdue in a selected scope' \
+  'P8 review-by 2026-08-01 is overdue at 2026-09-05' \
+  --date "$prov_now" --scopes unixlike,repository
+
+prov_overdue
+prov_expect_pass 'P8 overdue outside the selected scopes is reported' \
+  '1 overdue outside the changed scopes (unixlike/probe-measure)' \
+  --date "$prov_now" --scopes windows
+
+prov_overdue
+prov_expect_pass 'P8 an unselected scope list fails nothing' \
+  '1 overdue outside the changed scopes' --date "$prov_now"
+
+# A tree with no registry at all is zero entries and passes: the registry
+# exists to be emptied.
+prov_base
+rm -r "$prov_repo/provisional" "$prov_repo/modules/probe.nix"
+prov_expect_pass 'an absent registry' '0 registered, 0 overdue' --date "$prov_now"
+
+prov_base
+prov_table=$(prov_run --table --date "$prov_now")
+if ! printf '%s\n' "$prov_table" |
+  grep -qF '| `unixlike/probe-measure` | upstream-pending | 2026-12-01 |'; then
+  printf '%s\n' "$prov_table" >&2
+  echo "provisional --table did not render the entry" >&2
+  exit 1
+fi
+
+prov_status=0
+(cd "$prov_repo" && "$provisional" --bogus) >/dev/null 2>&1 || prov_status=$?
+if [ "$prov_status" -ne 2 ]; then
+  echo "provisional exited $prov_status on bad usage, expected 2" >&2
+  exit 1
+fi
+prov_status=0
+(cd "$prov_repo" && "$provisional" --date 2026-13-01) >/dev/null 2>&1 || prov_status=$?
+if [ "$prov_status" -ne 2 ]; then
+  echo "provisional exited $prov_status on a malformed reference date, expected 2" >&2
+  exit 1
+fi
+
+# ---------------------------------------------------------------------------
 # Domain trees are read only by their owners
 # ---------------------------------------------------------------------------
 #
@@ -3452,8 +3974,10 @@ printf '%s\n' "$domain_reads_output" | grep -q '^✓ domain reads: [1-9][0-9]* U
 
 domain_reads_fixture=$(mktemp -d)
 git -C "$domain_reads_fixture" init -q
-mkdir -p "$domain_reads_fixture/tool/checks" "$domain_reads_fixture/windows/tools" "$domain_reads_fixture/modules"
+mkdir -p "$domain_reads_fixture/tool/checks" "$domain_reads_fixture/tool/darwin" \
+  "$domain_reads_fixture/windows/tools" "$domain_reads_fixture/modules"
 printf '#!/bin/sh\ncat windows/desired/manifest.json\n' >"$domain_reads_fixture/tool/checks/probe"
+printf '#!/bin/sh\ncat windows/desired/files/probe.json\n' >"$domain_reads_fixture/tool/darwin/probe"
 printf '_: {\n  home.file."probe".source = ../windows/desired/files/probe;\n}\n' >"$domain_reads_fixture/modules/probe.nix"
 printf '$fonts = Get-Content (Join-Path $root %s)\n' "'assets\\wezterm\\fonts.json'" >"$domain_reads_fixture/windows/tools/probe.ps1"
 printf 'Import-Module (Join-Path $root %s)\n' "'modules/flake/probe.nix'" >"$domain_reads_fixture/windows/tools/module.psm1"
@@ -3465,6 +3989,7 @@ if domain_reads_output=$(cd "$domain_reads_fixture" && "$domain_reads" 2>&1); th
 fi
 for domain_reads_hit in \
   'tool/checks/probe:2:' \
+  'tool/darwin/probe:2:' \
   'modules/probe.nix:2:' \
   'windows/tools/probe.ps1:1:' \
   'windows/tools/module.psm1:1:'; do

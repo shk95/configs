@@ -80,7 +80,8 @@ while IFS="$tab" read -r status path || [ -n "${status:-}" ]; do
         *) narrow=0 ;;
       esac
       ;;
-    flake.nix | flake.lock | modules/* | .envrc | Justfile | tool/checks/*)
+    flake.nix | flake.lock | modules/* | .envrc | Justfile | tool/checks/* \
+      | tool/darwin/*)
       narrow=0
       ;;
   esac

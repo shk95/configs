@@ -52,9 +52,13 @@ declares its payloads and their formats — `assets/payloads.json` for Unix-like
 the `Parser` field of `windows/desired/manifest.json` for Windows — and
 validates them with the parser that will consume them. The two declarations are
 independent copies of one idea, not a shared authority, and neither imports the
-other.
+other. A payload the host application rewrites in place cannot be delivered as
+a link into the store at all, so its desired state declares the members it owns
+and one projection onto those members decides drift, what is written and what
+may be captured, leaving whatever the application keeps beside them as runtime
+(`docs/decisions/karabiner-desired-state-by-projection.md`).
 
-Composition, identity, and ownership in this domain rest on nine rules, each
+Composition, identity, and ownership in this domain rest on ten rules, each
 registered under `invariants/unixlike/`. One file maps module classes to
 hosts, and a feature file writes into a class without naming a host or
 forcing another class's decision, so where a program reaches is read in one
@@ -76,7 +80,11 @@ check that found nothing to evaluate has failed, not passed.
 Linux and macOS may share Nix modules where the Nix module system can evaluate
 the complete result directly for both. Platform-specific Nix modules remain
 preferable when behavior differs. This internal sharing does not make their
-content part of the repository-wide `common` domain.
+content part of the repository-wide `common` domain. The nixpkgs configuration
+and overlay set every flavour evaluates under are each declared once, in
+`modules/flake/nixpkgs.nix`, and read from there by the standalone home's
+`pkgs` and by the NixOS and darwin flavours' own `nixpkgs.*` options, rather
+than repeated per class.
 
 Unix-like deployment consumes a domain release tag and activates only on a
 matching host after evaluation and native build evidence.
@@ -350,6 +358,54 @@ coverage. The 2026-09-03 review of the suite measured why: over 157 CI runs
 the suite caught one configuration defect, and no fixture had ever caught a
 regression, because every fixture proved a tool once and nothing tied it to
 a claim.
+
+## Provisional registry
+
+The invariant registry records what must remain true. Its sibling
+`provisional/<scope>/` records what must eventually become false: an
+experiment, a workaround, or a patch carried until upstream ships a fix. The
+registry is the authority for which temporary measures exist; this document
+remains the authority for why the mechanism does. An entry names the
+condition that ends the measure (`exit-when`), what to watch for it
+(`watch`), and the date by which someone looks again (`review-by`), and
+every disposable line in the tree carries the entry's id as the literal
+`PROV <scope>/<slug>`. `tool/version-control/provisional` checks both
+directions, so a registration with no measure and a measure with no
+registration are both failures. `provisional/README.md` is the format
+contract.
+
+Time is the axis the invariant registry does not have. A measure without a
+date is temporary only in the sentence that introduced it, which is how
+`flake.nix` came to describe an experiment whose exit criteria existed
+nowhere else. An entry's `review-by` is at most 180 days after the later of
+`since` and its last `reviewed:` line, and an extension moves the date and
+says why in the entry rather than in a conversation.
+
+An entry leaves the registry in one of two ways, and only one of them
+throws the code away. Retirement deletes the entry and its tagged lines
+together, because a registration outliving its measure is the same drift in
+the other direction. Promotion keeps the code and writes a decision record;
+the entry and its tags still go. Either way the decision record is what
+survives: the registry holds only measures that are still live, so the
+reason a measure was accepted and the alternatives rejected with it belong
+under `docs/decisions/`, where nothing deletes them and a later reader can
+still find out why the tree looks as it does. Extension is the third
+outcome and the only one that keeps the entry: it moves `review-by` and
+records why in the entry itself.
+
+An overdue entry fails the check only for a commit or a pull request that
+touches its own scope, and is reported in the summary everywhere else. That
+is this repository's standing rule about domains: a Unix-like change must
+not have to wait on a Windows measure, because requiring an unrelated domain
+to pass is how a gate becomes something to bypass. The scope that
+owns the entry is the scope that is blocked by it.
+
+The reference date is explicit rather than implied. Under `pre-commit` it is
+today, which is the commit being made. In CI it is the date of the commit
+under test, taken from the pull request's head commit when there is one,
+because a pull request's checkout is a synthetic merge commit whose date is
+the run time; re-running an old commit would otherwise change its verdict
+without changing the tree.
 
 ## Version control and releases
 

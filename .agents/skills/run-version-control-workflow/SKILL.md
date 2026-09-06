@@ -26,7 +26,8 @@ planning read-only unless the user explicitly authorizes a Git mutation.
 ## Select one operation
 
 - **Audit**: Run `tool/version-control/audit`,
-  `tool/version-control/hygiene` and `tool/version-control/domain-reads`.
+  `tool/version-control/hygiene`, `tool/version-control/domain-reads` and
+  `tool/version-control/provisional`.
   When `gh` is authenticated, also run
   `tool/version-control/audit-remote`. Explain every warning or failure with
   the governing context file. A hygiene finding is fixed by removing or

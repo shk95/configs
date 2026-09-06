@@ -45,4 +45,77 @@ _: {
       extraConfig = builtins.readFile ../assets/zellij/config.kdl;
     };
   };
+
+  # PROV unixlike/zellij-combining-marks
+  #
+  # zellij's `Grid::add_character` drops every zero-width code point
+  # (zellij-org/zellij#1538; #3667 is the same defect seen through decomposed
+  # Latin), so the conjoining jamo of a decomposed Hangul syllable never reach
+  # the pane and composed Korean disappears inside zellij. Upstream PR
+  # zellij-org/zellij#5500 attaches combining marks — and, since 2026-09-06,
+  # Hangul jungseong and jongseong, which are letters of zero width rather than
+  # marks — instead of dropping them; it is unmerged, so this overlay carries
+  # its commits until a nixpkgs zellij already contains the fix. Darwin only:
+  # the symptom was reported there and the Linux homes stay on the unpatched
+  # package, so `optionalAttrs` yields `{}` for them.
+  #
+  # The pin is the pull request's commit range, base...head, fetched as one
+  # patch from the compare URL rather than commit by commit: the later
+  # commits build on the first one's cells and the readback fix cannot apply
+  # without the Hangul one before it, so the set is one unit. `excludes` drops
+  # `CHANGELOG.md`, which the range rewrites four times and which does not
+  # apply to the v0.45.1 tag; it is release notes, not code. The head commit
+  # is what `just zellij-patch-check` and the watcher read as the pin.
+  #
+  # The patch adds the crate `unicode-properties` to `Cargo.lock`, so the
+  # vendored dependency set changes with it. Pinned nixpkgs' `buildRustPackage`
+  # computes `cargoDeps` at call time from `args.cargoHash`, which
+  # `overrideAttrs` cannot reach; overriding `cargoDeps` itself with
+  # `rustPlatform.fetchCargoVendor` — which takes `src` and `patches` — is what
+  # takes effect. The `zellij` wrapper takes `zellij-unwrapped` as a function
+  # argument, so overriding the unwrapped package propagates to it.
+  #
+  # Pinned nixpkgs' `buildRustPackage` runs `cargo test` in the root crate
+  # alone, so the PR's grid tests never ran in the Darwin build
+  # (docs/decisions/zellij-patched-on-darwin-until-upstream.md § Retiring the
+  # overlay). `cargoTestFlags` and `checkFlags` point the check at
+  # `zellij-server` and at the combining-mark tests by name, so the build
+  # proves the grid behaviour it was built for, on the host it is built for.
+  #
+  # `appliesTo` is the zellij version the patch was verified against. A
+  # different version is a `throw` rather than a silent passthrough because an
+  # unpatched Darwin zellij is indistinguishable from a patched one until
+  # someone types Korean into it; refusing to evaluate is the only signal that
+  # arrives before that.
+  nixpkgsOverlays.zellij = _final: prev: let
+    appliesTo = "0.45.0";
+    patch = prev.fetchpatch {
+      name = "zellij-pr5500-combining-marks.patch";
+      url = "https://github.com/zellij-org/zellij/compare/bf8d23a4f774abf27a108da2a1a2689e7d8d0d23...cbb7b1650fcd4aff79e54b31f31c5729c1391e90.patch";
+      excludes = ["CHANGELOG.md"];
+      hash = "sha256-nYFgAPk4sTTx7Vf2+J3k4G8DOTB0mfE3rocidlUS/L0=";
+    };
+    patched = prev.zellij-unwrapped.overrideAttrs (old: {
+      patches = (old.patches or []) ++ [patch];
+      cargoDeps = prev.rustPlatform.fetchCargoVendor {
+        inherit (old) pname version src;
+        patches = [patch];
+        hash = "sha256-YDlaeHEXGXExbJVB31A/QuYDQbsQ+c8T576h3DYb/gE=";
+      };
+      cargoTestFlags = ["-p" "zellij-server"];
+      checkFlags = [
+        "combining_mark"
+        "thai_vowels"
+        "hangul_conjoining"
+        "keeps_the_combining_marks"
+        "is_not_trailing_whitespace"
+      ];
+    });
+  in
+    prev.lib.optionalAttrs prev.stdenv.hostPlatform.isDarwin {
+      zellij-unwrapped =
+        if prev.zellij-unwrapped.version == appliesTo
+        then patched
+        else throw "modules/zellij.nix: zellij ${prev.zellij-unwrapped.version} is not ${appliesTo}; re-check zellij-org/zellij#5500 (provisional/unixlike/zellij-combining-marks.md, CONTRIBUTING § zellij overlay)";
+    };
 }
