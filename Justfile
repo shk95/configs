@@ -165,17 +165,18 @@ fmt:
 zellij-patch-check tag:
     #!/usr/bin/env bash
     set -euo pipefail
-    commit=$(sed -n 's|.*/zellij/commit/\([0-9a-f]\{40\}\)\.patch.*|\1|p' modules/zellij.nix)
-    if [[ -z "${commit}" ]]; then
-      echo "modules/zellij.nix carries no pinned zellij commit" >&2
+    range=$(sed -n 's|.*/zellij/compare/\([0-9a-f]\{40\}\)\.\.\.\([0-9a-f]\{40\}\)\.patch.*|\1...\2|p' modules/zellij.nix)
+    if [[ -z "${range}" ]]; then
+      echo "modules/zellij.nix carries no pinned zellij commit range" >&2
       exit 1
     fi
     work=$(mktemp -d)
     trap 'rm -rf "${work}"' EXIT
     git -c advice.detachedHead=false clone --quiet --depth 1 --branch '{{ tag }}' https://github.com/zellij-org/zellij "${work}/zellij"
-    curl -fsSL "https://github.com/zellij-org/zellij/commit/${commit}.patch" >"${work}/pr.patch"
-    git -C "${work}/zellij" apply --check "${work}/pr.patch"
-    printf '%s applies cleanly to %s\n' "${commit}" '{{ tag }}'
+    curl -fsSL "https://github.com/zellij-org/zellij/compare/${range}.patch" >"${work}/pr.patch"
+    # CHANGELOG.md is excluded exactly as the overlay's fetchpatch excludes it.
+    git -C "${work}/zellij" apply --check --exclude=CHANGELOG.md "${work}/pr.patch"
+    printf '%s applies cleanly to %s\n' "${range}" '{{ tag }}'
 
 ############################################################################
 #

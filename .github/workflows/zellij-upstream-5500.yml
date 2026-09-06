@@ -53,14 +53,18 @@ jobs:
         run: |
           set -euo pipefail
           applies_to=$(sed -n 's/^ *appliesTo = "\(.*\)";$/\1/p' modules/zellij.nix)
-          pinned=$(sed -n 's|.*/zellij/commit/\([0-9a-f]\{40\}\)\.patch.*|\1|p' modules/zellij.nix)
-          if [[ -z "$applies_to" || -z "$pinned" ]]; then
-            echo "modules/zellij.nix carries no appliesTo or no pinned commit; the overlay was retired or renamed" >&2
+          # The overlay pins the pull request's commit range base...head; the
+          # head is the commit the pull request must still carry.
+          range=$(sed -n 's|.*/zellij/compare/\([0-9a-f]\{40\}\)\.\.\.\([0-9a-f]\{40\}\)\.patch.*|\1...\2|p' modules/zellij.nix)
+          pinned=${range##*...}
+          if [[ -z "$applies_to" || -z "$range" ]]; then
+            echo "modules/zellij.nix carries no appliesTo or no pinned commit range; the overlay was retired or renamed" >&2
             exit 1
           fi
           echo "APPLIES_TO=$applies_to" >>"$GITHUB_ENV"
+          echo "PINNED_RANGE=$range" >>"$GITHUB_ENV"
           echo "PINNED_COMMIT=$pinned" >>"$GITHUB_ENV"
-          echo "overlay pins zellij $applies_to to $pinned"
+          echo "overlay pins zellij $applies_to to $range"
 
       - name: Watch the pull request
         shell: bash
@@ -207,14 +211,14 @@ jobs:
             if ! git clone --quiet --depth 1 --branch "v$nixpkgs" "https://github.com/$upstream" "$work/zellij" 2>/dev/null; then
               verdict="unknown (no tag v$nixpkgs upstream)"
             else
-              curl -fsSL "https://github.com/$upstream/commit/$PINNED_COMMIT.patch" >"$work/pr.patch"
-              if ! git -C "$work/zellij" apply --check "$work/pr.patch" 2>"$work/apply.err"; then
+              curl -fsSL "https://github.com/$upstream/compare/$PINNED_RANGE.patch" >"$work/pr.patch"
+              if ! git -C "$work/zellij" apply --check --exclude=CHANGELOG.md "$work/pr.patch" 2>"$work/apply.err"; then
                 verdict="conflict: $(tr '\n' ' ' <"$work/apply.err")"
               fi
             fi
             body=$(printf '%s\n\n%s\n\n%s\n\n%s\n' \
               "nixpkgs nixos-unstable ships zellij $nixpkgs; the overlay in modules/zellij.nix pins $APPLIES_TO, so the next flake.lock refresh makes the Darwin evaluation refuse until the overlay is re-pinned." \
-              "git apply --check of $PINNED_COMMIT against v$nixpkgs: $verdict" \
+              "git apply --check of $PINNED_RANGE against v$nixpkgs: $verdict" \
               "The bump procedure is CONTRIBUTING.md § zellij overlay: refresh flake.lock alone, then re-pin appliesTo and the cargoDeps hash in a second commit." \
               "Opened by .github/workflows/zellij-upstream-5500.yml.")
             ensure_issue "zellij $nixpkgs reached nixpkgs unstable" \

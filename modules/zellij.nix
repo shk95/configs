@@ -48,14 +48,24 @@ _: {
 
   # PROV unixlike/zellij-combining-marks
   #
-  # zellij's `Grid::add_character` drops every zero-width code point, so the
-  # conjoining jamo of a decomposed Hangul syllable never reach the pane and
-  # composed Korean disappears inside zellij (zellij-org/zellij#3667, #1538).
-  # Upstream PR zellij-org/zellij#5500 attaches combining marks instead of
-  # dropping them; it is unmerged, so this overlay carries its commit until a
-  # nixpkgs zellij already contains the fix. Darwin only: the symptom was
-  # reported there and the Linux homes stay on the unpatched package, so
-  # `optionalAttrs` yields `{}` for them.
+  # zellij's `Grid::add_character` drops every zero-width code point
+  # (zellij-org/zellij#1538; #3667 is the same defect seen through decomposed
+  # Latin), so the conjoining jamo of a decomposed Hangul syllable never reach
+  # the pane and composed Korean disappears inside zellij. Upstream PR
+  # zellij-org/zellij#5500 attaches combining marks — and, since 2026-09-06,
+  # Hangul jungseong and jongseong, which are letters of zero width rather than
+  # marks — instead of dropping them; it is unmerged, so this overlay carries
+  # its commits until a nixpkgs zellij already contains the fix. Darwin only:
+  # the symptom was reported there and the Linux homes stay on the unpatched
+  # package, so `optionalAttrs` yields `{}` for them.
+  #
+  # The pin is the pull request's commit range, base...head, fetched as one
+  # patch from the compare URL rather than commit by commit: the later
+  # commits build on the first one's cells and the readback fix cannot apply
+  # without the Hangul one before it, so the set is one unit. `excludes` drops
+  # `CHANGELOG.md`, which the range rewrites four times and which does not
+  # apply to the v0.45.1 tag; it is release notes, not code. The head commit
+  # is what `just zellij-patch-check` and the watcher read as the pin.
   #
   # The patch adds the crate `unicode-properties` to `Cargo.lock`, so the
   # vendored dependency set changes with it. Pinned nixpkgs' `buildRustPackage`
@@ -64,17 +74,6 @@ _: {
   # `rustPlatform.fetchCargoVendor` — which takes `src` and `patches` — is what
   # takes effect. The `zellij` wrapper takes `zellij-unwrapped` as a function
   # argument, so overriding the unwrapped package propagates to it.
-  #
-  # The Mac observed on 2026-09-06 (#178) that the commit as pinned attaches
-  # Unicode general category Mark only, and a decomposed syllable's medial
-  # vowel and final consonant are letters (`Lo`) that `unicode-width` gives
-  # zero width, so `add_character` still dropped them. `postPatch` below
-  # carries the addition until zellij-org/zellij#5500 does: the jamo ranges are
-  # accepted beside category Mark, and a Hangul grid test goes with them. The
-  # substitution is `--replace-fail`, so a pinned commit that no longer has
-  # that exact function fails the build at the patch phase instead of
-  # silently building without the addition. The addition touches no
-  # `Cargo.lock`, so the `cargoDeps` hash is unchanged by it.
   #
   # Pinned nixpkgs' `buildRustPackage` runs `cargo test` in the root crate
   # alone, so the PR's grid tests never ran in the Darwin build
@@ -92,8 +91,9 @@ _: {
     appliesTo = "0.45.0";
     patch = prev.fetchpatch {
       name = "zellij-pr5500-combining-marks.patch";
-      url = "https://github.com/zellij-org/zellij/commit/8e02033f0bb8bdb53acf1484cb81605d0f3671dc.patch";
-      hash = "sha256-2l8tJEnvVnc18idfjIvXvCxw6sJ4rfX9Fk5q2F6HE74=";
+      url = "https://github.com/zellij-org/zellij/compare/bf8d23a4f774abf27a108da2a1a2689e7d8d0d23...cbb7b1650fcd4aff79e54b31f31c5729c1391e90.patch";
+      excludes = ["CHANGELOG.md"];
+      hash = "sha256-nYFgAPk4sTTx7Vf2+J3k4G8DOTB0mfE3rocidlUS/L0=";
     };
     patched = prev.zellij-unwrapped.overrideAttrs (old: {
       patches = (old.patches or []) ++ [patch];
@@ -102,54 +102,14 @@ _: {
         patches = [patch];
         hash = "sha256-YDlaeHEXGXExbJVB31A/QuYDQbsQ+c8T576h3DYb/gE=";
       };
-      postPatch =
-        (old.postPatch or "")
-        + ''
-          substituteInPlace zellij-server/src/panes/grid.rs \
-            --replace-fail \
-              'fn is_combining_mark(character: char) -> bool {
-              matches!(
-                  character.general_category_group(),
-                  GeneralCategoryGroup::Mark
-              )
-          }' \
-              'fn is_combining_mark(character: char) -> bool {
-              matches!(
-                  character.general_category_group(),
-                  GeneralCategoryGroup::Mark
-              ) || is_hangul_conjoining_jamo_vowel_or_final(character)
-          }
-
-          /// The medial vowels and final consonants of the Hangul Jamo block and its extensions.
-          /// They are letters rather than marks, but they are zero width because they conjoin with
-          /// the leading consonant before them: a decomposed syllable is one leading consonant
-          /// followed by them, and dropping them is what turns Korean into its first jamo.
-          fn is_hangul_conjoining_jamo_vowel_or_final(character: char) -> bool {
-              matches!(
-                  character,
-                  '"'"'\u{1160}'"'"'..='"'"'\u{11FF}'"'"'
-                      | '"'"'\u{D7B0}'"'"'..='"'"'\u{D7C6}'"'"'
-                      | '"'"'\u{D7CB}'"'"'..='"'"'\u{D7FB}'"'"'
-              )
-          }'
-          cat >>zellij-server/src/panes/unit/grid_tests.rs <<'RUST'
-
-          #[test]
-          fn hangul_conjoining_jamo_attach_to_the_leading_consonant() {
-              // A decomposed syllable is a leading consonant followed by a medial vowel and a final
-              // consonant. All three are letters rather than marks, and the vowel and the final are
-              // zero width because they conjoin with the consonant before them, so they attach as
-              // marks do: U+1112 U+1161 U+11AB is one wide cell, not one cell and two dropped
-              // code points.
-              let grid = create_grid_with_content("\u{1112}\u{1161}\u{11ab}a");
-
-              assert_eq!(rendered_row(&grid, 0), "\u{1112}\u{1161}\u{11ab}a");
-              assert_eq!(cursor_position(&grid), Some((3, 0)));
-          }
-          RUST
-        '';
       cargoTestFlags = ["-p" "zellij-server"];
-      checkFlags = ["combining_mark" "thai_vowels" "hangul_conjoining"];
+      checkFlags = [
+        "combining_mark"
+        "thai_vowels"
+        "hangul_conjoining"
+        "keeps_the_combining_marks"
+        "is_not_trailing_whitespace"
+      ];
     });
   in
     prev.lib.optionalAttrs prev.stdenv.hostPlatform.isDarwin {

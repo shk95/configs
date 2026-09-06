@@ -128,12 +128,10 @@ zellij takes two commits, in this order:
    `tool/version-control/commit --publish flake refresh`; it is not used here
    because it pushes as soon as this commit is made.
 3. Commit `fix(unixlike): re-pin the zellij overlay to <ver>` with `appliesTo`,
-   the `fetchpatch` hash if the commit was rebased, and the new `cargoDeps`
-   hash. The overlay also carries a `postPatch` addition — the Hangul jamo
-   ranges in `is_combining_mark` and a grid test — until the pinned commit
-   includes it; its `--replace-fail` fails the build the moment the pinned
-   function changes shape, which is the signal to delete the addition rather
-   than to adapt it.
+   the `fetchpatch` hash if the range was rebased, and the new `cargoDeps`
+   hash. The pin is the pull request's commit range `base...head` in the
+   overlay's compare URL; a re-pin to a branch that gained commits moves the
+   head, and a rebase moves both.
 4. `just darwin-build` on the Mac, then the reproduction in
    `docs/decisions/zellij-patched-on-darwin-until-upstream.md`.
 5. Push only after step 3.
