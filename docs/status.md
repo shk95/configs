@@ -53,12 +53,14 @@ activated it twice. Generation 34 showed the jamo still dropped, because the
 pull request attaches general-category Mark code points and a syllable's
 medial vowel and final consonant are letters that `unicode-width` gives zero
 width; the overlay then gained a `postPatch` that accepts those jamo ranges
-and a Hangul grid test, and generation 35 renders a decomposed syllable whole
-in a real session, with the build's check now running the combining-mark
-tests in `zellij-server`. The pull request's author folded that addition
-into the branch the same day, with a fix to the readback paths (`dump-screen`,
-copy, serialize) found on the way, and the overlay now pins the branch's
-commit range instead of its first commit; the dated paragraphs in
+and a Hangul grid test, and generation 35 rendered a decomposed syllable
+whole in a real session, with the build's check now running the
+combining-mark tests in `zellij-server`. The pull request's author folded
+that addition into the branch the same day, with a fix to the readback paths
+(`dump-screen`, copy, serialize) found on the way; the overlay now pins the
+branch's commit range instead of its first commit, and generation 36 runs
+it, with the client stream and `dump-screen` agreeing on the whole syllable.
+The dated paragraphs in
 `docs/decisions/zellij-patched-on-darwin-until-upstream.md` record the
 readings.
 
