@@ -1,0 +1,455 @@
+#!/bin/sh
+#
+# Enforce INV repository/provisional-registry-coverage: every temporary
+# measure registered under provisional/ names an exit condition and a review
+# date, every registration has a tagged measure in the tree, and an overdue
+# registration fails only its own scope.
+#
+# A provisional measure is one file, provisional/<scope>/<slug>.md, with a
+# header of `key: value` lines up to the first blank line and free prose
+# after it. provisional/README.md is the format contract; this file is its
+# check. The registry is the sibling of invariants/: that one records what
+# must remain true, this one records what must eventually become false.
+#
+# Rules, as named in failure output:
+#
+#   P1  a tracked path under provisional/ is README.md or <scope>/<slug>.md
+#       with a known scope, a [a-z0-9-] slug, and an id equal to that
+#       <scope>/<slug>
+#   P2  the header parses: `key: value` lines, known keys, one each of id,
+#       kind, statement, since, exit-when, review-by, issue, decision and
+#       owner, at most one watch, and a watch that is an indexed path or the
+#       word `manual`
+#   P3  kind is experiment, workaround or upstream-pending
+#   P4  since, review-by and each `reviewed:` date are real calendar dates
+#       written YYYY-MM-DD; review-by is after since; review-by minus the
+#       later of since and the last `reviewed:` date is at most 180 days
+#   P5  issue is `#<n>`; decision is `<path> § <heading>` naming a tracked
+#       file and a heading it contains
+#   P6  every entry is named by at least one `PROV <scope>/<slug>` tag in a
+#       tracked file outside provisional/
+#   P7  every `PROV <scope>/<slug>` in a tracked file is registered
+#   P8  an entry whose review-by is before the reference date is overdue.
+#       An overdue entry whose scope was named with --scopes fails; any
+#       other overdue entry is reported in the summary only, because
+#       AGENTS.md forbids requiring an unrelated domain to pass.
+#
+# A missing provisional/ directory is zero entries and passes: the registry
+# exists to be emptied.
+#
+# usage: tool/version-control/provisional [--table] [--scopes <a,b>]
+#                                         [--date <YYYY-MM-DD>]
+#
+# Exit 0 verified, 69 unverified, any other status failed. See
+# docs/architecture.md, "Repository governance plane", and .githooks/evidence,
+# which is the one place that decides what each means.
+
+set -eu
+
+# Guards this script's sed/grep/awk calls from Git for Windows' MSYS argument
+# conversion (#79); see tool/version-control/hygiene. Inert elsewhere.
+MSYS_NO_PATHCONV=1
+MSYS2_ARG_CONV_EXCL='*'
+export MSYS_NO_PATHCONV MSYS2_ARG_CONV_EXCL
+
+# The three-state prerequisite contract, restated rather than sourced from
+# tool/checks/prerequisite for the same reason tool/version-control/hygiene
+# restates it: a repository check must not depend on a domain's plane.
+require_command() {
+  require_missing=
+  for require_name in "$@"; do
+    command -v "$require_name" >/dev/null 2>&1 ||
+      require_missing="$require_missing $require_name"
+  done
+  [ -n "$require_missing" ] || return 0
+
+  if [ "${REQUIRE_NATIVE:-0}" = 1 ]; then
+    printf '\033[31m✗ required tooling is missing:%s\033[0m\n' \
+      "$require_missing" >&2
+    exit 1
+  fi
+
+  printf '· unverified: this host has no%s\n' "$require_missing" >&2
+  exit 69
+}
+
+require_command git awk
+
+usage() {
+  echo "usage: tool/version-control/provisional [--table] [--scopes <a,b>] [--date <YYYY-MM-DD>]" >&2
+  exit 2
+}
+
+# A real date, not only the shape: 2026-02-30 parses as 2 March in every
+# arithmetic below, so it is refused here instead. Month lengths and the
+# Gregorian leap rule are cheaper to write out than to explain away. The
+# regex is spelled without an interval so any POSIX awk accepts it.
+date_valid() {
+  printf '%s\n' "$1" | awk -F- '
+    $0 ~ /^[0-9][0-9][0-9][0-9]-[0-9][0-9]-[0-9][0-9]$/ {
+      y = $1 + 0
+      m = $2 + 0
+      d = $3 + 0
+      split("31 28 31 30 31 30 31 31 30 31 30 31", month_days, " ")
+      if (m >= 1 && m <= 12) {
+        last = month_days[m]
+        if (m == 2 && y % 4 == 0 && (y % 100 != 0 || y % 400 == 0)) last = 29
+        if (d >= 1 && d <= last) ok = 1
+      }
+    }
+    END { exit ok ? 0 : 1 }
+  '
+}
+
+mode=check
+selected=
+# `date` is a POSIX shell utility rather than a prerequisite worth reporting
+# on: every host that can run this script has it. The reference date is
+# today by default, which under pre-commit is the commit being made; CI
+# passes the date of the commit under test so a re-run stays deterministic.
+reference=$(date +%Y-%m-%d)
+
+while [ "$#" -gt 0 ]; do
+  case "$1" in
+    --table) mode=table ;;
+    --scopes)
+      [ "$#" -ge 2 ] || usage
+      selected=$2
+      shift
+      ;;
+    --date)
+      [ "$#" -ge 2 ] || usage
+      date_valid "$2" || usage
+      reference=$2
+      shift
+      ;;
+    *) usage ;;
+  esac
+  shift
+done
+
+# The repository being committed, not the one this file lives in, so the
+# fixtures in tool/version-control/test run this exact script against a
+# throwaway repository.
+root=$(git rev-parse --show-toplevel)
+cd "$root"
+
+registry=provisional
+horizon=180
+
+work=$(mktemp -d)
+trap 'rm -rf "$work"' EXIT
+
+status=0
+fail() {
+  printf '\033[31m✗ %s\033[0m\n' "$1" >&2
+  status=1
+}
+
+tracked() {
+  git ls-files --error-unmatch -- "$1" >/dev/null 2>&1
+}
+
+# A Markdown heading line whose text, after the `#` run, equals the value.
+# Compared in awk rather than grep so a heading may contain regex characters.
+heading_exists() {
+  git show ":$1" 2>/dev/null | awk -v h="$2" '
+    /^#+ / { t = $0; sub(/^#+ /, "", t); if (t == h) found = 1 }
+    END { exit found ? 0 : 1 }
+  '
+}
+
+# Days since 1970-01-01, so two dates can be compared and subtracted without
+# a date(1) that understands arithmetic. Howard Hinnant's days_from_civil;
+# every date this registry carries is well after year zero.
+day_number() {
+  printf '%s\n' "$1" | awk -F- '
+    {
+      y = $1 + 0
+      m = $2 + 0
+      d = $3 + 0
+      if (m <= 2) y -= 1
+      era = int(y / 400)
+      yoe = y - era * 400
+      mp = (m + 9) % 12
+      doy = int((153 * mp + 2) / 5) + d - 1
+      doe = yoe * 365 + int(yoe / 4) - int(yoe / 100) + doy
+      print era * 146097 + doe - 719468
+    }
+  '
+}
+
+selects_scope() {
+  case ",$selected," in
+    *",$1,"*) return 0 ;;
+  esac
+  return 1
+}
+
+git ls-files -- "$registry" >"$work/paths"
+: >"$work/ids"
+: >"$work/overdue"
+: >"$work/table"
+count=0
+tab=$(printf '\t')
+
+while IFS= read -r path; do
+  [ -n "$path" ] || continue
+  case "$path" in
+    "$registry"/README.md) continue ;;
+    "$registry"/*/*.md) ;;
+    *)
+      fail "$path: P1 not a registry path"
+      continue
+      ;;
+  esac
+  rest=${path#"$registry"/}
+  scope=${rest%%/*}
+  slug=${rest#*/}
+  slug=${slug%.md}
+  case "$scope" in
+    unixlike | windows | repository) ;;
+    *)
+      fail "$path: P1 unknown scope '$scope'"
+      continue
+      ;;
+  esac
+  case "$slug" in
+    */*)
+      fail "$path: P1 not a registry path"
+      continue
+      ;;
+  esac
+  if ! printf '%s\n' "$slug" | grep -qE '^[a-z0-9]+(-[a-z0-9]+)*$'; then
+    fail "$path: P1 slug '$slug' is not lowercase words joined by single hyphens"
+    continue
+  fi
+  expected_id="$scope/$slug"
+
+  # Read from the index, like every other governance check, so the hook and
+  # CI agree about one commit. Header lines become `key<TAB>value`; anything
+  # else in the header becomes `!<TAB>line` so the shell can name it. The
+  # prose is read separately for its `reviewed:` lines, which record each
+  # extension of the review horizon.
+  git show ":$path" >"$work/entry"
+  awk '
+    /^$/ { exit }
+    /^[a-z-]+: .+$/ {
+      i = index($0, ": ")
+      print substr($0, 1, i - 1) "\t" substr($0, i + 2)
+      next
+    }
+    { print "!\t" $0 }
+  ' "$work/entry" >"$work/header"
+  awk '
+    body && /^reviewed: / { print }
+    !body && /^$/ { body = 1 }
+  ' "$work/entry" >"$work/reviewed"
+
+  id=
+  kind=
+  statement=
+  since=
+  review_by=
+  n_id=0
+  n_kind=0
+  n_statement=0
+  n_since=0
+  n_exit_when=0
+  n_watch=0
+  n_review_by=0
+  n_issue=0
+  n_decision=0
+  n_owner=0
+
+  while IFS="$tab" read -r key value; do
+    case "$key" in
+      '!')
+        fail "$path: P2 malformed header line '$value'"
+        ;;
+      id)
+        n_id=$((n_id + 1))
+        id=$value
+        ;;
+      kind)
+        n_kind=$((n_kind + 1))
+        kind=$value
+        ;;
+      statement)
+        n_statement=$((n_statement + 1))
+        statement=$value
+        ;;
+      since)
+        n_since=$((n_since + 1))
+        since=$value
+        ;;
+      exit-when)
+        n_exit_when=$((n_exit_when + 1))
+        ;;
+      watch)
+        n_watch=$((n_watch + 1))
+        if [ "$value" != manual ] && ! tracked "$value"; then
+          fail "$path: P2 watch '$value' is neither a tracked path nor 'manual'"
+        fi
+        ;;
+      review-by)
+        n_review_by=$((n_review_by + 1))
+        review_by=$value
+        ;;
+      issue)
+        n_issue=$((n_issue + 1))
+        printf '%s\n' "$value" | grep -qE '^#[0-9]+$' ||
+          fail "$path: P5 issue must be '#<n>', got '$value'"
+        ;;
+      decision)
+        n_decision=$((n_decision + 1))
+        case "$value" in
+          *' § '*) ;;
+          *)
+            fail "$path: P5 decision must be '<path> § <heading>', got '$value'"
+            continue
+            ;;
+        esac
+        ref_path=${value%% § *}
+        ref_heading=${value#* § }
+        if ! tracked "$ref_path"; then
+          fail "$path: P5 decision names an untracked path $ref_path"
+          continue
+        fi
+        heading_exists "$ref_path" "$ref_heading" ||
+          fail "$path: P5 decision names no heading '$ref_heading' in $ref_path"
+        ;;
+      owner)
+        n_owner=$((n_owner + 1))
+        ;;
+      *)
+        fail "$path: P2 unknown key '$key'"
+        ;;
+    esac
+  done <"$work/header"
+
+  for required in id:$n_id kind:$n_kind statement:$n_statement since:$n_since \
+    exit-when:$n_exit_when review-by:$n_review_by issue:$n_issue \
+    decision:$n_decision owner:$n_owner; do
+    required_key=${required%:*}
+    required_count=${required#*:}
+    [ "$required_count" -eq 1 ] ||
+      fail "$path: P2 expected exactly one $required_key, found $required_count"
+  done
+  [ "$n_watch" -le 1 ] || fail "$path: P2 expected at most one watch, found $n_watch"
+  [ "$id" = "$expected_id" ] ||
+    fail "$path: P1 id '$id' does not match path (expected $expected_id)"
+
+  case "$kind" in
+    experiment | workaround | upstream-pending | '') ;;
+    *) fail "$path: P3 kind '$kind' is not experiment, workaround or upstream-pending" ;;
+  esac
+
+  # P4: the two dates parse, they are ordered, and the horizon they span is
+  # short enough that a measure is looked at again before it is forgotten.
+  # An extension moves review-by and records a `reviewed:` line; the horizon
+  # is then measured from that line rather than from the original date.
+  dates_valid=1
+  for date_pair in "since:$since" "review-by:$review_by"; do
+    date_key=${date_pair%%:*}
+    date_value=${date_pair#*:}
+    if [ -z "$date_value" ]; then
+      dates_valid=0
+      continue
+    fi
+    if ! date_valid "$date_value"; then
+      fail "$path: P4 $date_key must be a real YYYY-MM-DD date, got '$date_value'"
+      dates_valid=0
+    fi
+  done
+  base=$since
+  while IFS= read -r reviewed_line; do
+    [ -n "$reviewed_line" ] || continue
+    reviewed_rest=${reviewed_line#reviewed: }
+    reviewed_date=${reviewed_rest%% *}
+    if ! date_valid "$reviewed_date"; then
+      fail "$path: P4 reviewed date must be a real YYYY-MM-DD date, got '$reviewed_date'"
+      dates_valid=0
+      continue
+    fi
+    base=$reviewed_date
+  done <"$work/reviewed"
+  if [ "$dates_valid" -eq 1 ]; then
+    since_day=$(day_number "$since")
+    review_day=$(day_number "$review_by")
+    base_day=$(day_number "$base")
+    [ "$base_day" -ge "$since_day" ] || base_day=$since_day
+    if [ "$review_day" -le "$since_day" ]; then
+      fail "$path: P4 review-by $review_by is not after since $since"
+    elif [ "$((review_day - base_day))" -gt "$horizon" ]; then
+      fail "$path: P4 review-by $review_by is more than $horizon days after $base"
+    fi
+    # P8, decided per scope: an overdue entry is a repository-wide fact but
+    # only its own scope's commits and pull requests are blocked by it.
+    if [ "$review_day" -lt "$(day_number "$reference")" ]; then
+      printf '%s\n' "$expected_id" >>"$work/overdue"
+      if selects_scope "$scope"; then
+        fail "$path: P8 review-by $review_by is overdue at $reference"
+      fi
+    fi
+  fi
+
+  # P6: the registration is worthless if nothing in the tree points back at
+  # it, so the measure itself carries the tag. The id must end where the tag
+  # does: a fixed-string search would let a longer slug stand in for a
+  # shorter one it starts with, registering a measure nothing carries. An id
+  # is [a-z0-9/-] throughout, so it needs no escaping inside the pattern.
+  git -c color.grep=never grep --cached -q -E -e "PROV $expected_id(\$|[^a-z0-9-])" \
+    -- ':(exclude)provisional/' ':(exclude)notes/' 2>/dev/null ||
+    fail "$path: P6 no tracked file outside $registry/ names $expected_id"
+
+  printf '%s\n' "$expected_id" >>"$work/ids"
+  printf '| `%s` | %s | %s | %s |\n' "$expected_id" "$kind" "$review_by" \
+    "$statement" >>"$work/table"
+  count=$((count + 1))
+done <"$work/paths"
+
+# ---------------------------------------------------------------------------
+# P7: every tag in the tree names a registered entry
+# ---------------------------------------------------------------------------
+
+# git grep exits 1 for "nothing matched" and more than 1 for "the scan did
+# not run"; only the second is an error. The status is captured with `||`
+# rather than inside `if !`, where `$?` would be the negation's status.
+tag_scan_status=0
+git -c color.grep=never grep --cached -I -n -o -E \
+  -e 'PROV [a-z]+/[a-z0-9]+(-[a-z0-9]+)*' -- ':(exclude)notes/' >"$work/tags" ||
+  tag_scan_status=$?
+if [ "$tag_scan_status" -gt 1 ]; then
+  fail "tag scan did not run (git grep exited $tag_scan_status)"
+fi
+while IFS= read -r hit; do
+  [ -n "$hit" ] || continue
+  tag_id=${hit##*PROV }
+  location=${hit%%:PROV *}
+  grep -qxF -- "$tag_id" "$work/ids" ||
+    fail "$location: P7 names unregistered provisional measure $tag_id"
+done <"$work/tags"
+
+# ---------------------------------------------------------------------------
+
+# --table is a renderer: it has reported every failure on stderr but exits 0, as its sibling does.
+if [ "$mode" = table ]; then
+  printf '| Measure | Kind | Review by | Statement |\n|---|---|---|---|\n'
+  cat "$work/table"
+  exit 0
+fi
+
+if [ "$status" -ne 0 ]; then
+  printf '\033[31m✗ provisional registry failed\033[0m\n' >&2
+  exit 1
+fi
+
+overdue_count=$(wc -l <"$work/overdue" | tr -d ' ')
+if [ "$overdue_count" -gt 0 ]; then
+  printf '✓ provisional: %s registered, %s overdue outside the changed scopes (%s)\n' \
+    "$count" "$overdue_count" \
+    "$(paste -sd, "$work/overdue" | sed 's/,/, /g')"
+else
+  printf '✓ provisional: %s registered, 0 overdue\n' "$count"
+fi

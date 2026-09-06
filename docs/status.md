@@ -130,7 +130,7 @@ are disabled.
 The merge gate is CI's `Required checks`, demanded whenever a change falls
 in a domain that check covers.
 
-The invariant registry holds 53 entries, none pending and no fixture unit
+The invariant registry holds 54 entries, none pending and no fixture unit
 untagged, and `tool/version-control/invariants` enforces C10 (no untagged
 fixture unit) by default. Enforced is not the same as held: the manual
 `INV windows/support-boundary-named` records that the terminal delegation
@@ -138,6 +138,14 @@ item still passes its read-back below the Windows 10 boundary (#53).
 
 Content before a shell suite's first banner is in no fixture unit and
 invisible to C10 (`docs/decisions/fixture-tags-name-proven-invariants.md`).
+
+The provisional registry holds 0 entries: `provisional/README.md` is the
+contract and nothing in the tree is registered as temporary yet.
+`tool/version-control/provisional` checks it in both directions on every
+commit and in the CI scan job; an empty registry passes the check. #175
+registers the first measure. The exit criteria `flake.nix` states in comments
+are the known gap: moving them into the registry is a separate decision and
+has not been made.
 
 `tool/version-control/domain-reads` runs on every commit and in CI beside
 the hygiene scan; the Windows CI job no longer walks the checkout for

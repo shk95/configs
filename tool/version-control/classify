@@ -78,6 +78,13 @@ while IFS= read -r path; do
     invariants/unixlike/*) echo unixlike ;;
     invariants/windows/*) echo windows ;;
     invariants/repository/*) echo repository ;;
+    # The provisional registry (provisional/README.md is the format
+    # contract), classified the same way and for the same reason: a scope
+    # owns the temporary measures it carries.
+    provisional/README.md) echo repository ;;
+    provisional/unixlike/*) echo unixlike ;;
+    provisional/windows/*) echo windows ;;
+    provisional/repository/*) echo repository ;;
     *) echo unclassified ;;
   esac
 done <"$paths" | sort -u >"$scopes"

@@ -41,6 +41,10 @@ native checks instead of treating them as passed.
 - [ ] Every fixture unit this change touches names an invariant
       (INV repository/fixtures-name-invariants), and every gate job converts
       unverified into failure (INV repository/merge-gate-requires-native).
+- [ ] Every temporary measure the change adds is registered under
+      `provisional/` with an exit condition, a review date and a tag on each
+      disposable line, and a measure it removes loses its entry and its tags in
+      the same commit (INV repository/provisional-registry-coverage).
 
 ## Governance rule design
 
