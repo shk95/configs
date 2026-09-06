@@ -318,6 +318,13 @@ expect unixlike "$classify" --files tool/darwin/karabiner
 expect windows "$classify" --files windows/src/WinEnv.psm1
 expect unclassified "$classify" --files common/example.txt
 expect repository "$classify" --files .agents/skills/example/SKILL.md
+# INV repository/scope-ownership
+# Product-specific project paths have repository ownership; a similar prefix
+# outside the product directory still has no owner.
+expect repository "$classify" --files .claude/settings.json
+expect repository "$classify" --files .codex/config.toml
+expect repository "$classify" --files .codex/rules/example.rules
+expect unclassified "$classify" --files .codex-extra/config.toml
 expect unclassified "$classify" --files unexpected.file
 # INV repository/scope-ownership
 # The invariant registry is per scope: an entry classifies as the scope that
@@ -441,6 +448,20 @@ expect_units 'repository:fixtures' push "$setup_modified"
 expect_units 'repository:fixtures' commit "$worktree_modified"
 expect_units 'repository:fixtures' push "$hook_deleted"
 expect_units '' commit "$codeowners_modified"
+
+# INV repository/local-gate-selects-by-effect
+# Codex project paths select no local units; the hooks' unconditional scans
+# still apply. A similar unknown prefix stays refused, while changes to the
+# classifier or its fixtures keep selecting the repository suite.
+for stage in commit push; do
+  for codex_path in .codex/config.toml .codex/rules/example.rules; do
+    expect_units '' "$stage" "$(printf 'A\t%s' "$codex_path")"
+  done
+  expect_units 'unclassified' "$stage" "$(printf 'A\t.codex-extra/config.toml')"
+  for vc_path in tool/version-control/classify tool/version-control/test; do
+    expect_units 'repository:fixtures' "$stage" "$(printf 'M\t%s' "$vc_path")"
+  done
+done
 
 test_root=$(mktemp -d)
 cleanup() {
