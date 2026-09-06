@@ -9,11 +9,13 @@
 # tool/checks/composition refuses a feature file that names a host flavour
 # or forces a class's decision.
 {
+  lib,
   config,
   inputs,
   withSystem,
   ...
 }: let
+  inherit (lib) attrValues;
   wslUser = config.identity.wsl.user;
   darwin = config.identity.darwin;
   home = config.modules.homeManager;
@@ -37,6 +39,7 @@ in {
         config.modules.nixos.wsl
         {
           nixpkgs.config = config.nixpkgsConfig;
+          nixpkgs.overlays = attrValues config.nixpkgsOverlays;
           home-manager = {
             useGlobalPkgs = true;
             useUserPackages = true;
@@ -56,6 +59,7 @@ in {
         config.modules.darwin.system
         {
           nixpkgs.config = config.nixpkgsConfig;
+          nixpkgs.overlays = attrValues config.nixpkgsOverlays;
           home-manager = {
             useGlobalPkgs = true;
             useUserPackages = true;

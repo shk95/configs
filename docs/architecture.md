@@ -76,7 +76,11 @@ check that found nothing to evaluate has failed, not passed.
 Linux and macOS may share Nix modules where the Nix module system can evaluate
 the complete result directly for both. Platform-specific Nix modules remain
 preferable when behavior differs. This internal sharing does not make their
-content part of the repository-wide `common` domain.
+content part of the repository-wide `common` domain. The nixpkgs configuration
+and overlay set every flavour evaluates under are each declared once, in
+`modules/flake/nixpkgs.nix`, and read from there by the standalone home's
+`pkgs` and by the NixOS and darwin flavours' own `nixpkgs.*` options, rather
+than repeated per class.
 
 Unix-like deployment consumes a domain release tag and activates only on a
 matching host after evaluation and native build evidence.

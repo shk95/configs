@@ -129,6 +129,8 @@ just home-build
 just darwin-eval
 just darwin-build
 just darwin-check
+
+just zellij-patch-check v0.45.1
 ```
 
 The `*-eval`, `*-build`, and `*-check` commands do not activate a configuration.
