@@ -250,20 +250,26 @@ run_gate() {
     "$required_checks"
 }
 
+# Each case runs in a subshell. macOS /bin/sh is bash in POSIX mode, where an
+# assignment written before a function call persists after it and is
+# exported, so without the subshell `SECRETS_RESULT=failure` would outlive
+# its case, reach the GIT_DIR regression child through the environment and
+# fail that child's first positive case; dash, the Linux /bin/sh, does not
+# persist it, which is why CI never saw this.
 run_gate >/dev/null
-REPOSITORY_SCOPE=true REPOSITORY_RESULT=success run_gate >/dev/null
-UNIXLIKE_SCOPE=true UNIXLIKE_RESULT=success run_gate >/dev/null
-WINDOWS_SCOPE=true WINDOWS_RESULT=success run_gate >/dev/null
-PROMOTION_SCOPE=true PROMOTION_RESULT=success run_gate >/dev/null
-if REPOSITORY_SCOPE=true REPOSITORY_RESULT=failure run_gate >/dev/null 2>&1; then
+(REPOSITORY_SCOPE=true REPOSITORY_RESULT=success run_gate) >/dev/null
+(UNIXLIKE_SCOPE=true UNIXLIKE_RESULT=success run_gate) >/dev/null
+(WINDOWS_SCOPE=true WINDOWS_RESULT=success run_gate) >/dev/null
+(PROMOTION_SCOPE=true PROMOTION_RESULT=success run_gate) >/dev/null
+if (REPOSITORY_SCOPE=true REPOSITORY_RESULT=failure run_gate) >/dev/null 2>&1; then
   echo "required-checks accepted a failed selected job" >&2
   exit 1
 fi
-if SECRETS_RESULT=failure run_gate >/dev/null 2>&1; then
+if (SECRETS_RESULT=failure run_gate) >/dev/null 2>&1; then
   echo "required-checks accepted a failed secret scan" >&2
   exit 1
 fi
-if PROMOTION_SCOPE=true PROMOTION_RESULT=failure run_gate >/dev/null 2>&1; then
+if (PROMOTION_SCOPE=true PROMOTION_RESULT=failure run_gate) >/dev/null 2>&1; then
   echo "required-checks accepted a failed promotion gate" >&2
   exit 1
 fi
