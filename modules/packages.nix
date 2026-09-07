@@ -120,7 +120,6 @@ in {
           # search / text
           ripgrep
           fd
-          fzf
           jq
           yq-go
           file
@@ -165,7 +164,6 @@ in {
 
           # documents / media / data
           ghostscript
-          glow
           gnutar
           monolith
           pocketbase

@@ -1,10 +1,9 @@
 _: {
-  # skim provides a single executable, `sk`, plus shell keybindings
-  # (ctrl-r / ctrl-t / alt-c) compatible with fzf's integration scripts.
+  # Keep sk independently usable; modules/fzf.nix owns zsh's fuzzy shortcuts.
   modules.homeManager.shared = {
     programs.skim = {
       enable = true;
-      enableZshIntegration = true;
+      enableZshIntegration = false;
 
       # skim's default theme is `dark`, and it is 256-colour indices chosen for
       # a dark background — 236 behind the current line, 144 for the match
