@@ -120,7 +120,6 @@ in {
           # search / text
           ripgrep
           fd
-          fzf
           jq
           yq-go
           file

@@ -164,14 +164,9 @@ _: {
           # editors feel the same.
           KEYTIMEOUT=20
 
-          # Reverse history search was confirmed reachable, not assumed: the
-          # default viins keymap that `defaultKeymap` activates rebinds ^R to
-          # `redisplay`, not `history-incremental-search-backward` (checked
-          # with `bindkey -v; bindkey -M viins`), but the companion vicmd
-          # (command-mode) keymap keeps its own default `/` ->
-          # vi-history-search-backward with `n`/`N` to repeat (checked with
-          # `bindkey -v; bindkey -M vicmd`). Reverse search stays reachable via
-          # Esc then `/`, so no explicit rebinding is added here.
+          # modules/fzf.nix supplies Ctrl-R in viins and vicmd after the
+          # default keymap is selected. Command-mode / and n/N retain zsh's
+          # native vi history search; no later bindkey -v resets the widgets.
 
           # Standalone installers may place commands here. Append instead of
           # prepend so declarative packages keep precedence when names overlap.

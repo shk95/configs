@@ -169,7 +169,7 @@ unaliased because knowing them is more useful than shortening them:
 See the comment in `modules/git.nix` for the reasoning; this list only
 repeats the names so a maintainer can find them without opening a Nix module.
 
-### Markdown
+### Markdown and fuzzy search
 
 `glow README.md` renders a document; `glow` opens the Markdown browser (Enter
 opens a document, Esc returns, q quits). Both use the bundled `light` style.
@@ -184,6 +184,20 @@ Only the style is configured: glow's application defaults include hidden and
 ignored files (`all=true`) and adapt the width to the terminal (`width=0`,
 falling back to 80 columns without a terminal). These differ from the
 `all=false`, `width=80` in upstream's first-run generated config file.
+
+In the configured zsh, fzf owns Ctrl-R (history into the buffer, without
+execution), Ctrl-T (insert paths), and Alt-C (change directory). Enter accepts;
+Esc or Ctrl-C cancels. Ctrl-T and fuzzy path completion support Tab/Shift-Tab
+to select multiple entries. Type `**` then Tab for fuzzy completion, for
+example `cat **`; ordinary Tab completion remains available. `sk` stays
+installed as a separate command without zsh shortcut integration.
+
+fzf uses a reverse list, a border and 40% height with terminal ANSI colours.
+The current row uses bold default foreground; the border and separator use
+ANSI 8. Matching, walkers and other widget behavior retain upstream defaults.
+If the terminal intercepts Alt-C, press Esc then lowercase `c` within 200 ms
+(`KEYTIMEOUT=20`). After that timeout Esc enters vi command mode, where `/`
+and `n`/`N` still provide native history search.
 
 ## Windows
 
