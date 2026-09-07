@@ -8,6 +8,12 @@
 # INV unixlike/composition-in-one-place — this file is that place.
 # tool/checks/composition refuses a feature file that names a host flavour
 # or forces a class's decision.
+#
+# `home.agents` — the coding agents — is composed into the NixOS-WSL home
+# only; the standalone Ubuntu home and the Darwin home are unchanged by it
+# (modules/agents.nix). The NixOS output is named by the typed identity's
+# host name, as the Darwin one is, so `networking.hostName` and the output
+# attribute cannot drift (modules/wsl-host.nix, #191).
 {
   lib,
   config,
@@ -16,12 +22,12 @@
   ...
 }: let
   inherit (lib) attrValues;
-  wslUser = config.identity.wsl.user;
+  wsl = config.identity.wsl;
   darwin = config.identity.darwin;
   home = config.modules.homeManager;
 in {
   flake = {
-    homeConfigurations.${wslUser} = withSystem "x86_64-linux" ({pkgs, ...}:
+    homeConfigurations.${wsl.user} = withSystem "x86_64-linux" ({pkgs, ...}:
       inputs.home-manager.lib.homeManagerConfiguration {
         inherit pkgs;
         modules = [
@@ -31,7 +37,7 @@ in {
         ];
       });
 
-    nixosConfigurations.wsl = inputs.nixpkgs.lib.nixosSystem {
+    nixosConfigurations.${wsl.hostName} = inputs.nixpkgs.lib.nixosSystem {
       system = "x86_64-linux";
       modules = [
         inputs.nixos-wsl.nixosModules.default
@@ -43,9 +49,10 @@ in {
           home-manager = {
             useGlobalPkgs = true;
             useUserPackages = true;
-            users.${wslUser}.imports = [
+            users.${wsl.user}.imports = [
               home.shared
               home.wsl
+              home.agents
             ];
           };
         }

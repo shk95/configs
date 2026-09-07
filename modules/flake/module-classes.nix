@@ -32,6 +32,7 @@
 #   homeManager.wsl            both WSL flavours
 #   homeManager.wslStandalone  standalone only — no system layer underneath
 #   homeManager.darwin         Darwin-only user behavior
+#   homeManager.agents         the coding agents — the NixOS-WSL home only
 #   nixos.wsl                  the NixOS-WSL flavour only
 #   darwin.system              the nix-darwin system layer only
 #

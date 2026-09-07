@@ -50,6 +50,16 @@ identity_eval() {
 printf '→ accepts the inventory\n'
 user=$(identity_eval '{ }' wsl.user)
 [ -n "$user" ] || fail "identity.nix evaluated the inventory to an empty WSL account"
+wsl_host=$(identity_eval '{ }' wsl.hostName)
+[ -n "$wsl_host" ] || fail "identity.nix evaluated the inventory to an empty NixOS-WSL host name"
+
+# The invariant's other direction: the value reaches both of its consumers
+# through the typed option — the NixOS output is named by it and the host
+# answers to it (#191) — so a mismatch means one of the two carries an
+# untyped copy of the name instead.
+printf '→ the NixOS-WSL host answers to the name its output carries\n'
+host_name=$(nix eval --raw "path:$repo#nixosConfigurations.\"$wsl_host\".config.networking.hostName")
+[ "$host_name" = "$wsl_host" ] || fail "nixosConfigurations.$wsl_host declares networking.hostName $host_name"
 
 printf '→ refuses a platform outside the enum\n'
 if identity_eval '{ identity.darwin.system = lib.mkForce "x86_64-linux"; }' darwin.system >/dev/null 2>&1; then
@@ -59,6 +69,11 @@ fi
 printf '→ refuses a non-string account\n'
 if identity_eval '{ identity.wsl.user = lib.mkForce 5; }' wsl.user >/dev/null 2>&1; then
   fail "identity.nix accepted a number as the WSL account"
+fi
+
+printf '→ refuses a non-string host name\n'
+if identity_eval '{ identity.wsl.hostName = lib.mkForce 5; }' wsl.hostName >/dev/null 2>&1; then
+  fail "identity.nix accepted a number as the NixOS-WSL host name"
 fi
 
 # ---------------------------------------------------------------------------
@@ -84,7 +99,7 @@ darwin_host=$(identity_eval '{ }' darwin.hostName)
 
 for home in \
   "homeConfigurations.\"$wsl_user\".config.home.packages" \
-  "nixosConfigurations.wsl.config.home-manager.users.\"$wsl_user\".home.packages"
+  "nixosConfigurations.\"$wsl_host\".config.home-manager.users.\"$wsl_user\".home.packages"
 do
   printf '→ %s carries no graphical program\n' "${home%%.config*}"
   names=$(packages_of "$home")
@@ -148,7 +163,7 @@ assertion_diagnostics=$(mktemp)
 trap 'rm -f "$assertion_diagnostics"' EXIT
 
 home="homeConfigurations.\"$wsl_user\""
-nixos="nixosConfigurations.wsl"
+nixos="nixosConfigurations.\"$wsl_host\""
 darwin="darwinConfigurations.\"$darwin_host\""
 
 # ---------------------------------------------------------------------------

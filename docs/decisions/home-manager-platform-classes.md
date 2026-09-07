@@ -29,3 +29,12 @@ integration tries to install that entry on SSH destinations and falls back to
 `xterm-256color` only when the destination cannot accept it. Globally
 downgrading `TERM` would hide capabilities on every host to accommodate the
 few that need a fallback.
+
+Extended 2026-09-06 (#195): a fifth kind of class is not a platform overlay
+but a host-selected feature set. `homeManager.agents` carries the coding
+agents (`modules/agents.nix`), and `modules/flake/configurations.nix` gives
+it to the NixOS-WSL home alone; the standalone Ubuntu home and the Darwin
+home do not compose it. The mechanism is the one that keeps `desktop` out
+of the WSL homes, used to opt a single home in rather than to keep one out,
+and the composition file remains the only place the choice is visible
+(`INV unixlike/composition-in-one-place`).

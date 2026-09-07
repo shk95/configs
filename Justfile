@@ -10,6 +10,10 @@ _home-target:
 _darwin-target:
     @nix eval --raw path:.#darwinConfigurations --apply 'configs: let names = builtins.attrNames configs; in assert builtins.length names == 1; builtins.head names'
 
+[private]
+_nixos-target:
+    @nix eval --raw path:.#nixosConfigurations --apply 'configs: let names = builtins.attrNames configs; in assert builtins.length names == 1; builtins.head names'
+
 ############################################################################
 #
 #  repository checks
@@ -249,7 +253,7 @@ gc:
 
 ############################################################################
 #
-#  nixos-wsl  (M3 experiment)
+#  nixos-wsl
 #
 ############################################################################
 
@@ -260,7 +264,10 @@ gc:
 # Build the NixOS-WSL closure (~1.9 GiB)
 [group('nixos-wsl')]
 nixos-build:
-    nix build --no-link --print-out-paths path:.#nixosConfigurations.wsl.config.system.build.toplevel
+    #!/usr/bin/env bash
+    set -euo pipefail
+    target=$(just _nixos-target)
+    nix build --no-link --print-out-paths "path:.#nixosConfigurations.${target}.config.system.build.toplevel"
 
 # NixOS-WSL's builder refuses to run unless EUID is 0 — it chowns paths inside
 # the rootfs it assembles — so this needs a password and an agent cannot run
@@ -275,9 +282,13 @@ nixos-build:
 # Produce the rootfs archive that `wsl --import` takes (needs sudo)
 [group('nixos-wsl')]
 nixos-tarball:
-    sudo $(nix build --no-link --print-out-paths path:.#nixosConfigurations.wsl.config.system.build.tarballBuilder)/bin/nixos-wsl-tarball-builder nixos.wsl
-    @echo
-    @echo "Wrote ./nixos.wsl (root-owned, gitignored). Now run: just nixos-stage"
+    #!/usr/bin/env bash
+    set -euo pipefail
+    target=$(just _nixos-target)
+    builder=$(nix build --no-link --print-out-paths "path:.#nixosConfigurations.${target}.config.system.build.tarballBuilder")
+    sudo "${builder}/bin/nixos-wsl-tarball-builder" nixos.wsl
+    echo
+    echo "Wrote ./nixos.wsl (root-owned, gitignored). Now run: just nixos-stage"
 
 # `wsl --import` will not take a UNC source path. `\\wsl.localhost\...` reads
 # perfectly from `dir`, so it is not a permissions or 9p problem — the importer
@@ -300,7 +311,9 @@ nixos-stage dest="/mnt/c/WSL":
     echo "Staged and verified. From PowerShell or CMD — not from in here:"
     echo
     echo "  wsl --import NixOS C:\\WSL\\NixOS $win"
-    echo "  wsl -d NixOS"
+    echo
+    echo "Then follow CONTRIBUTING.md § Import the NixOS-WSL distribution: the"
+    echo "account is created locked, and ssh needs an authorized_keys copied in."
     echo
     echo "That registers a NEW distribution. Ubuntu is untouched;"
     echo "rollback is: wsl --unregister NixOS"
@@ -311,13 +324,30 @@ nixos-stage dest="/mnt/c/WSL":
 #
 ############################################################################
 
-# Make the home-manager-managed zsh the login shell
+# Make the Home Manager zsh the login shell — standalone Ubuntu and Darwin.
+# NixOS selects it declaratively (modules/wsl-shell.nix) and is refused here.
 [group('setup')]
 switch-shell:
     #!/usr/bin/env bash
     set -euo pipefail
 
-    TARGET_SHELL="$HOME/.nix-profile/bin/zsh"
+    if [ -e /etc/NIXOS ]; then
+      echo "NixOS selects the login shell in modules/wsl-shell.nix; nothing to switch here." >&2
+      exit 1
+    fi
+
+    case "$(uname -s)" in
+      # Registered in /etc/shells by modules/darwin-shell.nix; the store path
+      # behind it changes with every zsh update, this one does not.
+      Darwin) TARGET_SHELL="/run/current-system/sw/bin/zsh" ;;
+      # The standalone Home Manager profile.
+      *)      TARGET_SHELL="$HOME/.nix-profile/bin/zsh" ;;
+    esac
+
+    if [ ! -x "$TARGET_SHELL" ]; then
+      echo "$TARGET_SHELL does not exist yet; activate the home (or the Darwin system) first." >&2
+      exit 1
+    fi
 
     if [ "$SHELL" = "$TARGET_SHELL" ]; then
       echo "Current shell is already $TARGET_SHELL"

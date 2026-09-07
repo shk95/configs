@@ -7,8 +7,8 @@
 # NanumGothic, because the distro ships it. That is the trap. The NixOS flavour
 # has no distro:
 #
-#   nixosConfigurations.wsl.config.fonts.enableDefaultPackages  false
-#   nixosConfigurations.wsl.config.fonts.packages               [ ]
+#   nixosConfigurations.<host>.config.fonts.enableDefaultPackages  false
+#   nixosConfigurations.<host>.config.fonts.packages               [ ]
 #
 # Zero fonts, so Korean has nothing to resolve to at all and every CJK glyph is
 # a box. Contributed to `homeManager.wsl` rather than to `nixos.wsl` deliberately: it

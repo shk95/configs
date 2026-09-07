@@ -59,13 +59,22 @@ command aborts instead of adding the files you actually meant.
 ### `experimental Nix feature 'nix-command' is disabled`
 
 There is no `~/.config/nix/nix.conf` yet, which is the state of any machine
-before its first `home-manager switch` — `home/nix.nix` is what writes it.
-Export `NIX_CONFIG="experimental-features = nix-command flakes"` for the
-session rather than writing the file by hand: home-manager refuses to clobber
-an unmanaged file, so hand-writing it turns the first switch into a failure.
+before its first `home-manager switch` — `modules/nix-conf.nix` is what
+writes it. Export `NIX_CONFIG="experimental-features = nix-command flakes"`
+for the session rather than writing the file by hand: home-manager refuses to
+clobber an unmanaged file, so hand-writing it turns the first switch into a
+failure.
 
 This host passed that point on 2026-08-03 and no longer needs the variable. The
 entry stays because a fresh clone on a new machine starts where this one did.
+
+On the NixOS-WSL flavour the file that matters is `/etc/nix/nix.conf`, which
+is generated from `nix.settings`, and the standalone class that writes the
+home file is not composed there. The distribution imported on 2026-09-06 hit
+this exact message from a system whose whole configuration is a flake;
+`modules/nix-conf.nix` declares the setting for that flavour too, and it
+reaches the host on its next activation. The same `NIX_CONFIG` export covers
+the session until then.
 
 Note that `nix config show` cannot diagnose this — it needs `nix-command` in
 order to run at all. `tool/doctor.sh` probes with `nix flake metadata` instead,
@@ -374,6 +383,23 @@ So it is not permissions, not 9p, and not the distro name. The importer
 specifically does not accept a UNC source. Copy the image to a real Windows
 drive first and give it a plain path — `just nixos-stage` does that, verifies
 the copy, and prints the exact command. It takes about four seconds over drvfs.
+
+### `sudo: a password is required` right after `wsl --import`
+
+The account a fresh import creates has no password — its `/etc/shadow`
+field is `!` — and `modules/wsl.nix` makes sudo ask for one, because the
+host is reachable over ssh and a key alone must not be root. Nothing is
+broken; step 2 of `CONTRIBUTING.md § Import the NixOS-WSL distribution` has
+not run yet:
+
+```
+wsl -d NixOS -u root -- passwd <account>
+```
+
+WSL selects its user without Linux authentication, so `-u root` works with
+no password at all, and the same command recovers a host that was locked
+out after the fact. `users.mutableUsers` is at its default, so a password
+set this way survives every later activation.
 
 ### CI fails on a path that exists on your machine
 
