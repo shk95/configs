@@ -169,6 +169,22 @@ unaliased because knowing them is more useful than shortening them:
 See the comment in `modules/git.nix` for the reasoning; this list only
 repeats the names so a maintainer can find them without opening a Nix module.
 
+### Markdown
+
+`glow README.md` renders a document; `glow` opens the Markdown browser (Enter
+opens a document, Esc returns, q quits). Both use the bundled `light` style.
+The generated `glow/glow.yml` is read-only: edit `modules/glow.nix`, not
+`glow config`. XDG configuration is installed on every home; Darwin also gets
+the native `~/Library/Preferences/glow/glow.yml` fallback. `GLOW_CONFIG_HOME`
+can select an alternative config directory. The glow wrapper clears
+`GLAMOUR_STYLE` only for glow so the TUI follows the same style setting as the
+CLI. Redirected output uses upstream's uncoloured style unless `--style` is
+explicitly supplied; it is not a terminal-colour preview.
+Only the style is configured: glow's application defaults include hidden and
+ignored files (`all=true`) and adapt the width to the terminal (`width=0`,
+falling back to 80 columns without a terminal). These differ from the
+`all=false`, `width=80` in upstream's first-run generated config file.
+
 ## Windows
 
 From native Windows, `windows\win-env.ps1` is the one entry point. Each verb

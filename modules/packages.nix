@@ -165,7 +165,6 @@ in {
 
           # documents / media / data
           ghostscript
-          glow
           gnutar
           monolith
           pocketbase
