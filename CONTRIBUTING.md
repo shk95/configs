@@ -372,6 +372,30 @@ record for this intentionally manual policy.
 Do not add Windows desired state to a Nix module merely because the same tool
 also runs on Windows.
 
+### Import the NixOS-WSL distribution
+
+`just nixos-build`, `just nixos-tarball` (needs sudo) and `just nixos-stage`
+produce the rootfs archive and copy it to a Windows drive;
+`docs/troubleshooting.md` records why `wsl --import` will not read it from
+`\\wsl.localhost\...`. Then, from PowerShell or CMD:
+
+1. `wsl --import NixOS C:\WSL\NixOS C:\WSL\nixos.wsl` registers the
+   distribution. Its first boot activates the toplevel and the composed
+   home.
+2. `wsl -d NixOS -u root -- passwd <account>` sets the account's password.
+   The account is created locked and sudo asks for a password
+   (`modules/wsl.nix`), so until this has run nothing inside can become
+   root; WSL's `-u root` needs no Linux authentication, and the password
+   set this way survives every later activation.
+3. If the host is to be reached over ssh, copy an `authorized_keys` into
+   `\\wsl.localhost\NixOS\home\<account>\.ssh\`. Keys are host-owned
+   (`modules/ssh.nix`); the port is the one `modules/wsl-sshd.nix`
+   declares, and any mapping beyond the Windows host is Windows state.
+4. `wsl -d NixOS`. The account logs into zsh, flakes are on, and
+   `tool/doctor.sh unixlike` reports the host ready.
+
+Rollback is `wsl --unregister NixOS`; Ubuntu is untouched throughout.
+
 ### Capture Karabiner drift
 
 On the Mac, `just karabiner-check` reports whether the host still holds the
