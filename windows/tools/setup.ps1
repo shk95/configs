@@ -34,17 +34,18 @@ $powerToysWasRunning = $false
 $powerToysRestarted = $false
 $drift = [System.Collections.Generic.List[string]]::new()
 $changed = [System.Collections.Generic.List[string]]::new()
-# Sources this host has no parser for. Not drift and not a failure: Apply is a
-# deployment, and refusing it because a validator is absent would make the
-# missing tool look like broken desired state. They rank the same way the
-# detections below do: with no drift, a source nobody here could parse makes
-# the check unverified rather than verified (#54).
+# Sources this host has no parser for and other existing prerequisites such as
+# WSL support observations. Not drift and not a failure: Apply is a deployment,
+# and refusing it because a validator is absent would make the missing tool
+# look like broken desired state. They rank the same way the detections below
+# do: with no drift, an unavailable item makes the check unverified (#54).
 $unverified = [System.Collections.Generic.List[string]]::new()
-# Detections this host could not decide, as opposed to sources it could not
-# parse: the Appx module failing to load, which says nothing about whether the
-# package is installed, and the terminal delegation's documented boundary
-# when the host is below it or an observation it needs could not be made.
-$unverifiedDetection = [System.Collections.Generic.List[string]]::new()
+# Host observations this run could not make, as opposed to known support
+# limits. Both remain unverified evidence, but only an unavailable observation
+# is undecided. A below-boundary result is already decided against its named
+# requirement and must not inherit presence-query wording.
+$unavailableObservation = [System.Collections.Generic.List[string]]::new()
+$knownSupportLimit = [System.Collections.Generic.List[string]]::new()
 # CI sets this so the merge gate never accepts an undecided item; hooks and
 # hosts leave it unset so a host that cannot decide one is not blocked.
 $requireNative = ($env:REQUIRE_NATIVE -eq '1')
@@ -60,14 +61,33 @@ $hostBuild = $null
 $conditionalFiles = @()
 $wslInformation = [System.Collections.Generic.List[string]]::new()
 
+function Add-UnverifiedEvidence {
+    param(
+        [Parameter(Mandatory)][ValidateSet('Source', 'UnavailableObservation', 'KnownSupportLimit')][string] $Category,
+        [Parameter(Mandatory)][string] $Item
+    )
+
+    switch ($Category) {
+        'Source' { $unverified.Add($Item) }
+        'UnavailableObservation' { $unavailableObservation.Add($Item) }
+        'KnownSupportLimit' { $knownSupportLimit.Add($Item) }
+    }
+}
+
 function Test-Sources {
     param([array] $Definitions)
     foreach ($definition in $Definitions) {
         $reason = Test-WinEnvSourceFile -Definition $definition -RepositoryRoot $desiredStateRoot
         if ($reason -and -not $unverified.Contains("$($definition.Id): $reason")) {
-            $unverified.Add("$($definition.Id): $reason")
+            Add-UnverifiedEvidence -Category 'Source' -Item "$($definition.Id): $reason"
         }
     }
+}
+
+function Get-UnverifiedEvidenceLine {
+    return @(Format-WinEnvUnverifiedEvidence -Source $unverified.ToArray() `
+        -UnavailableObservation $unavailableObservation.ToArray() `
+        -KnownSupportLimit $knownSupportLimit.ToArray())
 }
 
 function Write-Summary {
@@ -86,19 +106,17 @@ function Write-Summary {
     }
     if ($changed.Count) { Write-Host ('  changed: ' + ($changed -join ', ')) }
     if ($drift.Count) { Write-Warning ('  drift: ' + ($drift -join ', ')) }
-    if ($unverified.Count) { Write-Host ('  unverified: ' + ($unverified -join ', ')) }
-    if ($unverifiedDetection.Count) {
-        Write-Host ('  unverified detection: ' + ($unverifiedDetection -join ', ') +
-            ' (not decided on this host; neither present nor missing was concluded)')
-    }
+    foreach ($line in Get-UnverifiedEvidenceLine) { Write-Host ('  ' + $line) }
     if ($conditionalFiles.Count) {
         $build = if ($null -ne $hostBuild) { [string]$hostBuild } else { 'undetermined' }
         Write-Host ('  Windows build ' + $build + ': ' +
             (($conditionalFiles | ForEach-Object { "$($_.Id) from $($_.Source)" }) -join ', '))
     }
     foreach ($item in $wslInformation) { Write-Host ('  wslConfig: ' + $item) }
-    # An undecided item is not a clean run, so it suppresses the clean line.
-    if (-not $changed.Count -and -not $drift.Count -and -not $unverified.Count -and -not $unverifiedDetection.Count) {
+    # Unverified evidence is not a clean run, so any category suppresses the
+    # clean line.
+    if (-not $changed.Count -and -not $drift.Count -and -not $unverified.Count -and
+        -not $unavailableObservation.Count -and -not $knownSupportLimit.Count) {
         Write-Host '  no changes or drift detected'
     }
 }
@@ -181,7 +199,9 @@ try {
         $status = Get-WinEnvPackageStatus -Package $package
         $packageStatuses += $status
         Write-Verbose "$($status.Id): registered=$($status.Registered), detected=$($status.Detected)"
-        if ($status.Unverified) { $unverifiedDetection.Add("$($status.Id): $($status.Unverified)") }
+        if ($status.Unverified) {
+            Add-UnverifiedEvidence -Category 'UnavailableObservation' -Item "$($status.Id): $($status.Unverified)"
+        }
         if ($status.Conflict) { $drift.Add("$($status.Id) detection conflict") }
         elseif ($status.Missing) { $drift.Add("$($status.Id) missing") }
     }
@@ -217,7 +237,7 @@ try {
         # would make a host that cannot ask the question look like a host that
         # answered no.
         foreach ($item in $preconditionResult.Unverified) {
-            $unverifiedDetection.Add("$($feature.Id) precondition: $item")
+            Add-UnverifiedEvidence -Category 'UnavailableObservation' -Item "$($feature.Id) precondition: $item"
         }
     }
 
@@ -246,24 +266,29 @@ try {
     if ($terminalSelected) {
         # INV windows/support-boundary-named — decided against the documented
         # condition, not the write: a read-back the host accepts below the
-        # boundary is undecided, never verified. A mismatch is drift on either
+        # boundary is unverified, never verified. A mismatch is drift on either
         # side, because Apply writes the values regardless.
         $delegation = Test-WinEnvTerminalDelegation -Terminal $manifest.Terminal -Build $hostBuild
         if (-not $delegation.Matches) { $drift.Add('default terminal delegation') }
-        if ($delegation.Unverified) { $unverifiedDetection.Add("default terminal delegation: $($delegation.Unverified)") }
+        if ($delegation.Unverified) {
+            $item = "default terminal delegation: $($delegation.Unverified)"
+            Add-UnverifiedEvidence -Category $delegation.EvidenceCategory -Item $item
+        }
     }
 
     # One place decides what this run's status is, so Apply and the check rank
-    # drift, undecided items, and REQUIRE_NATIVE the same way. Everything that
-    # can drift or go undecided has been collected by here.
-    $runStatus = Get-WinEnvCheckStatus -DriftCount $drift.Count -UnverifiedCount ($unverified.Count + $unverifiedDetection.Count) -RequireNative:$requireNative
+    # drift, unverified items, and REQUIRE_NATIVE the same way. Every Appx and
+    # terminal-delegation reason has been categorized and every other
+    # unverified reason has been collected by here.
+    $unverifiedCount = $unverified.Count + $unavailableObservation.Count + $knownSupportLimit.Count
+    $runStatus = Get-WinEnvCheckStatus -DriftCount $drift.Count -UnverifiedCount $unverifiedCount -RequireNative:$requireNative
     $mode = if ($Check) { 'check' } else { 'verification' }
     if ($runStatus -eq 1) {
         # The summary comes first on the one path where completeness is the
         # point: the operator loses the selection and the drift list otherwise.
         Write-Summary -Mode $mode
-        throw ('Detection could not be completed on this host and REQUIRE_NATIVE is set: ' +
-            (@($unverified) + @($unverifiedDetection) -join '; ') + '.')
+        throw ('Native evidence is incomplete on this host and REQUIRE_NATIVE is set: ' +
+            (@(Get-UnverifiedEvidenceLine) -join '; ') + '.')
     }
 
     if (-not $shouldApply) {

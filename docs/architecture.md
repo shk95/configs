@@ -123,6 +123,14 @@ from the inbox system path. The package name crosses UTF-8 stdin as data and
 only a validated name, presence and first-package version cross back; this
 does not make the module or the other management scripts 5.1-compatible.
 
+Windows Appx and terminal-delegation summaries preserve why their evidence is
+unverified. An Appx or required support value that could not be read is an
+unavailable observation; a typed terminal support result below its documented
+condition is a known support limit. Both retain the existing unverified status
+and exit ranking, while only the first is described as undecided. Normal output
+and `REQUIRE_NATIVE` failure output use the same categorized reason list, so
+changing presentation cannot drop or count one of those reasons twice.
+
 The source manifest and every owned payload live below `windows/desired/`.
 PowerShell reads that source directly; there is no Nix-rendered Windows
 consumer tree.

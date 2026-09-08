@@ -5,6 +5,7 @@ scope: windows
 status: accepted
 issue: #53
 issue: #54
+issue: #208
 source: 9f1e8ce:docs/status.md § Windows 10 support boundary
 
 Windows 10 was two reported symptoms rather than a recorded boundary. A sweep
@@ -57,3 +58,22 @@ the 69 itself was not observable there (`drift-outranks-unverified.md`).
 The native Pester suite passed (219, 11 skipped) and
 `check-desired-state.ps1` was valid. A host at or above 19045.3031 has not
 been observed; the issue's upper-side evidence is still owed.
+
+2026-09-08: #208 keeps the evidence state and support boundary while making
+their cause visible. `Test-WinEnvTerminalDelegation` derives an internal
+category from the typed support result: false is `KnownSupportLimit`, null is
+`UnavailableObservation`, and true has no unverified reason. `setup.ps1`
+formats unavailable observations and known support limits on separate lines
+and uses the same lines in its `REQUIRE_NATIVE` failure. It never classifies
+localized reason text. The blanket presence suffix was removed because it
+described a determined build boundary as though a package query had failed.
+Counts and the 0/2/69/1 ranking remain unchanged.
+
+On the same build 19044.7663 host used for #207, with
+`core,font,zellij,terminal,powertoys` resolved, the post-fallback input to this
+change contained only the known build boundary. Checks launched from both
+PowerShell 7 and Windows PowerShell 5.1 returned 2 for independent drift with
+empty stderr, and printed
+`known support limit: default terminal delegation: Windows build 19044 is
+below the documented boundary ...`. `REQUIRE_NATIVE=1` returned 1 and used the
+same category and reason in its failure. Apply remains untested.

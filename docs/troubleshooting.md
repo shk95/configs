@@ -667,9 +667,12 @@ On build 19044.7663 on 2026-09-08, the isolated queries returned Terminal
 1.24.11911.0 and Command Palette 0.12.12365.0 in 604--693 ms, including a
 successful absent control. Checks launched separately from Windows PowerShell
 5.1 and PowerShell 7 both stopped reporting Appx as unverified. The build is
-still below the default-terminal delegation boundary, so that separate warning
-and the existing 0/2/69/1 ranking remain. These diagnostic commands do not
-import compatibility mode or prove an Apply.
+still below the default-terminal delegation boundary, so the summary reports
+`known support limit: default terminal delegation: Windows build 19044 ...`.
+If the required build, revision or Terminal version cannot be read, it instead
+reports `unavailable observation`; only an actual unavailable observation is
+described as undecided. Both keep the existing 0/2/69/1 ranking. These
+diagnostic commands do not import compatibility mode or prove an Apply.
 
 ### `· unverified: this host has no nix`
 

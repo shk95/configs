@@ -806,6 +806,27 @@ function Get-WinEnvCheckStatus {
     return 0
 }
 
+function Format-WinEnvUnverifiedEvidence {
+    # Keep the three causes visible without changing their shared unverified
+    # rank. setup.ps1 uses these exact lines in both its normal summary and
+    # REQUIRE_NATIVE failure so neither route can relabel or drop an item.
+    param(
+        [AllowEmptyCollection()][string[]] $Source = @(),
+        [AllowEmptyCollection()][string[]] $UnavailableObservation = @(),
+        [AllowEmptyCollection()][string[]] $KnownSupportLimit = @()
+    )
+
+    $lines = [System.Collections.Generic.List[string]]::new()
+    if ($Source.Count) { $lines.Add('unverified: ' + ($Source -join ', ')) }
+    if ($UnavailableObservation.Count) {
+        $lines.Add('unavailable observation: ' + ($UnavailableObservation -join ', '))
+    }
+    if ($KnownSupportLimit.Count) {
+        $lines.Add('known support limit: ' + ($KnownSupportLimit -join ', '))
+    }
+    return $lines.ToArray()
+}
+
 function Compare-WinEnvVersion {
     param(
         [Parameter(Mandatory)][string] $RepositoryVersion,
@@ -3891,10 +3912,21 @@ function Test-WinEnvTerminalDelegation {
         }
     }
 
+    $evidenceCategory = if ($support.Supported -eq $true) {
+        $null
+    }
+    elseif ($support.Supported -eq $false) {
+        'KnownSupportLimit'
+    }
+    else {
+        'UnavailableObservation'
+    }
+
     return [pscustomobject]@{
-        Matches    = $matches
-        Supported  = $support.Supported
-        Unverified = $unverified
+        Matches          = $matches
+        Supported        = $support.Supported
+        Unverified       = $unverified
+        EvidenceCategory = $evidenceCategory
     }
 }
 
