@@ -25,6 +25,9 @@ $script:WinEnvParser = @('Json', 'Ini', 'PowerShell', 'Kdl', 'Lua', 'Text')
 # scope defaults rather than inline calls so that every outcome, including the
 # one a given host cannot produce, has a fixture. Nothing but a test passes
 # anything else.
+# The literal 0x80131539 symptom and the route-by-route diagnostic commands
+# live in docs/troubleshooting.md; this remains the production route #199
+# investigated, not an implicit compatibility import.
 $script:DefaultAppxQuery = { param([string] $PackageName) Get-AppxPackage -Name $PackageName -ErrorAction SilentlyContinue }
 $script:DefaultRegistrationQuery = { param([string] $PackageId) Get-WinGetRegistration -Id $PackageId }
 

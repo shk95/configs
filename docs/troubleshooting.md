@@ -602,6 +602,67 @@ fails the same way here (INV unixlike/generated-config-key-in-schema).
 
 ## Checks
 
+### `The 'Get-AppxPackage' command was found in the module 'Appx', but the module could not be loaded due to the following error: [Operation is not supported on this platform. (0x80131539)]`
+
+This is a module-loading failure, not evidence that the queried package is
+absent. On Windows 10 build 19044.7663 with the inbox Appx module 2.0.1.0,
+the production PowerShell 7.6.5 autoload query fails this way even with
+`-ErrorAction SilentlyContinue`; an explicit default `Import-Module Appx`
+fails with the same platform error. In the same non-elevated user context,
+Windows PowerShell 5.1 and an explicit PowerShell 7 compatibility import both
+distinguish installed packages from an intentionally nonexistent control.
+
+Run the same query in fresh `powershell.exe -NoProfile` and
+`pwsh.exe -NoProfile` sessions. Do not add `-AllUsers` or elevation:
+
+```powershell
+$names = 'Microsoft.WindowsTerminal', 'Microsoft.CommandPalette', 'WinEnv.Nonexistent.Appx.Control'
+$PSVersionTable | Select-Object PSVersion, PSEdition
+Get-Module Appx -ListAvailable | Select-Object Name, Version, Path, CompatiblePSEditions
+foreach ($name in $names) {
+    try {
+        $packages = @(Get-AppxPackage -Name $name -ErrorAction Stop)
+        [pscustomobject]@{ Name = $name; Present = $packages.Count -gt 0; Version = $packages.Version }
+    }
+    catch {
+        $_ | Select-Object FullyQualifiedErrorId, CategoryInfo, Exception
+    }
+}
+Get-Command Get-AppxPackage -ErrorAction SilentlyContinue |
+    Select-Object Name, CommandType, Source, ModuleName
+Get-PSSession -Name WinPSCompatSession -ErrorAction SilentlyContinue
+```
+
+Test the explicit compatibility route only in a separate disposable PowerShell
+7 session, then remove its proxy module:
+
+```powershell
+Import-Module Appx -UseWindowsPowerShell -ErrorAction Stop
+Get-AppxPackage -Name Microsoft.WindowsTerminal -ErrorAction Stop |
+    Select-Object Name, Version
+Get-PSSession -Name WinPSCompatSession
+Remove-Module Appx
+```
+
+That route returns deserialized objects, turns the package `Version` into a
+string, shadows `Get-AppxPackage` with a proxy function, and closes the
+`WinPSCompatSession` when the proxy module is removed. A fresh isolated
+`powershell.exe` subprocess returning only package name, presence and version
+as JSON also answered correctly on the observed host. Its caller must treat a
+non-zero process exit, stderr, invalid JSON or encoding failure as an
+unavailable query rather than absence.
+
+The current production behavior remains deliberately conservative:
+
+```powershell
+.\windows\win-env.ps1 check -Feature terminal,powertoys
+```
+
+PowerShell 7's default-route failure is reported as an unverified Appx
+detection. A future fallback needs a separately accepted detection-policy
+change; these diagnostic commands do not silently make compatibility mode a
+production prerequisite.
+
 ### `· unverified: this host has no nix`
 
 Not a failure. The Unix-like checks cannot run without Nix, and a check that
