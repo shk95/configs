@@ -179,6 +179,61 @@ Sources:
   https://learn.microsoft.com/en-us/powershell/windows/module-compatibility
 - Windows Terminal product repository — https://github.com/microsoft/terminal
 
+### `.wslconfig` prerequisites
+
+The two existing build variants suffice for the declared policy (#198):
+`files/wsl/mirrored-networking.wslconfig` at build >=22621 and
+`files/wsl/nat-networking.wslconfig` below it, including Windows 11 build
+22000. The latter declares only memory reclamation, not an explicit NAT
+mode. Application versions validate content; they do not select a third
+payload. This table describes the four managed keys and their DNS dependency.
+
+| Key | Accepted section | Minimum WSL application | Windows/dependency condition |
+| --- | --- | --- | --- |
+| `networkingMode=mirrored` | `[wsl2]`; legacy `[experimental]` | 2.0.5 for `[wsl2]`; 2.0.0 for `[experimental]` | Build >=22621; capture must match the selected source's network policy |
+| `hostAddressLoopback=true` | `[experimental]` | 2.0.0 | Build >=22621; active only with mirrored networking |
+| `bestEffortDnsParsing=true` | `[experimental]` | 2.0.0 | Build >=22621; active only with DNS tunneling |
+| `autoMemoryReclaim=gradual` | `[experimental]` | 2.0.0 | Both build variants; not Windows 11-only |
+| `dnsTunneling` (dependency) | `[wsl2]`; legacy `[experimental]` | 2.0.5 for `[wsl2]`; 2.0.0 for `[experimental]` | Build >=22621; independent of mirrored selection |
+
+Sources: [current configuration reference](https://learn.microsoft.com/en-us/windows/wsl/wsl-config),
+[WSL 2.0.0 release](https://github.com/microsoft/WSL/releases/tag/2.0.0),
+[the accompanying September 2023 documentation of the dependent options](https://github.com/MicrosoftDocs/WSL/commit/7d8758bf79c76d424582e8758dbc04b42118b369),
+and [2.0.5 section promotion, retaining legacy aliases](https://github.com/microsoft/WSL/releases/tag/2.0.5).
+The 2.0.0 boundary for the dependent options comes from that release's
+accompanying documentation, not a claim that today's section layout existed
+in every older application release.
+
+Capture and read-only support reporting check the known key/section gates.
+An absent or legacy `wsl.exe --version` response leaves application evidence
+unknown. Capture refuses it for an application-gated key, including when the
+file matches already; ordinary memory/processor tuning alone needs no assumed
+modern application version. Supported inactive DNS settings are retained with
+an explanation. When `dnsTunneling` is omitted, no default is inferred:
+[2.1.0 enabled it](https://github.com/microsoft/WSL/releases/tag/2.1.0),
+[2.1.1 disabled it](https://github.com/microsoft/WSL/releases/tag/2.1.1), and
+[2.2.1 enabled it again](https://github.com/microsoft/WSL/releases/tag/2.2.1).
+Unknown keys are outside this small check and retain their text. Managed
+scalars with escapes are reported as undetermined, not known unsupported;
+continuations remain outside the existing INI validator's grammar.
+
+Case-insensitive names/values, quoted scalars, unquoted `#` comments and
+first-occurrence precedence across aliases follow the
+[WSL configuration parser](https://github.com/microsoft/WSL/blob/master/src/shared/configfile/configfile.cpp).
+The existing INI syntax validator and Text comparison remain in place; this
+check does not reformat or silently remove a key. Network and DNS runtime
+behavior remain unverified even when all documentary prerequisites pass.
+The current reference documents NAT-to-VirtioProxy fallback since 2.3.25 and
+bridged deprecation since 2.4.5; neither changes source selection here.
+
+The lower side was observed for #198 on Windows 10 build 19044.7663 with
+WSL application 2.7.13.0 and PowerShell 7.6.5: the native preview selected the
+lower source and preserved host tuning; read-only check reported file drift
+separately from the supported prerequisites. Both desired payloads and the
+host file were unchanged. Native evidence for the >=22621 mirrored file
+remains owned by #121; mocks cannot close it. #198 adds prerequisite checks,
+not a WSL update, restart, firewall change or a change to Apply triggers.
+
 The `.wslconfig` runtime effect is permanently unverifiable on this host:
 only the deployed file's content and its agreement with the host's Windows
 build can ever be checked
@@ -203,7 +258,7 @@ are disabled.
 The merge gate is CI's `Required checks`, demanded whenever a change falls
 in a domain that check covers.
 
-The invariant registry holds 55 entries, none pending and no fixture unit
+The invariant registry holds 56 entries, none pending and no fixture unit
 untagged, and `tool/version-control/invariants` enforces C10 (no untagged
 fixture unit) by default. Enforced is not the same as held: the manual
 `INV windows/support-boundary-named` records that the terminal delegation

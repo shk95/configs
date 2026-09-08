@@ -137,3 +137,34 @@ Sources for the claims above:
   https://github.com/microsoft/WSL/releases/tag/2.0.0
 - `Environment.OSVersion` —
   https://learn.microsoft.com/en-us/dotnet/api/system.environment.osversion
+
+2026-09-07 (#198): selecting a filename is not proof that a host's content
+belongs there. Capture now checks the four managed settings and their DNS
+dependency against Windows build, WSL application version and INI section
+before its early unchanged result. The current support table and authoritative
+version/section sources are in `docs/status.md`. The application's 2.0.5
+promotion of networkingMode and dnsTunneling to `[wsl2]` means their 2.0.0
+feature introduction alone cannot validate today's payload layout.
+
+The two sources, one Id/target, shared resolver, Text comparison, schemas,
+project version, hash coverage and Apply triggers remain unchanged. The lower
+file leaves networking unspecified: the earlier description of a default NAT
+stack is not runtime evidence, and NAT may fall back to VirtioProxy. An unknown
+build still resolves to the lower source for Apply but is unverified for
+read-only support reporting and refused for capture. The earlier claim that
+this source is universally honoured is conditional on its application's
+support for autoMemoryReclaim, now explicitly checked.
+
+Capture must preserve the selected source's network policy. A >=22621 host
+requesting NAT or omitting mirrored is refused as a policy mismatch requiring
+a reviewed desired-state edit, not an invalid Windows configuration. A modern
+host may still capture the supported legacy experimental aliases. Compatible
+tuning and text are preserved, and unmodelled keys are identified without
+being classified as incompatible. A supported mirrored file with explicitly
+disabled DNS tunneling retains bestEffortDnsParsing with an inactive-option
+explanation; omitted DNS tunneling is not filled from an assumed historical
+default. Read-only check evaluates desired and host content prerequisites
+independently of file drift, so drift retains status 2 and REQUIRE_NATIVE
+still turns unverified evidence into failure. Runtime effect remains outside
+this check's evidence. The repository maintainer owns the network policy;
+adding another policy for the same Windows build remains separate work.

@@ -2567,8 +2567,12 @@ Describe 'capture' {
             Sources = @(@{ MinimumBuild = 22621; Source = $upper }, @{ Source = $lower })
         }
 
-        (Get-WinEnvCapturePlan -Definition $definition -RepositoryRoot $CaptureRoot `
-                -Build 22631 -HostPath $CaptureHost).Source | Should -Be $upper
+        [IO.File]::WriteAllText($target, "[wsl2]`nnetworkingMode=Mirrored`nmemory=8GB`n")
+        $above = Get-WinEnvCapturePlan -Definition $definition -RepositoryRoot $CaptureRoot `
+            -Build 22631 -HostPath $CaptureHost -WslVersion '2.0.5'
+        $above.Status | Should -Be 'Captured'
+        $above.Source | Should -Be $upper
+        [IO.File]::WriteAllText($target, "[wsl2]`nmemory=8GB`n")
         $below = Get-WinEnvCapturePlan -Definition $definition -RepositoryRoot $CaptureRoot `
             -Build 19045 -HostPath $CaptureHost
         $below.Source | Should -Be $lower

@@ -58,6 +58,7 @@ $unmanaged = @()
 # selects the variant every supported build honours.
 $hostBuild = $null
 $conditionalFiles = @()
+$wslInformation = [System.Collections.Generic.List[string]]::new()
 
 function Test-Sources {
     param([array] $Definitions)
@@ -95,6 +96,7 @@ function Write-Summary {
         Write-Host ('  Windows build ' + $build + ': ' +
             (($conditionalFiles | ForEach-Object { "$($_.Id) from $($_.Source)" }) -join ', '))
     }
+    foreach ($item in $wslInformation) { Write-Host ('  wslConfig: ' + $item) }
     # An undecided item is not a clean run, so it suppresses the clean line.
     if (-not $changed.Count -and -not $drift.Count -and -not $unverified.Count -and -not $unverifiedDetection.Count) {
         Write-Host '  no changes or drift detected'
@@ -220,8 +222,23 @@ try {
     }
 
     foreach ($definition in $managedFiles) {
-        if (-not (Test-WinEnvManagedFile -Definition $definition -RepositoryRoot $desiredStateRoot)) {
-            $drift.Add("$($definition.Id) settings")
+        $matches = Test-WinEnvManagedFile -Definition $definition -RepositoryRoot $desiredStateRoot
+        if (-not $matches) { $drift.Add("$($definition.Id) settings") }
+        if ($Check -and [string]$definition.Id -eq 'wslConfig') {
+            # INV windows/check-exit-contract — prerequisites and known file
+            # drift are independent evidence. Apply triggers stay unchanged.
+            $wslVersion = Get-WinEnvWslVersion
+            $versionText = if ($null -eq $wslVersion) { 'undetermined' } else { [string]$wslVersion }
+            $wslInformation.Add("WSL application $versionText; source agreement: $matches; runtime effect: unverified")
+            $texts = @{ desired = Get-Content -LiteralPath (Join-Path $desiredStateRoot $definition.Source) -Raw -Encoding utf8 }
+            $target = Resolve-WinEnvPath -Path $definition.Target
+            if (Test-Path -LiteralPath $target -PathType Leaf) { $texts.host = Get-Content -LiteralPath $target -Raw -Encoding utf8 }
+            foreach ($side in @('desired', 'host')) {
+                if (-not $texts.ContainsKey($side)) { continue }
+                $support = Test-WinEnvWslConfigSupport -Content $texts[$side] -Build $hostBuild -WslVersion $wslVersion
+                foreach ($reason in $support.Unverified) { $unverified.Add("wslConfig $side prerequisite: $reason") }
+                foreach ($item in $support.Information) { $wslInformation.Add("${side}: $item") }
+            }
         }
     }
     $hostProfile = Get-WinEnvPowerShellProfilePath

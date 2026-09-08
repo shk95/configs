@@ -307,20 +307,46 @@ win-env check summary
   Windows build 22631: wslConfig from files/wsl/mirrored-networking.wslconfig
 ```
 
-A host whose build cannot be determined gets the lower payload, which every
-supported build honours. The build is the discriminator throughout; the major
-version is `10` on Windows 10 and Windows 11 alike and is never compared.
+The resolver keeps the lower payload when the build is undetermined; capture
+refuses that case, and `check` reports the missing build evidence as unverified.
+The major version is `10` on Windows 10 and Windows 11 alike and is never used
+for source selection. The lower payload contains only `autoMemoryReclaim`; its
+NAT filename does not assert which networking stack is running.
 
 A host that crosses the bound later, because Windows Update moved it, is not
 redeployed on its own: the desired state did not change, only the host did.
 `-Check` reports it as `wslConfig settings` drift and exits 2, and
 `.\windows\win-env.ps1 apply -Force` writes the payload the new build honours.
 
-`.wslconfig` is read by the WSL VM only when it starts, and these commands never
-restart it, so a passing check means the file on disk matches the payload this
-host's build should have. It is not evidence that mirrored networking is
-running. `docs/decisions/wslconfig-selected-by-windows-build.md` records the
-per-key gate table behind the split.
+`check -Feature wsl` reports source agreement separately from Windows build
+and WSL **application** version prerequisites. Missing or unsupported
+prerequisites are unverified (69 when there is no drift); known drift still
+returns 2, and `REQUIRE_NATIVE=1` makes unverified evidence a failure (1).
+The WSL application version comes from `wsl.exe --version`, not the
+WSL1/WSL2 mode of a distribution. The key/section support table is in
+`docs/status.md`.
+
+Preview a host edit with:
+
+```powershell
+.\windows\win-env.ps1 capture -Id wslConfig -WhatIf
+```
+
+Capture validates those prerequisites before reporting even an unchanged
+file. It refuses NAT or an omitted mirrored mode when the selected payload
+requests mirrored networking, identifying the payload and asking for a
+reviewed desired-state edit to change that policy. This is a repository policy
+mismatch, not a claim that NAT is invalid on Windows 11. Compatible memory/CPU
+tuning, comments and formatting stay intact. Unknown keys are preserved and
+identified as outside this support check rather than called unsupported.
+
+A supported mirrored configuration with `dnsTunneling=false` remains capturable:
+`bestEffortDnsParsing=true` is then inactive, and the preview explains this
+without deleting either setting. An omitted `dnsTunneling` is reported without
+assuming an older release's default. No check here certifies the running
+network stack or DNS behavior: `.wslconfig` is read at VM startup, and these
+commands never restart WSL. Apply triggers and source selection remain as
+recorded in `docs/decisions/wslconfig-selected-by-windows-build.md`.
 
 ### Capture a change made in the application
 
