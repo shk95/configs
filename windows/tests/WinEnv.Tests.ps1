@@ -1469,6 +1469,12 @@ Describe 'Appx detection capability' {
         $uninstalled = Get-WinEnvPackageStatus -Package $AppxPackage -AppxQuery $AbsentQuery -RegistrationQuery $Unregistered
         $uninstalled.Missing | Should -Be $true
         $uninstalled.Conflict | Should -Be $false
+
+        $storeOnly = Get-WinEnvPackageStatus -Package $AppxPackage -AppxQuery $PresentQuery -RegistrationQuery $Unregistered
+        $storeOnly.Registered | Should -Be $false
+        $storeOnly.Detected | Should -Be $true
+        $storeOnly.Missing | Should -Be $false
+        $storeOnly.Conflict | Should -Be $true
     }
 
     It 'reports an unusable module as unverified instead of a missing package' {
@@ -1523,6 +1529,260 @@ Describe 'Appx detection capability' {
         # It promotes nothing that was decided.
         (Get-WinEnvCheckStatus -DriftCount 0 -UnverifiedCount 0 -RequireNative) | Should -Be 0
         (Get-WinEnvCheckStatus -DriftCount 1 -UnverifiedCount 0 -RequireNative) | Should -Be 2
+    }
+}
+
+Describe 'isolated Appx fallback transport' {
+    It 'INV windows/appx-fallback-bounded-and-isolated: pins the system executable and isolated child options' {
+        InModuleScope WinEnv -Parameters @{ TestRoot = $TestDrive } {
+            param($TestRoot)
+            $expectedExecutable = Join-Path $TestRoot 'System32\WindowsPowerShell\v1.0\powershell.exe'
+            [void](New-Item -ItemType Directory -Path (Split-Path -Parent $expectedExecutable) -Force)
+            [IO.File]::WriteAllText($expectedExecutable, '')
+            $resolved = Resolve-AppxPowerShell51Path -SystemRoot $TestRoot
+            $resolved | Should -Be ([IO.Path]::GetFullPath($expectedExecutable))
+
+            $payload = 'exit 0'
+            $encodedPayload = [Convert]::ToBase64String([Text.Encoding]::Unicode.GetBytes($payload))
+            $info = New-AppxQueryProcessStartInfo -ExecutablePath $resolved -Payload $payload
+            $info.FileName | Should -Be $resolved
+            (@($info.ArgumentList) -join '|') | Should -Be "-NoProfile|-NonInteractive|-EncodedCommand|$encodedPayload"
+            $info.UseShellExecute | Should -Be $false
+            $info.CreateNoWindow | Should -Be $true
+            $info.RedirectStandardInput | Should -Be $true
+            $info.RedirectStandardOutput | Should -Be $true
+            $info.RedirectStandardError | Should -Be $true
+            $info.UserName | Should -BeNullOrEmpty
+            $info.Verb | Should -BeNullOrEmpty
+
+            $checkedInPayload = Get-Content -LiteralPath $script:AppxQueryPayloadPath -Raw
+            $checkedInPayload | Should -Match 'Get-AppxPackage\s+-Name'
+            $checkedInPayload | Should -Not -Match '(?i)(?:^|\s)-AllUsers(?:\s|$)'
+        }
+    }
+
+    It 'INV windows/appx-fallback-bounded-and-isolated: bypasses fallback for present and absent primary results' {
+        InModuleScope WinEnv {
+            $fallbackCounter = [pscustomobject]@{ Calls = 0 }
+            $fallback = {
+                param([string] $Name)
+                $fallbackCounter.Calls++
+                [pscustomobject]@{ Name = $Name; Version = [version]'9.9' }
+            }
+
+            $present = @(Invoke-AppxQuery -Name 'Vendor.Terminal' `
+                    -PrimaryQuery { param($Name) [pscustomobject]@{ Name = $Name; Version = [version]'1.2.3' } } `
+                    -FallbackQuery $fallback)
+            $present.Count | Should -Be 1
+            $present[0].Version | Should -Be ([version]'1.2.3')
+
+            $absent = @(Invoke-AppxQuery -Name 'Vendor.Absent' -PrimaryQuery { param($Name) } -FallbackQuery $fallback)
+            $absent.Count | Should -Be 0
+            $fallbackCounter.Calls | Should -Be 0
+        }
+    }
+
+    It 'INV windows/appx-fallback-bounded-and-isolated: falls back on terminating and non-terminating failures and discards partial output' {
+        InModuleScope WinEnv {
+            $fallbackCounter = [pscustomobject]@{ Calls = 0 }
+            $fallback = {
+                param([string] $Name)
+                $fallbackCounter.Calls++
+                [pscustomobject]@{ Name = $Name; Version = [version]'2.4.6' }
+            }
+
+            $terminating = @(Invoke-AppxQuery -Name 'Vendor.Terminal' `
+                    -PrimaryQuery { throw 'primary terminating failure' } -FallbackQuery $fallback)
+            $terminating.Count | Should -Be 1
+            $terminating[0].Version | Should -Be ([version]'2.4.6')
+
+            $nonTerminating = @(Invoke-AppxQuery -Name 'Vendor.Terminal' -PrimaryQuery {
+                    param($Name)
+                    [pscustomobject]@{ Name = 'partial'; Version = [version]'0.0' }
+                    Write-Error 'primary non-terminating failure'
+                } -FallbackQuery $fallback)
+            $nonTerminating.Count | Should -Be 1
+            $nonTerminating[0].Name | Should -Be 'Vendor.Terminal'
+            $fallbackCounter.Calls | Should -Be 2
+
+            $absentCounter = [pscustomobject]@{ Calls = 0 }
+            $absentProbe = Get-WinEnvAppxPresence -Name 'Vendor.Absent' -Query {
+                Invoke-AppxQuery -Name 'Vendor.Absent' `
+                    -PrimaryQuery { throw 'primary unavailable' } `
+                    -FallbackQuery { param($Name) $absentCounter.Calls++ }
+            }
+            $absentProbe.Usable | Should -Be $true
+            $absentProbe.Present | Should -Be $false
+            $absentCounter.Calls | Should -Be 1
+        }
+    }
+
+    It 'INV windows/appx-fallback-bounded-and-isolated: preserves both route failures as one undecidable reason' {
+        InModuleScope WinEnv {
+            $probe = Get-WinEnvAppxPresence -Name 'Vendor.Terminal' -Query {
+                Invoke-AppxQuery -Name 'Vendor.Terminal' `
+                    -PrimaryQuery { throw 'primary route refused' } `
+                    -FallbackQuery { throw 'fallback route refused' }
+            }
+            $probe.Usable | Should -Be $false
+            ($null -eq $probe.Present) | Should -Be $true
+            $probe.Reason | Should -Match 'primary route refused'
+            $probe.Reason | Should -Match 'fallback route refused'
+        }
+    }
+
+    It 'INV windows/appx-fallback-bounded-and-isolated: validates present and absent response contracts' {
+        InModuleScope WinEnv {
+            $present = @(ConvertFrom-AppxQueryResponse -Name 'Vendor.Terminal' -ProcessResult ([pscustomobject]@{
+                        ExitCode = 0
+                        StdErr   = ''
+                        StdOut   = '{"SchemaVersion":1,"Name":"Vendor.Terminal","Present":true,"Version":"1.24.3.0"}'
+                    }))
+            $present.Count | Should -Be 1
+            $present[0].Name | Should -Be 'Vendor.Terminal'
+            $present[0].Version | Should -Be ([version]'1.24.3.0')
+
+            $absent = @(ConvertFrom-AppxQueryResponse -Name 'Vendor.Absent' -ProcessResult ([pscustomobject]@{
+                        ExitCode = 0
+                        StdErr   = ''
+                        StdOut   = '{"SchemaVersion":1,"Name":"Vendor.Absent","Present":false,"Version":null}'
+                    }))
+            $absent.Count | Should -Be 0
+        }
+    }
+
+    It 'INV windows/appx-fallback-bounded-and-isolated: rejects every invalid process and JSON result' {
+        InModuleScope WinEnv {
+            $invalid = @(
+                @{ Label = 'nonzero exit'; Result = @{ ExitCode = 7; StdErr = ''; StdOut = '{}' } },
+                @{ Label = 'stderr'; Result = @{ ExitCode = 0; StdErr = 'warning'; StdOut = '{}' } },
+                @{ Label = 'empty stdout'; Result = @{ ExitCode = 0; StdErr = ''; StdOut = '' } },
+                @{ Label = 'malformed JSON'; Result = @{ ExitCode = 0; StdErr = ''; StdOut = '{' } },
+                @{ Label = 'array JSON'; Result = @{ ExitCode = 0; StdErr = ''; StdOut = '[]' } },
+                @{ Label = 'wrong shape'; Result = @{ ExitCode = 0; StdErr = ''; StdOut = '{"SchemaVersion":1,"Name":"Vendor.Terminal","Present":true}' } },
+                @{ Label = 'wrong schema type'; Result = @{ ExitCode = 0; StdErr = ''; StdOut = '{"SchemaVersion":"1","Name":"Vendor.Terminal","Present":true,"Version":"1.0"}' } },
+                @{ Label = 'wrong name'; Result = @{ ExitCode = 0; StdErr = ''; StdOut = '{"SchemaVersion":1,"Name":"Vendor.Other","Present":true,"Version":"1.0"}' } },
+                @{ Label = 'wrong presence type'; Result = @{ ExitCode = 0; StdErr = ''; StdOut = '{"SchemaVersion":1,"Name":"Vendor.Terminal","Present":"true","Version":"1.0"}' } },
+                @{ Label = 'absent version'; Result = @{ ExitCode = 0; StdErr = ''; StdOut = '{"SchemaVersion":1,"Name":"Vendor.Terminal","Present":false,"Version":"1.0"}' } },
+                @{ Label = 'invalid version'; Result = @{ ExitCode = 0; StdErr = ''; StdOut = '{"SchemaVersion":1,"Name":"Vendor.Terminal","Present":true,"Version":"not-a-version"}' } }
+            )
+            foreach ($case in $invalid) {
+                { ConvertFrom-AppxQueryResponse -Name 'Vendor.Terminal' -ProcessResult ([pscustomobject]$case.Result) } |
+                    Should -Throw -Because $case.Label
+            }
+
+            $nonzero = [pscustomobject]@{ ExitCode = 7; StdErr = 'fallback detail'; StdOut = '' }
+            { ConvertFrom-AppxQueryResponse -Name 'Vendor.Terminal' -ProcessResult $nonzero } |
+                Should -Throw '*status 7*fallback detail*'
+        }
+    }
+
+    It 'INV windows/appx-fallback-bounded-and-isolated: refuses missing and unlaunchable executables' {
+        InModuleScope WinEnv -Parameters @{ TestRoot = $TestDrive } {
+            param($TestRoot)
+            $missing = Join-Path $TestRoot 'missing-powershell.exe'
+            { Invoke-AppxQueryChildProcess -ExecutablePath $missing -Payload 'exit 0' -Request '{}' -TimeoutMilliseconds 1000 } |
+                Should -Throw '*not found*'
+
+            $notExecutable = Join-Path $TestRoot 'not-an-executable.txt'
+            [IO.File]::WriteAllText($notExecutable, 'plain text')
+            { Invoke-AppxQueryChildProcess -ExecutablePath $notExecutable -Payload 'exit 0' -Request '{}' -TimeoutMilliseconds 1000 } |
+                Should -Throw '*could not start*'
+        }
+    }
+
+    It 'INV windows/appx-fallback-bounded-and-isolated: kills the child when the internal timeout expires' {
+        InModuleScope WinEnv -Parameters @{ TestRoot = $TestDrive } {
+            param($TestRoot)
+            $pidPath = Join-Path $TestRoot 'timed-out.pid'
+            $request = @{ PidPath = $pidPath } | ConvertTo-Json -Compress
+            $payload = @'
+$request = [Console]::In.ReadToEnd() | ConvertFrom-Json
+[IO.File]::WriteAllText([string]$request.PidPath, [string]$PID)
+Start-Sleep -Seconds 30
+'@
+            $pwsh = (Get-Process -Id $PID).Path
+            { Invoke-AppxQueryChildProcess -ExecutablePath $pwsh -Payload $payload `
+                    -Request $request -TimeoutMilliseconds 2000 } | Should -Throw '*timed out*'
+            Test-Path -LiteralPath $pidPath | Should -Be $true
+            $childPid = [int](Get-Content -LiteralPath $pidPath -Raw)
+            Get-Process -Id $childPid -ErrorAction SilentlyContinue | Should -BeNullOrEmpty
+        }
+    }
+
+    It 'INV windows/appx-fallback-bounded-and-isolated: bounds output drains after the direct child exits' {
+        InModuleScope WinEnv -Parameters @{ TestRoot = $TestDrive } {
+            param($TestRoot)
+            $pidPath = Join-Path $TestRoot 'descendant.pid'
+            $request = @{ PidPath = $pidPath } | ConvertTo-Json -Compress
+            $payload = @'
+$request = [Console]::In.ReadToEnd() | ConvertFrom-Json
+$info = [Diagnostics.ProcessStartInfo]::new((Get-Process -Id $PID).Path)
+$info.UseShellExecute = $false
+$info.Arguments = '-NoProfile -NonInteractive -Command "Start-Sleep -Seconds 5"'
+$descendant = [Diagnostics.Process]::Start($info)
+[IO.File]::WriteAllText([string]$request.PidPath, [string]$descendant.Id)
+exit 0
+'@
+            $pwsh = (Get-Process -Id $PID).Path
+            $watch = [Diagnostics.Stopwatch]::StartNew()
+            try {
+                { Invoke-AppxQueryChildProcess -ExecutablePath $pwsh -Payload $payload `
+                        -Request $request -TimeoutMilliseconds 1000 } | Should -Throw '*timed out*draining*'
+                $watch.Stop()
+                $watch.ElapsedMilliseconds | Should -BeLessThan 3000
+            }
+            finally {
+                $watch.Stop()
+                if (Test-Path -LiteralPath $pidPath) {
+                    $descendantPid = [int](Get-Content -LiteralPath $pidPath -Raw)
+                    Stop-Process -Id $descendantPid -Force -ErrorAction SilentlyContinue
+                }
+            }
+        }
+    }
+
+    It 'INV windows/appx-fallback-bounded-and-isolated: rejects a non-integer request schema before querying Appx' {
+        InModuleScope WinEnv {
+            $payload = Get-Content -LiteralPath $script:AppxQueryPayloadPath -Raw
+            $pwsh = (Get-Process -Id $PID).Path
+            $result = Invoke-AppxQueryChildProcess -ExecutablePath $pwsh -Payload $payload `
+                -Request '{"SchemaVersion":"1","Name":"Vendor.Terminal"}' -TimeoutMilliseconds 5000
+            $result.ExitCode | Should -Be 1
+            $result.StdErr | Should -Match 'SchemaVersion must be an integer'
+            $result.StdOut | Should -BeNullOrEmpty
+        }
+    }
+
+    It 'INV windows/appx-fallback-bounded-and-isolated: rejects invalid UTF-8 from the child' {
+        InModuleScope WinEnv {
+            $payload = @'
+$stream = [Console]::OpenStandardOutput()
+$bytes = [byte[]](0xc3, 0x28)
+$stream.Write($bytes, 0, $bytes.Length)
+'@
+            $pwsh = (Get-Process -Id $PID).Path
+            { Invoke-AppxQueryChildProcess -ExecutablePath $pwsh -Payload $payload `
+                    -Request '{}' -TimeoutMilliseconds 5000 } | Should -Throw
+        }
+    }
+
+    It 'INV windows/appx-fallback-bounded-and-isolated: executes the checked-in payload under Windows PowerShell 5.1 with the name carried as data' {
+        InModuleScope WinEnv -Parameters @{ TestRoot = $TestDrive } {
+            param($TestRoot)
+            if (-not $IsWindows) {
+                Set-ItResult -Skipped -Because 'this host has no Windows PowerShell; the windows-latest CI job runs this case'
+                return
+            }
+
+            $absent = @(Invoke-AppxPowerShell51Query -Name 'WinEnv.Nonexistent.Appx.Control')
+            $absent.Count | Should -Be 0
+
+            $sentinel = Join-Path $TestRoot 'name-was-executed.txt'
+            $name = 'WinEnv.Nonexistent;[IO.File]::WriteAllText("' + $sentinel + '","unsafe")'
+            try { $null = @(Invoke-AppxPowerShell51Query -Name $name) } catch {}
+            Test-Path -LiteralPath $sentinel | Should -Be $false
+        }
     }
 }
 

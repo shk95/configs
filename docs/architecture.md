@@ -113,10 +113,15 @@ no check outcome uses, because the entry point names the scripts and decides
 nothing they decide.
 
 Two shells serve the domain: the one the host ships, which runs the entry
-point and the bootstrap that installs the newer one, and the newer one, which
-runs everything after. A script that can run before the newer shell exists
-stays within the older one, because a host that needs bootstrap is by
-definition a host without it.
+point and the bootstrap that installs the newer one, and PowerShell 7, which
+is the management runtime after bootstrap. A script that can run before the
+newer shell exists stays within the older one, because a host that needs
+bootstrap is by definition a host without it. One narrow capability path also
+uses the older shell after bootstrap: when the default PowerShell 7 Appx query
+fails, detection starts one bounded, same-user Windows PowerShell 5.1 child
+from the inbox system path. The package name crosses UTF-8 stdin as data and
+only a validated name, presence and first-package version cross back; this
+does not make the module or the other management scripts 5.1-compatible.
 
 The source manifest and every owned payload live below `windows/desired/`.
 PowerShell reads that source directly; there is no Nix-rendered Windows
