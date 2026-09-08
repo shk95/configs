@@ -2392,14 +2392,17 @@ Describe 'terminal delegation boundary' {
         $above = Test-Delegation -Build $Windows11_24H2
         $above.Matches | Should -Be $true
         ($null -eq $above.Unverified) | Should -Be $true
+        $above.EvidenceCategory | Should -BeNullOrEmpty
 
         $below = Test-Delegation -Build $Windows10_21H2
         $below.Matches | Should -Be $true
         $below.Unverified | Should -Match 'below'
+        $below.EvidenceCategory | Should -Be 'KnownSupportLimit'
 
         $undetermined = Test-Delegation -Build $null
         $undetermined.Matches | Should -Be $true
         $undetermined.Unverified | Should -Match 'build'
+        $undetermined.EvidenceCategory | Should -Be 'UnavailableObservation'
     }
 
     It 'INV windows/check-exit-contract: a mismatched read-back is drift on either side of the boundary' {
@@ -2430,10 +2433,26 @@ Describe 'terminal delegation boundary' {
         ($null -eq $unusable.Supported) | Should -Be $true
         $unusable.Unverified | Should -Match 'Windows Terminal'
         $unusable.Unverified | Should -Match 'could not be loaded'
+        $unusable.EvidenceCategory | Should -Be 'UnavailableObservation'
         $absent = Test-Delegation -AppxQuery $TerminalAbsentQuery
         $absent.Supported | Should -Be $false
         $absent.Unverified | Should -Match 'not installed'
-        (Test-Delegation -AppxQuery $Terminal116Query).Unverified | Should -Match '1\.17'
+        $absent.EvidenceCategory | Should -Be 'KnownSupportLimit'
+        $old = Test-Delegation -AppxQuery $Terminal116Query
+        $old.Unverified | Should -Match '1\.17'
+        $old.EvidenceCategory | Should -Be 'KnownSupportLimit'
+    }
+
+    It 'INV windows/diagnostic-categories-preserved: derives the category from typed support state' {
+        $known = Test-Delegation -Build $Windows10_21H2 -AppxQuery $TerminalUnusableQuery
+        $known.Supported | Should -Be $false
+        $known.EvidenceCategory | Should -Be 'KnownSupportLimit'
+        $known.Unverified | Should -Not -Match 'could not be loaded'
+
+        $unknown = Test-Delegation -Build $null -AppxQuery $Terminal117Query
+        ($null -eq $unknown.Supported) | Should -Be $true
+        $unknown.EvidenceCategory | Should -Be 'UnavailableObservation'
+        $unknown.Unverified | Should -Match 'build'
     }
 
     It 'treats a read-back that throws as drift rather than aborting' {
@@ -2467,6 +2486,107 @@ Describe 'terminal delegation boundary' {
             $result.Matches | Should -Be $false
             $result.Unverified | Should -Match 'build'
         }
+    }
+}
+
+Describe 'unverified evidence presentation' {
+    BeforeAll {
+        # Exercise the functions setup.ps1 actually runs without dot-sourcing
+        # the host reconciliation around them. Reading their definitions from
+        # its AST makes this fixture fail when production formatting diverges.
+        $setupPath = Join-Path $repositoryRoot 'tools\setup.ps1'
+        $tokens = $null
+        $errors = $null
+        $setupAst = [System.Management.Automation.Language.Parser]::ParseFile(
+            $setupPath, [ref]$tokens, [ref]$errors)
+        if ($errors.Count) { throw ($errors -join [Environment]::NewLine) }
+        foreach ($name in @('Add-UnverifiedEvidence', 'Get-UnverifiedEvidenceLine', 'Write-Summary')) {
+            $definition = @($setupAst.FindAll({
+                        param($node)
+                        $node -is [System.Management.Automation.Language.FunctionDefinitionAst] -and
+                        $node.Name -eq $name
+                    }, $true))
+            if ($definition.Count -ne 1) { throw "setup.ps1 must define $name exactly once." }
+            . ([scriptblock]::Create($definition[0].Extent.Text))
+        }
+    }
+
+    It 'INV windows/diagnostic-categories-preserved: separates unavailable observations from known support limits' {
+        $lines = @(Format-WinEnvUnverifiedEvidence `
+                -UnavailableObservation @('Microsoft.WindowsTerminal: both Appx routes failed') `
+                -KnownSupportLimit @('default terminal delegation: Windows build 19044 is below the documented boundary'))
+
+        $lines | Should -Be @(
+            'unavailable observation: Microsoft.WindowsTerminal: both Appx routes failed',
+            'known support limit: default terminal delegation: Windows build 19044 is below the documented boundary'
+        )
+        ($lines -join "`n") | Should -Not -Match 'neither present nor missing'
+    }
+
+    It 'INV windows/diagnostic-categories-preserved: emits every reason once in the shared summary and failure representation' {
+        $lines = @(Format-WinEnvUnverifiedEvidence `
+                -Source @('zellij: parser unavailable') `
+                -UnavailableObservation @('build could not be determined', 'Appx query failed') `
+                -KnownSupportLimit @('Terminal 1.16 is below 1.17'))
+        $text = $lines -join '; '
+
+        $lines.Count | Should -Be 3
+        foreach ($reason in @('parser unavailable', 'build could not be determined', 'Appx query failed', 'below 1.17')) {
+            ([regex]::Matches($text, [regex]::Escape($reason))).Count | Should -Be 1
+        }
+    }
+
+    It 'INV windows/diagnostic-categories-preserved: runs the actual check and verification summary modes with the right category' {
+        $selected = @('core', 'terminal')
+        $selection = [pscustomobject]@{ Implied = @(); Excluded = @() }
+        $unmanaged = @()
+        $changed = @()
+        $drift = @()
+        $unverified = [System.Collections.Generic.List[string]]::new()
+        $unavailableObservation = [System.Collections.Generic.List[string]]::new()
+        $knownSupportLimit = [System.Collections.Generic.List[string]]::new()
+        $conditionalFiles = @()
+        $wslInformation = @()
+
+        $knownSupportLimit.Add('default terminal delegation: Windows build 19044 is below the boundary')
+        $check = @(& { Write-Summary -Mode 'check' } *>&1 | ForEach-Object { "$_" }) -join "`n"
+        $check | Should -Match 'win-env check summary'
+        $check | Should -Match 'known support limit: default terminal delegation'
+        $check | Should -Not -Match 'unavailable observation:'
+        $check | Should -Not -Match 'neither present nor missing'
+
+        $knownSupportLimit.Clear()
+        $unavailableObservation.Add('the Windows build could not be determined')
+        $verification = @(& { Write-Summary -Mode 'verification' } *>&1 | ForEach-Object { "$_" }) -join "`n"
+        $verification | Should -Match 'win-env verification summary'
+        $verification | Should -Match 'unavailable observation: the Windows build could not be determined'
+        $verification | Should -Not -Match 'known support limit:'
+        $verification | Should -Not -Match 'no changes or drift detected'
+    }
+
+    It 'INV windows/diagnostic-categories-preserved: routes every production reason through its typed category' {
+        $unverified = [System.Collections.Generic.List[string]]::new()
+        $unavailableObservation = [System.Collections.Generic.List[string]]::new()
+        $knownSupportLimit = [System.Collections.Generic.List[string]]::new()
+        Add-UnverifiedEvidence -Category 'Source' -Item 'source reason'
+        Add-UnverifiedEvidence -Category 'UnavailableObservation' -Item 'observation reason'
+        Add-UnverifiedEvidence -Category 'KnownSupportLimit' -Item 'limit reason'
+        $unverified.ToArray() | Should -Be @('source reason')
+        $unavailableObservation.ToArray() | Should -Be @('observation reason')
+        $knownSupportLimit.ToArray() | Should -Be @('limit reason')
+
+        $producerCalls = @($setupAst.FindAll({
+                    param($node)
+                    $node -is [System.Management.Automation.Language.CommandAst] -and
+                    $node.GetCommandName() -eq 'Add-UnverifiedEvidence'
+                }, $true))
+        $producerCalls.Count | Should -Be 4
+        $producerText = @($producerCalls | ForEach-Object { $_.Extent.Text })
+        @($producerText | Where-Object { $_ -match "-Category\s+'Source'" }).Count | Should -Be 1
+        @($producerText | Where-Object { $_ -match "-Category\s+'UnavailableObservation'" }).Count | Should -Be 2
+        @($producerText | Where-Object { $_ -match '-Category\s+\$delegation\.EvidenceCategory' }).Count | Should -Be 1
+        ($producerText -join "`n") | Should -Match '\$status\.Unverified'
+        ($producerText -join "`n") | Should -Match 'precondition:\s+\$item'
     }
 }
 
@@ -4857,12 +4977,12 @@ Describe 'check entry points' {
         Invoke-BootstrapCheck -RequireNative '1' | Should -Be 1
     }
 
-    It 'INV windows/check-exit-contract: ranks a source no parser could read beside an undecided detection' {
+    It 'INV windows/check-exit-contract: ranks every unverified evidence category exactly once' {
         # The check path past the prerequisites needs a Windows host (the
         # registry, the font store, WinGet), so the wiring is held by reading
-        # setup.ps1: the one call that ranks the run counts both lists, the
-        # sources nobody here could parse and the detections nobody here could
-        # decide, and the clean line is suppressed by either (#54).
+        # setup.ps1: the one call that ranks the run consumes one total made
+        # from unavailable sources, unavailable observations and known support
+        # limits. The clean line is suppressed by any of the three.
         $setup = Join-Path $repositoryRoot 'tools\setup.ps1'
         $tokens = $null
         $errors = $null
@@ -4875,9 +4995,18 @@ Describe 'check entry points' {
                 }, $true))
         $calls.Count | Should -Be 1
         $arguments = $calls[0].CommandElements | ForEach-Object { $_.Extent.Text }
-        $unverifiedCount = $arguments[([array]::IndexOf($arguments, '-UnverifiedCount') + 1)]
-        $unverifiedCount | Should -Match '\$unverified\.Count'
-        $unverifiedCount | Should -Match '\$unverifiedDetection\.Count'
+        $arguments[([array]::IndexOf($arguments, '-UnverifiedCount') + 1)] | Should -Be '$unverifiedCount'
+
+        $countAssignment = @($ast.FindAll({
+                    param($node)
+                    $node -is [System.Management.Automation.Language.AssignmentStatementAst] -and
+                    $node.Left.Extent.Text -eq '$unverifiedCount'
+                }, $true))
+        $countAssignment.Count | Should -Be 1
+        $countExpression = $countAssignment[0].Right.Extent.Text
+        $countExpression | Should -Match '\$unverified\.Count'
+        $countExpression | Should -Match '\$unavailableObservation\.Count'
+        $countExpression | Should -Match '\$knownSupportLimit\.Count'
 
         $cleanLine = @($ast.FindAll({
                     param($node)
@@ -4887,7 +5016,15 @@ Describe 'check entry points' {
         $cleanLine.Count | Should -Be 1
         $condition = $cleanLine[0].Clauses[0].Item1.Extent.Text
         $condition | Should -Match '\$unverified\.Count'
-        $condition | Should -Match '\$unverifiedDetection\.Count'
+        $condition | Should -Match '\$unavailableObservation\.Count'
+        $condition | Should -Match '\$knownSupportLimit\.Count'
+
+        $sharedPresentationCalls = @($ast.FindAll({
+                    param($node)
+                    $node -is [System.Management.Automation.Language.CommandAst] -and
+                    $node.GetCommandName() -eq 'Get-UnverifiedEvidenceLine'
+                }, $true))
+        $sharedPresentationCalls.Count | Should -Be 2
     }
 
     It 'INV windows/entry-point-forwards-status: check returns the status bootstrap.ps1 -Check returned' {

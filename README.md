@@ -242,20 +242,19 @@ still push Windows work. CI supplies the missing evidence. A Unix-like home
 this repository configures carries Pester itself, so `pre-push` there runs
 the suite under the host's own `pwsh` and reports a real result.
 
-`bootstrap.ps1 -Check` has a 69 of its own, and it means something else: a
-detection this host could not decide, such as an Appx query for which both the
-PowerShell 7 route and isolated 5.1 fallback failed, which is named as
-unverified instead of read as missing. A
+`bootstrap.ps1 -Check` has a 69 of its own, and it means something else. Its
+summary labels an Appx query for which both routes failed as an
+`unavailable observation`, instead of reading it as missing. A
 prerequisite this host lacks, WinGet or PowerShell 7, is the other case:
 `-Check` reports it as 69 rather than installing anything, and 1 under
 `REQUIRE_NATIVE=1`. A selected source this host has no parser for is the
-third case, and the default terminal delegation on a host below its
-documented boundary, or one that cannot be decided against it, the fourth:
-the read-back passes there while the setting does nothing, so it is named as
-undecided rather than as converged. It exits 69 only when nothing else
-drifted, because drift outranks an undecided item, so a host with both exits
-2 and still names the undecided items. `REQUIRE_NATIVE=1` turns an undecided
-item into a failure.
+third case. Default terminal delegation below its documented boundary is a
+`known support limit`; an unreadable build, revision or Terminal version is an
+`unavailable observation`. Both retain the existing unverified evidence rank,
+but only the latter is described as undecided. The check exits 69 only when
+nothing else drifted, because drift outranks unverified evidence, so a host
+with both exits 2 and still names every reason. `REQUIRE_NATIVE=1` turns any
+unverified evidence into a failure.
 `-Check` never installs or changes anything. Apply is explicit:
 
 ```powershell

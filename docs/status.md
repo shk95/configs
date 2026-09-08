@@ -153,7 +153,8 @@ PowerShell 7 is missing, or 1 under `REQUIRE_NATIVE=1`
 (`INV windows/check-exit-contract`). Since 2026-09-05 a selected source no
 parser here could read, and a default terminal delegation the host is below
 the documented boundary for or cannot be decided against it, rank the same
-way (#53, #54). Since 2026-09-05 `windows/win-env.ps1` is the domain's one
+way (#53, #54). Since #208, summaries distinguish a known support limit from
+an unavailable observation without changing that rank. Since 2026-09-05 `windows/win-env.ps1` is the domain's one
 entry point, and `bootstrap.ps1` and `setup.ps1` sit under `windows/tools/`
 (`docs/decisions/windows-entry-point-in-domain.md`).
 
@@ -165,7 +166,7 @@ the observation ran on.
 
 | Item | Documented boundary | Evidence state | Source |
 | --- | --- | --- | --- |
-| Default terminal delegation (`HKCU:\Console\%%Startup`) | Windows 11 22H2, or Windows 10 22H2 build 19045.3031 with KB5026435, plus Windows Terminal 1.17+ | Reported unverified by `-Check` below the boundary, or when the build, the Windows 10 revision or the Windows Terminal version cannot be read, since #53; observed again 2026-09-08 on build 19044.7663 after Appx recovery, launched from both PowerShell 5.1 and 7 with `terminal,powertoys` selected, as the sole remaining detection warning; above the boundary the pass is a read-back of the documented values, not an observed handoff, and no host at or above 19045.3031 has been observed | Group Policy for Windows Terminal; Windows Terminal installation |
+| Default terminal delegation (`HKCU:\Console\%%Startup`) | Windows 11 22H2, or Windows 10 22H2 build 19045.3031 with KB5026435, plus Windows Terminal 1.17+ | Reported as an unverified `known support limit` below the boundary and an unverified `unavailable observation` when the required build, revision or Terminal version cannot be read since #208; observed 2026-09-08 on build 19044.7663 after Appx recovery, launched from both PowerShell 5.1 and 7 with `terminal,powertoys` selected, as the sole remaining evidence reason; above the boundary the pass is a read-back of the documented values, not an observed handoff, and no host at or above 19045.3031 has been observed | Group Policy for Windows Terminal; Windows Terminal installation |
 | PowerToys `Microsoft.CommandPalette` precondition (`Get-AppxPackage`) | Windows 11, or Windows 10 2004 (build 19041) or later | PowerShell 7 reports query failure rather than absence and tries one isolated Windows PowerShell 5.1 query since #207; observed present at 0.12.12365.0 on build 19044.7663 on 2026-09-08, removing the precondition's Appx warning; both routes failing remains unverified | How to Install PowerToys; PowerShell 7 module compatibility |
 | Windows Terminal `Microsoft.WindowsTerminal` Appx detection | Windows 10 2004 (build 19041) or later | PowerShell 7 reports query failure rather than absence and tries one isolated Windows PowerShell 5.1 query since #207; observed present at 1.24.11911.0 on build 19044.7663 on 2026-09-08, removing the package's Appx warning while leaving the delegation boundary unchanged; both routes failing remains unverified | Windows Terminal installation; PowerShell 7 module compatibility; Windows Terminal product repository |
 
