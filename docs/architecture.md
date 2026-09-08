@@ -165,7 +165,11 @@ with native evidence able to turn that into a failure. A host observation is
 evidence only for the Windows builds the documented support boundary covers:
 an item the host accepts but does not honour below that boundary is reported
 unverified against its documentary source, never verified, and the build the
-observation came from is named beside it. Finally, the Windows
+observation came from is named beside it. Capturing a build-selected file must
+also validate its modelled setting prerequisites before accepting even matching content and preserve the selected
+source's network policy, because choosing a filename does not prove that a
+host's content belongs in it; an unsupported or undetermined prerequisite
+leaves both sources untouched. Finally, the Windows
 checks and suite read only the Windows tree and need no Unix-like toolchain,
 because this domain must be authorable and checkable on its own host. They
 also drop any repository context their caller exported, so a suite run from

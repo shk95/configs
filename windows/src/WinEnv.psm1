@@ -602,6 +602,168 @@ function Get-WinEnvWindowsBuild {
     return [int]$build
 }
 
+function Get-WinEnvWslVersion {
+    <#
+        .SYNOPSIS
+        The WSL application's version, or null when no reliable observation
+        is available. A distribution's WSL1/WSL2 mode is not this version.
+    #>
+    param([scriptblock] $VersionQuery = {
+            if (-not (Test-WinEnvWindowsHost)) { return }
+            if (-not (Get-Command wsl.exe -ErrorAction SilentlyContinue)) { return }
+            $output = @(& wsl.exe --version 2>&1)
+            if ($LASTEXITCODE -eq 0) { $output }
+        })
+    try {
+        $output = @(& $VersionQuery)
+        # The label after WSL is localized. Anchor the whole line so kernel,
+        # WSLg and Windows versions, or legacy usage text, cannot supply it.
+        $versions = @($output | ForEach-Object {
+                $line = ([string]$_).Replace([string][char]0, '')
+                if ($line -match '^WSL(?:\s+[^:]*)?:\s*(\d+\.\d+\.\d+(?:\.\d+)?)\s*$') {
+                    [version]$matches[1]
+                }
+            })
+        if ($versions.Count -eq 1 -and $versions[0].Major -gt 0) { return $versions[0] }
+    }
+    catch { }
+    return $null
+}
+
+function Test-WinEnvWslConfigSupport {
+    <#
+        .SYNOPSIS
+        Documentary prerequisites for this .wslconfig text, separately from
+        file equality and from the running network stack.
+
+        .DESCRIPTION
+        Models the four managed keys and dnsTunneling, their one dependency.
+        It does not select a source, probe a network, or rewrite text. Unknown
+        keys remain unmodelled, not proven unsupported. Version and section
+        boundaries are sourced in docs/status.md; no capability registry or
+        manifest extension is needed for this one file.
+    #>
+    param(
+        [Parameter(Mandatory)][AllowEmptyString()][string] $Content,
+        [AllowNull()][object] $Build,
+        [AllowNull()][version] $WslVersion
+    )
+
+    # INV windows/support-boundary-named — a matching file cannot prove a
+    # prerequisite the host lacks. Callers report these as unverified; capture
+    # refuses them before its early Unchanged result.
+    $unverified = [System.Collections.Generic.List[string]]::new()
+    $information = [System.Collections.Generic.List[string]]::new()
+    if ($null -eq $Build) { $unverified.Add('Windows build is undetermined; desired-source selection cannot be verified') }
+    $settings = @{}
+    $section = ''
+    $lineNumber = 0
+    $known = @('networkingMode', 'hostAddressLoopback', 'bestEffortDnsParsing', 'autoMemoryReclaim', 'dnsTunneling')
+    foreach ($line in ($Content -split '\r?\n')) {
+        $lineNumber++
+        $trimmed = $line.Trim()
+        if (-not $trimmed -or $trimmed.StartsWith('#') -or $trimmed.StartsWith(';')) { continue }
+        # Keep the existing Ini validator's section/assignment grammar. In
+        # particular this is not a new general-purpose INI comparison mode.
+        if ($trimmed -match '^\[([^\[\]]+)\]$') { $section = $matches[1]; continue }
+        if (-not $section -or $trimmed -notmatch '^([^=\s]+)\s*=\s*(.+)$') {
+            $unverified.Add("INI syntax cannot be validated at line $lineNumber")
+            continue
+        }
+        $key = $matches[1]
+        $raw = $matches[2]
+        $name = "$section.$key"
+        if ($known -notcontains $key) {
+            # Ordinary VM tuning and unknown content are preserved, with no
+            # claim to have checked every WSL option or host policy.
+            if ($section -ne 'wsl2' -or $key -notin @('memory', 'processors')) {
+                $information.Add("$name is outside this prerequisite check; preserved without a support claim")
+            }
+            continue
+        }
+        $sections = if ($key -in @('networkingMode', 'dnsTunneling')) { @('wsl2', 'experimental') } else { @('experimental') }
+        if ($sections -notcontains $section) {
+            $unverified.Add("unsupported setting ${name}: use section [$($sections -join '] or [')]")
+            continue
+        }
+        $minimum = if ($section -eq 'wsl2') { [version]'2.0.5' } else { [version]'2.0.0' }
+        if ($key -ne 'autoMemoryReclaim' -and $null -ne $Build -and [int]$Build -lt 22621) {
+            $unverified.Add("unsupported setting ${name}: requires Windows build >=22621 (observed: $Build)")
+        }
+        if ($null -eq $WslVersion) {
+            $unverified.Add("$name requires WSL application >=$minimum; application version evidence is missing (wsl.exe --version)")
+        }
+        elseif ($WslVersion -lt $minimum) {
+            $unverified.Add("unsupported setting ${name}: requires WSL application >=$minimum; observed $WslVersion")
+        }
+        # WSL compares names and enumerated values without case, takes the
+        # first occurrence (including experimental aliases), removes quotes,
+        # and ends an unquoted value at #. Preserve the original bytes. An
+        # escape/continuation in a managed scalar is undetermined here rather
+        # than guessed; the generic Ini validator accepts no continuation.
+        if ($settings.ContainsKey($key)) {
+            $information.Add("duplicate ${name}: WSL uses the first occurrence; text preserved")
+            continue
+        }
+        $escaped = $false
+        $quoted = $false
+        $value = ''
+        $length = 0
+        foreach ($ch in $raw.ToCharArray()) {
+            if ($ch -eq '"') { $quoted = -not $quoted; $length = $value.Length; continue }
+            if ($ch -eq '#' -and -not $quoted) { break }
+            if ($ch -eq '\') { $escaped = $true; break }
+            $value += $ch
+            if ($quoted -or $ch -notin @(' ', "`t")) { $length = $value.Length }
+        }
+        if ($escaped) {
+            $unverified.Add("$name uses an escaped value this prerequisite check cannot determine")
+            continue
+        }
+        if ($quoted) {
+            $unverified.Add("$name has an unterminated quoted value")
+            continue
+        }
+        $value = $value.Substring(0, $length)
+        if ($key -in @('hostAddressLoopback', 'bestEffortDnsParsing', 'dnsTunneling')) {
+            if ($value -in @('true', '1')) { $value = 'true' }
+            elseif ($value -in @('false', '0')) { $value = 'false' }
+            else { $unverified.Add("$name has an undetermined boolean value") }
+        }
+        elseif ($key -eq 'autoMemoryReclaim' -and $value -notin @('disabled', 'gradual', 'dropCache')) {
+            $information.Add("$name has an unmodelled value; its fallback behavior is not verified")
+        }
+        $settings[$key] = $value
+    }
+
+    # Absence means no explicit mode request. In particular, the lower
+    # payload's name never proves the VM is running NAT (VirtioProxy fallback
+    # and host policy are runtime evidence outside this check).
+    $mode = if ($settings.ContainsKey('networkingMode')) { [string]$settings.networkingMode } else { '' }
+    if ($settings.ContainsKey('hostAddressLoopback') -and $settings.hostAddressLoopback -eq 'true' -and $mode -ne 'mirrored') {
+        $information.Add('hostAddressLoopback=true is inactive without networkingMode=mirrored; runtime effect is not verified')
+    }
+    if ($settings.ContainsKey('bestEffortDnsParsing') -and $settings.bestEffortDnsParsing -eq 'true') {
+        if ($settings.ContainsKey('dnsTunneling')) {
+            if ($settings.dnsTunneling -eq 'false') {
+                $information.Add('bestEffortDnsParsing=true is inactive because dnsTunneling=false; both settings are preserved')
+            }
+            else { $information.Add('bestEffortDnsParsing requires DNS tunneling; configured dependency is enabled, runtime effect is not verified') }
+        }
+        else {
+            # Its default changed in 2.1.0, 2.1.1 and 2.2.1. Reporting the
+            # absent declaration avoids guessing an older release's default
+            # or claiming that host policy permits the configured behavior.
+            $information.Add('bestEffortDnsParsing requires DNS tunneling; dnsTunneling is omitted, so its version/host-dependent default and runtime effect are not verified')
+        }
+    }
+    return [pscustomobject]@{
+        Unverified = $unverified.ToArray()
+        Information = $information.ToArray()
+        NetworkingMode = $mode
+    }
+}
+
 function Test-WinEnvWindowsHost {
     <#
         .SYNOPSIS
@@ -1973,7 +2135,8 @@ function New-CaptureOutcome {
         [AllowNull()][string] $Source = $null,
         [AllowNull()][string] $Target = $null,
         [AllowNull()][string] $Reason = $null,
-        [AllowNull()][string] $Content = $null
+        [AllowNull()][string] $Content = $null,
+        [string[]] $Information = @()
     )
 
     return [pscustomobject]@{
@@ -1988,6 +2151,7 @@ function New-CaptureOutcome {
         Status  = $Status
         Reason  = $Reason
         Content = $Content
+        Information = $Information
     }
 }
 
@@ -2114,7 +2278,8 @@ function Get-WinEnvCapturePlan {
           2. runtime state, which no branch of this tool may ever write;
           3. a target this host does not have.
 
-        Then drift, and a file that matches its payload is untouched.
+        Then WSL prerequisites and source policy, followed by drift. A file
+        that matches its payload is untouched only after those checks.
 
         A drifted JsonSubset file is projected rather than refused. That mode
         is most of the PowerToys inventory, and refusing it left the maintainer
@@ -2139,7 +2304,8 @@ function Get-WinEnvCapturePlan {
         [Parameter(Mandatory)][hashtable] $Definition,
         [Parameter(Mandatory)][string] $RepositoryRoot,
         [AllowNull()][object] $Build = (Get-WinEnvWindowsBuild),
-        [hashtable] $HostPath = (Get-WinEnvHostPath)
+        [hashtable] $HostPath = (Get-WinEnvHostPath),
+        [AllowNull()][version] $WslVersion
     )
 
     if ($Definition.ContainsKey('Sources') -and $null -eq $Build) {
@@ -2161,8 +2327,34 @@ function Get-WinEnvCapturePlan {
             -Reason 'the managed target does not exist on this host'
     }
 
+    $information = @()
+    if ([string]$resolved.Id -eq 'wslConfig') {
+        if (-not $PSBoundParameters.ContainsKey('WslVersion')) { $WslVersion = Get-WinEnvWslVersion }
+        $hostText = Get-Content -LiteralPath $target -Raw -Encoding utf8
+        $support = Test-WinEnvWslConfigSupport -Content $hostText -Build $Build -WslVersion $WslVersion
+        $information = $support.Information
+        if ($support.Unverified.Count) {
+            return New-CaptureOutcome -Definition $Definition -Status 'Refused' -Source $source -Target $target `
+                -Reason ($support.Unverified -join '; ') -Information $information
+        }
+        $declared = Test-WinEnvWslConfigSupport -Content (Get-Content -LiteralPath (Join-Path $RepositoryRoot $source) -Raw -Encoding utf8) `
+            -Build $Build -WslVersion $WslVersion
+        # The selected payload owns the network policy. Capture may tune a
+        # compatible host, but cannot turn the mirrored payload into NAT (or
+        # another mode). Explicit NAT and no mode have the same declared
+        # default policy, not necessarily the same running network stack.
+        $hostMode = if ($support.NetworkingMode) { $support.NetworkingMode } else { 'nat' }
+        $desiredMode = if ($declared.NetworkingMode) { $declared.NetworkingMode } else { 'nat' }
+        if ($hostMode -ne $desiredMode) {
+            return New-CaptureOutcome -Definition $Definition -Status 'Refused' -Source $source -Target $target `
+                -Reason ("desired-source-policy mismatch: '$source' requests $desiredMode networking; the host requests $hostMode. " +
+                    'Changing that network policy requires a reviewed desired-state edit; this is not a claim that the Windows configuration is invalid') `
+                -Information $information
+        }
+    }
+
     if (Test-WinEnvManagedFile -Definition $resolved -RepositoryRoot $RepositoryRoot -HostPath $HostPath) {
-        return New-CaptureOutcome -Definition $Definition -Status 'Unchanged' -Source $source -Target $target
+        return New-CaptureOutcome -Definition $Definition -Status 'Unchanged' -Source $source -Target $target -Information $information
     }
 
     $hostText = Get-Content -LiteralPath $target -Raw -Encoding utf8
@@ -2249,7 +2441,7 @@ function Get-WinEnvCapturePlan {
             -Reason 'the content declares a .wslconfig firewall key, which AGENTS.md adds only on explicit direction'
     }
 
-    return New-CaptureOutcome -Definition $Definition -Status 'Captured' -Source $source -Target $target -Content $content
+    return New-CaptureOutcome -Definition $Definition -Status 'Captured' -Source $source -Target $target -Content $content -Information $information
 }
 
 function Get-WinEnvJsonLineBracketBalance {

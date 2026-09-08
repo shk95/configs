@@ -189,9 +189,19 @@ Write-Host ('  selected: ' + (@($selected) -join ', '))
 $buildText = if ($null -ne $hostBuild) { [string]$hostBuild } else { 'undetermined' }
 Write-Host "  Windows build: $buildText"
 
+$wslVersion = $null
+if (@($considered | Where-Object Id -eq 'wslConfig').Count) {
+    $wslVersion = Get-WinEnvWslVersion
+    $versionText = if ($null -eq $wslVersion) { 'undetermined' } else { [string]$wslVersion }
+    Write-Host "  WSL application: $versionText (runtime effect is not verified)"
+}
 $plans = @($considered | ForEach-Object {
-        Get-WinEnvCapturePlan -Definition $_ -RepositoryRoot $desiredStateRoot -Build $hostBuild -HostPath $hostPath
+        Get-WinEnvCapturePlan -Definition $_ -RepositoryRoot $desiredStateRoot -Build $hostBuild -HostPath $hostPath -WslVersion $wslVersion
     })
+foreach ($plan in $plans) {
+    if ($plan.Id -eq 'wslConfig' -and $plan.Source) { Write-Host "  wslConfig source: $($plan.Source)" }
+    foreach ($item in $plan.Information) { Write-Host "  $($plan.Id): $item" }
+}
 
 $planned = @($plans | Where-Object Status -eq 'Captured')
 $unchanged = @($plans | Where-Object Status -eq 'Unchanged')
