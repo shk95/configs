@@ -5,22 +5,24 @@ scope: windows
 status: accepted
 issue: #37
 issue: #38
+issue: #207
 source: 9f1e8ce:docs/status.md § Windows 10 support boundary
 source: 9f1e8ce:docs/status.md § Check evidence states
 
-The two `Appx` items are supported on Windows 10 and undetectable there by the
-route this domain uses. Those are different statements and the record keeps them
-apart. PowerToys, which contains Command Palette, requires Windows 11 or Windows
-10 version 2004 (20H1, build 19041) or newer; Windows Terminal requires Windows
-10 2004 (build 19041) or later. Both therefore run on a supported Windows 10
-host, and neither item is absent or unsupported there. What does not work is the
-question. `Get-AppxPackage` backs both the `powertoys` feature's
+Before #207, the two `Appx` items were supported on Windows 10 and undetectable
+there by the only route this domain used. Those are different statements and
+the record keeps them apart. PowerToys, which contains Command Palette,
+requires Windows 11 or Windows 10 version 2004 (20H1, build 19041) or newer;
+Windows Terminal requires Windows 10 2004 (build 19041) or later. Both
+therefore run on a supported Windows 10 host, and neither item is absent or
+unsupported there. What does not work is the question. `Get-AppxPackage`
+backs both the `powertoys` feature's
 `Microsoft.CommandPalette` precondition and the `Microsoft.WindowsTerminal`
 package's `Appx` detection, and Microsoft's Windows module compatibility table
-footnotes `Appx` with "Must use Compatibility Layer with PowerShell 7.1". This
-domain runs PowerShell 7 and both call sites pass `-ErrorAction
-SilentlyContinue`, so a route that cannot answer returns nothing and is read as
-absence. The precondition then reports the package missing and Apply refuses the
+footnotes `Appx` with "Must use Compatibility Layer with PowerShell 7.1". The
+domain ran PowerShell 7 and both call sites passed `-ErrorAction
+SilentlyContinue`, so a route that could not answer returned nothing and was
+read as absence. The precondition then reports the package missing and Apply refuses the
 feature; the package either reports missing, so Apply reinstalls an installed
 Windows Terminal, or disagrees with the WinGet registration and reports a
 detection conflict that blocks Apply. An unavailable route must report
@@ -60,3 +62,28 @@ not aborted mid-deployment over a package that is present; post-apply validation
 still asks the same undecidable question and refuses to record state. Deciding
 that item needs detection independent of the registration query, which belongs
 with the general unverified state rather than with the Appx route.
+
+2026-09-08: the accepted independent detection is one capability fallback
+behind the shared default query. PowerShell 7 remains first and uses
+terminating errors, so a successful empty query is absence and bypasses the
+fallback while any failed query discards partial output. A failure starts one
+same-user Windows PowerShell 5.1 child from the inbox system path, with no
+profile, interaction, elevation or `-AllUsers`; the package name is JSON data
+on UTF-8 stdin rather than interpolated code. The child returns a versioned
+record containing the matching name, presence and first package version. The
+parent drains stdout and stderr together, stops and disposes the process after
+15 seconds, and accepts only exit 0, empty stderr, strict UTF-8 and the exact
+validated JSON contract. Every other transport or value failure joins the
+PowerShell 7 reason and leaves Appx undecidable. No result cache is kept, since
+Apply can change package state between observations.
+
+An explicit `-UseWindowsPowerShell` import was rejected for production because
+it creates a proxy command and shared compatibility session and returns
+deserialized objects. A global move to 5.1 was rejected because PowerShell 7 is
+the management runtime. On the observed build 19044.7663 host, three isolated
+queries completed in 604--693 ms; 15 seconds leaves more than twenty times the
+slowest observation for startup and Appx loading without permitting an
+unbounded check. Terminal 1.24.11911.0 and Command Palette 0.12.12365.0 were
+present and the nonexistent control was absent. Checks launched from both 5.1
+and 7 then removed the Appx warning while retaining the known build-19044
+delegation limitation and exit 2 for independent drift. No Apply ran.

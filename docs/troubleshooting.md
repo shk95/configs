@@ -646,22 +646,30 @@ Remove-Module Appx
 
 That route returns deserialized objects, turns the package `Version` into a
 string, shadows `Get-AppxPackage` with a proxy function, and closes the
-`WinPSCompatSession` when the proxy module is removed. A fresh isolated
-`powershell.exe` subprocess returning only package name, presence and version
-as JSON also answered correctly on the observed host. Its caller must treat a
-non-zero process exit, stderr, invalid JSON or encoding failure as an
-unavailable query rather than absence.
+`WinPSCompatSession` when the proxy module is removed. Production does not use
+that compatibility session. It first makes the ordinary PowerShell 7 query
+with terminating errors; only a failure starts one
+`%SystemRoot%\System32\WindowsPowerShell\v1.0\powershell.exe -NoProfile
+-NonInteractive` child. The name is a UTF-8 JSON stdin value, and the child
+returns only a versioned JSON record containing the matching name, presence
+and first package version. The parent drains both streams, stops the child at
+15 seconds, and rejects nonzero exit, stderr, empty or invalid UTF-8/JSON,
+unexpected fields, a mismatched name and invalid presence/version types. Both
+routes failing remains unavailable rather than absence.
 
-The current production behavior remains deliberately conservative:
+Check the production result with:
 
 ```powershell
 .\windows\win-env.ps1 check -Feature terminal,powertoys
 ```
 
-PowerShell 7's default-route failure is reported as an unverified Appx
-detection. A future fallback needs a separately accepted detection-policy
-change; these diagnostic commands do not silently make compatibility mode a
-production prerequisite.
+On build 19044.7663 on 2026-09-08, the isolated queries returned Terminal
+1.24.11911.0 and Command Palette 0.12.12365.0 in 604--693 ms, including a
+successful absent control. Checks launched separately from Windows PowerShell
+5.1 and PowerShell 7 both stopped reporting Appx as unverified. The build is
+still below the default-terminal delegation boundary, so that separate warning
+and the existing 0/2/69/1 ranking remain. These diagnostic commands do not
+import compatibility mode or prove an Apply.
 
 ### `· unverified: this host has no nix`
 

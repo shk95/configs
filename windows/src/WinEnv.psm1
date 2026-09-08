@@ -6,6 +6,7 @@ Set-StrictMode -Version Latest
 $script:WinGetNoPackageExitCode = -1978335212
 $script:WinGetNoApplicableUpdateExitCode = -1978335189
 $script:Utf8NoBom = [System.Text.UTF8Encoding]::new($false)
+$script:StrictUtf8NoBom = [System.Text.UTF8Encoding]::new($false, $true)
 
 # Every comparison mode a managed file may declare. The manifest is validated
 # against this list when it loads, so a misspelled mode names the entry at
@@ -25,10 +26,16 @@ $script:WinEnvParser = @('Json', 'Ini', 'PowerShell', 'Kdl', 'Lua', 'Text')
 # scope defaults rather than inline calls so that every outcome, including the
 # one a given host cannot produce, has a fixture. Nothing but a test passes
 # anything else.
-# The literal 0x80131539 symptom and the route-by-route diagnostic commands
-# live in docs/troubleshooting.md; this remains the production route #199
-# investigated, not an implicit compatibility import.
-$script:DefaultAppxQuery = { param([string] $PackageName) Get-AppxPackage -Name $PackageName -ErrorAction SilentlyContinue }
+# INV windows/appx-fallback-bounded-and-isolated — the default route remains
+# first, and only its failure reaches one bounded Windows PowerShell 5.1 child.
+$script:AppxQueryTimeoutMilliseconds = 15000
+$script:AppxQueryPayloadPath = Join-Path $PSScriptRoot 'appx-query.ps1'
+$script:DefaultInProcessAppxQuery = { param([string] $PackageName) Get-AppxPackage -Name $PackageName -ErrorAction Stop }
+$script:DefaultPowerShell51AppxQuery = { param([string] $PackageName) Invoke-AppxPowerShell51Query -Name $PackageName }
+$script:DefaultAppxQuery = {
+    param([string] $PackageName)
+    Invoke-AppxQuery -Name $PackageName
+}
 $script:DefaultRegistrationQuery = { param([string] $PackageId) Get-WinGetRegistration -Id $PackageId }
 
 # The three host observations the default terminal delegation is decided
@@ -414,6 +421,242 @@ function Get-WinEnvAppliedFeature {
     # applied host on exactly what it already has.
     if (-not $State.PSObject.Properties['features']) { return (Get-WinEnvFeatureId -Manifest $Manifest) }
     return @($State.features | ForEach-Object { [string]$_ })
+}
+
+function Invoke-AppxQueryRoute {
+    param(
+        [Parameter(Mandatory)][scriptblock] $Query,
+        [Parameter(Mandatory)][string] $Name
+    )
+
+    $previousPreference = $ErrorActionPreference
+    try {
+        $ErrorActionPreference = 'Stop'
+        return @(& $Query $Name)
+    }
+    finally {
+        $ErrorActionPreference = $previousPreference
+    }
+}
+
+function Resolve-AppxPowerShell51Path {
+    param([AllowNull()][string] $SystemRoot = $env:SystemRoot)
+
+    if ([string]::IsNullOrWhiteSpace($SystemRoot)) {
+        throw 'SystemRoot is unavailable; the inbox Windows PowerShell 5.1 executable cannot be resolved.'
+    }
+    $path = Join-Path $SystemRoot 'System32\WindowsPowerShell\v1.0\powershell.exe'
+    if (-not (Test-Path -LiteralPath $path -PathType Leaf)) {
+        throw "The inbox Windows PowerShell 5.1 executable was not found at '$path'."
+    }
+    return (Get-Item -LiteralPath $path).FullName
+}
+
+function New-AppxQueryProcessStartInfo {
+    param(
+        [Parameter(Mandatory)][string] $ExecutablePath,
+        [Parameter(Mandatory)][string] $Payload
+    )
+
+    $encodedPayload = [Convert]::ToBase64String([Text.Encoding]::Unicode.GetBytes($Payload))
+    $info = [System.Diagnostics.ProcessStartInfo]::new($ExecutablePath)
+    foreach ($argument in '-NoProfile', '-NonInteractive', '-EncodedCommand', $encodedPayload) {
+        [void]$info.ArgumentList.Add($argument)
+    }
+    $info.CreateNoWindow = $true
+    $info.RedirectStandardInput = $true
+    $info.RedirectStandardOutput = $true
+    $info.RedirectStandardError = $true
+    $info.StandardInputEncoding = $script:StrictUtf8NoBom
+    $info.StandardOutputEncoding = $script:StrictUtf8NoBom
+    $info.StandardErrorEncoding = $script:StrictUtf8NoBom
+    $info.UseShellExecute = $false
+    return $info
+}
+
+function Invoke-AppxQueryChildProcess {
+    param(
+        [Parameter(Mandatory)][string] $ExecutablePath,
+        [Parameter(Mandatory)][string] $Payload,
+        [Parameter(Mandatory)][string] $Request,
+        [Parameter(Mandatory)][ValidateRange(1, [int]::MaxValue)][int] $TimeoutMilliseconds
+    )
+
+    if (-not (Test-Path -LiteralPath $ExecutablePath -PathType Leaf)) {
+        throw "The Appx query executable was not found at '$ExecutablePath'."
+    }
+
+    $info = New-AppxQueryProcessStartInfo -ExecutablePath $ExecutablePath -Payload $Payload
+
+    $process = [System.Diagnostics.Process]::new()
+    $process.StartInfo = $info
+    $started = $false
+    try {
+        try {
+            $started = $process.Start()
+        }
+        catch {
+            throw "The isolated Windows PowerShell 5.1 Appx query could not start: $($_.Exception.Message)"
+        }
+        if (-not $started) {
+            throw 'The isolated Windows PowerShell 5.1 Appx query did not start.'
+        }
+
+        # Begin both drains before writing the bounded request so neither pipe
+        # can fill while the caller waits for the other one.
+        $stdoutTask = $process.StandardOutput.ReadToEndAsync()
+        $stderrTask = $process.StandardError.ReadToEndAsync()
+        $process.StandardInput.Write($Request)
+        $process.StandardInput.Close()
+        $wait = [Diagnostics.Stopwatch]::StartNew()
+
+        if (-not $process.WaitForExit($TimeoutMilliseconds)) {
+            try { $process.Kill($true) }
+            catch {
+                throw "The isolated Windows PowerShell 5.1 Appx query timed out after $TimeoutMilliseconds ms and could not be stopped: $($_.Exception.Message)"
+            }
+            if (-not $process.WaitForExit(5000)) {
+                throw "The isolated Windows PowerShell 5.1 Appx query timed out after $TimeoutMilliseconds ms and did not stop within 5000 ms."
+            }
+            throw "The isolated Windows PowerShell 5.1 Appx query timed out after $TimeoutMilliseconds ms."
+        }
+
+        # Process exit alone does not close redirected handles inherited by a
+        # descendant. Keep the pipe drains inside the same total time bound so
+        # a malformed child cannot make GetResult wait forever.
+        $drainTask = [Threading.Tasks.Task]::WhenAll([Threading.Tasks.Task[]]@($stdoutTask, $stderrTask))
+        if (-not $drainTask.IsCompleted) {
+            $remaining = $TimeoutMilliseconds - [int]$wait.ElapsedMilliseconds
+            if ($remaining -le 0 -or
+                [Threading.Tasks.Task]::WaitAny([Threading.Tasks.Task[]]@($drainTask), $remaining) -lt 0) {
+                throw "The isolated Windows PowerShell 5.1 Appx query timed out after $TimeoutMilliseconds ms while draining its output."
+            }
+        }
+
+        return [pscustomobject]@{
+            ExitCode = $process.ExitCode
+            StdOut   = $stdoutTask.GetAwaiter().GetResult()
+            StdErr   = $stderrTask.GetAwaiter().GetResult()
+        }
+    }
+    finally {
+        if ($started) {
+            try { $process.StandardInput.Close() } catch {}
+            try {
+                if (-not $process.HasExited) {
+                    $process.Kill()
+                    [void]$process.WaitForExit(5000)
+                }
+            }
+            catch {}
+        }
+        $process.Dispose()
+    }
+}
+
+function ConvertFrom-AppxQueryResponse {
+    param(
+        [Parameter(Mandatory)][string] $Name,
+        [Parameter(Mandatory)] $ProcessResult
+    )
+
+    $stderrText = [string]$ProcessResult.StdErr
+    if ($ProcessResult.ExitCode -ne 0) {
+        if (-not [string]::IsNullOrEmpty($stderrText)) {
+            throw "The child exited with status $($ProcessResult.ExitCode) and wrote to stderr: $stderrText"
+        }
+        throw "The child exited with status $($ProcessResult.ExitCode)."
+    }
+    if (-not [string]::IsNullOrEmpty($stderrText)) {
+        throw "The child wrote to stderr: $stderrText"
+    }
+    if ([string]::IsNullOrWhiteSpace([string]$ProcessResult.StdOut)) {
+        throw 'The child returned empty stdout.'
+    }
+
+    try {
+        $response = $ProcessResult.StdOut | ConvertFrom-Json -ErrorAction Stop
+    }
+    catch {
+        throw "The child returned malformed JSON: $($_.Exception.Message)"
+    }
+    if ($null -eq $response -or $response -is [System.Array]) {
+        throw 'The child JSON response must be one object.'
+    }
+    $properties = @($response.PSObject.Properties.Name | Sort-Object)
+    if (($properties -join ',') -ne 'Name,Present,SchemaVersion,Version') {
+        throw 'The child JSON response has an unexpected shape.'
+    }
+    if (($response.SchemaVersion -isnot [int]) -and ($response.SchemaVersion -isnot [long])) {
+        throw 'The child JSON response SchemaVersion must be an integer.'
+    }
+    if ($response.SchemaVersion -ne 1) {
+        throw "Unsupported Appx query response schema: $($response.SchemaVersion)"
+    }
+    if ($response.Name -isnot [string] -or [string]::IsNullOrWhiteSpace($response.Name)) {
+        throw 'The child JSON response Name must be a non-empty string.'
+    }
+    if (-not [StringComparer]::OrdinalIgnoreCase.Equals([string]$response.Name, $Name)) {
+        throw "The child JSON response named '$($response.Name)' instead of '$Name'."
+    }
+    if ($response.Present -isnot [bool]) {
+        throw 'The child JSON response Present must be a Boolean.'
+    }
+
+    if (-not $response.Present) {
+        if ($null -ne $response.Version) {
+            throw 'The child JSON response supplied a Version for an absent package.'
+        }
+        return
+    }
+    if ($response.Version -isnot [string] -or [string]::IsNullOrWhiteSpace($response.Version)) {
+        throw 'The child JSON response Version must be a non-empty string for a present package.'
+    }
+    try { $version = [version]$response.Version }
+    catch { throw "The child JSON response Version is invalid: $($response.Version)" }
+
+    return [pscustomobject]@{ Name = [string]$response.Name; Version = $version }
+}
+
+function Invoke-AppxPowerShell51Query {
+    param(
+        [Parameter(Mandatory)][string] $Name,
+        [string] $ExecutablePath = (Resolve-AppxPowerShell51Path),
+        [string] $PayloadPath = $script:AppxQueryPayloadPath,
+        [int] $TimeoutMilliseconds = $script:AppxQueryTimeoutMilliseconds
+    )
+
+    if (-not (Test-Path -LiteralPath $PayloadPath -PathType Leaf)) {
+        throw "The Windows PowerShell 5.1 Appx query payload was not found at '$PayloadPath'."
+    }
+    $payload = Get-Content -LiteralPath $PayloadPath -Raw -Encoding utf8
+    $request = [ordered]@{ SchemaVersion = 1; Name = $Name } | ConvertTo-Json -Compress
+    $result = Invoke-AppxQueryChildProcess -ExecutablePath $ExecutablePath -Payload $payload `
+        -Request $request -TimeoutMilliseconds $TimeoutMilliseconds
+    return @(ConvertFrom-AppxQueryResponse -Name $Name -ProcessResult $result)
+}
+
+function Invoke-AppxQuery {
+    param(
+        [Parameter(Mandatory)][string] $Name,
+        [scriptblock] $PrimaryQuery = $script:DefaultInProcessAppxQuery,
+        [scriptblock] $FallbackQuery = $script:DefaultPowerShell51AppxQuery
+    )
+
+    try {
+        return @(Invoke-AppxQueryRoute -Query $PrimaryQuery -Name $Name)
+    }
+    catch {
+        $primaryReason = $_.Exception.Message
+    }
+
+    try {
+        return @(Invoke-AppxQueryRoute -Query $FallbackQuery -Name $Name)
+    }
+    catch {
+        throw ('PowerShell 7 Appx route failed: ' + $primaryReason +
+            '; isolated Windows PowerShell 5.1 Appx route failed: ' + $_.Exception.Message)
+    }
 }
 
 function Get-WinEnvAppxPresence {

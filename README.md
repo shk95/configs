@@ -225,6 +225,16 @@ forwards to the same files.
 verification and the merge gate agree on the versions. Zellij is not part of it
 because the manifest already installs the application itself.
 
+The entry point and bootstrap run under the Windows PowerShell 5.1 a host
+already has. `apply` and `check` then run setup under PowerShell 7; the module
+and the other management scripts are not generally 5.1-compatible.
+`setup-dev` is separate from that bootstrap path: it installs Pester and the
+other contributor tools and does not install or reconcile the declared host
+packages. When PowerShell 7 cannot load Appx, package detection alone starts a
+limited 5.1 child from the inbox system path, without a profile, elevation or
+`-AllUsers`. It has a 15-second limit and exchanges only validated UTF-8 JSON;
+no compatibility module or persistent session is imported into PowerShell 7.
+
 The checks run without that toolchain. A source whose parser is missing is
 reported as unverified rather than failing, and `check-desired-state.ps1` and
 `test.ps1` exit 69 to say so, which is why a clone without Lua or Pester can
@@ -233,8 +243,9 @@ this repository configures carries Pester itself, so `pre-push` there runs
 the suite under the host's own `pwsh` and reports a real result.
 
 `bootstrap.ps1 -Check` has a 69 of its own, and it means something else: a
-detection this host could not decide, such as an Appx package whose module will
-not load, which is named as unverified instead of read as missing. A
+detection this host could not decide, such as an Appx query for which both the
+PowerShell 7 route and isolated 5.1 fallback failed, which is named as
+unverified instead of read as missing. A
 prerequisite this host lacks, WinGet or PowerShell 7, is the other case:
 `-Check` reports it as 69 rather than installing anything, and 1 under
 `REQUIRE_NATIVE=1`. A selected source this host has no parser for is the
