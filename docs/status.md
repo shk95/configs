@@ -121,10 +121,12 @@ anything but a key, and both agents are on the per-user profile. The
 kernel-global resources came through the activation untouched — the binfmt
 registry is still read-only here, `WSLInterop` still carries the
 registration Ubuntu made before this distribution booted, `.exe` still runs,
-and both managers report `running`. One declaration does not take effect
-until the distribution restarts: WSL reads `/etc/wsl.conf` at start, so
-Windows drives still show the owner nixos-wsl's default named. The
-milestone's evidence issue (#192) carries the readings.
+and both managers report `running`. On 2026-09-08 the distribution was
+terminated while Ubuntu26.04 kept the WSL VM alive: Ubuntu's binfmt entries,
+their timestamps and `.exe` interop survived unchanged. Restarting NixOS
+made the generated `/etc/wsl.conf` effective, so `/mnt/c` now has the
+declared `uid=2000,gid=100`; both managers returned to `running` with no
+failed units. The milestone's evidence issue (#192) carries the readings.
 
 ## Windows
 
