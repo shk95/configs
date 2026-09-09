@@ -69,3 +69,20 @@ them equal, so a future Unix-like scheme change is a separate, reviewable
 Windows change and not an automatic one. That is the intended cost. Divergence
 between the two is a failure only when it is accidental; when it is decided —
 as the missing dark member above is — it is the point of owning the copy.
+
+2026-09-09 (#200): PowerShell 7.6.5 renders directory names with SGR `44;1`.
+Stable Windows Terminal 1.24.11911.0 defaults intense text to `bright`, so the
+profile's default black foreground first resolves to the scheme's bright black
+`#595959` on indexed blue `#0031A9`. Those colors measure 1.49:1, matching the
+reported unreadable directory and path surface. That Terminal release's schema
+supports the profile setting
+`adjustIndistinguishableColors`; `profiles.defaults` now selects `indexed` so
+the renderer adjusts only foreground/background pairs that came from the
+profile's default or indexed palette. For this pair, that release's Oklab
+adjustment produces approximately `#CCCCCC` on `#0031A9`, or 6.50:1. This is a
+renderer correction rather than a palette divergence: the copied Modus values,
+selection, cursor, light application theme, font and acrylic choices remain
+unchanged. It makes no claim about application truecolor output or Terminal UI
+accents. The property and its values are documented in Microsoft's
+[profile appearance settings](https://learn.microsoft.com/en-us/windows/terminal/customize-settings/profile-appearance),
+and were confirmed in the schema at the installed Terminal release tag.

@@ -16,6 +16,7 @@
   "newTabPosition": "afterCurrentTab",
   "profiles": {
     "defaults": {
+      "adjustIndistinguishableColors": "indexed",
       "colorScheme": "Modus Operandi",
       "experimental.retroTerminalEffect": false,
       "font": {

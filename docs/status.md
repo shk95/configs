@@ -148,6 +148,23 @@ colour-scheme query that pair depends on, so this copy carries the light member
 only. Acrylic stays off and the font stays `D2KodingLigature Nerd Font Mono` at
 size 13, unchanged from the superseded record.
 
+Since 2026-09-09, Windows Terminal adjusts indistinguishable indexed colors in
+every declared profile. PowerShell 7.6.5 emits directory names as intense text
+on indexed blue (`SGR 44;1`); under Terminal's default `bright` treatment and
+the copied palette, the foreground resolved to bright black `#595959`, only
+1.49:1 against `#0031A9`. Stable Terminal 1.24.11911.0's indexed adjustment
+makes that pair approximately `#CCCCCC` on `#0031A9`, or 6.50:1, without
+altering application truecolor output, the palette, selection, cursor, light
+theme, font or acrylic settings (#200).
+
+The same day, on Windows build 19044.7663 and Terminal 1.24.11911.0, the
+maintainer temporarily added the setting to the managed host file and inspected
+`Get-ChildItem`, ANSI foregrounds 0–15, intense text on indexed backgrounds,
+selected text, the cursor, and active/inactive tabs. Directory names and the
+indexed samples were readable, selection/current state stayed distinguishable,
+and a truecolor control remained unchanged. The original file was then restored
+byte for byte from its matching SHA-256 backup; no Apply ran.
+
 As of 2026-09-04, `bootstrap.ps1 -Check` returns 69 when WinGet or
 PowerShell 7 is missing, or 1 under `REQUIRE_NATIVE=1`
 (`INV windows/check-exit-contract`). Since 2026-09-05 a selected source no
