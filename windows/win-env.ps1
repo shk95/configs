@@ -1,3 +1,50 @@
+<#
+.SYNOPSIS
+Runs one public Windows environment command.
+
+.DESCRIPTION
+This is the single entry point for the Windows domain. The first positional
+argument selects a target script and every remaining argument is forwarded to
+that script unchanged. Use the help verb to list the targets, then use
+Get-Help on the target script for its parameters and examples.
+
+The check, validate, test, font, and help verbs do not apply desired state.
+The apply verb can install packages and write managed host files. The capture
+verb can write repository payloads and create commits after confirmation. The
+setup-dev verb installs contributor tooling.
+
+.PARAMETER Command
+One of check, apply, capture, validate, test, setup-dev, font, or help. A
+missing or unknown command exits 64.
+
+.EXAMPLE
+PS> .\windows\win-env.ps1 help
+
+Lists every verb and the Get-Help commands for detailed documentation.
+
+.EXAMPLE
+PS> .\windows\win-env.ps1 check -Feature terminal
+
+Read-only. Checks the terminal selection and its dependencies. The target
+status is returned unchanged: 0 converged, 2 drift, 69 unverified, or 1 failed.
+
+.EXAMPLE
+PS> .\windows\win-env.ps1 apply -Feature terminal
+
+Changes the host. Runs bootstrap.ps1, which can install PowerShell 7, and then
+deploys the terminal selection after its checks pass.
+
+.NOTES
+The entry point runs under Windows PowerShell 5.1 as well as PowerShell 7 so a
+new host can bootstrap PowerShell 7. It does not implement target-specific
+policy and it never turns check status 2 into a generic failure.
+
+.LINK
+https://github.com/shk95/configs/blob/dev/README.md#windows
+
+.LINK
+https://github.com/shk95/configs/blob/dev/CONTRIBUTING.md#windows-changes
+#>
 # win-env: the Windows domain's one entry point.
 #
 # Every verb runs exactly one script under tools\ and returns that script's
@@ -57,6 +104,11 @@ function Get-Usage {
     $lines += 'Arguments after the verb reach the script unchanged, for example:'
     $lines += '  win-env.ps1 check -Feature terminal'
     $lines += '  win-env.ps1 capture -Feature powertoys -Publish'
+    $lines += ''
+    $lines += 'Detailed help (these commands do not run the target script):'
+    $lines += '  Get-Help .\windows\win-env.ps1 -Detailed'
+    $lines += '  Get-Help .\windows\tools\bootstrap.ps1 -Full'
+    $lines += '  Get-Help .\windows\tools\capture.ps1 -Examples'
     return ($lines -join [Environment]::NewLine)
 }
 

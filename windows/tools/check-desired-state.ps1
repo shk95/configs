@@ -1,3 +1,42 @@
+<#
+.SYNOPSIS
+Parses every declared Windows desired-state payload.
+
+.DESCRIPTION
+Validates the manifest, every source and build-specific source variant, and
+every Lua example that the available native tools can parse. A missing parser
+does not hide results from parsers that are available; it is reported as
+unverified after those checks finish. This script reads repository files only.
+
+.PARAMETER RequireNativeTooling
+Requires complete parser evidence. Missing native tooling becomes exit 1
+instead of exit 69. Setting REQUIRE_NATIVE=1 has the same effect.
+
+.EXAMPLE
+PS> .\windows\tools\check-desired-state.ps1
+
+Read-only. Parses all sources possible on the current host and identifies any
+source that remains unverified.
+
+.EXAMPLE
+PS> .\windows\tools\check-desired-state.ps1 -RequireNativeTooling
+
+Read-only. Fails unless every declared source and Lua example can be parsed.
+
+.NOTES
+Exit 0 means every declared source parsed successfully. Exit 69 means every
+available parser succeeded but at least one native parser was unavailable.
+Exit 1 means a parser or manifest rejected desired state, or complete native
+evidence was required but unavailable. Install the pinned contributor tools
+with win-env.ps1 setup-dev; selected application tooling such as zellij may
+still come from the applied feature set.
+
+.LINK
+https://github.com/shk95/configs/blob/dev/README.md#windows
+
+.LINK
+https://github.com/shk95/configs/blob/dev/CONTRIBUTING.md#windows-changes
+#>
 [CmdletBinding()]
 param(
     # The merge gate must not accept a payload nobody parsed. CI passes this,

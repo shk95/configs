@@ -1,3 +1,91 @@
+<#
+.SYNOPSIS
+Captures managed Windows application settings into repository desired state.
+
+.DESCRIPTION
+capture.ps1 reads only managed host targets, compares them with the repository,
+shows the planned payload diff, and asks once before writing. After confirmation
+it writes repository payloads and creates one commit per affected feature. It
+never writes host configuration.
+
+-Feature and -Id are filters, not deployment selectors: when both are supplied
+their results intersect, and feature dependencies are not added. With neither,
+the script considers the selection recorded on an applied host or all declared
+features on a host with no state.
+
+On dev, capture creates a feature branch from the clone's origin/dev, but only
+when local dev exactly matches that remote-tracking ref. On another topic
+branch it commits on that branch. master is always refused. Use -WhatIf to
+inspect the decision and diff without writing or committing.
+
+.PARAMETER Feature
+Considers managed files owned by the named feature IDs. Unknown IDs are
+refused. Multiple or comma-separated values are accepted.
+
+.PARAMETER Id
+Considers only the named managed-file IDs. Unknown IDs are refused. When used
+with -Feature, a file must match both filters.
+
+.PARAMETER Branch
+Overrides the feature branch name created when capture starts on dev. It is
+ignored when capture starts on any other branch.
+
+.PARAMETER Publish
+After the single confirmation, pushes the resulting branch, opens one pull
+request against dev when needed, and arms merge-commit auto-merge. Git hooks
+and branch protection still apply. The script prints the pull-request URL and
+stops; it neither waits for CI nor performs the merge itself.
+
+.PARAMETER WhatIf
+Shows selection, refusals, the candidate diff, and branch plan, plus the publish
+plan when combined with -Publish. It then exits without writing a payload,
+creating a branch, committing, pushing, or opening a pull request.
+
+.EXAMPLE
+PS> .\windows\tools\capture.ps1 -Feature powertoys -WhatIf
+
+Read-only. Shows whether the managed PowerToys files can be captured and the
+exact repository diff that would result.
+
+.EXAMPLE
+PS> .\windows\tools\capture.ps1 -Feature terminal -Id windowsTerminal
+
+Changes the repository after confirmation. Captures only the intersection of
+the terminal feature and the windowsTerminal managed-file ID, then commits it.
+
+.EXAMPLE
+PS> .\windows\tools\capture.ps1 -Feature powertoys -Publish
+
+Changes the repository and GitHub after confirmation. Captures and commits the
+payloads, pushes the branch, opens or reuses a pull request, and arms auto-merge.
+
+.NOTES
+Requires Windows, PowerShell 7, Git, and a repository clone. -Publish also
+requires an authenticated GitHub CLI, a usable origin, and repository
+auto-merge support. The script refuses unsafe repository states before any
+payload write, including master, an unsuitable dev base, a dirty index, or an
+already-modified target payload. A rejected commit leaves its payloads staged
+and prints recovery instructions.
+
+For a stale dev base, run `git fetch origin dev` and then
+`git merge --ff-only origin/dev` on dev before retrying. Commit or deliberately
+unstage unrelated index changes; commit or restore an already-modified target
+payload. If the proposed capture branch already exists, finish that capture or
+delete the branch only after confirming it contains nothing still needed.
+
+For .wslconfig, capture preserves unmanaged keys but refuses when Windows build
+or WSL version cannot establish support, when the modelled networking policy is
+outside the supported boundary, or when a supported build-specific payload
+cannot be chosen. It reports DNS tunnelling limitations as information. File
+read-back is source evidence only: capture does not restart WSL and does not
+claim that the runtime adopted the file.
+
+.LINK
+https://github.com/shk95/configs/blob/dev/README.md#capture-a-change-made-in-the-application
+
+.LINK
+https://github.com/shk95/configs/blob/dev/CONTRIBUTING.md#windows-changes
+#>
 # ConvertTo-Json formats differently on Windows PowerShell 5 -- four-space
 # indentation and HTML/Unicode escaping the pretty-printer below does not
 # account for -- which would silently change what a captured JSON payload
