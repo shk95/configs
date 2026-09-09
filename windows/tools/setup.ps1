@@ -1,3 +1,85 @@
+<#
+.SYNOPSIS
+Checks or reconciles the selected Windows desired state.
+
+.DESCRIPTION
+setup.ps1 is the PowerShell 7 desired-state runner. It resolves feature
+selection and dependencies, observes packages and managed files, and either
+reports the result with -Check or reconciles the host after all safety checks
+pass. Use bootstrap.ps1 or win-env.ps1 for the normal public entry point.
+
+Choose at most one of -Feature, -Add, -Minimal, and -All. With no selector, an
+already-applied host keeps its recorded selection and a new host selects every
+declared feature. Dependencies and the required core feature are added. When a
+feature is deselected, its files and packages are left in place but stop being
+managed.
+
+.PARAMETER Check
+Reports desired-state drift without installing packages, writing files,
+changing terminal delegation, or updating state. It cannot be combined with
+-Force.
+
+.PARAMETER Force
+Runs reconciliation even when version, desired-state hash, and selection gates
+would otherwise skip it. It does not bypass selection conflicts, missing
+prerequisites, package detection conflicts, feature preconditions, or font
+overwrite protection. It cannot be combined with -Check.
+
+.PARAMETER Feature
+Replaces the host selection with the named feature IDs. Comma-separated values
+or a PowerShell string array are accepted.
+
+.PARAMETER Add
+Adds the named feature IDs to the selection recorded on this host.
+
+.PARAMETER Minimal
+Selects only required features, currently core.
+
+.PARAMETER All
+Selects every feature declared by the manifest.
+
+.EXAMPLE
+PS> .\windows\tools\setup.ps1 -Check -Minimal
+
+Read-only. Checks only the required feature set.
+
+.EXAMPLE
+PS> .\windows\tools\setup.ps1 -Check -Feature terminal
+
+Read-only. Checks terminal and the font, zellij, and core dependencies that
+make that selection deployable.
+
+.EXAMPLE
+PS> .\windows\tools\setup.ps1 -Force -Add wezterm
+
+Changes the host. Extends the recorded selection and forces reconciliation,
+while retaining every normal refusal and precondition.
+
+.NOTES
+Requires PowerShell 7, WinGet, and Windows. Under -Check, exit 0 means
+converged, 2 means drift, 69 means unverified, and 1 means failure; drift
+outranks unverified evidence. REQUIRE_NATIVE=1 turns any incomplete native
+evidence into exit 1.
+
+For the established Appx module-loading diagnosis, follow the troubleshooting
+link below. The documented probe requires neither -AllUsers nor elevation.
+
+Apply can install selected packages and fonts, back up and replace selected
+managed files, add the managed PowerShell profile hook, set terminal delegation
+when selected, briefly stop and restart PowerToys when selected, and write
+state below LOCALAPPDATA. It does not activate WSL configuration or prove its
+runtime effect. PowerToys can request elevation when it must be closed; a
+cancelled or failed elevation request aborts the run.
+
+.LINK
+https://github.com/shk95/configs/blob/dev/README.md#windows
+
+.LINK
+https://github.com/shk95/configs/blob/dev/CONTRIBUTING.md#windows-changes
+
+.LINK
+https://github.com/shk95/configs/blob/dev/docs/troubleshooting.md#checks
+#>
 [CmdletBinding(DefaultParameterSetName = 'Default')]
 param(
     [Parameter(ParameterSetName = 'Check')]

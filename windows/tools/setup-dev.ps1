@@ -1,3 +1,35 @@
+<#
+.SYNOPSIS
+Installs the pinned Windows contributor toolchain.
+
+.DESCRIPTION
+Reads windows/toolchain.json and installs any missing contributor tools. The
+current toolchain is Lua 5.4.6 from WinGet and Pester 5.7.1 from PowerShell
+Gallery at CurrentUser scope. An already-resolvable WinGet tool command is left
+alone without a version comparison; PowerShell modules must match the declared
+version. This toolchain validates repository content and is not Windows host
+desired state.
+
+.EXAMPLE
+PS> Get-Content .\windows\toolchain.json
+
+Read-only. Review the exact tools and versions before installing them.
+
+.EXAMPLE
+PS> .\windows\tools\setup-dev.ps1
+
+Changes the host. Installs missing pinned contributor tools from WinGet and
+PowerShell Gallery, then refreshes PATH for the current process.
+
+.NOTES
+Requires network access to the configured package sources and WinGet when its
+tool is missing. Pester is installed with Install-Module at
+CurrentUser scope. The script exits 0 when the toolchain is ready and 1 when an
+installation or provider fails. It does not Apply Windows desired state.
+
+.LINK
+https://github.com/shk95/configs/blob/dev/CONTRIBUTING.md#windows-changes
+#>
 [CmdletBinding()]
 param()
 

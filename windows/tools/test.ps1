@@ -1,3 +1,38 @@
+<#
+.SYNOPSIS
+Parses Windows PowerShell sources and runs the pinned Pester suite.
+
+.DESCRIPTION
+Loads the exact Pester version declared in windows/toolchain.json, parses every
+PowerShell script and module below windows, isolates tests from the caller's Git
+configuration, and runs the Windows test suite. The tests use fixture
+repositories and do not apply desired state to the host.
+
+.PARAMETER RequireNativeTooling
+Requires the pinned Pester version to be installed. Missing Pester becomes exit
+1 instead of exit 69. Setting REQUIRE_NATIVE=1 has the same effect.
+
+.EXAMPLE
+PS> .\windows\tools\test.ps1
+
+Read-only with respect to host desired state. Runs all locally available tests;
+publish end-to-end cases are skipped unless WIN_ENV_E2E is exactly 1.
+
+.EXAMPLE
+PS> $env:WIN_ENV_E2E = '1'; .\windows\tools\test.ps1 -RequireNativeTooling
+
+Runs the full capture publish fixtures used by CI and requires the pinned
+Pester tool. The end-to-end cases operate on isolated test repositories.
+
+.NOTES
+Requires Pester 5.7.1. Exit 0 means the suite passed, exit 69
+means the required Pester version is unavailable and native tooling was not
+required, and exit 1 means parsing or tests failed or required tooling is
+missing. Install the pinned tools with win-env.ps1 setup-dev.
+
+.LINK
+https://github.com/shk95/configs/blob/dev/CONTRIBUTING.md#windows-changes
+#>
 [CmdletBinding()]
 param(
     # CI passes this, as does the REQUIRE_NATIVE variable, so a runner that
