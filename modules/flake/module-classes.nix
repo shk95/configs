@@ -15,9 +15,8 @@
 # **Not under `flake`, deliberately.** The usual spelling of this is
 # `flake.modules.<class>.<name>`, which makes the fragments flake *outputs* — and
 # `nix flake check` then prints `warning: unknown flake output 'modules'` on every
-# run, including every hook and every CI job. This repository already carries one
-# such warning and has it recorded as a cost rather than as noise, so a second
-# one is not worth an export nothing consumes. flake-parts has a `touchup` module
+# run, including every hook and every CI job. A warning on every run is not
+# worth an export nothing consumes. flake-parts has a `touchup` module
 # for hiding outputs from `nix flake check`, which is the other way out if these
 # ever need to be public; exporting them then is one line:
 #
