@@ -18,3 +18,8 @@ The maintainer asked why the Windows entry point could not sit at the root like 
 ## Occurrences
 
 - 2026-09-05: one question, answered in the decision record.
+- 2026-09-10: asked again, this time about moving the Unix-like domain under
+  its own path. The cost the arm carries was measured: `classify` answers
+  `unixlike` with 8 patterns against `windows`' 1, and `tool/dispatch/select`
+  and `tool/version-control/domain-reads` each repeat that enumeration, so a
+  new Unix-like location is edited into three places.

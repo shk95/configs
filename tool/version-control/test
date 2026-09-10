@@ -1398,8 +1398,8 @@ if [ -n "$(commit_git status --porcelain --untracked-files=no)" ]; then
 fi
 commit_git switch -q feature/unixlike-fixture
 
-# AGENTS.md line 93: a tool that takes the hook's bypass silently creates the
-# policy a human was trusted to decide.
+# AGENTS.md § Governance design: a tool that takes the hook's bypass silently
+# creates the policy a human was trusted to decide.
 if bypass_output=$(run_commit y --no-verify cask add zzz); then
   echo "commit helper honoured a hook bypass" >&2
   exit 1
