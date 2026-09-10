@@ -48,6 +48,8 @@ on purpose.
 | addition | windows | Fixture tags are checked at Describe granularity; several tags name invariants their case cannot fail on | fixture-tag-fit-below-describe.md |
 | addition | repository | A domain's executable entry point lives under the domain's path; the Justfile is an unannotated exception | domain-tool-placement-and-justfile-exception.md |
 | addition | windows | Name the older-shell lane and its two scripts in the Windows procedure and evidence list | windows-older-shell-lane-in-procedure.md |
+| addition | repository | A citation into a living document names a section, not a line number | citation-by-section-not-line.md |
+| addition | repository | A code comment carries durable rationale that no registry or record holds | comment-carries-unregistered-rationale.md |
 | deletion | windows | windows/tools/check-powershell.ps1 is referenced by nothing | delete-check-powershell-script.md |
 | deletion | repository | The registry entry count in docs/status.md rots | drop-registry-count-from-status.md |
 | deletion | repository | The sentence that CI and the hooks call the Windows scripts directly | drop-ci-calls-scripts-directly-sentence.md |
