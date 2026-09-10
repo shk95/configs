@@ -4,10 +4,11 @@
 # applies a templated edit, shows exactly what it will do, and commits it.
 #
 # It composes the tools that already exist instead of becoming a second source
-# of policy, which AGENTS.md line 93 forbids. tool/version-control/classify
-# still answers who owns the change, tool/dispatch/select still answers which
-# checks it needs, and .githooks/evidence still decides what a check's exit
-# status means. Nothing here re-derives any of the three.
+# of policy, which AGENTS.md § Governance design forbids.
+# tool/version-control/classify still answers who owns the change,
+# tool/dispatch/select still answers which checks it needs, and
+# .githooks/evidence still decides what a check's exit status means. Nothing
+# here re-derives any of the three.
 #
 # The commit is a plain `git commit`, so .githooks/pre-commit runs and its
 # output reaches the terminal unaltered. That is the point rather than an
@@ -266,7 +267,7 @@ while [ "$#" -gt 0 ]; do
       ;;
     -n | --no-verify | --no-hooks | -f | --force)
       refuse "Refusing a hook bypass: $1" \
-        "AGENTS.md line 93: procedures and tools implement policy but must not silently create new policy. Skipping a gate is a human decision, not this tool's."
+        "AGENTS.md § Governance design: procedures and tools implement policy but must not silently create new policy. Skipping a gate is a human decision, not this tool's."
       ;;
     --)
       shift
@@ -1231,9 +1232,9 @@ mas_command() {
 }
 
 flake_command() {
-  # AGENTS.md line 127: do not update flake inputs unless the task calls for
-  # it. This is the only command that touches them, and it never runs as a side
-  # effect of another one.
+  # AGENTS.md § Rules that are expensive to break: do not update flake inputs
+  # unless the task calls for it. This is the only command that touches them,
+  # and it never runs as a side effect of another one.
   require_untouched flake.lock
 
   if [ -n "$input" ]; then
