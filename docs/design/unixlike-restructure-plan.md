@@ -170,6 +170,21 @@ and the contraction must not take them. And the Unix-like pathspec in
 always excluded payloads on the ground that data reads nothing. Neither is
 drift against a prediction; both are predictions that should have existed.
 
+**Judgement drift, found on 2026-09-12 while starting the move.** This
+document, the issue and the expansion itself all treated 3a as a
+classification problem. It is two: where a path belongs, and where an
+executable is found. The three tools answer the first. The hooks resolve
+`tool/checks/<name>` by literal path and the Unix-like CI job names each
+check by path, and none of that moved, so the expansion as shipped would have
+met the move as a merge failure — the CI job on a missing file, and, worse,
+`pre-commit` reporting every Unix-like check unverified and passing, which
+loses evidence more quietly than failing. The measure was extended the same
+day with a resolver in `.githooks/evidence` that both hooks call and a
+`checks` step in the CI job, all tagged `PROV`. The lesson generalises past
+this migration: an expansion has to widen every plane that names the old
+location, and "the classifier answers" is not the same claim as "the tooling
+finds it".
+
 **3b, migrate, `unixlike`.** `git mv` of `flake.nix`, `flake.lock`,
 `modules/`, `assets/`, `tool/checks/` and `tool/darwin/` into `unixlike/`;
 the Karabiner interpolation rewritten for the new layout; `.envrc` to

@@ -77,18 +77,31 @@ jobs:
     steps:
       - uses: actions/checkout@v7
       - uses: DeterminateSystems/nix-installer-action@v22
-      - run: tool/checks/format
-      - run: tool/checks/lint
-      - run: tool/checks/payloads-test
-      - run: tool/checks/karabiner-test
-      - run: tool/checks/flake-test
-      - run: tool/checks/composition-test
-      - run: tool/checks/eval-coverage-test
-      - run: tool/checks/prerequisite-test
-      - run: tool/checks/test
+      # PROV repository/unix-like-tree-migration
+      # The checks are moving into the domain (#219) and this job names each
+      # one by path, so it resolves the directory once instead of failing on
+      # a checkout where they have already moved. The contraction (#221)
+      # deletes this step and writes the domain path into each line below.
+      - id: checks
+        name: Resolve the Unix-like checks directory
+        run: |
+          if [ -d unixlike/tool/checks ]; then
+            echo "dir=unixlike/tool/checks" >>"$GITHUB_OUTPUT"
+          else
+            echo "dir=tool/checks" >>"$GITHUB_OUTPUT"
+          fi
+      - run: ${{ steps.checks.outputs.dir }}/format
+      - run: ${{ steps.checks.outputs.dir }}/lint
+      - run: ${{ steps.checks.outputs.dir }}/payloads-test
+      - run: ${{ steps.checks.outputs.dir }}/karabiner-test
+      - run: ${{ steps.checks.outputs.dir }}/flake-test
+      - run: ${{ steps.checks.outputs.dir }}/composition-test
+      - run: ${{ steps.checks.outputs.dir }}/eval-coverage-test
+      - run: ${{ steps.checks.outputs.dir }}/prerequisite-test
+      - run: ${{ steps.checks.outputs.dir }}/test
       # Composes every host twice; the merge gate runs it, the local gate
       # does not (INV unixlike/import-order-independence).
-      - run: tool/checks/import-order-test
+      - run: ${{ steps.checks.outputs.dir }}/import-order-test
 
   windows:
     name: Windows desired state

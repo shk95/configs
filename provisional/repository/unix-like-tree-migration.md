@@ -20,9 +20,20 @@ permanent one.
 Every disposable line carries `PROV repository/unix-like-tree-migration`. The
 set is one arm of `tool/version-control/classify`, one `case` block in
 `tool/dispatch/select`, the two `scan` calls and the code map in the header
-of `tool/version-control/domain-reads`, the fixture cases in
-`tool/version-control/test` that assert the old spellings still answer, and
-this entry.
+of `tool/version-control/domain-reads`, the `unixlike_check` function in
+`.githooks/evidence` with its two call sites in `.githooks/pre-commit` and
+`.githooks/pre-push`, the `checks` step in the Unix-like CI job and the ten
+lines that read its output, the fixture cases in
+`tool/version-control/test` that assert the old spellings still answer and
+that a check is resolved at either location, and this entry.
+
+Classification and resolution are two halves and the first shipped without
+the second, which #219 would have hit as a merge failure. Knowing where a
+path belongs does not tell a hook where to find an executable: the hooks
+resolve `tool/checks/<name>` by literal path, and CI names each check by
+path. Unresolved, `pre-commit` would have reported every Unix-like check
+unverified and passed, which loses evidence more quietly than failing, and
+the Unix-like CI job would have failed on a missing file.
 
 Two root paths are not part of the measure and carry no tag: `.envrc`,
 because direnv reads it at the root, and the `Justfile`, because where it
