@@ -75,12 +75,11 @@ One constraint has to survive the change, and it is the only hard one. Scope
 is decided per commit, from the paths that commit touches, and the tag, the
 CI lanes and the right to change a path all follow from it. A larger commit
 is more likely to span scopes, and what a two-scope commit is allowed to
-contain is currently unwritten:
-`docs/candidates/subject-scope-and-two-scope-allowance.md` records that
+contain is currently unwritten. A candidate open at the time of writing recorded that
 `CONTRIBUTING.md` calls one pairing "the one accepted two-scope commit" while
-the agent workflow states a general allowance, and leaves the question open
-for the maintainer. Adopting A pulls that candidate's `promote-when`, which
-fires when the branch-and-commit section is edited anyway.
+the agent workflow states a general allowance, and left the question to the
+maintainer; its `promote-when` fires when the branch-and-commit section is
+edited anyway, which adopting A does.
 
 The rule to write is therefore not "one commit per judgement point" but one
 commit per judgement point that is pure in scope.
@@ -141,9 +140,9 @@ the one being considered.
   falls behind cannot merge until it catches up, and GitHub's auto-merge does
   not do it. The procedure is a local merge of `dev` into the branch, which
   reruns the hooks and the native lanes against the tree that will actually
-  land; `docs/candidates/topic-branch-catch-up-procedure.md` holds it, its
-  `promote-when` is already satisfied, and under milestone branches it stops
-  being occasional.
+  land. A candidate held that procedure with its `promote-when` already
+  satisfied, and under milestone branches catching up stops being
+  occasional.
 - **Evidence ages with it, but less than this first said.** Corrected on
   2026-09-12 after checking the protection settings: `dev` requires
   `Required checks`, `strict` is on and administrators are included, so a
@@ -174,8 +173,8 @@ the one being considered.
 |---|---|
 | `AGENTS.md`, milestone paragraph | Today a closed milestone means its planned source work is complete and says nothing about merging. Tying closure to a merge is a tightening and has to be stated |
 | `CONTRIBUTING.md`, "Branch and commit flow" | Branch lifetime and the exception condition; the scope-purity rule for commit size |
-| `docs/candidates/subject-scope-and-two-scope-allowance.md` | Promoted, because the section is being edited and A depends on the answer |
-| `docs/candidates/topic-branch-catch-up-procedure.md` | Promoted, because catching up stops being occasional |
+| The two-scope allowance candidate | Promoted and deleted, because the section is being edited and A depends on the answer |
+| The catch-up procedure candidate | Promoted and deleted, because catching up stops being occasional |
 | `tool/version-control/commit` | Either taught about milestone branches or documented as something to run from `dev` |
 
 Nothing in `tool/`, the hooks or CI has to change for either half. That is

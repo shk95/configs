@@ -315,6 +315,17 @@ concern is to be the directory inside it, both naming the study in `source:`
 and neither moving a file. Stage 3, the migration itself, has not been
 opened.
 
+Also since 2026-09-12, a branch belongs to a milestone and merges through one
+pull request when that work is complete, and a commit marks a judgement point
+rather than a step (`docs/decisions/branch-lives-as-long-as-its-milestone.md`,
+`docs/decisions/commit-marks-a-judgement-point.md`). The known cost is taken
+deliberately: no branch here has lived past fourteen hours, so what a longer
+one does to catch-up frequency and review size is unmeasured, and the study
+behind the decisions stays `open` to record the first one. Two candidates
+promoted with it, the catch-up procedure and what a two-scope commit may
+contain, and both are now sentences in `CONTRIBUTING.md`. Nothing in `tool/`,
+the hooks or CI changed.
+
 ## Common
 
 No `common/` component exists.

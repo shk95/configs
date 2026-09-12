@@ -36,12 +36,13 @@ Rejected:
   with a branch's length rather than with the change's difficulty.
 - Widening what a two-scope commit may contain. Classifying each of the last
   sixty non-merge commits on `dev` gives none that spans more than one
-  scope, so the question is moot in practice, and `AGENTS.md`, "Governance
-  design", already decides the conflict recorded in
-  `docs/candidates/subject-scope-and-two-scope-allowance.md`: a procedure
-  must not silently create policy, so the agent workflow's broader wording
-  is not policy and `CONTRIBUTING.md`'s narrower sentence stands. Widening
-  it stays available as a deliberate act.
+  scope, so the question is moot in practice. The conflict a candidate had
+  recorded — the agent workflow stating a general allowance the procedure
+  does not — is decided by `AGENTS.md`, "Governance design": a procedure must
+  not silently create policy, so the broader wording is not policy and
+  `CONTRIBUTING.md`'s narrower sentence stands. That candidate is promoted
+  and deleted with this decision. Widening the allowance stays available as a
+  deliberate act.
 - A checked rule. "Judgement point" is not decidable by a tool, and a check
   that approximated it by counting files or lines would refuse correct
   commits. The scope half is already enforced; this half is not, and says so.

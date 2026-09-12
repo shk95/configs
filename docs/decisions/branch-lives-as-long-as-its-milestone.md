@@ -77,11 +77,12 @@ and arms auto-merge on the pull request already open from that head, which on
 a milestone branch would merge the unfinished milestone. Every templated edit
 it owns is `unixlike`, so running one on a `repository` milestone branch
 would also produce the two-scope commit the scope rule refuses. Two
-candidates promote with this decision,
-`docs/candidates/topic-branch-catch-up-procedure.md`, because catching up
-stops being occasional, and
-`docs/candidates/subject-scope-and-two-scope-allowance.md`, because the
-branch and commit section is being rewritten anyway. `AGENTS.md` gains the
+candidates promote with this decision and their files are deleted in the same
+change: the one that had recorded how a topic branch catches up with a moved
+`dev`, because catching up stops being occasional, and the one that had
+recorded what a commit subject's scope names and which two-scope commits are
+allowed, because the branch and commit section is being rewritten anyway.
+Both are now sentences in `CONTRIBUTING.md`. `AGENTS.md` gains the
 sentence that a milestone's branch merges when the milestone's work is
 complete; closure itself stays the maintainer's, and an issue already closes
 when its pull request merges. Nothing in `tool/`, the hooks or CI changes.
