@@ -81,7 +81,7 @@ native checks instead of treating them as passed.
 - [ ] A native build is performed on a matching system when sources or packages
       changed.
 - [ ] Foreign evaluation is reported as evaluation, not native build evidence.
-- [ ] Every source payload is declared in `assets/payloads.json` and parsed by
+- [ ] Every source payload is declared in `unixlike/payloads.json` and parsed by
       the tool that will consume it. Evaluation is not payload evidence: Nix
       copies these files without reading them.
 - [ ] A key written into a generated configuration exists in the pinned

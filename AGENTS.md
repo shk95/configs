@@ -21,10 +21,16 @@ workflows form a `repository` governance scope. This is not a fourth
 configuration domain, has no host output, and receives no domain release tag.
 Use it only when one configuration domain cannot honestly own the change.
 
-Files below `modules/` are flake-parts modules collected by import-tree for the
-Unix-like domain. Prefer one feature per file.
-`modules/flake/configurations.nix` is the only place that decides which
-deferred module classes reach a Unix-like host.
+The Unix-like domain owns one tree, `unixlike/`, and everything the classifier
+answers `unixlike` for lives under it, except `.envrc` and the `Justfile`,
+which stay at the root because direnv reads the first there and where the
+second belongs is a separate decision. Files below `unixlike/modules/` are
+flake-parts modules collected by import-tree. The first level there names a
+concern and the class a fragment reaches is read in the file that writes it,
+so a concern with one fragment is one file, and a concern with more, or with a
+payload or a script beside it, is a directory.
+`unixlike/modules/flake/configurations.nix` is the only place that decides
+which deferred module classes reach a Unix-like host.
 
 ## Domain boundaries
 
