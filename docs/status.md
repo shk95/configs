@@ -301,6 +301,27 @@ under the Windows tree is parsed for syntax (`check-desired-state.ps1`
 still parses the PowerShell payload it validates). `pre-push` audits the
 pushed history only.
 
+Since 2026-09-13 the Unix-like domain owns one tree. `unixlike/` holds the
+flake, the modules, the payloads and the domain's own tooling; `.envrc` and
+the `Justfile` stay at the root, and `tool/` holds repository tooling without
+exception. Inside the domain the first level of the module tree names a
+concern: five concerns that had fragments in more than one class became
+directories, five files that carried a platform in their name lost it, and
+each payload and the one script a module interpolates now sit beside that
+module. The classifier answers the domain with one pattern where it had eight,
+and the three tools that enumerated Unix-like locations no longer repeat a
+list (`docs/decisions/unixlike-domain-owns-its-tree.md`,
+`docs/decisions/concern-first-inside-the-domain.md`).
+
+Two things changed with it. The payload declaration moved to
+`unixlike/payloads.json` and the scanned tree became the module tree, so the
+Karabiner script is declared and parsed like the data payloads, in a `shell`
+format `sh -n` provides; payloads went from fifteen to sixteen. And the Darwin
+toplevel derivation path moved once, when the rearrangement renamed the files
+that activation interpolates; the relocation itself left all three paths
+byte-identical, which is why the two were separate changes. Native evidence
+for the moved tree on a WSL host has not been taken.
+
 Since 2026-09-12 the repository has an external layer: `docs/design/` holds
 the argument for a direction and carries no authority, and
 `tool/version-control/design-citations` refuses a citation of a document

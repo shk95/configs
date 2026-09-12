@@ -27,9 +27,9 @@ otherwise the reasoning goes quietly stale.
 | 0 | Correct text that is false today | repository, unixlike | merged into `dev` as #213 and #214 | — |
 | 1 | Record the observations as candidates | repository | merged with them | — |
 | 2 | Two decisions: the domain tree, and concern first | repository | recorded on 2026-09-12, in the outcome list above | — |
-| 3 | Migrate: expand, migrate, contract | repository, unixlike, repository | blocked | 2 |
-| 4 | Split `commit`, moving authoring knowledge into the domain | repository, unixlike | blocked | 3 |
-| 5 | A domain entry point | unixlike | blocked | 3 |
+| 3 | Migrate: expand, migrate, contract | repository, unixlike, repository | merged on 2026-09-12 and 09-13; the ledger below is its result | — |
+| 4 | Split `commit`, moving authoring knowledge into the domain | repository, unixlike | open | a study of its own |
+| 5 | A domain entry point | unixlike | open | a study of its own |
 
 Stage 3 blocks 4 and 5 structurally rather than by schedule. Without a domain
 directory there is nowhere to put the pieces the split produces, and building
@@ -331,9 +331,11 @@ forwards its target's exit status unchanged, which needs a new invariant,
 
 ## Still unverified
 
-One run of `home-manager news` against the subdirectory flakeref on a WSL
-host. The script's own parsing and the `nix eval` it performs were both
-checked and no failing path is visible.
+One run of `home-manager` against the domain's flakeref on a WSL host. The
+script's own parsing and the `nix eval` it performs were both checked and no
+failing path is visible, but the command line has not been run. It is the only
+thing keeping the `unixlike` milestone's evidence issue open now that stage 3's
+source work has merged, and it is the one piece no Mac can produce.
 
 ## 2026-09-12: the sequence, revised
 
