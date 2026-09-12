@@ -199,9 +199,24 @@ and grepping for what pointed at it.
 
 The general form of the correction: before a path moves, every reference to
 it that is *executed* has to resolve at either location, and the way to find
-them is to perform the move and search, not to reason about it. The count for
-this tree was three tools, two hooks, one CI job, one watcher, one helper,
-two Git configuration files and one agent allowlist.
+them is to perform the move and search, not to reason about it.
+
+**And grepping was not enough either.** A fourth round came out of running the
+gates with the tree moved rather than reading them. `tool/version-control/hygiene`
+reads the inventory to learn which names are declared, `tool/doctor.sh` asks
+the flake two questions by path, `tool/version-control/audit` reads the
+lock's history by pathspec, and the commit fixtures copy the Karabiner tool
+and payloads out of the real tree. Hygiene and doctor failed outright, which
+is the right direction; audit would have gone on passing while silently
+covering no new refresh. The counting method that worked, in the end, was
+neither reading the plan nor grepping the tree but applying the move and
+running every gate.
+
+The move also exposed a latent bug it did not cause.
+`tool/checks/karabiner-test` resolved its prerequisite library from `$0`
+*after* `cd`-ing to the repository root, which worked only while the two were
+the same directory. Every other check resolves it before. Fixed with the move,
+in the domain's own commit.
 
 **3b, migrate, `unixlike`.** `git mv` of `flake.nix`, `flake.lock`,
 `modules/`, `assets/`, `tool/checks/` and `tool/darwin/` into `unixlike/`;

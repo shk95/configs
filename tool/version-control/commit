@@ -1251,7 +1251,14 @@ flake_command() {
   # AGENTS.md § Rules that are expensive to break: do not update flake inputs
   # unless the task calls for it. This is the only command that touches them,
   # and it never runs as a side effect of another one.
-  require_untouched flake.lock
+  # PROV repository/unix-like-tree-migration
+  # The lock is moving into the domain (#219). Every path below follows it;
+  # the commit subjects do not, because they name the file rather than a
+  # location. The contraction (#221) replaces this with the domain path.
+  flake_lock=$(unixlike_path flake.lock)
+  flake_dir=$(dirname "$flake_lock")
+
+  require_untouched "$flake_lock"
 
   if [ -n "$input" ]; then
     message="chore(unixlike-deps): refresh $input in flake.lock"
@@ -1261,11 +1268,11 @@ flake_command() {
     action_line="nix flake update"
   fi
 
-  require_classified flake.lock
+  require_classified "$flake_lock"
 
-  printf 'edit: flake.lock\n'
+  printf 'edit: %s\n' "$flake_lock"
   printf 'action: %s\n' "$action_line"
-  report_plan "$message" flake.lock
+  report_plan "$message" "$flake_lock"
   report_publish_plan
 
   [ "$dry_run" -eq 0 ] || exit 0
@@ -1286,22 +1293,22 @@ flake_command() {
 
   create_publish_branch
 
-  before=$(git hash-object flake.lock)
+  before=$(git hash-object "$flake_lock")
   update_status=0
   if [ -n "$input" ]; then
-    nix flake update "$input" || update_status=$?
+    nix flake update --flake "./$flake_dir" "$input" || update_status=$?
   else
-    nix flake update || update_status=$?
+    nix flake update --flake "./$flake_dir" || update_status=$?
   fi
   if [ "$update_status" != 0 ]; then
     # Restore first: a failed update may still have written a partial lock, and
     # the branch cannot be left behind for the next run to refuse over.
-    git checkout --quiet -- flake.lock
+    git checkout --quiet -- "$flake_lock"
     remove_created_branch
     refuse "$action_line exited $update_status." \
       "Nothing was committed. Read what nix reported and run this again."
   fi
-  after=$(git hash-object flake.lock)
+  after=$(git hash-object "$flake_lock")
 
   if [ "$before" = "$after" ]; then
     printf '\nflake.lock is unchanged; nothing to commit.\n'
@@ -1313,8 +1320,8 @@ flake_command() {
 
   # CONTRIBUTING.md: flake.lock refreshes go in dedicated chore(unixlike-deps)
   # commits, so nothing else may join this one.
-  git add -- flake.lock
-  commit_staged "$message" flake.lock
+  git add -- "$flake_lock"
+  commit_staged "$message" "$flake_lock"
   publish_commit
 }
 
