@@ -7,7 +7,7 @@
 # application starts. Evaluation says nothing about payload content, so this is
 # the only check that can say anything about it.
 #
-# `assets/payloads.json` is the declaration, and coverage is enforced in both
+# `payloads.json` at the domain root is the declaration, and coverage is enforced in both
 # directions. A file that is not declared would silently escape validation,
 # which is the failure this check exists to prevent; a declaration with no file
 # is stale. A declared format with no validator here is also a failure, so
@@ -29,8 +29,11 @@ require_command nix
 repo=$(CDPATH= cd -- "$(dirname "$0")/../.." && pwd)
 cd "$repo"
 
-root=${1:-assets}
-manifest="$root/payloads.json"
+root=${1:-modules}
+# The declaration sits at the domain root rather than inside the scanned
+# tree, because the scanned tree is now the module tree: a payload lives beside
+# the module that delivers it (docs/decisions/concern-first-inside-the-domain.md).
+manifest=${2:-payloads.json}
 
 fail() {
   printf '\033[31m✗ %s\033[0m\n' "$1" >&2
@@ -47,7 +50,10 @@ nix shell nixpkgs#jq -c jq -r '.payloads[] | "\(.format)\t\(.source)"' "$manifes
   | sort >"$work/declared"
 
 cut -f2 "$work/declared" | sort >"$work/declared-sources"
-find "$root" -type f ! -name payloads.json | sed "s|^$root/||" | sort >"$work/present"
+# Every file under the module tree that is not a module is payload: a Nix file
+# is read by the evaluator, and everything else is copied without being read,
+# which is the gap this check exists to close.
+find "$root" -type f ! -name '*.nix' | sed "s|^$root/||" | sort >"$work/present"
 
 coverage=0
 
@@ -67,7 +73,7 @@ fi
 
 [ "$coverage" -eq 0 ] || exit 1
 
-unknown=$(cut -f1 "$work/declared" | sort -u | grep -vxE 'json|kdl|lua|powershell' || true)
+unknown=$(cut -f1 "$work/declared" | sort -u | grep -vxE 'json|kdl|lua|powershell|shell' || true)
 [ -z "$unknown" ] || fail "declared format has no validator here: $(echo $unknown)"
 
 paths_for() {
@@ -114,6 +120,18 @@ if [ -n "$powershell" ]; then
         exit 1
       }
     "
+  done
+fi
+
+# A script a module interpolates into an activation is copied without being
+# read, exactly like a data payload, so it is declared and parsed here too.
+# POSIX sh is the shell its own header names, and `sh -n` is that shell's
+# parser rather than a stand-in for it.
+shell=$(paths_for shell)
+if [ -n "$shell" ]; then
+  printf '→ shell\n'
+  for file in $shell; do
+    sh -n "$file" || fail "sh rejected '$file'."
   done
 fi
 

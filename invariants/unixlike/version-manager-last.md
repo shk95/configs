@@ -1,7 +1,7 @@
 id: unixlike/version-manager-last
 statement: An imperative version manager is never declared as a package, and its hook runs after every declarative PATH entry.
 rationale: docs/architecture.md § Unix-like domain
-enforced-by: schema unixlike/modules/shell.nix
+enforced-by: schema unixlike/modules/shell/shared.nix
 enforced-by: fixture unixlike/tool/checks/flake-test
 decision: docs/decisions/sdkman-adopted-not-owned.md § SDKMAN is adopted but not owned
 

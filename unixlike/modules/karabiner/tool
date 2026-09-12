@@ -41,8 +41,8 @@
 # Options, all optional; the host reads are overridable so the fixtures in
 # tool/checks/karabiner-test can run on a machine that is not a Mac.
 #
-#   --payload FILE       default assets/karabiner/karabiner.json
-#   --hotkeys FILE       default assets/karabiner/symbolic-hotkeys.json
+#   --payload FILE       default the karabiner.json beside this script
+#   --hotkeys FILE       default the symbolic-hotkeys.json beside this script
 #   --host FILE          default ~/.config/karabiner/karabiner.json
 #   --hotkeys-host FILE  default `defaults export com.apple.symbolichotkeys -`
 #                        piped through `plutil -convert json -o - -`
@@ -70,12 +70,12 @@
 # Manager activation can hand in the store path it already has and a clone can
 # run this with nothing installed beyond Nix.
 #
-# usage: tool/darwin/karabiner <project|check|apply> [options]
+# usage: modules/karabiner/tool <project|check|apply> [options]
 
 set -eu
 
 usage() {
-  echo "usage: tool/darwin/karabiner <project|check|apply> [--payload FILE]" >&2
+  echo "usage: modules/karabiner/tool <project|check|apply> [--payload FILE]" >&2
   echo "         [--hotkeys FILE] [--host FILE] [--hotkeys-host FILE] [--target FILE]" >&2
   exit 2
 }
@@ -168,10 +168,10 @@ plutil_bin=$(command -v plutil 2>/dev/null || echo /usr/bin/plutil)
 # Resolved after the guards, so a host that cannot answer says so rather than
 # printing a missing-utility error from the path arithmetic first.
 here=$(CDPATH= cd -- "$(dirname -- "$0")" && pwd)
-root=$(CDPATH= cd -- "$here/../.." && pwd)
 
-[ -n "$payload" ] || payload="$root/assets/karabiner/karabiner.json"
-[ -n "$hotkeys" ] || hotkeys="$root/assets/karabiner/symbolic-hotkeys.json"
+
+[ -n "$payload" ] || payload="$here/karabiner.json"
+[ -n "$hotkeys" ] || hotkeys="$here/symbolic-hotkeys.json"
 [ -n "$host" ] || host="${HOME:-}/.config/karabiner/karabiner.json"
 [ -n "$target" ] || target=$host
 

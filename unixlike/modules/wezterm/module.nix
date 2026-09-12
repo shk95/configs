@@ -10,10 +10,10 @@ _: {
     };
 
     xdg.configFile = {
-      "wezterm/wezterm.lua".source = ../assets/wezterm/wezterm.lua;
-      "wezterm/config".source = ../assets/wezterm/config;
-      "wezterm/platform".source = ../assets/wezterm/platform;
-      "wezterm/fonts.json".source = ../assets/wezterm/fonts.json;
+      "wezterm/wezterm.lua".source = ./wezterm.lua;
+      "wezterm/config".source = ./config;
+      "wezterm/platform".source = ./platform;
+      "wezterm/fonts.json".source = ./fonts.json;
     };
   };
 }

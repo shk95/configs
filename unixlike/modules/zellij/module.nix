@@ -42,7 +42,7 @@ _: {
     programs.zellij = {
       enable = true;
       package = pkgs.zellij;
-      extraConfig = builtins.readFile ../assets/zellij/config.kdl;
+      extraConfig = builtins.readFile ./config.kdl;
     };
   };
 

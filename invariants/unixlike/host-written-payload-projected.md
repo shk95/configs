@@ -1,7 +1,7 @@
 id: unixlike/host-written-payload-projected
 statement: A payload the host application rewrites in place is compared, applied and captured by one projection onto the members the payload declares; what else the host keeps in that file is runtime and is neither reported as drift nor captured.
 rationale: docs/architecture.md § Unix-like domain
-enforced-by: tool unixlike/tool/darwin/karabiner
+enforced-by: tool unixlike/modules/karabiner/tool
 enforced-by: fixture unixlike/tool/checks/karabiner-test
 enforced-by: fixture tool/version-control/test
 decision: docs/decisions/karabiner-desired-state-by-projection.md § Karabiner desired state is compared and applied by projection
