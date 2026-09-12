@@ -306,11 +306,12 @@ the argument for a direction and carries no authority, and
 `tool/version-control/design-citations` refuses a citation of a document
 there from anything that does, on every commit and in the CI scan job, which
 now carries seven repository-wide scans
-(`docs/decisions/design-documents-outside-the-authority-model.md`). The
-directory is empty of documents: the three that exist are Korean HTML
-artefacts outside the repository, and rewriting them in English here is the
-next change. Until they land, the decisions that came out of them cite no
-source.
+(`docs/decisions/design-documents-outside-the-authority-model.md`). It holds
+three documents, ported the same day from the HTML artefacts they were
+written as: a map of the tree as read at `dev` fc57495, the study that judged
+it, and the migration plan, which is the one still `open`. The two decisions
+that came out of the study are not recorded yet, so nothing cites the study
+as a source.
 
 ## Common
 

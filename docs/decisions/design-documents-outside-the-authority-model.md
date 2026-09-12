@@ -69,9 +69,10 @@ The tree gains a directory whose contents are never authoritative, which a
 reader has to learn to read as argument and an agent must not follow as rule;
 the charter in `docs/design/README.md` is the whole of that warning. Documents
 are never deleted, so the directory only grows and `superseded` is its only
-retirement. The three documents that exist today are Korean HTML artefacts and
-are rewritten in English, because the repository is public and its text is
-English (`CONTRIBUTING.md`, "Documentation ownership"). And the checked rule
+retirement. Porting the three documents that opened the area costs a
+translation: they were written as Korean HTML artefacts, and the repository is
+public and its text is English (`CONTRIBUTING.md`, "Documentation
+ownership"). And the checked rule
 is lexical: it separates citing a document from naming the directory, so a
 citation written in words rather than as a path passes, and a reviewer is what
 catches it.

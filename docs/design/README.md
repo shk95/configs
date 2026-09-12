@@ -82,3 +82,6 @@ from anything that carries authority
 
 | Kind | Scope | Title | Status | Record |
 |---|---|---|---|---|
+| map | unixlike, windows, repository | What the three scopes own and what a change passes through | closed | repository-domain-map.md |
+| study | unixlike, repository | Why the Unix-like domain's shape costs what it does | closed | unixlike-restructure-study.md |
+| plan | unixlike, repository | Moving the Unix-like domain into its own tree, in stages | open | unixlike-restructure-plan.md |
