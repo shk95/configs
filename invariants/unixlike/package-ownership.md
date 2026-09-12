@@ -1,8 +1,8 @@
 id: unixlike/package-ownership
 statement: A package is declared by exactly one module: a feature module when that module generates its configuration, otherwise the shared package list, and a system module only when a service, activation script, or system account needs it.
 rationale: docs/architecture.md § Unix-like domain
-enforced-by: schema modules/packages.nix
-enforced-by: fixture tool/checks/flake-test
+enforced-by: schema unixlike/modules/packages.nix
+enforced-by: fixture unixlike/tool/checks/flake-test
 decision: docs/decisions/package-ownership-by-generating-module.md § A package is owned by the module that configures it
 
 Two declaring modules make precedence an accident of merge order. The rule

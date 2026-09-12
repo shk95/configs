@@ -1,8 +1,8 @@
 id: unixlike/import-order-independence
 statement: No list-valued option depends on the order in which module files were collected.
 rationale: docs/architecture.md § Unix-like domain
-enforced-by: tool tool/checks/import-order
-enforced-by: fixture tool/checks/import-order-test
+enforced-by: tool unixlike/tool/checks/import-order
+enforced-by: fixture unixlike/tool/checks/import-order-test
 
 Module files are gathered by a directory walk. A value that is correct only
 because two files happen to sort a certain way breaks on a rename. The

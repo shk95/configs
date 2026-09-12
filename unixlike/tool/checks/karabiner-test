@@ -15,10 +15,13 @@
 
 set -e
 
+# Resolved before the `cd`, like every other check here: `$0` is relative to
+# the directory this was invoked from, so resolving it afterwards only worked
+# while the domain root and the invocation directory were the same place.
+. "$(CDPATH= cd -- "$(dirname -- "$0")" && pwd)/prerequisite"
+
 repo=$(CDPATH= cd -- "$(dirname -- "$0")/../.." && pwd)
 cd "$repo"
-
-. "$(CDPATH= cd -- "$(dirname -- "$0")" && pwd)/prerequisite"
 
 tool=tool/darwin/karabiner
 payload=assets/karabiner/karabiner.json

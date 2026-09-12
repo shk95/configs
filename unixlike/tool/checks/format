@@ -9,4 +9,9 @@ set -e
 . "$(CDPATH= cd -- "$(dirname -- "$0")" && pwd)/prerequisite"
 require_command nix
 
+# The domain root, which is where the flake is. Resolved from this script
+# rather than from the working directory, because the two stopped being the
+# same place when the domain moved into its own tree.
+cd "$(CDPATH= cd -- "$(dirname -- "$0")/../.." && pwd)"
+
 nix fmt -- --check .
