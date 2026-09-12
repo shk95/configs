@@ -52,13 +52,20 @@ jobs:
         shell: bash
         run: |
           set -euo pipefail
-          applies_to=$(sed -n 's/^ *appliesTo = "\(.*\)";$/\1/p' modules/zellij.nix)
+          # PROV repository/unix-like-tree-migration
+          # The module is moving into the domain (#219) and this job reads it
+          # by path. The contraction (#221) leaves the domain path alone here.
+          overlay=modules/zellij.nix
+          if [[ -f unixlike/modules/zellij.nix ]]; then
+            overlay=unixlike/modules/zellij.nix
+          fi
+          applies_to=$(sed -n 's/^ *appliesTo = "\(.*\)";$/\1/p' "$overlay")
           # The overlay pins the pull request's commit range base...head; the
           # head is the commit the pull request must still carry.
-          range=$(sed -n 's|.*/zellij/compare/\([0-9a-f]\{40\}\)\.\.\.\([0-9a-f]\{40\}\)\.patch.*|\1...\2|p' modules/zellij.nix)
+          range=$(sed -n 's|.*/zellij/compare/\([0-9a-f]\{40\}\)\.\.\.\([0-9a-f]\{40\}\)\.patch.*|\1...\2|p' "$overlay")
           pinned=${range##*...}
           if [[ -z "$applies_to" || -z "$range" ]]; then
-            echo "modules/zellij.nix carries no appliesTo or no pinned commit range; the overlay was retired or renamed" >&2
+            echo "$overlay carries no appliesTo or no pinned commit range; the overlay was retired or renamed" >&2
             exit 1
           fi
           echo "APPLIES_TO=$applies_to" >>"$GITHUB_ENV"

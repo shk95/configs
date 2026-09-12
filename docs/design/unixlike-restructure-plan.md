@@ -185,6 +185,24 @@ this migration: an expansion has to widen every plane that names the old
 location, and "the classifier answers" is not the same claim as "the tooling
 finds it".
 
+**And the planes were more than two.** Starting the move a second time, with
+the tree actually moved in the index, turned up five more places outside the
+domain that name a moving path and would break: `tool/version-control/commit`
+edits the Homebrew module and both Karabiner payloads by literal path, the
+zellij watcher reads `modules/zellij.nix` with `sed`, `.gitattributes` holds
+the line endings of the PowerShell payload, `.gitignore` keeps a host-local
+WezTerm file out, and the agent settings allow the checks directory. None of
+them would have failed a gate — which is what makes them worse than the CI
+job, not better. The expansion is three commits rather than one, and the
+number was not knowable from reading the plan; it came from moving the tree
+and grepping for what pointed at it.
+
+The general form of the correction: before a path moves, every reference to
+it that is *executed* has to resolve at either location, and the way to find
+them is to perform the move and search, not to reason about it. The count for
+this tree was three tools, two hooks, one CI job, one watcher, one helper,
+two Git configuration files and one agent allowlist.
+
 **3b, migrate, `unixlike`.** `git mv` of `flake.nix`, `flake.lock`,
 `modules/`, `assets/`, `tool/checks/` and `tool/darwin/` into `unixlike/`;
 the Karabiner interpolation rewritten for the new layout; `.envrc` to

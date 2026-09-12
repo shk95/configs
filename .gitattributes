@@ -1,6 +1,10 @@
 * text=auto eol=lf
 *.ps1 text eol=crlf
 *.psm1 text eol=crlf
+# PROV repository/unix-like-tree-migration
+# The second line is where the tree is moving (#219); the first goes with the
+# contraction (#221). A pattern that matches nothing is inert, so both stand.
 assets/powershell/*.ps1 text eol=lf
+unixlike/assets/powershell/*.ps1 text eol=lf
 *.png binary
 *.woff2 binary

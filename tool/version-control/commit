@@ -92,15 +92,31 @@ hooks_enabled() {
     done | grep -q yes
 }
 
-homebrew_module=modules/darwin-homebrew.nix
+# PROV repository/unix-like-tree-migration
+# The Unix-like tree is moving into the domain (#219) and this helper edits
+# four of its files by literal path, so it looks in the domain first and falls
+# back to where they are today. A path that exists at neither comes back as
+# the domain's, which is where it will be; the command's own checks report it
+# then. The contraction (#221) deletes this and leaves the domain prefix.
+unixlike_path() {
+  if [ -e "unixlike/$1" ]; then
+    printf 'unixlike/%s\n' "$1"
+  elif [ -e "$1" ]; then
+    printf '%s\n' "$1"
+  else
+    printf 'unixlike/%s\n' "$1"
+  fi
+}
+
+homebrew_module=$(unixlike_path modules/darwin-homebrew.nix)
 
 # The two payloads `capture karabiner` reads back, and the tool that knows how
-# to read them off a host. tool/darwin/karabiner owns the projection, the
+# to read them off a host. The Karabiner tool owns the projection, the
 # platform guard and the host defaults; this command only decides that a
 # capture is a commit.
-karabiner_tool=tool/darwin/karabiner
-karabiner_payload=assets/karabiner/karabiner.json
-karabiner_hotkeys=assets/karabiner/symbolic-hotkeys.json
+karabiner_tool=$(unixlike_path tool/darwin/karabiner)
+karabiner_payload=$(unixlike_path assets/karabiner/karabiner.json)
+karabiner_hotkeys=$(unixlike_path assets/karabiner/symbolic-hotkeys.json)
 
 # One scratch directory for the candidate edit, the pull-request body and the
 # copy of the hook's output. Trapped on the signals a prompt is interrupted
