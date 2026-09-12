@@ -1017,9 +1017,18 @@ cp -R "$root/tool/dispatch" "$commit_root/tool/dispatch"
 # stand-in for either side would leave that decision proving nothing. The host
 # it reads is faked through --host and --hotkeys-host, which is the whole
 # reason those flags exist.
-cp -R "$root/tool/darwin" "$commit_root/tool/darwin"
+# PROV repository/unix-like-tree-migration
+# The Karabiner tool is moving into the domain (#219); the fixture copies
+# whichever is there into the shape the helper resolves. The contraction
+# (#221) leaves the domain path.
+karabiner_src=$root/tool/darwin
+[ -d "$karabiner_src" ] || karabiner_src=$root/unixlike/tool/darwin
+cp -R "$karabiner_src" "$commit_root/tool/darwin"
 mkdir -p "$commit_root/assets"
-cp -R "$root/assets/karabiner" "$commit_root/assets/karabiner"
+# PROV repository/unix-like-tree-migration
+karabiner_assets=$root/assets/karabiner
+[ -d "$karabiner_assets" ] || karabiner_assets=$root/unixlike/assets/karabiner
+cp -R "$karabiner_assets" "$commit_root/assets/karabiner"
 # The pre-commit hook this fixture enables also runs
 # tool/version-control/invariants, whose own cases are below; here it is a
 # stand-in so only the behaviour under test decides the outcome.
@@ -1718,7 +1727,7 @@ run_capture() {
 capture_payloads_untouched() {
   for capture_payload in karabiner.json symbolic-hotkeys.json; do
     if ! cmp -s "$commit_root/assets/karabiner/$capture_payload" \
-      "$root/assets/karabiner/$capture_payload"; then
+      "$karabiner_assets/$capture_payload"; then
       echo "capture karabiner rewrote assets/karabiner/$capture_payload while $1" >&2
       exit 1
     fi
@@ -1736,9 +1745,9 @@ capture_payloads_untouched() {
 {
   printf '{\n'
   printf '  "machine_specific": {},\n'
-  tail -n +2 "$root/assets/karabiner/karabiner.json"
+  tail -n +2 "$karabiner_assets/karabiner.json"
 } >"$capture_host"
-cp "$root/assets/karabiner/symbolic-hotkeys.json" "$capture_hotkeys_host"
+cp "$karabiner_assets/symbolic-hotkeys.json" "$capture_hotkeys_host"
 
 capture_before=$(commit_count)
 capture_status=0
@@ -1792,10 +1801,10 @@ capture_payloads_untouched "the host was not a Mac"
 {
   printf '{\n'
   printf '  "machine_specific": {},\n'
-  tail -n +2 "$root/assets/karabiner/karabiner.json"
+  tail -n +2 "$karabiner_assets/karabiner.json"
 } | sed 's/"check_for_updates": false/"check_for_updates": true/' >"$capture_host"
 sed 's/"enabled": false/"enabled": true/' \
-  "$root/assets/karabiner/symbolic-hotkeys.json" >"$capture_hotkeys_host"
+  "$karabiner_assets/symbolic-hotkeys.json" >"$capture_hotkeys_host"
 
 capture_before=$(commit_count)
 if ! capture_output=$(run_capture n --dry-run --host "$capture_host" \

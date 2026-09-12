@@ -16,6 +16,14 @@ export MSYS_NO_PATHCONV MSYS2_ARG_CONV_EXCL
 
 cd "$(dirname "$0")/.." || exit 1
 
+# PROV repository/unix-like-tree-migration
+# Where the Unix-like flake is. It is moving into the domain (#219) and this
+# script asks the flake two questions by path: whether this machine can
+# resolve it at all, and which flavours it declares. The contraction (#221)
+# replaces this with the domain path.
+unixlike_flake=.
+[ -f unixlike/flake.nix ] && unixlike_flake=./unixlike
+
 scope=${1:-all}
 case "$scope" in
   all|unixlike|windows|common|repository) ;;
@@ -52,7 +60,7 @@ if [ "$scope" = all ] || [ "$scope" = unixlike ]; then
 # that cannot help. Not knowing is its own answer, and it stays a ✗ because the
 # question being asked is whether this machine can build.
   if command -v nix >/dev/null 2>&1; then
-    if err=$(nix flake metadata --no-write-lock-file 2>&1 >/dev/null); then
+    if err=$(nix flake metadata --no-write-lock-file "$unixlike_flake" 2>&1 >/dev/null); then
       ok "nix-command and flakes enabled"
     else
       case "$err" in
@@ -170,12 +178,12 @@ if [ "$scope" = all ] || [ "$scope" = unixlike ]; then
 
 found=0
 
-if grep -Rqs --include='*.nix' 'homeConfigurations' flake.nix modules 2>/dev/null; then
+if grep -Rqs --include='*.nix' 'homeConfigurations' "$unixlike_flake/flake.nix" "$unixlike_flake/modules" 2>/dev/null; then
   found=1
   ok "homeConfigurations — build and switch here"
 fi
 
-if grep -Rqs --include='*.nix' 'nixosConfigurations' flake.nix modules 2>/dev/null; then
+if grep -Rqs --include='*.nix' 'nixosConfigurations' "$unixlike_flake/flake.nix" "$unixlike_flake/modules" 2>/dev/null; then
   found=1
   if [ -r /etc/os-release ] && grep -q '^ID=nixos' /etc/os-release; then
     ok "nixosConfigurations — build and switch here"
@@ -185,7 +193,7 @@ if grep -Rqs --include='*.nix' 'nixosConfigurations' flake.nix modules 2>/dev/nu
   fi
 fi
 
-if grep -Rqs --include='*.nix' 'darwinConfigurations' flake.nix modules 2>/dev/null; then
+if grep -Rqs --include='*.nix' 'darwinConfigurations' "$unixlike_flake/flake.nix" "$unixlike_flake/modules" 2>/dev/null; then
   found=1
   if [ "$(uname -s)" = Darwin ]; then
     ok "darwinConfigurations — build and switch here"

@@ -28,8 +28,10 @@ lines that read its output, the fixture cases in
 that a check is resolved at either location, the `unixlike_path` function in
 `tool/version-control/commit` with the four paths it resolves, the overlay
 path the zellij watcher reads, the second pattern in each of `.gitattributes`
-and `.gitignore`, and the second allowlist entry in `.claude/settings.json`,
-and this entry.
+and `.gitignore`, and the second allowlist entry in `.claude/settings.json`, the inventory path
+in `tool/version-control/hygiene`, the flake directory in `tool/doctor.sh`,
+the lock pathspec in `tool/version-control/audit`, and the two source
+directories the commit fixtures copy from, and this entry.
 
 Classification and resolution are two halves and the first shipped without
 the second, which #219 would have hit as a merge failure. Knowing where a

@@ -222,13 +222,18 @@ if [ "$tag_count" -eq 0 ]; then
 fi
 
 root_commit=$(git rev-list --max-parents=0 HEAD | head -1)
-for sha in $(git log --format='%H' -- flake.lock); do
+# PROV repository/unix-like-tree-migration
+# The lock is moving into the domain (#219) and this rule reads history, so it
+# has to see refreshes at both spellings: the old ones are already committed
+# and the new ones are what follows the move. The contraction (#221) leaves
+# the domain path, and history keeps both because history is not rewritten.
+for sha in $(git log --format='%H' -- flake.lock unixlike/flake.lock); do
   [ "$sha" = "$root_commit" ] && continue
   subject=$(git show -s --format=%s "$sha")
   files=$(git diff-tree --no-commit-id --name-only -r "$sha")
   if ! printf '%s\n' "$subject" | grep -Eq '^chore\(unixlike-deps\): .+'; then
     fail "flake.lock changed outside chore(unixlike-deps): $sha"
-  elif [ "$files" != flake.lock ]; then
+  elif [ "$files" != flake.lock ] && [ "$files" != unixlike/flake.lock ]; then
     fail "flake.lock refresh is mixed with other files: $sha"
   else
     ok "isolated flake.lock refresh: $sha"
