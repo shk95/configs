@@ -154,6 +154,22 @@ and `tool/version-control/test` exits 0, which is the likeliest drift point,
 because a fixture that asserts the classifier's arm list as a string will
 fail.
 
+Measured on 2026-09-12, at `dev` 282206c, in #218. All four held, including
+the one expected to drift: no fixture asserted the arm list as a string, so
+the suite passed with the new cases added and nothing rewritten. Also run:
+`domain-reads` clean over 83 Unix-like and 14 Windows files, `hygiene` over
+321 paths, `invariants` at 59 registered, and `tool/dispatch/select` giving
+`repository:fixtures` for the change itself.
+
+Two things the predictions did not cover and a later stage now has to.
+`.envrc` and the `Justfile` are not part of the measure: they stay at the
+root, so they moved into the permanent arm rather than the disposable one,
+and the contraction must not take them. And the Unix-like pathspec in
+`domain-reads` needed `:(exclude)unixlike/assets` added with it, because
+`unixlike/*` would otherwise pull the payload tree into a scan that has
+always excluded payloads on the ground that data reads nothing. Neither is
+drift against a prediction; both are predictions that should have existed.
+
 **3b, migrate, `unixlike`.** `git mv` of `flake.nix`, `flake.lock`,
 `modules/`, `assets/`, `tool/checks/` and `tool/darwin/` into `unixlike/`;
 the Karabiner interpolation rewritten for the new layout; `.envrc` to
