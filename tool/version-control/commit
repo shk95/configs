@@ -92,37 +92,15 @@ hooks_enabled() {
     done | grep -q yes
 }
 
-# PROV repository/unix-like-tree-migration
-# The Unix-like tree is moving into the domain (#219) and this helper edits
-# four of its files by literal path, so it looks in the domain first and falls
-# back to where they are today. A path that exists at neither comes back as
-# the domain's, which is where it will be; the command's own checks report it
-# then. The contraction (#221) deletes this and leaves the domain prefix.
-# Candidates in the order the tree is moving through: the concern-first
-# spelling first, then the current one, each tried inside the domain and then
-# at the root. A name none of them resolves comes back as the first inside the
-# domain, which is where it will be.
-unixlike_path() {
-  for unixlike_candidate in "$@"; do
-    for unixlike_prefix in unixlike/ ''; do
-      if [ -e "$unixlike_prefix$unixlike_candidate" ]; then
-        printf '%s%s\n' "$unixlike_prefix" "$unixlike_candidate"
-        return 0
-      fi
-    done
-  done
-  printf 'unixlike/%s\n' "$1"
-}
-
-homebrew_module=$(unixlike_path modules/homebrew.nix modules/darwin-homebrew.nix)
+homebrew_module=unixlike/modules/homebrew.nix
 
 # The two payloads `capture karabiner` reads back, and the tool that knows how
 # to read them off a host. The Karabiner tool owns the projection, the
 # platform guard and the host defaults; this command only decides that a
 # capture is a commit.
-karabiner_tool=$(unixlike_path modules/karabiner/tool tool/darwin/karabiner)
-karabiner_payload=$(unixlike_path modules/karabiner/karabiner.json assets/karabiner/karabiner.json)
-karabiner_hotkeys=$(unixlike_path modules/karabiner/symbolic-hotkeys.json assets/karabiner/symbolic-hotkeys.json)
+karabiner_tool=unixlike/modules/karabiner/tool
+karabiner_payload=unixlike/modules/karabiner/karabiner.json
+karabiner_hotkeys=unixlike/modules/karabiner/symbolic-hotkeys.json
 
 # One scratch directory for the candidate edit, the pull-request body and the
 # copy of the hook's output. Trapped on the signals a prompt is interrupted
@@ -441,7 +419,7 @@ case $group in
     topic="mas-$action-$(slugify "$item")"
     ;;
   flake)
-    target=flake.lock
+    target=unixlike/flake.lock
     if [ -n "$input" ]; then
       topic="deps-refresh-$(slugify "$input")"
     else
@@ -1257,12 +1235,10 @@ flake_command() {
   # AGENTS.md § Rules that are expensive to break: do not update flake inputs
   # unless the task calls for it. This is the only command that touches them,
   # and it never runs as a side effect of another one.
-  # PROV repository/unix-like-tree-migration
-  # The lock is moving into the domain (#219). Every path below follows it;
-  # the commit subjects do not, because they name the file rather than a
-  # location. The contraction (#221) replaces this with the domain path.
-  flake_lock=$(unixlike_path flake.lock)
-  flake_dir=$(dirname "$flake_lock")
+  # The lock is the domain's; the commit subjects name the file rather than a
+  # location, so they stay as they are.
+  flake_lock=unixlike/flake.lock
+  flake_dir=unixlike
 
   require_untouched "$flake_lock"
 

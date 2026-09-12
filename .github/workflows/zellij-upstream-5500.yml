@@ -52,15 +52,7 @@ jobs:
         shell: bash
         run: |
           set -euo pipefail
-          # PROV repository/unix-like-tree-migration
-          # The module is moving into the domain (#219) and this job reads it
-          # by path. The contraction (#221) leaves the domain path alone here.
-          overlay=modules/zellij.nix
-          if [[ -f unixlike/modules/zellij/module.nix ]]; then
-            overlay=unixlike/modules/zellij/module.nix
-          elif [[ -f unixlike/modules/zellij.nix ]]; then
-            overlay=unixlike/modules/zellij.nix
-          fi
+          overlay=unixlike/modules/zellij/module.nix
           applies_to=$(sed -n 's/^ *appliesTo = "\(.*\)";$/\1/p' "$overlay")
           # The overlay pins the pull request's commit range base...head; the
           # head is the commit the pull request must still carry.

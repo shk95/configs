@@ -222,11 +222,9 @@ if [ "$tag_count" -eq 0 ]; then
 fi
 
 root_commit=$(git rev-list --max-parents=0 HEAD | head -1)
-# PROV repository/unix-like-tree-migration
-# The lock is moving into the domain (#219) and this rule reads history, so it
-# has to see refreshes at both spellings: the old ones are already committed
-# and the new ones are what follows the move. The contraction (#221) leaves
-# the domain path, and history keeps both because history is not rewritten.
+# Both spellings, permanently. The lock moved into the domain, and this rule
+# reads history: the refreshes made before the move are still at the old path
+# and always will be, because history is not rewritten.
 for sha in $(git log --format='%H' -- flake.lock unixlike/flake.lock); do
   [ "$sha" = "$root_commit" ] && continue
   # A commit that only moves the lock is not a refresh, and the rule is about

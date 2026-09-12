@@ -251,6 +251,60 @@ exception, so `repository: migration arms` and `unixlike: domain tree` stand
 separately and are only linked, and neither has a visible result alone. That
 is one of the two places with no way around.
 
+## Stage 3, measured
+
+| | Predicted | Actual |
+|---|---|---|
+| 3b-1, the three toplevel derivation paths | byte-identical across the move | identical, measured before, after and again after the commit |
+| 3b-1, `composition` | 42 feature files | 42 |
+| 3b-1, `tool/checks/test` without the flake path updated | exits 1 | not exercised: the checks resolve their own root from `$0`, so the path needed no updating |
+| 3b-2, the toplevel derivation paths | may move, and if they do the cause is the rename | the Darwin one moved and the other two did not |
+| 3c, `provisional` | 1 registered | 1 registered, and no `PROV` tag for the measure anywhere |
+| 3c, the old paths | `unclassified` | `unclassified`, with `unixlike/` still answering |
+
+The Darwin path moved for the reason the prediction named and no other: the
+Karabiner module interpolates the script and the payloads beside it, and the
+rearrangement changed their file names, so their store paths changed with
+them. The content did not. In one commit the move and the rename would have
+been indistinguishable, which is the whole argument for splitting them, now
+tested rather than asserted.
+
+Three things the stage found that no prediction covered. The Karabiner
+interpolation needed no rewriting, because the module and the tool moved
+together, so the decision record's expectation that it would was wrong. The
+checks resolve their own root from `$0`, so most of them moved unedited. And
+the move exposed three latent bugs it did not cause: `karabiner-test`
+resolved its prerequisite library after `cd`-ing to a root that had been the
+same directory, and `format` and `lint` ran `nix` against the working
+directory rather than the flake's.
+
+## What the expansion actually cost
+
+The plan assumed one expansion commit. It took seven, and the interesting part
+is how each was found.
+
+| Found by | Planes |
+|---|---|
+| Reading the plan | none |
+| Grepping the tree for the moving paths | 5 |
+| Running every gate with the move applied | 4 |
+| Trying to commit | 2 |
+| Trying to push | 1 |
+| Re-running the fixtures after the rearrangement | 2 |
+
+The order matters more than the total. Reading found nothing. Grepping found
+what was written as a path. Running found what was written as a path the
+grep's own patterns did not match, and what failed silently rather than
+loudly: the history audit would have gone on passing while covering no
+refresh made after the move, and `pre-commit` would have reported every
+Unix-like check unverified and passed.
+
+The general rule this leaves: before a path moves, every reference to it that
+is executed has to resolve at either location, and the only reliable way to
+enumerate them is to perform the move and run everything. A plane that fails
+loudly is the cheap case; the expensive ones are the two that would have kept
+quiet.
+
 ## Stages 4 and 5
 
 **4, splitting `commit`.** The authoring knowledge — the Homebrew list

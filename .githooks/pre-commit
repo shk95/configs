@@ -38,8 +38,7 @@ abort() {
 run_check() {
   name=$1
   hint=$2
-  # PROV repository/unix-like-tree-migration
-  script=$(unixlike_check "$name")
+  script="unixlike/tool/checks/$name"
   if [ ! -x "$script" ]; then
     # Not a pass: a selected check this host cannot run is unverified, and
     # .githooks/evidence decides what that means here and in CI.

@@ -16,13 +16,9 @@ export MSYS_NO_PATHCONV MSYS2_ARG_CONV_EXCL
 
 cd "$(dirname "$0")/.." || exit 1
 
-# PROV repository/unix-like-tree-migration
-# Where the Unix-like flake is. It is moving into the domain (#219) and this
-# script asks the flake two questions by path: whether this machine can
-# resolve it at all, and which flavours it declares. The contraction (#221)
-# replaces this with the domain path.
-unixlike_flake=.
-[ -f unixlike/flake.nix ] && unixlike_flake=./unixlike
+# Where the Unix-like flake is. Asked two questions below by path: whether
+# this machine can resolve it at all, and which flavours it declares.
+unixlike_flake=./unixlike
 
 scope=${1:-all}
 case "$scope" in

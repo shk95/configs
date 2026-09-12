@@ -17,13 +17,16 @@
 # domain declares this terminal" and a Windows script cite a Nix file for the
 # reader. Payload trees are not scanned; a payload is data and reads nothing.
 #
-#   Unix-like code   unixlike/ outside unixlike/assets, and while the tree is
-#                    moving also flake.nix, Justfile, .envrc, modules/,
-#                    tool/checks/, tool/darwin/
+#   Unix-like code   unixlike/, plus .envrc and the Justfile at the root
 #                    must not name  windows/
 #   Windows code     windows/ *.ps1 and *.psm1, outside windows/desired/files
-#                    must not name  unixlike/  assets/  modules/  flake.nix
-#                                   flake.lock  tool/checks
+#                    must not name  unixlike/
+#
+# The Unix-like side no longer excludes a payload tree, because there is no
+# longer a tree that holds payloads and nothing else: each payload sits beside
+# the module that delivers it. Scanning them is stricter than the rule needs
+# and costs nothing today; a payload that legitimately names the other tree is
+# the first reason to narrow this again.
 #
 # Three limits are accepted and are what a reviewer reads for by hand: a path
 # assembled from pieces at run time is not a literal and passes; a `#` after
@@ -151,17 +154,9 @@ scan() {
 # `$root/windows/` and `..\assets\` are what they look like.
 open='(^|[^A-Za-z0-9_-])'
 
-# PROV repository/unix-like-tree-migration
-# The old locations are listed beside unixlike/ while the tree moves (#219)
-# and go with the contraction (#221); .envrc and the Justfile stay. Payload
-# trees are excluded on both sides for the same reason: a payload is data and
-# reads nothing.
-scan 'Unix-like' "${open}windows[/\\\\]" \
-  flake.nix Justfile .envrc 'modules/*' 'tool/checks/*' 'tool/darwin/*' \
-  'unixlike/*' ':(exclude)unixlike/assets'
+scan 'Unix-like' "${open}windows[/\\\\]" Justfile .envrc 'unixlike/*'
 unixlike_count=$count
-scan Windows \
-  "${open}(assets|modules|unixlike)[/\\\\]|${open}flake\\.(nix|lock)([^A-Za-z0-9_]|\$)|${open}tool[/\\\\]checks" \
+scan Windows "${open}unixlike[/\\\\]" \
   'windows/*.ps1' 'windows/*.psm1' ':(exclude)windows/desired/files'
 windows_count=$count
 
