@@ -97,14 +97,8 @@ root=$(git rev-parse --show-toplevel)
 cd "$root"
 
 allow_file=tool/version-control/hygiene.allow
-# PROV repository/unix-like-tree-migration
-# The inventory is the declaration this scan reads its allowed names from, and
-# it is moving into the domain (#219). Without both spellings the scan fails
-# closed the moment the tree moves, which is the right direction to fail but
-# not a reason to block the move. The contraction (#221) leaves the domain
-# path.
-inventory=modules/flake/inventory.nix
-[ -f "$inventory" ] || inventory=unixlike/modules/flake/inventory.nix
+# The declaration this scan reads its allowed names from.
+inventory=unixlike/modules/flake/inventory.nix
 
 work=$(mktemp -d)
 trap 'rm -rf "$work"' EXIT

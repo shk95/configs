@@ -73,10 +73,6 @@ while IFS="$tab" read -r status path || [ -n "${status:-}" ]; do
       fixtures=1
       ;;
   esac
-  # PROV repository/unix-like-tree-migration
-  # Both spellings of the Unix-like tree select the same units while the move
-  # runs (#219). The contraction (#221) drops every spelling without the
-  # `unixlike/` prefix except .envrc and the Justfile, which stay at the root.
   case "$path" in
     # A module is Nix and an evaluation reads it; anything else under the
     # module tree is a payload the evaluator copies without reading, which is
@@ -85,14 +81,20 @@ while IFS="$tab" read -r status path || [ -n "${status:-}" ]; do
     unixlike/modules/*.nix)
       narrow=0
       ;;
-    assets/* | unixlike/assets/* | unixlike/modules/*)
+    # The data payloads, by the suffix of the format each is declared with.
+    # Listed rather than taken as "everything that is not a module", because a
+    # payload that a check executes is not inert: the Karabiner script is
+    # copied like data and also run by the Unix-like suite, so a change to it
+    # can alter what that suite says and must not narrow.
+    unixlike/modules/*.lua | unixlike/modules/*.lua.example \
+      | unixlike/modules/*.kdl | unixlike/modules/*.json \
+      | unixlike/modules/*.ps1)
       case "$status" in
         M*) ;;
         *) narrow=0 ;;
       esac
       ;;
-    flake.nix | flake.lock | modules/* | .envrc | Justfile | tool/checks/* \
-      | tool/darwin/* | unixlike/*)
+    unixlike/* | .envrc | Justfile)
       narrow=0
       ;;
   esac

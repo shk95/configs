@@ -68,24 +68,6 @@ evidence_unavailable() {
 }
 
 # Run one check and translate its exit status.
-# PROV repository/unix-like-tree-migration
-# The Unix-like checks are moving into the domain (#219), and the hooks
-# resolve one by literal path, so without this they would look where the
-# checks no longer are: pre-commit would report every Unix-like check
-# unverified and pass, which is worse than failing, and pre-push would fail
-# outright. Both hooks ask here instead until the move has landed. The
-# contraction (#221) deletes this and leaves the domain path at each call
-# site. A name at neither location comes back as the old path, so the
-# caller's own "not runnable here" branch reports it rather than this one
-# inventing a fourth state.
-unixlike_check() {
-  if [ -x "unixlike/tool/checks/$1" ]; then
-    printf 'unixlike/tool/checks/%s\n' "$1"
-  else
-    printf 'tool/checks/%s\n' "$1"
-  fi
-}
-
 evidence_run() {
   evidence_label=$1
   shift

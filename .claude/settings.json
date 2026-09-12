@@ -9,7 +9,6 @@
       "Bash(tool/doctor.sh:*)",
       "Bash(tool/setup:*)",
       "Bash(tool/worktree.sh:*)",
-      "Bash(tool/checks/:*)",
       "Bash(unixlike/tool/checks/:*)",
       "Bash(tool/version-control/:*)",
 

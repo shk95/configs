@@ -59,10 +59,6 @@ $RECYCLE.BIN/
 *.local
 
 # Host-local terminal overrides
-# PROV repository/unix-like-tree-migration — the second is where the tree is
-# moving (#219); the first goes with the contraction (#221).
-assets/wezterm/local.lua
-unixlike/assets/wezterm/local.lua
 unixlike/modules/wezterm/local.lua
 
 # Agent tooling — shared settings are committed, machine-local ones are not
