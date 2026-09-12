@@ -321,6 +321,20 @@ expect unixlike "$classify" --files modules/git.nix
 # a Unix-like payload, its evidence lane is a Mac, and no governance host can
 # produce it. Owned by unixlike, like modules/ and tool/checks/.
 expect unixlike "$classify" --files tool/darwin/karabiner
+# INV repository/scope-ownership
+# PROV repository/unix-like-tree-migration
+# The domain's tree is moving under unixlike/ (#219), so both spellings
+# answer while it does. The old ones go with the contraction (#221). .envrc
+# and the Justfile answer from the permanent arm, because those two stay at
+# the root, and a similar prefix outside the domain still has no owner.
+expect unixlike "$classify" --files unixlike/flake.nix
+expect unixlike "$classify" --files unixlike/modules/git.nix
+expect unixlike "$classify" --files unixlike/assets/payloads.json
+expect unixlike "$classify" --files unixlike/tool/darwin/karabiner
+expect unixlike "$classify" --files flake.nix
+expect unixlike "$classify" --files .envrc
+expect unixlike "$classify" --files Justfile
+expect unclassified "$classify" --files unixlike-extra/flake.nix
 expect windows "$classify" --files windows/src/WinEnv.psm1
 expect unclassified "$classify" --files common/example.txt
 expect repository "$classify" --files .agents/skills/example/SKILL.md
@@ -403,6 +417,17 @@ expect_units 'unixlike:format
 unixlike:lint
 unixlike:payloads' commit "$darwin_tool_modified"
 expect_units 'unixlike:test' push "$darwin_tool_modified"
+
+# INV repository/local-gate-selects-by-effect
+# PROV repository/unix-like-tree-migration
+# The moved tree selects the same units its current spelling does, including
+# the narrowing that keeps a modified payload from running an evaluation.
+# These cases outlive the measure; the ones above go with the contraction.
+unixlike_module_modified=$(printf 'M\tunixlike/modules/git.nix')
+expect_units 'unixlike:test' push "$unixlike_module_modified"
+unixlike_kdl_modified=$(printf 'M\tunixlike/assets/zellij/config.kdl')
+expect_units 'unixlike:payloads' commit "$unixlike_kdl_modified"
+expect_units '' push "$unixlike_kdl_modified"
 
 # A rename carries two paths on one line. Both have to reach classify, or a
 # payload moved into assets/ is never selected for the payload check.

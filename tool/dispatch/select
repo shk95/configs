@@ -73,15 +73,19 @@ while IFS="$tab" read -r status path || [ -n "${status:-}" ]; do
       fixtures=1
       ;;
   esac
+  # PROV repository/unix-like-tree-migration
+  # Both spellings of the Unix-like tree select the same units while the move
+  # runs (#219). The contraction (#221) drops every spelling without the
+  # `unixlike/` prefix except .envrc and the Justfile, which stay at the root.
   case "$path" in
-    assets/*)
+    assets/* | unixlike/assets/*)
       case "$status" in
         M*) ;;
         *) narrow=0 ;;
       esac
       ;;
     flake.nix | flake.lock | modules/* | .envrc | Justfile | tool/checks/* \
-      | tool/darwin/*)
+      | tool/darwin/* | unixlike/*)
       narrow=0
       ;;
   esac

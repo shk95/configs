@@ -58,7 +58,16 @@ while IFS= read -r path; do
   [ -n "$path" ] || continue
   case "$path" in
     windows/*) echo windows ;;
-    flake.nix|flake.lock|modules/*|assets/*|.envrc|Justfile|tool/checks/*|\
+    # The Unix-like domain's own tree, and the two root paths that stay
+    # outside it: direnv reads .envrc at the root, and where the Justfile
+    # belongs is a separate decision
+    # (docs/decisions/unixlike-domain-owns-its-tree.md).
+    unixlike/*|.envrc|Justfile) echo unixlike ;;
+    # PROV repository/unix-like-tree-migration
+    # The six locations the tree is moving from (#219). Both spellings answer
+    # while the move runs, because a moved path that classifies as nothing
+    # cannot be committed; this arm goes with the contraction (#221).
+    flake.nix|flake.lock|modules/*|assets/*|tool/checks/*|\
     tool/darwin/*)
       echo unixlike
       ;;
