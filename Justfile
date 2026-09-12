@@ -169,9 +169,9 @@ fmt:
 zellij-patch-check tag:
     #!/usr/bin/env bash
     set -euo pipefail
-    range=$(sed -n 's|.*/zellij/compare/\([0-9a-f]\{40\}\)\.\.\.\([0-9a-f]\{40\}\)\.patch.*|\1...\2|p' unixlike/modules/zellij.nix)
+    range=$(sed -n 's|.*/zellij/compare/\([0-9a-f]\{40\}\)\.\.\.\([0-9a-f]\{40\}\)\.patch.*|\1...\2|p' unixlike/modules/zellij/module.nix)
     if [[ -z "${range}" ]]; then
-      echo "unixlike/modules/zellij.nix carries no pinned zellij commit range" >&2
+      echo "unixlike/modules/zellij/module.nix carries no pinned zellij commit range" >&2
       exit 1
     fi
     work=$(mktemp -d)
@@ -234,7 +234,7 @@ darwin-generations:
 # Compare this Mac's Karabiner file and symbolic hotkeys with the payloads.
 [group('darwin')]
 karabiner-check:
-    unixlike/tool/darwin/karabiner check
+    unixlike/modules/karabiner/tool check
 
 # Read this Mac's Karabiner drift back into the payloads and commit it.
 [group('darwin')]
@@ -325,19 +325,19 @@ nixos-stage dest="/mnt/c/WSL":
 ############################################################################
 
 # Make the Home Manager zsh the login shell — standalone Ubuntu and Darwin.
-# NixOS selects it declaratively (unixlike/modules/wsl-shell.nix) and is refused here.
+# NixOS selects it declaratively (unixlike/modules/shell/wsl.nix) and is refused here.
 [group('setup')]
 switch-shell:
     #!/usr/bin/env bash
     set -euo pipefail
 
     if [ -e /etc/NIXOS ]; then
-      echo "NixOS selects the login shell in unixlike/modules/wsl-shell.nix; nothing to switch here." >&2
+      echo "NixOS selects the login shell in unixlike/modules/shell/wsl.nix; nothing to switch here." >&2
       exit 1
     fi
 
     case "$(uname -s)" in
-      # Registered in /etc/shells by unixlike/modules/darwin-shell.nix; the store path
+      # Registered in /etc/shells by unixlike/modules/shell/darwin.nix; the store path
       # behind it changes with every zsh update, this one does not.
       Darwin) TARGET_SHELL="/run/current-system/sw/bin/zsh" ;;
       # The standalone Home Manager profile.

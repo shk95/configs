@@ -3,6 +3,7 @@
   "payloads": [
     { "source": "karabiner/karabiner.json", "format": "json" },
     { "source": "karabiner/symbolic-hotkeys.json", "format": "json" },
+    { "source": "karabiner/tool", "format": "shell" },
     { "source": "powershell/profile.ps1", "format": "powershell" },
     { "source": "wezterm/config/appearance.lua", "format": "lua" },
     { "source": "wezterm/config/behavior.lua", "format": "lua" },

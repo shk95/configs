@@ -25,7 +25,7 @@ _: {
       packages = [pkgs.powershell];
 
       file = {
-        ".config/powershell/profile.ps1".source = ../assets/powershell/profile.ps1;
+        ".config/powershell/profile.ps1".source = ./profile.ps1;
 
         # pwsh resolves a versioned module directory by name, so the version is
         # part of the path and a bump here is visible as a path change.

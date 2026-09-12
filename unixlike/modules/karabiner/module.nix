@@ -50,9 +50,9 @@ _: {
     ...
   }: {
     home.activation.karabinerDesiredState = lib.hm.dag.entryAfter ["writeBoundary"] ''
-      JQ=${pkgs.jq}/bin/jq run sh ${../tool/darwin/karabiner} apply \
-        --payload ${../assets/karabiner/karabiner.json} \
-        --hotkeys ${../assets/karabiner/symbolic-hotkeys.json}
+      JQ=${pkgs.jq}/bin/jq run sh ${./tool} apply \
+        --payload ${./karabiner.json} \
+        --hotkeys ${./symbolic-hotkeys.json}
     '';
   };
 }

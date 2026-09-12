@@ -23,9 +23,9 @@ set -e
 repo=$(CDPATH= cd -- "$(dirname -- "$0")/../.." && pwd)
 cd "$repo"
 
-tool=tool/darwin/karabiner
-payload=assets/karabiner/karabiner.json
-hotkeys=assets/karabiner/symbolic-hotkeys.json
+tool=modules/karabiner/tool
+payload=modules/karabiner/karabiner.json
+hotkeys=modules/karabiner/symbolic-hotkeys.json
 
 # The fixtures build their host documents with jq, resolved the way the tool
 # resolves it, so this check has the same host requirements as the rest of the
