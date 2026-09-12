@@ -1375,7 +1375,12 @@ capture_command() {
     || refuse "This host has no readable $capture_host." \
       "There is nothing to read back. Karabiner writes that file the first time it saves."
 
-  set -- project
+  # The payloads are named rather than left to the tool's own defaults. This
+  # command already resolved which two files it is about to commit, and having
+  # the tool rediscover them independently made that a second source of truth:
+  # the two agreed only while the tool sat a fixed distance from them, which
+  # stopped being so when each payload moved beside the module that delivers it.
+  set -- project --payload "$karabiner_payload" --hotkeys "$karabiner_hotkeys"
   [ -z "$karabiner_host" ] || set -- "$@" --host "$karabiner_host"
   [ -z "$karabiner_hotkeys_host" ] || set -- "$@" --hotkeys-host "$karabiner_hotkeys_host"
   "$karabiner_tool" "$@" >"$work/projection" \
