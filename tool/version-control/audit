@@ -229,6 +229,15 @@ root_commit=$(git rev-list --max-parents=0 HEAD | head -1)
 # the domain path, and history keeps both because history is not rewritten.
 for sha in $(git log --format='%H' -- flake.lock unixlike/flake.lock); do
   [ "$sha" = "$root_commit" ] && continue
+  # A commit that only moves the lock is not a refresh, and the rule is about
+  # refreshes. Rename detection answers that directly: a pure rename is R100
+  # and is skipped, while a rename carrying a content change scores lower and
+  # goes on to the rules below, where mixing it with the move fails as it
+  # should.
+  case "$(git diff-tree --no-commit-id -r -M --name-status "$sha" \
+    -- flake.lock unixlike/flake.lock)" in
+    R100*) continue ;;
+  esac
   subject=$(git show -s --format=%s "$sha")
   files=$(git diff-tree --no-commit-id --name-only -r "$sha")
   if ! printf '%s\n' "$subject" | grep -Eq '^chore\(unixlike-deps\): .+'; then
