@@ -10,9 +10,14 @@ set -e
 . "$(CDPATH= cd -- "$(dirname -- "$0")" && pwd)/prerequisite"
 require_command nix
 
+# The domain root, for the reason format gives: the tree this analyses is the
+# domain's, and the working directory is no longer it.
+checks_dir=$(CDPATH= cd -- "$(dirname -- "$0")" && pwd)
+cd "$checks_dir/../.."
+
 nix run nixpkgs#statix -- check .
 nix run nixpkgs#deadnix -- --fail .
 
 # The composition rule is static analysis of the same tree: a feature file
 # names no host flavour and forces no value (INV unixlike/composition-in-one-place).
-"$(CDPATH= cd -- "$(dirname -- "$0")" && pwd)/composition"
+"$checks_dir/composition"

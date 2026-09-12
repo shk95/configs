@@ -1,8 +1,8 @@
 id: unixlike/composition-in-one-place
 statement: Only one file decides which module classes reach a Unix-like host; a feature module contributes to classes and never names a host or forces another class's decision.
 rationale: AGENTS.md § Goal and authority
-enforced-by: tool tool/checks/composition
-enforced-by: fixture tool/checks/composition-test
+enforced-by: tool unixlike/tool/checks/composition
+enforced-by: fixture unixlike/tool/checks/composition-test
 
 The classes are the whole interface between a feature file and a host. The
 check is lexical because the two ways a feature file can take the decision

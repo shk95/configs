@@ -4,15 +4,15 @@ default:
 
 [private]
 _home-target:
-    @nix eval --raw path:.#homeConfigurations --apply 'configs: let names = builtins.attrNames configs; in assert builtins.length names == 1; builtins.head names'
+    @nix eval --raw path:./unixlike#homeConfigurations --apply 'configs: let names = builtins.attrNames configs; in assert builtins.length names == 1; builtins.head names'
 
 [private]
 _darwin-target:
-    @nix eval --raw path:.#darwinConfigurations --apply 'configs: let names = builtins.attrNames configs; in assert builtins.length names == 1; builtins.head names'
+    @nix eval --raw path:./unixlike#darwinConfigurations --apply 'configs: let names = builtins.attrNames configs; in assert builtins.length names == 1; builtins.head names'
 
 [private]
 _nixos-target:
-    @nix eval --raw path:.#nixosConfigurations --apply 'configs: let names = builtins.attrNames configs; in assert builtins.length names == 1; builtins.head names'
+    @nix eval --raw path:./unixlike#nixosConfigurations --apply 'configs: let names = builtins.attrNames configs; in assert builtins.length names == 1; builtins.head names'
 
 ############################################################################
 #
@@ -29,62 +29,62 @@ doctor:
 # must have recipes of their own below and run in CI.
 [group('repository')]
 check:
-    tool/checks/format
-    tool/checks/lint
-    tool/checks/payloads
-    tool/checks/test
+    unixlike/tool/checks/format
+    unixlike/tool/checks/lint
+    unixlike/tool/checks/payloads
+    unixlike/tool/checks/test
 
 [group('repository')]
 format-check:
-    tool/checks/format
+    unixlike/tool/checks/format
 
 [group('repository')]
 lint:
-    tool/checks/lint
+    unixlike/tool/checks/lint
 
 # Parse every declared Unix-like source payload with its own native tool.
 [group('repository')]
 payloads:
-    tool/checks/payloads
+    unixlike/tool/checks/payloads
 
 # The same check plus the fixtures that prove it rejects what it must.
 [group('repository')]
 payloads-test:
-    tool/checks/payloads-test
+    unixlike/tool/checks/payloads-test
 
 # Prove each Unix-like check reports a missing Nix as unverified, not failed.
 [group('repository')]
 prerequisite-test:
-    tool/checks/prerequisite-test
+    unixlike/tool/checks/prerequisite-test
 
 # Prove the flake's typed identity and class composition refuse what they must.
 [group('repository')]
 flake-test:
-    tool/checks/flake-test
+    unixlike/tool/checks/flake-test
 
 # Prove a feature file names no host and forces no value, and that the check refuses one that does.
 [group('repository')]
 composition-test:
-    tool/checks/composition-test
+    unixlike/tool/checks/composition-test
 
 # Prove the evaluation check fails when it reaches no configuration.
 [group('repository')]
 eval-coverage-test:
-    tool/checks/eval-coverage-test
+    unixlike/tool/checks/eval-coverage-test
 
 # Compose every host in walk order and reversed; the toplevels must match.
 [group('repository')]
 import-order:
-    tool/checks/import-order
+    unixlike/tool/checks/import-order
 
 # The same check plus the order-dependent pair it must refuse.
 [group('repository')]
 import-order-test:
-    tool/checks/import-order-test
+    unixlike/tool/checks/import-order-test
 
 [group('repository')]
 test:
-    tool/checks/test
+    unixlike/tool/checks/test
 
 ############################################################################
 #
@@ -98,7 +98,7 @@ home-eval:
     #!/usr/bin/env bash
     set -euo pipefail
     target=$(just _home-target)
-    drv=$(nix eval --raw "path:.#homeConfigurations.${target}.activationPackage.drvPath")
+    drv=$(nix eval --raw "path:./unixlike#homeConfigurations.${target}.activationPackage.drvPath")
     printf '%s\n' "${drv}"
 
 # Build the standalone Home Manager generation without activating it.
@@ -107,7 +107,7 @@ home-build:
     #!/usr/bin/env bash
     set -euo pipefail
     target=$(just _home-target)
-    nix build --no-link --print-out-paths "path:.#homeConfigurations.${target}.activationPackage"
+    nix build --no-link --print-out-paths "path:./unixlike#homeConfigurations.${target}.activationPackage"
 
 # Activation: run only on the intended Ubuntu WSL host.
 [group('home-manager')]
@@ -115,7 +115,7 @@ home-switch:
     #!/usr/bin/env bash
     set -euo pipefail
     target=$(just _home-target)
-    generation=$(nix build --no-link --print-out-paths "path:.#homeConfigurations.${target}.activationPackage")
+    generation=$(nix build --no-link --print-out-paths "path:./unixlike#homeConfigurations.${target}.activationPackage")
     "${generation}/activate"
 
 # First activation without requiring a pre-existing home-manager command.
@@ -128,7 +128,7 @@ home-news:
     #!/usr/bin/env bash
     set -euo pipefail
     target=$(just _home-target)
-    home-manager news --flake "path:.#${target}"
+    home-manager news --flake "path:./unixlike#${target}"
 
 # List all home-manager generations
 [group('home-manager')]
@@ -169,9 +169,9 @@ fmt:
 zellij-patch-check tag:
     #!/usr/bin/env bash
     set -euo pipefail
-    range=$(sed -n 's|.*/zellij/compare/\([0-9a-f]\{40\}\)\.\.\.\([0-9a-f]\{40\}\)\.patch.*|\1...\2|p' modules/zellij.nix)
+    range=$(sed -n 's|.*/zellij/compare/\([0-9a-f]\{40\}\)\.\.\.\([0-9a-f]\{40\}\)\.patch.*|\1...\2|p' unixlike/modules/zellij.nix)
     if [[ -z "${range}" ]]; then
-      echo "modules/zellij.nix carries no pinned zellij commit range" >&2
+      echo "unixlike/modules/zellij.nix carries no pinned zellij commit range" >&2
       exit 1
     fi
     work=$(mktemp -d)
@@ -194,7 +194,7 @@ darwin-eval:
     #!/usr/bin/env bash
     set -euo pipefail
     target=$(just _darwin-target)
-    drv=$(nix eval --raw "path:.#darwinConfigurations.${target}.config.system.build.toplevel.drvPath")
+    drv=$(nix eval --raw "path:./unixlike#darwinConfigurations.${target}.config.system.build.toplevel.drvPath")
     printf '%s\n' "${drv}"
 
 # Build the Darwin system without creating a result symlink or activating it.
@@ -203,7 +203,7 @@ darwin-build:
     #!/usr/bin/env bash
     set -euo pipefail
     target=$(just _darwin-target)
-    nix build --no-link --print-out-paths "path:.#darwinConfigurations.${target}.config.system.build.toplevel"
+    nix build --no-link --print-out-paths "path:./unixlike#darwinConfigurations.${target}.config.system.build.toplevel"
 
 # Evaluate and natively build the Darwin system without activating it.
 [group('darwin')]
@@ -215,8 +215,8 @@ darwin-bootstrap:
     #!/usr/bin/env bash
     set -euo pipefail
     target=$(just _darwin-target)
-    system=$(nix build --no-link --print-out-paths "path:.#darwinConfigurations.${target}.config.system.build.toplevel")
-    sudo "${system}/sw/bin/darwin-rebuild" switch --flake "path:.#${target}"
+    system=$(nix build --no-link --print-out-paths "path:./unixlike#darwinConfigurations.${target}.config.system.build.toplevel")
+    sudo "${system}/sw/bin/darwin-rebuild" switch --flake "path:./unixlike#${target}"
 
 # Rebuild and activate the target Mac.
 [group('darwin')]
@@ -224,7 +224,7 @@ darwin-switch:
     #!/usr/bin/env bash
     set -euo pipefail
     target=$(just _darwin-target)
-    sudo darwin-rebuild switch --flake "path:.#${target}"
+    sudo darwin-rebuild switch --flake "path:./unixlike#${target}"
 
 # List nix-darwin generations on an already configured Mac.
 [group('darwin')]
@@ -234,7 +234,7 @@ darwin-generations:
 # Compare this Mac's Karabiner file and symbolic hotkeys with the payloads.
 [group('darwin')]
 karabiner-check:
-    tool/darwin/karabiner check
+    unixlike/tool/darwin/karabiner check
 
 # Read this Mac's Karabiner drift back into the payloads and commit it.
 [group('darwin')]
@@ -244,7 +244,7 @@ karabiner-capture *args:
 # Prove the Karabiner projection tolerates runtime members and refuses drift.
 [group('darwin')]
 karabiner-test:
-    tool/checks/karabiner-test
+    unixlike/tool/checks/karabiner-test
 
 # Garbage collect unused nix store entries older than 7 days
 [group('nix')]
@@ -257,9 +257,9 @@ gc:
 #
 ############################################################################
 
-# `tool/checks/test` skips this build by default, because nothing on a
+# `unixlike/tool/checks/test` skips this build by default, because nothing on a
 # non-NixOS host can activate the result. This is the deliberate way to ask
-# for it; `CHECKS_BUILD_ALL=1 tool/checks/test` is the other.
+# for it; `CHECKS_BUILD_ALL=1 unixlike/tool/checks/test` is the other.
 
 # Build the NixOS-WSL closure (~1.9 GiB)
 [group('nixos-wsl')]
@@ -267,7 +267,7 @@ nixos-build:
     #!/usr/bin/env bash
     set -euo pipefail
     target=$(just _nixos-target)
-    nix build --no-link --print-out-paths "path:.#nixosConfigurations.${target}.config.system.build.toplevel"
+    nix build --no-link --print-out-paths "path:./unixlike#nixosConfigurations.${target}.config.system.build.toplevel"
 
 # NixOS-WSL's builder refuses to run unless EUID is 0 — it chowns paths inside
 # the rootfs it assembles — so this needs a password and an agent cannot run
@@ -285,7 +285,7 @@ nixos-tarball:
     #!/usr/bin/env bash
     set -euo pipefail
     target=$(just _nixos-target)
-    builder=$(nix build --no-link --print-out-paths "path:.#nixosConfigurations.${target}.config.system.build.tarballBuilder")
+    builder=$(nix build --no-link --print-out-paths "path:./unixlike#nixosConfigurations.${target}.config.system.build.tarballBuilder")
     sudo "${builder}/bin/nixos-wsl-tarball-builder" nixos.wsl
     echo
     echo "Wrote ./nixos.wsl (root-owned, gitignored). Now run: just nixos-stage"
@@ -325,19 +325,19 @@ nixos-stage dest="/mnt/c/WSL":
 ############################################################################
 
 # Make the Home Manager zsh the login shell — standalone Ubuntu and Darwin.
-# NixOS selects it declaratively (modules/wsl-shell.nix) and is refused here.
+# NixOS selects it declaratively (unixlike/modules/wsl-shell.nix) and is refused here.
 [group('setup')]
 switch-shell:
     #!/usr/bin/env bash
     set -euo pipefail
 
     if [ -e /etc/NIXOS ]; then
-      echo "NixOS selects the login shell in modules/wsl-shell.nix; nothing to switch here." >&2
+      echo "NixOS selects the login shell in unixlike/modules/wsl-shell.nix; nothing to switch here." >&2
       exit 1
     fi
 
     case "$(uname -s)" in
-      # Registered in /etc/shells by modules/darwin-shell.nix; the store path
+      # Registered in /etc/shells by unixlike/modules/darwin-shell.nix; the store path
       # behind it changes with every zsh update, this one does not.
       Darwin) TARGET_SHELL="/run/current-system/sw/bin/zsh" ;;
       # The standalone Home Manager profile.
