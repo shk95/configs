@@ -136,8 +136,11 @@ configuration, architecture, release, or deployment authority. Each milestone
 owns exactly one of `unixlike`, `windows`, `common`, or `repository`, uses the
 title `<scope>: <outcome>`, and contains only issues in that scope. Cross-scope
 dependencies are linked instead of being assigned to the same milestone. A
-closed milestone means its planned source work is complete; it does not certify
-a domain release or authorize activation or Apply. Repository documents remain
+milestone's work lives on one branch and reaches `dev` through one pull
+request when that work is complete, except where the enforcement plane makes
+two branches interleave. A closed milestone means its planned source work is
+complete; it does not certify a domain release or authorize activation or
+Apply. Repository documents remain
 authoritative for durable decisions and current support boundaries. The
 repository maintainer owns milestone scope and closure decisions, with the
 milestone description and final evidence issue providing the manual evidence.

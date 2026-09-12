@@ -76,3 +76,5 @@ decision` is the procedure.
 | 2026-09-12 | repository | Design documents sit outside the authority model | accepted | design-documents-outside-the-authority-model.md |
 | 2026-09-12 | unixlike | The Unix-like domain owns its tree | accepted | unixlike-domain-owns-its-tree.md |
 | 2026-09-12 | unixlike | Inside the Unix-like domain the concern is the directory and the class is the file | accepted | concern-first-inside-the-domain.md |
+| 2026-09-12 | repository | A commit marks a judgement point | accepted | commit-marks-a-judgement-point.md |
+| 2026-09-12 | repository | A branch lives as long as its milestone | accepted | branch-lives-as-long-as-its-milestone.md |

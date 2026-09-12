@@ -42,8 +42,6 @@ on purpose.
 | addition | repository | CI runs the Windows checks through the entry point rather than the scripts directly | ci-windows-checks-through-the-entry-point.md |
 | addition | repository | Index the Git for Windows error from fetching a linked worktree by symptom | troubleshooting-worktree-fetch-symptom.md |
 | addition | repository | Index `file` reporting a PowerShell script as "Windows setup INFormation" | troubleshooting-file-misreads-ps1.md |
-| addition | repository | How a topic branch catches up with a moved dev before its native lane runs | topic-branch-catch-up-procedure.md |
-| addition | repository | What a commit subject scope names, and which two-scope commits are allowed | subject-scope-and-two-scope-allowance.md |
 | addition | repository | A registry entry's rationale section is read to confirm it justifies the statement | rationale-fit-evidence-item.md |
 | addition | windows | Fixture tags are checked at Describe granularity; several tags name invariants their case cannot fail on | fixture-tag-fit-below-describe.md |
 | addition | repository | A domain's executable entry point lives under the domain's path; the Justfile is an unannotated exception | domain-tool-placement-and-justfile-exception.md |

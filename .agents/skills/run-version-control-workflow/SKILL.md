@@ -34,9 +34,8 @@ planning read-only unless the user explicitly authorizes a Git mutation.
   declaring the value, never by widening the check; `CONTRIBUTING.md` owns that
   procedure. Do not mutate local or remote Git state.
 - **Classify**: Run `tool/version-control/classify` for the requested diff.
-  Confirm one owning scope. Multiple configuration scopes require an explicit
-  adoption or split; `repository` may accompany a domain only for supporting
-  documentation or enforcement.
+  Confirm one owning scope. `CONTRIBUTING.md`, "Branch and commit flow", owns
+  what a two-scope commit may contain.
 - **Start**: Propose `feature/<scope>-<topic>` or `fix/<scope>-<topic>` from
   `dev`. Fetch, create a branch, or add a worktree only after the user
   explicitly requests that mutation. A worktree made for an implementer is kept,
@@ -54,7 +53,9 @@ planning read-only unless the user explicitly authorizes a Git mutation.
   `chore(unixlike-deps)` commits. Never stage or commit without an explicit
   request.
 - **Integrate**: Merge a topic branch into `dev`. Require relevant checks,
-  preserve merge commits, and refuse squash or rebase of published work. Do
+  preserve merge commits, and refuse squash or rebase of published work. Catch
+  a stale branch up by merging `dev` into it locally and pushing, never with
+  `gh pr update-branch`. Do
   not merge, push, or change branches without explicit authorization.
   `tool/worktree.sh done` removes an implementer's worktree and runs only at
   the point Start names; the publish helper prunes the merged branch, never

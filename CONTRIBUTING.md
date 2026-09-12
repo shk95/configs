@@ -35,9 +35,14 @@ Every change belongs to one of these scopes:
 no release tag and must not contain platform behavior that belongs to
 `unixlike`, `windows`, or `common`.
 
-Prefer a single scope per branch and pull request. If a common change and its
-platform adoption are both needed, land them separately so neither release is
-synchronously coupled to the other.
+One scope per commit, and therefore per branch and pull request. A commit's
+scope is the classifier's answer over the paths it touches, and the release
+tag, the CI lanes and the right to change a path all follow from it. The
+subject's scope is a different thing: it names the domain the change
+describes, so `docs(windows)` over `docs/status.md`, which classifies
+`repository`, is correct. If a common change and its platform adoption are
+both needed, land them separately so neither release is synchronously coupled
+to the other.
 
 ## Branch and commit flow
 
@@ -49,10 +54,37 @@ Examples are `feature/unixlike-shell`, `fix/windows-zellij`, and
 `feature/common-terminal-colors`. Governance examples are
 `feature/repository-vcs-audit` and `fix/repository-ci-dispatch`.
 
+A branch belongs to a milestone. Cut it from `origin/dev` when the
+milestone's work starts, take its topic from the milestone's own
+`<scope>: <outcome>` title, carry every commit that work produces on it, and
+merge it through one pull request when the work is complete
+(`docs/decisions/branch-lives-as-long-as-its-milestone.md`). A change no
+milestone plans is a branch of its own and merges when it is done.
+
+A commit marks a judgement point. It carries the change one decision
+produced, however many files that is, and is not split further merely because
+it has parts (`docs/decisions/commit-marks-a-judgement-point.md`). Scope the
+subject, for example `feat(unixlike):`, `fix(windows):`, `chore(common):` or
+`refactor(repository):`. The one accepted two-scope commit is an invariant
+entry together with the evidence item that enforces it, which "Add or change
+an invariant" describes; anything else is two commits.
+
+Branches interleave where one blocks another, and no rule is needed to make
+them: the pre-commit hook refuses a staged path with no owning scope, so a
+move cannot be committed before the classifier accepts its new paths, and the
+old paths cannot be deleted before the move has merged. Where that happens
+each half merges when it is ready rather than when its milestone completes.
+
 Use merge commits for completed work; do not squash or rebase published work.
-Do not commit directly to `master`. Scope commits where practical, for example
-`feat(unixlike):`, `fix(windows):`, `chore(common):`, or
-`refactor(repository):`.
+Do not commit directly to `master`.
+
+`dev` requires an up-to-date branch, so one whose base has moved catches up
+before it can merge and GitHub's auto-merge will not do it. Merge `dev` into
+the branch locally and push: the pre-push hook and the native lanes then run
+against the tree that will actually land, which is where this repository's
+native evidence comes from. Do not use `gh pr update-branch`, which has
+GitHub author that merge outside both. `git merge-tree --write-tree HEAD
+origin/dev` shows the conflicts read-only first.
 
 `dev` means the affected domain's repository checks pass. `master` means the
 source change has been accepted; it no longer means every platform at that
@@ -74,6 +106,12 @@ formula or cask, a `flake.lock` refresh — `tool/version-control/commit` shows
 the edit, the classification, the selected checks, and the message, then
 applies it and commits on your confirmation. It refuses on `master` and never
 bypasses a hook.
+
+Run it from `dev`. On any other branch it commits where it stands, and with
+`--publish` it arms auto-merge on the pull request already open from that
+head, which on a milestone branch would merge that milestone unfinished.
+Every edit it templates is `unixlike`, so on a `repository` milestone branch
+it would also produce a two-scope commit.
 
 Add `--publish` and that one confirmation carries the change the rest of the
 way. On `dev` the helper branches to `feature/<scope>-<topic>` from
@@ -210,8 +248,8 @@ procedure.
    id in `docs/definition-of-done.md`; because the checker requires that
    listing and refuses an unregistered tag in the same run, the entry and the
    evidence item land in one commit that classifies as the entry's scope
-   and `repository` — the one accepted two-scope commit, as supporting
-   documentation. If nothing enforces it yet, open an
+   and `repository` — the two-scope commit "Branch and commit flow" allows.
+   If nothing enforces it yet, open an
    issue and declare `pending #<n>` with an owner. Tag the fixture *unit* —
    the `Describe` or the banner section — or the pre-commit hook refuses the
    commit; `tool/version-control/invariants --untagged` names the unit.
