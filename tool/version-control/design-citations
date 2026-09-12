@@ -1,0 +1,135 @@
+#!/bin/sh
+#
+# Enforce INV repository/design-outside-authority: nothing that carries
+# authority cites a design document.
+#
+# A design document under docs/design/ argues for a direction and binds
+# nothing until an inlet accepts it. If a rationale paragraph, a registry
+# entry, a procedure or a script could cite one, the argument would acquire
+# the force of the thing citing it without passing any inlet, and the
+# repository would enforce a direction nobody accepted. The four inlets are
+# reviewed on their own terms and are where a document is named as a source:
+# a decision record, a candidate, a provisional entry, and an issue.
+#
+# The rule separates citing a document from naming the directory, which is
+# the distinction the tree already draws for every other document directory:
+#
+#   refused   docs/design/<file>     a citation: the directory and a name
+#   allowed   docs/design/           a placement rule: nothing continues it
+#
+# So the ownership table, the placement paragraph in AGENTS.md, the procedure
+# in CONTRIBUTING.md and the registry entry itself all say where design
+# documents live without citing one, while a decision record's `source:` line
+# names the document it adopted from.
+#
+#   subject   every tracked path
+#   except    docs/design/  docs/decisions/  docs/candidates/  provisional/
+#             this script and tool/version-control/test
+#
+# The inlets are excluded whole rather than by header key: a decision record
+# argues in prose as well as in `source:`, and a checker that read only the
+# key would push the same citation one line down. This script and the fixture
+# that proves it are excluded because both have to write the form they refuse,
+# the way the Windows suite carries a cross-domain path in the fixture that
+# proves its own scan.
+#
+# Three limits are accepted and are what a reviewer reads for by hand: a
+# citation written in words carries no path and passes; a slug template in a
+# format contract is not a file name and passes; and comments are not
+# stripped, unlike tool/version-control/domain-reads, because rationale
+# borrowed from an unadopted argument is exactly as binding in a comment as
+# in prose.
+#
+# The subject is the index, like tool/version-control/hygiene: the invariant
+# is about committed state, and reading the working tree would let an unstaged
+# edit change the answer for a commit.
+#
+# usage: tool/version-control/design-citations
+#
+# Exit 0 verified, 69 unverified, any other status failed. See
+# docs/architecture.md, "Repository governance plane", and .githooks/evidence,
+# which is the one place that decides what each means.
+
+set -eu
+
+# Guards this script's grep calls from Git for Windows' MSYS argument
+# conversion (#79); see tool/version-control/hygiene. Inert elsewhere.
+MSYS_NO_PATHCONV=1
+MSYS2_ARG_CONV_EXCL='*'
+export MSYS_NO_PATHCONV MSYS2_ARG_CONV_EXCL
+
+# The three-state prerequisite contract, restated rather than sourced from
+# tool/checks/prerequisite for the reason tool/version-control/hygiene gives:
+# a repository check must not depend on a domain's plane.
+require_command() {
+  require_missing=
+  for require_name in "$@"; do
+    command -v "$require_name" >/dev/null 2>&1 ||
+      require_missing="$require_missing $require_name"
+  done
+  [ -n "$require_missing" ] || return 0
+
+  if [ "${REQUIRE_NATIVE:-0}" = 1 ]; then
+    printf '\033[31m✗ required tooling is missing:%s\033[0m\n' \
+      "$require_missing" >&2
+    exit 1
+  fi
+
+  printf '· unverified: this host has no%s\n' "$require_missing" >&2
+  exit 69
+}
+
+require_command git
+
+# The repository being committed, not the one this file lives in, so the
+# fixtures in tool/version-control/test run this exact script against a
+# throwaway repository.
+root=$(git rev-parse --show-toplevel)
+cd "$root"
+
+work=$(mktemp -d)
+trap 'rm -rf "$work"' EXIT
+
+# The directory followed by anything that could continue a file name. A
+# citation is refused; the bare directory is not matched at all.
+citation='docs/design/[A-Za-z0-9._-]'
+
+# One list, used for the scan and for the count it reports, so a pathspec
+# that stopped matching cannot leave a silent zero behind a green line.
+set -- . \
+  ':(exclude)docs/design' \
+  ':(exclude)docs/decisions' \
+  ':(exclude)docs/candidates' \
+  ':(exclude)provisional' \
+  ':(exclude)tool/version-control/design-citations' \
+  ':(exclude)tool/version-control/test'
+
+git ls-files -- "$@" >"$work/files"
+scanned=$(wc -l <"$work/files" | tr -d ' ')
+if [ "$scanned" -eq 0 ]; then
+  printf '\033[31m✗ scan did not run: no tracked path outside the adoption inlets\033[0m\n' >&2
+  exit 1
+fi
+
+# `git grep` exits 1 when nothing matched, which is the passing case here, so
+# its status is read rather than allowed to end the script under `set -e`.
+hits=0
+git -c color.grep=never grep --cached -n -I -E -e "$citation" -- "$@" \
+  >"$work/hits" 2>/dev/null || hits=$?
+if [ "$hits" -gt 1 ]; then
+  printf '\033[31m✗ scan did not run: git grep exited %s\033[0m\n' "$hits" >&2
+  exit 1
+fi
+
+if [ -s "$work/hits" ]; then
+  while IFS= read -r hit; do
+    printf '\033[31m✗ %s\033[0m\n' "$hit" >&2
+  done <"$work/hits"
+  echo "  See invariants/repository/design-outside-authority.md: a design document is" >&2
+  echo "  argued, not adopted. Cite the decision record, candidate or provisional entry" >&2
+  echo "  that accepted it, and name the directory rather than the document where the" >&2
+  echo "  sentence is about where design documents live." >&2
+  exit 1
+fi
+
+echo "✓ design citations: $scanned tracked paths outside the adoption inlets cite no design document"

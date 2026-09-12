@@ -126,9 +126,9 @@ jobs:
 
   # The job key stays `secrets`: the required-checks gate, its SECRETS_RESULT
   # input, and the `needs:` list below all key off it. Only the display name
-  # widens, because the job carries the six repository-wide scans.
+  # widens, because the job carries the seven repository-wide scans.
   secrets:
-    name: Secret, hygiene, domain-read, invariant, provisional and history scan
+    name: Secret, hygiene, domain-read, design-citation, invariant, provisional and history scan
     # Only for the classifier's scope outputs: the provisional check fails an
     # overdue entry solely in a scope this change touches.
     needs: classify
@@ -136,8 +136,9 @@ jobs:
     # The merge gate is the one place where a check that could not run must not
     # pass. tool/version-control/hygiene, tool/version-control/invariants and
     # tool/version-control/provisional need nothing but a POSIX shell, awk and
-    # Git today, as does tool/version-control/domain-reads; this is what keeps
-    # a future prerequisite from passing through the gate unverified.
+    # Git today, as do tool/version-control/domain-reads and
+    # tool/version-control/design-citations; this is what keeps a future
+    # prerequisite from passing through the gate unverified.
     env:
       REQUIRE_NATIVE: "1"
     steps:
@@ -153,6 +154,7 @@ jobs:
       - run: gitleaks git --redact --no-banner
       - run: tool/version-control/hygiene
       - run: tool/version-control/domain-reads
+      - run: tool/version-control/design-citations
       - run: tool/version-control/invariants
       # An overdue entry fails only the scopes this change owns, so the scope
       # list comes from the classify job rather than from this one.

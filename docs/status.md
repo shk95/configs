@@ -301,6 +301,20 @@ under the Windows tree is parsed for syntax (`check-desired-state.ps1`
 still parses the PowerShell payload it validates). `pre-push` audits the
 pushed history only.
 
+Since 2026-09-12 the repository has an external layer: `docs/design/` holds
+the argument for a direction and carries no authority, and
+`tool/version-control/design-citations` refuses a citation of a document
+there from anything that does, on every commit and in the CI scan job, which
+now carries seven repository-wide scans
+(`docs/decisions/design-documents-outside-the-authority-model.md`). It holds
+three documents, ported the same day from the HTML artefacts they were
+written as: a map of the tree as read at `dev` fc57495, the study that judged
+it, and the migration plan, which is the one still `open`. The study's first
+two outcomes are recorded: the Unix-like domain is to own one tree and the
+concern is to be the directory inside it, both naming the study in `source:`
+and neither moving a file. Stage 3, the migration itself, has not been
+opened.
+
 ## Common
 
 No `common/` component exists.

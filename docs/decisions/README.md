@@ -22,7 +22,7 @@ entries are (`invariants/README.md`); a list is a repeated key. Then prose.
 | `issue` | 0+ | `#<n>`. |
 | `reopen-when` | 0–1 | One sentence naming the condition under which the decision is revisited. |
 | `supersedes`, `superseded-by` | 0–1 each | A record path. |
-| `source` | 0+ | Provenance of an extracted record, `<commit>:<path> § <heading>`; never checked. |
+| `source` | 0+ | Where the record came from — the text it was extracted from, or the design document whose argument it adopts — as `<commit>:<path> § <heading>`; never checked. |
 
 Extending or correcting a decision edits its record and appends a dated
 paragraph. Reversing one creates a new record, sets the old one to
@@ -73,3 +73,6 @@ decision` is the procedure.
 | 2026-09-05 | repository | A rule or a deletion is observed before it is adopted | accepted | candidates-observed-before-adoption.md |
 | 2026-09-05 | repository | The provisional registry records what must become false | accepted | provisional-registry-created.md |
 | 2026-09-06 | unixlike | The NixOS-WSL system layer declares only what Home Manager cannot | accepted | nixos-wsl-system-layer-ownership.md |
+| 2026-09-12 | repository | Design documents sit outside the authority model | accepted | design-documents-outside-the-authority-model.md |
+| 2026-09-12 | unixlike | The Unix-like domain owns its tree | accepted | unixlike-domain-owns-its-tree.md |
+| 2026-09-12 | unixlike | Inside the Unix-like domain the concern is the directory and the class is the file | accepted | concern-first-inside-the-domain.md |
