@@ -71,7 +71,8 @@ if selected repository:fixtures; then
 fi
 
 if selected unixlike:test; then
-  evidence_run "Unix-like test" tool/checks/test || exit 1
+  # PROV repository/unix-like-tree-migration
+  evidence_run "Unix-like test" "$(unixlike_check test)" || exit 1
 fi
 
 if selected windows:desired-state || selected windows:tests; then

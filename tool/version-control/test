@@ -946,6 +946,35 @@ if ! run_protocol_pre_push >/dev/null; then
   exit 1
 fi
 
+# PROV repository/unix-like-tree-migration
+# The hooks resolve a Unix-like check at either location while the tree
+# moves, and prefer the domain's. The stand-in at the old path fails, so a
+# passing push proves the domain's copy is the one that ran; removing it must
+# fall back rather than report the check missing.
+mkdir -p "$protocol_root/unixlike/tool/checks"
+printf '#!/bin/sh\n: >ran-inside-the-domain\nexit 0\n' \
+  >"$protocol_root/unixlike/tool/checks/test"
+chmod +x "$protocol_root/unixlike/tool/checks/test"
+stub_check 1
+if ! protocol_output=$(run_protocol_pre_push 2>&1); then
+  printf '%s\n' "$protocol_output" >&2
+  echo "pre-push did not prefer the Unix-like check inside the domain" >&2
+  exit 1
+fi
+# The stand-in at the old path fails, so passing already says the domain's
+# copy ran; the marker says it ran rather than that the check was skipped.
+if [ ! -e "$protocol_root/ran-inside-the-domain" ]; then
+  printf '%s\n' "$protocol_output" >&2
+  echo "pre-push passed without running the check inside the domain" >&2
+  exit 1
+fi
+rm -rf "$protocol_root/unixlike" "$protocol_root/ran-inside-the-domain"
+stub_check 0
+if ! run_protocol_pre_push >/dev/null; then
+  echo "pre-push did not fall back to the current location" >&2
+  exit 1
+fi
+
 stub_check 1
 if run_protocol_pre_push >/dev/null 2>&1; then
   echo "pre-push accepted a failing check" >&2
