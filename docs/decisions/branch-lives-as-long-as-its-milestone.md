@@ -84,5 +84,14 @@ recorded what a commit subject's scope names and which two-scope commits are
 allowed, because the branch and commit section is being rewritten anyway.
 Both are now sentences in `CONTRIBUTING.md`. `AGENTS.md` gains the
 sentence that a milestone's branch merges when the milestone's work is
-complete; closure itself stays the maintainer's, and an issue already closes
-when its pull request merges. Nothing in `tool/`, the hooks or CI changes.
+complete; closure itself stays the maintainer's. Nothing in `tool/`, the
+hooks or CI changes.
+
+Corrected 2026-09-12. This record first said an issue already closes when its
+pull request merges, which is why no rule was needed to tie milestone closure
+to a merge. That is wrong: GitHub closes a linked issue only on a merge into
+the default branch, which here is `master`, while every pull request targets
+`dev`. Closure is manual, done promptly by the maintainer, and `AGENTS.md`
+already assigns it to them with named manual evidence. The decision not to
+add the rule stands on that instead: it would restate an assignment the
+governance documents already make, and automate nothing.

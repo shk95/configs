@@ -206,14 +206,21 @@ policy and the narrower sentence in `CONTRIBUTING.md` stands. The default is
 the narrow rule, and widening it would be a separate, deliberate act. The
 planned migration is single-scope at every step and needs nothing wider.
 
-**Milestone closure already follows merges.** Eight of the last twelve pull
-requests carry a `Closes #<n>` line, so an issue closes when its pull request
-merges and a milestone's open count reaches zero as merges land; the ones
-without such a line had no issue. `AGENTS.md` already gives closure to the
-maintainer with the milestone description and the final evidence issue as its
-manual evidence. A rule tying closure to a merge would restate what GitHub
-produces. What is worth writing is the convention rather than the rule: a
-pull request that resolves an issue says so.
+**Milestone closure is the maintainer's and stays there.** `AGENTS.md`
+already gives it to them with the milestone description and the final
+evidence issue as its manual evidence, so a rule tying closure to a merge
+would move an act nobody automated into a sentence nobody checks. What is
+worth writing is the convention rather than the rule: a pull request that
+resolves an issue says so.
+
+Corrected on 2026-09-12. This first read that eight of the last twelve pull
+requests carry a `Closes #<n>` line, so closure already followed merges by
+itself. It does not. GitHub closes a linked issue only when the pull request
+merges into the default branch, and this repository's default branch is
+`master` while every pull request targets `dev`. The timeline confirms it:
+#201 and #200 were closed by the maintainer 50 and 92 seconds after #212
+merged, and #208 a minute after #210. Closure here is prompt and manual. The
+answer to the question is unchanged, and its reason is now the right one.
 
 **What `--publish` does follows from the scope rule.** Read in
 `tool/version-control/commit`: on a branch that is not `dev`, with a pull
