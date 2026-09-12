@@ -142,12 +142,19 @@ the one being considered.
   land; `docs/candidates/topic-branch-catch-up-procedure.md` holds it, its
   `promote-when` is already satisfied, and under milestone branches it stops
   being occasional.
-- **Evidence ages with it.** The local gate runs per commit against whatever
-  base the branch had at the time. On a branch that lives an hour that is the
-  landing tree; on one that lives a week it is not, and only the final
-  catch-up rerun tests what merges. That candidate's `promote-when` names
-  exactly this failure — a pull request merged whose native evidence came
-  from a tip that did not contain `dev`.
+- **Evidence ages with it, but less than this first said.** Corrected on
+  2026-09-12 after checking the protection settings: `dev` requires
+  `Required checks`, `strict` is on and administrators are included, so a
+  branch cannot merge until it contains `dev`, and the catch-up is a local
+  merge whose push reruns the pre-push hook. The native lanes live in that
+  hook rather than in CI, because this repository adds no hosted runner
+  (`docs/decisions/ci-evidence-without-hosted-runners.md`), and CI itself
+  tests the synthetic merge of head and base. So the landing tree is tested
+  either way, and the hole is narrower and specific: `gh pr update-branch`
+  has GitHub author the catch-up merge, outside the hook and therefore
+  outside the native lanes. A longer branch does not age the evidence by
+  itself; it multiplies the catch-ups, and each one is an opportunity to
+  take the shortcut that does.
 - **`--publish` collides with it.** `tool/version-control/commit --publish`
   commits where it stands on any branch that is not `dev`, then pushes, opens
   a pull request against `dev` and arms auto-merge. A routine
@@ -173,28 +180,80 @@ Nothing in `tool/`, the hooks or CI has to change for either half. That is
 worth stating plainly: this is a practice change with a documentation cost,
 not an enforcement change.
 
-## What the maintainer has to decide
+## Four questions, and what already answers three of them
 
-1. Whether A is adopted as written, with scope purity as the surviving hard
-   constraint, and what a two-scope commit may contain.
-2. Whether B is adopted as the default with a named exception, or not
-   adopted. If adopted, whether the exception is written as the decidable
-   condition above or left to judgement.
-3. Whether a closed milestone means its branch has merged. This is the part
-   that changes what a milestone asserts.
-4. What `--publish` does when a milestone branch is checked out.
+The first draft left four questions for the maintainer. Checked against the
+tree on 2026-09-12, three of them are settled by mechanisms that exist, and
+asking them again would be asking the repository to choose something it has
+already arranged.
 
-## Recommendation
+**The exception needs no rule, because the hook is the rule.**
+`.githooks/pre-commit` fails on a staged path with no owning scope, so
+committing the move before the classifier accepts the new tree is not a
+policy someone may decide to violate; it is refused. Writing the interleave
+as a rule would restate a refusal that already happens. What is missing is a
+sentence in `CONTRIBUTING.md` saying why branches interleave, not a rule and
+not a check.
 
-Adopt A, as one commit per scope-pure judgement point, and promote the
-two-scope candidate with it. It costs a paragraph and removes real ceremony.
+**The two-scope question is moot in practice, and its conflict is already
+decided.** Classifying each of the last sixty non-merge commits on `dev`
+gives no commit spanning more than one scope, so widening the allowance buys
+nothing today. And `AGENTS.md`, "Governance design", already settles which
+text is in force: procedures and tools implement policy and must not
+silently create new policy, so the agent workflow's broader wording is not
+policy and the narrower sentence in `CONTRIBUTING.md` stands. The default is
+the narrow rule, and widening it would be a separate, deliberate act. The
+planned migration is single-scope at every step and needs nothing wider.
 
-Adopt B as the default, with the exception written as the decidable
-condition: where a commit would be refused as unclassified until another
-branch merges, the branches interleave and each half merges when it is ready.
-The migration is the first thing to hit that exception, so it keeps its three
-pull requests, and B applies to the milestones that follow.
+**Milestone closure already follows merges.** Eight of the last twelve pull
+requests carry a `Closes #<n>` line, so an issue closes when its pull request
+merges and a milestone's open count reaches zero as merges land; the ones
+without such a line had no issue. `AGENTS.md` already gives closure to the
+maintainer with the milestone description and the final evidence issue as its
+manual evidence. A rule tying closure to a merge would restate what GitHub
+produces. What is worth writing is the convention rather than the rule: a
+pull request that resolves an issue says so.
 
-Do not adopt B as an absolute rule. The deadlock above is not an edge case in
-this repository; it is the shape every move and every deletion takes, and a
-rule that has to be broken the first time it is used is not a rule.
+**What `--publish` does follows from the scope rule.** Read in
+`tool/version-control/commit`: on a branch that is not `dev`, with a pull
+request already open from that head, it runs `gh pr merge --auto --merge` on
+that pull request, which on a milestone branch would arm auto-merge over the
+unfinished milestone. But every templated edit the helper owns is `unixlike`
+— a formula, a cask, a Mac App Store entry, a lock refresh, a Karabiner
+capture — and a milestone branch is single-scope, so running one on a
+`repository` milestone branch would produce the two-scope commit the narrow
+rule refuses, and on a `unixlike` milestone branch it would be a different
+unit of work wearing the milestone's branch. Either way the answer is forced:
+run it from `dev`, which is the path the helper was built for. No tool
+change.
+
+## Decided
+
+**Commit granularity, A: adopted.** One commit per judgement point that is
+pure in scope. Nothing measured changes, because the tree is already there;
+what changes is that splitting for its own sake stops.
+
+**Branch lifetime, B: adopted, with the risk accepted deliberately.** A
+branch lives as long as its milestone and merges when the milestone is
+complete. The maintainer's reason for taking it rather than hedging it is
+that the cost is not decidable from here and has to be met in a real case:
+this tree has never run a branch longer than fourteen hours, so every
+argument about what a week-long branch does to review size, to catch-up
+frequency and to the temptation of `gh pr update-branch` is a prediction
+rather than an observation.
+
+The exception is not written as a rule, for the reason above. Where a commit
+would be refused as unclassified until another branch merges, the branches
+interleave because the hook makes them; the migration is the first case and
+keeps its three pull requests.
+
+What would reverse it is named in the decision record rather than left to
+memory, and the honest trip wire is not "evidence aged" but the shortcut:
+a pull request merged whose catch-up was authored by GitHub rather than by a
+push through the hook.
+
+## Still open
+
+Nothing, for these two questions. What remains is to watch the first
+milestone-length branch and record what it actually cost, which belongs in
+this document as a dated paragraph rather than in a new one.
