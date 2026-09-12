@@ -4,6 +4,8 @@ kind: study
 date: 2026-09-12
 scope: repository
 status: open
+outcome: docs/decisions/commit-marks-a-judgement-point.md
+outcome: docs/decisions/branch-lives-as-long-as-its-milestone.md
 
 The proposal: commit only at important judgement points rather than splitting
 every step, run one branch per milestone, and merge when the milestone is
