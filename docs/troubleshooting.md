@@ -39,7 +39,7 @@ nix eval --raw '.#homeConfigurations."<name>".activationPackage.drvPath'
 nix eval --raw '.#nixosConfigurations."<name>".config.system.build.toplevel.drvPath'
 ```
 
-`tool/checks/test` does this for every configuration.
+`unixlike/tool/checks/test` does this for every configuration.
 
 ### `Path 'flake.nix' in the repository "..." is not tracked by Git`
 
@@ -59,22 +59,22 @@ command aborts instead of adding the files you actually meant.
 ### `experimental Nix feature 'nix-command' is disabled`
 
 There is no `~/.config/nix/nix.conf` yet, which is the state of any machine
-before its first `home-manager switch` — `modules/nix-conf.nix` is what
-writes it. Export `NIX_CONFIG="experimental-features = nix-command flakes"`
-for the session rather than writing the file by hand: home-manager refuses to
-clobber an unmanaged file, so hand-writing it turns the first switch into a
-failure.
+before its first `home-manager switch` — `unixlike/modules/nix/shared.nix` is
+what writes it. Export `NIX_CONFIG="experimental-features = nix-command
+flakes"` for the session rather than writing the file by hand: home-manager
+refuses to clobber an unmanaged file, so hand-writing it turns the first switch
+into a failure.
 
 This host passed that point on 2026-08-03 and no longer needs the variable. The
 entry stays because a fresh clone on a new machine starts where this one did.
 
-On the NixOS-WSL flavour the file that matters is `/etc/nix/nix.conf`, which
-is generated from `nix.settings`, and the standalone class that writes the
-home file is not composed there. The distribution imported on 2026-09-06 hit
-this exact message from a system whose whole configuration is a flake;
-`modules/nix-conf.nix` declares the setting for that flavour too, and it
-reaches the host on its next activation. The same `NIX_CONFIG` export covers
-the session until then.
+On the NixOS-WSL flavour the file that matters is `/etc/nix/nix.conf`, which is
+generated from `nix.settings`, and the standalone class that writes the home
+file is not composed there. The distribution imported on 2026-09-06 hit this
+exact message from a system whose whole configuration is a flake;
+`unixlike/modules/nix/shared.nix` declares the setting for that flavour too,
+and it reaches the host on its next activation. The same `NIX_CONFIG` export
+covers the session until then.
 
 Note that `nix config show` cannot diagnose this — it needs `nix-command` in
 order to run at all. `tool/doctor.sh` probes with `nix flake metadata` instead,
@@ -117,7 +117,7 @@ experimental-features flag — so exporting `NIX_CONFIG` will not clear it. The
 rest of the line is the root cause nix reported; act on that.
 
 Seen so far: a read-only `~/.cache/nix` (agent sandboxes deny it), no network,
-and an untracked `flake.nix`. Each of these used to be reported as
+and an untracked `unixlike/flake.nix`. Each of these used to be reported as
 "nix-command/flakes not enabled by default", which sent you to a variable that
 could not help.
 
@@ -284,7 +284,7 @@ If `CanaryZZ` is gone, it was a flush — nothing deletes that name by name.
 stop `systemd-shutdown` calling the flush, but it can make the call decline.
 `disable_binfmt()` opens with `binfmt_mounted_and_writable()`, which ends in
 `access_fd(fd, W_OK)` — so a distribution whose *own* view of the registry is
-read-only skips it. `modules/wsl.nix` declares that as
+read-only skips it. `unixlike/modules/wsl.nix` declares that as
 `systemd.services.wsl-binfmt-protect`:
 
 ```sh
@@ -386,11 +386,10 @@ the copy, and prints the exact command. It takes about four seconds over drvfs.
 
 ### `sudo: a password is required` right after `wsl --import`
 
-The account a fresh import creates has no password — its `/etc/shadow`
-field is `!` — and `modules/wsl.nix` makes sudo ask for one, because the
-host is reachable over ssh and a key alone must not be root. Nothing is
-broken; step 2 of `CONTRIBUTING.md § Import the NixOS-WSL distribution` has
-not run yet:
+The account a fresh import creates has no password — its `/etc/shadow` field is
+`!` — and `unixlike/modules/wsl.nix` makes sudo ask for one, because the host
+is reachable over ssh and a key alone must not be root. Nothing is broken; step
+2 of `CONTRIBUTING.md § Import the NixOS-WSL distribution` has not run yet:
 
 ```
 wsl -d NixOS -u root -- passwd <account>
@@ -408,10 +407,10 @@ error: path '«git+file://…?ref=…&rev=…»/home/programs/<file>.nix' does n
 ```
 
 The file is `git add`-ed but never committed. A flake reads the *working tree*
-of a dirty repository, so `tool/checks/test` — and therefore the `pre-push`
-hook — sees it and passes. CI checks out the commit, where only the *reference*
-to it landed. `git status` shows it as `A ` rather than untracked, which is easy
-to read past.
+of a dirty repository, so `unixlike/tool/checks/test` — and therefore the
+`pre-push` hook — sees it and passes. CI checks out the commit, where only the
+*reference* to it landed. `git status` shows it as `A ` rather than untracked,
+which is easy to read past.
 
 A file that is untracked entirely does not do this: flakes refuse to see it and
 the local build fails first, with `Path '…' is not tracked by Git` above.
@@ -424,10 +423,10 @@ git diff --cached --stat   # what is still only staged
 ### `git push` fails with the same `nix-command is disabled` message
 
 Not a git problem, and nothing in the output says a hook ran. `pre-push`
-invokes `tool/checks/test`, which is a Nix command, so on a host where flakes
-are not enabled globally the push dies with a Nix error. Export `NIX_CONFIG` in
-the shell you push from. `--no-verify` also gets the push through, but skips
-the tests, which is the thing the hook is for.
+invokes `unixlike/tool/checks/test`, which is a Nix command, so on a host where
+flakes are not enabled globally the push dies with a Nix error. Export
+`NIX_CONFIG` in the shell you push from. `--no-verify` also gets the push
+through, but skips the tests, which is the thing the hook is for.
 
 ### statix: `Found empty pattern in function argument`
 
@@ -438,8 +437,8 @@ that do use some arguments (`{pkgs, ...}: ...`) are unaffected.
 
 ### deadnix reports unused code but the lint check still passes
 
-deadnix's default exit code is 0 regardless of findings. `tool/checks/lint`
-passes `--fail`; without it the check is cosmetic.
+deadnix's default exit code is 0 regardless of findings.
+`unixlike/tool/checks/lint` passes `--fail`; without it the check is cosmetic.
 
 ### `evaluation warning: The default value of 'programs.X.Y' has changed ... because 'home.stateVersion' is less than "..."`
 
@@ -559,19 +558,18 @@ timeout 6 script -q /tmp/repro.ts zellij attach repro </dev/null >/dev/null
 grep -a -o 'NFD:\[[^]]*\]' /tmp/repro.ts | grep -av '…' | head -1 | hexdump -C
 ```
 
-That `script` line is macOS's; GNU `script` spells it
-`script -q -c 'zellij attach repro' /tmp/repro.ts`. An unpatched zellij 0.45.0
-answers `4e 46 44 3a 5b e1 84 92 5d`; a grid that keeps the jamo answers
-`4e 46 44 3a 5b e1 84 92 e1 85 a1 e1 86 ab 5d`. This repository patches
-Darwin's zellij with upstream PR
+That `script` line is macOS's; GNU `script` spells it `script -q -c 'zellij
+attach repro' /tmp/repro.ts`. An unpatched zellij 0.45.0 answers `4e 46 44 3a
+5b e1 84 92 5d`; a grid that keeps the jamo answers `4e 46 44 3a 5b e1 84 92 e1
+85 a1 e1 86 ab 5d`. This repository patches Darwin's zellij with upstream PR
 [zellij-org/zellij#5500](https://github.com/zellij-org/zellij/pull/5500) while
 that PR is unmerged; `provisional/unixlike/zellij-combining-marks.md` says
-until when, and `docs/decisions/zellij-patched-on-darwin-until-upstream.md` says
-why. On 2026-09-06 the pull request's first commit alone still answered the
-short form — it attached general-category Mark code points and Hangul jamo
-are letters — and the branch gained the jamo ranges the same day; generation
-35 answers the full form. The decision record's Evidence has the readings.
-On a host the overlay does not reach, there is no local fix.
+until when, and `docs/decisions/zellij-patched-on-darwin-until-upstream.md`
+says why. On 2026-09-06 the pull request's first commit alone still answered
+the short form — it attached general-category Mark code points and Hangul jamo
+are letters — and the branch gained the jamo ranges the same day; generation 35
+answers the full form. The decision record's Evidence has the readings. On a
+host the overlay does not reach, there is no local fix.
 
 ### `msedit` opens with `b2b` already typed into the buffer
 
@@ -591,12 +589,12 @@ lazygit then exits 1 with `permission denied`. A key the pinned lazygit has
 retired (`git.paging`, now `git.diffRenderers`) makes it migrate the file by
 writing it back; under Home Manager the file is a symlink into the read-only
 store, so the write-back fails and the tool never starts — while evaluation,
-build and `tool/checks/test` all pass, because nothing in the pipeline reads
-a tool's schema. Use the pinned version's key and start the built binary once
-against the rendered home:
-`XDG_CONFIG_HOME=<built home>/home-files/.config timeout 3 <built home>/home-path/bin/lazygit`
-(exit 124 is the pass). Any tool that migrates its own configuration in place
-fails the same way here (INV unixlike/generated-config-key-in-schema).
+build and `unixlike/tool/checks/test` all pass, because nothing in the pipeline
+reads a tool's schema. Use the pinned version's key and start the built binary
+once against the rendered home: `XDG_CONFIG_HOME=<built
+home>/home-files/.config timeout 3 <built home>/home-path/bin/lazygit` (exit
+124 is the pass). Any tool that migrates its own configuration in place fails
+the same way here (INV unixlike/generated-config-key-in-schema).
 
 ---
 
@@ -698,25 +696,26 @@ checks plus the `windows-latest` CI job as the real gate) that this repository
 never wrote down until now.
 
 `pre-push` now runs the Windows checks under this host's own `pwsh` on any
-Unix-like host, including WSL — the same binary `modules/powershell.nix`
-installs into every home this repository configures. `check-desired-state.ps1`
-and the Pester suite both run cleanly under it; the suite's `WIN_ENV_E2E`
-cases self-skip there, and `windows-latest` remains the native gate for what a
-Linux `pwsh` cannot exercise. `pre-push` reaches for `pwsh.exe` only when
-`uname -s` reports an actual Windows host (`MINGW*` / `MSYS*` / `CYGWIN*`, the
-same test `tool/version-control/commit`'s `--publish` guard uses) — never over
-WSL interop. A host with neither pwsh reports the Windows checks unverified
-(exit 69) rather than failing, the same as any other missing prerequisite; see
-the `· unverified: this host has no nix` entry above. No `--no-verify` should
-be needed for a windows-scope push from WSL again.
+Unix-like host, including WSL — the same binary
+`unixlike/modules/powershell/module.nix` installs into every home this
+repository configures. `check-desired-state.ps1` and the Pester suite both run
+cleanly under it; the suite's `WIN_ENV_E2E` cases self-skip there, and
+`windows-latest` remains the native gate for what a Linux `pwsh` cannot
+exercise. `pre-push` reaches for `pwsh.exe` only when `uname -s` reports an
+actual Windows host (`MINGW*` / `MSYS*` / `CYGWIN*`, the same test
+`tool/version-control/commit`'s `--publish` guard uses) — never over WSL
+interop. A host with neither pwsh reports the Windows checks unverified (exit
+69) rather than failing, the same as any other missing prerequisite; see the `·
+unverified: this host has no nix` entry above. No `--no-verify` should be
+needed for a windows-scope push from WSL again.
 
 ### `Unix-like tests failed` on a machine that has no Nix
 
-An old checkout. `tool/checks/*` used to invoke `nix` unguarded, so the shell's
-"command not found" became the check's own exit status and the hook reported a
-failure for a check that could never have run there. It is why native Windows
-clones could not push a change to a Unix-like payload. Update past the commit
-that added `tool/checks/prerequisite`.
+An old checkout. `unixlike/tool/checks/*` used to invoke `nix` unguarded, so
+the shell's "command not found" became the check's own exit status and the hook
+reported a failure for a check that could never have run there. It is why
+native Windows clones could not push a change to a Unix-like payload. Update
+past the commit that added `unixlike/tool/checks/prerequisite`.
 
 ### `zellij.exe is required to validate Windows Zellij KDL.`
 
@@ -725,13 +724,13 @@ compiler before it read anything, so a clone without them failed for desired
 state that was never examined — including the JSON, INI and PowerShell sources
 it could have parsed. It now parses everything available and names the rest.
 
-### A broken `assets/` payload was committed and nothing caught it
+### A broken `unixlike/modules/` payload was committed and nothing caught it
 
 Fixed, but worth knowing why it was possible. Nix delivers those files with
 `.source`, which copies without reading, so evaluation and build evidence never
-covered their content and no check parsed them. `tool/checks/payloads` does
-now, driven by `assets/payloads.json`. A payload added without a declaration
-fails the check rather than escaping it.
+covered their content and no check parsed them. `unixlike/tool/checks/payloads`
+does now, driven by `unixlike/payloads.json`. A payload added without a
+declaration fails the check rather than escaping it.
 
 ### `warning: in the working copy of '<file>', LF will be replaced by CRLF the next time Git touches it`
 

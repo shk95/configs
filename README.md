@@ -86,7 +86,8 @@ present and is intentionally ignored by Git.
 Run checks for the domain you changed. `CONTRIBUTING.md` lists the workflows.
 
 A routine desired-state edit whose commit message is a template — a Homebrew
-formula or cask, a `flake.lock` refresh — reaches `dev` in one command:
+formula or cask, a `unixlike/flake.lock` refresh — reaches `dev` in one
+command:
 
 ```sh
 tool/version-control/commit --dry-run --publish brew add <formula>
@@ -153,9 +154,10 @@ just darwin-switch     # target Mac only; requires sudo
 
 ### Git commands that get no alias
 
-`modules/git.nix` declares this repository's `programs.git.settings.alias`
-set and, beside it, a comment naming the Git commands that deliberately stay
-unaliased because knowing them is more useful than shortening them:
+`unixlike/modules/git.nix` declares this repository's
+`programs.git.settings.alias` set and, beside it, a comment naming the Git
+commands that deliberately stay unaliased because knowing them is more useful
+than shortening them:
 
 - `git show` for the last commit with its patch, `git show --stat` for just
   the summary, and `git show <ref>` for any other commit.
@@ -166,24 +168,24 @@ unaliased because knowing them is more useful than shortening them:
 - `git show HEAD@{1}` with `git reflog` to recover a previous position.
 - `git range-diff` to compare two versions of a series.
 
-See the comment in `modules/git.nix` for the reasoning; this list only
+See the comment in `unixlike/modules/git.nix` for the reasoning; this list only
 repeats the names so a maintainer can find them without opening a Nix module.
 
 ### Markdown and fuzzy search
 
 `glow README.md` renders a document; `glow` opens the Markdown browser (Enter
 opens a document, Esc returns, q quits). Both use the bundled `light` style.
-The generated `glow/glow.yml` is read-only: edit `modules/glow.nix`, not
-`glow config`. XDG configuration is installed on every home; Darwin also gets
-the native `~/Library/Preferences/glow/glow.yml` fallback. `GLOW_CONFIG_HOME`
-can select an alternative config directory. The glow wrapper clears
-`GLAMOUR_STYLE` only for glow so the TUI follows the same style setting as the
-CLI. Redirected output uses upstream's uncoloured style unless `--style` is
-explicitly supplied; it is not a terminal-colour preview.
-Only the style is configured: glow's application defaults include hidden and
-ignored files (`all=true`) and adapt the width to the terminal (`width=0`,
-falling back to 80 columns without a terminal). These differ from the
-`all=false`, `width=80` in upstream's first-run generated config file.
+The generated `glow/glow.yml` is read-only: edit `unixlike/modules/glow.nix`,
+not `glow config`. XDG configuration is installed on every home; Darwin also
+gets the native `~/Library/Preferences/glow/glow.yml` fallback.
+`GLOW_CONFIG_HOME` can select an alternative config directory. The glow wrapper
+clears `GLAMOUR_STYLE` only for glow so the TUI follows the same style setting
+as the CLI. Redirected output uses upstream's uncoloured style unless `--style`
+is explicitly supplied; it is not a terminal-colour preview. Only the style is
+configured: glow's application defaults include hidden and ignored files
+(`all=true`) and adapt the width to the terminal (`width=0`, falling back to 80
+columns without a terminal). These differ from the `all=false`, `width=80` in
+upstream's first-run generated config file.
 
 In the configured zsh, fzf owns Ctrl-R (history into the buffer, without
 execution), Ctrl-T (insert paths), and Alt-C (change directory). Enter accepts;

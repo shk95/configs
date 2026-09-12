@@ -49,8 +49,8 @@ planning read-only unless the user explicitly authorizes a Git mutation.
   before remote writes. Keep a final evidence issue, report every created URL,
   and never present milestone closure as release or deployment evidence.
 - **Prepare**: Review the complete diff, classification, commit boundaries,
-  relevant checks, and evidence. Keep `flake.lock` refreshes isolated in
-  `chore(unixlike-deps)` commits. Never stage or commit without an explicit
+  relevant checks, and evidence. Keep `unixlike/flake.lock` refreshes isolated
+  in `chore(unixlike-deps)` commits. Never stage or commit without an explicit
   request.
 - **Integrate**: Merge a topic branch into `dev`. Require relevant checks,
   preserve merge commits, and refuse squash or rebase of published work. Catch

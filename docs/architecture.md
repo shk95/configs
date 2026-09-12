@@ -36,26 +36,37 @@ paths, release cadence, or validation environments can diverge.
 The Unix-like domain covers Linux, WSL, NixOS, Home Manager, and macOS. Nix and
 the flake are its composition authority.
 
-It owns:
+It owns one tree, `unixlike/`, which holds:
 
-- `flake.nix` and `flake.lock`;
-- feature and host modules under `modules/`;
-- Unix-like source payloads consumed by those modules;
-- Unix-like evaluation, build, and activation tooling.
+- the flake and its lock;
+- feature and host modules under `modules/`, where the first level names a
+  concern and the class a fragment reaches is read in the file that writes it;
+- the Unix-like source payloads those modules consume, each beside the module
+  that delivers it, and any script a module interpolates beside the same one;
+- Unix-like evaluation, build, and activation tooling under `tool/`.
+
+`.envrc` and the `Justfile` are the exceptions and stay at the repository
+root: direnv reads the first there, and where the second belongs is a separate
+decision (`docs/decisions/unixlike-domain-owns-its-tree.md`,
+`docs/decisions/concern-first-inside-the-domain.md`).
 
 A payload is not only a file a domain owns. It has a format, and being well
 formed is a property of that format rather than of the domain holding it, so it
 needs a parser that the domain's own evaluator does not provide. Nix delivers
 payloads with `.source`, which copies without reading, so evaluation and build
 evidence say nothing about payload content. Each deployable domain therefore
-declares its payloads and their formats — `assets/payloads.json` for Unix-like,
-the `Parser` field of `windows/desired/manifest.json` for Windows — and
-validates them with the parser that will consume them. The two declarations are
-independent copies of one idea, not a shared authority, and neither imports the
-other. A payload the host application rewrites in place cannot be delivered as
-a link into the store at all, so its desired state declares the members it owns
-and one projection onto those members decides drift, what is written and what
-may be captured, leaving whatever the application keeps beside them as runtime
+declares its payloads and their formats — `unixlike/payloads.json` for
+Unix-like, the `Parser` field of `windows/desired/manifest.json` for Windows —
+and validates them with the parser that will consume them. On the Unix-like
+side the scanned tree is the module tree, and what separates a payload from a
+module is that the evaluator reads Nix and copies everything else; a script a
+module interpolates is copied the same way, so it is declared and parsed too.
+The two declarations are independent copies of one idea, not a shared
+authority, and neither imports the other. A payload the host application
+rewrites in place cannot be delivered as a link into the store at all, so its
+desired state declares the members it owns and one projection onto those
+members decides drift, what is written and what may be captured, leaving
+whatever the application keeps beside them as runtime
 (`docs/decisions/karabiner-desired-state-by-projection.md`).
 
 Composition, identity, and ownership in this domain rest on ten rules, each
@@ -82,9 +93,9 @@ the complete result directly for both. Platform-specific Nix modules remain
 preferable when behavior differs. This internal sharing does not make their
 content part of the repository-wide `common` domain. The nixpkgs configuration
 and overlay set every flavour evaluates under are each declared once, in
-`modules/flake/nixpkgs.nix`, and read from there by the standalone home's
-`pkgs` and by the NixOS and darwin flavours' own `nixpkgs.*` options, rather
-than repeated per class.
+`unixlike/modules/flake/nixpkgs.nix`, and read from there by the standalone
+home's `pkgs` and by the NixOS and darwin flavours' own `nixpkgs.*` options,
+rather than repeated per class.
 
 Unix-like deployment consumes a domain release tag and activates only on a
 matching host after evaluation and native build evidence.
@@ -393,7 +404,7 @@ contract.
 
 Time is the axis the invariant registry does not have. A measure without a
 date is temporary only in the sentence that introduced it, which is how
-`flake.nix` came to describe an experiment whose exit criteria existed
+`unixlike/flake.nix` came to describe an experiment whose exit criteria existed
 nowhere else. An entry's `review-by` is at most 180 days after the later of
 `since` and its last `reviewed:` line, and an extension moves the date and
 says why in the entry rather than in a conversation.
@@ -454,9 +465,9 @@ mutable one would be the more visible of the pair
 (`docs/decisions/annotated-tag-is-the-release-record.md`).
 
 Commit subjects on the integration branches are Conventional Commits, and a
-`flake.lock` refresh is its own commit: the first keeps history readable by
-tools that group by type, the second keeps a change that moves every
-Unix-like derivation hash separable from the source change beside it
+`unixlike/flake.lock` refresh is its own commit: the first keeps history
+readable by tools that group by type, the second keeps a change that moves
+every Unix-like derivation hash separable from the source change beside it
 (`INV repository/conventional-subject`, `INV repository/flake-lock-isolated`).
 
 Source flows one way from topic branches through `dev` into `master`.

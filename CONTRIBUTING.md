@@ -97,15 +97,15 @@ Use independent release tags:
 - `windows-vYYYY.MM.DD`, with `.N` for another release that day;
 - `common-vYYYY.MM.DD`, with `.N` for another release that day.
 
-Keep `flake.lock` refreshes in dedicated `chore(unixlike-deps)` commits. A
-domain tag certifies only the named domain even though the commit may contain
-accepted history from the others.
+Keep `unixlike/flake.lock` refreshes in dedicated `chore(unixlike-deps)`
+commits. A domain tag certifies only the named domain even though the commit
+may contain accepted history from the others.
 
 For a routine desired-state edit whose message is a template — a Homebrew
-formula or cask, a `flake.lock` refresh — `tool/version-control/commit` shows
-the edit, the classification, the selected checks, and the message, then
-applies it and commits on your confirmation. It refuses on `master` and never
-bypasses a hook.
+formula or cask, a `unixlike/flake.lock` refresh —
+`tool/version-control/commit` shows the edit, the classification, the selected
+checks, and the message, then applies it and commits on your confirmation. It
+refuses on `master` and never bypasses a hook.
 
 Run it from `dev`. On any other branch it commits where it stands, and with
 `--publish` it arms auto-merge on the pull request already open from that
@@ -150,17 +150,18 @@ This subsection is disposable and carries the tag
 `PROV unixlike/zellij-combining-marks`, so it is deleted with the measure it
 describes.
 
-`modules/zellij.nix` carries upstream zellij-org/zellij#5500 for Darwin until
-nixpkgs ships a zellij whose source already has the fix;
+`unixlike/modules/zellij/module.nix` carries upstream zellij-org/zellij#5500
+for Darwin until nixpkgs ships a zellij whose source already has the fix;
 `provisional/unixlike/zellij-combining-marks.md` registers the measure and
 names the condition that ends it. The overlay is pinned to one zellij version
-and refuses to evaluate against any other, so a `flake.lock` refresh that moves
-zellij takes two commits, in this order:
+and refuses to evaluate against any other, so a `unixlike/flake.lock` refresh
+that moves zellij takes two commits, in this order:
 
 1. `just zellij-patch-check v<ver>` for the version the refresh will bring in.
    On a conflict, rebase the upstream commit in a fork and repoint the
    overlay's `url` and `hash` before going on.
-2. Commit `chore(unixlike-deps): refresh flake.lock` with `flake.lock` alone —
+2. Commit `chore(unixlike-deps): refresh flake.lock` with
+   `unixlike/flake.lock` alone —
    `tool/version-control/commit flake refresh`, with no `--publish`. Helper
    flags precede its command, so `--publish` would be
    `tool/version-control/commit --publish flake refresh`; it is not used here
@@ -422,9 +423,9 @@ record for this intentionally manual policy.
 
 ## Unix-like changes
 
-1. Put feature-oriented declarations under `modules/`.
+1. Put feature-oriented declarations under `unixlike/modules/`.
 2. Put Unix-like source payloads in their owning Unix-like asset location.
-3. Keep host composition in `modules/flake/configurations.nix`.
+3. Keep host composition in `unixlike/modules/flake/configurations.nix`.
 4. Run narrow formatting, lint, evaluation, and native build checks.
 5. Create a Unix-like release tag only after the required matching-host
    evidence exists, including a build of every configuration with
@@ -447,12 +448,12 @@ produce the rootfs archive and copy it to a Windows drive;
    home.
 2. `wsl -d NixOS -u root -- passwd <account>` sets the account's password.
    The account is created locked and sudo asks for a password
-   (`modules/wsl.nix`), so until this has run nothing inside can become
+   (`unixlike/modules/wsl.nix`), so until this has run nothing inside can become
    root; WSL's `-u root` needs no Linux authentication, and the password
    set this way survives every later activation.
 3. If the host is to be reached over ssh, copy an `authorized_keys` into
    `\\wsl.localhost\NixOS\home\<account>\.ssh\`. Keys are host-owned
-   (`modules/ssh.nix`); the port is the one `modules/wsl-sshd.nix`
+   (`unixlike/modules/ssh.nix`); the port is the one `unixlike/modules/sshd.nix`
    declares, and any mapping beyond the Windows host is Windows state.
 4. `wsl -d NixOS`. The account logs into zsh, flakes are on, and
    `tool/doctor.sh unixlike` reports the host ready.
@@ -462,8 +463,9 @@ Rollback is `wsl --unregister NixOS`; Ubuntu is untouched throughout.
 ### Capture Karabiner drift
 
 On the Mac, `just karabiner-check` reports whether the host still holds the
-members `assets/karabiner/` declares, and `just karabiner-capture` reads drift
-that belongs in desired state back into the payloads and commits it.
+members `unixlike/modules/karabiner/` declares, and `just karabiner-capture`
+reads drift that belongs in desired state back into the payloads and commits
+it.
 
 `apply` replaces the declared top-level keys wholesale. Before the first
 activation on a Mac whose Karabiner state has not been captured, run `just
@@ -602,19 +604,19 @@ tool/checks/test
 ```
 
 The fixtures that prove the Unix-like checks refuse what they must —
-`tool/checks/payloads-test`, `flake-test`, `composition-test`,
+`unixlike/tool/checks/payloads-test`, `flake-test`, `composition-test`,
 `eval-coverage-test`, `prerequisite-test` and `import-order-test` — run in
 the CI unix job. Run one by hand when its check or its fixtures change.
 `import-order-test` composes every host twice and is merge-gate only by
 design (`INV unixlike/import-order-independence`).
 
-`tool/checks/payloads` parses every source payload declared in
-`assets/payloads.json` with the tool that consumes it. Evaluation does not
+`unixlike/tool/checks/payloads` parses every source payload declared in
+`unixlike/payloads.json` with the tool that consumes it. Evaluation does not
 cover them: Nix copies a payload into the store without reading it.
 
-`tool/checks/test` evaluates every declared Unix-like configuration and builds
-configurations native to the current host when appropriate. Foreign evaluation
-is not native build or activation evidence.
+`unixlike/tool/checks/test` evaluates every declared Unix-like configuration
+and builds configurations native to the current host when appropriate. Foreign
+evaluation is not native build or activation evidence.
 
 For Windows changes, run the native Windows commands above. Unix-like Nix
 evaluation is not part of Windows verification.
@@ -666,8 +668,8 @@ When it reports something, in order of preference:
 
 1. Remove the value. A leaked value is desired state that names one machine.
 2. If it is a user or host name that genuinely belongs in desired state,
-   declare it in `modules/flake/inventory.nix` first. That is a `unixlike`
-   change and lands as its own change.
+   declare it in `unixlike/modules/flake/inventory.nix` first. That is a
+   `unixlike` change and lands as its own change.
 3. If it is a runtime artefact, delete it and add an ignore rule. The ignore
    rule alone changes nothing once the file is tracked; it has to leave the
    index too.
