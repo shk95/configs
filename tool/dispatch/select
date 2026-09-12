@@ -78,7 +78,14 @@ while IFS="$tab" read -r status path || [ -n "${status:-}" ]; do
   # runs (#219). The contraction (#221) drops every spelling without the
   # `unixlike/` prefix except .envrc and the Justfile, which stay at the root.
   case "$path" in
-    assets/* | unixlike/assets/*)
+    # A module is Nix and an evaluation reads it; anything else under the
+    # module tree is a payload the evaluator copies without reading, which is
+    # what the narrowing is about. The `*.nix` arm comes first because a case
+    # pattern's `*` matches a slash, so it covers every depth.
+    unixlike/modules/*.nix)
+      narrow=0
+      ;;
+    assets/* | unixlike/assets/* | unixlike/modules/*)
       case "$status" in
         M*) ;;
         *) narrow=0 ;;

@@ -329,7 +329,7 @@ expect unixlike "$classify" --files tool/darwin/karabiner
 # the root, and a similar prefix outside the domain still has no owner.
 expect unixlike "$classify" --files unixlike/flake.nix
 expect unixlike "$classify" --files unixlike/modules/git.nix
-expect unixlike "$classify" --files unixlike/assets/payloads.json
+expect unixlike "$classify" --files unixlike/payloads.json
 expect unixlike "$classify" --files unixlike/tool/darwin/karabiner
 expect unixlike "$classify" --files flake.nix
 expect unixlike "$classify" --files .envrc
@@ -428,6 +428,14 @@ expect_units 'unixlike:test' push "$unixlike_module_modified"
 unixlike_kdl_modified=$(printf 'M\tunixlike/assets/zellij/config.kdl')
 expect_units 'unixlike:payloads' commit "$unixlike_kdl_modified"
 expect_units '' push "$unixlike_kdl_modified"
+# A payload beside its module narrows the same way, and a module next to it
+# does not: under the concern-first layout the file's suffix is what separates
+# what the evaluator reads from what it copies.
+concern_kdl_modified=$(printf 'M\tunixlike/modules/zellij/config.kdl')
+expect_units 'unixlike:payloads' commit "$concern_kdl_modified"
+expect_units '' push "$concern_kdl_modified"
+concern_module_modified=$(printf 'M\tunixlike/modules/zellij/module.nix')
+expect_units 'unixlike:test' push "$concern_module_modified"
 
 # A rename carries two paths on one line. Both have to reach classify, or a
 # payload moved into assets/ is never selected for the payload check.
@@ -1021,14 +1029,23 @@ cp -R "$root/tool/dispatch" "$commit_root/tool/dispatch"
 # The Karabiner tool is moving into the domain (#219); the fixture copies
 # whichever is there into the shape the helper resolves. The contraction
 # (#221) leaves the domain path.
-karabiner_src=$root/tool/darwin
-[ -d "$karabiner_src" ] || karabiner_src=$root/unixlike/tool/darwin
-cp -R "$karabiner_src" "$commit_root/tool/darwin"
+karabiner_tool_src=$root/tool/darwin/karabiner
+for karabiner_candidate in "$root/unixlike/modules/karabiner/tool" \
+  "$root/unixlike/tool/darwin/karabiner"; do
+  [ -f "$karabiner_tool_src" ] || karabiner_tool_src=$karabiner_candidate
+done
+mkdir -p "$commit_root/tool/darwin"
+cp "$karabiner_tool_src" "$commit_root/tool/darwin/karabiner"
 mkdir -p "$commit_root/assets"
 # PROV repository/unix-like-tree-migration
 karabiner_assets=$root/assets/karabiner
-[ -d "$karabiner_assets" ] || karabiner_assets=$root/unixlike/assets/karabiner
-cp -R "$karabiner_assets" "$commit_root/assets/karabiner"
+for karabiner_candidate in "$root/unixlike/modules/karabiner" \
+  "$root/unixlike/assets/karabiner"; do
+  [ -d "$karabiner_assets" ] || karabiner_assets=$karabiner_candidate
+done
+mkdir -p "$commit_root/assets/karabiner"
+cp "$karabiner_assets/karabiner.json" "$karabiner_assets/symbolic-hotkeys.json" \
+  "$commit_root/assets/karabiner/"
 # The pre-commit hook this fixture enables also runs
 # tool/version-control/invariants, whose own cases are below; here it is a
 # stand-in so only the behaviour under test decides the outcome.
