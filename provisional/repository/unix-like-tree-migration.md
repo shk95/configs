@@ -25,7 +25,11 @@ of `tool/version-control/domain-reads`, the `unixlike_check` function in
 `.githooks/pre-push`, the `checks` step in the Unix-like CI job and the ten
 lines that read its output, the fixture cases in
 `tool/version-control/test` that assert the old spellings still answer and
-that a check is resolved at either location, and this entry.
+that a check is resolved at either location, the `unixlike_path` function in
+`tool/version-control/commit` with the four paths it resolves, the overlay
+path the zellij watcher reads, the second pattern in each of `.gitattributes`
+and `.gitignore`, and the second allowlist entry in `.claude/settings.json`,
+and this entry.
 
 Classification and resolution are two halves and the first shipped without
 the second, which #219 would have hit as a merge failure. Knowing where a
