@@ -7,6 +7,8 @@ scope: repository
 status: open
 outcome: #213
 outcome: #214
+outcome: docs/decisions/unixlike-domain-owns-its-tree.md
+outcome: docs/decisions/concern-first-inside-the-domain.md
 
 The cheap parts of `docs/design/unixlike-restructure-study.md` were carried
 out; the rest is written down here. Each stage writes its predictions before
@@ -24,7 +26,7 @@ otherwise the reasoning goes quietly stale.
 |---|---|---|---|---|
 | 0 | Correct text that is false today | repository, unixlike | merged into `dev` as #213 and #214 | — |
 | 1 | Record the observations as candidates | repository | merged with them | — |
-| 2 | Two decisions: the domain tree, and concern first | repository | in progress | — |
+| 2 | Two decisions: the domain tree, and concern first | repository | recorded on 2026-09-12, in the outcome list above | — |
 | 3 | Migrate: expand, migrate, contract | repository, unixlike, repository | blocked | 2 |
 | 4 | Split `commit`, moving authoring knowledge into the domain | repository, unixlike | blocked | 3 |
 | 5 | A domain entry point | unixlike | blocked | 3 |
@@ -116,6 +118,21 @@ assert something no evaluator enforces.
 Nothing moves at this stage. No candidate is promoted here either: the
 trigger for `docs/candidates/domain-tool-placement-and-justfile-exception.md`
 is stage 3a, when the classifier is edited anyway.
+
+Recorded on 2026-09-12, and both records settled a question this plan had
+left ambiguous. The first is `tool/checks/`: this document's stage 3b listed
+only `tool/darwin/` as moving and left the checks to a path update, while the
+study's split principle applies to both, and the record follows the
+principle. The checks and their fixtures move into the domain, which adds to
+stage 3b the `enforced-by` locator of every Unix-like invariant that names
+one, since `tool/version-control/invariants` refuses a locator that is not a
+tracked executable. The second is the depth of the concern directories, which
+this document never fixed: the record fixes the module root at
+`unixlike/modules/<concern>/`, because `flake.nix`, `tool/checks/composition`
+and `tool/checks/import-order` all already assume a `modules/` beside the
+flake, and concern directories placed directly beside `flake.nix` would pull
+the flake file and the deliberately broken check fixtures into all three
+walks.
 
 ## Stage 3: three commits, each in one scope
 

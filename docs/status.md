@@ -309,9 +309,11 @@ now carries seven repository-wide scans
 (`docs/decisions/design-documents-outside-the-authority-model.md`). It holds
 three documents, ported the same day from the HTML artefacts they were
 written as: a map of the tree as read at `dev` fc57495, the study that judged
-it, and the migration plan, which is the one still `open`. The two decisions
-that came out of the study are not recorded yet, so nothing cites the study
-as a source.
+it, and the migration plan, which is the one still `open`. The study's first
+two outcomes are recorded: the Unix-like domain is to own one tree and the
+concern is to be the directory inside it, both naming the study in `source:`
+and neither moving a file. Stage 3, the migration itself, has not been
+opened.
 
 ## Common
 

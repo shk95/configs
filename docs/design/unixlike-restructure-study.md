@@ -11,6 +11,8 @@ outcome: docs/candidates/domain-tool-placement-and-justfile-exception.md
 outcome: #213
 outcome: #214
 outcome: docs/design/unixlike-restructure-plan.md
+outcome: docs/decisions/unixlike-domain-owns-its-tree.md
+outcome: docs/decisions/concern-first-inside-the-domain.md
 
 Opened from one observation, that the Unix-like entry points were unpleasant
 to use, and carried through 2026-09-08 to 2026-09-10 against `dev` fc57495.
