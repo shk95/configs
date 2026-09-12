@@ -4023,4 +4023,80 @@ if ! inv_real_output=$(cd "$root" && "$invariants" 2>&1); then
   exit 1
 fi
 
+# ---------------------------------------------------------------------------
+# Design documents are cited only by the adoption inlets
+# ---------------------------------------------------------------------------
+#
+# INV repository/design-outside-authority
+# tool/version-control/design-citations scans the index for a citation of a
+# document under the design area from anything that carries authority. The
+# real repository is the positive case. The negative is a throwaway
+# repository where a rationale paragraph, a registry entry and a script each
+# cite one; the scan must name every file and line. A third repository names
+# the directory in a placement rule, writes the slug template a format
+# contract carries, and cites documents from the four inlets and from a
+# sibling design document; it must pass, because a citation names a document
+# while a placement rule names the directory.
+design_citations="$root/tool/version-control/design-citations"
+
+# Wired the way domain-reads is: every commit, and the repository-wide CI
+# scan job.
+grep -q 'evidence_run "design citations" tool/version-control/design-citations' "$root/.githooks/pre-commit"
+grep -q 'run: tool/version-control/design-citations' "$root/.github/workflows/ci.yml"
+
+if ! design_output=$(cd "$root" && "$design_citations" 2>&1); then
+  printf '%s\n' "$design_output" >&2
+  echo "the repository's own authority documents cite a design document" >&2
+  exit 1
+fi
+# A positive count, or a broken pathspec has retired the scan.
+printf '%s\n' "$design_output" | grep -q '^✓ design citations: [1-9][0-9]* tracked paths' || {
+  printf '%s\n' "$design_output" >&2
+  echo "design-citations did not report a positive count of scanned paths" >&2
+  exit 1
+}
+
+design_fixture=$(mktemp -d)
+git -C "$design_fixture" init -q
+mkdir -p "$design_fixture/docs/design" "$design_fixture/invariants/repository" \
+  "$design_fixture/tool/version-control"
+printf '# Restructure\n\nkind: study\n' >"$design_fixture/docs/design/restructure.md"
+printf 'The tree moves, as docs/design/restructure.md argues.\n' >"$design_fixture/docs/architecture.md"
+printf 'id: repository/probe\nrationale: docs/design/restructure.md \302\247 Restructure\n' >"$design_fixture/invariants/repository/probe.md"
+printf '#!/bin/sh\n# Why this shape: docs/design/restructure.md.\nexit 0\n' >"$design_fixture/tool/version-control/probe"
+git -C "$design_fixture" add -A
+if design_output=$(cd "$design_fixture" && "$design_citations" 2>&1); then
+  printf '%s\n' "$design_output" >&2
+  echo "design-citations accepted an authority document that cites a design document" >&2
+  exit 1
+fi
+for design_hit in \
+  'docs/architecture.md:1:' \
+  'invariants/repository/probe.md:2:' \
+  'tool/version-control/probe:2:'; do
+  printf '%s\n' "$design_output" | grep -qF "$design_hit" || {
+    printf '%s\n' "$design_output" >&2
+    echo "design-citations did not name $design_hit" >&2
+    exit 1
+  }
+done
+case "$design_fixture" in /tmp/*) rm -rf -- "$design_fixture" ;; esac
+
+design_fixture=$(mktemp -d)
+git -C "$design_fixture" init -q
+mkdir -p "$design_fixture/docs/design" "$design_fixture/docs/decisions" \
+  "$design_fixture/docs/candidates" "$design_fixture/provisional/repository"
+printf 'Arguments live in docs/design/, one file per document, docs/design/<slug>.md.\n' >"$design_fixture/CONTRIBUTING.md"
+printf 'source: docs/design/restructure.md \302\247 Restructure\n' >"$design_fixture/docs/decisions/probe.md"
+printf 'target: docs/design/restructure.md\n' >"$design_fixture/docs/candidates/probe.md"
+printf 'exit-when: docs/design/restructure.md is adopted\n' >"$design_fixture/provisional/repository/probe.md"
+printf 'Superseded by docs/design/restructure.md.\n' >"$design_fixture/docs/design/older.md"
+git -C "$design_fixture" add -A
+if ! design_output=$(cd "$design_fixture" && "$design_citations" 2>&1); then
+  printf '%s\n' "$design_output" >&2
+  echo "design-citations refused a placement rule, a slug template or an inlet's source" >&2
+  exit 1
+fi
+case "$design_fixture" in /tmp/*) rm -rf -- "$design_fixture" ;; esac
+
 echo "version-control fixtures passed"

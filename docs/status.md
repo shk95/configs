@@ -301,6 +301,17 @@ under the Windows tree is parsed for syntax (`check-desired-state.ps1`
 still parses the PowerShell payload it validates). `pre-push` audits the
 pushed history only.
 
+Since 2026-09-12 the repository has an external layer: `docs/design/` holds
+the argument for a direction and carries no authority, and
+`tool/version-control/design-citations` refuses a citation of a document
+there from anything that does, on every commit and in the CI scan job, which
+now carries seven repository-wide scans
+(`docs/decisions/design-documents-outside-the-authority-model.md`). The
+directory is empty of documents: the three that exist are Korean HTML
+artefacts outside the repository, and rewriting them in English here is the
+next change. Until they land, the decisions that came out of them cite no
+source.
+
 ## Common
 
 No `common/` component exists.

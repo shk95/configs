@@ -295,6 +295,31 @@ change in another domain is never blocked by it. That is not a reprieve: the
 next change to the owning scope stops until the entry is retired, extended or
 promoted.
 
+## Write a design document
+
+Write one when a direction needs arguing before any of it can be adopted: a
+survey, a spike and what it measured, three layouts weighed against each
+other, a plan and what each of its steps predicts. Add a file under
+`docs/design/` with the header and format the `README.md` there defines, add
+it to that file's index, and open it `status: open`.
+
+It has no authority and acquires none by being merged. Quote what you
+measured with the date and the commit you measured it at, and leave current
+state to `docs/status.md` and the schedule to a milestone and its issues.
+When a `plan` names what it expects, write the expectations before the work
+runs; an expectation written afterwards is not one and is left out of the
+ledger.
+
+Adopt from it through an inlet, never by citing it from a document that
+carries authority: a decision record, a promoted candidate, a registered
+provisional measure, or an issue. Add an `outcome` line for each thing the
+document produces, and set `status: closed` when the last one has landed.
+A result that contradicts the argument is written into the ledger and then
+corrected in the document that argued it.
+`tool/version-control/design-citations` refuses a citation from an internal
+location and runs on every commit, so a rule can never come to rest on an
+argument nobody accepted.
+
 ## Record a decision
 
 Write a record when a choice is expensive to reverse or a reviewer will ask
@@ -575,6 +600,7 @@ tool/version-control/test
 tool/version-control/invariants
 tool/version-control/provisional
 tool/version-control/domain-reads
+tool/version-control/design-citations
 tool/version-control/audit
 tool/version-control/audit-remote  # when gh is authenticated
 tool/version-control/hook-evidence
@@ -641,6 +667,26 @@ that reads it; the destination then owns the copy (`docs/architecture.md`,
 "Default rule: keep implementations separate"). There is no allow list: a
 read across the boundary has no legitimate form.
 
+### Design citations
+
+`tool/version-control/design-citations` scans the index for a citation of a
+design document from anything that carries authority. The adoption inlets are
+excluded, so a decision record, a candidate and a provisional entry may name
+the document they adopted from. It runs on every commit beside the hygiene
+scan and in CI, because the document and the text citing it can be in any
+scope.
+
+```sh
+tool/version-control/design-citations
+```
+
+When it reports something, decide which of the two the sentence is doing. If
+it says where design documents live, name the directory rather than a file:
+`docs/design/` passes and `docs/design/<file>` does not. If it rests on the
+document's argument, that argument has not been adopted — record the decision,
+promote the candidate or register the measure, and cite that instead. There is
+no allow list.
+
 Branch protection on `dev` and `master` requires the stable `Required checks`
 job. That job fails unless classification and secret scanning pass and every
 selected domain job succeeds. Conditional domain job names are deliberately
@@ -648,21 +694,35 @@ not branch-protection contexts because unselected domains are skipped.
 
 ## Documentation ownership
 
-| Location | Responsibility |
-| --- | --- |
-| `README.md` | Setup, outputs, and everyday use |
-| `CONTRIBUTING.md` | Domain-scoped workflow and releases |
-| `AGENTS.md` | Stable judgement and safety boundaries |
-| `docs/architecture.md` | Domain authority and dependency policy |
-| `docs/status.md` | Current state |
-| `docs/decisions/` | One record per expensive decision; `README.md` there is the index and format |
-| `docs/candidates/` | Observed candidates for adding a rule or removing text; `README.md` there is the index and format |
-| `docs/troubleshooting.md` | Recurring problems indexed by symptom |
-| `docs/definition-of-done.md` | Domain-specific evidence requirements |
-| `invariants/` | Enumerated invariants and how each one is enforced |
-| `provisional/` | Registered temporary measures and the condition that ends each |
-| `.agents/skills/` | Model-neutral workflows specific to this repository |
-| `tool/`, hooks, CI | Executable policy |
+`Authority` says whether a location binds the repository. An internal
+location is authority: it is read as a rule, it is the context an agent works
+under, and it is where an obligation may rest. An external location argues,
+observes or proposes, and binds nothing until an internal location adopts
+from it.
+
+| Location | Authority | Responsibility |
+| --- | --- | --- |
+| `README.md` | internal | Setup, outputs, and everyday use |
+| `CONTRIBUTING.md` | internal | Domain-scoped workflow and releases |
+| `AGENTS.md` | internal | Stable judgement and safety boundaries |
+| `docs/architecture.md` | internal | Domain authority and dependency policy |
+| `docs/status.md` | internal | Current state |
+| `docs/decisions/` | internal | One record per expensive decision; `README.md` there is the index and format |
+| `docs/troubleshooting.md` | internal | Recurring problems indexed by symptom |
+| `docs/definition-of-done.md` | internal | Domain-specific evidence requirements |
+| `invariants/` | internal | Enumerated invariants and how each one is enforced |
+| `provisional/` | internal | Registered temporary measures and the condition that ends each |
+| `.agents/skills/` | internal | Model-neutral workflows specific to this repository |
+| `tool/`, hooks, CI | internal | Executable policy |
+| `docs/candidates/` | external | Observed candidates for adding a rule or removing text; `README.md` there is the index and format |
+| `docs/design/` | external | The argument for a direction, and what its plan predicts; `README.md` there is the index and format |
+| `notes/` | none | Untracked maintainer scratch space; no structure, review or retention, and not project context |
+
+The two external locations differ in size, not in standing. A candidate is
+one observation waiting to become a sentence in an internal document; a
+design document is a whole argument that may produce several. Neither is
+cited by an internal location, and a design document is never deleted,
+because an adoption record names it as its source.
 
 Cross-project methods are maintained in the separate sibling `skills` project
 and adopted explicitly. They do not become a source of project policy.

@@ -99,6 +99,17 @@ When adding a repository rule, separate its concerns before implementation:
 - Put a rule that has been observed but not accepted, and a document or tool
   judged stale, in `docs/candidates/` until recurrence or silence decides it.
   A candidate is an observation and never a source of authority.
+- Put the argument for a direction — what was surveyed, measured and weighed,
+  and what the next steps predict — in `docs/design/`, outside the authority
+  model. A design document observes this repository and binds nothing. It
+  becomes binding only through an inlet that is reviewed on its own terms: a
+  decision record, a promoted candidate, a registered provisional measure, or
+  an issue, each naming the document as its source. Nothing that carries
+  authority may cite one (`INV repository/design-outside-authority`), and an
+  agent reads a design document when a task, an issue or a record points at
+  it, never as a rule to follow. Work under an adopted direction reports
+  through commits, check evidence and `docs/status.md` rather than through a
+  document of its own.
 
 Each obligation has one authoritative source. Procedures and tools implement
 policy but must not silently create new policy. Model-specific adapters only
@@ -149,9 +160,10 @@ milestone description and final evidence issue providing the manual evidence.
 User-facing usage belongs in `README.md`, workflow in `CONTRIBUTING.md`,
 architecture and ownership in `docs/architecture.md`, current state in
 `docs/status.md`, decisions in `docs/decisions/`, recurring symptoms in
-`docs/troubleshooting.md`, invariants in `invariants/`, and executable policy
-in `tool/`, hooks, and CI. Canonical project-specific agent workflows live
-under `.agents/skills/` and follow the Agent Skills open standard. Reusable
+`docs/troubleshooting.md`, invariants in `invariants/`, the argument for a
+direction in `docs/design/`, and executable policy in `tool/`, hooks, and CI.
+Canonical project-specific agent workflows live under `.agents/skills/` and
+follow the Agent Skills open standard. Reusable
 cross-project methods live in the separate sibling `skills` project.
 Model-specific context and skill files only point to canonical sources.
 
