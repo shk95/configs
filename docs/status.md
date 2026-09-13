@@ -321,7 +321,11 @@ format `sh -n` provides; payloads went from fifteen to sixteen. And the Darwin
 toplevel derivation path moved once, when the rearrangement renamed the files
 that activation interpolates; the relocation itself left all three paths
 byte-identical, which is why the two were separate changes. Native evidence
-for the moved tree on a WSL host has not been taken.
+for the moved tree was taken on an Ubuntu WSL host on 2026-09-13:
+`home-manager build --flake ./unixlike#user1` succeeds, and the Home Manager
+generation built from `unixlike/` is byte-identical to the one activated
+before the move, so the maintainer's `just home-switch` reused it rather than
+creating a new one (#223).
 
 Since 2026-09-12 the repository has an external layer: `docs/design/` holds
 the argument for a direction and carries no authority, and
