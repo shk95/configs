@@ -346,13 +346,18 @@ forwards its target's exit status unchanged, which needs a new invariant,
 `unixlike/entry-point-forwards-status`, with fixtures in both directions. The
 `Justfile` is not deleted but becomes a thin adapter calling the entry point.
 
-## Still unverified
+## Verified on WSL
 
-One run of `home-manager` against the domain's flakeref on a WSL host. The
-script's own parsing and the `nix eval` it performs were both checked and no
-failing path is visible, but the command line has not been run. It is the only
-thing keeping the `unixlike` milestone's evidence issue open now that stage 3's
-source work has merged, and it is the one piece no Mac can produce.
+One run of `home-manager` against the domain's flakeref on a WSL host was the
+last thing stage 3 left unverified, and the one piece no Mac could produce. It
+was taken on 2026-09-13 on Ubuntu WSL, in #223.
+`home-manager build --flake ./unixlike#user1` exits 0, in both the plain and
+the `path:` form. The generation it builds is byte-identical to the one
+activated on 2026-09-12 before #229 merged, so the home toplevel held across
+the move and the rearrangement on a host as well as in a clone, and the
+maintainer's `just home-switch` reused that generation instead of creating a
+new one. That recipe runs the activation script directly, so `home-manager
+switch` itself was not exercised through the CLI.
 
 ## 2026-09-12: the sequence, revised
 
