@@ -53,8 +53,9 @@ MSYS2_ARG_CONV_EXCL='*'
 export MSYS_NO_PATHCONV MSYS2_ARG_CONV_EXCL
 
 # The three-state prerequisite contract, restated rather than sourced from
-# tool/checks/prerequisite for the same reason tool/version-control/hygiene
-# restates it: a repository check must not depend on a domain's plane.
+# unixlike/tool/checks/prerequisite for the same reason
+# tool/version-control/hygiene restates it: a repository check must not
+# depend on a domain's plane.
 require_command() {
   require_missing=
   for require_name in "$@"; do

@@ -429,7 +429,7 @@ record for this intentionally manual policy.
 4. Run narrow formatting, lint, evaluation, and native build checks.
 5. Create a Unix-like release tag only after the required matching-host
    evidence exists, including a build of every configuration with
-   `CHECKS_BUILD_ALL=1 tool/checks/test` on a matching host.
+   `CHECKS_BUILD_ALL=1 unixlike/tool/checks/test` on a matching host.
 6. Activate only when explicitly requested, from the intended Unix-like
    release.
 
@@ -597,10 +597,10 @@ Run checks in proportion to the affected domain.
 For Unix-like changes:
 
 ```sh
-tool/checks/format
-tool/checks/lint
-tool/checks/payloads
-tool/checks/test
+unixlike/tool/checks/format
+unixlike/tool/checks/lint
+unixlike/tool/checks/payloads
+unixlike/tool/checks/test
 ```
 
 The fixtures that prove the Unix-like checks refuse what they must —

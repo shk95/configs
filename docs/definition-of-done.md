@@ -92,8 +92,8 @@ native checks instead of treating them as passed.
 - [ ] Activation is performed only when explicitly requested.
 - [ ] Runtime claims name the host on which they were observed.
 - [ ] A `unixlike-v...` tag is assigned only after required native evidence
-      is available, including `CHECKS_BUILD_ALL=1 tool/checks/test` on a
-      matching host.
+      is available, including `CHECKS_BUILD_ALL=1 unixlike/tool/checks/test`
+      on a matching host.
 
 ## Windows domain
 

@@ -8,5 +8,5 @@ Observed as #79: a hook rejected a clean Windows commit because a search
 string had become a Windows path. The value can come through a variable, so
 the rule keys on the call, not on a literal.
 
-tool/checks/* is unixlike scope and outside this rule by the maintainer's
-ruling.
+unixlike/tool/checks/* is unixlike scope and outside this rule by the
+maintainer's ruling.

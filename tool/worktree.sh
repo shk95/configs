@@ -65,10 +65,11 @@ case "${1:-}" in
     # Each worktree gets its own dependency directory, so they have to be
     # resolved per directory. Doing it here means the session can start working
     # rather than discovering it on the first build.
-    if [ -x tool/checks/install ]; then
+    if [ -x unixlike/tool/checks/install ]; then
       echo "→ install"
-      (cd "$wt_root/$kind-$name" && ../../"$(basename "$root")"/tool/checks/install 2>/dev/null \
-        || tool/checks/install)
+      (cd "$wt_root/$kind-$name" && \
+        ../../"$(basename "$root")"/unixlike/tool/checks/install 2>/dev/null \
+        || unixlike/tool/checks/install)
     fi
 
     echo

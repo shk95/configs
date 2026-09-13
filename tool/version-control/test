@@ -45,8 +45,8 @@ export MSYS_NO_PATHCONV MSYS2_ARG_CONV_EXCL
 # "a literal appears" but "the script calls a text tool at all": every POSIX
 # shell script in the governance plane that invokes sed, grep or awk declares
 # the guard. Derived from the tree, so a new script is covered on arrival.
-# tool/checks/* is unixlike scope and outside this rule by the maintainer's
-# ruling.
+# unixlike/tool/checks/* is unixlike scope and outside this rule by the
+# maintainer's ruling.
 #
 # The scan is a function so the rule itself can be exercised, not only the
 # tree it happens to be run over: a derived check that silently matched
@@ -317,9 +317,10 @@ expect() {
 
 expect unixlike "$classify" --files unixlike/modules/git.nix
 # INV repository/scope-ownership
-# tool/darwin/ is the Unix-like domain's own Mac tooling: it reads and writes
-# a Unix-like payload, its evidence lane is a Mac, and no governance host can
-# produce it. Owned by unixlike, like the modules and the checks beside it.
+# unixlike/modules/karabiner/tool is the Unix-like domain's own Mac tooling:
+# it reads and writes a Unix-like payload, its evidence lane is a Mac, and
+# no governance host can produce it. Owned by unixlike, like the modules
+# and the checks beside it.
 expect unixlike "$classify" --files unixlike/modules/karabiner/tool
 # INV repository/scope-ownership
 # The domain owns one tree. .envrc and the Justfile answer from the same arm,
@@ -409,9 +410,9 @@ expect_units 'unixlike:test' push "$kdl_added"
 expect_units 'unixlike:test' push "$module_modified"
 
 # INV repository/local-gate-selects-by-effect
-# tool/darwin/ holds the projection the Karabiner payloads are compared and
-# applied by, so a change to it can alter what the Unix-like suite says; it
-# selects the same units a module does.
+# unixlike/modules/karabiner/tool holds the projection the Karabiner
+# payloads are compared and applied by, so a change to it can alter what
+# the Unix-like suite says; it selects the same units a module does.
 darwin_tool_modified=$(printf 'M\tunixlike/modules/karabiner/tool')
 expect_units 'unixlike:format
 unixlike:lint
@@ -758,11 +759,11 @@ fi
 # interop) runs the checks under its own native `pwsh`; only an actual Windows
 # host uses `pwsh.exe`; a host with neither reports the checks unverified
 # rather than failing. Isolated from whatever pwsh binaries this suite's own
-# host happens to have — modules/powershell.nix installs a Unix-like `pwsh`
-# into every home this repository configures, and a WSL host additionally
-# reaches a `pwsh.exe` through Windows interop, which is the exact shape #113
-# regressed on — by hiding any real pwsh/pwsh.exe from PATH before each
-# scenario adds back only the stub it names.
+# host happens to have — unixlike/modules/powershell/module.nix installs a
+# Unix-like `pwsh` into every home this repository configures, and a WSL
+# host additionally reaches a `pwsh.exe` through Windows interop, which is
+# the exact shape #113 regressed on — by hiding any real pwsh/pwsh.exe from
+# PATH before each scenario adds back only the stub it names.
 hook_root="$test_root/pre-push"
 mkdir -p "$hook_root/none" "$hook_root/pwsh-only" "$hook_root/pwshexe-only" \
   "$hook_root/win-host" "$hook_root/windows"
@@ -1353,7 +1354,8 @@ fi
 commit_git checkout -q -- unixlike/modules/homebrew.nix
 
 # What every mas edit above produced must still satisfy alejandra, the
-# formatter tool/checks/format delegates to through `nix fmt`. This fixture
+# formatter unixlike/tool/checks/format delegates to through `nix fmt`.
+# This fixture
 # has no flake.nix of its own, so alejandra runs directly rather than through
 # that indirection; it is still the same binary the real pipeline calls.
 if command -v alejandra >/dev/null 2>&1; then
@@ -1688,13 +1690,14 @@ STUB
 #
 # INV unixlike/host-written-payload-projected
 #
-# The capture direction of the same projection modules/karabiner.nix applies:
-# what the payloads declare decides what is read back, and what else the host
-# keeps in that file is runtime that is neither reported as drift nor captured.
-# The real tool/darwin/karabiner and the real payloads are in the throwaway
-# repository above; only the host is faked, through the flags that exist for
-# it, so the two directions of the rule are the fixture's subject rather than a
-# stand-in's.
+# The capture direction of the same projection
+# unixlike/modules/karabiner/module.nix applies: what the payloads declare
+# decides what is read back, and what else the host keeps in that file is
+# runtime that is neither reported as drift nor captured. The real
+# unixlike/modules/karabiner/tool and the real payloads are in the
+# throwaway repository above; only the host is faked, through the flags
+# that exist for it, so the two directions of the rule are the fixture's
+# subject rather than a stand-in's.
 capture_host="$test_root/karabiner-host.json"
 capture_hotkeys_host="$test_root/karabiner-hotkeys-host.json"
 
@@ -2777,8 +2780,9 @@ printf '{ "%s" = "%s"; }\n' hostName eve >"$hygiene_repo/host.nix"
 hygiene_expect_fail 'axis 2, a quoted Nix attribute' "undeclared name 'eve'"
 
 # The two separator forms the bare and quoted branches exist for: a shell
-# environment assignment, and the Nix quoted form -- the likeliest real leak in
-# modules/, and the one the spaced ` = ` exclusion must not swallow.
+# environment assignment, and the Nix quoted form -- the likeliest real leak
+# in unixlike/modules/, and the one the spaced ` = ` exclusion must not
+# swallow.
 hygiene_new
 printf '%s=%s\n' USER eve >"$hygiene_repo/profile.sh"
 hygiene_expect_fail 'axis 2, a bare shell assignment' "undeclared name 'eve'"
@@ -2788,7 +2792,7 @@ printf '  %s = "%s";\n' user eve >"$hygiene_repo/module.nix"
 hygiene_expect_fail 'axis 2, a quoted Nix assignment' "undeclared name 'eve'"
 
 # A bare right-hand side after the spaced ` = ` form is an expression, not a
-# name; modules/home-account.nix assigns one on every evaluation.
+# name; unixlike/modules/home-account.nix assigns one on every evaluation.
 hygiene_new
 printf '  %s = config.identity.wsl.%s;\n' username user >"$hygiene_repo/module.nix"
 hygiene_expect_pass 'axis 2, a bare expression is not a name'
@@ -2980,8 +2984,9 @@ if [ "$hygiene_status" -eq 0 ] || [ "$hygiene_status" -eq 69 ]; then
   exit 1
 fi
 
-# The pre-commit wiring. The hook's run_check helper resolves tool/checks/<name>
-# and cannot reach a repository-scope check, so the hook calls evidence_run
+# The pre-commit wiring. The hook's run_check helper resolves
+# unixlike/tool/checks/<name> and cannot reach a repository-scope check, so
+# the hook calls evidence_run
 # directly; these cases exercise that call through a real hook run with a
 # stand-in check, in the style of the pre-push protocol fixture above.
 hygiene_hook_root="$test_root/hygiene-hook"

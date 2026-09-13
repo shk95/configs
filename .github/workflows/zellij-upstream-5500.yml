@@ -1,9 +1,10 @@
 # PROV unixlike/zellij-combining-marks
 #
 # Watch zellij-org/zellij#5500, the patch the Darwin zellij overlay in
-# modules/zellij.nix carries, and open one issue when a signal the tree cannot
-# see arrives. Three signals decide the overlay's life: the pull request's
-# state, which nixpkgs zellij version is current, and the review date in
+# unixlike/modules/zellij/module.nix carries, and open one issue when a
+# signal the tree cannot see arrives. Three signals decide the overlay's
+# life: the pull request's state, which nixpkgs zellij version is current,
+# and the review date in
 # provisional/unixlike/zellij-combining-marks.md. Only the first two are
 # checked here; the third is the registry's own.
 #
@@ -123,7 +124,8 @@ jobs:
 
           1. `chore(unixlike-deps): refresh flake.lock` alone, once nixpkgs ships a
              zellij whose source already contains the fix.
-          2. One commit that deletes the overlay block in `modules/zellij.nix`, this
+          2. One commit that deletes the overlay block in
+             `unixlike/modules/zellij/module.nix`, this
              workflow, the `CONTRIBUTING.md` subsection, the `README.md` line, the
              `Justfile` recipe, `provisional/unixlike/zellij-combining-marks.md`, and
              all three of `docs/status.md`'s mentions of the measure -- the Unix-like
@@ -195,7 +197,7 @@ jobs:
           if ! grep -qx "$PINNED_COMMIT" <<<"$commits"; then
             body=$(printf '%s\n\n%s\n\n%s\n' \
               "$PINNED_COMMIT is no longer in the commit list of zellij-org/zellij#$pr, so the branch was rewritten and the overlay fetches a commit the pull request no longer claims." \
-              "Re-read the pull request, pick the commit that now carries the fix, and repoint the overlay's url and hash in modules/zellij.nix." \
+              "Re-read the pull request, pick the commit that now carries the fix, and repoint the overlay's url and hash in unixlike/modules/zellij/module.nix." \
               "Opened by .github/workflows/zellij-upstream-5500.yml.")
             ensure_issue "zellij upstream #$pr was rewritten" \
               "unixlike: zellij upstream #$pr was rewritten; re-pin the overlay" "$body"
@@ -218,7 +220,7 @@ jobs:
               fi
             fi
             body=$(printf '%s\n\n%s\n\n%s\n\n%s\n' \
-              "nixpkgs nixos-unstable ships zellij $nixpkgs; the overlay in modules/zellij.nix pins $APPLIES_TO, so the next flake.lock refresh makes the Darwin evaluation refuse until the overlay is re-pinned." \
+              "nixpkgs nixos-unstable ships zellij $nixpkgs; the overlay in unixlike/modules/zellij/module.nix pins $APPLIES_TO, so the next flake.lock refresh makes the Darwin evaluation refuse until the overlay is re-pinned." \
               "git apply --check of $PINNED_RANGE against v$nixpkgs: $verdict" \
               "The bump procedure is CONTRIBUTING.md § zellij overlay: refresh flake.lock alone, then re-pin appliesTo and the cargoDeps hash in a second commit." \
               "Opened by .github/workflows/zellij-upstream-5500.yml.")

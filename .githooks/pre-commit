@@ -60,7 +60,7 @@ if selected unclassified; then
 fi
 
 if selected unixlike:format; then
-  run_check format "Formatting is off. See tool/checks/format for the fix command."
+  run_check format "Formatting is off. See unixlike/tool/checks/format for the fix command."
 fi
 
 if selected unixlike:lint; then
@@ -68,7 +68,7 @@ if selected unixlike:lint; then
 fi
 
 if selected unixlike:payloads; then
-  run_check payloads "Fix the payload it rejected, or declare it in assets/payloads.json."
+  run_check payloads "Fix the payload it rejected, or declare it in unixlike/payloads.json."
 fi
 
 if selected repository:fixtures; then
@@ -79,8 +79,8 @@ fi
 # Desired-state hygiene is repository-wide, domain-agnostic and cheap, the same
 # shape as the secret scan below, so it runs unconditionally rather than
 # through tool/dispatch/select. The run_check helper above resolves
-# tool/checks/<name> and cannot reach a repository-scope check, so this calls
-# evidence_run directly.
+# unixlike/tool/checks/<name> and cannot reach a repository-scope check,
+# so this calls evidence_run directly.
 evidence_run hygiene tool/version-control/hygiene \
   || abort "See invariants/repository/hygiene-*.md and tool/version-control/hygiene.allow."
 

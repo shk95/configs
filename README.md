@@ -21,9 +21,10 @@ produce, refusals included; `tool/doctor.sh` shows the count.
 
 ```text
 unixlike
-  flake.nix
-  modules/                    flake-parts and host composition
-  assets/                     Unix-like source payloads
+  flake.nix                   flake definition and lock (unixlike/flake.lock)
+  payloads.json               the payload declaration
+  modules/                    flake-parts modules, one concern per entry
+  tool/checks/                the Unix-like check suite
 
 windows
   windows/win-env.ps1         the one entry point: check, apply, capture, validate, test, setup-dev, font
