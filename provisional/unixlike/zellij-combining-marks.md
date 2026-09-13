@@ -18,7 +18,7 @@ off the pinned version. The Linux homes are unaffected: the overlay yields
 `{}` there.
 
 Every disposable line carries `PROV unixlike/zellij-combining-marks`. The set
-is the overlay block in `modules/zellij.nix`, the watcher
+is the overlay block in `unixlike/modules/zellij/module.nix`, the watcher
 `.github/workflows/zellij-upstream-5500.yml`, the `zellij-patch-check` recipe
 in the `Justfile`, the "zellij overlay" subsection in `CONTRIBUTING.md`, the
 open condition in `docs/status.md`, and this entry. `README.md` lists the
