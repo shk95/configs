@@ -9,6 +9,23 @@ outcome: #213
 outcome: #214
 outcome: docs/decisions/unixlike-domain-owns-its-tree.md
 outcome: docs/decisions/concern-first-inside-the-domain.md
+outcome: #218
+outcome: #219
+outcome: #220
+outcome: #221
+outcome: #222
+outcome: #223
+outcome: provisional/repository/unix-like-tree-migration
+outcome: #224
+outcome: #225
+outcome: #226
+outcome: #227
+outcome: #228
+outcome: #229
+outcome: #230
+outcome: #231
+outcome: #232
+outcome: #233
 
 The cheap parts of `docs/design/unixlike-restructure-study.md` were carried
 out; the rest is written down here. Each stage writes its predictions before

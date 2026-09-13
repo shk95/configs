@@ -90,3 +90,10 @@ with the flake, and `nix flake update` given the subdirectory writes it
 there and creates none at the root, measured on a fixture. The milestone
 rule splits the move into a `repository` milestone and a `unixlike` one,
 linked, neither with a visible result alone.
+
+Corrected 2026-09-13. The Karabiner interpolation needed no rewriting,
+because the module and the script moved together. The move ran as ten
+pull requests rather than three, because the expansion this decision's
+"What it costs" paragraph counted as three single-scope commits took seven
+repository commits, each found by applying the move and running the gates
+rather than by reading.

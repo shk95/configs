@@ -95,3 +95,10 @@ the default branch, which here is `master`, while every pull request targets
 already assigns it to them with named manual evidence. The decision not to
 add the rule stands on that instead: it would restate an assignment the
 governance documents already make, and automate nothing.
+
+Observed 2026-09-13. The migration, the first case, interleaved seven
+times rather than once, because each widening of the repository planes had
+to merge before the Unix-like branch could continue, so it ran as ten pull
+requests. The two documentation follow-ups, #234 and #235, were changes no
+milestone planned. No milestone-length branch has yet been run, so the
+cost this record accepts is still unmeasured.

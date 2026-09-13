@@ -37,8 +37,9 @@
 #
 # A scanner that stores the strings it hunts matches itself, so its exclusions
 # are declared rather than incidental and are enforced in both directions, the
-# way tool/checks/payloads enforces assets/payloads.json: a declaration with no
-# file is stale. This file and its allow file are excluded by path because they
+# way unixlike/tool/checks/payloads enforces unixlike/payloads.json: a
+# declaration with no file is stale. This file and its allow file are
+# excluded by path because they
 # are the check's own machinery. Everything else is excluded one literal string
 # at a time in tool/version-control/hygiene.allow, because file-granularity
 # exclusion would retire the check on the one file that has already drifted.
@@ -64,7 +65,8 @@ MSYS2_ARG_CONV_EXCL='*'
 export MSYS_NO_PATHCONV MSYS2_ARG_CONV_EXCL
 
 # The three-state prerequisite contract, restated rather than sourced from
-# tool/checks/prerequisite: that file is `unixlike` scope, and a `repository`
+# unixlike/tool/checks/prerequisite: that file is `unixlike` scope, and a
+# `repository`
 # check must not take a dependency on a configuration domain's plane. Nothing
 # beyond a POSIX shell and Git is needed, so 69 should never occur here, but
 # the state exists so a future prerequisite reports it instead of inventing a
@@ -115,9 +117,9 @@ violation() {
 # ---------------------------------------------------------------------------
 
 # A name, in the sense of an account or host label. `$` and `{` are outside the
-# class on purpose: `/home/${user}` in modules/home-account.nix and
-# `/Users/${user}` in modules/darwin-host.nix are interpolations of a declared
-# value, not names, and do not match at all.
+# class on purpose: `/home/${user}` in unixlike/modules/home-account.nix and
+# `/Users/${user}` in unixlike/modules/host/darwin.nix are interpolations of
+# a declared value, not names, and do not match at all.
 name='[A-Za-z0-9._-]+'
 
 # One or two backslashes. Every windows/desired/files payload is JSON, where a
@@ -151,7 +153,7 @@ absolute_home="($posix_home)|($windows_home)|($unc_home)"
 # A quoted right-hand side is a literal in every language here. A bare one is
 # only a literal where the separator is not the spaced ` = ` form; after ` = ` a
 # bare token is an expression -- `user = config.identity.wsl.user` in
-# modules/home-account.nix names no account.
+# unixlike/modules/home-account.nix names no account.
 keys='(user|username|hostName|hostname|USER|USERNAME|HOSTNAME|COMPUTERNAME)'
 key_start='(^|[^A-Za-z0-9_])'
 assignment=$(printf '%s%s"?([ \t]*[=:][ \t]*("%s"|'\''%s'\'')|(=|[ \t]*:)[ \t]*%s)' \

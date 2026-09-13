@@ -44,7 +44,6 @@ on purpose.
 | addition | repository | Index `file` reporting a PowerShell script as "Windows setup INFormation" | troubleshooting-file-misreads-ps1.md |
 | addition | repository | A registry entry's rationale section is read to confirm it justifies the statement | rationale-fit-evidence-item.md |
 | addition | windows | Fixture tags are checked at Describe granularity; several tags name invariants their case cannot fail on | fixture-tag-fit-below-describe.md |
-| addition | repository | A domain's executable entry point lives under the domain's path; the Justfile is an unannotated exception | domain-tool-placement-and-justfile-exception.md |
 | addition | windows | Name the older-shell lane and its two scripts in the Windows procedure and evidence list | windows-older-shell-lane-in-procedure.md |
 | addition | repository | A citation into a living document names a section, not a line number | citation-by-section-not-line.md |
 | addition | repository | A code comment carries durable rationale that no registry or record holds | comment-carries-unregistered-rationale.md |

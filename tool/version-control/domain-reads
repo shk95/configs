@@ -5,11 +5,11 @@
 #
 # Each configuration domain must be authorable and checkable on its own host,
 # so a Unix-like check that opens a file under windows/ or a Windows script
-# that opens a file under assets/ or modules/ makes one domain's evidence
-# depend on the other's tree. The two known cases were exactly that: the
-# Windows suite byte-compared assets/wezterm/fonts.json, and the merge-gate
-# job parsed every PowerShell file in the checkout. Similarity between copies
-# is never a failure; a read across the boundary is.
+# that opens a file under the Unix-like module tree makes one domain's
+# evidence depend on the other's tree. The two known cases were exactly
+# that: the Windows suite byte-compared assets/wezterm/fonts.json, and the
+# merge-gate job parsed every PowerShell file in the checkout. Similarity
+# between copies is never a failure; a read across the boundary is.
 #
 # A read is a path in code, so the scan looks at code and not prose: line
 # comments (`#`) and PowerShell block comments (`<# … #>`) are stripped before
@@ -54,8 +54,8 @@ MSYS2_ARG_CONV_EXCL='*'
 export MSYS_NO_PATHCONV MSYS2_ARG_CONV_EXCL
 
 # The three-state prerequisite contract, restated rather than sourced from
-# tool/checks/prerequisite for the reason tool/version-control/hygiene gives:
-# a repository check must not depend on a domain's plane.
+# unixlike/tool/checks/prerequisite for the reason tool/version-control/hygiene
+# gives: a repository check must not depend on a domain's plane.
 require_command() {
   require_missing=
   for require_name in "$@"; do

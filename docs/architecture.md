@@ -257,6 +257,11 @@ common change   ──> common checks   ──> common release
   version, and failure boundary are explicit.
 - Root-level tooling may dispatch domain checks, but must not turn unrelated
   domain success into a prerequisite for a local change.
+- An executable a domain owns lives under that domain's tree; `.envrc` and
+  the `Justfile` are the root exceptions the Unix-like decision keeps until
+  the Justfile's place is decided
+  (`docs/decisions/unixlike-domain-owns-its-tree.md`,
+  `docs/decisions/windows-entry-point-in-domain.md`).
 
 ## Repository governance plane
 
