@@ -308,9 +308,10 @@ exception. Inside the domain the first level of the module tree names a
 concern: five concerns that had fragments in more than one class became
 directories, five files that carried a platform in their name lost it, and
 each payload and the one script a module interpolates now sit beside that
-module. The classifier answers the domain with one pattern where it had eight,
-and the three tools that enumerated Unix-like locations no longer repeat a
-list (`docs/decisions/unixlike-domain-owns-its-tree.md`,
+module. The classifier answers the domain with one arm for the tree, with
+`.envrc` and the `Justfile` as the two root exceptions, where it had eight
+patterns, and the three tools that enumerated Unix-like locations no longer
+repeat a list (`docs/decisions/unixlike-domain-owns-its-tree.md`,
 `docs/decisions/concern-first-inside-the-domain.md`).
 
 Two things changed with it. The payload declaration moved to
@@ -328,13 +329,11 @@ the argument for a direction and carries no authority, and
 there from anything that does, on every commit and in the CI scan job, which
 now carries seven repository-wide scans
 (`docs/decisions/design-documents-outside-the-authority-model.md`). It holds
-three documents, ported the same day from the HTML artefacts they were
-written as: a map of the tree as read at `dev` fc57495, the study that judged
-it, and the migration plan, which is the one still `open`. The study's first
-two outcomes are recorded: the Unix-like domain is to own one tree and the
-concern is to be the directory inside it, both naming the study in `source:`
-and neither moving a file. Stage 3, the migration itself, has not been
-opened.
+four documents, ported the same day from the HTML artefacts they were
+written as: a map of the tree as read at `dev` fc57495, the restructure
+study, the restructure plan, and the commit-granularity study; the plan and
+the commit-granularity study are the two still `open`. The two records the
+study produced landed as the migration the preceding paragraph describes.
 
 Also since 2026-09-12, a branch belongs to a milestone and merges through one
 pull request when that work is complete, and a commit marks a judgement point

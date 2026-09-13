@@ -65,6 +65,20 @@ needs `unixlike/tool/<feature>`, and without a domain directory that means a
 ninth pattern in `classify`, which makes the first group worse. The tax has
 to be paid before the bottleneck can be fixed.
 
+Corrected 2026-09-13. Cause 1's cost was counted as three tools; the
+migration measured fourteen planes outside the domain that named a moving
+path, widened over seven repository commits, found by applying the move and
+running every gate rather than by reading (the ledger is in
+`docs/design/unixlike-restructure-plan.md`). After the move the repository
+scope still names paths inside the domain by literal:
+`.github/workflows/ci.yml` 11 times (one per check),
+`tool/version-control/commit` 7, the zellij watcher 5,
+`tool/dispatch/select` 4, `tool/version-control/audit` 3, and one each in
+the hooks, `.claude/settings.json`, `.gitattributes` and `.gitignore` — so
+the tax recurs per file a repository plane names rather than per location,
+and no check runs the reverse of `tool/version-control/domain-reads`. This
+is what stages 4 and 5 rest on.
+
 Measured on 2026-09-08:
 
 | | windows | unixlike |

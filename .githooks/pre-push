@@ -78,10 +78,11 @@ if selected windows:desired-state || selected windows:tests; then
   # Pick the pwsh that belongs to this host rather than the first one PATH
   # happens to expose. A Unix-like host — including WSL, where `pwsh.exe` is
   # also reachable through Windows interop — runs the checks under its own
-  # native `pwsh`: modules/powershell.nix installs one into every home this
-  # repository configures, the suite's WIN_ENV_E2E cases self-skip there, and
-  # the windows-latest CI job remains the native gate for what a Linux pwsh
-  # cannot exercise. Reaching for `pwsh.exe` over WSL interop instead runs an
+  # native `pwsh`: unixlike/modules/powershell/module.nix installs one into
+  # every home this repository configures, the suite's WIN_ENV_E2E cases
+  # self-skip there, and the windows-latest CI job remains the native gate
+  # for what a Linux pwsh cannot exercise. Reaching for `pwsh.exe` over WSL
+  # interop instead runs an
   # unsigned script from \\wsl.localhost\... under Windows' own execution
   # policy, which refuses it (SecurityError) for reasons that have nothing to
   # do with the change being pushed — that was the recurring failure #113

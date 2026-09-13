@@ -22,9 +22,10 @@
 #
 # The scope is edits whose commit message is a template. It is not a general
 # Nix editor: it inserts and deletes whole lines and never re-serialises a
-# file, leaving tool/checks/format as the arbiter of layout. That check is
-# selected automatically, because modules/* classifies unixlike, so a host
-# without Nix reports it unverified rather than skipping the question.
+# file, leaving unixlike/tool/checks/format as the arbiter of layout. That
+# check is selected automatically, because unixlike/* classifies unixlike,
+# so a host without Nix reports it unverified rather than skipping the
+# question.
 #
 # INV repository/publish-through-dev
 # --publish carries the same commit the rest of the way: a branch from
@@ -143,15 +144,15 @@ options:
                            of the host's symbolic hotkey dictionary
 
 commands:
-  brew add <formula>       declare a Homebrew formula in modules/darwin-homebrew.nix
+  brew add <formula>       declare a Homebrew formula in unixlike/modules/homebrew.nix
   brew remove <formula>    remove a Homebrew formula
   cask add <cask>          declare a Homebrew cask
   cask remove <cask>       remove a Homebrew cask
-  mas add <name> <id>      declare a Mac App Store app in modules/darwin-homebrew.nix
+  mas add <name> <id>      declare a Mac App Store app in unixlike/modules/homebrew.nix
   mas remove <name>        remove a Mac App Store app
   flake refresh [<input>]  refresh flake.lock, every input or one
   capture karabiner        read this Mac's Karabiner state back into
-                           assets/karabiner/
+                           unixlike/modules/karabiner/
   prune                    delete local branches already merged into origin/dev
 
 mas add/remove edit the masApps attrset: <name> is the Nix attribute and <id>
@@ -159,8 +160,9 @@ is the numeric App Store id the maintainer supplies (no lookup here); the mas
 CLI itself is already a declared Homebrew formula, so it needs no command of
 its own.
 
-capture karabiner is the reverse of the activation: tool/darwin/karabiner
-projects this host onto the members the two payloads declare, and each
+capture karabiner is the reverse of the activation:
+unixlike/modules/karabiner/tool projects this host onto the members the two
+payloads declare, and each
 projection that differs becomes the payload's new content. Runtime keys the
 host also holds are neither read nor written. It runs on a Mac only, refuses
 when neither payload changed, and commits nothing the other commands would
@@ -1309,10 +1311,12 @@ flake_command() {
 
 # INV unixlike/host-written-payload-projected
 #
-# The reverse direction of the activation modules/karabiner.nix declares: the
-# same projection that decides what `apply` writes decides what a capture reads
-# back. tool/darwin/karabiner owns it, so nothing here reads the host document,
-# names a runtime key, or re-derives which members the payloads own.
+# The reverse direction of the activation
+# unixlike/modules/karabiner/module.nix declares: the same projection that
+# decides what `apply` writes decides what a capture reads back.
+# unixlike/modules/karabiner/tool owns it, so nothing here reads the host
+# document, names a runtime key, or re-derives which members the payloads
+# own.
 #
 # `project` prints the two projections introduced by `=== <name> ===` marker
 # lines, and that script's header names those lines as the whole contract a
@@ -1342,8 +1346,9 @@ capture_command() {
     || refuse "$karabiner_tool is missing or not executable." \
       "That script owns the projection this command commits."
 
-  # The default tool/darwin/karabiner documents, restated only so that a
-  # missing file is a refusal rather than a capture of an empty document.
+  # The default unixlike/modules/karabiner/tool documents, restated only so
+  # that a missing file is a refusal rather than a capture of an empty
+  # document.
   # --host overrides it, which is how a fixture hands in a host of its own.
   capture_host=$karabiner_host
   [ -n "$capture_host" ] || capture_host="${HOME:-}/.config/karabiner/karabiner.json"
@@ -1396,7 +1401,7 @@ capture_command() {
   done
   if [ "$capture_changed" -eq 0 ]; then
     refuse "There is nothing to capture." \
-      "Both payloads already hold this host's projection, which is what tool/darwin/karabiner check reports in one line."
+      "Both payloads already hold this host's projection, which is what unixlike/modules/karabiner/tool check reports in one line."
   fi
 
   for capture_payload in "$karabiner_payload" "$karabiner_hotkeys"; do

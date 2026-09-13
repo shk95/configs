@@ -62,7 +62,7 @@ if [ "$scope" = all ] || [ "$scope" = unixlike ]; then
       case "$err" in
         *"experimental Nix feature"*)
           bad "nix-command/flakes not enabled by default" \
-              'export NIX_CONFIG="experimental-features = nix-command flakes" until the first home-manager switch writes it for you (see modules/nix-conf.nix)'
+              'export NIX_CONFIG="experimental-features = nix-command flakes" until the first home-manager switch writes it for you (see unixlike/modules/nix/shared.nix)'
           ;;
         *)
           detail=$(printf '%s\n' "$err" \
@@ -167,9 +167,10 @@ fi
 if [ "$scope" = all ] || [ "$scope" = unixlike ]; then
   echo
   echo "Flavours declared by the flake"
-# tool/checks/test builds every configuration on the host it runs on, so what
-# matters here is only whether each one can also be *activated* from this
-# machine. Building and activating are different questions: a NixOS closure
+# unixlike/tool/checks/test builds every configuration on the host it runs
+# on, so what matters here is only whether each one can also be *activated*
+# from this machine. Building and activating are different questions: a
+# NixOS closure
 # builds on any Linux box, and only switching to it needs the real host.
 
 found=0
@@ -200,19 +201,20 @@ if grep -Rqs --include='*.nix' 'darwinConfigurations' "$unixlike_flake/flake.nix
 fi
 
   [ "$found" -eq 1 ] || warn "no Unix-like host configurations in the flake sources" \
-       "tool/checks/test has nothing to verify."
+       "unixlike/tool/checks/test has nothing to verify."
 
   echo
   echo "Karabiner (Darwin only)"
 # Karabiner-Elements is a Homebrew cask that rewrites its own configuration
-# file, so tool/darwin/karabiner compares that file rather than delivering it.
+# file, so unixlike/modules/karabiner/tool compares that file rather than
+# delivering it.
 # These say whether this machine can run that comparison at all; they are
 # warnings everywhere, because a clone that is not a Mac is not broken.
   if [ "$(uname -s)" = Darwin ]; then
     [ -d /Applications/Karabiner-Elements.app ] \
       && ok "Karabiner-Elements.app installed" \
       || warn "Karabiner-Elements.app is not installed" \
-             "The cask is declared in modules/darwin-homebrew.nix; 'just karabiner-check' reports drift until it is installed."
+             "The cask is declared in unixlike/modules/homebrew.nix; 'just karabiner-check' reports drift until it is installed."
     # The cask installs it below the application's own support directory and
     # puts nothing on PATH, so the absolute path is the only probe that can
     # answer.
@@ -226,7 +228,7 @@ fi
              "'just karabiner-check' reports that as drift, not as unverified. Start Karabiner-Elements once, or apply the desired state."
   else
     warn "Karabiner probes are Darwin-only" \
-         "tool/darwin/karabiner reports unverified here; the Mac supplies that evidence."
+         "unixlike/modules/karabiner/tool reports unverified here; the Mac supplies that evidence."
   fi
 fi
 
