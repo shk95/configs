@@ -3451,6 +3451,8 @@ Describe 'capture branch' {
             & git -C $repo init -q -b dev | Out-Null
             & git -C $repo config user.name Fixture | Out-Null
             & git -C $repo config user.email fixture@example.invalid | Out-Null
+            # Never the host's line-ending conversion; see New-PublishRepository.
+            & git -C $repo config core.autocrlf false | Out-Null
             & git -C $repo remote add origin $remote | Out-Null
             [IO.File]::WriteAllText((Join-Path $repo 'seed.txt'), 'seed')
             & git -C $repo add -- seed.txt | Out-Null
@@ -3637,6 +3639,8 @@ Describe 'capture branch pruning' {
             & git -C $repo init -q -b dev | Out-Null
             & git -C $repo config user.name Fixture | Out-Null
             & git -C $repo config user.email fixture@example.invalid | Out-Null
+            # Never the host's line-ending conversion; see New-PublishRepository.
+            & git -C $repo config core.autocrlf false | Out-Null
             & git -C $repo remote add origin $remote | Out-Null
             [IO.File]::WriteAllText((Join-Path $repo 'seed.txt'), 'seed')
             & git -C $repo add -- seed.txt | Out-Null
@@ -3845,6 +3849,14 @@ exit 1
             & git -C $repo init -q -b dev | Out-Null
             & git -C $repo config user.name Fixture | Out-Null
             & git -C $repo config user.email fixture@example.invalid | Out-Null
+            # This repository's own .gitattributes keeps its text files LF in
+            # the working tree; a fixture repository has none, so without this
+            # it inherits the host's core.autocrlf -- true in Git for Windows'
+            # system config -- and every `git add` of the LF payloads below
+            # prints an "LF will be replaced by CRLF" warning into the suite's
+            # transcript. Capture's payload bytes are not what this changes:
+            # it only stops git converting and warning about them.
+            & git -C $repo config core.autocrlf false | Out-Null
             & git -C $repo remote add origin $remote | Out-Null
             if ($Populate) { & $Populate $repo } else { [IO.File]::WriteAllText((Join-Path $repo 'seed.txt'), 'seed') }
             & git -C $repo add -A | Out-Null
