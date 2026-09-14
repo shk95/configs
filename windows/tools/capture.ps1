@@ -36,6 +36,14 @@ request against dev when needed, and arms merge-commit auto-merge. Git hooks
 and branch protection still apply. The script prints the pull-request URL and
 stops; it neither waits for CI nor performs the merge itself.
 
+When nothing drifted, -Publish resumes an earlier capture's publish instead.
+On a topic branch whose every commit beyond origin/dev has the subject capture
+gives its commits and changes only windows/desired, the single confirmation
+pushes the branch unless origin already has it, opens or reuses the pull
+request, and arms auto-merge. Any other commit on the branch refuses the run.
+It never resumes on dev or master; on dev it names a local capture branch that
+still carries commits dev does not have.
+
 .PARAMETER WhatIf
 Shows selection, refusals, the candidate diff, and branch plan, plus the publish
 plan when combined with -Publish. It then exits without writing a payload,
@@ -72,6 +80,13 @@ For a stale dev base, run `git fetch origin dev` and then
 unstage unrelated index changes; commit or restore an already-modified target
 payload. If the proposed capture branch already exists, finish that capture or
 delete the branch only after confirming it contains nothing still needed.
+
+A capture whose push was rejected, whose branch was then pushed by hand, or
+whose auto-merge could not be armed is finished by running capture with
+-Publish again on that branch. Its pull request says the commits came from an
+earlier run and, when origin already had the branch, that nothing was pushed
+and no pre-push hook ran. Commits capture did not make are never published
+this way; push them and open the pull request yourself.
 
 For .wslconfig, capture preserves unmanaged keys but refuses when Windows build
 or WSL version cannot establish support, when the modelled networking policy is
@@ -145,6 +160,14 @@ param(
 # refusals, the pull-request body and the writing half live in
 # Get-WinEnvPublishPreflight, New-WinEnvPullRequestBody and
 # Publish-WinEnvCapture, where they have fixtures.
+#
+# A capture's commit makes the host read as unchanged, so a rerun after a
+# publish that did not finish -- a rejected push, a branch pushed by hand, an
+# auto-merge that was never armed -- captures nothing. -Publish on such a run
+# resumes that publish rather than stopping at "Nothing to capture", under the
+# same single confirmation, and only for commits capture itself made: which
+# branch may resume is Get-WinEnvCaptureResumeBranch, and which commits it may
+# carry is Get-WinEnvCaptureResumeCommit.
 #
 # Nothing on the host is written. The managed targets are read and nothing
 # else; every write goes to this repository's desired state, and only after
@@ -223,6 +246,70 @@ function Get-RepositoryRelativePath {
     param([Parameter(Mandatory)][string] $Source)
 
     return 'windows/desired/' + $Source.Replace('\', '/')
+}
+
+function Confirm-CaptureRun {
+    # The one question a run asks before it writes anything. A capture and a
+    # resumed publish each reach it exactly once, with their own wording, so
+    # there is one Read-Host in this script and no path that asks twice.
+    param(
+        [Parameter(Mandatory)][string] $Question,
+        [Parameter(Mandatory)][string] $Abort
+    )
+
+    $answer = Read-Host $Question
+    if ($answer -cne 'y' -and $answer -cne 'Y') {
+        Write-Host $Abort
+        exit 1
+    }
+}
+
+function Write-PublishPlan {
+    # The publish half of the plan, printed before the confirmation by a
+    # capture run with -Publish and by a resumed publish alike.
+    param(
+        [Parameter(Mandatory)][string] $PublishBranch,
+        [Parameter(Mandatory)][string] $Title,
+        [Parameter(Mandatory)][string] $Preview,
+        [AllowEmptyString()][string] $PullRequest,
+        [AllowEmptyCollection()][string[]] $Carried = @(),
+        [switch] $CreateBranch,
+        [switch] $Resumed
+    )
+
+    Write-Host ''
+    Write-Host '  publish: one pull request against dev, auto-merge armed'
+    if ($Carried.Count) {
+        Write-Host '  this branch also carries, and will publish and merge:'
+        foreach ($line in $Carried) { Write-Host "    $line" }
+    }
+    if ($PullRequest) {
+        # The pull request already exists and this run does not rewrite it.
+        # Printing the body it would have written would promise a reviewer
+        # something nobody is going to read.
+        Write-Host "  pull request: $PullRequest (existing; title and body unchanged)"
+    }
+    else {
+        Write-Host "  pull request title: $Title"
+        Write-Host '  pull request body:'
+        foreach ($line in ($Preview.TrimEnd() -split "`r?`n")) { Write-Host "    $line" }
+    }
+    Write-Host '  commands:'
+    if ($CreateBranch) {
+        Write-Host "    git switch --create $PublishBranch origin/dev"
+    }
+    Write-Host "    git push --set-upstream origin $PublishBranch"
+    if ($Resumed) {
+        Write-Host '    (not run if origin already has this branch at this commit; no pre-push hook runs then)'
+    }
+    if ($PullRequest) {
+        Write-Host "    gh pr merge --auto --merge $PullRequest"
+        Write-Host '    (that pull request is already open against dev; no second one is opened)'
+    }
+    else {
+        Write-Host ("    gh pr create --base dev --head $PublishBranch --title '$Title' --body-file <body>")
+        Write-Host '    gh pr merge --auto --merge <the pull request that opens>'
+    }
 }
 
 $manifest = Get-WinEnvManifest -Path (Join-Path $desiredStateRoot 'manifest.json')
@@ -331,9 +418,123 @@ foreach ($plan in $inexpressible) {
 }
 foreach ($plan in $refused) { Write-Refusal -Message "refused: $($plan.Id)" -Detail $plan.Reason }
 
+# What the operator typed, rebuilt from the bound parameters rather than from
+# the raw command line: every value here has already been validated against
+# the manifest or the branch-naming policy.
+$invocationPart = @('windows/tools/capture.ps1')
+if ($requestedFeature.Count) { $invocationPart += '-Feature ' + ($requestedFeature -join ',') }
+if ($requestedId.Count) { $invocationPart += '-Id ' + ($requestedId -join ',') }
+if ($Branch) { $invocationPart += "-Branch $Branch" }
+if ($Publish) { $invocationPart += '-Publish' }
+$invocation = $invocationPart -join ' '
+
 if (-not $captured.Count) {
+    # Nothing drifted, so there is nothing to commit -- but a -Publish run may
+    # still have an earlier capture's publish to finish. Only a run with no
+    # drift at all asks: a refused or inexpressible file is drift this run
+    # could not settle, and publishing past it would read as a host that
+    # matches what the pull request carries.
+    $resume = $null
+    if ($Publish -and -not $refused.Count -and -not $inexpressible.Count) {
+        $consideredFeatureId = @($plans | ForEach-Object { [string]$_.Feature })
+        $resumeFeature = @($declaredFeature | Where-Object { $consideredFeatureId -contains $_ })
+        # The branch names a capture from dev would have given these features,
+        # for naming one that still carries commits when this run is on dev.
+        $resumeBranchName = if ($Branch) {
+            @($Branch)
+        }
+        else {
+            @($resumeFeature | ForEach-Object { "feature/windows-capture-$_" })
+            if ($resumeFeature.Count -gt 1) { 'feature/windows-capture-' + ($resumeFeature -join '-') }
+        }
+        $resume = Get-WinEnvCaptureResumeBranch -RepositoryRoot $repositoryRoot -BranchName @($resumeBranchName)
+        if ($resume.Status -eq 'Refused' -or $resume.Status -eq 'Elsewhere') {
+            Stop-Capture -Message $resume.Message -Detail $resume.Detail
+        }
+    }
+
+    if (-not $resume -or $resume.Status -ne 'Current') {
+        Write-Host ''
+        Write-Host 'Nothing to capture. No payload was written and no commit was made.'
+        exit 0
+    }
+
+    # A resumed publish. The refusals come in the order a capture asks them,
+    # every one before anything is written: the index, the payloads this run
+    # compared, the tools and the remote, and then the commits themselves.
+    $publishBranch = [string]$resume.Branch
+
+    if (@(Invoke-GitCommand -Argument @('diff', '--cached', '--name-only')).Count) {
+        Stop-Capture -Message 'The index already holds staged changes.' `
+            -Detail 'A resumed publish carries only what is committed. Commit or unstage the rest first.'
+    }
+
+    # Unchanged was decided against the working tree. A payload with
+    # uncommitted changes means the host matches that edit rather than the
+    # commits this run would publish.
+    foreach ($plan in @($plans | Where-Object { $_.Source })) {
+        $relative = Get-RepositoryRelativePath -Source $plan.Source
+        if (@(Invoke-GitCommand -Argument @('status', '--porcelain', '--', $relative)).Count) {
+            Stop-Capture -Message "$relative already has uncommitted changes." `
+                -Detail 'This run compared the host with that edit, not with the commits it would publish. Commit or restore that file first.'
+        }
+    }
+
+    $preflight = Get-WinEnvPublishPreflight -RepositoryRoot $repositoryRoot -Branch $publishBranch
+    if ($preflight.Status -eq 'Refused') {
+        Stop-Capture -Message $preflight.Message -Detail $preflight.Detail
+    }
+    $existingPullRequest = [string]$preflight.PullRequest
+
+    $resumeCommit = Get-WinEnvCaptureResumeCommit -RepositoryRoot $repositoryRoot -Branch $publishBranch `
+        -ManagedFile @($manifest.ManagedFiles)
+    if ($resumeCommit.Status -eq 'Refused') {
+        Stop-Capture -Message $resumeCommit.Message -Detail $resumeCommit.Detail
+    }
+
+    # The title, the features and the files come from the commits being
+    # published, not from this run's selection, which found nothing.
+    $resumeCommitFeature = @($resumeCommit.Feature)
+    $features = @($declaredFeature | Where-Object { $resumeCommitFeature -contains $_ })
+    $pullRequestTitle = Get-WinEnvPullRequestTitle -Commit @($resumeCommit.Subject | Select-Object -Unique)
+    $bodyParameter = @{
+        Branch      = $publishBranch
+        Feature     = $features
+        ManagedFile = @($resumeCommit.ManagedFile)
+        Commit      = @($resumeCommit.Subject)
+        Command     = $invocation
+        Build       = $buildText
+        Resumed     = $true
+    }
+    $pullRequestPreview = New-WinEnvPullRequestBody @bodyParameter
+
     Write-Host ''
-    Write-Host 'Nothing to capture. No payload was written and no commit was made.'
+    Write-Host "  branch: $publishBranch (current)"
+    Write-Host '  resume: nothing drifted, and this branch carries capture commits dev does not have:'
+    foreach ($line in @($resumeCommit.Commit)) { Write-Host "    $line" }
+    Write-PublishPlan -PublishBranch $publishBranch -Title $pullRequestTitle -Preview $pullRequestPreview `
+        -PullRequest $existingPullRequest -Resumed
+
+    if ($WhatIfPreference) {
+        Write-Host ''
+        Write-Host 'What if: nothing was pushed and no pull request was opened.'
+        exit 0
+    }
+
+    Write-Host ''
+    Confirm-CaptureRun -Question 'Publish these commits? [y/N]' -Abort 'Aborted. Nothing was published.'
+
+    # No branch prune here: this run creates no branch and is not the end of
+    # a capture cycle, and the prune step's safety was shown for that cycle.
+    $published = Publish-WinEnvCapture -RepositoryRoot $repositoryRoot -Branch $publishBranch `
+        -Title $pullRequestTitle -PullRequest $existingPullRequest -BodyParameter $bodyParameter
+    if ($published.Status -ne 'Published') {
+        Write-Refusal -Message $published.Message -Detail $published.Detail
+        exit 1
+    }
+
+    Write-Host ''
+    Write-Host $published.Url
     exit 0
 }
 
@@ -403,16 +604,6 @@ foreach ($featureId in $features) {
     $commitSubject[$featureId] = "feat(windows): capture $featureId settings from the host"
 }
 $commitSubjectLine = @($features | ForEach-Object { $commitSubject[$_] })
-
-# What the operator typed, rebuilt from the bound parameters rather than from
-# the raw command line: every value here has already been validated against
-# the manifest or the branch-naming policy.
-$invocationPart = @('windows/tools/capture.ps1')
-if ($requestedFeature.Count) { $invocationPart += '-Feature ' + ($requestedFeature -join ',') }
-if ($requestedId.Count) { $invocationPart += '-Id ' + ($requestedId -join ',') }
-if ($Branch) { $invocationPart += "-Branch $Branch" }
-if ($Publish) { $invocationPart += '-Publish' }
-$invocation = $invocationPart -join ' '
 
 $carriedCommit = @()
 $pullRequestTitle = $null
@@ -491,36 +682,8 @@ try {
     }
 
     if ($Publish) {
-        Write-Host ''
-        Write-Host '  publish: one pull request against dev, auto-merge armed'
-        if ($carriedCommit.Count) {
-            Write-Host '  this branch also carries, and will publish and merge:'
-            foreach ($line in $carriedCommit) { Write-Host "    $line" }
-        }
-        if ($existingPullRequest) {
-            # The pull request already exists and this run does not rewrite it.
-            # Printing the body it would have written would promise a reviewer
-            # something nobody is going to read.
-            Write-Host "  pull request: $existingPullRequest (existing; title and body unchanged)"
-        }
-        else {
-            Write-Host "  pull request title: $pullRequestTitle"
-            Write-Host '  pull request body:'
-            foreach ($line in ($pullRequestPreview.TrimEnd() -split "`r?`n")) { Write-Host "    $line" }
-        }
-        Write-Host '  commands:'
-        if ($branchPlan.Status -eq 'Create') {
-            Write-Host "    git switch --create $publishBranch origin/dev"
-        }
-        Write-Host "    git push --set-upstream origin $publishBranch"
-        if ($existingPullRequest) {
-            Write-Host "    gh pr merge --auto --merge $existingPullRequest"
-            Write-Host '    (that pull request is already open against dev; no second one is opened)'
-        }
-        else {
-            Write-Host ("    gh pr create --base dev --head $publishBranch --title '$pullRequestTitle' --body-file <body>")
-            Write-Host '    gh pr merge --auto --merge <the pull request that opens>'
-        }
+        Write-PublishPlan -PublishBranch $publishBranch -Title $pullRequestTitle -Preview $pullRequestPreview `
+            -PullRequest $existingPullRequest -Carried $carriedCommit -CreateBranch:($branchPlan.Status -eq 'Create')
     }
 
     if ($WhatIfPreference) {
@@ -536,11 +699,7 @@ try {
     else {
         'Write these payloads and commit? [y/N]'
     }
-    $answer = Read-Host $question
-    if ($answer -cne 'y' -and $answer -cne 'Y') {
-        Write-Host 'Aborted. Nothing was written.'
-        exit 1
-    }
+    Confirm-CaptureRun -Question $question -Abort 'Aborted. Nothing was written.'
 }
 finally {
     if ([IO.Directory]::Exists($stagingRoot)) { [IO.Directory]::Delete($stagingRoot, $true) }
