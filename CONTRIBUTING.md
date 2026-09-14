@@ -158,8 +158,9 @@ applies the range with no fuzz to whatever zellij the lock brings in, so a
 `unixlike/flake.lock` refresh that moves zellij is the ordinary one commit,
 `tool/version-control/commit flake refresh`.
 
-The flake checks `zellij-combining-marks` and
-`zellij-combining-marks-refuses-a-patched-tree`, declared beside the overlay,
+The flake checks `zellij-combining-marks`,
+`zellij-combining-marks-refuses-a-patched-tree` and
+`zellij-combining-marks-refuses-a-stale-vendor`, declared beside the overlay,
 are what judge that refresh. `unixlike/tool/checks/test` builds them on every
 system, so the refresh's pre-push and the merge gate refuse a lock whose
 zellij the range no longer applies to; `just zellij-patch-check` builds the
