@@ -299,8 +299,12 @@ decision and has not been made.
 the hygiene scan; the Windows CI job no longer walks the checkout for
 PowerShell files, and `windows/tools/test.ps1` is the one place every script
 under the Windows tree is parsed for syntax (`check-desired-state.ps1`
-still parses the PowerShell payload it validates). `pre-push` audits the
-pushed history only.
+still parses the PowerShell payload it validates). `pre-push` runs the
+history form of the audit, which judges `dev`, `master` and release-tag
+reachability against `origin/dev` and `origin/master` when a fetch left
+them (#240). It still reads every local tag, so a stray local `*-v*` tag
+the push does not carry fails the push; judging only the tags a push
+carries has not been done.
 
 Since 2026-09-13 the Unix-like domain owns one tree. `unixlike/` holds the
 flake, the modules, the payloads and the domain's own tooling; `.envrc` and

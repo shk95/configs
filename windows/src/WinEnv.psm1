@@ -3246,24 +3246,18 @@ function ConvertTo-WinEnvCondensedPushEvidence {
         A capture's push runs .githooks/pre-push, which -- when the Windows
         checks are selected -- runs windows/tools/test.ps1's whole Pester
         suite as one of its steps. Most of that run is scaffolding nobody
-        reviewing a pull request needs: discovery banners, a pass mark per
-        test or container, and (because this suite's own module-level
-        publish fixtures push to throwaway remotes and simulate a rejected
-        push) product output from tests that passed. What a reviewer does
-        need survives regardless of source: the selected-checks header, each
-        check's own header line and final verdict, every skip or unverified
-        marker, the suite's own "Tests Passed: ..." tally, and every line of
-        any test that failed.
+        reviewing a pull request needs: discovery banners and a pass mark per
+        test or container. What a reviewer does need survives regardless of
+        source: the selected-checks header, each check's own header line and
+        final verdict, every skip or unverified marker, the suite's own
+        "Tests Passed: ..." tally, and every line of any test that failed.
 
         Condensing is scoped to the "Windows tests" check specifically --
         entered at its own header line and left at the tally line -- because
         that is the only check whose own output is a Pester transcript.
         Everything outside that span (another check's header and verdict,
         git's own push confirmation) is untouched: it was never part of "the
-        passing Pester transcript" this elides, and this function does not
-        try to tell a real git remote from a fixture's throwaway one by
-        content -- New-WinEnvPullRequestBody prints a note above this block
-        for exactly that residual case.
+        passing Pester transcript" this elides.
 
         A failed test's own lines are kept by finding where Pester prints
         them: every line Pester emits for a failing test, from its "[-]"
@@ -3274,12 +3268,13 @@ function ConvertTo-WinEnvCondensedPushEvidence {
         part of the same test that way.
 
         No "-> " line is auto-kept once inside the span, unlike outside it:
-        the only "-> " header that legitimately appears inside a Pester
-        transcript is capture.ps1's and Publish-WinEnvCapture's own progress
-        narration ("-> pushing ...", "-> opening a pull request against
-        dev", "-> arming auto-merge") printed by this suite's own
-        module-level publish fixtures under test -- exactly the confusing
-        noise this function exists to remove, not preserve.
+        no check's header is printed from inside a Pester transcript, so a
+        "-> " line there is a test's own output rather than the hook's. The
+        suite's module-level publish fixtures capture the narration
+        Publish-WinEnvCapture prints ("-> pushing ...", "-> opening a pull
+        request against dev") instead of letting it reach this transcript;
+        this rule keeps any such line a future test leaks out of the body
+        too.
     #>
     param([AllowEmptyCollection()][string[]] $Line = @())
 
@@ -3508,6 +3503,230 @@ function Get-WinEnvPublishCarriedCommit {
     return @($lines | ForEach-Object { [string]$_ } | Where-Object { $_ })
 }
 
+# The subject capture.ps1 gives every commit it makes, and the one tree those
+# commits change. A publish resumed by a run that captured nothing carries a
+# branch only when every commit it has beyond origin/dev has both, because
+# such a run has no capture of its own to vouch for anything else.
+$script:WinEnvCaptureSubjectPattern = '^feat\(windows\): capture \S+ settings from the host$'
+$script:WinEnvCapturePathPrefix = 'windows/desired/'
+
+function Get-WinEnvCaptureResumeBranch {
+    <#
+        .SYNOPSIS
+        Decide whether a -Publish run that captured nothing resumes an
+        earlier capture's publish, without touching the repository.
+
+        .DESCRIPTION
+        A capture compares the host with the payloads in the working tree, so
+        once its commit exists the same host reads as unchanged and a rerun
+        captures nothing. A run whose push was rejected, whose branch was then
+        pushed by hand, or whose auto-merge could not be armed would otherwise
+        leave the operator a manual pull request as the only way on. This is
+        the first question that decides whether a rerun carries it instead.
+
+        master refuses, as it does for a capture, and so does a detached HEAD,
+        which is no branch to publish. dev never resumes: a capture started
+        there commits on a branch of its own, so a commit dev carries is not
+        one a capture left behind. When a local branch named in -BranchName
+        -- the names a capture from dev would have created -- still carries
+        commits origin/dev does not have, it is named instead, so the operator
+        is sent to that branch rather than told there is nothing to do. Any
+        other branch resumes when it carries commits beyond origin/dev,
+        whether or not they were pushed already: ahead of its upstream, pushed
+        by hand with no pull request, and pushed with a pull request that was
+        never armed all read the same here. Whether those commits may be
+        published is Get-WinEnvCaptureResumeCommit's question.
+
+        Every check is a read of this clone's refs, and origin/dev is taken as
+        this clone last fetched it.
+    #>
+    param(
+        [Parameter(Mandatory)][string] $RepositoryRoot,
+        [Parameter(Mandatory)][AllowEmptyCollection()][string[]] $BranchName
+    )
+
+    $PSNativeCommandUseErrorActionPreference = $false
+
+    $head = & git -C $RepositoryRoot symbolic-ref --quiet --short HEAD 2>$null
+    $current = if ($LASTEXITCODE -eq 0 -and $head) { [string]$head } else { $null }
+
+    if ($current -ceq 'master') {
+        return [pscustomobject]@{
+            Status  = 'Refused'
+            Branch  = $null
+            Message = 'Refusing to publish from master.'
+            Detail  = "AGENTS.md: only this repository's dev may enter master, by pull request and merge commit. There is no operational bypass."
+        }
+    }
+
+    if (-not $current) {
+        return [pscustomobject]@{
+            Status  = 'Refused'
+            Branch  = $null
+            Message = 'HEAD is detached, so there is no branch to publish.'
+            Detail  = 'Switch to the feature branch this capture belongs on.'
+        }
+    }
+
+    & git -C $RepositoryRoot rev-parse --verify --quiet refs/remotes/origin/dev *>$null
+    if ($LASTEXITCODE -ne 0) {
+        return [pscustomobject]@{
+            Status  = 'Refused'
+            Branch  = $null
+            Message = 'origin/dev is unavailable.'
+            Detail  = "A resumed publish carries what the branch has beyond origin/dev. Run 'git fetch origin dev' first."
+        }
+    }
+
+    if ($current -ceq 'dev') {
+        $carrying = @()
+        foreach ($name in @($BranchName | Where-Object { $_ } | Select-Object -Unique)) {
+            & git -C $RepositoryRoot show-ref --verify --quiet "refs/heads/$name" *>$null
+            if ($LASTEXITCODE -ne 0) { continue }
+            $ahead = @(& git -C $RepositoryRoot rev-list "refs/remotes/origin/dev..refs/heads/$name" 2>$null |
+                    ForEach-Object { [string]$_ } | Where-Object { $_ })
+            if ($ahead.Count) { $carrying += $name }
+        }
+        if ($carrying.Count) {
+            return [pscustomobject]@{
+                Status  = 'Elsewhere'
+                Branch  = $carrying
+                Message = "Nothing to capture on dev, but $($carrying -join ', ') still carries commits dev does not have."
+                Detail  = "Switch to it with 'git switch $($carrying[0])' and run capture -Publish there to resume its publish."
+            }
+        }
+        return [pscustomobject]@{ Status = 'Nothing'; Branch = $null; Message = $null; Detail = $null }
+    }
+
+    $ahead = @(& git -C $RepositoryRoot rev-list refs/remotes/origin/dev..HEAD 2>$null |
+            ForEach-Object { [string]$_ } | Where-Object { $_ })
+    if (-not $ahead.Count) {
+        return [pscustomobject]@{ Status = 'Nothing'; Branch = $null; Message = $null; Detail = $null }
+    }
+    return [pscustomobject]@{ Status = 'Current'; Branch = $current; Message = $null; Detail = $null }
+}
+
+function Get-WinEnvCaptureResumeCommit {
+    <#
+        .SYNOPSIS
+        The commits a resumed publish would carry, refused unless capture made
+        every one of them.
+
+        .DESCRIPTION
+        Git pushes a branch, so resuming a publish carries everything the
+        current branch has beyond origin/dev. A capture that commits leaves
+        commits of one shape only: a single parent, the subject capture.ps1
+        writes, and changes under windows/desired alone. Anything else on the
+        branch -- a hand-written commit, a merge, a capture-titled commit that
+        also edits a script -- is work this tool did not make, and a run that
+        captured nothing has no diff of its own the operator confirmed, so it
+        is refused by name and the operator is pointed at an ordinary push
+        and pull request. Paths are listed with renames split into their
+        delete and add halves, so a file moved in from outside the tree cannot
+        pass as a change inside it.
+
+        What the pull request says comes from here too: the commits and their
+        subjects, oldest first, and the managed files and features the
+        touched paths belong to, read from the manifest's declared sources
+        passed as -ManagedFile. A touched path no declared source names is
+        listed by its path alone.
+    #>
+    param(
+        [Parameter(Mandatory)][string] $RepositoryRoot,
+        [Parameter(Mandatory)][string] $Branch,
+        [AllowEmptyCollection()][object[]] $ManagedFile = @()
+    )
+
+    $PSNativeCommandUseErrorActionPreference = $false
+
+    $manual = ("Push it and open its pull request against dev yourself (git push --set-upstream origin $Branch, " +
+        "then gh pr create --base dev --head $Branch). If origin/dev is stale, run 'git fetch origin dev' first.")
+
+    function New-ResumeRefusal([string] $Message) {
+        return [pscustomobject]@{
+            Status = 'Refused'; Commit = @(); Subject = @(); Path = @(); ManagedFile = @(); Feature = @()
+            Message = $Message; Detail = $manual
+        }
+    }
+
+    $log = & git -C $RepositoryRoot log --reverse --format='%H%x09%h%x09%P%x09%s' refs/remotes/origin/dev..HEAD 2>$null
+    if ($LASTEXITCODE -ne 0) {
+        return New-ResumeRefusal 'The commits this branch carries beyond origin/dev could not be listed.'
+    }
+    $rows = @($log | ForEach-Object { [string]$_ } | Where-Object { $_ })
+    if (-not $rows.Count) {
+        return New-ResumeRefusal "$Branch carries no commit beyond origin/dev to publish."
+    }
+
+    $commit = @()
+    $subject = @()
+    $touched = [System.Collections.Generic.List[string]]::new()
+    foreach ($row in $rows) {
+        $field = $row -split "`t", 4
+        $sha = $field[0]
+        $short = $field[1]
+        $parents = @($field[2] -split ' ' | Where-Object { $_ })
+        $text = if ($field.Count -gt 3) { $field[3] } else { '' }
+
+        if ($parents.Count -ne 1) {
+            return New-ResumeRefusal "$short is not a single-parent commit, the only kind capture makes, so this run will not publish it."
+        }
+        if ($text -cnotmatch $script:WinEnvCaptureSubjectPattern) {
+            return New-ResumeRefusal "$short '$text' is not a commit capture made, so this run will not publish it."
+        }
+
+        $changed = & git -C $RepositoryRoot -c core.quotePath=false diff-tree --no-commit-id --name-only -r --no-renames $sha 2>$null
+        if ($LASTEXITCODE -ne 0) {
+            return New-ResumeRefusal "The paths $short changes could not be listed."
+        }
+        $paths = @($changed | ForEach-Object { [string]$_ } | Where-Object { $_ })
+        $outside = @($paths | Where-Object { -not $_.StartsWith($script:WinEnvCapturePathPrefix, [StringComparison]::Ordinal) })
+        if ($outside.Count) {
+            return New-ResumeRefusal ("$short changes $($outside -join ', '), outside windows/desired, " +
+                'so it is not a commit capture made and this run will not publish it.')
+        }
+
+        $commit += "$short $text"
+        $subject += $text
+        foreach ($path in $paths) { if (-not $touched.Contains($path)) { [void]$touched.Add($path) } }
+    }
+
+    $managed = @()
+    $feature = @()
+    $matched = [System.Collections.Generic.HashSet[string]]::new([StringComparer]::Ordinal)
+    foreach ($definition in @($ManagedFile)) {
+        # The same two shapes Resolve-WinEnvManagedFile reads: a scalar
+        # Source, or build-conditional Sources, every variant of which a
+        # capture on some host could have written.
+        $sources = if ($definition.ContainsKey('Sources')) {
+            @($definition.Sources | ForEach-Object { [string]$_.Source })
+        }
+        else {
+            @([string]$definition.Source)
+        }
+        foreach ($source in $sources) {
+            if (-not $source) { continue }
+            $path = $script:WinEnvCapturePathPrefix + $source.Replace('\', '/')
+            if (-not $touched.Contains($path) -or $matched.Contains($path)) { continue }
+            [void]$matched.Add($path)
+            $managed += "$($definition.Id) ($path)"
+            if ($feature -cnotcontains [string]$definition.Feature) { $feature += [string]$definition.Feature }
+        }
+    }
+    foreach ($path in $touched) { if (-not $matched.Contains($path)) { $managed += $path } }
+
+    return [pscustomobject]@{
+        Status      = 'Ready'
+        Commit      = $commit
+        Subject     = $subject
+        Path        = $touched.ToArray()
+        ManagedFile = $managed
+        Feature     = $feature
+        Message     = $null
+        Detail      = $null
+    }
+}
+
 function Get-WinEnvPullRequestTitle {
     <#
         .SYNOPSIS
@@ -3556,6 +3775,14 @@ function New-WinEnvPullRequestBody {
         output is the evidence a reviewer of this pull request cannot get any
         other way. Publishing from a Windows host and then discarding it would
         throw away the one thing that host can prove.
+
+        Neither block claims more than the run saw. -Resumed marks a run that
+        captured nothing and publishes commits an earlier capture made: this
+        run made no commit, so the commit block says so instead of showing
+        output nobody kept. -NotPushed marks a publish whose branch origin
+        already had at the commit being published: nothing was pushed and no
+        pre-push hook ran, so the push block says so instead of showing a
+        placeholder or another run's output.
     #>
     param(
         [Parameter(Mandatory)][string] $Branch,
@@ -3566,7 +3793,9 @@ function New-WinEnvPullRequestBody {
         [Parameter(Mandatory)][AllowEmptyString()][string] $Build,
         [AllowEmptyCollection()][string[]] $Carried = @(),
         [AllowEmptyCollection()][string[]] $Evidence = @(),
-        [AllowEmptyCollection()][string[]] $PushEvidence = @()
+        [AllowEmptyCollection()][string[]] $PushEvidence = @(),
+        [switch] $Resumed,
+        [switch] $NotPushed
     )
 
     $lines = [System.Collections.Generic.List[string]]::new()
@@ -3575,6 +3804,9 @@ function New-WinEnvPullRequestBody {
     [void]$lines.Add('Feature selection: ' + (@($Feature) -join ', '))
     [void]$lines.Add('Windows build: ' + $(if ($Build) { $Build } else { 'undetermined' }))
     [void]$lines.Add("Command: $Command")
+    if ($Resumed) {
+        [void]$lines.Add('Resumed: this run captured nothing and publishes commits an earlier capture run made.')
+    }
 
     [void]$lines.Add('')
     [void]$lines.Add('Captured managed files:')
@@ -3596,41 +3828,44 @@ function New-WinEnvPullRequestBody {
     [void]$lines.Add('')
     [void]$lines.Add('Local commit evidence:')
     [void]$lines.Add('')
-    [void]$lines.Add('```text')
-    if (@($Evidence).Count) {
-        foreach ($line in @($Evidence)) {
-            $clean = ($line -replace $script:WinEnvAnsiPattern, '') -replace $script:WinEnvControlCharacterPattern, ''
-            [void]$lines.Add($clean)
-        }
+    if ($Resumed) {
+        [void]$lines.Add('Not reproduced: an earlier capture run made these commits, and this run made none, ' +
+            'so their commit output is not part of this run.')
     }
     else {
-        [void]$lines.Add('(the commit output, once the commit runs)')
+        [void]$lines.Add('```text')
+        if (@($Evidence).Count) {
+            foreach ($line in @($Evidence)) {
+                $clean = ($line -replace $script:WinEnvAnsiPattern, '') -replace $script:WinEnvControlCharacterPattern, ''
+                [void]$lines.Add($clean)
+            }
+        }
+        else {
+            [void]$lines.Add('(the commit output, once the commit runs)')
+        }
+        [void]$lines.Add('```')
     }
-    [void]$lines.Add('```')
 
     [void]$lines.Add('')
     [void]$lines.Add('Local push evidence:')
     [void]$lines.Add('')
-    # The pre-push hook runs this very suite, whose own module-level publish
-    # fixtures push to throwaway remotes and simulate a rejected push. A
-    # fixture's own line can survive condensing below -- it is not this
-    # function's job to tell it apart from a real push by content -- so a
-    # line naming a throwaway `Temp\…\remote.git` remote here is that
-    # fixture's output, not a real push.
-    [void]$lines.Add('Fixture output inside this suite may mention throwaway `Temp\…\remote.git` ' +
-        'remotes; a line like that surviving condensing below is a fixture, not a real push.')
-    [void]$lines.Add('')
-    [void]$lines.Add('```text')
-    if (@($PushEvidence).Count) {
-        foreach ($line in (ConvertTo-WinEnvCondensedPushEvidence -Line @($PushEvidence))) {
-            $clean = ($line -replace $script:WinEnvAnsiPattern, '') -replace $script:WinEnvControlCharacterPattern, ''
-            [void]$lines.Add($clean)
-        }
+    if ($NotPushed) {
+        [void]$lines.Add('Nothing was pushed: origin already had this branch at the commit being published, ' +
+            'so no pre-push hook ran on this host.')
     }
     else {
-        [void]$lines.Add('(the pre-push hook''s output, once the push runs)')
+        [void]$lines.Add('```text')
+        if (@($PushEvidence).Count) {
+            foreach ($line in (ConvertTo-WinEnvCondensedPushEvidence -Line @($PushEvidence))) {
+                $clean = ($line -replace $script:WinEnvAnsiPattern, '') -replace $script:WinEnvControlCharacterPattern, ''
+                [void]$lines.Add($clean)
+            }
+        }
+        else {
+            [void]$lines.Add('(the pre-push hook''s output, once the push runs)')
+        }
+        [void]$lines.Add('```')
     }
-    [void]$lines.Add('```')
 
     [void]$lines.Add('')
     [void]$lines.Add('Opened by windows/tools/capture.ps1 -Publish. Auto-merge is armed, so the')
@@ -3669,6 +3904,14 @@ function Publish-WinEnvCapture {
         push evidence does not exist until the push has run, and on the reuse
         arm no body is built at all, because that pull request's own is left
         exactly as it is.
+
+        A branch origin already has at the local tip is not pushed again. Git
+        runs the pre-push hook even for a push with nothing to send, and this
+        repository's hook then checks whatever HEAD last changed, so the
+        output would be evidence about no push at all. A resumed publish of a
+        branch pushed by hand, or of one whose pull request is open but was
+        never armed, therefore skips the push, and the body says nothing was
+        pushed and no hook ran.
     #>
     [CmdletBinding(SupportsShouldProcess)]
     param(
@@ -3692,31 +3935,46 @@ function Publish-WinEnvCapture {
         return [pscustomobject]@{ Status = 'Skipped'; Url = $null; Message = $null; Detail = $null }
     }
 
+    # Whether origin already has this branch at the local tip, so a push
+    # would send nothing. A failed read falls through to the push, which then
+    # answers the same question itself.
+    $localTip = ([string](& git -C $RepositoryRoot rev-parse --verify --quiet "refs/heads/$Branch" 2>$null)).Trim()
+    $remoteHead = @(& git -C $RepositoryRoot ls-remote --heads origin "refs/heads/$Branch" 2>$null |
+            ForEach-Object { [string]$_ })
+    $alreadyPushed = [bool]$localTip -and
+        (@($remoteHead | Where-Object { $_ -ceq "$localTip`trefs/heads/$Branch" }).Count -gt 0)
+
     Write-Host ''
-    Write-Host "→ pushing $Branch"
-    # Copied the way the commit is copied in capture.ps1, and for the same
-    # reason: nobody reviews a pull request by scrolling somebody else's
-    # terminal. Every line is re-emitted as it arrives, so the operator reads
-    # the hook exactly when it speaks. Invoke-WinEnvTeeCommand, not a
-    # `2>&1 | ForEach-Object` pipe, for the same encoding reason the commit
-    # tee gives: git and the pre-push hook's own pwsh.exe both write UTF-8,
-    # and only the evidence copy needs decoding that PowerShell's own pipe
-    # cannot be trusted to get right on a non-UTF-8 host.
-    # The exit code is read from the returned object, not $LASTEXITCODE:
-    # once anything assigns $LASTEXITCODE explicitly, a native command run by
-    # a function called afterwards (Invoke-WinEnvGh, below) stops refreshing
-    # it -- confirmed empirically -- so this function never writes that
-    # variable at all.
-    $teed = Invoke-WinEnvTeeCommand -FilePath 'git' -ArgumentList @(
-        '-C', $RepositoryRoot, 'push', '--set-upstream', 'origin', $Branch)
-    $pushEvidence = @($teed.Evidence)
-    if ($teed.ExitCode -ne 0) {
-        return [pscustomobject]@{
-            Status  = 'Refused'
-            Url     = $null
-            Message = 'The push was rejected.'
-            Detail  = ("Every commit this run made is still local on $Branch and nothing was published. " +
-                'Fix what the hook or the remote reported and push again; nothing here retries with a bypass.')
+    if ($alreadyPushed) {
+        Write-Host "→ origin already has $Branch at this commit; nothing to push, so no pre-push hook runs"
+        $pushEvidence = @()
+    }
+    else {
+        Write-Host "→ pushing $Branch"
+        # Copied the way the commit is copied in capture.ps1, and for the same
+        # reason: nobody reviews a pull request by scrolling somebody else's
+        # terminal. Every line is re-emitted as it arrives, so the operator reads
+        # the hook exactly when it speaks. Invoke-WinEnvTeeCommand, not a
+        # `2>&1 | ForEach-Object` pipe, for the same encoding reason the commit
+        # tee gives: git and the pre-push hook's own pwsh.exe both write UTF-8,
+        # and only the evidence copy needs decoding that PowerShell's own pipe
+        # cannot be trusted to get right on a non-UTF-8 host.
+        # The exit code is read from the returned object, not $LASTEXITCODE:
+        # once anything assigns $LASTEXITCODE explicitly, a native command run by
+        # a function called afterwards (Invoke-WinEnvGh, below) stops refreshing
+        # it -- confirmed empirically -- so this function never writes that
+        # variable at all.
+        $teed = Invoke-WinEnvTeeCommand -FilePath 'git' -ArgumentList @(
+            '-C', $RepositoryRoot, 'push', '--set-upstream', 'origin', $Branch)
+        $pushEvidence = @($teed.Evidence)
+        if ($teed.ExitCode -ne 0) {
+            return [pscustomobject]@{
+                Status  = 'Refused'
+                Url     = $null
+                Message = 'The push was rejected.'
+                Detail  = ("Every commit on $Branch that origin lacks is still local and nothing was published. " +
+                    'Fix what the hook or the remote reported and push again; nothing here retries with a bypass.')
+            }
         }
     }
 
@@ -3729,7 +3987,7 @@ function Publish-WinEnvCapture {
         $bodyPath = Join-Path ([IO.Path]::GetTempPath()) `
         ('win-env-pull-request-' + [guid]::NewGuid().ToString('N') + '.md')
         try {
-            $body = New-WinEnvPullRequestBody @BodyParameter -PushEvidence @($pushEvidence)
+            $body = New-WinEnvPullRequestBody @BodyParameter -PushEvidence @($pushEvidence) -NotPushed:$alreadyPushed
             Write-WinEnvAtomicText -Path $bodyPath -Content $body
             $created = Invoke-WinEnvGh -RepositoryRoot $RepositoryRoot -Argument @(
                 'pr', 'create', '--base', $script:WinEnvPublishBase, '--head', $Branch,
