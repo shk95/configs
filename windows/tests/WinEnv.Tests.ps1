@@ -66,6 +66,52 @@ BeforeAll {
     # $TestDrive stand-in for it), never under windows/tests/, or that
     # exclusion stops holding by construction.
     $WindowsHomePathPattern = '(?i)C:\\{1,2}Users\\{1,2}[A-Za-z0-9._-]+'
+
+    # What a function under test prints for its operator is that function's
+    # product, not this suite's. Left alone it lands in the transcript
+    # .githooks/pre-push shows for a push, where a fixture's "-> pushing"
+    # line or a throwaway remote reads as a real publish. Write-Host is
+    # stream 6, so it is captured here and handed back as Host, for the
+    # fixtures whose subject it is to assert.
+    function Invoke-CapturingHost {
+        param([Parameter(Mandatory)][scriptblock] $ScriptBlock)
+
+        $capturedHostLine = [System.Collections.Generic.List[string]]::new()
+        $capturedOutput = @(& $ScriptBlock 6>&1 | ForEach-Object {
+                if ($_ -is [System.Management.Automation.InformationRecord]) {
+                    [void]$capturedHostLine.Add([string]$_.MessageData)
+                }
+                else { $_ }
+            })
+        return [pscustomobject]@{
+            Output = if ($capturedOutput.Count -eq 1) { $capturedOutput[0] } else { $capturedOutput }
+            Host   = $capturedHostLine.ToArray()
+        }
+    }
+
+    # A -WhatIf message is not stream 6 or any other stream: ShouldProcess
+    # writes it to the host's own UI, which no redirection in this process
+    # reaches. A runspace created without a host has no UI to write it to,
+    # so a fixture that proves -WhatIf writes nothing runs the call there.
+    function Invoke-WithoutHost {
+        param(
+            [Parameter(Mandatory)][string] $Command,
+            [Parameter(Mandatory)][hashtable] $Parameter
+        )
+
+        $shell = [powershell]::Create()
+        try {
+            [void]$shell.AddCommand('Import-Module').AddParameter('Name', (Join-Path $repositoryRoot 'src\WinEnv.psm1'))
+            [void]$shell.AddStatement().AddCommand($Command).AddParameters($Parameter)
+            $returned = @($shell.Invoke() | ForEach-Object { if ($_.BaseObject -is [string]) { $_.BaseObject } else { $_ } })
+            if ($shell.Streams.Error.Count) { throw $shell.Streams.Error[0] }
+            if ($returned.Count -eq 1) { return $returned[0] }
+            return $returned
+        }
+        finally {
+            $shell.Dispose()
+        }
+    }
 }
 
 Describe 'win-env manifest' {
@@ -3031,7 +3077,8 @@ Describe 'capture' {
         $plan = Get-WinEnvCapturePlan -Definition $definition -RepositoryRoot $CaptureRoot `
             -Build 22631 -HostPath $CaptureHost
         $plan.Status | Should -Be 'Captured'
-        (Save-WinEnvCapturedPayload -Plan $plan -RepositoryRoot $CaptureRoot -WhatIf) | Should -Be $payloadPath
+        (Invoke-WithoutHost 'Save-WinEnvCapturedPayload' @{ Plan = $plan; RepositoryRoot = $CaptureRoot; WhatIf = $true }) |
+            Should -Be $payloadPath
         (Get-FileHash -LiteralPath $payloadPath -Algorithm SHA256).Hash | Should -Be $before
 
         [void](Save-WinEnvCapturedPayload -Plan $plan -RepositoryRoot $CaptureRoot)
@@ -3556,7 +3603,9 @@ Describe 'capture branch' {
         $fixture = New-BranchFixture
         $before = Get-FixtureBranches -Repo $fixture.Repo
 
-        [void](New-WinEnvCaptureBranch -RepositoryRoot $fixture.Repo -Branch 'feature/windows-capture-font' -WhatIf)
+        [void](Invoke-WithoutHost 'New-WinEnvCaptureBranch' @{
+                RepositoryRoot = $fixture.Repo; Branch = 'feature/windows-capture-font'; WhatIf = $true
+            })
         (Get-FixtureBranches -Repo $fixture.Repo) | Should -Be $before
         (Get-FixtureCurrentBranch -Repo $fixture.Repo) | Should -Be 'dev'
     }
@@ -3679,7 +3728,7 @@ Describe 'capture branch pruning' {
         & git -C $fixture.Repo branch -q feature/windows-old-capture | Out-Null
         $before = Get-FixtureBranches -Repo $fixture.Repo
 
-        [void](Remove-WinEnvMergedLocalBranch -RepositoryRoot $fixture.Repo -WhatIf)
+        [void](Invoke-WithoutHost 'Remove-WinEnvMergedLocalBranch' @{ RepositoryRoot = $fixture.Repo; WhatIf = $true })
         (Get-FixtureBranches -Repo $fixture.Repo) | Should -Be $before
     }
 }
@@ -4031,15 +4080,22 @@ exit 7
             $saved = [Console]::OutputEncoding
             try {
                 [Console]::OutputEncoding = [System.Text.Encoding]::GetEncoding(437)
-                $result = Invoke-WinEnvTeeCommand -FilePath $PwshPath -ArgumentList @('-NoProfile', '-File', $stubPath)
+                $run = Invoke-CapturingHost {
+                    Invoke-WinEnvTeeCommand -FilePath $PwshPath -ArgumentList @('-NoProfile', '-File', $stubPath)
+                }
             }
             finally {
                 [Console]::OutputEncoding = $saved
             }
+            $result = $run.Output
 
             $result.ExitCode | Should -Be 7
             $result.Evidence | Should -Contain '→ ✓ ·'
             $result.Evidence | Should -Contain '→-err'
+            # Every line still reaches the operator as it arrives, the copy
+            # this function exists to keep; this suite captures that copy
+            # rather than printing it into its own transcript.
+            $run.Host | Should -Be $result.Evidence
         }
 
         It 'recovers the same glyphs when the console is already UTF-8, the common case' {
@@ -4063,14 +4119,18 @@ exit 0
             $saved = [Console]::OutputEncoding
             try {
                 [Console]::OutputEncoding = [System.Text.Encoding]::UTF8
-                $result = Invoke-WinEnvTeeCommand -FilePath $PwshPath -ArgumentList @('-NoProfile', '-File', $stubPath)
+                $run = Invoke-CapturingHost {
+                    Invoke-WinEnvTeeCommand -FilePath $PwshPath -ArgumentList @('-NoProfile', '-File', $stubPath)
+                }
             }
             finally {
                 [Console]::OutputEncoding = $saved
             }
+            $result = $run.Output
 
             $result.ExitCode | Should -Be 0
             $result.Evidence | Should -Contain '→ ✓ ·'
+            $run.Host | Should -Be $result.Evidence
         }
 
         It 'reports what a CP949 console loses instead of inventing glyphs' {
@@ -4113,7 +4173,13 @@ exit 0
 
             $saved = [Console]::OutputEncoding
             try {
-                $result = Invoke-WinEnvTeeCommand -FilePath $PwshPath -ArgumentList @('-NoProfile', '-File', $stubPath)
+                # Captured, not printed: this deliberately lossy line is the
+                # fixture's product, and in a pre-push transcript it reads as
+                # the hook's own glyphs gone wrong.
+                $run = Invoke-CapturingHost {
+                    Invoke-WinEnvTeeCommand -FilePath $PwshPath -ArgumentList @('-NoProfile', '-File', $stubPath)
+                }
+                $result = $run.Output
             }
             finally {
                 # A console is shared by every process attached to it, so the
@@ -4125,6 +4191,7 @@ exit 0
 
             $result.ExitCode | Should -Be 0
             @($result.Evidence).Count | Should -Be 1
+            @($run.Host).Count | Should -Be 1
             $line = @($result.Evidence)[0]
             $line | Should -BeLike '*Tests Passed: 1, Failed: 0'
             $line | Should -Not -Match ([regex]::Escape('→'))
@@ -4179,10 +4246,9 @@ exit 0
             $condensed | Should -Contain ('· skipped: publish end to end, the happy path ' +
                 '(set WIN_ENV_E2E=1 to run it; the CI windows job does)')
             $condensed | Should -Contain 'Tests Passed: 154, Failed: 0, Skipped: 10, Inconclusive: 0, NotRun: 0'
-            # The fixture's own push narration is inside the Windows tests
-            # span and matches none of the kept shapes, so it is elided along
-            # with Pester's own scaffolding -- this is the residual the note
-            # above the block exists for, not a promise this function makes.
+            # A test's own push narration, should one reach the transcript,
+            # is inside the Windows tests span and matches none of the kept
+            # shapes, so it is elided along with Pester's own scaffolding.
             $condensed | Should -Not -Contain '→ pushing feature/windows-capture-font'
             $condensed | Should -Not -Contain 'Starting discovery in 1 files.'
             # One elision marker naming a count, not one marker per line.
@@ -4218,7 +4284,7 @@ exit 0
             ConvertTo-WinEnvCondensedPushEvidence -Line $line | Should -Be $line
         }
 
-        It 'condenses the push-evidence block inside the pull-request body and keeps the note above it' {
+        It 'condenses the push-evidence block inside the pull-request body and explains no fixture line away' {
             $line = @(
                 '→ Windows tests',
                 'Discovery found 200 tests in 600ms.',
@@ -4232,8 +4298,11 @@ exit 0
                 -Commit @('feat(windows): capture font settings from the host') `
                 -Command 'windows/tools/capture.ps1 -Publish' -Build '22631' -PushEvidence $line
 
-            $body | Should -Match ([regex]::Escape('Fixture output inside this suite may mention throwaway ' +
-                    '`Temp\…\remote.git` remotes'))
+            # The suite's module-level publish fixtures capture what they
+            # print, so the body carries no disclaimer about fixture lines,
+            # and a fixture line inside the span is elided like any other.
+            $body | Should -Not -Match 'Fixture output inside this suite'
+            $body | Should -Not -Match ([regex]::Escape('remote.git'))
             $body | Should -Match ([regex]::Escape('Tests Passed: 199, Failed: 0, Skipped: 1'))
             $body | Should -Not -Match ([regex]::Escape('Discovery found 200 tests in 600ms.'))
             $body | Should -Match '… \d+ passing .* elided …'
@@ -4385,11 +4454,16 @@ exit 0
             $fixture = New-PublishRepository
             & git -C $fixture.Repo switch -q -c feature/windows-capture-font | Out-Null
 
-            $result = Invoke-WithStubGh -Fixture $fixture -ScriptBlock {
-                Publish-WinEnvCapture -RepositoryRoot $fixture.Repo -Branch 'feature/windows-capture-font' `
-                    -Title 'feat(windows): capture font settings from the host' `
-                    -BodyParameter $BodyParameter -PullRequest $null
+            $run = Invoke-CapturingHost {
+                Invoke-WithStubGh -Fixture $fixture -ScriptBlock {
+                    Publish-WinEnvCapture -RepositoryRoot $fixture.Repo -Branch 'feature/windows-capture-font' `
+                        -Title 'feat(windows): capture font settings from the host' `
+                        -BodyParameter $BodyParameter -PullRequest $null
+                }
             }
+            $result = $run.Output
+            $run.Host | Should -Contain '→ pushing feature/windows-capture-font'
+            $run.Host | Should -Contain '→ opening a pull request against dev'
             $result.Status | Should -Be 'Published'
             $result.Url | Should -Be 'https://github.com/example/repo/pull/1'
 
@@ -4416,11 +4490,15 @@ exit 0
             $fixture = New-PublishRepository
             & git -C $fixture.Repo switch -q -c feature/windows-capture-font | Out-Null
 
-            $result = Invoke-WithStubGh -Fixture $fixture -ScriptBlock {
-                Publish-WinEnvCapture -RepositoryRoot $fixture.Repo -Branch 'feature/windows-capture-font' `
-                    -Title 'feat(windows): capture font settings from the host' `
-                    -BodyParameter $BodyParameter -PullRequest 'https://github.com/example/repo/pull/7'
+            $run = Invoke-CapturingHost {
+                Invoke-WithStubGh -Fixture $fixture -ScriptBlock {
+                    Publish-WinEnvCapture -RepositoryRoot $fixture.Repo -Branch 'feature/windows-capture-font' `
+                        -Title 'feat(windows): capture font settings from the host' `
+                        -BodyParameter $BodyParameter -PullRequest 'https://github.com/example/repo/pull/7'
+                }
             }
+            $result = $run.Output
+            $run.Host | Should -Contain '→ reusing the pull request already open against dev'
             $result.Status | Should -Be 'Published'
             $result.Url | Should -Be 'https://github.com/example/repo/pull/7'
 
@@ -4445,11 +4523,16 @@ exit 0
             if (-not $IsWindows) { & chmod +x $hook }
             & git -C $fixture.Repo config core.hooksPath .githooks | Out-Null
 
-            $result = Invoke-WithStubGh -Fixture $fixture -ScriptBlock {
-                Publish-WinEnvCapture -RepositoryRoot $fixture.Repo -Branch 'feature/windows-capture-font' `
-                    -Title 'feat(windows): capture font settings from the host' `
-                    -BodyParameter $BodyParameter -PullRequest $null
+            $run = Invoke-CapturingHost {
+                Invoke-WithStubGh -Fixture $fixture -ScriptBlock {
+                    Publish-WinEnvCapture -RepositoryRoot $fixture.Repo -Branch 'feature/windows-capture-font' `
+                        -Title 'feat(windows): capture font settings from the host' `
+                        -BodyParameter $BodyParameter -PullRequest $null
+                }
             }
+            $result = $run.Output
+            # What the hook said reached the operator.
+            $run.Host | Should -Contain '- the Windows checks failed'
             $result.Status | Should -Be 'Refused'
             $result.Message | Should -Match 'push was rejected'
             $result.Detail | Should -Match ([regex]::Escape('feature/windows-capture-font'))
@@ -4465,11 +4548,13 @@ exit 0
             $fixture = New-PublishRepository
             & git -C $fixture.Repo switch -q -c feature/windows-capture-font | Out-Null
 
-            $result = Invoke-WithStubGh -Fixture $fixture -Environment @{ STUB_GH_MERGE_STATUS = '1' } -ScriptBlock {
-                Publish-WinEnvCapture -RepositoryRoot $fixture.Repo -Branch 'feature/windows-capture-font' `
-                    -Title 'feat(windows): capture font settings from the host' `
-                    -BodyParameter $BodyParameter -PullRequest $null
-            }
+            $result = (Invoke-CapturingHost {
+                    Invoke-WithStubGh -Fixture $fixture -Environment @{ STUB_GH_MERGE_STATUS = '1' } -ScriptBlock {
+                        Publish-WinEnvCapture -RepositoryRoot $fixture.Repo -Branch 'feature/windows-capture-font' `
+                            -Title 'feat(windows): capture font settings from the host' `
+                            -BodyParameter $BodyParameter -PullRequest $null
+                    }
+                }).Output
             $result.Status | Should -Be 'Refused'
             $result.Message | Should -Match 'Auto-merge could not be armed'
             $result.Detail | Should -Match ([regex]::Escape('https://github.com/example/repo/pull/1'))
@@ -4479,11 +4564,16 @@ exit 0
             $fixture = New-PublishRepository
             & git -C $fixture.Repo switch -q -c feature/windows-capture-font | Out-Null
 
-            $result = Invoke-WithStubGh -Fixture $fixture -Environment @{ STUB_GH_CREATE_STATUS = '1' } -ScriptBlock {
-                Publish-WinEnvCapture -RepositoryRoot $fixture.Repo -Branch 'feature/windows-capture-font' `
-                    -Title 'feat(windows): capture font settings from the host' `
-                    -BodyParameter $BodyParameter -PullRequest $null
+            $run = Invoke-CapturingHost {
+                Invoke-WithStubGh -Fixture $fixture -Environment @{ STUB_GH_CREATE_STATUS = '1' } -ScriptBlock {
+                    Publish-WinEnvCapture -RepositoryRoot $fixture.Repo -Branch 'feature/windows-capture-font' `
+                        -Title 'feat(windows): capture font settings from the host' `
+                        -BodyParameter $BodyParameter -PullRequest $null
+                }
             }
+            $result = $run.Output
+            # gh's own refusal is printed for the operator, not swallowed.
+            $run.Host | Should -Contain 'stub: pr create refused'
             $result.Status | Should -Be 'Refused'
             $result.Message | Should -Match 'could not be opened'
             @(Get-GhLog $fixture | Where-Object { $_ -like 'pr merge *' }).Count | Should -Be 0
@@ -4495,14 +4585,17 @@ exit 0
             $before = @(& git -C $fixture.Remote for-each-ref --format='%(refname)' refs/heads)
 
             $result = Invoke-WithStubGh -Fixture $fixture -ScriptBlock {
-                Publish-WinEnvCapture -RepositoryRoot $fixture.Repo -Branch 'feature/windows-capture-font' `
-                    -Title 'feat(windows): capture font settings from the host' `
-                    -BodyParameter $BodyParameter -PullRequest $null -WhatIf
+                Invoke-WithoutHost 'Publish-WinEnvCapture' @{
+                    RepositoryRoot = $fixture.Repo; Branch = 'feature/windows-capture-font'
+                    Title = 'feat(windows): capture font settings from the host'
+                    BodyParameter = $BodyParameter; PullRequest = $null; WhatIf = $true
+                }
             }
             $result.Status | Should -Be 'Skipped'
             @(& git -C $fixture.Remote for-each-ref --format='%(refname)' refs/heads) | Should -Be $before
             (Get-GhLog $fixture).Count | Should -Be 0
         }
+
     }
 
     Context 'the whole run, from a drifted host file to a pull request' {

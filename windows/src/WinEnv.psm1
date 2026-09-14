@@ -3246,24 +3246,18 @@ function ConvertTo-WinEnvCondensedPushEvidence {
         A capture's push runs .githooks/pre-push, which -- when the Windows
         checks are selected -- runs windows/tools/test.ps1's whole Pester
         suite as one of its steps. Most of that run is scaffolding nobody
-        reviewing a pull request needs: discovery banners, a pass mark per
-        test or container, and (because this suite's own module-level
-        publish fixtures push to throwaway remotes and simulate a rejected
-        push) product output from tests that passed. What a reviewer does
-        need survives regardless of source: the selected-checks header, each
-        check's own header line and final verdict, every skip or unverified
-        marker, the suite's own "Tests Passed: ..." tally, and every line of
-        any test that failed.
+        reviewing a pull request needs: discovery banners and a pass mark per
+        test or container. What a reviewer does need survives regardless of
+        source: the selected-checks header, each check's own header line and
+        final verdict, every skip or unverified marker, the suite's own
+        "Tests Passed: ..." tally, and every line of any test that failed.
 
         Condensing is scoped to the "Windows tests" check specifically --
         entered at its own header line and left at the tally line -- because
         that is the only check whose own output is a Pester transcript.
         Everything outside that span (another check's header and verdict,
         git's own push confirmation) is untouched: it was never part of "the
-        passing Pester transcript" this elides, and this function does not
-        try to tell a real git remote from a fixture's throwaway one by
-        content -- New-WinEnvPullRequestBody prints a note above this block
-        for exactly that residual case.
+        passing Pester transcript" this elides.
 
         A failed test's own lines are kept by finding where Pester prints
         them: every line Pester emits for a failing test, from its "[-]"
@@ -3274,12 +3268,13 @@ function ConvertTo-WinEnvCondensedPushEvidence {
         part of the same test that way.
 
         No "-> " line is auto-kept once inside the span, unlike outside it:
-        the only "-> " header that legitimately appears inside a Pester
-        transcript is capture.ps1's and Publish-WinEnvCapture's own progress
-        narration ("-> pushing ...", "-> opening a pull request against
-        dev", "-> arming auto-merge") printed by this suite's own
-        module-level publish fixtures under test -- exactly the confusing
-        noise this function exists to remove, not preserve.
+        no check's header is printed from inside a Pester transcript, so a
+        "-> " line there is a test's own output rather than the hook's. The
+        suite's module-level publish fixtures capture the narration
+        Publish-WinEnvCapture prints ("-> pushing ...", "-> opening a pull
+        request against dev") instead of letting it reach this transcript;
+        this rule keeps any such line a future test leaks out of the body
+        too.
     #>
     param([AllowEmptyCollection()][string[]] $Line = @())
 
@@ -3610,15 +3605,6 @@ function New-WinEnvPullRequestBody {
 
     [void]$lines.Add('')
     [void]$lines.Add('Local push evidence:')
-    [void]$lines.Add('')
-    # The pre-push hook runs this very suite, whose own module-level publish
-    # fixtures push to throwaway remotes and simulate a rejected push. A
-    # fixture's own line can survive condensing below -- it is not this
-    # function's job to tell it apart from a real push by content -- so a
-    # line naming a throwaway `Temp\…\remote.git` remote here is that
-    # fixture's output, not a real push.
-    [void]$lines.Add('Fixture output inside this suite may mention throwaway `Temp\…\remote.git` ' +
-        'remotes; a line like that surviving condensing below is a fixture, not a real push.')
     [void]$lines.Add('')
     [void]$lines.Add('```text')
     if (@($PushEvidence).Count) {
