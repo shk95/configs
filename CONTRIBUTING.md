@@ -647,10 +647,18 @@ tool/version-control/hook-evidence
 ```
 
 `tool/version-control/audit --history` runs on every push and in the
-repository-wide CI scan job, and judges committed history alone. The full
-form, which also judges this clone — local branch names, tags, the hooks
-setting — is a read-only look by hand, because a clone's scratch branch is
-not a property of the change being pushed.
+repository-wide CI scan job, and judges committed history alone. It reads
+`dev` and `master` as `origin/dev` and `origin/master` when those refs
+exist, and the local branches only when they do not, so a local `dev` or
+`master` that lags or leads its remote neither blocks a push nor lets one
+through unchecked. A clone that has not fetched is judged against the remote
+as it last saw it. Every local tag is still judged, including one the push
+does not carry: a stray local `*-v*` tag still fails the push until it is
+deleted. The full form, which also judges this clone — local branch names,
+the hooks setting — and reads the local branches first, is a read-only look
+by hand, because a clone's scratch branch is not a property of the change
+being pushed. `tool/version-control/plan-release` checks reachability from
+the local `master`, because it plans a tag this clone creates.
 
 ### Desired-state hygiene
 
