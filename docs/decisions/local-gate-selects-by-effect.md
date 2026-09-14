@@ -56,3 +56,10 @@ the remote. The costs accepted: a clone that has not fetched is judged
 against old remote history, and a subject on an unpublished local `dev`
 commit is left to the commit-message hook. `tool/version-control/plan-release`
 stays on the local `master`, because it plans a tag the clone creates.
+
+2026-09-14: the second cost above is narrowed (#243). Pre-push now names the
+tips it pushes to `audit --history`, which judges their subjects with
+`dev`'s, so a subject on an unpublished local `dev` commit is read when that
+`dev` is pushed; a commit no push carries is still left to the
+commit-message hook. `invariants/repository/conventional-subject.md` records
+why the pushed tips are named rather than `HEAD`.
