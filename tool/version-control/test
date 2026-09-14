@@ -147,8 +147,9 @@ grep -q 'needs: \[classify, repository, unix, windows, secrets, promotion\]' \
   "$root/.github/workflows/ci.yml"
 grep -q 'run: tool/version-control/required-checks' \
   "$root/.github/workflows/ci.yml"
-# INV repository/local-gate-selects-by-effect: pre-push audits the pushed
-# history, never the clone's branches and tags, which no push can change.
+# INV repository/local-gate-selects-by-effect: pre-push runs the history form,
+# never the clone-local half (branch names, the hooks setting), which no push
+# can change.
 grep -q 'evidence_run audit tool/version-control/audit --history' "$root/.githooks/pre-push"
 grep -q 'run: tool/version-control/audit --history' "$root/.github/workflows/ci.yml"
 # INV repository/local-gate-selects-by-effect: the merge gate runs the whole
@@ -695,6 +696,101 @@ if ! printf '%s\n' "$audit_ci_full" | grep -q 'core.hooksPath'; then
   echo "the full audit failed on a CI checkout for a reason other than hooks" >&2
   exit 1
 fi
+# INV repository/release-tag-contract: an annotated, evidenced release tag
+# whose target master does not contain fails the merge gate's form.
+audit_ci_commit=$(git -C "$audit_ci" -c user.name=Fixture -c user.email=fixture@example.invalid \
+  commit-tree -p HEAD -m 'feat(repository): leave master behind' 'HEAD^{tree}')
+git -C "$audit_ci" -c user.name=Fixture -c user.email=fixture@example.invalid \
+  tag -a windows-v2030.04.05 -m 'Domain: windows' -m 'Evaluation: passed; fixture' \
+  -m 'Build: passed; fixture' -m 'Native runtime: passed; fixture' "$audit_ci_commit"
+audit_status=0
+audit_ci_tag=$(cd "$audit_ci" && REQUIRE_NATIVE=1 "$audit" --history 2>&1) || audit_status=$?
+if [ "$audit_status" -eq 0 ] ||
+  ! printf '%s\n' "$audit_ci_tag" | grep -q 'not reachable from master: windows-v2030.04.05$'; then
+  printf '%s\n' "$audit_ci_tag" >&2
+  echo "audit --history accepted a release tag master does not contain" >&2
+  exit 1
+fi
+
+# INV repository/local-gate-selects-by-effect
+# INV repository/release-tag-contract
+# The history form judges dev and master as origin/ holds them, both
+# together, and the full form stays local-first. A remote gains a promotion
+# and a release tag on it; a clone fetches both without moving its local
+# branches, the way `git fetch` in windows/tools/capture.ps1 does.
+audit_remote="$test_root/audit-advanced.git"
+git clone -q --bare "$audit_bare" "$audit_remote"
+audit_stale="$test_root/audit-stale"
+git clone -q "$audit_remote" "$audit_stale"
+git -C "$audit_stale" branch -q dev origin/dev
+audit_stale_dev=$(git -C "$audit_stale" rev-parse dev)
+git -C "$audit_stale" switch -q -c feature/repository-audit-stale
+audit_publisher="$test_root/audit-publisher"
+git clone -q "$audit_remote" "$audit_publisher"
+git -C "$audit_publisher" config user.name Fixture
+git -C "$audit_publisher" config user.email fixture@example.invalid
+git -C "$audit_publisher" config core.hooksPath .githooks
+git -C "$audit_publisher" switch -q -c dev origin/dev
+printf 'advance\n' >>"$audit_publisher/file"
+git -C "$audit_publisher" commit -q -am 'feat(repository): advance dev'
+git -C "$audit_publisher" switch -q master
+git -C "$audit_publisher" merge -q --no-ff dev -m "Merge branch 'dev'"
+git -C "$audit_publisher" tag -a common-v2030.03.04 -m 'Domain: common' \
+  -m 'Evaluation: passed; fixture' -m 'Build: passed; fixture' \
+  -m 'Native runtime: passed; fixture'
+git -C "$audit_publisher" push -q origin master dev common-v2030.03.04
+git -C "$audit_stale" fetch -q origin
+
+# A local master that lags origin/master, which contains the release tag.
+git -C "$audit_stale" branch -q -D dev
+if ! audit_stale_output=$(cd "$audit_stale" && REQUIRE_NATIVE=1 "$audit" --history 2>&1) ||
+  ! printf '%s\n' "$audit_stale_output" | grep -q 'master resolves to origin/master$'; then
+  printf '%s\n' "$audit_stale_output" >&2
+  echo "audit --history judged a release tag against a stale local master" >&2
+  exit 1
+fi
+
+# No local master, and a local dev that lags origin/dev: resolving only
+# master to the remote would fail the dev/master traceability checks here.
+git -C "$audit_stale" branch -q dev "$audit_stale_dev"
+git -C "$audit_stale" branch -q -D master
+if ! audit_stale_output=$(cd "$audit_stale" && REQUIRE_NATIVE=1 "$audit" --history 2>&1) ||
+  ! printf '%s\n' "$audit_stale_output" | grep -q 'dev resolves to origin/dev$'; then
+  printf '%s\n' "$audit_stale_output" >&2
+  echo "audit --history compared origin/master with a stale local dev" >&2
+  exit 1
+fi
+
+# A local master ahead of origin/master that contains a release tag the
+# remote does not: the history form fails it, the full form does not.
+audit_ahead="$test_root/audit-ahead"
+git clone -q "$audit_remote" "$audit_ahead"
+git -C "$audit_ahead" config user.name Fixture
+git -C "$audit_ahead" config user.email fixture@example.invalid
+git -C "$audit_ahead" config core.hooksPath .githooks
+git -C "$audit_ahead" switch -q -c dev origin/dev
+printf 'unpublished\n' >>"$audit_ahead/file"
+git -C "$audit_ahead" commit -q -am 'feat(repository): prepare an unpublished release'
+git -C "$audit_ahead" switch -q master
+git -C "$audit_ahead" merge -q --no-ff dev -m "Merge branch 'dev'"
+git -C "$audit_ahead" tag -a windows-v2030.05.06 -m 'Domain: windows' \
+  -m 'Evaluation: passed; fixture' -m 'Build: passed; fixture' \
+  -m 'Native runtime: passed; fixture'
+audit_status=0
+audit_ahead_output=$(cd "$audit_ahead" && "$audit" --history 2>&1) || audit_status=$?
+if [ "$audit_status" -eq 0 ] ||
+  ! printf '%s\n' "$audit_ahead_output" | grep -q 'not reachable from master: windows-v2030.05.06$' ||
+  ! printf '%s\n' "$audit_ahead_output" | grep -q '^summary: 0 warning(s), 1 failure(s)$'; then
+  printf '%s\n' "$audit_ahead_output" >&2
+  echo "audit --history judged a release tag against a local master ahead of origin/master" >&2
+  exit 1
+fi
+if ! audit_ahead_full=$(cd "$audit_ahead" && "$audit" 2>&1); then
+  printf '%s\n' "$audit_ahead_full" >&2
+  echo "the full audit stopped reading the local master first" >&2
+  exit 1
+fi
+
 audit_status=0
 "$audit" --bogus >/dev/null 2>&1 || audit_status=$?
 if [ "$audit_status" -ne 2 ]; then
