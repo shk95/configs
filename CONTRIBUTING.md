@@ -153,33 +153,30 @@ describes.
 `unixlike/modules/zellij/module.nix` carries upstream zellij-org/zellij#5500
 for Darwin until nixpkgs ships a zellij whose source already has the fix;
 `provisional/unixlike/zellij-combining-marks.md` registers the measure and
-names the condition that ends it. The overlay is pinned to one zellij version
-and refuses to evaluate against any other, so a `unixlike/flake.lock` refresh
-that moves zellij takes two commits, in this order:
+names the condition that ends it. The overlay names no zellij version: it
+applies the range with no fuzz to whatever zellij the lock brings in, so a
+`unixlike/flake.lock` refresh that moves zellij is the ordinary one commit,
+`tool/version-control/commit flake refresh`.
 
-1. `just zellij-patch-check v<ver>` for the version the refresh will bring in.
-   On a conflict, rebase the upstream commit in a fork and repoint the
-   overlay's `url` and `hash` before going on.
-2. Commit `chore(unixlike-deps): refresh flake.lock` with
-   `unixlike/flake.lock` alone —
-   `tool/version-control/commit flake refresh`, with no `--publish`. Helper
-   flags precede its command, so `--publish` would be
-   `tool/version-control/commit --publish flake refresh`; it is not used here
-   because it pushes as soon as this commit is made.
-3. Commit `fix(unixlike): re-pin the zellij overlay to <ver>` with `appliesTo`,
-   the `fetchpatch` hash if the range was rebased, and the new `cargoDeps`
-   hash. The pin is the pull request's commit range `base...head` in the
-   overlay's compare URL; a re-pin to a branch that gained commits moves the
-   head, and a rebase moves both.
-4. `just darwin-build` on the Mac, then the reproduction in
-   `docs/decisions/zellij-patched-on-darwin-until-upstream.md`.
-5. Push only after step 3.
+The flake checks `zellij-combining-marks` and
+`zellij-combining-marks-refuses-a-patched-tree`, declared beside the overlay,
+are what judge that refresh. `unixlike/tool/checks/test` builds them on every
+system, so the refresh's pre-push and the merge gate refuse a lock whose
+zellij the range no longer applies to; `just zellij-patch-check` builds the
+first alone, and `just zellij-patch-check v<ver>` applies the range to an
+upstream tag before a refresh brings it in. When they refuse:
 
-Between steps 2 and 3 the Darwin configuration refuses to evaluate, by design:
-that refusal is the overlay's report that its patch no longer matches the
-pinned zellij. Nothing selects evaluation for a lock-only change, so the
-refusal blocks no commit, but it does block a push, which is why step 5 waits
-for the re-pin.
+1. Rebase the range in a fork and repoint the overlay's `url` and `hash` in a
+   `fix(unixlike):` commit made before the refresh. The pin is the pull
+   request's commit range `base...head` in the overlay's compare URL; a
+   re-pin to a branch that gained commits moves the head, and a rebase moves
+   both.
+2. Refresh the lock again after it.
+
+After a refresh that moves zellij, `just darwin-build` on the Mac and the
+reproduction in `docs/decisions/zellij-patched-on-darwin-until-upstream.md`
+are the build and runtime evidence; the checks prove only that the range
+applies.
 
 `.github/workflows/zellij-upstream-5500.yml` watches the pull request and
 reports a bump or a merge as an issue. GitHub runs a `schedule` only from the

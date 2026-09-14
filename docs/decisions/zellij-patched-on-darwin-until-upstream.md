@@ -79,7 +79,7 @@ the readback paths (§ Evidence). The pin is now the branch's commit range,
 `CHANGELOG.md` excluded: the later commits build on the first one's cells,
 so the set is one unit, and the release notes are the one file in it that
 does not apply to v0.45.1. `just zellij-patch-check` and the watcher read
-the head of that range as the pin. `modules/zellij.nix`
+the head of that range as the pin. `unixlike/modules/zellij/module.nix`
 carries that range as an overlay contributed to `nixpkgsOverlays`
 (`docs/decisions/nixpkgs-overlays-declared-once.md`), and the measure is
 registered as temporary in `provisional/unixlike/zellij-combining-marks.md`,
@@ -105,49 +105,55 @@ derivation, so nothing is fetched during evaluation and Linux CI can still
 evaluate the Darwin configuration.
 
 The patch adds the crate `unicode-properties` to `Cargo.lock`, so the vendored
-dependency set changes with it. Pinned nixpkgs' `buildRustPackage` computes
-`cargoDeps` at call time from `args.cargoHash`, which `overrideAttrs` cannot
-reach; the overlay therefore overrides `cargoDeps` itself with
-`rustPlatform.fetchCargoVendor`, which takes `src` and `patches` and
-reproduces the same derivation name. The `zellij` wrapper takes
-`zellij-unwrapped` as a function argument, so overriding the unwrapped package
-is enough for the wrapper the home installs. Both hashes were discovered on
-x86_64-linux and hold for aarch64-darwin because the unpatched `src` and
-`cargoDeps` fixed-output hashes are identical on the two systems, which is the
-direction that matters: the overlay only ever builds on Darwin.
+dependency set changes with it, and by exactly that one crate. Pinned nixpkgs'
+`buildRustPackage` computes `cargoDeps` at call time from `args.cargoHash`,
+which `overrideAttrs` cannot reach, so the overlay overrides `cargoDeps`
+itself. It does so without a hash of its own: the vendor directory is
+nixpkgs' `cargoDeps` for the lock's zellij, copied, with the patch's
+`Cargo.lock` hunk applied and that one crate added — fetched by the checksum
+the hunk carries, in the shape `fetch-cargo-vendor-util.py` writes.
+`cargoSetupHook` accepts any directory and compares its `Cargo.lock` with the
+patched source's, so a vendor set that does not match the patch fails before a
+line is compiled. If upstream ever carries the crate itself, the hunk fails
+in the vendor derivation and in the patch phase alike. The `zellij` wrapper
+takes `zellij-unwrapped` as a function argument, so overriding the unwrapped
+package is enough for the wrapper the home installs.
 
-The overlay pins `appliesTo` to the zellij version the patch was verified
-against and `throw`s on any other version rather than warning or passing the
-package through. A warning is the wrong shape here: an unpatched Darwin zellij
-is indistinguishable from a patched one until someone types Korean into it, so
-a signal that arrives at build time and is easy to scroll past is no signal.
-Refusing to evaluate is the only report that arrives before the defect does,
-and the cost of the refusal is bounded — it is one line to move, and the
-procedure below says when.
+The patch applies with `-F0`, so a hunk either applies where the range wrote
+it or the patch phase fails. That failure is the guard: an unpatched Darwin
+zellij is indistinguishable from a patched one until someone types Korean into
+it, and a build that stops is a signal nobody scrolls past. Stdenv's default
+fuzz of 2 is not enough for it; on a tree that already carried the range,
+`patch` reported the hunks as previously applied yet re-applied one at fuzz 1.
+
+Because a Linux host only evaluates the Darwin configuration, the patch phase
+alone would first fail on the Mac. The same builder therefore yields two flake
+checks, on every system, which `unixlike/tool/checks/test` builds through
+`nix flake check` for pre-push and the merge gate alike: `zellij-combining-marks`
+runs nixpkgs' source and patches with the range appended through stdenv's patch
+phase and `cargoSetupHook`'s `Cargo.lock` comparison, and
+`zellij-combining-marks-refuses-a-patched-tree` requires the same derivation to
+refuse a second copy of the range. Both fetch only fixed-output sources,
+compile nothing, and use no import-from-derivation, so the Darwin configuration
+still evaluates on Linux with it disallowed.
+
+What this gives up, against the `appliesTo` `throw` it replaces (§ 2026-09-14
+below): a lock refresh whose patch no longer applies is no longer refused at
+evaluation on every host, only by the checks and the Mac's build. What it keeps:
+no unpatched zellij reaches the Mac, and no refresh that breaks the patch
+reaches `dev`, since the checks run wherever `unixlike:test` is selected.
 
 ## Bumping the pin
 
-nixpkgs `nixos-unstable` already ships zellij 0.45.1 while `flake.lock` pins
-0.45.0, so the first bump is expected at the next lock refresh; the watcher
-`.github/workflows/zellij-upstream-5500.yml` (#176) reports it.
-`INV repository/flake-lock-isolated` makes a lock refresh a commit of its own,
-so the bump is two commits and their order is fixed:
-
-1. `just zellij-patch-check v<ver>`. On a conflict, rebase the commit in a fork
-   and repoint the overlay's `url` and `hash`.
-2. Commit `chore(unixlike-deps): refresh flake.lock` with `flake.lock` alone
-   (`tool/version-control/commit flake refresh`, without `--publish`). The
-   Darwin configuration refuses to evaluate at this commit by design;
-   `pre-commit` selects no evaluation for a lock-only change, so the refusal
-   blocks nothing.
-3. Commit `fix(unixlike): re-pin the zellij overlay to <ver>` with `appliesTo`,
-   the `fetchpatch` hash if the commit was rebased, and the new `cargoDeps`
-   hash.
-4. `just darwin-build`, then the reproduction above against the built binary.
-5. Push only after step 3; `pre-push` and CI evaluate the branch head. The
-   helper's flags precede its command (`tool/version-control/commit --publish
-   flake refresh`), and `--publish` would push straight after step 2, which is
-   why it is not used there.
+A `unixlike/flake.lock` refresh that moves zellij is one commit,
+`chore(unixlike-deps): refresh flake.lock` alone, as
+`INV repository/flake-lock-isolated` already requires. Its pre-push runs the
+flake checks against the new lock. When they fail, the range no longer applies:
+rebase it in a fork, repoint the overlay's `url` and `hash` in a
+`fix(unixlike):` commit on the lock's parent, and refresh again after it.
+After any refresh that moves zellij, `just darwin-build` on the Mac and the
+reproduction above against the built binary are the build and runtime
+evidence; the checks are neither.
 
 ## Retiring the overlay
 
@@ -178,16 +184,21 @@ mixing hazards decide it:
   compiles is caught only by the reproduction above on the Mac, which is why
   CONTRIBUTING § zellij overlay makes that reproduction part of every bump.
 
-The first two are build failures rather than silent breakage, which is why the
-`appliesTo` `throw` is the guard that matters: it stops the evaluation before
-either of them costs a compile.
+The first two are build failures rather than silent breakage, and since
+2026-09-14 the flake checks under § The measure meet both before either costs
+a compile: against a source that already carries the fix, the range does not
+apply. That is also why the refresh commit cannot be pushed alone: its
+pre-push runs those checks and they refuse it, so it is pushed together with
+the retirement commit that deletes them.
 
 ## Rejected alternatives
 
 - `rustPlatform.importCargoLock` with a vendored `Cargo.lock`. It works, but it
   puts a second copy of zellij's lock file in this repository, to be kept in
-  step with both nixpkgs and the PR by hand; `fetchCargoVendor` derives the
-  same set from the patched source and needs one hash instead.
+  step with both nixpkgs and the PR by hand. Neither the `fetchCargoVendor`
+  hash chosen on 2026-09-05 nor the checksum carried since 2026-09-14 has
+  that cost: the checksum is the patch's own `Cargo.lock` line, and the rest
+  of the set is nixpkgs'.
 - A shell-level `iconv` or NFC-normalising pipe around zellij. It would have to
   sit between the pane's program and zellij for every pane and every program,
   it normalises output that was correct as well as output that was not, and it
@@ -268,3 +279,17 @@ Activated as generation 36 at 19:37 on the maintainer's request; in a session
 created after the switch, served by the installed binary, both readings
 answered the same bytes again, and `just karabiner-check` still exited 0
 with the Karabiner file untouched.
+
+2026-09-14, #242. The guard mechanism changed; the decision did not. A lock
+refresh on the Mac moved nixpkgs to zellij 0.45.1, and the `appliesTo`
+`throw` refused the Darwin evaluation, as designed, although the range
+applied to 0.45.1. What tied the overlay to one version was the
+`fetchCargoVendor` hash over the patched source, which covers that version's
+whole vendored set. The overlay now builds the vendor directory from nixpkgs'
+own set plus the one crate the patch adds, applies the range with `-F0`, and
+drops `appliesTo`; the flake checks under § The measure take over the refusal,
+and § Bumping the pin becomes one commit. A `patch --dry-run` cannot stand in
+for them: the range touches `grid.rs` three times and `terminal_character.rs`
+twice, and a dry run never applies the earlier sections the later ones rest
+on, so it reports failures a real apply does not. The checks and
+`just zellij-patch-check` therefore apply for real, to a scratch tree.
