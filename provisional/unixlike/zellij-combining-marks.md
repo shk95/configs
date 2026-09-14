@@ -16,8 +16,9 @@ the Mac and one `fetchpatch` hash to keep current. The one crate the patch adds
 is fetched by the checksum the patch's own `Cargo.lock` hunk carries, and the
 rest of the vendored set is nixpkgs' own for the lock's zellij, so a
 `flake.lock` refresh that moves zellij needs no second commit. What it needs
-instead is the flake checks `zellij-combining-marks` and
-`zellij-combining-marks-refuses-a-patched-tree` passing, which
+instead is the flake checks `zellij-combining-marks`,
+`zellij-combining-marks-refuses-a-patched-tree` and
+`zellij-combining-marks-refuses-a-stale-vendor` passing, which
 `unixlike/tool/checks/test` builds on every system; when the first fails, the
 range is rebased in a fork before the refresh can merge. The Linux homes are
 unaffected: the overlay yields `{}` there, and the checks build sources, not a
@@ -25,7 +26,7 @@ Linux zellij.
 
 Every disposable line carries `PROV unixlike/zellij-combining-marks`. The set
 is the overlay block in `unixlike/modules/zellij/module.nix` — the shared
-builder, the overlay and the two flake checks — the watcher
+builder, the overlay and the three flake checks — the watcher
 `.github/workflows/zellij-upstream-5500.yml`, the `zellij-patch-check` recipe
 in the `Justfile`, the "zellij overlay" subsection in `CONTRIBUTING.md`, the
 open condition in `docs/status.md`, and this entry. `README.md` lists the
