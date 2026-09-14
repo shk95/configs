@@ -123,8 +123,11 @@ fi
 # non-conventional subject or a lock refresh mixed into a source commit is a
 # property of the push, not of a scope. The merge-gate form, which reads
 # committed history alone: the full form also judges the clone — every local
-# branch name, every tag, the hooks setting — which no change can alter and
-# which blocked pushes over a scratch branch (INV repository/local-gate-selects-by-effect).
+# branch name, the hooks setting — which no change can alter and which blocked
+# pushes over a scratch branch. The history form reads dev and master from
+# origin/ when those refs exist, so a local branch that lags its remote does
+# not block the push either; it still judges every local tag
+# (INV repository/local-gate-selects-by-effect).
 evidence_run audit tool/version-control/audit --history || exit 1
 
 evidence_summary
