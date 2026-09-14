@@ -4,8 +4,10 @@
 #
 # usage: tool/version-control/audit [--history]
 #
-# `--history` is the merge-gate form, which audits committed history alone,
-# because a runner has no clone-local configuration to audit.
+# `--history` is the merge-gate and pre-push form, which audits committed
+# history alone, because a runner has no clone-local configuration to audit.
+# It judges dev and master as origin/ holds them when a fetch left those refs
+# (see ref_of below); every local tag is still judged.
 #
 # INV repository/flake-lock-isolated, INV repository/release-tag-contract
 # INV repository/hooks-are-the-tracked-ones
@@ -103,12 +105,24 @@ if [ "$mode" = full ]; then
   fi
 fi
 
-# The integration branches as this clone can see them: a local branch when it
-# exists, else the remote-tracking ref a fetch left behind. A clone with
-# neither cannot answer the history questions below and says so as
+# The integration branches the checks below judge. The full form reads a local
+# branch when it exists, else the remote-tracking ref a fetch left behind. The
+# history form reads origin/<name> first, for dev and master together: a local
+# branch is clone state no push carries, and one that lags or leads its remote
+# would fail a push, or pass it unchecked, over history it does not change.
+# Resolving only one of the two to the remote would compare a fresh ref with a
+# stale one and fail the traceability checks. The server keeps origin/dev and
+# origin/master consistent, so the history form needs no rule for local and
+# remote diverging. What it accepts: a clone that has not fetched judges the
+# remote as it last saw it, and a subject on an unpublished local dev commit
+# is left to .githooks/commit-msg. tool/version-control/plan-release stays on
+# the local master, because it plans a tag this clone is about to create. A
+# clone with neither ref cannot answer the history questions and says so as
 # unverified, which CI turns into a failure.
 ref_of() {
-  if git show-ref --verify --quiet "refs/heads/$1"; then
+  if [ "$mode" = history ] && git show-ref --verify --quiet "refs/remotes/origin/$1"; then
+    printf 'origin/%s\n' "$1"
+  elif git show-ref --verify --quiet "refs/heads/$1"; then
     printf '%s\n' "$1"
   elif git show-ref --verify --quiet "refs/remotes/origin/$1"; then
     printf 'origin/%s\n' "$1"
