@@ -215,8 +215,41 @@ _: let
       '';
       passthru = {};
     });
+
+    # PROV unixlike/zellij-combining-marks
+    # The same derivation over nixpkgs' own vendor set, which has neither the
+    # range's `Cargo.lock` hunk nor its crate: every patch applies, and
+    # `cargoSetupHook`'s post-patch comparison must refuse the vendor set.
+    # Without it, `applies` would still pass if the hook were dropped from it
+    # or its `cargoDeps` stopped carrying the hunk. Reaching the last `applying
+    # patch` line and the hook's own `Cargo.lock is not the same in` line show
+    # the refusal came from that comparison and not from a patch.
+    refusesStaleVendor = applies.overrideAttrs (old: {
+      name = "zellij-combining-marks-refuses-a-stale-vendor-${upstream.version}";
+      inherit (upstream) cargoDeps;
+      patchPhase = ''
+        set +e
+        (set -e; patchPhase) >"$TMPDIR/patch.log" 2>&1
+        status=$?
+        set -e
+        reached=$(grep -c '^applying patch ' "$TMPDIR/patch.log" || true)
+        if [ "$status" -eq 0 ]; then
+          cat "$TMPDIR/patch.log"
+          echo "the patch check accepted a vendor set without the range's Cargo.lock hunk" >&2
+          exit 1
+        fi
+        if [ "$reached" -ne ${toString (lib.length old.patches)} ] \
+          || ! grep -q '^Cargo.lock is not the same in ' "$TMPDIR/patch.log"; then
+          cat "$TMPDIR/patch.log"
+          echo "the check failed, but not in cargoSetupHook's Cargo.lock comparison" >&2
+          exit 1
+        fi
+        grep '^Cargo.lock is not the same in ' "$TMPDIR/patch.log"
+      '';
+      passthru = {};
+    });
   in {
-    inherit package applies refuses;
+    inherit package applies refuses refusesStaleVendor;
   };
 in {
   modules.homeManager.shared = {pkgs, ...}: {
@@ -242,6 +275,7 @@ in {
     checks = {
       zellij-combining-marks = carried.applies;
       zellij-combining-marks-refuses-a-patched-tree = carried.refuses;
+      zellij-combining-marks-refuses-a-stale-vendor = carried.refusesStaleVendor;
     };
   };
 }

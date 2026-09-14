@@ -2,10 +2,15 @@
 
 # Audit committed history and clone-local version-control policy. Read-only.
 #
-# usage: tool/version-control/audit [--history]
+# usage: tool/version-control/audit [--history [<revision>...]]
 #
-# `--history` is the merge-gate form, which audits committed history alone,
-# because a runner has no clone-local configuration to audit.
+# `--history` is the merge-gate and pre-push form, which audits committed
+# history alone, because a runner has no clone-local configuration to audit.
+# It judges dev and master as origin/ holds them when a fetch left those refs
+# (see ref_of below); every local tag is still judged. Each <revision> is a
+# commit the caller is about to publish, whose non-merge subjects are judged
+# with dev's: the merge gate names HEAD, the commit under test, and
+# .githooks/pre-push names the tips it pushes.
 #
 # INV repository/flake-lock-isolated, INV repository/release-tag-contract
 # INV repository/hooks-are-the-tracked-ones
@@ -20,15 +25,19 @@ set -eu
 # only answerable where a clone was configured by a person. A CI checkout is
 # a detached, hook-less, branch-less shape by construction, so the merge gate
 # asks for history alone rather than for findings it would have to ignore.
+usage() {
+  echo "usage: tool/version-control/audit [--history [<revision>...]]" >&2
+  exit 2
+}
 mode=full
 if [ "$#" -gt 0 ]; then
-  if [ "$#" -eq 1 ] && [ "$1" = --history ]; then
-    mode=history
-  else
-    echo "usage: tool/version-control/audit [--history]" >&2
-    exit 2
-  fi
+  [ "$1" = --history ] || usage
+  mode=history
+  shift
 fi
+for revision in "$@"; do
+  case "$revision" in -*) usage ;; esac
+done
 
 # Guards this script's sed/grep/awk calls from Git for Windows' MSYS argument
 # conversion (#79); see tool/version-control/hygiene. Inert elsewhere.
@@ -103,12 +112,24 @@ if [ "$mode" = full ]; then
   fi
 fi
 
-# The integration branches as this clone can see them: a local branch when it
-# exists, else the remote-tracking ref a fetch left behind. A clone with
-# neither cannot answer the history questions below and says so as
+# The integration branches the checks below judge. The full form reads a local
+# branch when it exists, else the remote-tracking ref a fetch left behind. The
+# history form reads origin/<name> first, for dev and master together: a local
+# branch is clone state no push carries, and one that lags or leads its remote
+# would fail a push, or pass it unchecked, over history it does not change.
+# Resolving only one of the two to the remote would compare a fresh ref with a
+# stale one and fail the traceability checks. The server keeps origin/dev and
+# origin/master consistent, so the history form needs no rule for local and
+# remote diverging. What it accepts: a clone that has not fetched judges the
+# remote as it last saw it, and a subject on an unpublished local dev commit
+# is left to .githooks/commit-msg. tool/version-control/plan-release stays on
+# the local master, because it plans a tag this clone is about to create. A
+# clone with neither ref cannot answer the history questions and says so as
 # unverified, which CI turns into a failure.
 ref_of() {
-  if git show-ref --verify --quiet "refs/heads/$1"; then
+  if [ "$mode" = history ] && git show-ref --verify --quiet "refs/remotes/origin/$1"; then
+    printf 'origin/%s\n' "$1"
+  elif git show-ref --verify --quiet "refs/heads/$1"; then
     printf '%s\n' "$1"
   elif git show-ref --verify --quiet "refs/remotes/origin/$1"; then
     printf 'origin/%s\n' "$1"
@@ -148,8 +169,23 @@ commit_msg_hook="$root/.githooks/commit-msg"
 commits=$(mktemp)
 subject_file=$(mktemp)
 trap 'rm -f "$commits" "$subject_file"' EXIT
-if [ -n "$dev_ref" ]; then
-  git log "$dev_ref" --no-merges --format='%H%x09%s' >"$commits"
+# The revisions a caller names are read with dev. git log walks the union of
+# its arguments, so history a revision shares with dev is read once, and a
+# promotion's merge, whose non-merge commits are already on dev, adds nothing.
+# Each is resolved to a commit id, which holds no separator, so the list
+# splits safely where it is expanded below.
+subject_tips=
+subject_scope=dev
+for revision in "$@"; do
+  if resolved_revision=$(git rev-parse --verify --quiet "$revision^{commit}"); then
+    subject_tips="$subject_tips $resolved_revision"
+    subject_scope="$subject_scope, $revision"
+  else
+    fail "revision to judge does not name a commit: $revision"
+  fi
+done
+if [ -n "$dev_ref$subject_tips" ]; then
+  git log $dev_ref $subject_tips --no-merges --format='%H%x09%s' >"$commits"
   tab=$(printf '\t')
   commit_failures=$failures
   while IFS="$tab" read -r sha subject; do
@@ -161,7 +197,7 @@ if [ -n "$dev_ref" ]; then
     fi
   done <"$commits"
   if [ "$failures" -eq "$commit_failures" ]; then
-    ok "non-merge commit subjects on dev follow policy"
+    ok "non-merge commit subjects on $subject_scope follow policy"
   fi
 fi
 

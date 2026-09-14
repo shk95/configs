@@ -147,10 +147,13 @@ grep -q 'needs: \[classify, repository, unix, windows, secrets, promotion\]' \
   "$root/.github/workflows/ci.yml"
 grep -q 'run: tool/version-control/required-checks' \
   "$root/.github/workflows/ci.yml"
-# INV repository/local-gate-selects-by-effect: pre-push audits the pushed
-# history, never the clone's branches and tags, which no push can change.
-grep -q 'evidence_run audit tool/version-control/audit --history' "$root/.githooks/pre-push"
-grep -q 'run: tool/version-control/audit --history' "$root/.github/workflows/ci.yml"
+# INV repository/local-gate-selects-by-effect: pre-push runs the history form,
+# never the clone-local half (branch names, the hooks setting), which no push
+# can change.
+# INV repository/conventional-subject: each gate names what it publishes, the
+# pushed tips or the commit under test, so their own subjects are judged.
+grep -q 'evidence_run audit tool/version-control/audit --history \$pushed_tips || exit 1$' "$root/.githooks/pre-push"
+grep -q 'run: tool/version-control/audit --history HEAD$' "$root/.github/workflows/ci.yml"
 # INV repository/local-gate-selects-by-effect: the merge gate runs the whole
 # suite and never consults the local gate's selector.
 grep -q 'run: tool/version-control/test$' "$root/.github/workflows/ci.yml"
@@ -695,6 +698,150 @@ if ! printf '%s\n' "$audit_ci_full" | grep -q 'core.hooksPath'; then
   echo "the full audit failed on a CI checkout for a reason other than hooks" >&2
   exit 1
 fi
+# INV repository/release-tag-contract: an annotated, evidenced release tag
+# whose target master does not contain fails the merge gate's form.
+audit_ci_commit=$(git -C "$audit_ci" -c user.name=Fixture -c user.email=fixture@example.invalid \
+  commit-tree -p HEAD -m 'feat(repository): leave master behind' 'HEAD^{tree}')
+git -C "$audit_ci" -c user.name=Fixture -c user.email=fixture@example.invalid \
+  tag -a windows-v2030.04.05 -m 'Domain: windows' -m 'Evaluation: passed; fixture' \
+  -m 'Build: passed; fixture' -m 'Native runtime: passed; fixture' "$audit_ci_commit"
+audit_status=0
+audit_ci_tag=$(cd "$audit_ci" && REQUIRE_NATIVE=1 "$audit" --history 2>&1) || audit_status=$?
+if [ "$audit_status" -eq 0 ] ||
+  ! printf '%s\n' "$audit_ci_tag" | grep -q 'not reachable from master: windows-v2030.04.05$'; then
+  printf '%s\n' "$audit_ci_tag" >&2
+  echo "audit --history accepted a release tag master does not contain" >&2
+  exit 1
+fi
+
+# INV repository/conventional-subject: the shape of a pull_request checkout,
+# detached at the merge of a topic into origin/dev with no local branch. The
+# topic's commits are reachable from HEAD alone, so the merge gate names HEAD
+# and a subject the hook refuses fails before the pull request merges. The
+# topic's catch-up merge and the synthetic merge carry subjects Git and GitHub
+# write, and are not judged.
+audit_pr="$test_root/audit-pr"
+git clone -q "$audit_bare" "$audit_pr"
+git -C "$audit_pr" checkout -q --detach origin/dev
+for audit_pr_branch in $(git -C "$audit_pr" for-each-ref --format='%(refname:short)' refs/heads); do
+  git -C "$audit_pr" branch -q -D "$audit_pr_branch"
+done
+audit_pr_commit() {
+  git -C "$audit_pr" -c user.name=Fixture -c user.email=fixture@example.invalid \
+    commit-tree "$@" 'origin/dev^{tree}'
+}
+audit_pr_checkout() {
+  audit_pr_topic=$(audit_pr_commit -p origin/dev~1 -m "$1")
+  audit_pr_catchup=$(audit_pr_commit -p "$audit_pr_topic" -p origin/dev \
+    -m "Merge branch 'dev' into fix/repository-pull-request")
+  audit_pr_merge=$(audit_pr_commit -p origin/dev -p "$audit_pr_catchup" \
+    -m "Merge $audit_pr_catchup into $(git -C "$audit_pr" rev-parse origin/dev)")
+  git -C "$audit_pr" checkout -q --detach "$audit_pr_merge"
+}
+audit_pr_checkout 'bad subject no type'
+audit_status=0
+audit_pr_output=$(cd "$audit_pr" && REQUIRE_NATIVE=1 "$audit" --history HEAD 2>&1) || audit_status=$?
+if [ "$audit_status" -eq 0 ] ||
+  ! printf '%s\n' "$audit_pr_output" | grep -q "commit-msg $audit_pr_topic: bad subject no type\$"; then
+  printf '%s\n' "$audit_pr_output" >&2
+  echo "audit --history HEAD accepted a pull request commit the hook refuses" >&2
+  exit 1
+fi
+audit_pr_checkout 'feat(repository): add a pull request change'
+if ! audit_pr_output=$(cd "$audit_pr" && REQUIRE_NATIVE=1 "$audit" --history HEAD 2>&1) ||
+  ! printf '%s\n' "$audit_pr_output" | grep -q '^ok: non-merge commit subjects on dev, HEAD follow policy$'; then
+  printf '%s\n' "$audit_pr_output" >&2
+  echo "audit --history HEAD refused a pull request whose own subjects conform" >&2
+  exit 1
+fi
+audit_status=0
+audit_pr_output=$(cd "$audit_pr" && "$audit" --history no-such-revision 2>&1) || audit_status=$?
+if [ "$audit_status" -eq 0 ] ||
+  ! printf '%s\n' "$audit_pr_output" | grep -q 'does not name a commit: no-such-revision$'; then
+  printf '%s\n' "$audit_pr_output" >&2
+  echo "audit --history accepted a revision that names no commit" >&2
+  exit 1
+fi
+
+# INV repository/local-gate-selects-by-effect
+# INV repository/release-tag-contract
+# The history form judges dev and master as origin/ holds them, both
+# together, and the full form stays local-first. A remote gains a promotion
+# and a release tag on it; a clone fetches both without moving its local
+# branches, the way `git fetch` in windows/tools/capture.ps1 does.
+audit_remote="$test_root/audit-advanced.git"
+git clone -q --bare "$audit_bare" "$audit_remote"
+audit_stale="$test_root/audit-stale"
+git clone -q "$audit_remote" "$audit_stale"
+git -C "$audit_stale" branch -q dev origin/dev
+audit_stale_dev=$(git -C "$audit_stale" rev-parse dev)
+git -C "$audit_stale" switch -q -c feature/repository-audit-stale
+audit_publisher="$test_root/audit-publisher"
+git clone -q "$audit_remote" "$audit_publisher"
+git -C "$audit_publisher" config user.name Fixture
+git -C "$audit_publisher" config user.email fixture@example.invalid
+git -C "$audit_publisher" config core.hooksPath .githooks
+git -C "$audit_publisher" switch -q -c dev origin/dev
+printf 'advance\n' >>"$audit_publisher/file"
+git -C "$audit_publisher" commit -q -am 'feat(repository): advance dev'
+git -C "$audit_publisher" switch -q master
+git -C "$audit_publisher" merge -q --no-ff dev -m "Merge branch 'dev'"
+git -C "$audit_publisher" tag -a common-v2030.03.04 -m 'Domain: common' \
+  -m 'Evaluation: passed; fixture' -m 'Build: passed; fixture' \
+  -m 'Native runtime: passed; fixture'
+git -C "$audit_publisher" push -q origin master dev common-v2030.03.04
+git -C "$audit_stale" fetch -q origin
+
+# A local master that lags origin/master, which contains the release tag.
+git -C "$audit_stale" branch -q -D dev
+if ! audit_stale_output=$(cd "$audit_stale" && REQUIRE_NATIVE=1 "$audit" --history 2>&1) ||
+  ! printf '%s\n' "$audit_stale_output" | grep -q 'master resolves to origin/master$'; then
+  printf '%s\n' "$audit_stale_output" >&2
+  echo "audit --history judged a release tag against a stale local master" >&2
+  exit 1
+fi
+
+# No local master, and a local dev that lags origin/dev: resolving only
+# master to the remote would fail the dev/master traceability checks here.
+git -C "$audit_stale" branch -q dev "$audit_stale_dev"
+git -C "$audit_stale" branch -q -D master
+if ! audit_stale_output=$(cd "$audit_stale" && REQUIRE_NATIVE=1 "$audit" --history 2>&1) ||
+  ! printf '%s\n' "$audit_stale_output" | grep -q 'dev resolves to origin/dev$'; then
+  printf '%s\n' "$audit_stale_output" >&2
+  echo "audit --history compared origin/master with a stale local dev" >&2
+  exit 1
+fi
+
+# A local master ahead of origin/master that contains a release tag the
+# remote does not: the history form fails it, the full form does not.
+audit_ahead="$test_root/audit-ahead"
+git clone -q "$audit_remote" "$audit_ahead"
+git -C "$audit_ahead" config user.name Fixture
+git -C "$audit_ahead" config user.email fixture@example.invalid
+git -C "$audit_ahead" config core.hooksPath .githooks
+git -C "$audit_ahead" switch -q -c dev origin/dev
+printf 'unpublished\n' >>"$audit_ahead/file"
+git -C "$audit_ahead" commit -q -am 'feat(repository): prepare an unpublished release'
+git -C "$audit_ahead" switch -q master
+git -C "$audit_ahead" merge -q --no-ff dev -m "Merge branch 'dev'"
+git -C "$audit_ahead" tag -a windows-v2030.05.06 -m 'Domain: windows' \
+  -m 'Evaluation: passed; fixture' -m 'Build: passed; fixture' \
+  -m 'Native runtime: passed; fixture'
+audit_status=0
+audit_ahead_output=$(cd "$audit_ahead" && "$audit" --history 2>&1) || audit_status=$?
+if [ "$audit_status" -eq 0 ] ||
+  ! printf '%s\n' "$audit_ahead_output" | grep -q 'not reachable from master: windows-v2030.05.06$' ||
+  ! printf '%s\n' "$audit_ahead_output" | grep -q '^summary: 0 warning(s), 1 failure(s)$'; then
+  printf '%s\n' "$audit_ahead_output" >&2
+  echo "audit --history judged a release tag against a local master ahead of origin/master" >&2
+  exit 1
+fi
+if ! audit_ahead_full=$(cd "$audit_ahead" && "$audit" 2>&1); then
+  printf '%s\n' "$audit_ahead_full" >&2
+  echo "the full audit stopped reading the local master first" >&2
+  exit 1
+fi
+
 audit_status=0
 "$audit" --bogus >/dev/null 2>&1 || audit_status=$?
 if [ "$audit_status" -ne 2 ]; then
@@ -986,6 +1133,36 @@ fi
 
 if (REQUIRE_NATIVE=1; export REQUIRE_NATIVE; run_protocol_pre_push) >/dev/null 2>&1; then
   echo "pre-push accepted an unverified check under REQUIRE_NATIVE" >&2
+  exit 1
+fi
+
+# INV repository/conventional-subject: pre-push judges the subjects of the
+# tips it pushes and not HEAD. The real audit replaces the stand-in, HEAD sits
+# on a branch whose commit the hook refuses, and two pushes differ only in the
+# tip they name: the conforming one passes, the refused one fails. A push
+# failing over a commit it does not carry would judge clone state
+# (INV repository/local-gate-selects-by-effect).
+stub_check 0
+cp "$root/tool/version-control/audit" "$protocol_root/tool/version-control/audit"
+git -C "$protocol_root" switch -q -c fix/repository-refused-subject "$protocol_base"
+# The switch removed the module and, with it, the emptied directory.
+mkdir -p "$protocol_root/unixlike/modules"
+printf '_: { }\n' >"$protocol_root/unixlike/modules/fixture.nix"
+git -C "$protocol_root" add unixlike/modules/fixture.nix
+git -C "$protocol_root" commit -q --no-verify -m 'bad subject no type'
+protocol_refused=$(git -C "$protocol_root" rev-parse HEAD)
+run_protocol_push_tip() {
+  printf 'refs/heads/fix/repository-pushed %s refs/heads/fix/repository-pushed %s\n' \
+    "$1" "$protocol_base" | (cd "$protocol_root" && .githooks/pre-push 2>&1)
+}
+if ! protocol_output=$(run_protocol_push_tip "$protocol_head"); then
+  printf '%s\n' "$protocol_output" >&2
+  echo "pre-push judged a refused subject on HEAD that the push does not carry" >&2
+  exit 1
+fi
+if protocol_output=$(run_protocol_push_tip "$protocol_refused"); then
+  printf '%s\n' "$protocol_output" >&2
+  echo "pre-push accepted a pushed commit whose subject the hook refuses" >&2
   exit 1
 fi
 
