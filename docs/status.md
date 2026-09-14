@@ -176,6 +176,18 @@ an unavailable observation without changing that rank. Since 2026-09-05 `windows
 entry point, and `bootstrap.ps1` and `setup.ps1` sit under `windows/tools/`
 (`docs/decisions/windows-entry-point-in-domain.md`).
 
+Since #241, `capture -Publish` on a run that found no drift resumes an earlier
+capture's unfinished publish from the topic branch that carries it, for
+single-parent commits with the capture subject that change only
+`windows/desired/**`, and refuses anything else
+(`INV windows/capture-publishes-through-dev`). Module-level fixtures cover the
+branch and commit rules and the resumed pull-request body; the `WIN_ENV_E2E`
+cases cover a resumed run. The suite's module-level fixtures now capture what
+the functions they drive print, and run their `-WhatIf` cases in a runspace
+with no host, so the `Windows tests` step of a pre-push no longer shows fixture
+pushes, `What if:` lines or fixture glyph lines, and the pull-request body no
+longer carries a disclaimer about them.
+
 ### Windows 10 support boundary
 
 This table is the evidence record `INV windows/support-boundary-named`
@@ -302,7 +314,9 @@ under the Windows tree is parsed for syntax (`check-desired-state.ps1`
 still parses the PowerShell payload it validates). `pre-push` runs the
 history form of the audit, which judges `dev`, `master` and release-tag
 reachability against `origin/dev` and `origin/master` when a fetch left
-them (#240). It still reads every local tag, so a stray local `*-v*` tag
+them (#240), and the subjects of the commits each pushed tip carries;
+the CI audit names `HEAD`, so a pull request's own commits are judged
+before it merges (#243). It still reads every local tag, so a stray local `*-v*` tag
 the push does not carry fails the push; judging only the tags a push
 carries has not been done.
 
@@ -379,8 +393,11 @@ semantics across independent platform validation and release cycles.
   on stays the reviewer's manual evidence. The lower side is observed
   (build 19044.7663); no host at or above 19045.3031 has been, so the
   item's evidence above the boundary is still owed.
-- One real-host capture run is still owed as evidence
-  (`docs/decisions/capture-moves-host-changes.md`).
+- One resumed `capture -Publish` for a branch in the stuck state on the
+  maintainer's host is still owed as evidence
+  (`docs/decisions/capture-moves-host-changes.md`),
+  with the pull request it opens or arms and one pre-push log whose
+  `Windows tests` step shows no fixture output (#241).
 - `docs/decisions/hygiene-tool-owns-enforcement.md`: reopens when the same
   four axes are decided from a typed declaration rather than from text.
 - `docs/decisions/annotated-tag-is-the-release-record.md`: reopens when a
