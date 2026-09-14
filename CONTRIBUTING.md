@@ -559,6 +559,23 @@ lists whatever the branch already carries beyond `dev` before the `[y/N]`.
 `-WhatIf -Publish` prints the branch, the title, the body and every command
 and writes nothing. Promotion to `master` and release remain the flows above.
 
+A capture's commit makes the host read as unchanged, so a rerun after a publish
+that did not finish captures nothing. With `-Publish` that run resumes the
+publish instead of stopping at "Nothing to capture": on a topic branch whose
+every commit beyond `origin/dev` has the subject capture gives its commits and
+changes only `windows/desired/**`, one confirmation (`Publish these commits?
+[y/N]`) pushes the branch unless `origin` already has it at that commit, opens
+or reuses the pull request against `dev`, and arms auto-merge. A branch whose
+push was rejected, one pushed by hand with no pull request, and one whose
+auto-merge was never armed all finish this way; run it on that branch. Any
+other commit on the branch refuses the run, so push it and open the pull
+request yourself. It never resumes on `dev` or `master`, and on `dev` it names
+a local `feature/windows-capture-<feature>` branch that still carries commits.
+The detached-HEAD, staged-change and uncommitted-payload refusals still apply.
+The resumed pull request says its commits came from an earlier run, and when
+nothing was pushed it says no pre-push hook ran rather than showing hook
+output.
+
 `windows/tools/test.ps1` leaves out the Pester cases that run `capture.ps1`
 end to end in a child PowerShell, and says which ones it skipped. Set
 `WIN_ENV_E2E=1` to run them; the `windows-latest` CI job does, so the merge
