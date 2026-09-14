@@ -657,6 +657,13 @@ by hand, because a clone's scratch branch is not a property of the change
 being pushed. `tool/version-control/plan-release` checks reachability from
 the local `master`, because it plans a tag this clone creates.
 
+The history form also judges, through `.githooks/commit-msg`, the non-merge
+subjects of the commits being published: the pre-push hook names the tips it
+pushes, and CI names `HEAD`, which for a pull request is the merge GitHub
+would make. A commit made without the hooks or with `--no-verify` therefore
+fails the push that carries it, and the pull request, before it merges. A
+commit on a branch the push does not carry is not judged.
+
 ### Desired-state hygiene
 
 `tool/version-control/hygiene` scans the tracked tree for undeclared user and

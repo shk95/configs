@@ -195,7 +195,10 @@ jobs:
       # merge gate can and must judge. Unconditional because a badly named
       # branch or a non-conventional subject is a property of the push, not of
       # a scope, and needs the fetch-depth: 0 checkout this job already takes.
-      - run: tool/version-control/audit --history
+      # HEAD is the commit under test: on a pull request the merge GitHub would
+      # make, whose own commits dev does not yet contain, so their subjects are
+      # judged before the pull request merges (INV repository/conventional-subject).
+      - run: tool/version-control/audit --history HEAD
 
   promotion:
     name: Promotion policy

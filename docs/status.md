@@ -302,7 +302,9 @@ under the Windows tree is parsed for syntax (`check-desired-state.ps1`
 still parses the PowerShell payload it validates). `pre-push` runs the
 history form of the audit, which judges `dev`, `master` and release-tag
 reachability against `origin/dev` and `origin/master` when a fetch left
-them (#240). It still reads every local tag, so a stray local `*-v*` tag
+them (#240), and the subjects of the commits each pushed tip carries;
+the CI audit names `HEAD`, so a pull request's own commits are judged
+before it merges (#243). It still reads every local tag, so a stray local `*-v*` tag
 the push does not carry fails the push; judging only the tags a push
 carries has not been done.
 
