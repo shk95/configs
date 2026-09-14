@@ -89,3 +89,11 @@ remote, and is not Windows evidence: the fixtures hand the module a host no
 machine has to be. What is owed from the maintainer's host is one real capture
 after a change made in an application's own UI, showing the branch line in the
 plan and a readable diff, and the hooks' behaviour on that host.
+
+2026-09-14: That capture is observed. On the maintainer's host (build 19044),
+`capture -Feature terminal -Publish` showed the branch line and a readable
+diff of Windows Terminal's settings, committed through the pre-commit hook and
+pushed through the pre-push hook, whose Windows checks and audit passed on that
+host; pull request #239 carries both hooks' output and merged into `dev` on
+2026-09-14. Earlier publishes of the same capture, on 2026-09-06 and
+2026-09-08, were rejected by the pre-push audit, which #240 and #241 answer. The maintainer judged it sufficient evidence.

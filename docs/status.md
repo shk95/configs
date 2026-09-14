@@ -386,9 +386,9 @@ semantics across independent platform validation and release cycles.
   on stays the reviewer's manual evidence. The lower side is observed
   (build 19044.7663); no host at or above 19045.3031 has been, so the
   item's evidence above the boundary is still owed.
-- One real-host capture run is still owed as evidence
-  (`docs/decisions/capture-moves-host-changes.md`), and so is one resumed
-  `capture -Publish` for a branch in the stuck state on the maintainer's host,
+- One resumed `capture -Publish` for a branch in the stuck state on the
+  maintainer's host is still owed as evidence
+  (`docs/decisions/capture-moves-host-changes.md`),
   with the pull request it opens or arms and one pre-push log whose
   `Windows tests` step shows no fixture output (#241).
 - `docs/decisions/hygiene-tool-owns-enforcement.md`: reopens when the same
