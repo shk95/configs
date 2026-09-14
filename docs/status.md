@@ -44,9 +44,10 @@ zellij-org/zellij#5500, which attaches combining marks instead of dropping
 them, so a decomposed Hangul syllable is expected to survive a pane; without it
 only the leading jamo arrives, which was reproduced on Linux against the pinned
 unpatched build. The patch is an overlay in
-`unixlike/modules/zellij/module.nix`, is pinned to zellij 0.45.0 and refuses to
-evaluate against any other version, and yields nothing on Linux, where every
-toplevel derivation path is unchanged. The measure is registered as temporary
+`unixlike/modules/zellij/module.nix`, applies with no fuzz to whatever zellij
+the lock brings in, and yields nothing on Linux, where every toplevel
+derivation path is unchanged; since 2026-09-14 two flake checks built on every
+system refuse a lock whose zellij the patch no longer applies to. The measure is registered as temporary
 in `provisional/unixlike/zellij-combining-marks.md`. Evaluation and the two
 fixed-output hashes are Linux evidence. On 2026-09-06 the Mac built and
 activated it twice. Generation 34 showed the jamo still dropped, because the
