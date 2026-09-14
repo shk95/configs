@@ -63,6 +63,26 @@ nothing to commit rather than carried into the commit path, where an empty `git
 add` would make `git commit` fail and read as a hook rejection: the host drifted
 in a way desired state cannot express, and saying that is the whole answer.
 
+2026-09-14: `-Publish` also finishes a publish that did not (#241). Capture
+compares the host with the working-tree payload, so after its commit the same
+host reads as unchanged and a rerun stopped at "Nothing to capture"; a branch
+whose push the pre-push audit had rejected (#240) could then reach `dev` only
+through a hand push and a hand-opened pull request. A `-Publish` run that finds
+no drift now carries such a branch the rest of the way under its own single
+confirmation, and the rule is kept narrow in three ways. It triggers on commits
+beyond `origin/dev` rather than on being ahead of the upstream, because a
+branch pushed by hand is level with its upstream and still unmerged. It carries
+only single-parent commits with the capture subject that change
+`windows/desired/**` alone, because a run that captured nothing has no diff the
+operator confirmed to vouch for anything else. And it never resumes on `dev` or
+`master`. Git runs the pre-push hook even for a push with nothing to send, with
+empty input, and this repository's hook then selects its checks from the last
+commit on HEAD, so that output would be evidence about no push at all; a branch
+origin already has at the local tip is therefore not pushed again, and the pull
+request says nothing was pushed and no hook ran. Its commit evidence is stated
+as an earlier run's and not reproduced. The branch prune does not run on a
+resumed publish.
+
 Evidence is split accordingly. The Unix-like Pester run covers every rule just
 listed, including the branch rule against a throwaway repository and bare
 remote, and is not Windows evidence: the fixtures hand the module a host no
