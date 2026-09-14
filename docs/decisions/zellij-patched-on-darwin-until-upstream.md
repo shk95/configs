@@ -127,13 +127,16 @@ fuzz of 2 is not enough for it; on a tree that already carried the range,
 `patch` reported the hunks as previously applied yet re-applied one at fuzz 1.
 
 Because a Linux host only evaluates the Darwin configuration, the patch phase
-alone would first fail on the Mac. The same builder therefore yields two flake
-checks, on every system, which `unixlike/tool/checks/test` builds through
+alone would first fail on the Mac. The same builder therefore yields three
+flake checks, on every system, which `unixlike/tool/checks/test` builds through
 `nix flake check` for pre-push and the merge gate alike: `zellij-combining-marks`
 runs nixpkgs' source and patches with the range appended through stdenv's patch
-phase and `cargoSetupHook`'s `Cargo.lock` comparison, and
+phase and `cargoSetupHook`'s `Cargo.lock` comparison,
 `zellij-combining-marks-refuses-a-patched-tree` requires the same derivation to
-refuse a second copy of the range. Both fetch only fixed-output sources,
+refuse a second copy of the range, and
+`zellij-combining-marks-refuses-a-stale-vendor` requires it to refuse nixpkgs'
+own vendor set, which lacks the range's `Cargo.lock` hunk, in that comparison.
+All three fetch only fixed-output sources,
 compile nothing, and use no import-from-derivation, so the Darwin configuration
 still evaluates on Linux with it disallowed.
 
@@ -293,3 +296,11 @@ for them: the range touches `grid.rs` three times and `terminal_character.rs`
 twice, and a dry run never applies the earlier sections the later ones rest
 on, so it reports failures a real apply does not. The checks and
 `just zellij-patch-check` therefore apply for real, to a scratch tree.
+
+2026-09-14, #251. Nothing proved the `Cargo.lock` half of
+`zellij-combining-marks`: with `cargoSetupHook` removed from it, the check
+still passed. A third check, `zellij-combining-marks-refuses-a-stale-vendor`,
+builds the same derivation over nixpkgs' own vendor set and passes only when
+every patch applied and the hook printed its `Cargo.lock is not the same in`
+line; with the hook removed in a scratch copy it failed, and with the hook in
+place it passed.

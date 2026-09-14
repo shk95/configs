@@ -46,7 +46,7 @@ only the leading jamo arrives, which was reproduced on Linux against the pinned
 unpatched build. The patch is an overlay in
 `unixlike/modules/zellij/module.nix`, applies with no fuzz to whatever zellij
 the lock brings in, and yields nothing on Linux, where every toplevel
-derivation path is unchanged; since 2026-09-14 two flake checks built on every
+derivation path is unchanged; since 2026-09-14 three flake checks built on every
 system refuse a lock whose zellij the patch no longer applies to. The measure is registered as temporary
 in `provisional/unixlike/zellij-combining-marks.md`. Evaluation and the two
 fixed-output hashes are Linux evidence. On 2026-09-06 the Mac built and
