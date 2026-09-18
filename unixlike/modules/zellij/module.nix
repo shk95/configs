@@ -29,8 +29,9 @@
 # docs/decisions/composed-homes-render-in-declared-terminals.md.
 #
 # INV unixlike/composition-in-one-place — this file contributes one definition
-# of one Home Manager option, `programs.zellij.extraConfig`, which Home Manager
-# renders into config.kdl. It forces no value and names no host, so it decides
+# of `programs.zellij.extraConfig`, which Home Manager renders into
+# config.kdl, and the zsh function that sends a bare `zellij` to that asset's
+# session. It forces no value and names no host, so it decides
 # nothing about which class wins; the composition file decides which classes a
 # home gets. The keymap stays in exactly one place and no second payload
 # appears under assets/; the file a host receives is Home Manager's rendering —
@@ -251,13 +252,38 @@ _: let
   in {
     inherit package applies refuses refusesStaleVendor;
   };
+
+  # A bare `zellij` starts the asset's `session_name` with
+  # `attach_to_session`, and zellij 0.45.1 takes that path through
+  # `attach_with_session_name`, which asks only whether a live session of that
+  # name exists: an exited one is not consulted, so a new session starts under
+  # the old name instead of resurrecting it. `zellij attach --create <name>`
+  # also reads the serialised layout and resurrects before it creates, so the
+  # shell sends a bare call there. The name is read from the asset rather than
+  # restated, so the two cannot drift.
+  kdl = builtins.readFile ./config.kdl;
+  sessionMatch = builtins.match "(.*\n)?session_name \"([^\"]+)\"\n.*" kdl;
+  sessionName =
+    if sessionMatch == null
+    then throw "modules/zellij: config.kdl declares no session_name for the bare zellij call to attach to."
+    else builtins.elemAt sessionMatch 1;
 in {
   modules.homeManager.shared = {pkgs, ...}: {
     programs.zellij = {
       enable = true;
       package = pkgs.zellij;
-      extraConfig = builtins.readFile ./config.kdl;
+      extraConfig = kdl;
     };
+
+    programs.zsh.initContent = ''
+      zellij() {
+        if (( $# == 0 )); then
+          command zellij attach --create ${sessionName}
+        else
+          command zellij "$@"
+        fi
+      }
+    '';
   };
 
   # PROV unixlike/zellij-combining-marks
