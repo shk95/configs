@@ -4749,4 +4749,134 @@ work_overdue=$(cd "$work_repo" && "$work_check" --overdue --date 2026-03-01)
   exit 1
 }
 
+# ---------------------------------------------------------------------------
+# No closing keyword reaches dev or a promotion body
+# ---------------------------------------------------------------------------
+#
+# INV repository/no-closing-keyword
+# tool/version-control/closing-keywords owns the grammar. Every listed form —
+# nine keywords, with and without a colon, before `#<n>` and before
+# `<owner>/<repo>#<n>` — is refused in a subject and in a body by the real
+# commit-msg hook, in a commit of a range whose base is dev, and in a text
+# taken as a promotion's body. `Refs #<n>`, a keyword that does not stand
+# before the reference and a keyword that is the tail of a longer word are
+# accepted by all three. The same range is left unread when the base is
+# master, because dev carries commits from before the rule.
+closing_keywords="$root/tool/version-control/closing-keywords"
+
+# Wired three ways: the hook, the merge gate's scan job for every pull
+# request, and the promotion job for the body.
+grep -q 'tool/version-control/closing-keywords' "$root/.githooks/commit-msg"
+grep -q 'closing-keywords --range "$PR_BASE" "$PR_HEAD" --base-ref "$BASE_REF"' "$root/.github/workflows/ci.yml"
+grep -q 'closing-keywords --text "$RUNNER_TEMP/promotion-body"' "$root/.github/workflows/ci.yml"
+
+closing_repo="$test_root/closing-keywords"
+mkdir -p "$closing_repo"
+git -C "$closing_repo" init -q -b dev
+git -C "$closing_repo" config user.name Fixture
+git -C "$closing_repo" config user.email fixture@example.invalid
+git -C "$closing_repo" commit -q --allow-empty -m 'chore(repository): start'
+closing_base=$(git -C "$closing_repo" rev-parse HEAD)
+closing_file="$test_root/closing-keywords-message"
+
+# closing_refused <label> <message>: the hook, the text form and a range
+# based on dev each refuse it, and the range based on master leaves it unread.
+closing_refused() {
+  printf '%s\n' "$2" >"$closing_file"
+  if "$commit_msg" "$closing_file" >/dev/null 2>&1; then
+    echo "commit-msg accepted a closing keyword: $1" >&2
+    exit 1
+  fi
+  if "$closing_keywords" --text "$closing_file" >/dev/null 2>&1; then
+    echo "closing-keywords --text accepted a closing keyword: $1" >&2
+    exit 1
+  fi
+  git -C "$closing_repo" reset -q --hard "$closing_base"
+  git -C "$closing_repo" commit -q --allow-empty -F "$closing_file"
+  if (cd "$closing_repo" && "$closing_keywords" --range "$closing_base" HEAD --base-ref dev) >/dev/null 2>&1; then
+    echo "closing-keywords --range accepted a closing keyword on its way to dev: $1" >&2
+    exit 1
+  fi
+  if ! (cd "$closing_repo" && "$closing_keywords" --range "$closing_base" HEAD --base-ref master) >/dev/null 2>&1; then
+    echo "closing-keywords --range read a promotion's range: $1" >&2
+    exit 1
+  fi
+}
+
+closing_accepted() {
+  printf '%s\n' "$2" >"$closing_file"
+  "$commit_msg" "$closing_file" >/dev/null 2>&1 ||
+    { echo "commit-msg refused a message with no closing keyword: $1" >&2; exit 1; }
+  "$closing_keywords" --text "$closing_file" >/dev/null 2>&1 ||
+    { echo "closing-keywords --text refused a text with no closing keyword: $1" >&2; exit 1; }
+  git -C "$closing_repo" reset -q --hard "$closing_base"
+  git -C "$closing_repo" commit -q --allow-empty -F "$closing_file"
+  (cd "$closing_repo" && "$closing_keywords" --range "$closing_base" HEAD --base-ref dev) >/dev/null 2>&1 ||
+    { echo "closing-keywords --range refused a commit with no closing keyword: $1" >&2; exit 1; }
+}
+
+for closing_word in close closes closed fix fixes fixed resolve resolves resolved; do
+  for closing_colon in '' ':'; do
+    for closing_ref in '#12' 'owner/repo#12'; do
+      closing_form="$closing_word$closing_colon $closing_ref"
+      closing_refused "$closing_form in the body" \
+        "$(printf 'feat(repository): add a rule\n\nSome reason. This %s, as agreed.' "$closing_form")"
+    done
+  done
+done
+closing_refused "a keyword in the subject" 'feat(repository): add a rule, fixes #12'
+closing_refused "a capitalised keyword at the start of a line" \
+  "$(printf 'feat(repository): add a rule\n\nCloses #12')"
+closing_refused "an upper-case keyword" "$(printf 'feat(repository): add a rule\n\nRESOLVES: #12')"
+closing_refused "a keyword in a merge Git subjects itself" \
+  "$(printf "Merge branch 'dev' into feature/x\n\nfixes #12")"
+
+closing_accepted "Refs" "$(printf 'feat(repository): add a rule\n\nRefs #12')"
+closing_accepted "a keyword that does not stand before the reference" \
+  "$(printf 'feat(repository): add a rule\n\nThis fixes the regression #12 described.')"
+closing_accepted "a keyword that is the tail of a longer word" \
+  "$(printf 'feat(repository): add a rule\n\nThe prefix #12 is kept, and so is unresolved #13.')"
+closing_accepted "a conventional fix subject that names an issue" 'fix(repository): stop the gate reading #12 twice'
+
+# What Git shows in the editor is not the message: a comment line and the
+# diff below the scissors line of `git commit -v` are not read by the hook.
+printf 'feat(repository): add a rule\n\nRefs #12\n# fixes #13 in a comment\n# ------------------------ >8 ------------------------\n+fixes #14 in the diff\n' >"$closing_file"
+"$commit_msg" "$closing_file" >/dev/null 2>&1 ||
+  { echo "commit-msg read a comment line or the diff below the scissors line" >&2; exit 1; }
+# The text form takes every line as it stands.
+if "$closing_keywords" --text "$closing_file" >/dev/null 2>&1; then
+  echo "closing-keywords --text skipped a line of a promotion body" >&2
+  exit 1
+fi
+
+# A range names the commit and the line, and reads every commit in it.
+git -C "$closing_repo" reset -q --hard "$closing_base"
+git -C "$closing_repo" commit -q --allow-empty -m 'feat(repository): first' -m 'Refs #12'
+git -C "$closing_repo" commit -q --allow-empty -m 'feat(repository): second' -m 'Fixes #13'
+closing_bad=$(git -C "$closing_repo" rev-parse --short HEAD)
+git -C "$closing_repo" commit -q --allow-empty -m 'feat(repository): third'
+if closing_output=$(cd "$closing_repo" && "$closing_keywords" --range "$closing_base" HEAD --base-ref dev 2>&1); then
+  printf '%s\n' "$closing_output" >&2
+  echo "closing-keywords --range missed a keyword in the middle of a range" >&2
+  exit 1
+fi
+printf '%s\n' "$closing_output" | grep -qF "$closing_bad:3:Fixes #13" || {
+  printf '%s\n' "$closing_output" >&2
+  echo "closing-keywords --range did not name the commit and the line" >&2
+  exit 1
+}
+git -C "$closing_repo" reset -q --hard "$closing_base"
+git -C "$closing_repo" commit -q --allow-empty -m 'feat(repository): first' -m 'Refs #12'
+git -C "$closing_repo" commit -q --allow-empty -m 'feat(repository): second'
+closing_output=$(cd "$closing_repo" && "$closing_keywords" --range "$closing_base" HEAD --base-ref dev)
+printf '%s\n' "$closing_output" | grep -qF '2 commit messages carry none' || {
+  printf '%s\n' "$closing_output" >&2
+  echo "closing-keywords --range did not count the commits it read" >&2
+  exit 1
+}
+if (cd "$closing_repo" && "$closing_keywords" --range 0000000000000000000000000000000000000000 HEAD --base-ref dev) >/dev/null 2>&1; then
+  echo "closing-keywords --range passed a base that is no commit" >&2
+  exit 1
+fi
+
 echo "version-control fixtures passed"

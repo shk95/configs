@@ -19,7 +19,7 @@ are disabled.
 The merge gate is CI's `Required checks`, demanded whenever a change falls
 in a domain that check covers.
 
-The invariant registry holds 61 entries, none pending and no fixture unit
+The invariant registry holds 62 entries, none pending and no fixture unit
 untagged, and `tool/version-control/invariants` enforces C10 (no untagged
 fixture unit) by default. Enforced is not the same as held: the manual
 `INV windows/support-boundary-named` records that the terminal delegation
@@ -78,7 +78,7 @@ Since 2026-09-12 the repository has an external layer: `docs/design/` (since
 2026-09-19 `docs/work/`) holds the argument for a direction and carries no authority, and
 `tool/version-control/design-citations` refuses a citation of a document
 there from anything that does, on every commit and in the CI scan job, which
-now carries nine repository-wide scans
+now carries ten repository-wide scans
 (`docs/policy/decisions/repository/design-documents-outside-the-authority-model.md`). It held
 four documents, ported the same day from the HTML artefacts they were
 written as: a map of the tree as read at `dev` fc57495, the restructure
