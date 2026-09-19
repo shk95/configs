@@ -9,9 +9,7 @@
 # is delicate: home-manager refuses to clobber an unmanaged
 # ~/.config/nix/nix.conf, so hand-writing one to get flakes working turns the
 # first switch into a failure. Export NIX_CONFIG for that shell instead.
-{config, ...}: let
-  user = config.identity.wsl.user;
-in {
+_: {
   modules.homeManager.wslStandalone = {pkgs, ...}: {
     nix = {
       package = pkgs.nix;
@@ -19,12 +17,13 @@ in {
     };
   };
 
-  # NixOS: /etc/nix/nix.conf is generated from `nix.settings`, and the
-  # standalone class above is not composed into this flavour, so nothing else
-  # declares it. Found on the imported host, whose whole configuration is a
+  # NixOS, every host: /etc/nix/nix.conf is generated from `nix.settings`, and
+  # the standalone class above is not composed into a NixOS host, so nothing
+  # else declares it. Found on the imported host, whose whole configuration is a
   # flake and whose daemon refused `nix-command`
   # (docs/policy/decisions/unixlike/nixos-wsl-system-layer-ownership.md). The rest mirrors
-  # modules/darwin-nix.nix: the account that rebuilds the host is trusted,
+  # modules/nix/darwin.nix: the account that rebuilds the host is trusted — the
+  # host's own, read from what modules/host/nixos.nix tells it about itself —
   # and the store is collected weekly — generations older than two weeks go
   # with the garbage, so that is the rollback window.
   #
@@ -35,11 +34,11 @@ in {
   # removes the `nix-channel` command, and keeps the tarball builder from
   # registering one at import. A rebuild that names no flake then stops on the
   # search path instead of reaching for a configuration nobody maintains.
-  modules.nixos.wsl = {config, ...}: {
+  modules.nixos.shared = {config, ...}: {
     nix = {
       settings = {
         experimental-features = ["nix-command" "flakes"];
-        trusted-users = [user];
+        trusted-users = [config.host.user];
       };
       gc = {
         automatic = true;

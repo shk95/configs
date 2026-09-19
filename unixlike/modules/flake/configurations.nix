@@ -26,7 +26,7 @@
   withSystem,
   ...
 }: let
-  inherit (lib) attrValues mapAttrs;
+  inherit (lib) attrValues mapAttrs optionalAttrs;
   inherit (config.identity) wsl darwin nixosHosts;
   home = config.modules.homeManager;
   nixos = config.modules.nixos;
@@ -42,6 +42,26 @@
         home.wsl
         home.agents
       ];
+    };
+
+    # Declared and not yet installed (modules/host/placeholder.nix): the
+    # kind's own class and no home, until the order that installs the host
+    # composes one.
+    vmware = {
+      system = [nixos.vmware];
+      home = [];
+    };
+    utm = {
+      system = [nixos.utm];
+      home = [];
+    };
+    orbstack = {
+      system = [nixos.orbstack];
+      home = [];
+    };
+    desktop = {
+      system = [nixos.desktop];
+      home = [];
     };
   };
 
@@ -68,7 +88,9 @@
             home-manager = {
               useGlobalPkgs = true;
               useUserPackages = true;
-              users.${host.user}.imports = composition.home;
+              users = optionalAttrs (composition.home != []) {
+                ${host.user}.imports = composition.home;
+              };
             };
           }
         ];
