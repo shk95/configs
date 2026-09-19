@@ -5,6 +5,7 @@ date: 2026-09-19
 scope: unixlike
 status: approved
 review-by: 2026-10-31
+issue: #272
 
 Agreed with the maintainer in the session of 2026-09-19 and revised the same
 day after an independent review whose findings were reproduced before they
