@@ -113,10 +113,10 @@ first issue, #259, on 2026-09-19. The document layout is done
 (`docs/work/repository/docs-layout/report.md`); what it left is the
 classifier's handling of the registries' old roots, a provisional measure
 that ends when the move reaches `master` (#275). The work model is done too
-(`docs/work/repository/work-model/report.md`). One work item is open: the
-in-place NixOS-WSL update
-(`docs/work/unixlike/nixos-wsl-in-place-update/report.md`, in progress,
-#272).
+(`docs/work/repository/work-model/report.md`), and so is the in-place
+NixOS-WSL update (`docs/work/unixlike/nixos-wsl-in-place-update/report.md`),
+whose issue the workflow also closed. No work item is open;
+`docs/work/roadmap.md` names what comes next.
 
 ## Common
 
