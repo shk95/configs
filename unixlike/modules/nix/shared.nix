@@ -27,15 +27,33 @@ in {
   # modules/darwin-nix.nix: the account that rebuilds the host is trusted,
   # and the store is collected weekly — generations older than two weeks go
   # with the garbage, so that is the rollback window.
-  modules.nixos.wsl.nix = {
-    settings = {
-      experimental-features = ["nix-command" "flakes"];
-      trusted-users = [user];
+  #
+  # INV unixlike/nixos-no-channel — the assertion below is the schema half of
+  # the rule; tool/checks/flake-test holds both directions. The host is
+  # rebuilt from this flake and from nothing else, so it has no channel:
+  # turning channels off takes the channel directory out of `nix.nixPath`,
+  # removes the `nix-channel` command, and keeps the tarball builder from
+  # registering one at import. A rebuild that names no flake then stops on the
+  # search path instead of reaching for a configuration nobody maintains.
+  modules.nixos.wsl = {config, ...}: {
+    nix = {
+      settings = {
+        experimental-features = ["nix-command" "flakes"];
+        trusted-users = [user];
+      };
+      gc = {
+        automatic = true;
+        dates = "weekly";
+        options = "--delete-older-than 14d";
+      };
+      channel.enable = false;
     };
-    gc = {
-      automatic = true;
-      dates = "weekly";
-      options = "--delete-older-than 14d";
-    };
+
+    assertions = [
+      {
+        assertion = !config.nix.channel.enable;
+        message = "INV unixlike/nixos-no-channel: nix.channel.enable is on; this host is rebuilt from the flake alone and carries no channel.";
+      }
+    ];
   };
 }
