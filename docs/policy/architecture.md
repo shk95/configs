@@ -325,7 +325,11 @@ An issue closes from what its report says, never from a merge. GitHub closes
 a referenced issue when a closing keyword reaches the default branch, which
 here is a promotion: an event that accepts source history and certifies
 nothing. So no commit message on its way to `dev` and no promotion body
-carries one, and a message links an issue with `Refs #<n>`.
+carries one, and a message links an issue with `Refs #<n>`. The one automatic
+closure reads the report: a push to `dev` that ends a report closes the issue
+its spec names, and the audits report what that misses — an issue still open
+beside a terminal report, and a spec past its review date whose report is
+still pending.
 
 The canonical agent workflow follows the Agent Skills open standard under
 `.agents/skills/`. Product-specific discovery locations may contain thin

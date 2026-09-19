@@ -48,8 +48,22 @@
 # still pending, and fails nothing: tool/version-control/audit is where an
 # overdue spec is reported, the way an overdue provisional measure is.
 #
+# Closure follows the report, so three listings read the pairs whose spec
+# names an issue and whose report is done, abandoned or superseded, one line
+# each as `#<n> <state> <report path>`, and fail nothing:
+#
+#   --terminal                  every such pair in the index
+#   --became-terminal <base> <head>
+#                               those terminal at <head> that were not at
+#                               <base>: what a push to dev may close
+#   --unclosed                  those whose issue the remote still reports
+#                               open; needs an authenticated gh, and is what
+#                               tool/version-control/audit-remote reports
+#
 # usage: tool/version-control/work [--staged | --range <base> <head>]
 #        tool/version-control/work --overdue [--date <YYYY-MM-DD>]
+#        tool/version-control/work --terminal | --unclosed
+#        tool/version-control/work --became-terminal <base> <head>
 #
 # Exit 0 verified, 69 unverified, any other status failed. See
 # docs/policy/architecture.md, "Repository governance plane", and .githooks/evidence,
@@ -87,6 +101,8 @@ require_command() {
 usage() {
   echo "usage: tool/version-control/work [--staged | --range <base> <head>]" >&2
   echo "       tool/version-control/work --overdue [--date <YYYY-MM-DD>]" >&2
+  echo "       tool/version-control/work --terminal | --unclosed" >&2
+  echo "       tool/version-control/work --became-terminal <base> <head>" >&2
   exit 2
 }
 
@@ -114,6 +130,16 @@ case "${1:-}" in
       3) [ "$2" = --date ] || usage; reference=$3 ;;
       *) usage ;;
     esac
+    ;;
+  --terminal | --unclosed)
+    [ "$#" -eq 1 ] || usage
+    mode=${1#--}
+    ;;
+  --became-terminal)
+    [ "$#" -eq 3 ] || usage
+    mode=became-terminal
+    base=$2
+    head=$3
     ;;
   *) usage ;;
 esac
@@ -197,6 +223,66 @@ valid_date='
     return dd <= dim
   }
 '
+
+# The pairs at a revision whose spec names an issue and whose report is
+# terminal, as `#<n> <state> <report path>`. The empty revision is the index.
+terminal_at() {
+  if [ -n "$1" ]; then
+    git ls-tree -r --name-only "$1" -- docs/work
+  else
+    git ls-files -- docs/work
+  fi | awk -F/ 'NF == 5 && $5 == "spec.md"' | while IFS= read -r terminal_spec; do
+    terminal_report=${terminal_spec%spec.md}report.md
+    blob_exists "$1" "$terminal_report" || continue
+    terminal_issue=$(blob "$1" "$terminal_spec" | parse |
+      awk -F'\t' '$1 == "H" && $2 == "issue" && $3 ~ /^#[0-9]+$/ { print $3; exit }')
+    [ -n "$terminal_issue" ] || continue
+    terminal_state=$(blob "$1" "$terminal_report" | parse |
+      awk -F'\t' '$1 == "H" && $2 == "status" { print $3; exit }')
+    case "$terminal_state" in
+      done | abandoned | superseded)
+        printf '%s %s %s\n' "$terminal_issue" "$terminal_state" "$terminal_report"
+        ;;
+    esac
+  done
+}
+
+case "$mode" in
+  terminal)
+    terminal_at ""
+    exit 0
+    ;;
+  became-terminal)
+    git rev-parse -q --verify "$head^{commit}" >/dev/null ||
+      { echo "not a commit: $head" >&2; exit 2; }
+    terminal_at "$head" >"$tmp/terminal-head"
+    # A base that is not a commit — the zero id of a branch's first push —
+    # held no report, so everything terminal at the head became so.
+    if git rev-parse -q --verify "$base^{commit}" >/dev/null 2>&1; then
+      terminal_at "$base" >"$tmp/terminal-base"
+    else
+      : >"$tmp/terminal-base"
+    fi
+    # A report that was already terminal at the base is not listed again, even
+    # if it moved between two terminal states: its issue was closed then.
+    awk 'FILENAME == ARGV[1] { was[$3] = 1; next } !($3 in was)' \
+      "$tmp/terminal-base" "$tmp/terminal-head"
+    exit 0
+    ;;
+  unclosed)
+    require_command gh
+    terminal_at "" >"$tmp/terminal"
+    while read -r unclosed_issue unclosed_state unclosed_report; do
+      unclosed_remote=$(gh issue view "${unclosed_issue#\#}" --json state --jq .state) || {
+        echo "could not read $unclosed_issue from the remote" >&2
+        exit 2
+      }
+      [ "$unclosed_remote" = OPEN ] || continue
+      printf '%s %s %s\n' "$unclosed_issue" "$unclosed_state" "$unclosed_report"
+    done <"$tmp/terminal"
+    exit 0
+    ;;
+esac
 
 git ls-files -- docs/work >"$tmp/files"
 

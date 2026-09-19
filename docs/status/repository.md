@@ -19,7 +19,7 @@ are disabled.
 The merge gate is CI's `Required checks`, demanded whenever a change falls
 in a domain that check covers.
 
-The invariant registry holds 62 entries, none pending and no fixture unit
+The invariant registry holds 63 entries, none pending and no fixture unit
 untagged, and `tool/version-control/invariants` enforces C10 (no untagged
 fixture unit) by default. Enforced is not the same as held: the manual
 `INV windows/support-boundary-named` records that the terminal delegation
@@ -103,9 +103,11 @@ and the report that answers it under `docs/work/<scope>/<slug>/`, checked by
 execution state only and `docs/work/roadmap.md` stating lanes and order.
 GitHub milestones are no longer used, a branch is one reviewable increment,
 and no commit message on its way to `dev` and no promotion body carries a
-closing keyword. Closing an execution issue from its report is still done by
-hand; the workflow that does it and the two audit readings are the next
-increment of #265. Three work items are open: the document layout
+closing keyword. A push to `dev` that ends a report closes the issue its
+spec names (`.github/workflows/work-closure.yml`), `tool/version-control/audit`
+warns about a spec past its review-by, and `tool/version-control/audit-remote`
+reports an issue left open beside a terminal report; the workflow has not yet
+closed a real issue. Three work items are open: the document layout
 (`docs/work/repository/docs-layout/report.md`, review lanes owed), the work
 model itself (`docs/work/repository/work-model/report.md`) and the in-place
 NixOS-WSL update (`docs/work/unixlike/nixos-wsl-in-place-update/report.md`,

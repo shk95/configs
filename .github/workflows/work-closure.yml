@@ -1,0 +1,40 @@
+# Close an execution issue from what its report says
+# (INV repository/issue-closes-from-report).
+#
+# Every pull request targets dev, and GitHub closes a linked issue only on a
+# merge into master, so without this an execution issue is closed by hand. A
+# closing keyword is not the answer: it would close the issue at a promotion,
+# which certifies nothing about the work (INV repository/no-closing-keyword).
+#
+# On a push to dev, tool/version-control/close-issues reads the reports that
+# became done, abandoned or superseded in the push and whose spec names an
+# issue, and closes each with a comment linking the report. The token can
+# read the repository and write issues, and nothing else.
+name: Work closure
+
+on:
+  push:
+    branches: [dev]
+
+permissions:
+  contents: read
+  issues: write
+
+concurrency:
+  group: work-closure
+  cancel-in-progress: false
+
+jobs:
+  close:
+    name: Close issues whose report became terminal
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v7
+        with:
+          fetch-depth: 0
+      - name: Close from the reports this push ended
+        env:
+          GH_TOKEN: ${{ github.token }}
+          PUSH_BASE: ${{ github.event.before }}
+          PUSH_HEAD: ${{ github.sha }}
+        run: tool/version-control/close-issues "$PUSH_BASE" "$PUSH_HEAD"

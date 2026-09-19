@@ -45,6 +45,9 @@ MSYS_NO_PATHCONV=1
 MSYS2_ARG_CONV_EXCL='*'
 export MSYS_NO_PATHCONV MSYS2_ARG_CONV_EXCL
 
+# Resolved before the directory changes: the checks beside this file read the
+# repository being audited, so the fixtures run them against a throwaway one.
+audit_tools=$(CDPATH= cd -- "$(dirname -- "$0")" && pwd)
 root=$(git rev-parse --show-toplevel)
 cd "$root"
 
@@ -282,6 +285,20 @@ for sha in $(git log --format='%H' -- flake.lock unixlike/flake.lock); do
     ok "isolated flake.lock refresh: $sha"
   fi
 done
+
+# A spec past its review-by whose report is still pending is reported, the
+# way the provisional check reports an overdue measure outside the scopes
+# under change: it is a prompt to end the report or move the date, not a
+# failure of the change at hand. The work check owns the reading.
+overdue_specs=$("$audit_tools/work" --overdue) || overdue_specs=
+if [ -n "$overdue_specs" ]; then
+  printf '%s\n' "$overdue_specs" | while IFS= read -r overdue_spec; do
+    printf 'warning: overdue spec: %s\n' "$overdue_spec"
+  done
+  warnings=$((warnings + $(printf '%s\n' "$overdue_specs" | wc -l | tr -d ' ')))
+else
+  ok "no spec is past its review-by with a pending report"
+fi
 
 printf 'summary: %s warning(s), %s failure(s)\n' "$warnings" "$failures"
 if [ "$failures" -ne 0 ]; then

@@ -367,8 +367,11 @@ the format; this is the procedure.
 6. To change a criterion after the report exists, add a paragraph to the spec
    that opens `Amended YYYY-MM-DD` and names the criterion. The checker
    refuses a criterion removed or rewritten without one.
-7. End the report as `done`, `abandoned` or `superseded`, and close the
-   execution issue from what it says. A durable rule the work produced lands
+7. End the report as `done`, `abandoned` or `superseded`. The push to `dev`
+   that carries it closes the execution issue with a comment linking the
+   report (`INV repository/issue-closes-from-report`); nothing else closes
+   one automatically, and `tool/version-control/audit-remote` reports an
+   issue left open beside a terminal report. A durable rule the work produced lands
    in a decision record or an invariant that names the document as its
    source, never by citing the work item from a document that carries
    authority; `tool/version-control/design-citations` refuses that citation.
