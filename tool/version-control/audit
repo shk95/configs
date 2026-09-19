@@ -226,6 +226,70 @@ if [ -n "$master_ref" ] && [ -n "$dev_ref" ]; then
   fi
 fi
 
+# The annotation of a release tag, one defect per line and nothing when it
+# follows the form. A unixlike or windows tag states its evidence in a block
+# per host, `Host: <label>` followed by the three lanes, and carries no lane
+# outside a block; a common tag deploys nowhere and keeps the three lanes at
+# the domain level. A lane's value opens with one of three states. A label
+# names a kind of host, and only its grammar is decidable here.
+annotation_defects() {
+  git for-each-ref --format='%(contents)' "refs/tags/$1" | awk -v domain="$2" '
+    function close_block(   i) {
+      if (!in_block) return
+      for (i = 1; i <= 3; i++)
+        if (seen[lanes[i]] == 0) print "host " label " lacks " lanes[i]
+      in_block = 0
+    }
+    BEGIN { lanes[1] = "Evaluation"; lanes[2] = "Build"; lanes[3] = "Native runtime" }
+    { sub(/^[ \t]+/, ""); sub(/[ \t\r]+$/, "") }
+    $0 == "Domain: " domain { domain_seen = 1; next }
+    /^Host:/ {
+      close_block()
+      label = $0; sub(/^Host:[ \t]*/, "", label)
+      in_block = 1; hosts++
+      for (i = 1; i <= 3; i++) seen[lanes[i]] = 0
+      if (domain == "common") print "a common tag carries a host block: " label
+      if (label !~ /^[a-z0-9][a-z0-9-]*$/) print "host label is outside [a-z0-9][a-z0-9-]*: " label
+      else if (labels[label]++) print "host label is repeated: " label
+      next
+    }
+    /^Deployment:/ { close_block(); next }
+    /^(Evaluation|Build|Native runtime):/ {
+      lane = $0; sub(/:.*/, "", lane)
+      value = $0; sub(/^[^:]*:[ \t]*/, "", value)
+      if (value !~ /^(passed|unavailable|not applicable)([ \t]*;.*)?$/)
+        print lane " is none of passed, unavailable, not applicable: " value
+      if (in_block) {
+        if (seen[lane]++) print "host " label " repeats " lane
+      } else if (domain == "common") {
+        if (top[lane]++) print lane " is repeated"
+      } else {
+        print lane " stands outside a host block"
+      }
+      next
+    }
+    END {
+      close_block()
+      if (!domain_seen) print "lacks Domain: " domain
+      if (domain == "common") {
+        for (i = 1; i <= 3; i++) if (top[lanes[i]] == 0) print "lacks " lanes[i]
+      } else if (hosts == 0) {
+        print "has no host block"
+      }
+    }'
+}
+
+# The tags created before the host-block form, excepted by name and held to
+# the check they were created under. The list is closed: a tag is immutable,
+# so nothing joins it.
+legacy_tags="unixlike-v2026.08.31 windows-v2026.08.31"
+legacy_annotation_defects() {
+  legacy_annotation=$(git for-each-ref --format='%(contents)' "refs/tags/$1")
+  for field in "Domain: $2" "Evaluation:" "Build:" "Native runtime:"; do
+    printf '%s\n' "$legacy_annotation" | grep -Fq "$field" || printf 'lacks %s\n' "$field"
+  done
+}
+
 tag_count=0
 for tag in $(git tag); do
   tag_count=$((tag_count + 1))
@@ -241,16 +305,17 @@ for tag in $(git tag); do
   elif ! git merge-base --is-ancestor "$tag^{}" "$master_ref"; then
     fail "release tag target is not reachable from master: $tag"
   else
-    annotation=$(git for-each-ref --format='%(contents)' "refs/tags/$tag")
     domain=${tag%%-v*}
-    missing=""
-    for field in "Domain: $domain" "Evaluation:" "Build:" "Native runtime:"; do
-      if ! printf '%s\n' "$annotation" | grep -Fq "$field"; then
-        missing="$missing $field"
-      fi
-    done
-    if [ -n "$missing" ]; then
-      fail "release tag annotation lacks evidence fields:$missing ($tag)"
+    case " $legacy_tags " in
+      *" $tag "*) defects=$(legacy_annotation_defects "$tag" "$domain") ;;
+      *) defects=$(annotation_defects "$tag" "$domain") ;;
+    esac
+    if [ -n "$defects" ]; then
+      while IFS= read -r defect; do
+        fail "release tag annotation: $defect ($tag)"
+      done <<EOF
+$defects
+EOF
     else
       ok "release tag is annotated, evidenced, and master-reachable: $tag"
     fi

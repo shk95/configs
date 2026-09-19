@@ -136,10 +136,18 @@ leaves its title and body alone.
 Domain releases use immutable annotated tags. The target commit must be
 reachable from `master`. The annotation records the domain and reports
 evaluation, build, and native-runtime evidence separately, including explicit
-`unavailable` or `not applicable` values. Create and push a tag only when the
-user explicitly requests those mutations. Create no GitHub Release: the
-annotation is the whole record. Activation and Windows Apply happen after
-release and are not implied by a tag.
+`unavailable` or `not applicable` values. A `unixlike` or `windows`
+annotation reports them once for each host the release speaks for, in a block
+opened by `Host: <label>`; a `common` annotation reports them once.
+`tool/version-control/plan-release` prints the template, and
+`tool/version-control/audit` refuses a tag that departs from it. A label is
+lowercase letters, digits and hyphens and names a kind of host — `darwin`,
+`wsl-nixos`, `windows` — never a machine; keep machine names, account names
+and machine identifiers out of the references too, because a pushed tag
+cannot be edited. A host whose check failed is not released around. Create
+and push a tag only when the user explicitly requests those mutations. Create
+no GitHub Release: the annotation is the whole record. Activation and Windows
+Apply happen after release and are not implied by a tag.
 
 For agent-assisted work, invoke `run-version-control-workflow`. Its canonical
 Agent Skills implementation is under `.agents/skills/`; model-specific
