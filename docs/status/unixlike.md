@@ -140,8 +140,22 @@ the toplevel that carries this builds on x86_64-linux. `CONTRIBUTING.md`,
 "Update the registered NixOS-WSL distribution", is the procedure. Owed, on
 the host and by the maintainer: the baseline reading of a rebuild without a
 flake, the cleanup of the channel and the default configuration file the
-2026-09-06 import left, and the first test, switch and rollback. Generation 2
-is still what runs there.
+2026-09-06 import left, and the first test, switch and rollback.
+
+The host took that path on 2026-09-19. A rebuild without a flake failed on
+the search path before and after, as predicted; the cleanup removed
+`/etc/nixos` and the channel the import had added and never updated;
+`just nixos-test` and `just nixos-switch` activated generation 4, whose
+toplevel is the one the Ubuntu distribution had built, and both managers
+report `running`. Generation 3 had been activated earlier the same day from
+the tree before channels were turned off, which the paragraph above did not
+know when it called generation 2 current. `just nixos-rollback` went back to
+generation 3 and `just nixos-switch` returned to generation 4, the same
+generation rather than a fifth, because Nix reuses the one that already holds
+the path. The binfmt_misc mount is read-only in this distribution and a
+Windows executable runs from a fresh shell; one long-lived shell session
+failed to run one earlier the same evening, unexplained and not seen since.
+The work is done (`docs/work/unixlike/nixos-wsl-in-place-update/report.md`).
 
 ## Open conditions
 
