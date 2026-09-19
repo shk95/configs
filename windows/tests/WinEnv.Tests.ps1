@@ -184,7 +184,7 @@ Describe 'win-env manifest' {
         # Windows 11 version 22H2 or higher" footnote and one carries no
         # footnote at all. Every assertion below traces to a row of the per-key
         # gate table in
-        # docs/decisions/wslconfig-selected-by-windows-build.md.
+        # docs/policy/decisions/windows/wslconfig-selected-by-windows-build.md.
         $manifest = Get-WinEnvManifest -Path (Join-Path $desiredStateRoot 'manifest.json')
         $wsl = $manifest.ManagedFiles | Where-Object Id -eq 'wslConfig'
         $wsl.Target | Should -Be '{USERPROFILE}\.wslconfig'
@@ -3290,7 +3290,7 @@ Describe 'capture' {
         # repository, never this one. What remains genuinely host-only is
         # whether the commit's pre-commit hook actually ran, which #77 has
         # since shown happens under Git for Windows
-        # (docs/decisions/hooks-run-under-git-for-windows.md).
+        # (docs/policy/decisions/repository/hooks-run-under-git-for-windows.md).
         $capturePath = Join-Path $repositoryRoot 'tools\capture.ps1'
         (Test-Path -LiteralPath $capturePath -PathType Leaf) | Should -Be $true
 
