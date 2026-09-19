@@ -321,6 +321,12 @@ before the work. A work document still binds nothing but the work it
 describes: a durable rule it produces lands in a decision record or an
 invariant.
 
+An issue closes from what its report says, never from a merge. GitHub closes
+a referenced issue when a closing keyword reaches the default branch, which
+here is a promotion: an event that accepts source history and certifies
+nothing. So no commit message on its way to `dev` and no promotion body
+carries one, and a message links an issue with `Refs #<n>`.
+
 The canonical agent workflow follows the Agent Skills open standard under
 `.agents/skills/`. Product-specific discovery locations may contain thin
 adapters, but they do not own or duplicate the workflow.
