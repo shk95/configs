@@ -108,7 +108,8 @@ zone, key-only sshd on 2223, and the state version — and nothing a standalone
 home can declare (`docs/policy/decisions/unixlike/nixos-wsl-system-layer-ownership.md`). Its
 output is `nixosConfigurations.<identity.wsl.hostName>`, and
 `unixlike/tool/checks/flake-test` proves the host answers to that name (#191).
-GUI options are set off explicitly; #21 owns WSLg and `INV
+GUI options are set off explicitly; WSLg is the deferred item of
+`docs/work/roadmap.md` (it was #21 until 2026-09-19) and `INV
 unixlike/desktop-not-wsl` stands. The coding agents (`claude-code`, `codex`)
 are a Home Manager class, `homeManager.agents`, composed into this home only
 (#195). The distribution was imported on 2026-09-06 from the toplevel the
