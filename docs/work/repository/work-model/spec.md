@@ -283,3 +283,20 @@ Amended 2026-09-19, the Components table and AC2, after
   `tool/version-control/classify` because its case arms name area paths.
 - A work item's scope is its area's scope position, the directory directly
   under `docs/work/`, as the classifier reads it.
+
+Amended 2026-09-19, the Issues decision, the closing-keywords component and
+AC4. A re-verification found two commits on `dev` that are not yet on
+`master` and carry a closing keyword (d3046c6, "closes #215"; 574e0fc,
+"Closes #218"). A promotion pull request runs the same jobs as any other, so
+a check over its commit range would refuse every promotion, and history is
+not rewritten.
+
+- The merge-gate step reads the commit range only of a pull request whose
+  base is `dev`. On a promotion pull request it does not run, and the
+  promotion job's check of the body stands alone.
+- Every commit reaches `dev` through such a pull request, so none passes
+  unchecked from here on; the two commits are let through by that scoping,
+  not by a list of exceptions. Both issues are closed already.
+- AC4's fixtures prove both directions of the scoping as well: a keyword
+  commit refused in a range whose base is `dev`, and the same range left
+  unread when the base is `master`.
