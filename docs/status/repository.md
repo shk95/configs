@@ -109,11 +109,14 @@ closing keyword. A push to `dev` that ends a report closes the issue its
 spec names (`.github/workflows/work-closure.yml`), `tool/version-control/audit`
 warns about a spec past its review-by, and `tool/version-control/audit-remote`
 reports an issue left open beside a terminal report; the workflow has not yet
-closed a real issue. Three work items are open: the document layout
-(`docs/work/repository/docs-layout/report.md`, review lanes owed), the work
-model itself (`docs/work/repository/work-model/report.md`) and the in-place
-NixOS-WSL update (`docs/work/unixlike/nixos-wsl-in-place-update/report.md`,
-not started).
+closed a real issue. The document layout is done
+(`docs/work/repository/docs-layout/report.md`); what it left is the
+classifier's handling of the registries' old roots, a provisional measure
+that ends when the move reaches `master` (#275). Two work items are open: the
+work model itself (`docs/work/repository/work-model/report.md`) and the
+in-place NixOS-WSL update
+(`docs/work/unixlike/nixos-wsl-in-place-update/report.md`, in progress,
+#272).
 
 ## Common
 

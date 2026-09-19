@@ -5,7 +5,7 @@ since: 2026-09-19
 exit-when: The commit that moved the registries under `docs/` is an ancestor of `master`, so no pull-request or promotion range spans the deletion of the old roots.
 watch: manual
 review-by: 2026-10-31
-issue: #259
+issue: #275
 decision: docs/policy/decisions/repository/documents-classified-by-scope.md § Documents are classified by the scope directory that holds them
 owner: repository maintainer
 
