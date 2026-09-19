@@ -221,4 +221,25 @@ expect_clean 'the NixOS flavour'
 failed_assertions "$darwin" '{ }'
 expect_clean 'the Darwin flavour'
 
+# ---------------------------------------------------------------------------
+# The NixOS host carries no channel
+# ---------------------------------------------------------------------------
+#
+# INV unixlike/nixos-no-channel
+# modules/nix/shared.nix turns channels off and asserts it. A module that
+# turns them back on is the violation; the real configuration must pass, and
+# its search path must then name the flake's nixpkgs and nothing else, which
+# is what makes a rebuild without `--flake` stop before it builds anything.
+
+printf '→ refuses a NixOS configuration with channels on\n'
+failed_assertions "$nixos" '{lib, ...}: { nix.channel.enable = lib.mkForce true; }'
+expect_refusal 'INV unixlike/nixos-no-channel' 'nix.channel.enable = true'
+
+printf '→ the real NixOS flavour has channels off and searches the flake alone\n'
+failed_assertions "$nixos" '{ }'
+expect_clean 'the NixOS flavour'
+nix_path=$(nix eval --raw "path:$repo#$nixos.config.nix.nixPath" --apply 'builtins.concatStringsSep " "')
+[ "$nix_path" = "nixpkgs=flake:nixpkgs" ] ||
+  fail "nixosConfigurations.$wsl_host searches '$nix_path', expected nixpkgs=flake:nixpkgs alone"
+
 echo "✓ flake schema fixtures behave"
