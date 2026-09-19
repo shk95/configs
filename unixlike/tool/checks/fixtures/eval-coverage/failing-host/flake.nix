@@ -8,8 +8,14 @@
   # only ever evaluated, as an aarch64 one is on an x86_64 machine, has no
   # other evidence to lose.
   description = "eval-coverage fixture: a host that fails to evaluate";
+  #
+  # `pkgs.stdenv.system` is there for a `nix flake check` that reads it to
+  # learn a NixOS configuration's platform, as the merge gate's Nix does.
   outputs = _: let
-    pkgs.stdenv.hostPlatform.system = "riscv64-linux";
+    pkgs.stdenv = {
+      system = "riscv64-linux";
+      hostPlatform.system = "riscv64-linux";
+    };
   in {
     nixosConfigurations = {
       sound = {
