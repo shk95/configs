@@ -5,6 +5,7 @@ date: 2026-09-19
 scope: repository
 status: approved
 review-by: 2026-10-17
+issue: #285
 
 Agreed with the maintainer in the session of 2026-09-19. It is the unnumbered
 item `docs/work/roadmap.md` places before order 4.
