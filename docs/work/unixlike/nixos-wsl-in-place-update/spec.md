@@ -112,3 +112,16 @@ needs the account password, so the maintainer runs them.
   one-output assumption is replaced there (roadmap order 4).
 - WSLg (deferred on the roadmap).
 - `.wslconfig` and any Windows-side state.
+
+## Amendments
+
+Amended 2026-09-19, AC8, with the maintainer's approval. The criterion said
+that a `just nixos-switch` after the rollback activates the current
+configuration "again as a further generation". It cannot: when a profile is
+set to the path its highest-numbered generation already holds, Nix reuses
+that generation. The host showed it (generations 1 to 4 before and after,
+with 3 current in between) and a throwaway profile reproduces it with Nix
+2.35.1. AC8 now reads: `just nixos-rollback` returns to the previous
+configuration, and a following `just nixos-switch` activates the current one
+again; while the configuration is unchanged that is the same generation, and
+the rollback is visible in the generation list taken between the two.

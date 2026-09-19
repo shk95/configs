@@ -149,8 +149,13 @@ the search path before and after, as predicted; the cleanup removed
 toplevel is the one the Ubuntu distribution had built, and both managers
 report `running`. Generation 3 had been activated earlier the same day from
 the tree before channels were turned off, which the paragraph above did not
-know when it called generation 2 current. A rollback and a second switch
-were run and reported working; the readings still owed are in the report.
+know when it called generation 2 current. `just nixos-rollback` went back to
+generation 3 and `just nixos-switch` returned to generation 4, the same
+generation rather than a fifth, because Nix reuses the one that already holds
+the path. The binfmt_misc mount is read-only in this distribution and a
+Windows executable runs from a fresh shell; one long-lived shell session
+failed to run one earlier the same evening, unexplained and not seen since.
+The work is done (`docs/work/unixlike/nixos-wsl-in-place-update/report.md`).
 
 ## Open conditions
 
