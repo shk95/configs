@@ -26,7 +26,7 @@ maintainer owns this file, and changing the order is a repository change.
 | 1 | docs layout — done 2026-09-19 | repository |
 | 2 | work model — done 2026-09-19 | repository |
 | 3 | NixOS-WSL updated in place — done 2026-09-19 | unixlike |
-| — | release tag contract: an annotation that states each host's evidence state (before 4) | repository |
+| — | release tag contract: an annotation that states each host's evidence state (before 4) — done 2026-09-19 | repository |
 | 4 | typed NixOS host inventory | unixlike |
 | — | judgement on the CI decision's `reopen-when` (before 5) | repository |
 | 5 | headless x86_64 guest on VMware Workstation | unixlike; a windows spec for the host install |

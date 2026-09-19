@@ -115,8 +115,12 @@ classifier's handling of the registries' old roots, a provisional measure
 that ends when the move reaches `master` (#275). The work model is done too
 (`docs/work/repository/work-model/report.md`), and so is the in-place
 NixOS-WSL update (`docs/work/unixlike/nixos-wsl-in-place-update/report.md`),
-whose issue the workflow also closed. No work item is open;
-`docs/work/roadmap.md` names what comes next.
+whose issue the workflow also closed. A release tag annotation now states
+each host's evidence in a block of its own, which the audit holds every tag
+but the two of 2026-08-31 to
+(`docs/work/repository/release-tag-contract/report.md`); no tag has been
+created in that form yet. No work item is open; `docs/work/roadmap.md` names
+what comes next.
 
 ## Common
 

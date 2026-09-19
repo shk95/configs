@@ -2,7 +2,7 @@
 
 kind: report
 spec: docs/work/repository/release-tag-contract/spec.md
-status: pending
+status: done
 
 ## Acceptance
 
@@ -14,4 +14,4 @@ status: pending
 | AC4 | verified | Same unit at e2d77c0: `unixlike-v2026.08.31` and `windows-v2026.08.31` are accepted in the old form, `windows-v2026.08.31` without `Build:` is refused, and `unixlike-v2026.08.31.1` in the old form is refused for having no host block, as are `unixlike-v2030.06.02` and `windows-v2030.06.02`. |
 | AC5 | verified | The unit opens with `INV repository/release-tag-contract`, and `tool/version-control/invariants` at e2d77c0 reports 0 fixture units untagged. Sixteen mutation runs on 2026-09-19 against the unit extracted from the suite and run with the real audit in a stand-in repository, each restored, each failing the unit at the case written for it: dropping the no-host-block, missing-lane, repeated-lane, lane-outside-a-block, value, label-grammar, repeated-label, common-host-block, common-missing-lane and `Domain:` refusals; accepting any text after a valid state word; adding a third name to the legacy list; emptying the legacy list; no longer checking a legacy tag's fields; and the two `plan-release` mutations of AC2. The unmutated unit passes in the same harness. |
 | AC6 | verified | At e2d77c0 on this repository: `tool/version-control/audit` reports `ok: release tag is annotated, evidenced, and master-reachable` for `unixlike-v2026.08.31` and for `windows-v2026.08.31` and 0 failures; `invariants` (64 registered, 0 pending), `design-citations`, `records`, `work`, `hygiene` and `provisional` pass, run by hand and again by the pre-commit hook of that commit. |
-| AC7 | pending | |
+| AC7 | verified | `Required checks` passed on the head of each pull request of this work before it merged: #286 (424d1a2, merged as 9886887) and #287 (e5ce147, after `origin/dev` was merged into it locally, merged as b181a0d). The pull request that carries this row is held to the same check by the merge gate before it lands, and the `Work closure` run on its push is what closes #285. |
