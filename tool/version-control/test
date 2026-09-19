@@ -4879,4 +4879,218 @@ if (cd "$closing_repo" && "$closing_keywords" --range 00000000000000000000000000
   exit 1
 fi
 
+# ---------------------------------------------------------------------------
+# An execution issue closes from its report
+# ---------------------------------------------------------------------------
+#
+# INV repository/issue-closes-from-report
+# tool/version-control/close-issues is what the closure workflow runs on a
+# push to dev. A stand-in gh on PATH records every call and answers an issue's
+# state. Between two commits, the report that became done closes its issue as
+# completed and the one that stayed pending closes nothing; an abandoned one
+# closes as not planned; a report that was already terminal at the base, a
+# spec that names no issue, and a tree the work check refuses close nothing.
+# The same stand-in proves the two audit readings: `work --unclosed`, which
+# tool/version-control/audit-remote reports, lists a terminal report whose
+# issue is open and not one whose issue is closed, and
+# tool/version-control/audit warns about a spec past its review-by.
+close_issues="$root/tool/version-control/close-issues"
+
+grep -q 'run: tool/version-control/close-issues "$PUSH_BASE" "$PUSH_HEAD"' "$root/.github/workflows/work-closure.yml"
+grep -q 'issues: write' "$root/.github/workflows/work-closure.yml"
+grep -q 'contents: read' "$root/.github/workflows/work-closure.yml"
+grep -q '"$audit_tools/work" --unclosed' "$root/tool/version-control/audit-remote"
+grep -q '"$audit_tools/work" --overdue' "$root/tool/version-control/audit"
+
+closure_stub="$test_root/closure-gh"
+closure_log="$test_root/closure-gh.log"
+mkdir -p "$closure_stub"
+cat >"$closure_stub/gh" <<'STUB'
+#!/bin/sh
+printf '%s\n' "$*" >>"$CLOSURE_LOG"
+case "$1 $2" in
+  "issue view") case "$3" in 7) echo OPEN ;; *) echo CLOSED ;; esac ;;
+esac
+STUB
+chmod +x "$closure_stub/gh"
+
+closure_run() {
+  : >"$closure_log"
+  (cd "$work_repo" && PATH="$closure_stub:$PATH" CLOSURE_LOG="$closure_log" \
+    GITHUB_REPOSITORY=owner/repo "$close_issues" "$@" 2>&1)
+}
+
+# closure_issue <item directory> <n>: the spec names its execution issue.
+closure_issue() {
+  sed "s/^review-by: .*/&\\
+issue: #$2/" "$1/spec.md" >"$1/spec.tmp"
+  mv "$1/spec.tmp" "$1/spec.md"
+}
+
+# Two items, both pending: probe (#7) and other (#8).
+work_new
+closure_issue "$work_item" 7
+closure_probe=$work_item
+closure_other="$work_repo/docs/work/unixlike/other"
+mkdir -p "$closure_other"
+sed 's/^# Probe/# Other/' "$closure_probe/spec.md" | sed 's/^issue: #7/issue: #8/' >"$closure_other/spec.md"
+sed 's#unixlike/probe/#unixlike/other/#' "$closure_probe/report.md" >"$closure_other/report.md"
+work_run >/dev/null
+git -C "$work_repo" commit -q -m 'docs(unixlike): open two items'
+closure_base=$(git -C "$work_repo" rev-parse HEAD)
+
+# probe becomes done; other stays pending.
+work_item=$closure_probe
+work_report done verified verified
+work_run >/dev/null
+git -C "$work_repo" commit -q -m 'docs(unixlike): end the probe'
+closure_done=$(git -C "$work_repo" rev-parse HEAD)
+
+closure_listing=$(cd "$work_repo" && "$work_check" --became-terminal "$closure_base" "$closure_done")
+[ "$closure_listing" = '#7 done docs/work/unixlike/probe/report.md' ] || {
+  printf '%s\n' "$closure_listing" >&2
+  echo "work --became-terminal did not list exactly the report that became done" >&2
+  exit 1
+}
+closure_output=$(closure_run "$closure_base" "$closure_done") || {
+  printf '%s\n' "$closure_output" >&2
+  echo "close-issues failed on a report that became done" >&2
+  exit 1
+}
+grep -qF "issue close 7 --repo owner/repo --reason completed --comment" "$closure_log" &&
+  grep -qF "https://github.com/owner/repo/blob/$closure_done/docs/work/unixlike/probe/report.md" "$closure_log" || {
+  cat "$closure_log" >&2
+  echo "close-issues did not close the done report's issue as completed with a link to the report" >&2
+  exit 1
+}
+if grep -q 'issue close 8' "$closure_log"; then
+  cat "$closure_log" >&2
+  echo "close-issues closed an issue whose report is still pending" >&2
+  exit 1
+fi
+
+# The same report, already terminal at the base, closes nothing again, and
+# --dry-run performs no close.
+closure_run "$closure_done" "$closure_done" >/dev/null
+if grep -q 'issue close' "$closure_log"; then
+  cat "$closure_log" >&2
+  echo "close-issues closed an issue whose report was already terminal at the base" >&2
+  exit 1
+fi
+closure_output=$(closure_run --dry-run "$closure_base" "$closure_done")
+printf '%s\n' "$closure_output" | grep -qF 'would close #7 as completed' || {
+  printf '%s\n' "$closure_output" >&2
+  echo "close-issues --dry-run did not print the close" >&2
+  exit 1
+}
+if grep -q 'issue close' "$closure_log"; then
+  echo "close-issues --dry-run performed a close" >&2
+  exit 1
+fi
+
+# The zero id of a first push holds no report: everything terminal is listed.
+closure_listing=$(cd "$work_repo" && "$work_check" --became-terminal 0000000000000000000000000000000000000000 "$closure_done")
+[ "$closure_listing" = '#7 done docs/work/unixlike/probe/report.md' ] || {
+  echo "work --became-terminal did not read a first push" >&2
+  exit 1
+}
+
+# The remote reading: #7 is open while its report is done; #8's report is
+# pending, so it is not listed whatever the remote says.
+closure_unclosed=$(cd "$work_repo" && PATH="$closure_stub:$PATH" CLOSURE_LOG="$closure_log" "$work_check" --unclosed)
+[ "$closure_unclosed" = '#7 done docs/work/unixlike/probe/report.md' ] || {
+  printf '%s\n' "$closure_unclosed" >&2
+  echo "work --unclosed did not list the terminal report whose issue is open" >&2
+  exit 1
+}
+
+# other is abandoned: closed as not planned. Its issue then reads closed, so
+# --unclosed still lists only #7.
+work_item=$closure_other
+{
+  printf '# Report: other\n\nkind: report\nspec: docs/work/unixlike/other/spec.md\nstatus: abandoned\n\n'
+  printf '## Acceptance\n\n| ID | State | Evidence |\n| --- | --- | --- |\n'
+  printf '| AC1 | verified | read at 0000000 |\n| AC2 | unmet | |\n'
+} >"$work_item/report.md"
+work_run >/dev/null
+git -C "$work_repo" commit -q -m 'docs(unixlike): abandon the other'
+closure_abandoned=$(git -C "$work_repo" rev-parse HEAD)
+closure_run "$closure_done" "$closure_abandoned" >/dev/null
+grep -qF 'issue close 8 --repo owner/repo --reason not planned --comment' "$closure_log" || {
+  cat "$closure_log" >&2
+  echo "close-issues did not close an abandoned report's issue as not planned" >&2
+  exit 1
+}
+if grep -q 'issue close 7' "$closure_log"; then
+  echo "close-issues closed the earlier report's issue a second time" >&2
+  exit 1
+fi
+closure_unclosed=$(cd "$work_repo" && PATH="$closure_stub:$PATH" CLOSURE_LOG="$closure_log" "$work_check" --unclosed)
+[ "$closure_unclosed" = '#7 done docs/work/unixlike/probe/report.md' ] || {
+  printf '%s\n' "$closure_unclosed" >&2
+  echo "work --unclosed listed a terminal report whose issue is closed" >&2
+  exit 1
+}
+
+# A done report whose spec names no issue closes nothing.
+work_new
+work_run >/dev/null
+git -C "$work_repo" commit -q -m 'docs(unixlike): open the probe'
+closure_base=$(git -C "$work_repo" rev-parse HEAD)
+work_report done verified verified
+work_run >/dev/null
+git -C "$work_repo" commit -q -m 'docs(unixlike): end the probe'
+closure_run "$closure_base" HEAD >/dev/null
+if grep -q 'issue close' "$closure_log"; then
+  echo "close-issues closed something for a spec that names no issue" >&2
+  exit 1
+fi
+
+# A report that says done while a criterion is pending is refused by the work
+# check, and nothing is closed.
+work_new
+closure_issue "$work_item" 7
+work_run >/dev/null
+git -C "$work_repo" commit -q -m 'docs(unixlike): open the probe'
+closure_base=$(git -C "$work_repo" rev-parse HEAD)
+work_report done verified pending
+git -C "$work_repo" add -A
+git -C "$work_repo" commit -q -m 'docs(unixlike): end the probe early'
+if closure_output=$(closure_run "$closure_base" HEAD); then
+  printf '%s\n' "$closure_output" >&2
+  echo "close-issues ran on a tree the work check refuses" >&2
+  exit 1
+fi
+if grep -q 'issue close' "$closure_log"; then
+  echo "close-issues closed an issue from a report the work check refuses" >&2
+  exit 1
+fi
+
+# The audit warns about a spec past its review-by whose report is pending, and
+# says so when there is none. The clone has origin/dev and origin/master, so
+# the audit can answer.
+closure_audit="$test_root/closure-audit"
+git clone -q "$audit_bare" "$closure_audit"
+git -C "$closure_audit" config user.name Fixture
+git -C "$closure_audit" config user.email fixture@example.invalid
+git -C "$closure_audit" config core.hooksPath .githooks
+mkdir -p "$closure_audit/.githooks"
+closure_audit_output=$(cd "$closure_audit" && "$audit" 2>&1) || true
+printf '%s\n' "$closure_audit_output" | grep -qF 'ok: no spec is past its review-by with a pending report' || {
+  printf '%s\n' "$closure_audit_output" >&2
+  echo "audit did not report that no spec is overdue" >&2
+  exit 1
+}
+mkdir -p "$closure_audit/docs/work/unixlike"
+cp -R "$work_repo/docs/work/unixlike/probe" "$closure_audit/docs/work/unixlike/probe"
+work_item="$closure_audit/docs/work/unixlike/probe"
+work_report pending pending pending
+git -C "$closure_audit" add -A
+closure_audit_output=$(cd "$closure_audit" && "$audit" 2>&1) || true
+printf '%s\n' "$closure_audit_output" | grep -qF 'warning: overdue spec: docs/work/unixlike/probe/spec.md: review-by 2026-02-05 has passed' || {
+  printf '%s\n' "$closure_audit_output" >&2
+  echo "audit did not warn about a spec past its review-by" >&2
+  exit 1
+}
+
 echo "version-control fixtures passed"
