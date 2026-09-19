@@ -360,6 +360,7 @@ expect unixlike "$classify" --files docs/policy/invariants/unixlike/import-order
 expect windows "$classify" --files docs/policy/invariants/windows/parser-declared.md
 # A common scope is restored together with the domain; until then its paths have no owner.
 expect unclassified "$classify" --files docs/policy/invariants/common/example.md
+# PROV repository/classify-registry-old-roots: the next four fixtures.
 # The removed scope's placeholder keeps an arm of its own: its deletion is
 # inside every pull-request range that spans it, and an unclassified path
 # cannot be pushed.
@@ -509,6 +510,7 @@ for stage in commit push; do
   expect_units '' "$stage" "$(printf 'M\tdocs/status/unixlike.md\nM\tdocs/status/windows.md')"
   expect_units '' "$stage" "$(printf 'A\tdocs/work/unixlike/example/spec.md')"
 done
+# PROV repository/classify-registry-old-roots
 # Deleting from the registries' old roots selects nothing either.
 for stage in commit push; do
   expect_units '' "$stage" "$(printf 'D\tprovisional/unixlike/zellij-overlay.md\nD\tinvariants/windows/parser-declared.md')"

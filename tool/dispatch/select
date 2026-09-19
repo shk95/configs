@@ -60,6 +60,7 @@ cut -f2- <"$changes" | sort -u >"$paths"
 # and the registries' roots before they moved there, are left out of the
 # scopes this selection reads. An unclassified path still reports, from the
 # whole list.
+# PROV repository/classify-registry-old-roots: the two old roots in the filter.
 effect=$(mktemp)
 trap 'rm -f "$changes" "$paths" "$effect"' EXIT
 grep -v -E '^(docs|invariants|provisional)/' "$paths" >"$effect" || [ "$?" -eq 1 ]

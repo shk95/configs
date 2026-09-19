@@ -60,7 +60,10 @@ exception loses no evidence. It also narrows
 thing the classifier answers `unixlike` for outside `unixlike/`. The comments in the domain trees that cite a
 moved path follow as ordinary single-scope changes. The classifier keeps the
 registries' old roots until the move has reached `master`, because their
-deletion sits inside every range that spans it.
+deletion sits inside every range that spans it. Those arms, the selector's
+filter for the same roots and their fixtures are a temporary measure with
+that exit condition, so they are registered in the provisional registry
+under `repository` rather than left to be remembered.
 
 Rejected:
 

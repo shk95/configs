@@ -96,6 +96,7 @@ while IFS= read -r path; do
       echo repository
       ;;
     # common/ has no arm: the change that creates the domain restores its classification, dispatch and gate together (docs/policy/architecture.md, "Common domain").
+    # PROV repository/classify-registry-old-roots
     # The registries' roots before they moved under docs/, and the removed
     # common scope's placeholder: a deletion must still classify while it sits
     # inside a pull-request or promotion range. Dropped once the move has

@@ -177,6 +177,7 @@ repository change after the promotion.
 | AC9 | A change confined to `docs/**/unixlike/` or `docs/**/windows/` selects no domain suite at commit or push, proved by a `tool/dispatch/select` fixture. | fixtures |
 | AC10 | Every step's pull request passes `Required checks`, and the hooks ran on every commit. | affected dispatch |
 | AC11 | `docs/README.md` maps the tree, and `AGENTS.md`, `CONTRIBUTING.md`, `README.md`, the skill and the architecture document describe the new layout. | review |
+| AC12 | The transitional handling of the registries' old roots — the classifier's arms, the selector's filter and their fixtures — is a registered provisional measure whose exit condition is the move reaching `master`, and the `provisional` check accepts its entry and its tags in both directions. | policy checks |
 
 ## Out of scope
 
@@ -201,3 +202,15 @@ repository change after the promotion.
   status-only change in a domain runs that domain's full CI job. The local
   gate does not (AC9); the CI cost is accepted.
 - Parallel sessions push to `dev`; fetch `origin/dev` before each step.
+
+## Amendments
+
+Amended 2026-09-19, AC12 added. A re-verification at 790ca6c found that
+nothing tracks the removal of the classifier's transitional arms: it is no
+criterion here and no increment of the execution issue, so once the report is
+`done` the arms would stand by neglect, and `AGENTS.md` has a temporary
+measure registered in the change that adds it. Step 1 therefore registers
+them, with the selector's filter for the same roots and their fixtures, as a
+provisional measure under `repository`, tagged on every disposable line. AC12
+holds the registration. The retirement stays a repository change after the
+promotion, outside this spec; the registry's review date holds it.
