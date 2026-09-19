@@ -14,6 +14,25 @@ _darwin-target:
 _nixos-target:
     @nix eval --raw path:./unixlike#nixosConfigurations --apply 'configs: let names = builtins.attrNames configs; in assert builtins.length names == 1; builtins.head names'
 
+# The recipes that touch a NixOS system run only on the host the flake's
+# output names: a rebuild anywhere else would activate, or list, another
+# machine's system. Prints the target for the caller.
+[private]
+_nixos-host:
+    #!/usr/bin/env bash
+    set -euo pipefail
+    if [ ! -e /etc/NIXOS ]; then
+      echo "This host is not NixOS (/etc/NIXOS is absent); the nixos-* recipes that rebuild, roll back or list generations run inside the NixOS distribution. 'just nixos-eval' and 'just nixos-build' run anywhere." >&2
+      exit 1
+    fi
+    target=$(just _nixos-target)
+    host=$(cat /proc/sys/kernel/hostname)
+    if [ "${host}" != "${target}" ]; then
+      echo "This NixOS host is '${host}', and the flake's NixOS output is '${target}'; refusing to act on another host's system." >&2
+      exit 1
+    fi
+    printf '%s\n' "${target}"
+
 ############################################################################
 #
 #  repository checks
@@ -109,11 +128,18 @@ home-build:
     target=$(just _home-target)
     nix build --no-link --print-out-paths "path:./unixlike#homeConfigurations.${target}.activationPackage"
 
-# Activation: run only on the intended Ubuntu WSL host.
+# NixOS composes its home into the system, so the standalone home is refused
+# there; 'just nixos-switch' is that host's activation.
+
+# Activation: run only on the intended Ubuntu WSL host; refused on NixOS.
 [group('home-manager')]
 home-switch:
     #!/usr/bin/env bash
     set -euo pipefail
+    if [ -e /etc/NIXOS ]; then
+      echo "NixOS composes Home Manager into the system; activating the standalone home here would put the Ubuntu home over it. Use 'just nixos-switch'." >&2
+      exit 1
+    fi
     target=$(just _home-target)
     generation=$(nix build --no-link --print-out-paths "path:./unixlike#homeConfigurations.${target}.activationPackage")
     "${generation}/activate"
@@ -265,6 +291,15 @@ gc:
 #
 ############################################################################
 
+# Evaluate the NixOS toplevel without building or activating. Runs anywhere.
+[group('nixos-wsl')]
+nixos-eval:
+    #!/usr/bin/env bash
+    set -euo pipefail
+    target=$(just _nixos-target)
+    drv=$(nix eval --raw "path:./unixlike#nixosConfigurations.${target}.config.system.build.toplevel.drvPath")
+    printf '%s\n' "${drv}"
+
 # `unixlike/tool/checks/test` skips this build by default, because nothing on a
 # non-NixOS host can activate the result. This is the deliberate way to ask
 # for it; `CHECKS_BUILD_ALL=1 unixlike/tool/checks/test` is the other.
@@ -286,6 +321,45 @@ nixos-build:
 # default, which is `nixos.wsl` relative to whatever the cwd happens to be. It
 # lands in the repo root and is gitignored; it is owned by root, so removing it
 # needs sudo as well.
+
+# The registered distribution is updated in place, from a clone inside it:
+# build and activate without touching the boot profile, then switch. WSL has
+# no boot loader, so a rollback is a switch to the previous generation, and it
+# is possible only while that generation is inside the garbage collector's
+# window (unixlike/modules/nix/shared.nix). CONTRIBUTING.md, "Update the
+# registered NixOS-WSL distribution", is the procedure.
+
+# Build and activate the NixOS system without making it the boot default.
+[group('nixos-wsl')]
+nixos-test:
+    #!/usr/bin/env bash
+    set -euo pipefail
+    target=$(just _nixos-host)
+    sudo nixos-rebuild test --flake "path:./unixlike#${target}"
+
+# Activation: rebuild and switch the NixOS host this clone sits on.
+[group('nixos-wsl')]
+nixos-switch:
+    #!/usr/bin/env bash
+    set -euo pipefail
+    target=$(just _nixos-host)
+    sudo nixos-rebuild switch --flake "path:./unixlike#${target}"
+
+# Activation: switch back to the previous NixOS generation.
+[group('nixos-wsl')]
+nixos-rollback:
+    #!/usr/bin/env bash
+    set -euo pipefail
+    target=$(just _nixos-host)
+    sudo nixos-rebuild switch --rollback --flake "path:./unixlike#${target}"
+
+# List the NixOS system generations on this host.
+[group('nixos-wsl')]
+nixos-generations:
+    #!/usr/bin/env bash
+    set -euo pipefail
+    just _nixos-host >/dev/null
+    nixos-rebuild list-generations
 
 # Produce the rootfs archive that `wsl --import` takes (needs sudo)
 [group('nixos-wsl')]
