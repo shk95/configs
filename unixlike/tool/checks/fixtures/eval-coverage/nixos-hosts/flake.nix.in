@@ -1,0 +1,24 @@
+{
+  # tool/checks/eval-coverage-test: two NixOS configurations for the platform
+  # the test runs on, which the test substitutes for @system@ in a temporary
+  # copy, because a pure flake cannot ask for the current system. Both
+  # instantiate and both would build; tool/checks/test must build the one
+  # named after the NixOS host it runs on and only evaluate the other.
+  description = "eval-coverage fixture: two NixOS hosts";
+  outputs = _: let
+    host = name: {
+      config.system.build.toplevel = derivation {
+        inherit name;
+        system = "@system@";
+        builder = "/bin/sh";
+        args = ["-c" "echo ${name} > $out"];
+      };
+      pkgs.stdenv.hostPlatform.system = "@system@";
+    };
+  in {
+    nixosConfigurations = {
+      this-host = host "this-host";
+      other-host = host "other-host";
+    };
+  };
+}

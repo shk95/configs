@@ -47,4 +47,50 @@ for case in empty-flavour no-flavour; do
   fi
 done
 
+# A host for another platform is evaluated and never built, so evaluation is
+# all the evidence it has, and one that stops instantiating must fail the run
+# by name while the host beside it is still reported. `nix flake check` does
+# not find it; the row comes from forcing `.drvPath`.
+printf '→ rejects a host that fails to evaluate, by name\n'
+if output=$(CHECKS_FLAKE="path:$fixtures/failing-host" tool/checks/test 2>&1); then
+  printf '%s\n' "$output" >&2
+  fail "the evaluation check passed a host whose toplevel does not instantiate"
+fi
+printf '%s\n' "$output" | grep -q 'nixosConfigurations.broken  *eval ✗$' &&
+  printf '%s\n' "$output" | grep -q 'nixosConfigurations.sound  *eval ✓ build — targets riscv64-linux$' || {
+  printf '%s\n' "$output" >&2
+  fail "the evaluation check did not report the broken host as failed beside the sound one"
+}
+
+# A NixOS host can activate one output, the one named after it, so that is
+# the one the check builds there; every other NixOS output is evaluated and
+# reported as not activatable, as all of them are anywhere else.
+printf '→ builds only the NixOS output named after the host it runs on\n'
+hosts_flake=$(mktemp -d)
+trap 'rm -rf "$hosts_flake"' EXIT
+here=$(nix eval --raw --impure --expr 'builtins.currentSystem')
+sed "s/@system@/$here/g" "$fixtures/nixos-hosts/flake.nix.in" > "$hosts_flake/flake.nix"
+if ! output=$(CHECKS_BUILD_ALL= CHECKS_NIXOS_HOST=this-host CHECKS_FLAKE="path:$hosts_flake" tool/checks/test 2>&1); then
+  printf '%s\n' "$output" >&2
+  fail "the evaluation check rejected the two-host fixture on this-host"
+fi
+printf '%s\n' "$output" | grep -q '^→ build nixosConfigurations.this-host$' &&
+  printf '%s\n' "$output" | grep -q '^→ skip  nixosConfigurations.other-host ' &&
+  ! printf '%s\n' "$output" | grep -q '^→ build nixosConfigurations.other-host$' || {
+  printf '%s\n' "$output" >&2
+  fail "on this-host the evaluation check did not build this-host alone"
+}
+
+# Neither fixture name is this machine's, so the same holds when the test
+# itself runs on a NixOS host.
+printf '→ builds no NixOS output on a host none of them is named after\n'
+if ! output=$(CHECKS_BUILD_ALL= CHECKS_NIXOS_HOST= CHECKS_FLAKE="path:$hosts_flake" tool/checks/test 2>&1); then
+  printf '%s\n' "$output" >&2
+  fail "the evaluation check rejected the two-host fixture off-host"
+fi
+if printf '%s\n' "$output" | grep -q '^→ build nixosConfigurations'; then
+  printf '%s\n' "$output" >&2
+  fail "the evaluation check built a NixOS output on a host it is not named after"
+fi
+
 printf '✓ evaluation coverage fixtures behave\n'
