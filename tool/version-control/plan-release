@@ -65,13 +65,27 @@ else
   candidate="$base.$((max + 1))"
 fi
 
-cat <<EOF
-tag: $candidate
-target: $target
-annotation-template:
-  Domain: $domain
-  Evaluation: <passed | unavailable | not applicable; include reference>
-  Build: <passed | unavailable | not applicable; include reference>
-  Native runtime: <passed | unavailable | not applicable; include host/reference>
-  Deployment: not performed by release
+# A unixlike or windows release states its evidence in a block per host; a
+# common release deploys nowhere and states it once. tool/version-control/audit
+# holds a created tag to the same form.
+states='passed | unavailable | not applicable'
+printf 'tag: %s\ntarget: %s\nannotation-template:\n  Domain: %s\n' "$candidate" "$target" "$domain"
+if [ "$domain" = common ]; then
+  cat <<EOF
+  Evaluation: <$states; include reference>
+  Build: <$states; include reference>
+  Native runtime: <$states; include reference>
 EOF
+else
+  cat <<EOF
+
+  Host: <label of a kind of host, [a-z0-9][a-z0-9-]*; never a machine or account name>
+    Evaluation: <$states; include reference>
+    Build: <$states; include reference>
+    Native runtime: <$states; include reference>
+
+  <repeat the block for every host the release speaks for>
+
+EOF
+fi
+echo '  Deployment: not performed by release'

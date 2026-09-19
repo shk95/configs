@@ -627,6 +627,7 @@ printf '%s\n' "$first_plan" | grep -q '^tag: unixlike-v2030.01.02$'
 
 git -C "$test_root" tag -a unixlike-v2030.01.02 \
   -m 'Domain: unixlike' \
+  -m 'Host: fixture-host' \
   -m 'Evaluation: passed; fixture' \
   -m 'Build: passed; fixture' \
   -m 'Native runtime: passed; fixture'
@@ -751,7 +752,8 @@ fi
 audit_ci_commit=$(git -C "$audit_ci" -c user.name=Fixture -c user.email=fixture@example.invalid \
   commit-tree -p HEAD -m 'feat(repository): leave master behind' 'HEAD^{tree}')
 git -C "$audit_ci" -c user.name=Fixture -c user.email=fixture@example.invalid \
-  tag -a windows-v2030.04.05 -m 'Domain: windows' -m 'Evaluation: passed; fixture' \
+  tag -a windows-v2030.04.05 -m 'Domain: windows' -m 'Host: windows' \
+  -m 'Evaluation: passed; fixture' \
   -m 'Build: passed; fixture' -m 'Native runtime: passed; fixture' "$audit_ci_commit"
 audit_status=0
 audit_ci_tag=$(cd "$audit_ci" && REQUIRE_NATIVE=1 "$audit" --history 2>&1) || audit_status=$?
@@ -872,7 +874,7 @@ printf 'unpublished\n' >>"$audit_ahead/file"
 git -C "$audit_ahead" commit -q -am 'feat(repository): prepare an unpublished release'
 git -C "$audit_ahead" switch -q master
 git -C "$audit_ahead" merge -q --no-ff dev -m "Merge branch 'dev'"
-git -C "$audit_ahead" tag -a windows-v2030.05.06 -m 'Domain: windows' \
+git -C "$audit_ahead" tag -a windows-v2030.05.06 -m 'Domain: windows' -m 'Host: windows' \
   -m 'Evaluation: passed; fixture' -m 'Build: passed; fixture' \
   -m 'Native runtime: passed; fixture'
 audit_status=0
@@ -945,6 +947,146 @@ git -C "$test_root" tag -d windows-v2030.01.02 >/dev/null
 git -C "$test_root" tag -a windows-v2030.01.02 -m 'Domain: windows'
 if (cd "$test_root" && "$audit") >/dev/null 2>&1; then
   echo "audit accepted a release tag without evidence" >&2
+  exit 1
+fi
+git -C "$test_root" tag -d windows-v2030.01.02 >/dev/null
+
+# INV repository/release-tag-contract: the annotation states each host's
+# evidence in a block of its own. Each case is one tag on master, judged by
+# the real audit and removed; a refusal must name the tag and the defect.
+tag_case() {
+  # tag_case <accept|refuse> <tag> <expected output, a grep pattern> <annotation>
+  git -C "$test_root" tag -a "$2" -m "$4"
+  tag_case_status=0
+  tag_case_output=$(cd "$test_root" && "$audit" 2>&1) || tag_case_status=$?
+  git -C "$test_root" tag -d "$2" >/dev/null
+  if [ "$1" = accept ] && [ "$tag_case_status" -eq 0 ] &&
+    printf '%s\n' "$tag_case_output" | grep -q "$3"; then
+    return 0
+  fi
+  if [ "$1" = refuse ] && [ "$tag_case_status" -ne 0 ] &&
+    printf '%s\n' "$tag_case_output" | grep -q "$3"; then
+    return 0
+  fi
+  printf '%s\n' "$tag_case_output" >&2
+  echo "audit did not $1 $2 with: $3" >&2
+  exit 1
+}
+two_hosts='Domain: unixlike
+
+Host: darwin
+  Evaluation: passed; fixture
+  Build: passed
+  Native runtime: not applicable; fixture
+
+Host: wsl-nixos
+  Native runtime: unavailable; nobody ran it
+  Build: passed; fixture
+  Evaluation: passed; fixture
+
+Deployment: not performed by release'
+tag_case accept unixlike-v2030.06.01 '^ok: release tag is annotated, evidenced, and master-reachable: unixlike-v2030.06.01$' "$two_hosts"
+tag_case accept common-v2030.06.01 '^ok: .*: common-v2030.06.01$' 'Domain: common
+Evaluation: passed; fixture
+Build: not applicable
+Native runtime: not applicable; deploys nowhere
+Deployment: not performed by release'
+
+old_form='Evaluation: passed; fixture
+Build: passed; fixture
+Native runtime: passed; fixture'
+tag_case refuse unixlike-v2030.06.02 'has no host block (unixlike-v2030.06.02)$' "Domain: unixlike
+$old_form"
+tag_case refuse windows-v2030.06.02 'Build stands outside a host block (windows-v2030.06.02)$' "Domain: windows
+$old_form"
+tag_case refuse unixlike-v2030.06.03 'host darwin lacks Native runtime (unixlike-v2030.06.03)$' 'Domain: unixlike
+Host: darwin
+Evaluation: passed
+Build: passed
+Host: wsl-nixos
+Evaluation: passed
+Build: passed
+Native runtime: passed'
+tag_case refuse unixlike-v2030.06.04 'host darwin repeats Build (unixlike-v2030.06.04)$' 'Domain: unixlike
+Host: darwin
+Evaluation: passed
+Build: passed
+Build: passed
+Native runtime: passed'
+tag_case refuse unixlike-v2030.06.05 'Evaluation stands outside a host block (unixlike-v2030.06.05)$' 'Domain: unixlike
+Evaluation: passed
+Host: darwin
+Evaluation: passed
+Build: passed
+Native runtime: passed'
+tag_case refuse unixlike-v2030.06.06 'Native runtime is none of passed, unavailable, not applicable: probably (unixlike-v2030.06.06)$' 'Domain: unixlike
+Host: darwin
+Evaluation: passed
+Build: passed
+Native runtime: probably'
+tag_case refuse unixlike-v2030.06.07 'Build is none of passed, unavailable, not applicable: passedish; fixture (unixlike-v2030.06.07)$' 'Domain: unixlike
+Host: darwin
+Evaluation: passed
+Build: passedish; fixture
+Native runtime: passed'
+tag_case refuse unixlike-v2030.06.08 'host label is outside .*: Some-Machine.local (unixlike-v2030.06.08)$' 'Domain: unixlike
+Host: Some-Machine.local
+Evaluation: passed
+Build: passed
+Native runtime: passed'
+tag_case refuse unixlike-v2030.06.09 'host label is repeated: darwin (unixlike-v2030.06.09)$' 'Domain: unixlike
+Host: darwin
+Evaluation: passed
+Build: passed
+Native runtime: passed
+Host: darwin
+Evaluation: passed
+Build: passed
+Native runtime: passed'
+tag_case refuse common-v2030.06.02 'a common tag carries a host block: darwin (common-v2030.06.02)$' 'Domain: common
+Host: darwin
+Evaluation: passed
+Build: passed
+Native runtime: passed'
+tag_case refuse common-v2030.06.03 'lacks Build (common-v2030.06.03)$' 'Domain: common
+Evaluation: passed
+Native runtime: not applicable'
+tag_case refuse windows-v2030.06.03 'lacks Domain: windows (windows-v2030.06.03)$' 'Domain: unixlike
+Host: windows
+Evaluation: passed
+Build: passed
+Native runtime: passed'
+
+# The two tags that predate the form are excepted by name, and the list is
+# closed: the same annotation under any other name is refused above.
+tag_case accept unixlike-v2026.08.31 '^ok: .*: unixlike-v2026.08.31$' "Domain: unixlike
+$old_form"
+tag_case accept windows-v2026.08.31 '^ok: .*: windows-v2026.08.31$' "Domain: windows
+$old_form"
+tag_case refuse windows-v2026.08.31 'lacks Build: (windows-v2026.08.31)$' 'Domain: windows
+Evaluation: passed
+Native runtime: passed'
+tag_case refuse unixlike-v2026.08.31.1 'has no host block (unixlike-v2026.08.31.1)$' "Domain: unixlike
+$old_form"
+
+# The planner templates the form the audit holds, per domain, and creates
+# no tag.
+tags_before=$(git -C "$test_root" tag)
+host_plan=$(cd "$test_root" && "$plan_release" windows master 2030.07.01)
+printf '%s\n' "$host_plan" | grep -q '^  Host: <label' &&
+  printf '%s\n' "$host_plan" | grep -q '^    Native runtime: <passed | unavailable | not applicable' &&
+  ! printf '%s\n' "$host_plan" | grep -q '^  Evaluation:' || {
+  echo "plan-release did not template a host block for windows" >&2
+  exit 1
+}
+common_plan=$(cd "$test_root" && "$plan_release" common master 2030.07.01)
+printf '%s\n' "$common_plan" | grep -q '^  Build: <passed | unavailable | not applicable' &&
+  ! printf '%s\n' "$common_plan" | grep -q 'Host:' || {
+  echo "plan-release did not template domain-level lanes for common" >&2
+  exit 1
+}
+if [ "$(git -C "$test_root" tag)" != "$tags_before" ]; then
+  echo "plan-release created a tag" >&2
   exit 1
 fi
 

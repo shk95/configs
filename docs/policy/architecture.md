@@ -499,6 +499,17 @@ evidence record and distinguishes evaluation, build, and native-runtime checks.
 Activation and Apply remain later deployment events and are never inferred
 from the tag.
 
+A domain configures more than one host, and one line per lane cannot say
+which host it speaks for: a reader could not tell a host that passed from one
+nobody ran. A `unixlike` or `windows` annotation therefore states the three
+lanes once for each host the release speaks for, in a block opened by
+`Host: <label>`, and each value opens with `passed`, `unavailable` or
+`not applicable`. A `common` release deploys nowhere and states them once. A
+label names a kind of host and never a machine: a tag is immutable and
+public, and the hygiene scan never reads one. The annotation declares its own
+hosts, because a repository tool must not evaluate a domain to learn them
+(`docs/policy/decisions/repository/release-annotation-states-each-host.md`).
+
 The annotated tag is the only release record; the repository creates no
 GitHub Releases. A Release is a second surface for the same event, editable
 and deletable without touching the tag, so two records could disagree and the
