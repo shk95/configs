@@ -21,6 +21,12 @@ other document directories, which is why the ownership table, the placement
 paragraph in `AGENTS.md` and this entry's own statement can all say where
 design documents live without citing one.
 
+Two places that carry no authority may name a work item: the status files,
+which link the report behind a statement of current state instead of
+repeating it, and the map of the document tree. The area's own two files —
+its format contract and the order of work — hold no argument, so naming
+either is not a citation and passes anywhere.
+
 Accepted limits, which are the reviewer's rather than the check's: a citation
 written in words carries no path and passes; a template such as the slug form
 in a format contract is not a file name and passes; and the inlets are

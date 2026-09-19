@@ -5,6 +5,7 @@ date: 2026-09-19
 scope: repository
 status: approved
 review-by: 2026-10-24
+issue: #265
 
 Agreed with the maintainer in the session of 2026-09-19 and revised the same
 day after an independent review whose findings were reproduced before they

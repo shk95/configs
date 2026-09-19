@@ -100,6 +100,12 @@ evidence_run "design citations" tool/version-control/design-citations \
 evidence_run records tool/version-control/records \
   || abort "See docs/policy/invariants/repository/document-index-generated.md."
 
+# A work item is checked repository-wide for the same reason: a spec and its
+# report live in any scope. --staged also holds the commit about to be made to
+# the criteria its spec carried before it.
+evidence_run work tool/version-control/work --staged \
+  || abort "See docs/work/README.md and docs/policy/invariants/repository/work-spec-has-report.md."
+
 # The invariant registry check is repository-wide for the same reason
 # hygiene is: a fixture renamed in any scope can orphan the tag an entry
 # depends on, so it runs unconditionally rather than through dispatch.

@@ -157,6 +157,23 @@ jobs:
       - run: tool/version-control/domain-reads
       - run: tool/version-control/design-citations
       - run: tool/version-control/records
+      # The range is the one the classify job reads, so a criterion rewritten
+      # anywhere in a pull request or a push is judged against the spec its
+      # base carried. HEAD is the commit under test: on a pull request the
+      # merge GitHub would make.
+      - name: Check the work items
+        shell: bash
+        env:
+          EVENT_NAME: ${{ github.event_name }}
+          PR_BASE: ${{ github.event.pull_request.base.sha }}
+          PUSH_BASE: ${{ github.event.before }}
+        run: |
+          if [[ "$EVENT_NAME" == pull_request ]]; then
+            base=$PR_BASE
+          else
+            base=$PUSH_BASE
+          fi
+          tool/version-control/work --range "$base" HEAD
       - run: tool/version-control/invariants
       # An overdue entry fails only the scopes this change owns, so the scope
       # list comes from the classify job rather than from this one.

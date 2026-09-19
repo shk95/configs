@@ -4350,7 +4350,10 @@ fi
 # the directory in a placement rule, writes the slug template a format
 # contract carries, and cites documents from the four inlets and from a
 # sibling design document; it must pass, because a citation names a document
-# while a placement rule names the directory.
+# while a placement rule names the directory. The same two repositories carry
+# the rule as it stands for work items: a work item's path is refused in each
+# place that carries authority, accepted from current state and the map of
+# the tree, and the area's own two files are accepted from anything.
 design_citations="$root/tool/version-control/design-citations"
 
 # Wired the way domain-reads is: every commit, and the repository-wide CI
@@ -4378,6 +4381,18 @@ printf '# Restructure\n\nkind: study\n' >"$design_fixture/docs/work/restructure.
 printf 'The tree moves, as docs/work/restructure.md argues.\n' >"$design_fixture/docs/policy/architecture.md"
 printf 'id: repository/probe\nrationale: docs/work/restructure.md \302\247 Restructure\n' >"$design_fixture/docs/policy/invariants/repository/probe.md"
 printf '#!/bin/sh\n# Why this shape: docs/work/restructure.md.\nexit 0\n' >"$design_fixture/tool/version-control/probe"
+# A work item's path, in each place the rule names as carrying authority. The
+# last line also names the area's format contract, which does not excuse the
+# work item beside it.
+mkdir -p "$design_fixture/.githooks" "$design_fixture/.github/workflows" \
+  "$design_fixture/unixlike/modules" "$design_fixture/windows/src"
+printf 'Follow docs/work/unixlike/probe/spec.md.\n' >"$design_fixture/AGENTS.md"
+printf 'The steps are in docs/work/unixlike/probe/spec.md.\n' >"$design_fixture/CONTRIBUTING.md"
+printf '#!/bin/sh\n# docs/work/unixlike/probe/report.md says so.\n' >"$design_fixture/.githooks/pre-commit"
+printf '# see docs/work/repository/probe/spec.md\n' >"$design_fixture/.github/workflows/ci.yml"
+printf '# docs/work/unixlike/probe/spec.md decided this.\n_: { }\n' >"$design_fixture/unixlike/modules/probe.nix"
+printf '# docs/work/windows/probe/spec.md decided this.\n' >"$design_fixture/windows/src/Probe.psm1"
+printf 'The form is docs/work/README.md; the reason is docs/work/unixlike/probe/spec.md.\n' >"$design_fixture/README.md"
 git -C "$design_fixture" add -A
 if design_output=$(cd "$design_fixture" && "$design_citations" 2>&1); then
   printf '%s\n' "$design_output" >&2
@@ -4387,7 +4402,14 @@ fi
 for design_hit in \
   'docs/policy/architecture.md:1:' \
   'docs/policy/invariants/repository/probe.md:2:' \
-  'tool/version-control/probe:2:'; do
+  'tool/version-control/probe:2:' \
+  'AGENTS.md:1:' \
+  'CONTRIBUTING.md:1:' \
+  '.githooks/pre-commit:2:' \
+  '.github/workflows/ci.yml:1:' \
+  'unixlike/modules/probe.nix:1:' \
+  'windows/src/Probe.psm1:1:' \
+  'README.md:1:'; do
   printf '%s\n' "$design_output" | grep -qF "$design_hit" || {
     printf '%s\n' "$design_output" >&2
     echo "design-citations did not name $design_hit" >&2
@@ -4407,10 +4429,19 @@ printf 'target: docs/work/restructure.md\n' >"$design_fixture/docs/policy/candid
 printf 'exit-when: docs/work/restructure.md is adopted\n' >"$design_fixture/docs/provisional/repository/probe.md"
 printf 'Superseded by docs/work/restructure.md.\n' >"$design_fixture/docs/work/older.md"
 printf '#!/bin/sh\n# docs/work/repository/*) echo repository ;;\n' >"$design_fixture/tool/version-control/classify"
+# Current state links the report behind it, the map of the tree may name an
+# item, and the area's own two files — the format contract and the order of
+# work — are named from anything, a policy file and a script included.
+mkdir -p "$design_fixture/docs/status" "$design_fixture/docs/policy/invariants/repository"
+printf 'Updated in place since docs/work/unixlike/probe/report.md closed.\n' >"$design_fixture/docs/status/unixlike.md"
+printf 'An example item is docs/work/unixlike/probe/spec.md.\n' >"$design_fixture/docs/README.md"
+printf 'The form is docs/work/README.md and the order is docs/work/roadmap.md.\n' >"$design_fixture/AGENTS.md"
+printf 'id: repository/probe\nstatement: docs/work/README.md is the format.\n' >"$design_fixture/docs/policy/invariants/repository/probe.md"
+printf '#!/bin/sh\necho "See docs/work/README.md and docs/work/roadmap.md." >&2\n' >"$design_fixture/tool/version-control/probe"
 git -C "$design_fixture" add -A
 if ! design_output=$(cd "$design_fixture" && "$design_citations" 2>&1); then
   printf '%s\n' "$design_output" >&2
-  echo "design-citations refused a placement rule, a slug template, an inlet's source or the classifier's path table" >&2
+  echo "design-citations refused a placement rule, a slug template, an inlet's source, the classifier's path table, a status link, the tree map or the area's own files" >&2
   exit 1
 fi
 case "$design_fixture" in /tmp/*) rm -rf -- "$design_fixture" ;; esac
@@ -4474,5 +4505,248 @@ if (cd "$records_fixture" && "$records" --table issues) >/dev/null 2>&1; then
   exit 1
 fi
 case "$records_fixture" in /tmp/*) rm -rf -- "$records_fixture" ;; esac
+
+# ---------------------------------------------------------------------------
+# A spec is paired with a report that answers it
+# ---------------------------------------------------------------------------
+#
+# INV repository/work-spec-has-report
+# tool/version-control/work reads the index for the work items under the work
+# area. The real repository is the positive case. Every rule is proved in both
+# directions in a throwaway repository: a valid pair and a carried study that
+# spans scopes pass; a spec without a report, a report without a spec, a
+# criterion with no row and a row with no criterion, a report that is done
+# while a criterion is not verified, a spec whose scope is not its
+# directory's or that lists two, and a criterion removed or rewritten after
+# its report existed are each refused, and the last is accepted once a new
+# dated amendment names the criterion.
+work_check="$root/tool/version-control/work"
+
+# Wired the way records is: every commit, against what the commit changes,
+# and the repository-wide CI scan job, against the range under test.
+grep -q 'evidence_run work tool/version-control/work --staged' "$root/.githooks/pre-commit"
+grep -q 'tool/version-control/work --range' "$root/.github/workflows/ci.yml"
+
+if ! work_output=$(cd "$root" && "$work_check" 2>&1); then
+  printf '%s\n' "$work_output" >&2
+  echo "work refused the repository's own work items" >&2
+  exit 1
+fi
+printf '%s\n' "$work_output" | grep -q '^✓ work: [1-9][0-9]* work items, [1-9][0-9]* specs' || {
+  printf '%s\n' "$work_output" >&2
+  echo "work did not report a positive count of work items and pairs" >&2
+  exit 1
+}
+
+work_seq=0
+work_new() {
+  work_seq=$((work_seq + 1))
+  work_repo="$test_root/work-$work_seq"
+  work_item="$work_repo/docs/work/unixlike/probe"
+  mkdir -p "$work_item"
+  git -C "$work_repo" init -q -b dev
+  git -C "$work_repo" config user.name Fixture
+  git -C "$work_repo" config user.email fixture@example.invalid
+  work_spec unixlike 'the output evaluates' 'evaluation, build'
+  work_report pending pending pending
+}
+
+# work_spec <scope lines, space separated> <AC1 text> <AC1 lanes>
+work_spec() {
+  {
+    printf '# Probe\n\nkind: spec\ndate: 2026-01-05\n'
+    for work_scope in $1; do printf 'scope: %s\n' "$work_scope"; done
+    printf 'status: approved\nreview-by: 2026-02-05\n\n## Acceptance\n\n'
+    printf '| ID | Criterion | Required lanes |\n| --- | --- | --- |\n'
+    printf '| AC1 | %s | %s |\n' "$2" "$3"
+    printf '| AC2 | the procedure is written down | review |\n'
+  } >"$work_item/spec.md"
+}
+
+# work_report <status> <AC1 state> <AC2 state>
+work_report() {
+  {
+    printf '# Report: probe\n\nkind: report\nspec: docs/work/unixlike/probe/spec.md\nstatus: %s\n\n' "$1"
+    printf '## Acceptance\n\n| ID | State | Evidence |\n| --- | --- | --- |\n'
+    for work_row in "AC1 $2" "AC2 $3"; do
+      case "$work_row" in
+        *verified) printf '| %s | verified | read at 0000000 |\n' "${work_row% *}" ;;
+        *) printf '| %s | %s | |\n' "${work_row% *}" "${work_row#* }" ;;
+      esac
+    done
+  } >"$work_item/report.md"
+}
+
+work_run() {
+  git -C "$work_repo" add -A
+  (cd "$work_repo" && "$work_check" "$@" 2>&1)
+}
+
+work_expect_pass() {
+  work_label=$1
+  shift
+  if ! work_output=$(work_run "$@"); then
+    printf '%s\n' "$work_output" >&2
+    echo "work refused a valid fixture: $work_label" >&2
+    exit 1
+  fi
+}
+
+work_expect_fail() {
+  work_label=$1
+  work_want=$2
+  shift 2
+  if work_output=$(work_run "$@"); then
+    printf '%s\n' "$work_output" >&2
+    echo "work accepted a violation: $work_label" >&2
+    exit 1
+  fi
+  if ! printf '%s\n' "$work_output" | grep -qF "$work_want"; then
+    printf '%s\n' "$work_output" >&2
+    echo "work did not name the violation: $work_label" >&2
+    exit 1
+  fi
+}
+
+# The valid pair, with a carried study that spans two scopes beside the area's
+# own two files.
+work_new
+mkdir -p "$work_repo/docs/work/repository/older"
+printf '# Older\n\nkind: study\ndate: 2026-01-02\nscope: unixlike\nscope: repository\nstatus: closed\noutcome: #1\n\nProse.\n' \
+  >"$work_repo/docs/work/repository/older/study.md"
+printf '# Work\n' >"$work_repo/docs/work/README.md"
+printf '# Roadmap\n' >"$work_repo/docs/work/roadmap.md"
+work_expect_pass "a pending pair and a carried study with two scopes"
+printf '%s\n' "$work_output" | grep -qF '2 work items, 1 specs paired' || {
+  printf '%s\n' "$work_output" >&2
+  echo "work miscounted the fixture's work items" >&2
+  exit 1
+}
+
+# W1: a file that is no kind, and a file beside the item directories.
+work_new
+printf 'notes\n' >"$work_item/notes.md"
+work_expect_fail "a file that is no kind" 'docs/work/unixlike/probe/notes.md: W1'
+
+# W2, both directions.
+work_new
+rm "$work_item/report.md"
+work_expect_fail "a spec without a report" 'spec.md: W2 has no report.md beside it'
+work_new
+rm "$work_item/spec.md"
+work_expect_fail "a report without a spec" 'report.md: W2 has no spec.md beside it'
+
+# W3: the spec's one scope is its directory's.
+work_new
+work_spec windows 'the output evaluates' 'evaluation, build'
+work_expect_fail "a spec whose scope is not its directory's" 'W3 scope is windows, the directory names unixlike'
+work_new
+work_spec 'unixlike repository' 'the output evaluates' 'evaluation, build'
+work_expect_fail "a spec that lists two scopes" 'W3 needs exactly one scope'
+work_new
+sed 's/^review-by: .*/review-by: 2026-02-30/' "$work_item/spec.md" >"$work_item/spec.tmp"
+mv "$work_item/spec.tmp" "$work_item/spec.md"
+work_expect_fail "a review-by that is no calendar date" 'W3 review-by is not a real YYYY-MM-DD date'
+work_new
+sed 's#^spec: .*#spec: docs/work/unixlike/other/spec.md#' "$work_item/report.md" >"$work_item/report.tmp"
+mv "$work_item/report.tmp" "$work_item/report.md"
+work_expect_fail "a report that names another spec" 'W3 spec is docs/work/unixlike/other/spec.md'
+
+# W4: a lane outside the known set.
+work_new
+work_spec unixlike 'the output evaluates' 'evaluation, vibes'
+work_expect_fail "an unknown lane" 'W4 criterion AC1 names an unknown lane: vibes'
+
+# W5, both directions, and a verified row with nothing behind it.
+work_new
+sed '/^| AC2 /d' "$work_item/report.md" >"$work_item/report.tmp"
+mv "$work_item/report.tmp" "$work_item/report.md"
+work_expect_fail "a criterion with no report row" 'W5 criterion AC2 has no row'
+work_new
+printf '| AC3 | pending | |\n' >>"$work_item/report.md"
+work_expect_fail "a row with no criterion" 'W5 row AC3 answers no criterion of the spec'
+work_new
+printf '| AC2 | verified | |\n' >"$work_item/row.tmp"
+sed '/^| AC2 /d' "$work_item/report.md" >"$work_item/report.tmp"
+cat "$work_item/report.tmp" "$work_item/row.tmp" >"$work_item/report.md"
+rm "$work_item/report.tmp" "$work_item/row.tmp"
+work_expect_fail "a verified row with no evidence" 'W5 row AC2 is verified with no evidence'
+
+# W6: done follows from the rows, in both directions; an abandoned report
+# states what it did not meet.
+work_new
+work_report done verified pending
+work_expect_fail "done while a criterion is not verified" 'W6 is done while these rows are not verified: AC2'
+work_report done verified verified
+work_expect_pass "done with every criterion verified"
+work_report abandoned verified pending
+work_expect_fail "abandoned with a row still pending" 'W6 is abandoned while these rows are still pending'
+work_report abandoned verified unmet
+work_expect_pass "abandoned with the unmet criterion stated"
+work_report superseded verified unmet
+work_expect_fail "superseded naming no successor" 'W3 is superseded and names no tracked spec in superseded-by'
+
+# W7: the bar is set before the work. The pair is committed, then a criterion
+# is rewritten, removed, and finally amended.
+work_new
+work_run >/dev/null
+git -C "$work_repo" commit -q -m 'docs(unixlike): open the probe'
+work_base=$(git -C "$work_repo" rev-parse HEAD)
+work_expect_pass "an unchanged spec against its own commit" --staged
+work_spec unixlike 'the output evaluates on one system' 'evaluation, build'
+work_expect_fail "a criterion rewritten after its report existed" 'W7 criterion AC1 was rewritten' --staged
+work_spec unixlike 'the output evaluates' 'evaluation'
+work_expect_fail "a criterion's lanes weakened after its report existed" 'W7 criterion AC1 was rewritten' --staged
+sed '/^| AC2 /d' "$work_item/spec.md" >"$work_item/spec.tmp"
+mv "$work_item/spec.tmp" "$work_item/spec.md"
+sed '/^| AC2 /d' "$work_item/report.md" >"$work_item/report.tmp"
+mv "$work_item/report.tmp" "$work_item/report.md"
+work_expect_fail "a criterion removed after its report existed" 'W7 criterion AC2 was removed' --staged
+printf '\n## Amendments\n\nAmended 2026-01-20, AC1 and AC2. One system is enough, and the\nprocedure moved to another item.\n' \
+  >>"$work_item/spec.md"
+work_expect_pass "the same changes under a dated amendment naming both" --staged
+work_run >/dev/null
+git -C "$work_repo" commit -q -m 'docs(unixlike): amend the probe'
+work_expect_pass "the amended range" --range "$work_base" HEAD
+# An amendment that names another criterion does not cover this one, and one
+# the base already carried does not cover a later change.
+work_new
+work_run >/dev/null
+git -C "$work_repo" commit -q -m 'docs(unixlike): open the probe'
+work_spec unixlike 'the output evaluates on one system' 'evaluation, build'
+printf '\n## Amendments\n\nAmended 2026-01-20, AC2. Reworded.\n' >>"$work_item/spec.md"
+work_expect_fail "an amendment naming another criterion" 'W7 criterion AC1 was rewritten' --staged
+work_base=$(git -C "$work_repo" rev-parse HEAD)
+git -C "$work_repo" commit -q -m 'docs(unixlike): reword the probe'
+work_expect_fail "the same change as a range between commits" 'W7 criterion AC1 was rewritten' --range "$work_base" HEAD
+# A spec edited before any report existed is not held to it: the first commit
+# of the pair has no base.
+work_new
+work_expect_pass "a first commit" --staged
+
+# --overdue lists a spec past its review-by while its report is pending, and
+# not one whose report is terminal.
+work_new
+work_run >/dev/null
+work_overdue=$(cd "$work_repo" && "$work_check" --overdue --date 2026-03-01)
+printf '%s\n' "$work_overdue" | grep -qF 'docs/work/unixlike/probe/spec.md: review-by 2026-02-05 has passed' || {
+  printf '%s\n' "$work_overdue" >&2
+  echo "work --overdue did not list a spec past its review-by" >&2
+  exit 1
+}
+work_overdue=$(cd "$work_repo" && "$work_check" --overdue --date 2026-02-05)
+[ -z "$work_overdue" ] || {
+  printf '%s\n' "$work_overdue" >&2
+  echo "work --overdue listed a spec on its review-by date" >&2
+  exit 1
+}
+work_report done verified verified
+work_run >/dev/null
+work_overdue=$(cd "$work_repo" && "$work_check" --overdue --date 2026-03-01)
+[ -z "$work_overdue" ] || {
+  printf '%s\n' "$work_overdue" >&2
+  echo "work --overdue listed a spec whose report is done" >&2
+  exit 1
+}
 
 echo "version-control fixtures passed"

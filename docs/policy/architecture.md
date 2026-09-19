@@ -311,6 +311,16 @@ headers, and a hand-kept one would make every new record a repository edit.
 No domain suite reads a document, so documents select no check unit by that
 ownership.
 
+Work that needs more than one judgement is planned and verified in tracked
+documents rather than in an issue, whose text can be rewritten after the
+fact. A spec states the acceptance criteria and the evidence lanes each one
+requires; a report, created in the same commit, answers every criterion and
+ends as done, abandoned or superseded. Once the report exists a criterion is
+changed only by a dated amendment that names it, so the bar is visibly set
+before the work. A work document still binds nothing but the work it
+describes: a durable rule it produces lands in a decision record or an
+invariant.
+
 The canonical agent workflow follows the Agent Skills open standard under
 `.agents/skills/`. Product-specific discovery locations may contain thin
 adapters, but they do not own or duplicate the workflow.
