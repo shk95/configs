@@ -19,17 +19,19 @@ are disabled.
 The merge gate is CI's `Required checks`, demanded whenever a change falls
 in a domain that check covers.
 
-The invariant registry holds 63 entries, none pending and no fixture unit
-untagged, and `tool/version-control/invariants` enforces C10 (no untagged
-fixture unit) by default. Enforced is not the same as held: the manual
+The invariant registry has no pending entry and no untagged fixture unit, and
+`tool/version-control/invariants` enforces C10 (no untagged fixture unit) by
+default; `tool/version-control/invariants --table` prints the entries and
+their number, which this file does not repeat. Enforced is not the same as held: the manual
 `INV windows/support-boundary-named` records that the terminal delegation
 item still passes its read-back below the Windows 10 boundary (#53).
 
 Content before a shell suite's first banner is in no fixture unit and
 invisible to C10 (`docs/policy/decisions/repository/fixture-tags-name-proven-invariants.md`).
 
-The provisional registry holds 1 entry, `unixlike/zellij-combining-marks`,
-registered on 2026-09-05 by #175; `docs/provisional/README.md` is the contract.
+The provisional registry exists since 2026-09-05, when #175 registered its
+first entry; `docs/provisional/README.md` is the contract and
+`tool/version-control/provisional --table` prints the entries.
 `tool/version-control/provisional` checks it in both directions on every
 commit and in the CI scan job. The exit criteria `unixlike/flake.nix` states in
 comments are the known gap: moving them into the registry is a separate
