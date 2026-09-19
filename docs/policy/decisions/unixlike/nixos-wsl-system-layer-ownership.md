@@ -149,3 +149,8 @@ host also lost its channel on that date: it is rebuilt from this flake alone
 (`INV unixlike/nixos-no-channel`), and what an import leaves behind — a
 default configuration file, and on the first import a channel — is removed
 by a documented step, because no activation removes it.
+
+2026-09-19: The host name of item 5 is no longer `identity.wsl.hostName`. The
+host is the entry `nixos` of `identity.nixosHosts`, whose name is its output
+name and its host name
+(`docs/policy/decisions/unixlike/nixos-hosts-declared-in-typed-inventory.md`).

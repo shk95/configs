@@ -7,7 +7,44 @@ _: {
     gitEmail = "101378576+shk95@users.noreply.github.com";
     wsl = {
       user = "user1";
-      hostName = "nixos";
+    };
+    nixosHosts = {
+      nixos = {
+        system = "x86_64-linux";
+        kind = "wsl";
+        user = "user1";
+        stateVersion = "26.05";
+      };
+
+      # Declared and not yet installed (modules/host/placeholder.nix). Each
+      # state version is the pinned nixpkgs release, which the order that
+      # installs the host confirms or corrects before anything is activated.
+      vm = {
+        system = "x86_64-linux";
+        kind = "vm";
+        hypervisor = "vmware";
+        user = "user1";
+        stateVersion = "26.11";
+      };
+      utm = {
+        system = "aarch64-linux";
+        kind = "vm";
+        hypervisor = "utm";
+        user = "shk";
+        stateVersion = "26.11";
+      };
+      orbstack = {
+        system = "aarch64-linux";
+        kind = "orbstack";
+        user = "shk";
+        stateVersion = "26.11";
+      };
+      desktop = {
+        system = "x86_64-linux";
+        kind = "desktop";
+        user = "user1";
+        stateVersion = "26.11";
+      };
     };
     darwin = {
       user = "shk";

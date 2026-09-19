@@ -11,9 +11,14 @@
 #
 # `home.agents` — the coding agents — is composed into the NixOS-WSL home
 # only; the standalone Ubuntu home and the Darwin home are unchanged by it
-# (modules/agents.nix). The NixOS output is named by the typed identity's
-# host name, as the Darwin one is, so `networking.hostName` and the output
-# attribute cannot drift (modules/wsl-host.nix, #191).
+# (modules/agents.nix).
+#
+# INV unixlike/nixos-host-inventory — every NixOS output is generated from
+# `identity.nixosHosts`, named after its entry, and told about itself through
+# `host` (modules/host/nixos.nix), so the output name, the inventory name and
+# `networking.hostName` cannot drift (#191). `nixosCompositions` is the one
+# table from a host's kind — for a `vm`, its hypervisor — to the classes it
+# receives; a host whose kind has no row does not evaluate.
 {
   lib,
   config,
@@ -21,10 +26,75 @@
   withSystem,
   ...
 }: let
-  inherit (lib) attrValues;
-  wsl = config.identity.wsl;
-  darwin = config.identity.darwin;
+  inherit (lib) attrValues mapAttrs optionalAttrs;
+  inherit (config.identity) wsl darwin nixosHosts;
   home = config.modules.homeManager;
+  nixos = config.modules.nixos;
+
+  nixosCompositions = {
+    wsl = {
+      system = [
+        inputs.nixos-wsl.nixosModules.default
+        nixos.wsl
+      ];
+      home = [
+        home.shared
+        home.wsl
+        home.agents
+      ];
+    };
+
+    # Declared and not yet installed (modules/host/placeholder.nix): the
+    # kind's own class and no home, until the order that installs the host
+    # composes one.
+    vmware = {
+      system = [nixos.vmware];
+      home = [];
+    };
+    utm = {
+      system = [nixos.utm];
+      home = [];
+    };
+    orbstack = {
+      system = [nixos.orbstack];
+      home = [];
+    };
+    desktop = {
+      system = [nixos.desktop];
+      home = [];
+    };
+  };
+
+  nixosHost = name: host: let
+    key =
+      if host.kind == "vm"
+      then host.hypervisor
+      else host.kind;
+    composition =
+      nixosCompositions.${key}
+      or (throw "identity.nixosHosts.${name}: no composition is written for ${key} in modules/flake/configurations.nix.");
+  in
+    inputs.nixpkgs.lib.nixosSystem {
+      inherit (host) system;
+      modules =
+        composition.system
+        ++ [
+          inputs.home-manager.nixosModules.home-manager
+          nixos.shared
+          {
+            host = host // {inherit name;};
+            nixpkgs.config = config.nixpkgsConfig;
+            nixpkgs.overlays = attrValues config.nixpkgsOverlays;
+            home-manager = {
+              useGlobalPkgs = true;
+              useUserPackages = true;
+              users = optionalAttrs (composition.home != []) {
+                ${host.user}.imports = composition.home;
+              };
+            };
+          }
+        ];
+    };
 in {
   flake = {
     homeConfigurations.${wsl.user} = withSystem "x86_64-linux" ({pkgs, ...}:
@@ -37,27 +107,7 @@ in {
         ];
       });
 
-    nixosConfigurations.${wsl.hostName} = inputs.nixpkgs.lib.nixosSystem {
-      system = "x86_64-linux";
-      modules = [
-        inputs.nixos-wsl.nixosModules.default
-        inputs.home-manager.nixosModules.home-manager
-        config.modules.nixos.wsl
-        {
-          nixpkgs.config = config.nixpkgsConfig;
-          nixpkgs.overlays = attrValues config.nixpkgsOverlays;
-          home-manager = {
-            useGlobalPkgs = true;
-            useUserPackages = true;
-            users.${wsl.user}.imports = [
-              home.shared
-              home.wsl
-              home.agents
-            ];
-          };
-        }
-      ];
-    };
+    nixosConfigurations = mapAttrs nixosHost nixosHosts;
 
     darwinConfigurations.${darwin.hostName} = inputs.nix-darwin.lib.darwinSystem {
       inherit (darwin) system;

@@ -32,7 +32,10 @@
 #   homeManager.wslStandalone  standalone only — no system layer underneath
 #   homeManager.darwin         Darwin-only user behavior
 #   homeManager.agents         the coding agents — the NixOS-WSL home only
-#   nixos.wsl                  the NixOS-WSL flavour only
+#   nixos.shared               every NixOS host
+#   nixos.wsl                  NixOS hosts of kind wsl only
+#   nixos.vmware, nixos.utm, nixos.orbstack, nixos.desktop
+#                              their kind, a placeholder until it is installed
 #   darwin.system              the nix-darwin system layer only
 #
 # INV unixlike/composition-in-one-place — a feature file writes into a class
