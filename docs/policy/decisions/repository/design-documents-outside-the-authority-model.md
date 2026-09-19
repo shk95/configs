@@ -76,3 +76,12 @@ ownership"). And the checked rule
 is lexical: it separates citing a document from naming the directory, so a
 citation written in words rather than as a path passes, and a reviewer is what
 catches it.
+
+2026-09-19: one sentence above no longer holds. Work under an adopted
+direction now does hand back a report: a spec and the report that answers it
+live under `docs/work/` and are created together
+(`docs/policy/decisions/repository/work-planned-and-verified-in-documents.md`). The
+objection to a document written by the work to describe itself was that
+nothing would own it; a report is owned by its spec and checked against it.
+Everything else here stands: a work document carries no authority, the
+traffic runs one way, and the inlets are where a direction becomes binding.

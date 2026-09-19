@@ -3,6 +3,7 @@ statement: A spec is tracked together with a report that answers each of its acc
 rationale: docs/policy/architecture.md § Repository governance plane
 enforced-by: tool tool/version-control/work
 enforced-by: fixture tool/version-control/test
+decision: docs/policy/decisions/repository/work-planned-and-verified-in-documents.md § Work is planned and verified in documents, and a branch is one increment
 
 A plan kept where it can be edited after the fact cannot be held to account,
 and a spec with no report sets a bar nobody is asked to meet. The pair is

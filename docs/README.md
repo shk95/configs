@@ -13,7 +13,8 @@ docs/
     decisions/<scope>/           adopted choices and why
     invariants/<scope>/          what must remain true, and what enforces it
   provisional/<scope>/           temporary measures that must become false
-  work/<scope>/<slug>/           arguments and plans for a direction
+  work/<scope>/<slug>/           a spec, the report that answers it, the study behind it
+  work/roadmap.md                lanes and order of work, not schedule
   status/<scope>.md              what is true today
   reference/                     recurring symptoms and their causes
 ```

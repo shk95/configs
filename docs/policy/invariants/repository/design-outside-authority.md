@@ -1,11 +1,13 @@
 id: repository/design-outside-authority
-statement: Nothing that carries authority cites a design document; only an adoption record names one as its source.
+statement: Nothing that carries authority cites a work document; only an adoption record names one as its source.
 rationale: AGENTS.md § Governance design
 enforced-by: tool tool/version-control/design-citations
 enforced-by: fixture tool/version-control/test
 decision: docs/policy/decisions/repository/design-documents-outside-the-authority-model.md § Design documents sit outside the authority model
+decision: docs/policy/decisions/repository/work-planned-and-verified-in-documents.md § Work is planned and verified in documents, and a branch is one increment
 
-A design document argues for a direction and binds nothing. If a rationale
+A work document — a spec, the report that answers it, or the study that
+argued a direction — binds only the work it describes. If a rationale
 paragraph, a registry entry, a procedure or a script could rest on one, the
 argument would acquire the force of the thing citing it without ever passing
 an inlet, and the repository would be enforcing a direction nobody accepted.

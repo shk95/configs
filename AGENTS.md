@@ -106,17 +106,16 @@ When adding a repository rule, separate its concerns before implementation:
 - Put a rule that has been observed but not accepted, and a document or tool
   judged stale, in `docs/policy/candidates/` until recurrence or silence decides it.
   A candidate is an observation and never a source of authority.
-- Put the argument for a direction — what was surveyed, measured and weighed,
-  and what the next steps predict — in `docs/work/`, outside the authority
-  model. A design document observes this repository and binds nothing. It
-  becomes binding only through an inlet that is reviewed on its own terms: a
-  decision record, a promoted candidate, a registered provisional measure, or
-  an issue, each naming the document as its source. Nothing that carries
-  authority may cite one (`INV repository/design-outside-authority`), and an
-  agent reads a design document when a task, an issue or a record points at
-  it, never as a rule to follow. Work under an adopted direction reports
-  through commits, check evidence and `docs/status/` rather than through a
-  document of its own.
+- Put the plan for a piece of work and its verification in `docs/work/`,
+  outside the authority model: a spec with its acceptance criteria and the
+  evidence lanes each requires, a report that answers every criterion, and
+  optionally the study that argued the direction. A work document binds only
+  the work it describes. It becomes binding on the repository only through
+  an inlet that is reviewed on its own terms: a decision record, a promoted
+  candidate, a registered provisional measure, or an issue, each naming the
+  document as its source. Nothing that carries authority may cite a work
+  item (`INV repository/design-outside-authority`), and an agent reads one
+  when a task, an issue or a record points at it, never as a rule to follow.
 
 Each obligation has one authoritative source. Procedures and tools implement
 policy but must not silently create new policy. Model-specific adapters only
@@ -138,19 +137,21 @@ does not certify a domain release or authorize deployment. Do not merge
 repository maintainer owns promotion decisions. There is no operational
 bypass; change this policy through the governance workflow before deviating.
 
-GitHub milestones are the repository's planning surface, not a source of
-configuration, architecture, release, or deployment authority. Each milestone
-owns exactly one of `unixlike`, `windows`, `common`, or `repository`, uses the
-title `<scope>: <outcome>`, and contains only issues in that scope. Cross-scope
-dependencies are linked instead of being assigned to the same milestone. A
-milestone's work lives on one branch and reaches `dev` through one pull
-request when that work is complete, except where the enforcement plane makes
-two branches interleave. A closed milestone means its planned source work is
-complete; it does not certify a domain release or authorize activation or
-Apply. Repository documents remain
-authoritative for durable decisions and current support boundaries. The
-repository maintainer owns milestone scope and closure decisions, with the
-milestone description and final evidence issue providing the manual evidence.
+Work is planned and verified in documents, and issues hold execution state.
+Work with more than one acceptance criterion or more than one pull request
+has a spec and a report under `docs/work/<scope>/<slug>/`, created in the
+same commit; any other change is a single pull request whose body carries
+its evidence. An execution issue names its spec, holds the increments as a
+checklist, carries no acceptance criteria and is never a source of evidence;
+it closes from what the report says, and no commit message or promotion body
+carries a closing keyword (`INV repository/no-closing-keyword`).
+`docs/work/roadmap.md` states lanes and order, not schedule. GitHub
+milestones are not used. A branch is one reviewable increment — one issue,
+or what one judgement covers — cut from `origin/dev` and merged through one
+pull request when it is complete and green; a spec takes as many pull
+requests as it needs. Neither a finished report nor a closed issue certifies
+a domain release or authorizes activation or Apply. The repository
+maintainer owns the roadmap and the decision that a report is done.
 
 ## Working contract
 
@@ -170,8 +171,8 @@ milestone description and final evidence issue providing the manual evidence.
 User-facing usage belongs in `README.md`, workflow in `CONTRIBUTING.md`,
 architecture and ownership in `docs/policy/architecture.md`, current state in
 `docs/status/`, decisions in `docs/policy/decisions/`, recurring symptoms in
-`docs/reference/troubleshooting.md`, invariants in `docs/policy/invariants/`, the argument for a
-direction in `docs/work/`, and executable policy in `tool/`, hooks, and CI.
+`docs/reference/troubleshooting.md`, invariants in `docs/policy/invariants/`, plans and
+their verification in `docs/work/`, and executable policy in `tool/`, hooks, and CI.
 `docs/README.md` maps the document tree; a document is owned by the scope
 directory, or the scope-named file, that holds it.
 Canonical project-specific agent workflows live under `.agents/skills/` and

@@ -54,12 +54,12 @@ Examples are `feature/unixlike-shell`, `fix/windows-zellij`, and
 `feature/common-terminal-colors`. Governance examples are
 `feature/repository-vcs-audit` and `fix/repository-ci-dispatch`.
 
-A branch belongs to a milestone. Cut it from `origin/dev` when the
-milestone's work starts, take its topic from the milestone's own
-`<scope>: <outcome>` title, carry every commit that work produces on it, and
-merge it through one pull request when the work is complete
-(`docs/policy/decisions/repository/branch-lives-as-long-as-its-milestone.md`). A change no
-milestone plans is a branch of its own and merges when it is done.
+A branch is one reviewable increment: one issue, or what one judgement
+covers. Cut it from `origin/dev`, and merge it through one pull request when
+it is complete and green
+(`docs/policy/decisions/repository/work-planned-and-verified-in-documents.md`). A spec
+takes as many pull requests as it needs; "Plan and verify work" below is how
+they are planned.
 
 A commit marks a judgement point. It carries the change one decision
 produced, however many files that is, and is not split further merely because
@@ -76,7 +76,7 @@ Branches interleave where one blocks another, and no rule is needed to make
 them: the pre-commit hook refuses a staged path with no owning scope, so a
 move cannot be committed before the classifier accepts its new paths, and the
 old paths cannot be deleted before the move has merged. Where that happens
-each half merges when it is ready rather than when its milestone completes.
+each half merges when it is ready.
 
 Use merge commits for completed work; do not squash or rebase published work.
 Do not commit directly to `master`.
@@ -112,9 +112,9 @@ refuses on `master` and never bypasses a hook.
 
 Run it from `dev`. On any other branch it commits where it stands, and with
 `--publish` it arms auto-merge on the pull request already open from that
-head, which on a milestone branch would merge that milestone unfinished.
-Every edit it templates is `unixlike`, so on a `repository` milestone branch
-it would also produce a two-scope commit.
+head, which on a branch carrying other work would merge that work
+unfinished. Every edit it templates is `unixlike`, so on a `repository`
+branch it would also produce a two-scope commit.
 
 Add `--publish` and that one confirmation carries the change the rest of the
 way. On `dev` the helper branches to `feature/<scope>-<topic>` from
@@ -335,31 +335,48 @@ change in another domain is never blocked by it. That is not a reprieve: the
 next change to the owning scope stops until the entry is retired, extended or
 promoted.
 
-## Write a design document
+## Plan and verify work
 
-Write one when a direction needs arguing before any of it can be adopted: a
-survey, a spike and what it measured, three layouts weighed against each
-other, a plan and what each of its steps predicts. Add a directory
-`docs/work/<scope>/<slug>/` holding a file with the header and format the
-`README.md` there defines, and open it `status: open`;
-`tool/version-control/records --table work` lists it.
+Work with more than one acceptance criterion or more than one pull request
+has a spec and a report. Any other change is a single pull request whose body
+carries its evidence; an issue for it is optional. `docs/work/README.md` is
+the format; this is the procedure.
 
-It has no authority and acquires none by being merged. Quote what you
-measured with the date and the commit you measured it at, and leave current
-state to `docs/status/<scope>.md` and the schedule to a milestone and its issues.
-When a `plan` names what it expects, write the expectations before the work
-runs; an expectation written afterwards is not one and is left out of the
-ledger.
+1. Classify the outcome. The work item is `docs/work/<scope>/<slug>/`, and
+   the spec has that one scope. Work whose outcome spans scopes is one spec
+   per scope. An increment may classify differently from its spec, and its
+   commit and pull request stay single-scope.
+2. Write `spec.md`: the problem, the decisions with what was rejected, the
+   increments, and an `## Acceptance` table naming for each criterion the
+   evidence lanes that must be verified. A criterion no check can decide
+   names `review`. Set `review-by` to the date by which someone could tell
+   whether the work is done. Argue a direction first in `study.md` when it
+   needs a survey or a measurement, quoting each measurement with the date
+   and the commit it was taken at.
+3. Create `report.md` in the same commit, with one `pending` row per
+   criterion. Stage both and run `tool/version-control/work`.
+4. When implementation starts, open the execution issue. Its first line names
+   the spec path; it holds the increments as a checklist and carries no
+   acceptance criteria. Add `issue: #<n>` to the spec's header. A report
+   issue that already exists — a bug, an upstream watch — links the spec and
+   becomes the execution issue.
+5. Work in increments, one branch and one pull request each. Link the issue
+   with `Refs #<n>`; a closing keyword is refused
+   (`INV repository/no-closing-keyword`). Record evidence in the report row
+   as each criterion is verified, per lane and never upgraded.
+6. To change a criterion after the report exists, add a paragraph to the spec
+   that opens `Amended YYYY-MM-DD` and names the criterion. The checker
+   refuses a criterion removed or rewritten without one.
+7. End the report as `done`, `abandoned` or `superseded`, and close the
+   execution issue from what it says. A durable rule the work produced lands
+   in a decision record or an invariant that names the document as its
+   source, never by citing the work item from a document that carries
+   authority; `tool/version-control/design-citations` refuses that citation.
 
-Adopt from it through an inlet, never by citing it from a document that
-carries authority: a decision record, a promoted candidate, a registered
-provisional measure, or an issue. Add an `outcome` line for each thing the
-document produces, and set `status: closed` when the last one has landed.
-A result that contradicts the argument is written into the ledger and then
-corrected in the document that argued it.
-`tool/version-control/design-citations` refuses a citation from an internal
-location and runs on every commit, so a rule can never come to rest on an
-argument nobody accepted.
+`docs/work/roadmap.md` states lanes and order, not schedule; change it when
+the order of work changes. GitHub milestones are not used. A spec whose
+`review-by` has passed while its report is pending is overdue:
+`tool/version-control/work --overdue` lists it.
 
 ## Record a decision
 
@@ -397,32 +414,6 @@ Two things do not wait: a change that is fatal on a host and invisible to
 every gate, and the correction of tracked text that is false today. A
 candidate is an observation. Nothing cites it as authority, and an agent
 does not follow one as a rule.
-
-## Plan work with GitHub milestones
-
-GitHub milestones group planned work after its owning scope and outcome are
-known. They coordinate issues; they do not replace repository policy, domain
-release evidence, or deployment authorization.
-
-1. Search open and closed milestones for the same outcome before creating one.
-2. Choose exactly one scope and title the milestone `<scope>: <outcome>`.
-3. Write `Outcome`, `Included`, `Excluded`, `Completion criteria`, and
-   `Authority` sections in the description. Link the repository documents that
-   own durable decisions and current support boundaries.
-4. Set a due date only when the maintainer has chosen a real schedule. Leave it
-   unset for an unordered roadmap.
-5. Create independently closable issues with the same scope prefix and assign
-   only those issues to the milestone. Link cross-scope prerequisites without
-   assigning them.
-6. Keep one final evidence issue open until the milestone's evaluation, build,
-   native runtime, and activation or Apply evidence is reported as applicable.
-7. Close the milestone only after every assigned issue is closed and the
-   maintainer confirms the completion criteria.
-
-If the scope or outcome was wrong, edit the milestone and its issue membership;
-do not reinterpret a closed milestone as a release or move work between domains
-silently. The milestone description and final evidence issue are the review
-record for this intentionally manual policy.
 
 ## Unix-like changes
 
@@ -746,9 +737,10 @@ read across the boundary has no legitimate form.
 ### Design citations
 
 `tool/version-control/design-citations` scans the index for a citation of a
-design document from anything that carries authority. The adoption inlets are
+work item from anything that carries authority. The adoption inlets are
 excluded, so a decision record, a candidate and a provisional entry may name
-the document they adopted from. It runs on every commit beside the hygiene
+the document they adopted from; the status files and `docs/README.md` may
+name one too, and the area's own `README.md` and `roadmap.md` pass anywhere. It runs on every commit beside the hygiene
 scan and in CI, because the document and the text citing it can be in any
 scope.
 
@@ -757,7 +749,7 @@ tool/version-control/design-citations
 ```
 
 When it reports something, decide which of the two the sentence is doing. If
-it says where design documents live, name the directory rather than a file:
+it says where work documents live, name the directory rather than a file:
 `docs/work/` passes and `docs/work/<file>` does not. If it rests on the
 document's argument, that argument has not been adopted — record the decision,
 promote the candidate or register the measure, and cite that instead. There is
@@ -807,14 +799,14 @@ from it.
 | `.agents/skills/` | internal | Model-neutral workflows specific to this repository |
 | `tool/`, hooks, CI | internal | Executable policy |
 | `docs/policy/candidates/` | external | Observed candidates for adding a rule or removing text; `README.md` there is the format, `tool/version-control/records --table candidates` the index |
-| `docs/work/` | external | The argument for a direction, and what its plan predicts; `README.md` there is the format, `tool/version-control/records --table work` the index |
+| `docs/work/` | external | A spec, the report that answers it, and the study behind it; `README.md` there is the format, `roadmap.md` the order of work, `tool/version-control/records --table work` the index |
 | `notes/` | none | Untracked maintainer scratch space; no structure, review or retention, and not project context |
 
 The two external locations differ in size, not in standing. A candidate is
 one observation waiting to become a sentence in an internal document; a
-design document is a whole argument that may produce several. Neither is
-cited by an internal location, and a design document is never deleted,
-because an adoption record names it as its source.
+work item is a whole piece of work that may produce several. Neither is
+cited by an internal location, and a work item is never deleted, because an
+adoption record names it as its source.
 
 Cross-project methods are maintained in the separate sibling `skills` project
 and adopted explicitly. They do not become a source of project policy.
