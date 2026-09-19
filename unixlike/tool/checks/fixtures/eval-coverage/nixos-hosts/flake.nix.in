@@ -13,7 +13,12 @@
         builder = "/bin/sh";
         args = ["-c" "echo ${name} > $out"];
       };
-      pkgs.stdenv.hostPlatform.system = "@system@";
+      # Both spellings: tool/checks/test reads the first, and a `nix flake
+      # check` that learns a NixOS configuration's platform reads the second.
+      pkgs.stdenv = {
+        hostPlatform.system = "@system@";
+        system = "@system@";
+      };
     };
   in {
     nixosConfigurations = {
