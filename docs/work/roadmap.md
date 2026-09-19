@@ -17,15 +17,15 @@ maintainer owns this file, and changing the order is a repository change.
 | desktop | x86_64 NixOS, physical AMD APU desktop | not started |
 | vm | x86_64 NixOS guest, VMware Workstation on a Linux and a Windows host | not started |
 | wsl-standalone | x86_64 Ubuntu WSL, standalone Home Manager | operational; tagged `unixlike-v2026.08.31` |
-| wsl-nixos | x86_64 NixOS-WSL | activated (generation 2); no in-place update path |
+| wsl-nixos | x86_64 NixOS-WSL | activated (generation 4); updated in place since that day |
 
 ## Order
 
 | Order | Work | Scope |
 | --- | --- | --- |
-| 1 | docs layout | repository |
-| 2 | work model | repository |
-| 3 | NixOS-WSL updated in place | unixlike |
+| 1 | docs layout — done 2026-09-19 | repository |
+| 2 | work model — done 2026-09-19 | repository |
+| 3 | NixOS-WSL updated in place — done 2026-09-19 | unixlike |
 | — | release tag contract: an annotation that states each host's evidence state (before 4) | repository |
 | 4 | typed NixOS host inventory | unixlike |
 | — | judgement on the CI decision's `reopen-when` (before 5) | repository |
