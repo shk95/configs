@@ -482,15 +482,19 @@ is the maintainer's to run: building and evaluating never imply it.
    a channel or a configuration file that an import already wrote.
 
    ```sh
-   sudo nix-channel --remove nixos-wsl   # only where the command still exists
+   sudo nix-channel --remove nixos-wsl
    sudo rm -rf /etc/nixos /root/.nix-channels /root/.nix-defexpr/channels
    sudo rm -f /nix/var/nix/profiles/per-user/root/channels /nix/var/nix/profiles/per-user/root/channels-*-link
    ```
 
    The distribution imported on 2026-09-06 registered a `nixos-wsl` channel,
    so run the first line there while `nix-channel` still exists: the switch
-   that turns channels off removes the command. An archive built after that
-   switch registers no channel, and only the `rm` lines apply to it.
+   that turns channels off removes the command. It answers `matched no
+   installed derivations` where the channel was added and never updated,
+   which is what an import leaves. An archive built after that switch
+   registers no channel, and only the `rm` lines apply to it. The block
+   carries no trailing comments on purpose: the account's interactive zsh
+   does not read `#` as a comment and would pass the words on as arguments.
 3. `just nixos-test` builds the system and activates it without making it the
    default, so a system that cannot start is gone at the next `wsl
    --terminate`. When it holds, `just nixos-switch` makes it the default, and
@@ -508,7 +512,10 @@ generation; WSL has no boot loader to choose one from. It works only while
 that generation still exists, and the store is collected weekly with
 everything older than fourteen days (`unixlike/modules/nix/shared.nix`), so
 that is the window. `just nixos-switch` after a rollback activates the
-current configuration again as a further generation.
+current configuration again. While that configuration is unchanged it is the
+same generation again and not a further one: Nix reuses the highest-numbered
+generation when it already holds the path, so the list shows a rollback only
+between the two commands.
 
 Importing again is recovery, not an update. It replaces the whole root file
 system, so it loses `/home`, the account's password and
