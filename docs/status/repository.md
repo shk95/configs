@@ -19,9 +19,10 @@ are disabled.
 The merge gate is CI's `Required checks`, demanded whenever a change falls
 in a domain that check covers.
 
-The invariant registry holds 63 entries, none pending and no fixture unit
-untagged, and `tool/version-control/invariants` enforces C10 (no untagged
-fixture unit) by default. Enforced is not the same as held: the manual
+The invariant registry has no pending entry and no untagged fixture unit, and
+`tool/version-control/invariants` enforces C10 (no untagged fixture unit) by
+default; `tool/version-control/invariants --table` prints the entries and
+their number, which this file does not repeat. Enforced is not the same as held: the manual
 `INV windows/support-boundary-named` records that the terminal delegation
 item still passes its read-back below the Windows 10 boundary (#53).
 
