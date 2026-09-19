@@ -56,7 +56,7 @@ $script:DefaultRevisionQuery = {
 # 3031 (KB5026435), and Windows Terminal 1.17 or later. Below either half the
 # host accepts the write and the read-back passes while the setting does
 # nothing, so the item is decided against this condition and never against
-# the write (docs/decisions/terminal-delegation-unverified-below-boundary.md).
+# the write (docs/policy/decisions/windows/terminal-delegation-unverified-below-boundary.md).
 $script:TerminalDelegationBoundary = @{
     Windows11Build    = 22621
     Windows10Build    = 19045
@@ -670,7 +670,7 @@ function Get-WinEnvAppxPresence {
     # compatibility layer, so the error is raised during command discovery,
     # before Get-AppxPackage runs; -ErrorAction cannot suppress what was never
     # bound, and only a try/catch sees it. That is a prerequisite the host
-    # cannot supply, which docs/architecture.md calls unverified. It is not
+    # cannot supply, which docs/policy/architecture.md calls unverified. It is not
     # evidence of absence, and reporting it as absence is wrong in both
     # directions. Read Usable before Present: Present is $null when the module
     # did not answer, so absence is not representable in that case.
@@ -782,7 +782,7 @@ function Get-WinEnvCheckStatus {
     #   2   something drifted
     #   69  nothing drifted and something could not be decided here
     #
-    # Ranking: a failure outranks everything, per docs/architecture.md, which
+    # Ranking: a failure outranks everything, per docs/policy/architecture.md, which
     # is the whole effect of RequireNative; then drift outranks unverified.
     # -Check exists to answer whether an Apply is needed, and drift is a
     # positive answer to that question while an undecidable item is not, so a
@@ -2347,7 +2347,7 @@ $script:WinEnvRuntimeStateName = @(
 # a capture cannot write a payload that the commit's own hygiene scan then
 # refuses, and the tool does not depend on that scan running even though the
 # POSIX hooks do execute under Git for Windows (#77,
-# docs/decisions/hooks-run-under-git-for-windows.md): hooks stay opt-in per
+# docs/policy/decisions/repository/hooks-run-under-git-for-windows.md): hooks stay opt-in per
 # clone regardless of platform.
 #
 #   - a drive-letter path, with either separator, singled or doubled: a text
