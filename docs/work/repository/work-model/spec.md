@@ -247,3 +247,39 @@ Remote writes, each restated before it runs:
 - The release tag contract and the CI `reopen-when` judgement: separate
   items on the roadmap.
 - Any host work.
+
+## Amendments
+
+Amended 2026-09-19, AC8 and AC9. The roadmap carries what the session
+decided about the NixOS lanes, so that closing #18, #22 and #23 loses
+nothing. `docs/work/roadmap.md` adds, under the orders named:
+
+- Order 4, typed NixOS host inventory (from #18, re-scoped): a host declares
+  its system (`x86_64-linux`, `aarch64-linux`), its kind (`wsl`, `orbstack`,
+  `vm`, `desktop`), for `vm` its hypervisor (`vmware`, `utm`), its primary
+  user and its state version; only the combinations the lanes name evaluate;
+  `aarch64-linux` joins the evaluated systems; the NixOS-WSL identity moves
+  into the inventory while Darwin and the standalone home keep theirs; the
+  output name and `networking.hostName` agree; `_nixos-target` selects by
+  host name instead of assuming one NixOS output.
+- Order 5, VMware (from #23, re-scoped): one guest profile, headless first,
+  on both a Linux and a Windows host; GNOME waits for order 10. Hyper-V
+  remains the lighter choice for a headless guest on a Windows-only host,
+  and QEMU/KVM the more native one on a NixOS host; VMware is chosen so one
+  guest profile serves both hosts and carries the later GNOME stage.
+- Order 6, UTM (from #22, re-scoped): headless first; GNOME waits for order
+  10.
+- Order 7, OrbStack: a host kind of its own, like WSL in having no boot
+  loader and a host that injects its integration, so it reuses the
+  flake-only rebuild that order 3 settles.
+
+Amended 2026-09-19, the Components table and AC2, after
+`docs/work/repository/docs-layout/` landed its step 1:
+
+- The index of work items is `tool/version-control/records --table work`,
+  which exists; `tool/version-control/work` gains no `--table`.
+- The citation rule restated here applies on top of the exclusions
+  `design-citations` already has, which include
+  `tool/version-control/classify` because its case arms name area paths.
+- A work item's scope is its area's scope position, the directory directly
+  under `docs/work/`, as the classifier reads it.
