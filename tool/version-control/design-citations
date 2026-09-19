@@ -16,6 +16,9 @@
 #
 #   refused   docs/work/<file>     a citation: the directory and a name
 #   allowed   docs/work/           a placement rule: nothing continues it
+#   allowed   the area's own two files, its README.md and its roadmap.md,
+#             anywhere: the format contract and the order of work hold no
+#             argument, so naming either borrows none
 #
 # So the ownership table, the placement paragraph in AGENTS.md, the procedure
 # in CONTRIBUTING.md and the registry entry itself all say where design
@@ -24,6 +27,9 @@
 #
 #   subject   every tracked path
 #   except    docs/work/  docs/policy/decisions/  docs/policy/candidates/  docs/provisional/
+#             docs/status/, which carries no authority and links the report
+#             behind a statement of current state instead of repeating it,
+#             and docs/README.md, the map of the tree
 #             this script, tool/version-control/test, and
 #             tool/version-control/classify, whose case arms name the area's
 #             paths as a table and cite no document
@@ -103,6 +109,8 @@ set -- . \
   ':(exclude)docs/policy/decisions' \
   ':(exclude)docs/policy/candidates' \
   ':(exclude)docs/provisional' \
+  ':(exclude)docs/status' \
+  ':(exclude)docs/README.md' \
   ':(exclude)tool/version-control/classify' \
   ':(exclude)tool/version-control/design-citations' \
   ':(exclude)tool/version-control/test'
@@ -118,11 +126,21 @@ fi
 # its status is read rather than allowed to end the script under `set -e`.
 hits=0
 git -c color.grep=never grep --cached -n -I -E -e "$citation" -- "$@" \
-  >"$work/hits" 2>/dev/null || hits=$?
+  >"$work/candidates" 2>/dev/null || hits=$?
 if [ "$hits" -gt 1 ]; then
   printf '\033[31m✗ scan did not run: git grep exited %s\033[0m\n' "$hits" >&2
   exit 1
 fi
+
+# The area's own two files are not work items. A line is a hit only if a
+# citation is left once every mention of them is taken out of it.
+awk -v citation="$citation" '
+  {
+    line = $0
+    gsub(/docs\/work\/(README|roadmap)\.md/, "", line)
+    if (line ~ citation) print
+  }
+' "$work/candidates" >"$work/hits"
 
 if [ -s "$work/hits" ]; then
   while IFS= read -r hit; do

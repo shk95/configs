@@ -1,0 +1,414 @@
+#!/bin/sh
+#
+# Enforce INV repository/work-spec-has-report: a spec under docs/work/ is
+# paired with a report that answers each of its acceptance criteria, the
+# report's state follows from its rows, and a criterion is never removed or
+# rewritten after the work began except by a dated amendment.
+#
+# A work item is one directory, docs/work/<scope>/<slug>/, holding spec.md and
+# report.md and optionally a study.md; the documents carried from the design
+# area keep the kinds they were written with (study, plan, map).
+# docs/work/README.md is the format contract; this file is its check. The
+# plan and its verification are tracked so they can be held to account: an
+# issue's text can be edited after the fact, and a spec with no report sets a
+# bar nobody is asked to meet.
+#
+# Rules, as named in failure output:
+#
+#   W1  a tracked path under docs/work/ is README.md, roadmap.md, or
+#       <scope>/<slug>/<kind>.md with a [a-z0-9-] slug and a kind of spec,
+#       report, study, plan or map
+#   W2  a spec.md has a report.md beside it, and a report.md a spec.md
+#   W3  the header parses: line 1 is `# <Title>`, then `key: value` lines up
+#       to the first blank line, known keys in their counts, real calendar
+#       dates written YYYY-MM-DD. A spec has one scope, the one its directory
+#       names, and status `approved`; a report names the spec beside it and
+#       is pending, done, abandoned or superseded, the last with a
+#       `superseded-by` that is a tracked spec; a carried document's kind is
+#       its file name. An `Amended` paragraph opens with a real date.
+#   W4  the spec's `## Acceptance` table has at least one criterion, ids are
+#       AC<n> and unique, and every criterion names required lanes from the
+#       known set
+#   W5  every criterion has exactly one report row and every report row a
+#       criterion; a row is pending, verified or unmet, and a verified row
+#       carries its evidence
+#   W6  the report's state follows from its rows: done only when every row is
+#       verified; abandoned or superseded only when no row is still pending
+#   W7  with --staged or --range: a criterion that stood beside a report at
+#       the base is present and unchanged at the head, in its text and its
+#       lanes, unless the head's spec carries an `Amended` paragraph the base
+#       did not have that names the criterion
+#
+# The subject is the index, like tool/version-control/hygiene: the invariant
+# is about committed state. --staged compares HEAD with the index, which is
+# the commit about to be made; --range compares two commits, which is a pull
+# request or a push.
+#
+# --overdue lists the specs whose review-by has passed while the report is
+# still pending, and fails nothing: tool/version-control/audit is where an
+# overdue spec is reported, the way an overdue provisional measure is.
+#
+# usage: tool/version-control/work [--staged | --range <base> <head>]
+#        tool/version-control/work --overdue [--date <YYYY-MM-DD>]
+#
+# Exit 0 verified, 69 unverified, any other status failed. See
+# docs/policy/architecture.md, "Repository governance plane", and .githooks/evidence,
+# which is the one place that decides what each means.
+
+set -eu
+
+# Guards this script's sed/grep/awk calls from Git for Windows' MSYS argument
+# conversion (#79); see tool/version-control/hygiene. Inert elsewhere.
+MSYS_NO_PATHCONV=1
+MSYS2_ARG_CONV_EXCL='*'
+export MSYS_NO_PATHCONV MSYS2_ARG_CONV_EXCL
+
+# The three-state prerequisite contract, restated rather than sourced from
+# unixlike/tool/checks/prerequisite for the reason tool/version-control/hygiene
+# gives: a repository check must not depend on a domain's plane.
+require_command() {
+  require_missing=
+  for require_name in "$@"; do
+    command -v "$require_name" >/dev/null 2>&1 ||
+      require_missing="$require_missing $require_name"
+  done
+  [ -n "$require_missing" ] || return 0
+
+  if [ "${REQUIRE_NATIVE:-0}" = 1 ]; then
+    printf '\033[31m✗ required tooling is missing:%s\033[0m\n' \
+      "$require_missing" >&2
+    exit 1
+  fi
+
+  printf '· unverified: this host has no%s\n' "$require_missing" >&2
+  exit 69
+}
+
+usage() {
+  echo "usage: tool/version-control/work [--staged | --range <base> <head>]" >&2
+  echo "       tool/version-control/work --overdue [--date <YYYY-MM-DD>]" >&2
+  exit 2
+}
+
+mode=tree
+base=
+head=
+reference=
+case "${1:-}" in
+  "") [ "$#" -eq 0 ] || usage ;;
+  --staged)
+    [ "$#" -eq 1 ] || usage
+    mode=range
+    base=HEAD
+    ;;
+  --range)
+    [ "$#" -eq 3 ] || usage
+    mode=range
+    base=$2
+    head=$3
+    ;;
+  --overdue)
+    mode=overdue
+    case "$#" in
+      1) ;;
+      3) [ "$2" = --date ] || usage; reference=$3 ;;
+      *) usage ;;
+    esac
+    ;;
+  *) usage ;;
+esac
+
+require_command git awk
+
+# The repository being checked, not the one this file lives in, so the
+# fixtures in tool/version-control/test run this exact script against a
+# throwaway repository.
+root=$(git rev-parse --show-toplevel)
+cd "$root"
+
+tmp=$(mktemp -d)
+trap 'rm -rf "$tmp"' EXIT
+
+# A document at a revision; the empty revision is the index.
+blob() {
+  if [ -n "$1" ]; then git show "$1:$2"; else git show ":$2"; fi
+}
+
+blob_exists() {
+  if [ -n "$1" ]; then
+    git cat-file -e "$1:$2" 2>/dev/null
+  else
+    git ls-files --error-unmatch -- "$2" >/dev/null 2>&1
+  fi
+}
+
+# One document as records, tab-separated:
+#   E <message>                            the document does not parse
+#   H <key> <value>                        a header line
+#   C <id> <second cell> <last cell> <cells 2..n-1> <cells 3..n>
+#                                          a row of the Acceptance table
+#   A <paragraph>                          an Amended paragraph, on one line
+parse() {
+  awk '
+    function trim(s) { sub(/^[ \t]+/, "", s); sub(/[ \t]+$/, "", s); return s }
+    function flush() { if (para != "") { print "A\t" para; para = "" } }
+    { sub(/\r$/, "") }
+    NR == 1 {
+      if ($0 !~ /^# ./) print "E\tline 1 is not `# <Title>`"
+      next
+    }
+    body == 0 {
+      if ($0 == "") { if (seen) body = 1; next }
+      seen = 1
+      i = index($0, ": ")
+      if (i < 2) { print "E\theader line is not `key: value`: " $0; next }
+      print "H\t" substr($0, 1, i - 1) "\t" trim(substr($0, i + 2))
+      next
+    }
+    /^## / { flush(); section = $0; prev = ""; next }
+    $0 == "" { flush(); prev = ""; next }
+    {
+      if (para != "") para = para " " $0
+      else if (prev == "" && $0 ~ /^Amended /) para = $0
+      prev = $0
+    }
+    section == "## Acceptance" && /^\|/ {
+      row = $0
+      sub(/^\|/, "", row); sub(/\|[ \t]*$/, "", row)
+      n = split(row, cell, "|")
+      for (k = 1; k <= n; k++) cell[k] = trim(cell[k])
+      if (cell[1] !~ /^AC[0-9]+$/) next
+      middle = ""; rest = ""
+      for (k = 2; k < n; k++) middle = middle (k > 2 ? " | " : "") cell[k]
+      for (k = 3; k <= n; k++) rest = rest (k > 3 ? " | " : "") cell[k]
+      print "C\t" cell[1] "\t" (n >= 2 ? cell[2] : "") "\t" (n >= 3 ? cell[n] : "") "\t" middle "\t" rest
+    }
+    END { flush() }
+  '
+}
+
+valid_date='
+  function valid_date(d,   y, m, dd, dim) {
+    if (d !~ /^[0-9][0-9][0-9][0-9]-[0-9][0-9]-[0-9][0-9]$/) return 0
+    y = substr(d, 1, 4) + 0; m = substr(d, 6, 2) + 0; dd = substr(d, 9, 2) + 0
+    if (m < 1 || m > 12 || dd < 1) return 0
+    if (m == 2) dim = (y % 4 == 0 && (y % 100 != 0 || y % 400 == 0)) ? 29 : 28
+    else dim = (m == 4 || m == 6 || m == 9 || m == 11) ? 30 : 31
+    return dd <= dim
+  }
+'
+
+git ls-files -- docs/work >"$tmp/files"
+
+if [ "$mode" = overdue ]; then
+  [ -n "$reference" ] || reference=$(date +%Y-%m-%d)
+  awk -F/ 'NF == 5 && $5 == "spec.md"' "$tmp/files" | while IFS= read -r spec; do
+    report=${spec%spec.md}report.md
+    blob_exists "" "$report" || continue
+    review=$(blob "" "$spec" | parse | awk -F'\t' '$1 == "H" && $2 == "review-by" { print $3; exit }')
+    state=$(blob "" "$report" | parse | awk -F'\t' '$1 == "H" && $2 == "status" { print $3; exit }')
+    [ "$state" = pending ] || continue
+    # Dates written YYYY-MM-DD order as strings.
+    if [ -n "$review" ] && expr "$review" \< "$reference" >/dev/null; then
+      printf '%s: review-by %s has passed and the report is still pending\n' "$spec" "$review"
+    fi
+  done
+  exit 0
+fi
+
+: >"$tmp/fail"
+
+# W1: the shape of every tracked path in the area.
+awk -F/ '
+  $0 == "docs/work/README.md" || $0 == "docs/work/roadmap.md" { next }
+  NF == 5 && $4 ~ /^[a-z0-9]+(-[a-z0-9]+)*$/ &&
+    ($5 == "spec.md" || $5 == "report.md" || $5 == "study.md" ||
+     $5 == "plan.md" || $5 == "map.md") { next }
+  { print $0 ": W1 is not README.md, roadmap.md or <scope>/<slug>/<kind>.md with a kind of spec, report, study, plan or map" }
+' "$tmp/files" >>"$tmp/fail"
+
+# The work items: every <scope>/<slug> directory holding a well-formed path.
+awk -F/ 'NF == 5 { print $1 "/" $2 "/" $3 "/" $4 }' "$tmp/files" | sort -u >"$tmp/items"
+
+items=0
+pairs=0
+while IFS= read -r item; do
+  items=$((items + 1))
+  scope=$(printf '%s\n' "$item" | awk -F/ '{ print $3 }')
+
+  # W3 for the documents carried from the design area and for a study.
+  for kind in study plan map; do
+    path="$item/$kind.md"
+    blob_exists "" "$path" || continue
+    blob "" "$path" | parse | awk -F'\t' -v path="$path" -v kind="$kind" "$valid_date"'
+      function bad(msg) { print path ": W3 " msg }
+      $1 == "E" { bad($2); next }
+      $1 == "A" { d = substr($2, 9, 10); if (!valid_date(d)) bad("an Amended paragraph does not open with a real date") }
+      $1 != "H" { next }
+      { count[$2]++ }
+      $2 == "kind" { if ($3 != kind) bad("kind is " $3 ", the file is " kind ".md") }
+      $2 == "date" { if (!valid_date($3)) bad("date is not a real YYYY-MM-DD date: " $3) }
+      $2 == "scope" { if ($3 !~ /^(unixlike|windows|repository|common)$/) bad("unknown scope: " $3) }
+      $2 == "status" { if ($3 !~ /^(open|closed|superseded)$/) bad("status is not open, closed or superseded: " $3) }
+      $2 == "issue" { if ($3 !~ /^#[0-9]+$/) bad("issue is not #<n>: " $3) }
+      $2 !~ /^(kind|date|scope|status|issue|outcome|supersedes|superseded-by)$/ { bad("unknown key: " $2) }
+      END {
+        if (count["kind"] != 1) bad("needs exactly one kind")
+        if (count["date"] != 1) bad("needs exactly one date")
+        if (count["scope"] < 1) bad("needs at least one scope")
+        if (count["status"] != 1) bad("needs exactly one status")
+        if (count["supersedes"] > 1 || count["superseded-by"] > 1) bad("at most one supersedes and one superseded-by")
+      }
+    ' >>"$tmp/fail"
+  done
+
+  spec="$item/spec.md"
+  report="$item/report.md"
+  has_spec=0
+  has_report=0
+  blob_exists "" "$spec" && has_spec=1
+  blob_exists "" "$report" && has_report=1
+  [ "$has_spec" = 1 ] || [ "$has_report" = 1 ] || continue
+
+  # W2
+  if [ "$has_spec" = 0 ]; then
+    echo "$report: W2 has no spec.md beside it" >>"$tmp/fail"
+    continue
+  fi
+  if [ "$has_report" = 0 ]; then
+    echo "$spec: W2 has no report.md beside it; a spec and its report are created together" >>"$tmp/fail"
+    continue
+  fi
+  pairs=$((pairs + 1))
+
+  blob "" "$spec" | parse >"$tmp/spec.rec"
+  blob "" "$report" | parse >"$tmp/report.rec"
+
+  # W3 and W4 for the spec.
+  awk -F'\t' -v path="$spec" -v scope="$scope" "$valid_date"'
+    function bad(rule, msg) { print path ": " rule " " msg }
+    BEGIN {
+      n = split("evaluation,build,native runtime,activation,Apply,fixtures,policy checks,affected dispatch,review", l, ",")
+      for (k = 1; k <= n; k++) lane[l[k]] = 1
+    }
+    $1 == "E" { bad("W3", $2); next }
+    $1 == "A" { d = substr($2, 9, 10); if (!valid_date(d)) bad("W3", "an Amended paragraph does not open with a real date"); next }
+    $1 == "H" {
+      count[$2]++
+      if ($2 == "kind") { if ($3 != "spec") bad("W3", "kind is " $3 ", the file is spec.md") }
+      else if ($2 == "date" || $2 == "review-by") { if (!valid_date($3)) bad("W3", $2 " is not a real YYYY-MM-DD date: " $3) }
+      else if ($2 == "scope") { if ($3 != scope) bad("W3", "scope is " $3 ", the directory names " scope) }
+      else if ($2 == "status") { if ($3 != "approved") bad("W3", "status is not approved: " $3) }
+      else if ($2 == "issue") { if ($3 !~ /^#[0-9]+$/) bad("W3", "issue is not #<n>: " $3) }
+      else bad("W3", "unknown key: " $2)
+      next
+    }
+    $1 == "C" {
+      criteria++
+      if (seen[$2]++) bad("W4", "criterion " $2 " appears twice")
+      if ($5 == "") bad("W4", "criterion " $2 " has no text")
+      if ($4 == "") bad("W4", "criterion " $2 " names no required lane")
+      m = split($4, want, /, */)
+      for (k = 1; k <= m; k++) if (!(want[k] in lane)) bad("W4", "criterion " $2 " names an unknown lane: " want[k])
+    }
+    END {
+      if (count["kind"] != 1) bad("W3", "needs exactly one kind")
+      if (count["date"] != 1) bad("W3", "needs exactly one date")
+      if (count["scope"] != 1) bad("W3", "needs exactly one scope; a spec whose outcome spans scopes is one spec per scope")
+      if (count["status"] != 1) bad("W3", "needs exactly one status")
+      if (count["review-by"] != 1) bad("W3", "needs exactly one review-by")
+      if (count["issue"] > 1) bad("W3", "at most one issue")
+      if (criteria == 0) bad("W4", "has no criterion under `## Acceptance`")
+    }
+  ' "$tmp/spec.rec" >>"$tmp/fail"
+
+  # W3 for the report, then W5 and W6 against the spec.
+  superseded_by=$(awk -F'\t' '$1 == "H" && $2 == "superseded-by" { print $3; exit }' "$tmp/report.rec")
+  superseded_ok=0
+  case "$superseded_by" in
+    docs/work/*/spec.md) blob_exists "" "$superseded_by" && superseded_ok=1 ;;
+  esac
+  awk -F'\t' -v path="$report" -v spec="$spec" -v superseded_ok="$superseded_ok" '
+    function bad(rule, msg) { print path ": " rule " " msg }
+    FILENAME == ARGV[1] { if ($1 == "C") criterion[$2] = 1; next }
+    $1 == "E" { bad("W3", $2); next }
+    $1 == "H" {
+      count[$2]++
+      if ($2 == "kind") { if ($3 != "report") bad("W3", "kind is " $3 ", the file is report.md") }
+      else if ($2 == "spec") { if ($3 != spec) bad("W3", "spec is " $3 ", the spec beside it is " spec) }
+      else if ($2 == "status") {
+        state = $3
+        if ($3 !~ /^(pending|done|abandoned|superseded)$/) bad("W3", "status is not pending, done, abandoned or superseded: " $3)
+      }
+      else if ($2 == "superseded-by") { }
+      else bad("W3", "unknown key: " $2)
+      next
+    }
+    $1 == "C" {
+      if (row[$2]++) bad("W5", "criterion " $2 " has more than one row")
+      if (!($2 in criterion)) bad("W5", "row " $2 " answers no criterion of the spec")
+      if ($3 !~ /^(pending|verified|unmet)$/) bad("W5", "row " $2 " is not pending, verified or unmet: " $3)
+      if ($3 == "verified" && $6 == "") bad("W5", "row " $2 " is verified with no evidence")
+      if ($3 != "verified") unverified = unverified " " $2
+      if ($3 == "pending") open = open " " $2
+    }
+    END {
+      if (count["kind"] != 1) bad("W3", "needs exactly one kind")
+      if (count["spec"] != 1) bad("W3", "needs exactly one spec")
+      if (count["status"] != 1) bad("W3", "needs exactly one status")
+      if (state == "superseded" && !superseded_ok) bad("W3", "is superseded and names no tracked spec in superseded-by")
+      if (state != "superseded" && count["superseded-by"] > 0) bad("W3", "carries superseded-by and is not superseded")
+      for (id in criterion) if (!(id in row)) bad("W5", "criterion " id " has no row")
+      if (state == "done" && unverified != "") bad("W6", "is done while these rows are not verified:" unverified)
+      if ((state == "abandoned" || state == "superseded") && open != "") bad("W6", "is " state " while these rows are still pending; state an unmet criterion as unmet:" open)
+    }
+  ' "$tmp/spec.rec" "$tmp/report.rec" >>"$tmp/fail"
+done <"$tmp/items"
+
+# W7: the bar is set before the work. A spec that stood beside a report at the
+# base keeps every criterion it had, word for word, unless an amendment the
+# base did not carry names it. A base that is not a commit — the empty tree of
+# a first push, or a repository with no HEAD yet — held no spec.
+if [ "$mode" = range ] && git rev-parse -q --verify "$base^{commit}" >/dev/null 2>&1; then
+  git ls-tree -r --name-only "$base" -- docs/work 2>/dev/null |
+    awk -F/ 'NF == 5 && $5 == "spec.md"' >"$tmp/base-specs"
+  while IFS= read -r spec; do
+    report=${spec%spec.md}report.md
+    blob_exists "$base" "$report" || continue
+    if ! blob_exists "$head" "$spec"; then
+      echo "$spec: W7 was removed while its report existed; close the work through the report's state" >>"$tmp/fail"
+      continue
+    fi
+    blob "$base" "$spec" | parse >"$tmp/base.rec"
+    blob "$head" "$spec" | parse >"$tmp/head.rec"
+    awk -F'\t' -v path="$spec" '
+      FILENAME == ARGV[1] {
+        if ($1 == "C") { text[$2] = $5; lanes[$2] = $4 }
+        else if ($1 == "A") old[$2] = 1
+        next
+      }
+      $1 == "C" { now[$2] = 1; now_text[$2] = $5; now_lanes[$2] = $4 }
+      $1 == "A" && !($2 in old) { fresh = fresh "\n" $2 }
+      END {
+        for (id in text) {
+          if (!(id in now)) what = "was removed"
+          else if (now_text[id] != text[id] || now_lanes[id] != lanes[id]) what = "was rewritten"
+          else continue
+          if (fresh !~ ("(^|[^A-Za-z0-9])" id "([^0-9]|$)"))
+            print path ": W7 criterion " id " " what " after its report existed, and no new `Amended YYYY-MM-DD` paragraph names it"
+        }
+      }
+    ' "$tmp/base.rec" "$tmp/head.rec" >>"$tmp/fail"
+  done <"$tmp/base-specs"
+fi
+
+if [ -s "$tmp/fail" ]; then
+  while IFS= read -r line; do
+    printf '\033[31m✗ %s\033[0m\n' "$line" >&2
+  done <"$tmp/fail"
+  echo "  See docs/work/README.md for the format and" >&2
+  echo "  docs/policy/invariants/repository/work-spec-has-report.md for the rule." >&2
+  exit 1
+fi
+
+echo "✓ work: $items work items, $pairs specs paired with a report"
