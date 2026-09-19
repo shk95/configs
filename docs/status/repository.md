@@ -108,12 +108,12 @@ and no commit message on its way to `dev` and no promotion body carries a
 closing keyword. A push to `dev` that ends a report closes the issue its
 spec names (`.github/workflows/work-closure.yml`), `tool/version-control/audit`
 warns about a spec past its review-by, and `tool/version-control/audit-remote`
-reports an issue left open beside a terminal report; the workflow has not yet
-closed a real issue. The document layout is done
+reports an issue left open beside a terminal report; the workflow closed its
+first issue, #259, on 2026-09-19. The document layout is done
 (`docs/work/repository/docs-layout/report.md`); what it left is the
 classifier's handling of the registries' old roots, a provisional measure
-that ends when the move reaches `master` (#275). Two work items are open: the
-work model itself (`docs/work/repository/work-model/report.md`) and the
+that ends when the move reaches `master` (#275). The work model is done too
+(`docs/work/repository/work-model/report.md`). One work item is open: the
 in-place NixOS-WSL update
 (`docs/work/unixlike/nixos-wsl-in-place-update/report.md`, in progress,
 #272).
