@@ -457,6 +457,64 @@ produce the rootfs archive and copy it to a Windows drive;
 
 Rollback is `wsl --unregister NixOS`; Ubuntu is untouched throughout.
 
+An import is how the distribution is created, not how it is updated:
+"Update the registered NixOS-WSL distribution" below is the ordinary path,
+and the archive still carries a default `/etc/nixos/configuration.nix` that
+the cleanup step there removes.
+
+### Update the registered NixOS-WSL distribution
+
+The distribution is updated in place, from a clone of this repository inside
+it, by the recipes in the `nixos-wsl` group. They refuse on any host but the
+NixOS one the flake names, and `just switch` refuses there, because it would
+put the standalone Ubuntu home over the one the system composes. Home Manager
+stays composed into the system, so a dotfile change is also a system switch
+and needs `sudo`
+(`docs/policy/decisions/unixlike/nixos-wsl-system-layer-ownership.md`). Activation
+is the maintainer's to run: building and evaluating never imply it.
+
+1. Inside the distribution, clone the repository once, and `git pull` in that
+   clone for every update. `tool/doctor.sh unixlike` reports whether the host
+   is ready.
+2. Once per import, before the first switch from this flake: remove what the
+   import left behind. The host is rebuilt from the flake alone
+   (`INV unixlike/nixos-no-channel`), and nothing an activation does removes
+   a channel or a configuration file that an import already wrote.
+
+   ```sh
+   sudo nix-channel --remove nixos-wsl   # only where the command still exists
+   sudo rm -rf /etc/nixos /root/.nix-channels /root/.nix-defexpr/channels
+   sudo rm -f /nix/var/nix/profiles/per-user/root/channels /nix/var/nix/profiles/per-user/root/channels-*-link
+   ```
+
+   The distribution imported on 2026-09-06 registered a `nixos-wsl` channel,
+   so run the first line there while `nix-channel` still exists: the switch
+   that turns channels off removes the command. An archive built after that
+   switch registers no channel, and only the `rm` lines apply to it.
+3. `just nixos-test` builds the system and activates it without making it the
+   default, so a system that cannot start is gone at the next `wsl
+   --terminate`. When it holds, `just nixos-switch` makes it the default, and
+   `just nixos-generations` lists it.
+4. If the change touched `/etc/wsl.conf` — anything under `wsl.*` in
+   `unixlike/modules/wsl.nix` — run `wsl --terminate NixOS` from Windows and
+   start the distribution again: WSL reads that file only at boot.
+5. A rebuild that names no flake is expected to fail: `nixos-rebuild switch`
+   stops on the search path, which carries no `nixos-config`. nixos-wsl's
+   welcome text advises that command and `nix-channel --update`; neither
+   describes this host.
+
+Roll back with `just nixos-rollback`, which switches to the previous
+generation; WSL has no boot loader to choose one from. It works only while
+that generation still exists, and the store is collected weekly with
+everything older than fourteen days (`unixlike/modules/nix/shared.nix`), so
+that is the window. `just nixos-switch` after a rollback activates the
+current configuration again as a further generation.
+
+Importing again is recovery, not an update. It replaces the whole root file
+system, so it loses `/home`, the account's password and
+`~/.ssh/authorized_keys`; steps 2 and 3 of the import, and the cleanup step
+above, are owed again afterwards.
+
 ### Capture Karabiner drift
 
 On the Mac, `just karabiner-check` reports whether the host still holds the
