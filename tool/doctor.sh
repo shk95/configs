@@ -177,13 +177,19 @@ found=0
 
 if grep -Rqs --include='*.nix' 'homeConfigurations' "$unixlike_flake/flake.nix" "$unixlike_flake/modules" 2>/dev/null; then
   found=1
-  ok "homeConfigurations — build and switch here"
+  # NixOS composes its home into the system: the standalone home builds there
+  # and is never activated there (`just home-switch` refuses).
+  if [ -e /etc/NIXOS ]; then
+    ok "homeConfigurations — build here; this host's home comes with the system"
+  else
+    ok "homeConfigurations — build and switch here (just home-switch)"
+  fi
 fi
 
 if grep -Rqs --include='*.nix' 'nixosConfigurations' "$unixlike_flake/flake.nix" "$unixlike_flake/modules" 2>/dev/null; then
   found=1
   if [ -r /etc/os-release ] && grep -q '^ID=nixos' /etc/os-release; then
-    ok "nixosConfigurations — build and switch here"
+    ok "nixosConfigurations — build and switch here (just nixos-test, then just nixos-switch)"
   else
     warn "nixosConfigurations — build here, but not switch" \
          "nixos-rebuild switch needs the target host. The closure still builds and is still verified; only activation is out of reach."
