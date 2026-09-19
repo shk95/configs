@@ -214,3 +214,14 @@ them, with the selector's filter for the same roots and their fixtures, as a
 provisional measure under `repository`, tagged on every disposable line. AC12
 holds the registration. The retirement stays a repository change after the
 promotion, outside this spec; the registry's review date holds it.
+
+Amended 2026-09-19, AC4. Its exemptions gain one: a dated account of the old
+layout that names the new path beside the old one. The re-verification found
+three such lines outside the exemptions as they were worded —
+`docs/status/repository.md`, where the design area is "`docs/design/` (since
+2026-09-19 `docs/work/`)", and two lines of
+`docs/policy/candidates/repository/citation-by-section-not-line.md` that
+count citations as they were spelled when the candidate was observed. Each
+was written to say what stood before the move, so rewriting it to pass the
+search would drop the record it keeps. A line that names only the old path
+is still a hit.
