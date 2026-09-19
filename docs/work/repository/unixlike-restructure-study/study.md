@@ -5,14 +5,14 @@ date: 2026-09-08
 scope: unixlike
 scope: repository
 status: closed
-outcome: docs/candidates/citation-by-section-not-line.md
-outcome: docs/candidates/comment-carries-unregistered-rationale.md
-outcome: docs/candidates/domain-tool-placement-and-justfile-exception.md
+outcome: docs/policy/candidates/repository/citation-by-section-not-line.md
+outcome: docs/policy/candidates/repository/comment-carries-unregistered-rationale.md
+outcome: 64a2a85:docs/candidates/domain-tool-placement-and-justfile-exception.md (deleted when promoted)
 outcome: #213
 outcome: #214
-outcome: docs/design/unixlike-restructure-plan.md
-outcome: docs/decisions/unixlike-domain-owns-its-tree.md
-outcome: docs/decisions/concern-first-inside-the-domain.md
+outcome: docs/work/repository/unixlike-restructure-plan/plan.md
+outcome: docs/policy/decisions/unixlike/unixlike-domain-owns-its-tree.md
+outcome: docs/policy/decisions/unixlike/concern-first-inside-the-domain.md
 
 Opened from one observation, that the Unix-like entry points were unpleasant
 to use, and carried through 2026-09-08 to 2026-09-10 against `dev` fc57495.
@@ -344,6 +344,10 @@ pays once and removes it.
 6. Whether to amend the milestone rule and the tag contract, which have no
    vocabulary for a cross-scope unit of work or a library release. They are
    sentences this repository wrote, so they can be amended.
+   Answered on 2026-09-19 for the milestone half: milestones are no longer
+   used, and a cross-scope unit of work is one spec per scope linked through
+   the roadmap (`docs/work/repository/work-model/spec.md`). The tag half
+   remains open.
 7. The deployment tool, once there are more NixOS desktop hosts: an entry
    point verb, or colmena or deploy-rs.
 
