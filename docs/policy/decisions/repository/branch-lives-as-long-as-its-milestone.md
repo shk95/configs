@@ -2,7 +2,8 @@
 
 date: 2026-09-12
 scope: repository
-status: accepted
+status: superseded
+superseded-by: docs/policy/decisions/repository/work-planned-and-verified-in-documents.md
 reopen-when: a pull request merges whose catch-up with `dev` was authored by GitHub rather than pushed through the hook, or a milestone branch grows past what one review can hold.
 source: 88ee3ea:docs/design/commit-granularity-and-branch-lifetime.md § How much work one commit and one branch should carry
 

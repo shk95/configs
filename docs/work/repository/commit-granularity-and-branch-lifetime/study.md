@@ -3,9 +3,10 @@
 kind: study
 date: 2026-09-12
 scope: repository
-status: open
-outcome: docs/decisions/commit-marks-a-judgement-point.md
-outcome: docs/decisions/branch-lives-as-long-as-its-milestone.md
+status: superseded
+superseded-by: docs/work/repository/work-model/spec.md
+outcome: docs/policy/decisions/repository/commit-marks-a-judgement-point.md
+outcome: docs/policy/decisions/repository/branch-lives-as-long-as-its-milestone.md
 
 The proposal: commit only at important judgement points rather than splitting
 every step, run one branch per milestone, and merge when the milestone is
@@ -265,3 +266,10 @@ push through the hook.
 Nothing, for these two questions. What remains is to watch the first
 milestone-length branch and record what it actually cost, which belongs in
 this document as a dated paragraph rather than in a new one.
+
+2026-09-19: superseded before it was measured. No milestone-length branch
+ever ran, so the cost this document was kept open to record was never
+incurred, and the branch rule it produced was replaced: a branch is one
+reviewable increment and milestones are no longer used
+(`docs/work/repository/work-model/spec.md`). The judgement-point rule for
+commits stands.

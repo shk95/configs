@@ -3,6 +3,7 @@ statement: No commit message on its way to dev and no promotion pull request bod
 rationale: docs/policy/architecture.md § Repository governance plane
 enforced-by: tool tool/version-control/closing-keywords
 enforced-by: fixture tool/version-control/test
+decision: docs/policy/decisions/repository/work-planned-and-verified-in-documents.md § Work is planned and verified in documents, and a branch is one increment
 
 GitHub closes a referenced issue when a closing keyword reaches the default
 branch. Every pull request targets `dev`, so the keyword does nothing when

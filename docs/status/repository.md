@@ -82,20 +82,34 @@ now carries ten repository-wide scans
 (`docs/policy/decisions/repository/design-documents-outside-the-authority-model.md`). It held
 four documents, ported the same day from the HTML artefacts they were
 written as: a map of the tree as read at `dev` fc57495, the restructure
-study, the restructure plan, and the commit-granularity study; the plan and
-the commit-granularity study are the two still `open`. The two records the
+study, the restructure plan, and the commit-granularity study; all four are
+closed or superseded since 2026-09-19. The two records the
 study produced landed as the migration the preceding paragraph describes.
 
-Also since 2026-09-12, a branch belongs to a milestone and merges through one
-pull request when that work is complete, and a commit marks a judgement point
-rather than a step (`docs/policy/decisions/repository/branch-lives-as-long-as-its-milestone.md`,
-`docs/policy/decisions/repository/commit-marks-a-judgement-point.md`). The known cost is taken
-deliberately: no branch here has lived past fourteen hours, so what a longer
-one does to catch-up frequency and review size is unmeasured, and the study
-behind the decisions stays `open` to record the first one. Two candidates
-promoted with it, the catch-up procedure and what a two-scope commit may
-contain, and both are now sentences in `CONTRIBUTING.md`. Nothing in `tool/`,
-the hooks or CI changed.
+Also since 2026-09-12 a commit marks a judgement point rather than a step
+(`docs/policy/decisions/repository/commit-marks-a-judgement-point.md`), and from then
+until 2026-09-19 a branch belonged to a milestone and merged through one pull
+request when that work was complete
+(`docs/policy/decisions/repository/branch-lives-as-long-as-its-milestone.md`, superseded).
+No milestone-length branch ever ran, so what one costs stayed unmeasured and
+the study behind the decision closed as superseded. Two candidates promoted
+with it, the catch-up procedure and what a two-scope commit may contain, and
+both are still sentences in `CONTRIBUTING.md`.
+
+Since 2026-09-19 work is planned and verified in documents
+(`docs/policy/decisions/repository/work-planned-and-verified-in-documents.md`): a spec
+and the report that answers it under `docs/work/<scope>/<slug>/`, checked by
+`tool/version-control/work` on every commit and in CI, with issues holding
+execution state only and `docs/work/roadmap.md` stating lanes and order.
+GitHub milestones are no longer used, a branch is one reviewable increment,
+and no commit message on its way to `dev` and no promotion body carries a
+closing keyword. Closing an execution issue from its report is still done by
+hand; the workflow that does it and the two audit readings are the next
+increment of #265. Three work items are open: the document layout
+(`docs/work/repository/docs-layout/report.md`, review lanes owed), the work
+model itself (`docs/work/repository/work-model/report.md`) and the in-place
+NixOS-WSL update (`docs/work/unixlike/nixos-wsl-in-place-update/report.md`,
+not started).
 
 ## Common
 
@@ -112,9 +126,6 @@ semantics across independent platform validation and release cycles.
 - `docs/policy/decisions/repository/powershell-copied-per-domain.md`: reopens when both
   implementations show stable semantics that would justify a common
   component.
-- Milestone naming, issue membership, and closure stay a manual maintainer
-  review; automated remote enforcement is deferred until that workflow shows
-  a recurring failure.
 - `docs/policy/decisions/repository/hygiene-tool-owns-enforcement.md`: reopens when the same
   four axes are decided from a typed declaration rather than from text.
 - `docs/policy/decisions/repository/annotated-tag-is-the-release-record.md`: reopens when a

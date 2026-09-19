@@ -4,18 +4,18 @@ kind: plan
 date: 2026-09-10
 scope: unixlike
 scope: repository
-status: open
+status: closed
 outcome: #213
 outcome: #214
-outcome: docs/decisions/unixlike-domain-owns-its-tree.md
-outcome: docs/decisions/concern-first-inside-the-domain.md
+outcome: docs/policy/decisions/unixlike/unixlike-domain-owns-its-tree.md
+outcome: docs/policy/decisions/unixlike/concern-first-inside-the-domain.md
 outcome: #218
 outcome: #219
 outcome: #220
 outcome: #221
 outcome: #222
 outcome: #223
-outcome: provisional/repository/unix-like-tree-migration
+outcome: the provisional entry repository/unix-like-tree-migration, since retired
 outcome: #224
 outcome: #225
 outcome: #226
@@ -26,6 +26,7 @@ outcome: #230
 outcome: #231
 outcome: #232
 outcome: #233
+outcome: #235
 
 The cheap parts of `docs/design/unixlike-restructure-study.md` were carried
 out; the rest is written down here. Each stage writes its predictions before
@@ -385,3 +386,5 @@ generation's hash once already on 2026-09-04. Predicted for 6: the derivation
 paths are identical. Predicted for 7: they may move, and if they do the cause
 is the rename rather than the relocation. In one commit the two would be
 indistinguishable.
+
+2026-09-19: closed. Every stage landed, and #235 recorded the last of them.

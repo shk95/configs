@@ -43,12 +43,16 @@ planning read-only unless the user explicitly authorizes a Git mutation.
   with the ability to resume that implementer in it, until the pull request
   from its branch has merged: review feedback returns to the same worktree,
   and one removed earlier costs a fresh setup for every fix.
-- **Milestone**: Search open and closed GitHub milestones before creating one.
-  Confirm one owning scope, the `<scope>: <outcome>` title, the required
-  description sections, no due date unless the maintainer supplied one, and
-  same-scope issue membership. Restate the exact milestone and issue targets
-  before remote writes. Keep a final evidence issue, report every created URL,
-  and never present milestone closure as release or deployment evidence.
+- **Work**: Follow `CONTRIBUTING.md`, "Plan and verify work". Work with more
+  than one acceptance criterion or more than one pull request gets a spec and
+  a report under `docs/work/<scope>/<slug>/`, created in the same commit and
+  checked by `tool/version-control/work`; anything else carries its evidence
+  in the pull request body. Open the execution issue only when
+  implementation starts, name the spec on its first line, and keep acceptance
+  criteria and evidence out of it. Create no GitHub milestone. Restate the
+  exact issue targets before remote writes, report every created URL, link
+  issues with `Refs #<n>`, and never present a finished report or a closed
+  issue as release or deployment evidence.
 - **Prepare**: Review the complete diff, classification, commit boundaries,
   relevant checks, and evidence. Keep `unixlike/flake.lock` refreshes isolated
   in `chore(unixlike-deps)` commits. Never stage or commit without an explicit

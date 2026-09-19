@@ -6,7 +6,7 @@ scope: unixlike
 scope: windows
 scope: repository
 status: closed
-outcome: docs/design/unixlike-restructure-study.md
+outcome: docs/work/repository/unixlike-restructure-study/study.md
 
 Three scopes share one tree. This document draws what owns what, which
 evidence a change passes through on its way to a tag, and where the physical
