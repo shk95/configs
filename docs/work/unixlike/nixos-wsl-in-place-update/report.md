@@ -16,4 +16,4 @@ status: pending
 | AC6 | pending | |
 | AC7 | pending | |
 | AC8 | pending | |
-| AC9 | pending | |
+| AC9 | pending | What the reviewer reads: `CONTRIBUTING.md` § "Update the registered NixOS-WSL distribution" and the paragraph that links it from the import section (the procedure, the cleanup step and when its channel line must run, rollback and its window, re-import as recovery), landed by #277; `tool/doctor.sh`, which names `just nixos-test` and `just nixos-switch` on NixOS and says the standalone home is not activated there, also #277; the paragraph dated 2026-09-19 in `docs/policy/decisions/unixlike/nixos-wsl-system-layer-ownership.md` (the rejected split and its cost); and the paragraph in `docs/status/unixlike.md` that says what is declared and what the host still owes. Awaits review. |
