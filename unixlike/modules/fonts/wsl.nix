@@ -20,7 +20,7 @@
 # visible to it — installing 194 MiB of Nerd Font here would not change one
 # glyph in the terminal. So the prompt is written not to need one (see the
 # emoji in modules/starship.nix), and the Windows-side step is documented where it
-# will be looked for: docs/troubleshooting.md, under the symptom.
+# will be looked for: docs/reference/troubleshooting.md, under the symptom.
 #
 # Noto rather than Ubuntu's Nanum: it covers Korean, Japanese and Chinese in one
 # package at 61 MiB against Nanum's 113 MiB for Korean alone, and it is the font

@@ -4,11 +4,12 @@
 # check simply ran `nix` and let the shell's "command not found" surface as a
 # failure. That reports a check this host could never run as a check that ran
 # and found a problem, which is the opposite of what
-# docs/definition-of-done.md asks for, and it left native Windows clones unable
-# to push a change to a Unix-like payload they had every right to edit.
+# docs/policy/definition-of-done/repository.md asks for, and it left native
+# Windows clones unable to push a change to a Unix-like payload they had every
+# right to edit.
 #
 # Exit status 69 is the repository's unverified state; see
-# docs/architecture.md. REQUIRE_NATIVE=1 turns it back into a failure, and CI
+# docs/policy/architecture.md. REQUIRE_NATIVE=1 turns it back into a failure, and CI
 # sets that so the merge gate never accepts an unchecked change.
 
 require_command() {

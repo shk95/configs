@@ -12,7 +12,7 @@
 # and this script is the one place that reads the host through that
 # declaration. Everything the host keeps beside the declared keys is runtime:
 # it survives an apply and is never printed by `project`.
-# `docs/decisions/karabiner-desired-state-by-projection.md` records the choice
+# `docs/policy/decisions/unixlike/karabiner-desired-state-by-projection.md` records the choice
 # and what was rejected.
 #
 # The Korean input-source toggle depends on two macOS symbolic hotkeys rather
@@ -55,7 +55,7 @@
 # for the two states in which no answer exists here: the platform is not
 # Darwin, or no jq can be resolved. A Karabiner installation with no
 # `karabiner.json` is drift rather than unverified, which is the rule
-# `docs/decisions/drift-outranks-unverified.md` states for the other domain.
+# `docs/policy/decisions/windows/drift-outranks-unverified.md` states for the other domain.
 #
 # The hotkey write path calls `defaults`, `plutil` and `activateSettings`,
 # which exist only on macOS and are each resolved from PATH first and from

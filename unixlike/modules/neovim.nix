@@ -20,7 +20,7 @@ _: {
       # inside Windows Terminal — a scheme the Windows domain declares, which
       # code here may not read but which has been light since #97, so every home
       # this repository composes now renders in a terminal it declares itself
-      # (`docs/decisions/composed-homes-render-in-declared-terminals.md`).
+      # (`docs/policy/decisions/unixlike/composed-homes-render-in-declared-terminals.md`).
       # Deference is not chosen because that scheme is unreadable; it is chosen
       # because asking the terminal needs no declaration at all, and so needs no
       # revision when one of them changes. A pinned `background` would.

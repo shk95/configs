@@ -1,7 +1,7 @@
 # The one service the headless host runs: sshd, so the host is reachable
 # without a Windows terminal in front of it. A home cannot run a system
 # daemon, which is what puts it in the system layer
-# (docs/decisions/nixos-wsl-system-layer-ownership.md).
+# (docs/policy/decisions/unixlike/nixos-wsl-system-layer-ownership.md).
 #
 # The port is the port Windows sees. WSL2's NAT mode relays every port the
 # VM listens on to the Windows loopback, and every distribution shares the

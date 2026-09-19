@@ -32,7 +32,7 @@ cd "$repo"
 root=${1:-modules}
 # The declaration sits at the domain root rather than inside the scanned
 # tree, because the scanned tree is now the module tree: a payload lives beside
-# the module that delivers it (docs/decisions/concern-first-inside-the-domain.md).
+# the module that delivers it (docs/policy/decisions/unixlike/concern-first-inside-the-domain.md).
 manifest=${2:-payloads.json}
 
 fail() {

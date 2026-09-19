@@ -2,7 +2,7 @@
 # Selecting a login shell is something a home cannot do: under NixOS the
 # account's shell and /etc/shells are both generated from declarations. The
 # standalone Ubuntu flavour has no such layer and keeps `just switch-shell`
-# (docs/decisions/nixos-wsl-system-layer-ownership.md).
+# (docs/policy/decisions/unixlike/nixos-wsl-system-layer-ownership.md).
 #
 # The two lines below do different things, and both were read back on the
 # host after the first activation. `shell` writes the passwd entry and, by
@@ -15,7 +15,7 @@
 # in it rather than only in its passwd entry. zsh therefore reaches both the
 # system profile and the managed home; that is one evaluator-owned package
 # rather than two declarations
-# (docs/decisions/package-ownership-by-generating-module.md).
+# (docs/policy/decisions/unixlike/package-ownership-by-generating-module.md).
 #
 # Not `programs.zsh.enable`: that writes a global /etc/zshrc and runs a second
 # compinit the Home Manager zsh does not want, and it is not needed for the

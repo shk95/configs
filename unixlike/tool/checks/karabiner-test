@@ -74,7 +74,7 @@ karabiner check --host "$work/host.json" --hotkeys-host "$work/hotkeys-host.json
 
 # A Mac with Karabiner installed and no configuration file yet is a host this
 # check can read and disagree with, so the answer is drift rather than
-# unverified; `docs/decisions/drift-outranks-unverified.md` is the rule. The
+# unverified; `docs/policy/decisions/windows/drift-outranks-unverified.md` is the rule. The
 # opposite direction is the case above: a file that is there and matches.
 printf '→ reports a missing host file as drift, not as unverified\n'
 status=0

@@ -1,7 +1,7 @@
 # The NixOS-WSL system layer, and the test for what belongs in it: a
 # declaration lives here only when standalone Home Manager on the Ubuntu
 # flavour genuinely could not make it
-# (docs/decisions/nixos-wsl-system-layer-ownership.md). Everything else stays
+# (docs/policy/decisions/unixlike/nixos-wsl-system-layer-ownership.md). Everything else stays
 # in the Home Manager classes, because a package or a file moved here is
 # *removed* from the standalone flavour, which has no
 # `environment.systemPackages` at all. This file holds the WSL integration,
@@ -67,7 +67,7 @@ in {
     # Verified inside the running distro before being written, and then verified
     # again by a fresh import: `systemctl --user is-system-running` answers
     # `running`, where UID 1000 could not start the manager at all. See
-    # docs/troubleshooting.md under WSL's message.
+    # docs/reference/troubleshooting.md under WSL's message.
     users.users.${user}.uid = 2000;
 
     # sudo asks for the account's password. nixos-wsl defaults this to false
@@ -108,7 +108,7 @@ in {
     # within the same service start by WSL's own generated drop-in, and the
     # second disarms `binfmt.c`'s flush while the one that fires is
     # `shutdown.c`'s. See the `cat: /proc/sys/fs/binfmt_misc/WSLInterop` entry
-    # in docs/troubleshooting.md.
+    # in docs/reference/troubleshooting.md.
     #
     # What is left is the guard `disable_binfmt()` opens with:
     #
@@ -164,7 +164,7 @@ in {
     # What is *not* here is as deliberate as what is. Packages, fonts, the zsh
     # configuration, git — everything a standalone home can declare — stay in
     # the Home Manager classes composed beside this layer.
-    # docs/decisions/nixos-wsl-system-layer-ownership.md records the test,
+    # docs/policy/decisions/unixlike/nixos-wsl-system-layer-ownership.md records the test,
     # what it admitted, and what it refused.
   };
 }
