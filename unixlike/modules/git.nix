@@ -136,7 +136,7 @@ in {
           # domain, which code here may not read but which has selected a
           # light one since #97. The WSL homes are therefore no longer the
           # class that keeps `light` out of `homeManager.shared`
-          # (`docs/decisions/composed-homes-render-in-declared-terminals.md`),
+          # (`docs/policy/decisions/unixlike/composed-homes-render-in-declared-terminals.md`),
           # which makes moving `light = true` up here legal. It is not done
           # here: it changes what every WSL home's `git diff`, `git show` and
           # `git log -p` paint, which is a behaviour change with its own issue
@@ -152,7 +152,7 @@ in {
   # half of the same family. That is why the light-tuned pager landed here
   # first, and it is no longer what makes it legal only here — the WSL homes'
   # terminal is declared light too, by the Windows domain
-  # (`docs/decisions/composed-homes-render-in-declared-terminals.md`). This
+  # (`docs/policy/decisions/unixlike/composed-homes-render-in-declared-terminals.md`). This
   # split is where the option sits today, not a boundary the reasoning still
   # requires.
   modules.homeManager.desktop = {

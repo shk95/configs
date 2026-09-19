@@ -164,7 +164,7 @@ show_release_notes false
 // copy is applied. Ghostty reports and drives the pair itself. The premise is
 // recorded once, with the declaring files and the condition that would reopen
 // it, in
-// docs/decisions/composed-homes-render-in-declared-terminals.md.
+// docs/policy/decisions/unixlike/composed-homes-render-in-declared-terminals.md.
 //
 // Two settings carry it, and they do not fight. `theme_dark` and `theme_light`
 // are the terminal-driven pair: with both configured, zellij swaps palettes

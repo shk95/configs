@@ -4,7 +4,7 @@
 #
 # Karabiner-Elements is a Homebrew cask, declared once in
 # `modules/darwin-homebrew.nix`, and stays there: this file declares no
-# package and no service. `docs/decisions/homebrew-owns-mac-apps.md` is the
+# package and no service. `docs/policy/decisions/unixlike/homebrew-owns-mac-apps.md` is the
 # rule, and nothing about managing the configuration changes who owns the
 # application.
 #
@@ -16,7 +16,7 @@
 # replace the link with a plain file that no longer tracks the payload.
 # `tool/darwin/karabiner apply` writes a copy instead, restricted to the
 # top-level keys the payload declares, and leaves the host's own runtime keys
-# in place. `docs/decisions/karabiner-desired-state-by-projection.md` records
+# in place. `docs/policy/decisions/unixlike/karabiner-desired-state-by-projection.md` records
 # that choice and what was rejected.
 #
 # The same script writes the two macOS symbolic hotkeys the Korean

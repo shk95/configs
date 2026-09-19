@@ -22,7 +22,7 @@ _: {
         # domain, which has declared a light scheme since #97. Every home this
         # repository composes now renders in a terminal it declares itself, and
         # every one of those is light
-        # (`docs/decisions/composed-homes-render-in-declared-terminals.md`), so
+        # (`docs/policy/decisions/unixlike/composed-homes-render-in-declared-terminals.md`), so
         # a named light theme here would no longer be the guess the paragraph
         # above calls it, and `homeManager.desktop` — the class that excludes
         # the WSL homes — is no longer where it would have to go.

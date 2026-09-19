@@ -3,7 +3,7 @@
 # NixOS-WSL home and to no other, so the standalone Ubuntu home and the
 # Darwin home are unchanged by this file — the mechanism that keeps
 # `homeManager.desktop` out of the WSL homes, used the other way round
-# (#195; docs/decisions/home-manager-platform-classes.md).
+# (#195; docs/policy/decisions/unixlike/home-manager-platform-classes.md).
 #
 # Both come from the flake's nixpkgs input, which already tracks
 # nixos-unstable; a newer version arrives with the next `flake.lock` refresh

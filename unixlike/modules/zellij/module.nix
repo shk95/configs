@@ -26,7 +26,7 @@
 # no obligation to move when this side does. Reading that file is a
 # cross-domain read by a person and not by code; nothing here imports or opens
 # it. The premise and the condition that would reopen it are recorded in
-# docs/decisions/composed-homes-render-in-declared-terminals.md.
+# docs/policy/decisions/unixlike/composed-homes-render-in-declared-terminals.md.
 #
 # INV unixlike/composition-in-one-place — this file contributes one definition
 # of `programs.zellij.extraConfig`, which Home Manager renders into
@@ -88,7 +88,7 @@
 #
 # Pinned nixpkgs' `buildRustPackage` runs `cargo test` in the root crate
 # alone, so the PR's grid tests never ran in the Darwin build
-# (docs/decisions/zellij-patched-on-darwin-until-upstream.md § Retiring the
+# (docs/policy/decisions/unixlike/zellij-patched-on-darwin-until-upstream.md § Retiring the
 # overlay). `cargoTestFlags` and `checkFlags` point the check at
 # `zellij-server` and at the combining-mark tests by name. A filter that
 # matches nothing still exits 0, and `-p zellij-server` runs a second test

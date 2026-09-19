@@ -71,7 +71,7 @@ _: {
         # `homeManager.shared` has to be. The premise has since narrowed: the
         # WSL homes this class also reaches render inside a Windows Terminal
         # the Windows domain declares light
-        # (`docs/decisions/composed-homes-render-in-declared-terminals.md`).
+        # (`docs/policy/decisions/unixlike/composed-homes-render-in-declared-terminals.md`).
         # `bold cyan` stands on the same reason it always did — a mid-tone
         # needs no declaration to be right — rather than on a terminal being
         # dark.

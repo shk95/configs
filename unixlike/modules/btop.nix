@@ -3,7 +3,7 @@ _: {
     # `programs.btop` contributes its own package, so INV
     # unixlike/package-ownership keeps btop out of modules/packages.nix — the
     # same shape modules/bat.nix and modules/lazygit.nix use for their
-    # packages (docs/decisions/package-ownership-by-generating-module.md).
+    # packages (docs/policy/decisions/unixlike/package-ownership-by-generating-module.md).
     #
     # btop cannot defer to the terminal's sixteen ANSI colours the way
     # modules/bat.nix (`theme = "ansi"`) and modules/skim.nix (`--color=16`)
@@ -14,7 +14,7 @@ _: {
     # `Default_theme["main_bg"] = "#00"`, `TTY_theme["main_bg"] =
     # "\x1b[0;40m"` unless `theme_background` is false). Naming a light
     # theme here rests on
-    # docs/decisions/composed-homes-render-in-declared-terminals.md: every
+    # docs/policy/decisions/unixlike/composed-homes-render-in-declared-terminals.md: every
     # home this repository composes renders in a terminal the repository
     # itself declares, and every one of those is light, so `homeManager.shared`
     # is no longer a guess about a background this flake cannot read.

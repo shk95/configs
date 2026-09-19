@@ -91,7 +91,7 @@ _: {
     # permitted shell and leaves the selection to macOS, and the standalone
     # Ubuntu home cannot select at all — there the choice is `chsh`, run
     # out-of-band by `Justfile`'s `switch-shell` recipe (see
-    # docs/troubleshooting.md). Until that has run, the Ubuntu host logs into
+    # docs/reference/troubleshooting.md). Until that has run, the Ubuntu host logs into
     # whatever bash the account already had, so the zsh keymap alone would
     # not reach every host. `programs.readline` below is the one declaration that reaches
     # bash — and every other readline-linked program, such as python3, psql,

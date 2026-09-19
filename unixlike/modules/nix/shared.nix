@@ -23,7 +23,7 @@ in {
   # standalone class above is not composed into this flavour, so nothing else
   # declares it. Found on the imported host, whose whole configuration is a
   # flake and whose daemon refused `nix-command`
-  # (docs/decisions/nixos-wsl-system-layer-ownership.md). The rest mirrors
+  # (docs/policy/decisions/unixlike/nixos-wsl-system-layer-ownership.md). The rest mirrors
   # modules/darwin-nix.nix: the account that rebuilds the host is trusted,
   # and the store is collected weekly — generations older than two weeks go
   # with the garbage, so that is the rollback window.

@@ -17,7 +17,7 @@
 # in both its system packages and the managed home, because installing the
 # same interactive package into both is not a way to make it more available;
 # the two evaluator-owned shells are the documented exception
-# (docs/decisions/package-ownership-by-generating-module.md). Which packages
+# (docs/policy/decisions/unixlike/package-ownership-by-generating-module.md). Which packages
 # a system module *should* hold is the reviewer's, not this check's.
 #
 # These are Home Manager packages rather than `environment.systemPackages`.
