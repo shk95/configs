@@ -3,7 +3,7 @@
 # Enforce INV repository/design-outside-authority: nothing that carries
 # authority cites a design document.
 #
-# A design document under docs/design/ argues for a direction and binds
+# A design document under docs/work/ argues for a direction and binds
 # nothing until an inlet accepts it. If a rationale paragraph, a registry
 # entry, a procedure or a script could cite one, the argument would acquire
 # the force of the thing citing it without passing any inlet, and the
@@ -14,8 +14,8 @@
 # The rule separates citing a document from naming the directory, which is
 # the distinction the tree already draws for every other document directory:
 #
-#   refused   docs/design/<file>     a citation: the directory and a name
-#   allowed   docs/design/           a placement rule: nothing continues it
+#   refused   docs/work/<file>     a citation: the directory and a name
+#   allowed   docs/work/           a placement rule: nothing continues it
 #
 # So the ownership table, the placement paragraph in AGENTS.md, the procedure
 # in CONTRIBUTING.md and the registry entry itself all say where design
@@ -23,8 +23,10 @@
 # names the document it adopted from.
 #
 #   subject   every tracked path
-#   except    docs/design/  docs/decisions/  docs/candidates/  provisional/
-#             this script and tool/version-control/test
+#   except    docs/work/  docs/policy/decisions/  docs/policy/candidates/  docs/provisional/
+#             this script, tool/version-control/test, and
+#             tool/version-control/classify, whose case arms name the area's
+#             paths as a table and cite no document
 #
 # The inlets are excluded whole rather than by header key: a decision record
 # argues in prose as well as in `source:`, and a checker that read only the
@@ -47,7 +49,7 @@
 # usage: tool/version-control/design-citations
 #
 # Exit 0 verified, 69 unverified, any other status failed. See
-# docs/architecture.md, "Repository governance plane", and .githooks/evidence,
+# docs/policy/architecture.md, "Repository governance plane", and .githooks/evidence,
 # which is the one place that decides what each means.
 
 set -eu
@@ -92,15 +94,16 @@ trap 'rm -rf "$work"' EXIT
 
 # The directory followed by anything that could continue a file name. A
 # citation is refused; the bare directory is not matched at all.
-citation='docs/design/[A-Za-z0-9._-]'
+citation='docs/work/[A-Za-z0-9._-]'
 
 # One list, used for the scan and for the count it reports, so a pathspec
 # that stopped matching cannot leave a silent zero behind a green line.
 set -- . \
-  ':(exclude)docs/design' \
-  ':(exclude)docs/decisions' \
-  ':(exclude)docs/candidates' \
-  ':(exclude)provisional' \
+  ':(exclude)docs/work' \
+  ':(exclude)docs/policy/decisions' \
+  ':(exclude)docs/policy/candidates' \
+  ':(exclude)docs/provisional' \
+  ':(exclude)tool/version-control/classify' \
   ':(exclude)tool/version-control/design-citations' \
   ':(exclude)tool/version-control/test'
 
@@ -125,7 +128,7 @@ if [ -s "$work/hits" ]; then
   while IFS= read -r hit; do
     printf '\033[31m✗ %s\033[0m\n' "$hit" >&2
   done <"$work/hits"
-  echo "  See invariants/repository/design-outside-authority.md: a design document is" >&2
+  echo "  See docs/policy/invariants/repository/design-outside-authority.md: a design document is" >&2
   echo "  argued, not adopted. Cite the decision record, candidate or provisional entry" >&2
   echo "  that accepted it, and name the directory rather than the document where the" >&2
   echo "  sentence is about where design documents live." >&2

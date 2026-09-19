@@ -78,7 +78,7 @@ https://github.com/shk95/configs/blob/dev/README.md#windows
 https://github.com/shk95/configs/blob/dev/CONTRIBUTING.md#windows-changes
 
 .LINK
-https://github.com/shk95/configs/blob/dev/docs/troubleshooting.md#checks
+https://github.com/shk95/configs/blob/dev/docs/reference/troubleshooting.md#checks
 #>
 [CmdletBinding(DefaultParameterSetName = 'Default')]
 param(

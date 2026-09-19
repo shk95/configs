@@ -907,7 +907,7 @@ function Test-WinEnvWslConfigSupport {
         Models the four managed keys and dnsTunneling, their one dependency.
         It does not select a source, probe a network, or rewrite text. Unknown
         keys remain unmodelled, not proven unsupported. Version and section
-        boundaries are sourced in docs/status.md; no capability registry or
+        boundaries are sourced in docs/status/windows.md; no capability registry or
         manifest extension is needed for this one file.
     #>
     param(

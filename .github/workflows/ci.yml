@@ -136,8 +136,9 @@ jobs:
     # The merge gate is the one place where a check that could not run must not
     # pass. tool/version-control/hygiene, tool/version-control/invariants and
     # tool/version-control/provisional need nothing but a POSIX shell, awk and
-    # Git today, as do tool/version-control/domain-reads and
-    # tool/version-control/design-citations; this is what keeps a future
+    # Git today, as do tool/version-control/domain-reads,
+    # tool/version-control/design-citations and tool/version-control/records;
+    # this is what keeps a future
     # prerequisite from passing through the gate unverified.
     env:
       REQUIRE_NATIVE: "1"
@@ -155,6 +156,7 @@ jobs:
       - run: tool/version-control/hygiene
       - run: tool/version-control/domain-reads
       - run: tool/version-control/design-citations
+      - run: tool/version-control/records
       - run: tool/version-control/invariants
       # An overdue entry fails only the scopes this change owns, so the scope
       # list comes from the classify job rather than from this one.

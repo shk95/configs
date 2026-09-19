@@ -24,7 +24,8 @@ Use it only when one configuration domain cannot honestly own the change.
 The Unix-like domain owns one tree, `unixlike/`, and everything the classifier
 answers `unixlike` for lives under it, except `.envrc` and the `Justfile`,
 which stay at the root because direnv reads the first there and where the
-second belongs is a separate decision. Files below `unixlike/modules/` are
+second belongs is a separate decision, and the domain's documents, which
+live in the Unix-like scope directories under `docs/`. Files below `unixlike/modules/` are
 flake-parts modules collected by import-tree. The first level there names a
 concern and the class a fragment reaches is read in the file that writes it,
 so a concern with one fragment is one file, and a concern with more, or with a
@@ -53,7 +54,7 @@ which deferred module classes reach a Unix-like host.
   copy on that platform's schedule. A common change must not silently alter a
   platform output.
 
-See `docs/architecture.md` for the complete ownership, versioning, and
+See `docs/policy/architecture.md` for the complete ownership, versioning, and
 deployment model.
 
 ## Rules that are expensive to break
@@ -71,42 +72,42 @@ rule stands on this sentence alone.
 | Preserve externally managed PowerShell profile blocks. Do not change Windows OpenSSH DefaultShell or add a `.wslconfig` firewall value without explicit direction. | Both are host state another owner writes. | none |
 | Classify a change before editing and change only the owning domain. | Evidence, release tags, and CI jobs are selected by ownership. | hook (`tool/version-control/classify` refuses an unclassified path) |
 | Report evaluation, build, native runtime, and activation or Apply evidence separately, and never upgrade partial evidence. | A tag or a merge is only as true as the lane it names. | `.githooks/evidence`; skill |
-| Register a temporary measure under `provisional/` in the change that adds it, tag every disposable line `PROV <scope>/<slug>`, and retire it by deleting the entry and its tags together. | A measure with no exit condition and no review date becomes permanent by neglect. | tool (`tool/version-control/provisional`) |
+| Register a temporary measure under `docs/provisional/` in the change that adds it, tag every disposable line `PROV <scope>/<slug>`, and retire it by deleting the entry and its tags together. | A measure with no exit condition and no review date becomes permanent by neglect. | tool (`tool/version-control/provisional`) |
 
 ## Where invariants are enforced
 
 Codebase invariants — what must remain true of committed desired state and
-tooling — are enumerated under `invariants/<scope>/`, one file each. An entry
+tooling — are enumerated under `docs/policy/invariants/<scope>/`, one file each. An entry
 states the rule without naming a command, cites its rationale in
-`docs/architecture.md` or this file, and declares its enforcement as
+`docs/policy/architecture.md` or this file, and declares its enforcement as
 `schema` (an evaluator or loader refuses it), `tool` (a script refuses it),
 `fixture` (a test proves both directions), `manual` (a reviewer evidence item
-in `docs/definition-of-done.md`), or `pending` (an issue, until a check
+in `docs/policy/definition-of-done/<scope>.md`), or `pending` (an issue, until a check
 exists). `tool/version-control/invariants` checks in both directions that
 every declaration exists and names its invariant, on every commit and in CI.
 Read the classified scope's list before editing that scope.
-`invariants/README.md` is the format.
+`docs/policy/invariants/README.md` is the format.
 
 ## Governance design
 
 When adding a repository rule, separate its concerns before implementation:
 
-- Put durable rationale in `AGENTS.md` or `docs/architecture.md` and the
-  invariant itself in `invariants/<scope>/`. State what must remain true
+- Put durable rationale in `AGENTS.md` or `docs/policy/architecture.md` and the
+  invariant itself in `docs/policy/invariants/<scope>/`. State what must remain true
   without depending on a particular command, product, or model.
 - Put human-operable prerequisites, ordered steps, recovery, and authorization
   boundaries in `CONTRIBUTING.md`.
 - Put repeatable agent orchestration in a canonical `.agents/skills/` skill.
 - Put deterministic classification and enforcement in `tool/`, hooks, CI, and
   remote repository settings.
-- Put current adoption state and migration gaps in `docs/status.md` and
-  expensive choices in `docs/decisions/`; put per-run proof in CI, pull
+- Put current adoption state and migration gaps in `docs/status/<scope>.md` and
+  expensive choices in `docs/policy/decisions/`; put per-run proof in CI, pull
   requests, and release evidence.
 - Put a rule that has been observed but not accepted, and a document or tool
-  judged stale, in `docs/candidates/` until recurrence or silence decides it.
+  judged stale, in `docs/policy/candidates/` until recurrence or silence decides it.
   A candidate is an observation and never a source of authority.
 - Put the argument for a direction — what was surveyed, measured and weighed,
-  and what the next steps predict — in `docs/design/`, outside the authority
+  and what the next steps predict — in `docs/work/`, outside the authority
   model. A design document observes this repository and binds nothing. It
   becomes binding only through an inlet that is reviewed on its own terms: a
   decision record, a promoted candidate, a registered provisional measure, or
@@ -114,7 +115,7 @@ When adding a repository rule, separate its concerns before implementation:
   authority may cite one (`INV repository/design-outside-authority`), and an
   agent reads a design document when a task, an issue or a record points at
   it, never as a rule to follow. Work under an adopted direction reports
-  through commits, check evidence and `docs/status.md` rather than through a
+  through commits, check evidence and `docs/status/` rather than through a
   document of its own.
 
 Each obligation has one authoritative source. Procedures and tools implement
@@ -153,8 +154,8 @@ milestone description and final evidence issue providing the manual evidence.
 
 ## Working contract
 
-1. Read `CONTRIBUTING.md`, `docs/architecture.md`, `invariants/<scope>/` for
-   the classified scope, the scope's current state in `docs/status.md`, and
+1. Read `CONTRIBUTING.md`, `docs/policy/architecture.md`, `docs/policy/invariants/<scope>/` for
+   the classified scope, the scope's current state in `docs/status/<scope>.md`, and
    every decision record those entries and that state cite.
 2. Classify the task as `unixlike`, `windows`, `common`, `repository`, or an
    explicit transfer.
@@ -167,10 +168,12 @@ milestone description and final evidence issue providing the manual evidence.
    evidence separately for each affected domain.
 
 User-facing usage belongs in `README.md`, workflow in `CONTRIBUTING.md`,
-architecture and ownership in `docs/architecture.md`, current state in
-`docs/status.md`, decisions in `docs/decisions/`, recurring symptoms in
-`docs/troubleshooting.md`, invariants in `invariants/`, the argument for a
-direction in `docs/design/`, and executable policy in `tool/`, hooks, and CI.
+architecture and ownership in `docs/policy/architecture.md`, current state in
+`docs/status/`, decisions in `docs/policy/decisions/`, recurring symptoms in
+`docs/reference/troubleshooting.md`, invariants in `docs/policy/invariants/`, the argument for a
+direction in `docs/work/`, and executable policy in `tool/`, hooks, and CI.
+`docs/README.md` maps the document tree; a document is owned by the scope
+directory, or the scope-named file, that holds it.
 Canonical project-specific agent workflows live under `.agents/skills/` and
 follow the Agent Skills open standard. Reusable
 cross-project methods live in the separate sibling `skills` project.

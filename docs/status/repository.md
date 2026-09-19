@@ -1,0 +1,122 @@
+# Current state: repository
+
+This file states what is observably true of the repository scope today: hosts and
+classes in use, schema and version facts, and open conditions. Every decision
+is recorded under `docs/policy/decisions/`; the model those decisions implement
+is `docs/policy/architecture.md`, and the three-domain direction is
+`docs/policy/architecture.md` § Decision. The other scopes' state is in the
+files beside this one.
+
+Branch protection is enabled on both `dev` and `master`: pull requests and
+current-branch checks are required, administrators are enforced,
+conversations must be resolved, force pushes and deletions are disabled, and
+both branches require only the `Required checks` gate.
+
+`dev` requires a pull request and an up-to-date base; `master` accepts only
+`dev` through a pull request with a merge commit; squash and rebase merges
+are disabled.
+
+The merge gate is CI's `Required checks`, demanded whenever a change falls
+in a domain that check covers.
+
+The invariant registry holds 60 entries, none pending and no fixture unit
+untagged, and `tool/version-control/invariants` enforces C10 (no untagged
+fixture unit) by default. Enforced is not the same as held: the manual
+`INV windows/support-boundary-named` records that the terminal delegation
+item still passes its read-back below the Windows 10 boundary (#53).
+
+Content before a shell suite's first banner is in no fixture unit and
+invisible to C10 (`docs/policy/decisions/repository/fixture-tags-name-proven-invariants.md`).
+
+The provisional registry holds 1 entry, `unixlike/zellij-combining-marks`,
+registered on 2026-09-05 by #175; `docs/provisional/README.md` is the contract.
+`tool/version-control/provisional` checks it in both directions on every
+commit and in the CI scan job. The exit criteria `unixlike/flake.nix` states in
+comments are the known gap: moving them into the registry is a separate
+decision and has not been made.
+
+`tool/version-control/domain-reads` runs on every commit and in CI beside
+the hygiene scan; the Windows CI job no longer walks the checkout for
+PowerShell files, and `windows/tools/test.ps1` is the one place every script
+under the Windows tree is parsed for syntax (`check-desired-state.ps1`
+still parses the PowerShell payload it validates). `pre-push` runs the
+history form of the audit, which judges `dev`, `master` and release-tag
+reachability against `origin/dev` and `origin/master` when a fetch left
+them (#240), and the subjects of the commits each pushed tip carries;
+the CI audit names `HEAD`, so a pull request's own commits are judged
+before it merges (#243). It still reads every local tag, so a stray local `*-v*` tag
+the push does not carry fails the push; judging only the tags a push
+carries has not been done.
+
+Since 2026-09-13 the Unix-like domain owns one tree. `unixlike/` holds the
+flake, the modules, the payloads and the domain's own tooling; `.envrc` and
+the `Justfile` stay at the root, and `tool/` holds repository tooling without
+exception. Inside the domain the first level of the module tree names a
+concern: five concerns that had fragments in more than one class became
+directories, five files that carried a platform in their name lost it, and
+each payload and the one script a module interpolates now sit beside that
+module. The classifier answers the domain with one arm for the tree, with
+`.envrc` and the `Justfile` as the two root exceptions, where it had eight
+patterns, and the three tools that enumerated Unix-like locations no longer
+repeat a list (`docs/policy/decisions/unixlike/unixlike-domain-owns-its-tree.md`,
+`docs/policy/decisions/unixlike/concern-first-inside-the-domain.md`).
+
+Two things changed with it. The payload declaration moved to
+`unixlike/payloads.json` and the scanned tree became the module tree, so the
+Karabiner script is declared and parsed like the data payloads, in a `shell`
+format `sh -n` provides; payloads went from fifteen to sixteen. And the Darwin
+toplevel derivation path moved once, when the rearrangement renamed the files
+that activation interpolates; the relocation itself left all three paths
+byte-identical, which is why the two were separate changes. Native evidence
+for the moved tree was taken on an Ubuntu WSL host on 2026-09-13:
+`home-manager build --flake ./unixlike#user1` succeeds, and the Home Manager
+generation built from `unixlike/` is byte-identical to the one activated
+before the move, so the maintainer's `just home-switch` reused it rather than
+creating a new one (#223).
+
+Since 2026-09-12 the repository has an external layer: `docs/design/` (since
+2026-09-19 `docs/work/`) holds the argument for a direction and carries no authority, and
+`tool/version-control/design-citations` refuses a citation of a document
+there from anything that does, on every commit and in the CI scan job, which
+now carries eight repository-wide scans
+(`docs/policy/decisions/repository/design-documents-outside-the-authority-model.md`). It held
+four documents, ported the same day from the HTML artefacts they were
+written as: a map of the tree as read at `dev` fc57495, the restructure
+study, the restructure plan, and the commit-granularity study; the plan and
+the commit-granularity study are the two still `open`. The two records the
+study produced landed as the migration the preceding paragraph describes.
+
+Also since 2026-09-12, a branch belongs to a milestone and merges through one
+pull request when that work is complete, and a commit marks a judgement point
+rather than a step (`docs/policy/decisions/repository/branch-lives-as-long-as-its-milestone.md`,
+`docs/policy/decisions/repository/commit-marks-a-judgement-point.md`). The known cost is taken
+deliberately: no branch here has lived past fourteen hours, so what a longer
+one does to catch-up frequency and review size is unmeasured, and the study
+behind the decisions stays `open` to record the first one. Two candidates
+promoted with it, the catch-up procedure and what a two-scope commit may
+contain, and both are now sentences in `CONTRIBUTING.md`. Nothing in `tool/`,
+the hooks or CI changed.
+
+## Common
+
+No `common/` component exists.
+`docs/policy/decisions/repository/powershell-copied-per-domain.md` names what would justify
+one: both the PowerShell and the Zellij keymap copies showing stable
+semantics across independent platform validation and release cycles.
+
+## Open conditions
+
+- `docs/policy/decisions/repository/ci-evidence-without-hosted-runners.md`: reopens when a
+  defect class a hosted runner would have caught occurs twice, or a NixOS
+  host configuration exists for VM tests to target.
+- `docs/policy/decisions/repository/powershell-copied-per-domain.md`: reopens when both
+  implementations show stable semantics that would justify a common
+  component.
+- Milestone naming, issue membership, and closure stay a manual maintainer
+  review; automated remote enforcement is deferred until that workflow shows
+  a recurring failure.
+- `docs/policy/decisions/repository/hygiene-tool-owns-enforcement.md`: reopens when the same
+  four axes are decided from a typed declaration rather than from text.
+- `docs/policy/decisions/repository/annotated-tag-is-the-release-record.md`: reopens when a
+  consumer needs a release artifact or a note the tag annotation cannot
+  carry.

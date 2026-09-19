@@ -1,0 +1,794 @@
+# Things that already cost someone an afternoon
+
+Findings that recur. Not a changelog and not a diary — `docs/status/`
+holds the current state; decisions are under `docs/policy/decisions/`. This holds
+the things that will bite again.
+
+**Search this file by the error text, not by reading it.** Headings are the
+literal message you will see, so `grep` finds the entry that matches what is in
+front of you.
+
+**Bar for adding an entry:** it cost more than a quarter of an hour to work out,
+*and* it will happen again — to a future session, on another machine, or after a
+dependency upgrade. A typo you fixed in a minute does not belong here. Keep
+entries to a few lines; a long one means the explanation belongs in a code
+comment where the problem lives.
+
+---
+
+## Nix
+
+### `A corresponding Nix package must be specified via 'nix.package' for generating nix.conf.`
+
+Standalone home-manager (no NixOS or nix-darwin underneath) cannot infer which
+Nix binary should generate `nix.conf` the way the OS-level modules can. Set
+`nix.package = pkgs.nix;` in whichever module sets `nix.settings` — here that is
+`home/nix.nix`. Only `homeConfigurations` needs this.
+
+Note that `nix flake check` passes with this bug present; see the entry below.
+
+### `nix flake check` passes but the configuration is broken
+
+`nix flake check` validates the flake's shape and its standard outputs. It does
+not descend into `homeConfigurations` or `nixosConfigurations` — those are
+arbitrary attributes as far as it is concerned. Forcing the toplevel derivation
+is what actually evaluates them:
+
+```sh
+nix eval --raw '.#homeConfigurations."<name>".activationPackage.drvPath'
+nix eval --raw '.#nixosConfigurations."<name>".config.system.build.toplevel.drvPath'
+```
+
+`unixlike/tool/checks/test` does this for every configuration.
+
+### `Path 'flake.nix' in the repository "..." is not tracked by Git`
+
+Flakes only see files known to git — an untracked file is invisible to flake
+purity even when it is sitting right next to a tracked one. Before the first
+`nix flake check` / `nix build` on brand-new files:
+
+```sh
+git add -N <the new files>
+```
+
+`-N` (intent-to-add) is enough; a full `git add` is not required yet. Name the
+paths rather than running `git add -N .` — it fails outright the moment the
+tree contains anything that is not a regular file or symlink, and the whole
+command aborts instead of adding the files you actually meant.
+
+### `experimental Nix feature 'nix-command' is disabled`
+
+There is no `~/.config/nix/nix.conf` yet, which is the state of any machine
+before its first `home-manager switch` — `unixlike/modules/nix/shared.nix` is
+what writes it. Export `NIX_CONFIG="experimental-features = nix-command
+flakes"` for the session rather than writing the file by hand: home-manager
+refuses to clobber an unmanaged file, so hand-writing it turns the first switch
+into a failure.
+
+This host passed that point on 2026-08-03 and no longer needs the variable. The
+entry stays because a fresh clone on a new machine starts where this one did.
+
+On the NixOS-WSL flavour the file that matters is `/etc/nix/nix.conf`, which is
+generated from `nix.settings`, and the standalone class that writes the home
+file is not composed there. The distribution imported on 2026-09-06 hit this
+exact message from a system whose whole configuration is a flake;
+`unixlike/modules/nix/shared.nix` declares the setting for that flavour too,
+and it reaches the host on its next activation. The same `NIX_CONFIG` export
+covers the session until then.
+
+Note that `nix config show` cannot diagnose this — it needs `nix-command` in
+order to run at all. `tool/doctor.sh` probes with `nix flake metadata` instead,
+which exercises both flags the way real commands do.
+
+### GitHub Actions never runs, and every API check says it is enabled
+
+A new repository can have Actions switched off in a way nothing visible
+reports. Everything that looks like a diagnostic lies:
+
+```
+$ gh api repos/<owner>/<repo>/actions/permissions
+{"enabled":true,"allowed_actions":"all","sha_pinning_required":false}
+$ gh api repos/<owner>/<repo>/actions/workflows -q '.workflows[].state'
+active
+```
+
+Both were byte-identical to a repository where Actions worked. The only
+signal is negative — `gh api repos/<owner>/<repo>/actions/runs -q .total_count`
+stays at `0` no matter what you push. Fix it in **Settings → Actions** in the
+web UI.
+
+Two consequences worth knowing before you go looking:
+
+- **Enabling does not replay missed events.** Pushes and pull requests that
+  happened while it was off are gone; you need a fresh event. Pushing to an
+  open pull request's head branch is the cheapest one, since it fires
+  `pull_request: synchronize` even when the branch itself is not in the
+  workflow's `push` filter.
+- **It interacts badly with branch protection.** Both `dev` and `master`
+  require the `Required checks` job, which reports only after the classify,
+  scan and selected domain jobs have run. With Actions off nothing reports, so
+  every pull request waits forever on something that cannot arrive — and the
+  branch protection settings look perfectly correct while it happens.
+
+### `tool/doctor.sh`: `could not ask the flake whether nix-command works`
+
+The doctor could not run `nix flake metadata`, and the failure was *not* the
+experimental-features flag — so exporting `NIX_CONFIG` will not clear it. The
+rest of the line is the root cause nix reported; act on that.
+
+Seen so far: a read-only `~/.cache/nix` (agent sandboxes deny it), no network,
+and an untracked `unixlike/flake.nix`. Each of these used to be reported as
+"nix-command/flakes not enabled by default", which sent you to a variable that
+could not help.
+
+### `cat: /proc/sys/fs/binfmt_misc/WSLInterop: No such file or directory`
+
+> If you are a person and just want it working again, read
+> `docs/reference/wsl-interop.md` instead — one page, fix at the top. The rest of this
+> entry is the mechanism.
+
+Equivalently, and how you will actually meet it: every Windows executable stops
+working from Linux, with
+
+```
+fork/exec /mnt/c/WINDOWS/system32/cmd.exe: exec format error
+```
+
+`/mnt/c` still reads fine, which is what makes it confusing — drvfs is healthy,
+it is *interop* that is gone. Anything shelling out to `cmd.exe`, `powershell`,
+`wsl.exe`, `explorer.exe`, `clip.exe` or `code` fails; on Ubuntu the loudest
+symptom is `wsl-pro.service` restart-looping in the journal every twenty
+minutes.
+
+**Do not go looking in the Nix configuration or the login shell.** Neither can
+reach `binfmt_misc`: it is a kernel-global registry, and a home-manager
+generation or a `chsh` cannot write to it. This was mis-attributed to both for a
+day.
+
+**What is actually wrong.** Interop is one `binfmt_misc` registration:
+
+```
+$ cat /proc/sys/fs/binfmt_misc/WSLInterop
+enabled
+interpreter /init
+flags: P
+offset 0
+magic 4d5a                                  # "MZ", the DOS/PE header
+```
+
+When it is missing, the kernel has no handler for a PE binary and `execve`
+returns `ENOEXEC` — which is precisely `exec format error`.
+
+**All WSL distributions share one `binfmt_misc` registry**, the same way they
+share one cgroup hierarchy (see the entry below). It is global state that no
+distribution owns and any distribution can empty. Check whether it was emptied
+rather than merely damaged:
+
+```
+$ ls /proc/sys/fs/binfmt_misc/
+register  status                            # nothing else — the whole registry is gone
+$ cat /proc/sys/fs/binfmt_misc/status
+enabled
+```
+
+There are two different ways entries disappear, they have different causes, and
+guessing between them wastes the afternoon. `systemd-binfmt` is the program to
+read — `src/binfmt/binfmt.c` and `src/shared/binfmt-util.c`:
+
+| | what it does | when |
+| --- | --- | --- |
+| `apply_rule()` | for each rule in `binfmt.d`, writes `-1` to `.../binfmt_misc/<name>` — a delete **by name** — and then registers its own | every `ExecStart` |
+| `disable_binfmt()` | writes `-1` to `.../binfmt_misc/status` — flushes **every** entry | only `--unregister`, i.e. `ExecStop` |
+
+So a `binfmt.d` rule named `WSLInterop` in *any* distribution does not add to
+the shared registry. It **deletes whatever is there and substitutes its own**.
+That is what WSL means by "overriding", and it is a takeover, not a merge.
+
+Tell the two apart by mtime, which survives when nothing else does:
+
+```
+$ stat -c '%n %y' /proc/sys/fs/binfmt_misc/register /proc/sys/fs/binfmt_misc/status
+register  2026-08-05 15:38:38     ← last registration
+status    2026-08-04 00:31:19     ← mount time; never written = never flushed
+```
+
+If `status` still carries the boot-time timestamp, no `--unregister` has ever
+run and you are looking at a by-name takeover, not a flush.
+
+Ubuntu is protected against its own copy of that unit and nobody else's. WSL
+generates the guard, which is worth reading because it documents the whole
+problem:
+
+```
+$ cat /run/systemd/generator/systemd-binfmt.service.d/override.conf
+# Note: This file is generated by WSL to prevent binfmt.d from overriding WSL's binfmt interpreter.
+# To disable this unit, add the following to /etc/wsl.conf:
+# [boot]
+# protectBinfmt=false
+
+[Service]
+ExecStop=
+ExecStart=/bin/sh -c '(echo -1 > /proc/sys/fs/binfmt_misc/WSLInterop) ; (echo ":WSLInterop:M::MZ::/init:P" > /proc/sys/fs/binfmt_misc/register)'
+```
+
+`ExecStop=` disarms the flush and the appended `ExecStart` puts the entry back
+after `binfmt.d` has been applied. A drop-in in one distro cannot guard a
+registry shared with the others.
+
+**Getting it back, now.** No reboot needed, but it is root-only:
+
+```sh
+echo ':WSLInterop:M::MZ::/init:P' | sudo tee /proc/sys/fs/binfmt_misc/register
+```
+
+`wsl --shutdown` from Windows also fixes it — WSL re-registers at boot — but you
+cannot run that from inside, because `wsl.exe` is itself an `.exe`.
+
+**It is the second distribution's *shutdown* that does it, and no amount of
+NixOS configuration prevents it.** Measured on 2026-08-05 by watching the
+registry from Ubuntu at each step:
+
+| step | registry seen from Ubuntu |
+| --- | --- |
+| baseline | `WSLInterop`, `interpreter /init` |
+| `wsl -d NixOS` — booted, left running | `WSLInterop`, `interpreter /init` — **unharmed** |
+| exit the NixOS shell (distro shuts down) | **gone** |
+
+Booting the second distribution is harmless. Note that it is harmless even
+though `systemd-binfmt` ran inside it and its `binfmt.d` rule names
+`WSLInterop`: WSL's generated drop-in re-registers `:WSLInterop:M::MZ::/init:P`
+as a second `ExecStart`, which lands after the NixOS rule and puts the original
+line back. The interpreter reads `/init`, not `/run/binfmt/WSLInterop`, which is
+how you can tell.
+
+**The shutdown flushes the whole registry, and it is PID 1 that does it.** Not
+`systemd-binfmt.service` — `systemd-shutdown`, the binary systemd becomes at the
+end of shutdown:
+
+```c
+/* systemd/src/shutdown/shutdown.c */
+        disable_coredumps();
+        (void) disable_binfmt();                        /* -1 into .../binfmt_misc/status */
+
+        log_info("Sending SIGTERM to remaining processes...");
+```
+
+`disable_binfmt()` has exactly two callers in the whole tree — `binfmt.c` under
+`--unregister`, and this one. This one is unconditional. There is no unit, no
+`ExecStop`, no drop-in and no configuration option anywhere in its path, and the
+journal line right after it is the one you can see in every WSL distro shutdown:
+
+```
+systemd-shutdown[1]: Sending SIGTERM to remaining processes...
+```
+
+So **any** systemd distribution shutting down empties the registry for every
+distribution still running. This is why unrelated entries vanish together, and
+it is the answer to `python3.14`.
+
+**Do not try to prove a flush from `status`'s mtime.** binfmt_misc does not
+update it on write — it still reads as the mount time on a host where flushes
+have demonstrably happened. `register`'s mtime *does* move. An afternoon was
+lost to that asymmetry.
+
+The reliable test is a canary: register a second entry under a name nothing else
+knows, then look for it.
+
+```sh
+echo ':CanaryZZ:M::MZ::/init:P' | sudo tee /proc/sys/fs/binfmt_misc/register
+```
+
+If `CanaryZZ` is gone, it was a flush — nothing deletes that name by name.
+
+**Fixed for this repository's NixOS flavour, on 2026-08-05.** The guest cannot
+stop `systemd-shutdown` calling the flush, but it can make the call decline.
+`disable_binfmt()` opens with `binfmt_mounted_and_writable()`, which ends in
+`access_fd(fd, W_OK)` — so a distribution whose *own* view of the registry is
+read-only skips it. `unixlike/modules/wsl.nix` declares that as
+`systemd.services.wsl-binfmt-protect`:
+
+```sh
+mount --make-private /proc/sys/fs/binfmt_misc     # do not propagate back to the other distro
+mount -o remount,bind,ro /proc/sys/fs/binfmt_misc # bind: this mount only, not the shared superblock
+```
+
+The `bind` is not decoration. Without it the read-only lands on the superblock,
+which every distribution shares, and Ubuntu — the one that still needs to
+write — loses the registry instead. Check with `grep binfmt_misc /proc/mounts`
+on both sides: the guest should say `ro`, Ubuntu `rw`.
+
+The guest loses nothing: read-only blocks writing the registry, not reading or
+matching it, and WSL's entry names `/init` with `P` and no `F`, resolved at exec
+time in the caller's own namespace. `.exe` keeps working in both.
+
+**If you are on a distribution this repository does not manage**, the fallback
+is unchanged: run one at a time, and re-register by hand with the command above.
+
+**How to attribute it, if it happens again.** The registry keeps no history, so
+the journal is all there is. Interop's last known-good moment and the first
+`exec format error` bracket it, and every distro start and stop is logged:
+
+```sh
+journalctl | grep -n "exec format error" | head -1
+journalctl --since "<that time minus an hour>" | grep -E "WSL \(|systemd-binfmt"
+```
+
+`WSL (2 - init-systemd(NixOS))` in that window is a second distribution booting,
+and is the thing to suspect first.
+
+### `wsl: Failed to start the systemd user session for '<user>'.`
+
+Printed on entering a second WSL distribution. It is **not** a bug in that
+distribution, and chasing it there wastes the afternoon. In the journal:
+
+```
+systemd[1]: user@1000.service: Failed to spawn executor: Device or resource busy
+systemd[1]: user@1000.service: Failed with result 'resources'.
+```
+
+**All WSL distributions share one cgroup v2 hierarchy.** Confirmed rather than
+inferred — `/sys/fs/cgroup` reports the same `st_dev` from both distros, and
+from inside the failing one you can see the *other* distro's delegated subtree,
+already populated:
+
+```
+$ cat /proc/387/cgroup                     # Ubuntu's systemd --user
+0::/user.slice/user-1000.slice/user@1000.service/init.scope
+# and from inside NixOS, the same path:
+  session.slice  init.scope   ← 3 processes, none of them ours
+```
+
+So two distributions whose default user is UID 1000 both want
+`/user.slice/user-1000.slice/user@1000.service`. Whichever booted first owns it;
+the second gets `EBUSY`. The control experiment settles it — in the failing
+distro, a UID nobody else has claimed starts fine:
+
+```
+user@0.service    (UID 0,    unclaimed)      → active
+user@1000.service (UID 1000, held by Ubuntu) → failed
+```
+
+**What it costs.** System units are unaffected; `systemctl is-system-running`
+reports `degraded` only because of this and `getty@tty1`, which has no tty in
+WSL and always fails. What breaks is the *user* level: no user D-Bus socket, so
+`systemctl --user` is unusable and any home-manager systemd user service will
+not start.
+
+**What to do.** Give the second distribution's user a different UID
+(`users.users.<name>.uid`), so the paths do not collide; or run only one of them
+at a time; or wait for WSL to isolate per-distro cgroups —
+[microsoft/WSL#40519](https://github.com/microsoft/WSL/pull/40519), not present
+in WSL 2.7.11.0. The UID workaround is untested here.
+
+### `wsl --import` will not read the image from `\\wsl.localhost\...`
+
+The obvious way to import a rootfs built inside WSL is to point at it where it
+already is:
+
+```
+wsl --import NixOS C:\WSL\NixOS \\wsl.localhost\Ubuntu-26.04\home\<user>\...\nixos.wsl
+```
+
+It does not work, and the interesting part is that the path is fine. `dir` reads
+it through both spellings:
+
+```
+> dir \\wsl.localhost\Ubuntu-26.04\home\<user>\...\configs\nixos.wsl
+       603,474,420 nixos.wsl
+> dir \\wsl$\Ubuntu-26.04\home\<user>\...\configs\nixos.wsl
+       603,474,420 nixos.wsl
+```
+
+So it is not permissions, not 9p, and not the distro name. The importer
+specifically does not accept a UNC source. Copy the image to a real Windows
+drive first and give it a plain path — `just nixos-stage` does that, verifies
+the copy, and prints the exact command. It takes about four seconds over drvfs.
+
+### `sudo: a password is required` right after `wsl --import`
+
+The account a fresh import creates has no password — its `/etc/shadow` field is
+`!` — and `unixlike/modules/wsl.nix` makes sudo ask for one, because the host
+is reachable over ssh and a key alone must not be root. Nothing is broken; step
+2 of `CONTRIBUTING.md § Import the NixOS-WSL distribution` has not run yet:
+
+```
+wsl -d NixOS -u root -- passwd <account>
+```
+
+WSL selects its user without Linux authentication, so `-u root` works with
+no password at all, and the same command recovers a host that was locked
+out after the fact. `users.mutableUsers` is at its default, so a password
+set this way survives every later activation.
+
+### CI fails on a path that exists on your machine
+
+```
+error: path '«git+file://…?ref=…&rev=…»/home/programs/<file>.nix' does not exist
+```
+
+The file is `git add`-ed but never committed. A flake reads the *working tree*
+of a dirty repository, so `unixlike/tool/checks/test` — and therefore the
+`pre-push` hook — sees it and passes. CI checks out the commit, where only the
+*reference* to it landed. `git status` shows it as `A ` rather than untracked,
+which is easy to read past.
+
+A file that is untracked entirely does not do this: flakes refuse to see it and
+the local build fails first, with `Path '…' is not tracked by Git` above.
+
+```sh
+git log --stat -1          # what actually went into the commit
+git diff --cached --stat   # what is still only staged
+```
+
+### `git push` fails with the same `nix-command is disabled` message
+
+Not a git problem, and nothing in the output says a hook ran. `pre-push`
+invokes `unixlike/tool/checks/test`, which is a Nix command, so on a host where
+flakes are not enabled globally the push dies with a Nix error. Export
+`NIX_CONFIG` in the shell you push from. `--no-verify` also gets the push
+through, but skips the tests, which is the thing the hook is for.
+
+### statix: `Found empty pattern in function argument`
+
+A module written as `{...}: { ... }` when nothing from the module arguments is
+used. statix wants `_: { ... }` instead — identical behaviour, but it does not
+read as attrset-destructuring for a value that is never destructured. Modules
+that do use some arguments (`{pkgs, ...}: ...`) are unaffected.
+
+### deadnix reports unused code but the lint check still passes
+
+deadnix's default exit code is 0 regardless of findings.
+`unixlike/tool/checks/lint` passes `--fail`; without it the check is cosmetic.
+
+### `evaluation warning: The default value of 'programs.X.Y' has changed ... because 'home.stateVersion' is less than "..."`
+
+Cosmetic, but recurs on every build until addressed. Either pin the option
+explicitly (keeps the old behaviour, silences the warning) or bump
+`stateVersion` deliberately after reading the home-manager release notes for
+what else changes with it — pinning is the lower-risk fix in the middle of
+unrelated work.
+
+### `Error opening terminal: xterm-ghostty.`
+
+The remote host does not know Ghostty's terminfo entry. Interactive `ssh`
+started from Ghostty is wrapped by the configured `ssh-terminfo` integration:
+it installs the entry with remote `tic`, keeps `TERM=xterm-ghostty` when that
+works, and falls back to `xterm-256color` when it cannot.
+
+The shell function cannot intercept tools that launch `ssh` themselves, such
+as `scp`, `rsync`, Git, `mosh`, or non-interactive scripts. Install the entry
+once for such a host:
+
+```sh
+infocmp -x xterm-ghostty | ssh example.com -- tic -x -
+```
+
+For a locked-down host with no usable `tic`, use a host-specific SSH stanza,
+not a global terminal downgrade:
+
+```sshconfig
+Host legacy.example.com
+  SetEnv TERM=xterm-256color
+```
+
+### WezTerm cannot load `D2CodingLigature Nerd Font` on Darwin
+
+The archive and Nix package are named D2Coding, but the font's internal family
+name is `D2KodingLigature Nerd Font Mono`. Home Manager also preserves the Nix
+font hierarchy below
+`~/Library/Fonts/HomeManager/truetype/NerdFonts/D2KodingLigature`; macOS font
+discovery does not recursively expose that directory to WezTerm.
+
+The repository therefore uses the internal `D2Koding...` name and sets
+WezTerm's Darwin-only `font_dirs` to the Home Manager-owned directory. Check
+both the installed files and WezTerm's resolved font before changing package
+ownership:
+
+```sh
+find ~/Library/Fonts/HomeManager -iname '*D2Koding*'
+wezterm ls-fonts --list-system | rg 'D2KodingLigature'
+wezterm ls-fonts --text 'ABC 한글 => !='
+```
+
+The last command should name `D2KodingLigature Nerd Font Mono` for Latin,
+Hangul, and the ligature sample. A Darwin or Home Manager rebuild is required
+only when the files themselves are absent; a family-name error is not evidence
+that another Homebrew font package is needed.
+
+### Korean renders as boxes in the terminal, and declaring a font changes nothing
+
+Because the terminal's font is not a Linux setting. Windows Terminal draws with
+a font named in its own `settings.json` and reads it from Windows — a font in
+the Nix store is invisible to it, so `home/fonts.nix` cannot fix this and adding
+a Nerd Font there would only spend 194 MiB proving it.
+
+The fix is on the Windows side, in the profile's font, as a fallback list:
+
+```json
+"font": { "face": "Cascadia Mono, Malgun Gothic" }
+```
+
+`settings.json` is at
+`%LOCALAPPDATA%\Packages\Microsoft.WindowsTerminal_8wekyb3d8bbwe\LocalState\settings.json`.
+The second name is what covers Hangul when the first does not; without a
+fallback the terminal substitutes per-glyph and the row's metrics stop lining up,
+which is the misalignment that usually gets described as breakage rather than
+the boxes themselves.
+
+**Check which side you are actually on.** If GUI applications under WSLg render
+Korean and the terminal does not, it is the terminal, and nothing in this
+repository is involved:
+
+```sh
+fc-match 'sans-serif:lang=ko'      # what Linux resolves Korean to
+```
+
+That command answering `Noto Sans CJK JP` is not the bug — see the comment in
+`home/fonts.nix` for why the family name says JP while the coverage is Korean.
+
+Nothing answering at all is a real gap, and it is the NixOS-WSL case:
+`fonts.enableDefaultPackages` is `false` and `fonts.packages` is empty there, so
+that flavour has no font of any kind until one is declared.
+
+### Hangul jamo vanish inside zellij on macOS
+
+Composed Korean disappears as it is typed inside a zellij pane and reappears
+outside one; the leading consonant arrives and the vowel and final consonant do
+not. Not an IME, a font or a locale problem, and not WezTerm's:
+`normalize_output_to_unicode_nfc` never sees the missing code points. zellij's
+`Grid::add_character` drops every zero-width code point
+([zellij-org/zellij#1538](https://github.com/zellij-org/zellij/issues/1538);
+[#3667](https://github.com/zellij-org/zellij/issues/3667) is the same defect
+seen through decomposed Latin), and the medial vowel and final consonant of a
+decomposed syllable are zero width — letters that conjoin with the leading
+consonant rather than marks, which is why a fix that attaches only marks
+still drops them.
+
+Read back what the grid kept rather than what the screen looks like — the
+missing bytes are the evidence. Read them from the bytes zellij sends an
+attached client, not from `zellij action dump-screen`, which prints each
+cell's base character alone and so cannot tell a grid that attached a mark
+from one that dropped it:
+
+```sh
+zellij attach --create-background repro
+zellij -s repro action new-pane -- \
+  sh -c 'printf "NFD:[\341\204\222\341\205\241\341\206\253]\n"; sleep 60'
+timeout 6 script -q /tmp/repro.ts zellij attach repro </dev/null >/dev/null
+grep -a -o 'NFD:\[[^]]*\]' /tmp/repro.ts | grep -av '…' | head -1 | hexdump -C
+```
+
+That `script` line is macOS's; GNU `script` spells it `script -q -c 'zellij
+attach repro' /tmp/repro.ts`. An unpatched zellij 0.45.0 answers `4e 46 44 3a
+5b e1 84 92 5d`; a grid that keeps the jamo answers `4e 46 44 3a 5b e1 84 92 e1
+85 a1 e1 86 ab 5d`. This repository patches Darwin's zellij with upstream PR
+[zellij-org/zellij#5500](https://github.com/zellij-org/zellij/pull/5500) while
+that PR is unmerged; `docs/provisional/unixlike/zellij-combining-marks.md` says
+until when, and `docs/policy/decisions/unixlike/zellij-patched-on-darwin-until-upstream.md`
+says why. On 2026-09-06 the pull request's first commit alone still answered
+the short form — it attached general-category Mark code points and Hangul jamo
+are letters — and the branch gained the jamo ranges the same day; generation 35
+answers the full form. The decision record's Evidence has the readings. On a
+host the overlay does not reach, there is no local fix.
+
+### `msedit` opens with `b2b` already typed into the buffer
+
+Upstream, not this repository:
+[microsoft/edit#243](https://github.com/microsoft/edit/issues/243). The
+editor asks the terminal for its colours with an OSC query at startup and
+waits 100 ms for the reply; a reply that lands after that, or in fragments,
+is consumed as typed input. Diagnosed 2026-08-31: the fragment was the tail
+of the background `#2b2b2b`, Zellij's dark fallback theme before Flexoki
+landed (#88 on Unix-like, #89 on Windows), so the visible text may differ,
+or the symptom may vanish, now that the payloads carry a theme. No change is made here; the defect is
+upstream and was unchanged as of that date.
+
+### `The user config file <path>/config.yml must be migrated. Attempting to do this automatically.`
+
+lazygit then exits 1 with `permission denied`. A key the pinned lazygit has
+retired (`git.paging`, now `git.diffRenderers`) makes it migrate the file by
+writing it back; under Home Manager the file is a symlink into the read-only
+store, so the write-back fails and the tool never starts — while evaluation,
+build and `unixlike/tool/checks/test` all pass, because nothing in the pipeline
+reads a tool's schema. Use the pinned version's key and start the built binary
+once against the rendered home: `XDG_CONFIG_HOME=<built
+home>/home-files/.config timeout 3 <built home>/home-path/bin/lazygit` (exit
+124 is the pass). Any tool that migrates its own configuration in place fails
+the same way here (INV unixlike/generated-config-key-in-schema).
+
+---
+
+## Checks
+
+### `The 'Get-AppxPackage' command was found in the module 'Appx', but the module could not be loaded due to the following error: [Operation is not supported on this platform. (0x80131539)]`
+
+This is a module-loading failure, not evidence that the queried package is
+absent. On Windows 10 build 19044.7663 with the inbox Appx module 2.0.1.0,
+the production PowerShell 7.6.5 autoload query fails this way even with
+`-ErrorAction SilentlyContinue`; an explicit default `Import-Module Appx`
+fails with the same platform error. In the same non-elevated user context,
+Windows PowerShell 5.1 and an explicit PowerShell 7 compatibility import both
+distinguish installed packages from an intentionally nonexistent control.
+
+Run the same query in fresh `powershell.exe -NoProfile` and
+`pwsh.exe -NoProfile` sessions. Do not add `-AllUsers` or elevation:
+
+```powershell
+$names = 'Microsoft.WindowsTerminal', 'Microsoft.CommandPalette', 'WinEnv.Nonexistent.Appx.Control'
+$PSVersionTable | Select-Object PSVersion, PSEdition
+Get-Module Appx -ListAvailable | Select-Object Name, Version, Path, CompatiblePSEditions
+foreach ($name in $names) {
+    try {
+        $packages = @(Get-AppxPackage -Name $name -ErrorAction Stop)
+        [pscustomobject]@{ Name = $name; Present = $packages.Count -gt 0; Version = $packages.Version }
+    }
+    catch {
+        $_ | Select-Object FullyQualifiedErrorId, CategoryInfo, Exception
+    }
+}
+Get-Command Get-AppxPackage -ErrorAction SilentlyContinue |
+    Select-Object Name, CommandType, Source, ModuleName
+Get-PSSession -Name WinPSCompatSession -ErrorAction SilentlyContinue
+```
+
+Test the explicit compatibility route only in a separate disposable PowerShell
+7 session, then remove its proxy module:
+
+```powershell
+Import-Module Appx -UseWindowsPowerShell -ErrorAction Stop
+Get-AppxPackage -Name Microsoft.WindowsTerminal -ErrorAction Stop |
+    Select-Object Name, Version
+Get-PSSession -Name WinPSCompatSession
+Remove-Module Appx
+```
+
+That route returns deserialized objects, turns the package `Version` into a
+string, shadows `Get-AppxPackage` with a proxy function, and closes the
+`WinPSCompatSession` when the proxy module is removed. Production does not use
+that compatibility session. It first makes the ordinary PowerShell 7 query
+with terminating errors; only a failure starts one
+`%SystemRoot%\System32\WindowsPowerShell\v1.0\powershell.exe -NoProfile
+-NonInteractive` child. The name is a UTF-8 JSON stdin value, and the child
+returns only a versioned JSON record containing the matching name, presence
+and first package version. The parent drains both streams, stops the child at
+15 seconds, and rejects nonzero exit, stderr, empty or invalid UTF-8/JSON,
+unexpected fields, a mismatched name and invalid presence/version types. Both
+routes failing remains unavailable rather than absence.
+
+Check the production result with:
+
+```powershell
+.\windows\win-env.ps1 check -Feature terminal,powertoys
+```
+
+On build 19044.7663 on 2026-09-08, the isolated queries returned Terminal
+1.24.11911.0 and Command Palette 0.12.12365.0 in 604--693 ms, including a
+successful absent control. Checks launched separately from Windows PowerShell
+5.1 and PowerShell 7 both stopped reporting Appx as unverified. The build is
+still below the default-terminal delegation boundary, so the summary reports
+`known support limit: default terminal delegation: Windows build 19044 ...`.
+If the required build, revision or Terminal version cannot be read, it instead
+reports `unavailable observation`; only an actual unavailable observation is
+described as undecided. Both keep the existing 0/2/69/1 ranking. These
+diagnostic commands do not import compatibility mode or prove an Apply.
+
+### `· unverified: this host has no nix`
+
+Not a failure. The Unix-like checks cannot run without Nix, and a check that
+could not run is reported rather than treated as one that ran and found a
+problem. The commit or push proceeds and the `unix` CI job supplies the
+evidence. Exit status 69 carries this state everywhere in the repository, and
+`REQUIRE_NATIVE=1` turns it back into a failure — CI sets that, hooks do not.
+
+The same line appears for `zellij.exe`, a `luac` compiler, Pester, and native
+PowerShell. Install the Windows ones with `.\windows\tools\setup-dev.ps1`.
+
+### `git push` from WSL fails the Windows checks with a PowerShell security error
+
+Historical, fixed by #113. Before it, `pre-push` located `pwsh.exe` through
+WSL's Windows interop and ran `check-desired-state.ps1` and
+`windows/tools/test.ps1` through it over `\\wsl.localhost\...`. Windows'
+script execution policy refuses an unsigned script reached that way, so every
+windows-scope push from WSL failed here for environmental reasons — never
+because the desired state was actually wrong. It was bypassed with
+`git push --no-verify` under a session-level maintainer ruling (manual native
+checks plus the `windows-latest` CI job as the real gate) that this repository
+never wrote down until now.
+
+`pre-push` now runs the Windows checks under this host's own `pwsh` on any
+Unix-like host, including WSL — the same binary
+`unixlike/modules/powershell/module.nix` installs into every home this
+repository configures. `check-desired-state.ps1` and the Pester suite both run
+cleanly under it; the suite's `WIN_ENV_E2E` cases self-skip there, and
+`windows-latest` remains the native gate for what a Linux `pwsh` cannot
+exercise. `pre-push` reaches for `pwsh.exe` only when `uname -s` reports an
+actual Windows host (`MINGW*` / `MSYS*` / `CYGWIN*`, the same test
+`tool/version-control/commit`'s `--publish` guard uses) — never over WSL
+interop. A host with neither pwsh reports the Windows checks unverified (exit
+69) rather than failing, the same as any other missing prerequisite; see the `·
+unverified: this host has no nix` entry above. No `--no-verify` should be
+needed for a windows-scope push from WSL again.
+
+### `Unix-like tests failed` on a machine that has no Nix
+
+An old checkout. `unixlike/tool/checks/*` used to invoke `nix` unguarded, so
+the shell's "command not found" became the check's own exit status and the hook
+reported a failure for a check that could never have run there. It is why
+native Windows clones could not push a change to a Unix-like payload. Update
+past the commit that added `unixlike/tool/checks/prerequisite`.
+
+### `zellij.exe is required to validate Windows Zellij KDL.`
+
+Also an old checkout. `check-desired-state.ps1` demanded zellij.exe and a luac
+compiler before it read anything, so a clone without them failed for desired
+state that was never examined — including the JSON, INI and PowerShell sources
+it could have parsed. It now parses everything available and names the rest.
+
+### A broken `unixlike/modules/` payload was committed and nothing caught it
+
+Fixed, but worth knowing why it was possible. Nix delivers those files with
+`.source`, which copies without reading, so evaluation and build evidence never
+covered their content and no check parsed them. `unixlike/tool/checks/payloads`
+does now, driven by `unixlike/payloads.json`. A payload added without a
+declaration fails the check rather than escaping it.
+
+### `warning: in the working copy of '<file>', LF will be replaced by CRLF the next time Git touches it`
+
+`.gitattributes` pins `*.ps1` and `*.psm1` to `eol=crlf`: the checkout is
+CRLF, the stored blob is LF. An editor or script that rewrites such a file
+with LF endings — Python's `Path.write_text()` does — changes nothing that
+can be committed: `git diff` is empty and the staged blob is identical, so
+no hook has anything to refuse. Only `git status` and this warning show it,
+until the next add or diff refreshes the stat cache. `git checkout --
+windows/` restores the working tree; there is nothing to commit. Edit these
+files with a tool that keeps `\r` (`sed -i` does; Python needs
+`open(..., newline='')`).
+
+## The agent sandbox
+
+Everything here has one cause: an agent's shell tool runs inside a mount
+namespace that bind-mounts over the paths it is not allowed to touch. What the
+agent sees is real *inside that namespace* and absent everywhere else, so these
+symptoms cannot be reproduced by a person in a terminal — which is exactly why
+they waste time.
+
+**The test that settles all of them is the same:** run the command again
+outside the sandbox and compare. If the two disagree, the sandbox is the
+subject, not the repository.
+
+### `error: <file>: can only add regular files, symbolic links or git-directories`
+
+Followed by `fatal: adding files failed`, and usually met while running
+`git add -N .` before a flake build (see *`Path 'flake.nix' ... is not tracked
+by Git`* above).
+
+The named file is a bind-mounted `/dev/null`, not anything on disk. `ls -l`
+gives it away:
+
+```
+crw-rw-rw- 1 nobody nogroup 1, 3 .bashrc
+```
+
+`c` for character device, `1, 3` being `/dev/null`, `nobody nogroup` being the
+user namespace showing through. Whole families of them appear at once, sharing
+one mtime to the nanosecond. Nothing was created in the repository and there is
+nothing to clean up.
+
+### `git status` lists dotfiles nobody put there
+
+`.bashrc`, `.zshrc`, `.zprofile`, `.gitconfig`, `.idea`, `.vscode`, `.mcp.json`
+and similar, all untracked, in a repository that has never contained them. Same
+cause as the entry above: the agent's deny-list is mostly named after home
+directory and editor files, and each denied path that does not exist becomes a
+device node inside the namespace.
+
+`git status` **exits 0 here.** It is not failing; it is answering truthfully
+about a filesystem that only it can see. That is what makes this worse than a
+probe that errors.
+
+### `warning: unable to access '<repo>/.gitmodules': Permission denied`
+
+Emitted by git commands that otherwise succeed — `git fetch` and `git status`
+print it and then work correctly. The path is read-only inside the namespace.
+Harmless, and not a sign of a damaged repository or a permissions problem in
+`$HOME`.

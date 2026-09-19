@@ -11,10 +11,10 @@ cross-platform build graph:
 - Truly platform-neutral material may live in `common`, but common code is the
   exception rather than the default.
 
-See `docs/architecture.md` for the domain and release model.
+See `docs/policy/architecture.md` for the domain and release model.
 
 The invariants each domain must keep, and how each one is enforced, are
-enumerated under `invariants/`. The hooks record every outcome they
+enumerated under `docs/policy/invariants/`. The hooks record every outcome they
 produce, refusals included; `tool/doctor.sh` shows the count.
 
 ## Architecture
@@ -337,7 +337,7 @@ prerequisites are unverified (69 when there is no drift); known drift still
 returns 2, and `REQUIRE_NATIVE=1` makes unverified evidence a failure (1).
 The WSL application version comes from `wsl.exe --version`, not the
 WSL1/WSL2 mode of a distribution. The key/section support table is in
-`docs/status.md`.
+`docs/status/`.
 
 Preview a host edit with:
 
@@ -359,7 +359,7 @@ without deleting either setting. An omitted `dnsTunneling` is reported without
 assuming an older release's default. No check here certifies the running
 network stack or DNS behavior: `.wslconfig` is read at VM startup, and these
 commands never restart WSL. Apply triggers and source selection remain as
-recorded in `docs/decisions/wslconfig-selected-by-windows-build.md`.
+recorded in `docs/policy/decisions/windows/wslconfig-selected-by-windows-build.md`.
 
 ### Capture a change made in the application
 
@@ -442,7 +442,7 @@ host is written: the managed targets are read and nothing else.
 Unix-like activation and Windows Apply are separate deployments. A common
 release deploys nothing; each platform adopts it later through an explicit
 change. Domain tags and evidence requirements are defined in
-`CONTRIBUTING.md` and `docs/definition-of-done.md`.
+`CONTRIBUTING.md` and `docs/policy/definition-of-done/`.
 
 No activation or Apply is a routine check. Perform either only deliberately on
 the matching host.

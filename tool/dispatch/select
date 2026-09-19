@@ -55,7 +55,19 @@ trap 'rm -f "$changes" "$paths"' EXIT
 awk -F'\t' '{ for (i = 2; i <= NF; i++) if ($i != "") print $1 "\t" $i }' >"$changes"
 cut -f2- <"$changes" | sort -u >"$paths"
 
-scopes=$("$root/tool/version-control/classify" --stdin <"$paths")
+# A document is owned by the scope its directory names, but no domain suite
+# reads one, so it selects nothing by that ownership: documents under docs/,
+# and the registries' roots before they moved there, are left out of the
+# scopes this selection reads. An unclassified path still reports, from the
+# whole list.
+# PROV repository/classify-registry-old-roots: the two old roots in the filter.
+effect=$(mktemp)
+trap 'rm -f "$changes" "$paths" "$effect"' EXIT
+grep -v -E '^(docs|invariants|provisional)/' "$paths" >"$effect" || [ "$?" -eq 1 ]
+scopes=$("$root/tool/version-control/classify" --stdin <"$effect")
+if "$root/tool/version-control/classify" --stdin <"$paths" | grep -qx unclassified; then
+  scopes=$(printf '%s\nunclassified\n' "$scopes")
+fi
 
 has_scope() { printf '%s\n' "$scopes" | grep -qx "$1"; }
 
