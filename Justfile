@@ -10,25 +10,44 @@ _home-target:
 _darwin-target:
     @nix eval --raw path:./unixlike#darwinConfigurations --apply 'configs: let names = builtins.attrNames configs; in assert builtins.length names == 1; builtins.head names'
 
+# The flake exports one NixOS output per host of the typed inventory
+# (unixlike/modules/flake/inventory.nix), so a recipe names the host it means.
+# Prints the name when the flake exports it; refuses, listing the names it
+# does export, when it does not or when none was given.
 [private]
-_nixos-target:
-    @nix eval --raw path:./unixlike#nixosConfigurations --apply 'configs: let names = builtins.attrNames configs; in assert builtins.length names == 1; builtins.head names'
+_nixos-target host="":
+    #!/usr/bin/env bash
+    set -euo pipefail
+    host={{ quote(host) }}
+    names=$(nix eval --raw path:./unixlike#nixosConfigurations --apply 'configs: builtins.concatStringsSep " " (builtins.attrNames configs)')
+    for name in ${names}; do
+      if [ "${name}" = "${host}" ]; then
+        printf '%s\n' "${name}"
+        exit 0
+      fi
+    done
+    if [ -z "${host}" ]; then
+      echo "Name the NixOS host: ${names}." >&2
+    else
+      echo "The flake exports no NixOS host '${host}'. It exports: ${names}." >&2
+    fi
+    exit 1
 
-# The recipes that touch a NixOS system run only on the host the flake's
-# output names: a rebuild anywhere else would activate, or list, another
-# machine's system. Prints the target for the caller.
+# The recipes that touch a NixOS system act on the output named after the
+# host they run on, and on no other: a rebuild under another name would
+# activate, or list, another machine's system. Prints the target for the
+# caller.
 [private]
 _nixos-host:
     #!/usr/bin/env bash
     set -euo pipefail
     if [ ! -e /etc/NIXOS ]; then
-      echo "This host is not NixOS (/etc/NIXOS is absent); the nixos-* recipes that rebuild, roll back or list generations run inside the NixOS distribution. 'just nixos-eval' and 'just nixos-build' run anywhere." >&2
+      echo "This host is not NixOS (/etc/NIXOS is absent); the nixos-* recipes that rebuild, roll back or list generations run inside the NixOS distribution. 'just nixos-eval <host>' and 'just nixos-build <host>' run anywhere." >&2
       exit 1
     fi
-    target=$(just _nixos-target)
     host=$(cat /proc/sys/kernel/hostname)
-    if [ "${host}" != "${target}" ]; then
-      echo "This NixOS host is '${host}', and the flake's NixOS output is '${target}'; refusing to act on another host's system." >&2
+    if ! target=$(just _nixos-target "${host}"); then
+      echo "This NixOS host is '${host}'; refusing to act on another host's system." >&2
       exit 1
     fi
     printf '%s\n' "${target}"
@@ -86,7 +105,7 @@ flake-test:
 composition-test:
     unixlike/tool/checks/composition-test
 
-# Prove the evaluation check fails when it reaches no configuration.
+# Prove what the evaluation check reaches, refuses and builds.
 [group('repository')]
 eval-coverage-test:
     unixlike/tool/checks/eval-coverage-test
@@ -287,29 +306,31 @@ gc:
 
 ############################################################################
 #
-#  nixos-wsl
+#  nixos
 #
 ############################################################################
 
-# Evaluate the NixOS toplevel without building or activating. Runs anywhere.
-[group('nixos-wsl')]
-nixos-eval:
+# Evaluate a NixOS host's toplevel without building or activating. Runs anywhere.
+[group('nixos')]
+nixos-eval host="":
     #!/usr/bin/env bash
     set -euo pipefail
-    target=$(just _nixos-target)
+    target=$(just _nixos-target {{ quote(host) }})
     drv=$(nix eval --raw "path:./unixlike#nixosConfigurations.${target}.config.system.build.toplevel.drvPath")
     printf '%s\n' "${drv}"
 
-# `unixlike/tool/checks/test` skips this build by default, because nothing on a
-# non-NixOS host can activate the result. This is the deliberate way to ask
-# for it; `CHECKS_BUILD_ALL=1 unixlike/tool/checks/test` is the other.
+# `unixlike/tool/checks/test` builds a NixOS output only on the host it names,
+# because nothing anywhere else can activate the result. This is the
+# deliberate way to ask for it; `CHECKS_BUILD_ALL=1 unixlike/tool/checks/test`
+# is the other. An aarch64 host builds natively or on a remote builder, never
+# under emulation (unixlike/modules/flake/systems.nix).
 
-# Build the NixOS-WSL closure (~1.9 GiB)
-[group('nixos-wsl')]
-nixos-build:
+# Build a NixOS host's closure (the NixOS-WSL one is ~1.9 GiB)
+[group('nixos')]
+nixos-build host="":
     #!/usr/bin/env bash
     set -euo pipefail
-    target=$(just _nixos-target)
+    target=$(just _nixos-target {{ quote(host) }})
     nix build --no-link --print-out-paths "path:./unixlike#nixosConfigurations.${target}.config.system.build.toplevel"
 
 # NixOS-WSL's builder refuses to run unless EUID is 0 — it chowns paths inside
@@ -330,7 +351,7 @@ nixos-build:
 # registered NixOS-WSL distribution", is the procedure.
 
 # Build and activate the NixOS system without making it the boot default.
-[group('nixos-wsl')]
+[group('nixos')]
 nixos-test:
     #!/usr/bin/env bash
     set -euo pipefail
@@ -338,7 +359,7 @@ nixos-test:
     sudo nixos-rebuild test --flake "path:./unixlike#${target}"
 
 # Activation: rebuild and switch the NixOS host this clone sits on.
-[group('nixos-wsl')]
+[group('nixos')]
 nixos-switch:
     #!/usr/bin/env bash
     set -euo pipefail
@@ -346,7 +367,7 @@ nixos-switch:
     sudo nixos-rebuild switch --flake "path:./unixlike#${target}"
 
 # Activation: switch back to the previous NixOS generation.
-[group('nixos-wsl')]
+[group('nixos')]
 nixos-rollback:
     #!/usr/bin/env bash
     set -euo pipefail
@@ -354,7 +375,7 @@ nixos-rollback:
     sudo nixos-rebuild switch --rollback --flake "path:./unixlike#${target}"
 
 # List the NixOS system generations on this host.
-[group('nixos-wsl')]
+[group('nixos')]
 nixos-generations:
     #!/usr/bin/env bash
     set -euo pipefail
@@ -363,10 +384,15 @@ nixos-generations:
 
 # Produce the rootfs archive that `wsl --import` takes (needs sudo)
 [group('nixos-wsl')]
-nixos-tarball:
+nixos-tarball host="":
     #!/usr/bin/env bash
     set -euo pipefail
-    target=$(just _nixos-target)
+    target=$(just _nixos-target {{ quote(host) }})
+    kind=$(nix eval --raw "path:./unixlike#nixosConfigurations.${target}.config.host.kind")
+    if [ "${kind}" != wsl ]; then
+      echo "'${target}' is a host of kind ${kind}; only a host of kind wsl has a WSL rootfs archive." >&2
+      exit 1
+    fi
     builder=$(nix build --no-link --print-out-paths "path:./unixlike#nixosConfigurations.${target}.config.system.build.tarballBuilder")
     sudo "${builder}/bin/nixos-wsl-tarball-builder" nixos.wsl
     echo
@@ -383,7 +409,7 @@ nixos-tarball:
 nixos-stage dest="/mnt/c/WSL":
     #!/usr/bin/env bash
     set -euo pipefail
-    [ -f nixos.wsl ] || { echo "No ./nixos.wsl — run 'just nixos-tarball' first." >&2; exit 1; }
+    [ -f nixos.wsl ] || { echo "No ./nixos.wsl — run 'just nixos-tarball <host>' first." >&2; exit 1; }
     [ -d "$(dirname "{{ dest }}")" ] || { echo "{{ dest }} is not reachable — is that drive mounted?" >&2; exit 1; }
     mkdir -p "{{ dest }}"
     cp nixos.wsl "{{ dest }}/nixos.wsl"

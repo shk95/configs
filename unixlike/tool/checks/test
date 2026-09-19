@@ -11,10 +11,12 @@
 #                   fail to compile.
 #
 # `nix flake check` is neither, and this is the reason the script exists: it
-# validates the flake's shape and its standard outputs, and does not descend
-# into homeConfigurations / nixosConfigurations / darwinConfigurations at all.
-# A green `nix flake check` says nothing about whether your configurations
-# work. Forcing `.drvPath` is what actually evaluates them.
+# validates the flake's shape and its standard outputs. It does not descend
+# into homeConfigurations or darwinConfigurations at all, and of a
+# nixosConfigurations output it asks only that the toplevel is a derivation,
+# which does not instantiate it. A green `nix flake check` says nothing about
+# whether your configurations work. Forcing `.drvPath` is what actually
+# evaluates them.
 #
 # A `nix build --dry-run` middle tier was tried and removed: measured against
 # eval it caught nothing extra. A nonexistent package fails both; an
@@ -70,12 +72,25 @@ toplevel_attr() {
 # 600 MiB, and CI starts from an empty store every run.
 #
 # So build what this host could actually activate, and say plainly what was
-# not built. `nixos-rebuild switch` needs a NixOS host; home-manager runs
-# anywhere. Set CHECKS_BUILD_ALL=1 to build everything regardless — worth doing
-# deliberately when a flavour changes, and cheap locally once the store is warm.
+# not built. `nixos-rebuild switch` needs a NixOS host, and that host can
+# activate one output only, the one named after it (the typed inventory names
+# every NixOS output after its host); home-manager runs anywhere. Set
+# CHECKS_BUILD_ALL=1 to build everything regardless — worth doing deliberately
+# when a flavour changes, and cheap locally once the store is warm.
+#
+# CHECKS_NIXOS_HOST stands in for "this is the NixOS host of that name". It
+# exists for tool/checks/eval-coverage-test, which has no NixOS host to run on.
+nixos_host_here() {
+  if [ -n "${CHECKS_NIXOS_HOST:-}" ]; then
+    printf '%s\n' "$CHECKS_NIXOS_HOST"
+  elif [ -r /etc/os-release ] && grep -q '^ID=nixos' /etc/os-release; then
+    cat /proc/sys/kernel/hostname
+  fi
+}
+
 activatable_here() {
   case $1 in
-    nixosConfigurations) [ -r /etc/os-release ] && grep -q '^ID=nixos' /etc/os-release ;;
+    nixosConfigurations) [ "$(nixos_host_here)" = "$2" ] ;;
     *)                   return 0 ;;
   esac
 }
@@ -127,7 +142,7 @@ check_flavour() {
       continue
     fi
 
-    if [ -z "${CHECKS_BUILD_ALL:-}" ] && ! activatable_here "$output"; then
+    if [ -z "${CHECKS_BUILD_ALL:-}" ] && ! activatable_here "$output" "$name"; then
       printf '→ skip  %s.%s — nothing here can activate it\n' "$output" "$name"
       size=$(nix build --dry-run "$ref.$attr" 2>&1 \
              | sed -n 's/.*will be fetched (\([^)]*\)).*/\1/p' | head -1)

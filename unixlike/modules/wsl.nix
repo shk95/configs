@@ -6,10 +6,11 @@
 # *removed* from the standalone flavour, which has no
 # `environment.systemPackages` at all. This file holds the WSL integration,
 # the account's identity and the kernel-global protection; the Nix daemon
-# settings, the host name, the login shell, the system editor, the time zone
-# and sshd the same decision names are in modules/nix-conf.nix,
-# modules/wsl-host.nix, modules/wsl-shell.nix, modules/wsl-editor.nix,
-# modules/wsl-timezone.nix and modules/wsl-sshd.nix, one feature each.
+# settings, the login shell, the system editor, the time zone and sshd the
+# same decision names are in modules/nix/shared.nix, modules/shell/wsl.nix,
+# modules/editor/wsl.nix, modules/timezone.nix and modules/sshd.nix, one
+# feature each; the host name comes from the host's inventory entry
+# (modules/host/nixos.nix).
 {config, ...}: let
   user = config.identity.wsl.user;
 in {

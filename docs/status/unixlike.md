@@ -103,11 +103,16 @@ The NixOS-WSL host is headless and its system layer is a decided boundary since
 2026-09-06 rather than the experiment `unixlike/modules/wsl.nix` described:
 `modules.nixos.wsl` declares the WSL integration, the account's UID, login
 shell and sudo password requirement, the binfmt protection, the Nix daemon's
-settings, the host name from the typed identity, the system `EDITOR` and time
-zone, key-only sshd on 2223, and the state version — and nothing a standalone
-home can declare (`docs/policy/decisions/unixlike/nixos-wsl-system-layer-ownership.md`). Its
-output is `nixosConfigurations.<identity.wsl.hostName>`, and
-`unixlike/tool/checks/flake-test` proves the host answers to that name (#191).
+settings, the system `EDITOR` and time zone, and key-only sshd on 2223 — and
+nothing a standalone home can declare
+(`docs/policy/decisions/unixlike/nixos-wsl-system-layer-ownership.md`). The
+host is the entry `nixos` of `identity.nixosHosts`, the typed inventory of
+NixOS hosts: every `nixosConfigurations` output is generated from an entry
+and named after it, `modules.nixos.shared` gives the host that name and the
+entry's state version, and only a combination of system, kind and hypervisor
+that a host lane names evaluates (`INV unixlike/nixos-host-inventory`).
+`unixlike/tool/checks/flake-test` proves each host answers to its entry's
+name (#191). `aarch64-linux` is an evaluated system and is not built here.
 GUI options are set off explicitly; WSLg is the deferred item of
 `docs/work/roadmap.md` (it was #21 until 2026-09-19) and `INV
 unixlike/desktop-not-wsl` stands. The coding agents (`claude-code`, `codex`)
@@ -130,9 +135,13 @@ evidence issue (#192) carries the readings.
 
 Since 2026-09-19 the distribution is updated in place
 (`docs/work/unixlike/nixos-wsl-in-place-update/report.md`, done). The
-`nixos-wsl` recipes `nixos-test`, `nixos-switch`, `nixos-rollback` and
-`nixos-generations` run only on the NixOS host the flake names, `nixos-eval`
-runs anywhere, and `home-switch` refuses on NixOS. Channels are off in the
+recipes `nixos-test`, `nixos-switch`, `nixos-rollback` and
+`nixos-generations` act on the output named after the NixOS host they run on
+and refuse where there is none; `nixos-eval`, `nixos-build` and
+`nixos-tarball` run anywhere and take the host as an argument, refusing with
+the list of exported names when it is missing or unknown; and `home-switch`
+refuses on NixOS. `unixlike/tool/checks/test` builds a NixOS output only on
+the host it is named after. Channels are off in the
 configuration (`INV unixlike/nixos-no-channel`), so the search path names the
 flake's nixpkgs alone and an archive built from here registers no channel.
 `CONTRIBUTING.md`, "Update the registered NixOS-WSL distribution", is the
