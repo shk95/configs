@@ -128,6 +128,21 @@ and `.exe` interop survived unchanged. Restarting NixOS made the generated
 both managers returned to `running` with no failed units. The milestone's
 evidence issue (#192) carries the readings.
 
+Since 2026-09-19 the desired state has an in-place update path for that
+distribution and the host has not yet taken it
+(`docs/work/unixlike/nixos-wsl-in-place-update/report.md`, #272). The
+`nixos-wsl` recipes `nixos-test`, `nixos-switch`, `nixos-rollback` and
+`nixos-generations` run only on the NixOS host the flake names, `nixos-eval`
+runs anywhere, and `home-switch` refuses on NixOS. Channels are off in the
+configuration (`INV unixlike/nixos-no-channel`), so the search path names the
+flake's nixpkgs alone and an archive built from here registers no channel;
+the toplevel that carries this builds on x86_64-linux. `CONTRIBUTING.md`,
+"Update the registered NixOS-WSL distribution", is the procedure. Owed, on
+the host and by the maintainer: the baseline reading of a rebuild without a
+flake, the cleanup of the channel and the default configuration file the
+2026-09-06 import left, and the first test, switch and rollback. Generation 2
+is still what runs there.
+
 ## Open conditions
 
 - The Darwin zellij overlay (`PROV unixlike/zellij-combining-marks`) stands

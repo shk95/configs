@@ -135,3 +135,17 @@ activation. A fresh import needs two host-owned steps before it is usable,
 the password and the authorized keys, and the procedure carries them.
 Weekly collection with `--delete-older-than 14d` makes two weeks the
 rollback window.
+
+2026-09-19: Home Manager stays composed into the system. When the in-place
+update path was written, splitting the home out into a standalone
+configuration on this host was weighed and rejected. The tarball's first boot
+would no longer carry the home; a rollback would need two generation lists
+kept in step, the system's and the home's; and the UID the system declares
+and the home relies on would sit in two evaluations. The cost accepted is
+that a dotfile change on this host is a system switch: it needs `sudo` and a
+system evaluation. For the same reason the standalone home's activation is
+refused here, since it would put the Ubuntu home over the composed one. The
+host also lost its channel on that date: it is rebuilt from this flake alone
+(`INV unixlike/nixos-no-channel`), and what an import leaves behind — a
+default configuration file, and on the first import a channel — is removed
+by a documented step, because no activation removes it.
