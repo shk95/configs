@@ -11,7 +11,7 @@
 # runtime state out of every domain's committed desired state. Secrets
 # already have an enforcement owner in gitleaks and are deliberately not
 # duplicated here. The other three had no enforcement owner at all, which is
-# how two absolute home paths reached docs/troubleshooting.md and stayed
+# how two absolute home paths reached docs/reference/troubleshooting.md and stayed
 # there for the document's whole history.
 #
 # The subject is the index rather than the working tree. The invariant is about
@@ -32,7 +32,7 @@
 #   4. machine-unique identifiers: GUID, MAC address, and Windows SID.
 #
 # A bare account name in free prose is not decidable lexically. It is a manual
-# invariant instead, and docs/architecture.md names its evidence and its owner
+# invariant instead, and docs/policy/architecture.md names its evidence and its owner
 # rather than letting this scanner imply coverage it does not have.
 #
 # A scanner that stores the strings it hunts matches itself, so its exclusions
@@ -45,7 +45,7 @@
 # exclusion would retire the check on the one file that has already drifted.
 #
 # Exit 0 verified, 69 unverified, any other status failed. See
-# docs/architecture.md, "Check dispatch uses three evidence states", and
+# docs/policy/architecture.md, "Check dispatch uses three evidence states", and
 # .githooks/evidence, which is the one place that decides what each means.
 
 set -eu
@@ -128,7 +128,7 @@ bs='\\{1,2}'
 
 # Anchoring rule. A match counts only when the character that opens the path is
 # at start-of-line or follows one of space, tab, ' " ` = ( , or :. This is not
-# cosmetic. docs/troubleshooting.md carries
+# cosmetic. docs/reference/troubleshooting.md carries
 #
 #   error: path '«git+file://...»/home/programs/<file>.nix' does not exist
 #
@@ -205,7 +205,7 @@ git show ":$allow_file" 2>/dev/null |
 # violations go to be forgotten. "Matches" means the literal still occurs at
 # that path, not that the scanner would have flagged it. The two readings are
 # not equivalent, and only this one is usable: the anchoring rule above already
-# excludes docs/troubleshooting.md on its own, so under a would-have-flagged
+# excludes docs/reference/troubleshooting.md on its own, so under a would-have-flagged
 # reading the seed entry would be stale the moment it was written. Under the
 # occurrence reading it stays valid while the text is there and goes stale
 # exactly when the line is edited away, which is the forgetting this rule

@@ -61,32 +61,49 @@ while IFS= read -r path; do
     # The Unix-like domain's own tree, and the two root paths that stay
     # outside it: direnv reads .envrc at the root, and where the Justfile
     # belongs is a separate decision
-    # (docs/decisions/unixlike-domain-owns-its-tree.md).
+    # (docs/policy/decisions/unixlike/unixlike-domain-owns-its-tree.md).
     unixlike/*|.envrc|Justfile) echo unixlike ;;
+    # INV repository/scope-ownership
+    # Documents: inside each document area the scope directory, or for status
+    # and the definition of done the file named for a scope, owns what it
+    # holds, so a Unix-like decision, invariant, status file or work item is a
+    # unixlike change
+    # (docs/policy/decisions/repository/documents-classified-by-scope.md).
+    # A document outside those areas is repository's.
+    docs/policy/candidates/unixlike/*|docs/policy/decisions/unixlike/*|docs/policy/invariants/unixlike/*|\
+    docs/provisional/unixlike/*|docs/work/unixlike/*|docs/status/unixlike.md|\
+    docs/policy/definition-of-done/unixlike.md) echo unixlike ;;
+    docs/policy/candidates/windows/*|docs/policy/decisions/windows/*|docs/policy/invariants/windows/*|\
+    docs/provisional/windows/*|docs/work/windows/*|docs/status/windows.md|\
+    docs/policy/definition-of-done/windows.md) echo windows ;;
+    docs/policy/candidates/repository/*|docs/policy/decisions/repository/*|docs/policy/invariants/repository/*|\
+    docs/provisional/repository/*|docs/work/repository/*|docs/status/repository.md|\
+    docs/policy/definition-of-done/repository.md) echo repository ;;
+    docs/policy/candidates/README.md|docs/policy/decisions/README.md|\
+    docs/policy/invariants/README.md|docs/provisional/README.md|\
+    docs/work/README.md|docs/work/roadmap.md) echo repository ;;
+    # Anything else inside a document area is refused rather than read as
+    # repository's: a scope position that names no domain, a file beside an
+    # area's format contract, or a scope name in the wrong position.
+    docs/policy/candidates/*|docs/policy/decisions/*|docs/policy/invariants/*|\
+    docs/provisional/*|docs/work/*|docs/status/*|docs/policy/definition-of-done/*)
+      echo unclassified
+      ;;
     AGENTS.md|CLAUDE.md|CONTRIBUTING.md|README.md|LICENSE|docs/*|\
     .agents/*|.claude/*|.codex/*|.github/*|.githooks/*|.editorconfig|.gitattributes|\
     .gitignore|tool/setup|tool/doctor.sh|tool/worktree.sh|tool/version-control/*|\
     tool/dispatch/*)
       echo repository
       ;;
-    # common/ has no arm: the change that creates the domain restores its classification, dispatch and gate together (docs/architecture.md, "Common domain").
-    # INV repository/scope-ownership
-    # The invariant registry (invariants/README.md is the format contract).
-    # Each scope owns the entries under its own directory, so a Windows
-    # invariant is a windows change and needs no Unix-like host to check.
-    # The removed common scope's placeholder: its deletion must still classify
-    # while it sits inside a pull-request range. Dropped when the domain returns.
-    invariants/README.md|invariants/common/.gitkeep) echo repository ;;
-    invariants/unixlike/*) echo unixlike ;;
-    invariants/windows/*) echo windows ;;
-    invariants/repository/*) echo repository ;;
-    # The provisional registry (provisional/README.md is the format
-    # contract), classified the same way and for the same reason: a scope
-    # owns the temporary measures it carries.
-    provisional/README.md) echo repository ;;
-    provisional/unixlike/*) echo unixlike ;;
-    provisional/windows/*) echo windows ;;
-    provisional/repository/*) echo repository ;;
+    # common/ has no arm: the change that creates the domain restores its classification, dispatch and gate together (docs/policy/architecture.md, "Common domain").
+    # The registries' roots before they moved under docs/, and the removed
+    # common scope's placeholder: a deletion must still classify while it sits
+    # inside a pull-request or promotion range. Dropped once the move has
+    # reached master.
+    invariants/README.md|invariants/common/.gitkeep|provisional/README.md) echo repository ;;
+    invariants/unixlike/*|provisional/unixlike/*) echo unixlike ;;
+    invariants/windows/*|provisional/windows/*) echo windows ;;
+    invariants/repository/*|provisional/repository/*) echo repository ;;
     *) echo unclassified ;;
   esac
 done <"$paths" | sort -u >"$scopes"

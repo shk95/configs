@@ -1,7 +1,7 @@
 # Contributing
 
 This is the workflow for people and tools. `AGENTS.md` contains stable
-judgement and safety rules, `docs/architecture.md` defines domain ownership,
+judgement and safety rules, `docs/policy/architecture.md` defines domain ownership,
 and `README.md` contains usage.
 
 ## Prepare a clone
@@ -39,7 +39,7 @@ One scope per commit, and therefore per branch and pull request. A commit's
 scope is the classifier's answer over the paths it touches, and the release
 tag, the CI lanes and the right to change a path all follow from it. The
 subject's scope is a different thing: it names the domain the change
-describes, so `docs(windows)` over `docs/status.md`, which classifies
+describes, so `docs(windows)` over `docs/policy/architecture.md`, which classifies
 `repository`, is correct. If a common change and its platform adoption are
 both needed, land them separately so neither release is synchronously coupled
 to the other.
@@ -58,16 +58,19 @@ A branch belongs to a milestone. Cut it from `origin/dev` when the
 milestone's work starts, take its topic from the milestone's own
 `<scope>: <outcome>` title, carry every commit that work produces on it, and
 merge it through one pull request when the work is complete
-(`docs/decisions/branch-lives-as-long-as-its-milestone.md`). A change no
+(`docs/policy/decisions/repository/branch-lives-as-long-as-its-milestone.md`). A change no
 milestone plans is a branch of its own and merges when it is done.
 
 A commit marks a judgement point. It carries the change one decision
 produced, however many files that is, and is not split further merely because
-it has parts (`docs/decisions/commit-marks-a-judgement-point.md`). Scope the
+it has parts (`docs/policy/decisions/repository/commit-marks-a-judgement-point.md`). Scope the
 subject, for example `feat(unixlike):`, `fix(windows):`, `chore(common):` or
-`refactor(repository):`. The one accepted two-scope commit is an invariant
-entry together with the evidence item that enforces it, which "Add or change
-an invariant" describes; anything else is two commits.
+`refactor(repository):`. A document classifies as the scope directory that
+holds it, or the scope a file under `docs/status/` or
+`docs/policy/definition-of-done/` is named for, so a domain's decision,
+invariant, evidence item and status land in that domain's commit
+(`docs/policy/decisions/repository/documents-classified-by-scope.md`).
+Anything that still touches two scopes is two commits.
 
 Branches interleave where one blocks another, and no rule is needed to make
 them: the pre-commit hook refuses a staged path with no owning scope, so a
@@ -89,7 +92,7 @@ origin/dev` shows the conflicts read-only first.
 `dev` means the affected domain's repository checks pass. `master` means the
 source change has been accepted; it no longer means every platform at that
 commit has been exercised. Native readiness is represented by domain tags and
-the evidence in `docs/definition-of-done.md`.
+the evidence in `docs/policy/definition-of-done/`.
 
 Use independent release tags:
 
@@ -152,7 +155,7 @@ describes.
 
 `unixlike/modules/zellij/module.nix` carries upstream zellij-org/zellij#5500
 for Darwin until nixpkgs ships a zellij whose source already has the fix;
-`provisional/unixlike/zellij-combining-marks.md` registers the measure and
+`docs/provisional/unixlike/zellij-combining-marks.md` registers the measure and
 names the condition that ends it. The overlay names no zellij version: it
 applies the range with no fuzz to whatever zellij the lock brings in, so a
 `unixlike/flake.lock` refresh that moves zellij is the ordinary one commit,
@@ -175,7 +178,7 @@ upstream tag before a refresh brings it in. When they refuse:
 2. Refresh the lock again after it.
 
 After a refresh that moves zellij, `just darwin-build` on the Mac and the
-reproduction in `docs/decisions/zellij-patched-on-darwin-until-upstream.md`
+reproduction in `docs/policy/decisions/unixlike/zellij-patched-on-darwin-until-upstream.md`
 are the build and runtime evidence; the checks prove only that the range
 applies.
 
@@ -232,22 +235,22 @@ owns the result. A product-specific adapter must not own any part of either.
 ## Add or change an invariant
 
 An invariant is a statement that must remain true of committed desired state
-or repository tooling. `invariants/README.md` is the format; this is the
+or repository tooling. `docs/policy/invariants/README.md` is the format; this is the
 procedure.
 
 1. Classify the invariant's scope. Its file goes under
-   `invariants/<scope>/<slug>.md` and the change classifies as that scope.
+   `docs/policy/invariants/<scope>/<slug>.md` and the change classifies as that scope.
 2. Write the statement as one sentence naming no command, product, or model.
-3. Point `rationale` at the section of `docs/architecture.md` or `AGENTS.md`
+3. Point `rationale` at the section of `docs/policy/architecture.md` or `AGENTS.md`
    that justifies it. If none does, write that section first; a rule with no
    rationale is not ready to register.
 4. Declare the enforcement. A `schema` or `tool` entry also declares a
    `fixture`; add the fixture in the same change and tag it with
    `INV <scope>/<slug>`. A `manual` entry names its evidence and is listed by
-   id in `docs/definition-of-done.md`; because the checker requires that
+   id in its scope's `docs/policy/definition-of-done/<scope>.md`; because the checker requires that
    listing and refuses an unregistered tag in the same run, the entry and the
-   evidence item land in one commit that classifies as the entry's scope
-   and `repository` — the two-scope commit "Branch and commit flow" allows.
+   evidence item land in one commit, which classifies as the entry's scope
+   because both files sit under it.
    If nothing enforces it yet, open an
    issue and declare `pending #<n>` with an owner. Tag the fixture *unit* —
    the `Describe` or the banner section — or the pre-commit hook refuses the
@@ -265,11 +268,11 @@ reviewed as one.
 
 A provisional measure is an experiment, a workaround, or a patch carried until
 upstream ships a fix — anything the tree is meant to stop carrying.
-`provisional/README.md` is the format; this is the procedure. Register it in
+`docs/provisional/README.md` is the format; this is the procedure. Register it in
 the same change that adds it, not afterwards.
 
 1. Classify the measure's scope. Its file goes under
-   `provisional/<scope>/<slug>.md` and the change classifies as that scope.
+   `docs/provisional/<scope>/<slug>.md` and the change classifies as that scope.
    Create the scope directory only if the measure needs it.
 2. Write `statement` and `exit-when` as one sentence each: what the measure is,
    and the condition that ends it.
@@ -300,7 +303,7 @@ what is registered and when each entry is next due.
 Retire it when `exit-when` came true:
 
 1. Delete the measure itself and every line tagged `PROV <scope>/<slug>`.
-2. Delete `provisional/<scope>/<slug>.md`, and the scope directory if that was
+2. Delete `docs/provisional/<scope>/<slug>.md`, and the scope directory if that was
    its last entry.
 3. Do both in one commit, classified as the entry's scope, with `repository`
    alongside for the supporting documents it deletes. The check refuses an
@@ -336,13 +339,14 @@ promoted.
 
 Write one when a direction needs arguing before any of it can be adopted: a
 survey, a spike and what it measured, three layouts weighed against each
-other, a plan and what each of its steps predicts. Add a file under
-`docs/design/` with the header and format the `README.md` there defines, add
-it to that file's index, and open it `status: open`.
+other, a plan and what each of its steps predicts. Add a directory
+`docs/work/<scope>/<slug>/` holding a file with the header and format the
+`README.md` there defines, and open it `status: open`;
+`tool/version-control/records --table work` lists it.
 
 It has no authority and acquires none by being merged. Quote what you
 measured with the date and the commit you measured it at, and leave current
-state to `docs/status.md` and the schedule to a milestone and its issues.
+state to `docs/status/<scope>.md` and the schedule to a milestone and its issues.
 When a `plan` names what it expects, write the expectations before the work
 runs; an expectation written afterwards is not one and is left out of the
 ledger.
@@ -360,8 +364,9 @@ argument nobody accepted.
 ## Record a decision
 
 Write a record when a choice is expensive to reverse or a reviewer will ask
-why it was made. Add a file under `docs/decisions/` with the header and
-format `docs/decisions/README.md` defines, and add it to that file's index.
+why it was made. Add a file under `docs/policy/decisions/<scope>/` with the
+header and format `docs/policy/decisions/README.md` defines; nothing lists it
+by hand, `tool/version-control/records --table decisions` does.
 Reversing a decision creates a new record, sets the old one to
 `status: superseded` with `superseded-by`, and moves every pointer to it in
 the same commit — the checker cannot tell a superseded record from a live
@@ -373,10 +378,10 @@ invariant rests on it.
 
 A sentence added to a policy document without a check behind it rots, and a
 deletion is as easy to get wrong as an addition. Both pass through
-`docs/candidates/` first. `docs/candidates/README.md` is the format; this is
+`docs/policy/candidates/` first. `docs/policy/candidates/README.md` is the format; this is
 the procedure.
 
-1. Record the observation as `docs/candidates/<slug>.md` with `kind:
+1. Record the observation as `docs/policy/candidates/<slug>.md` with `kind:
    addition` or `kind: deletion`, the target it would change, the criterion
    that promotes it and the date or event that drops it. Write what was met
    and where, not the rule you would like to exist.
@@ -438,7 +443,7 @@ also runs on Windows.
 
 `just nixos-build`, `just nixos-tarball` (needs sudo) and `just nixos-stage`
 produce the rootfs archive and copy it to a Windows drive;
-`docs/troubleshooting.md` records why `wsl --import` will not read it from
+`docs/reference/troubleshooting.md` records why `wsl --import` will not read it from
 `\\wsl.localhost\...`. Then, from PowerShell or CMD:
 
 1. `wsl --import NixOS C:\WSL\NixOS C:\WSL\nixos.wsl` registers the
@@ -656,6 +661,7 @@ tool/version-control/invariants
 tool/version-control/provisional
 tool/version-control/domain-reads
 tool/version-control/design-citations
+tool/version-control/records
 tool/version-control/audit
 tool/version-control/audit-remote  # when gh is authenticated
 tool/version-control/hook-evidence
@@ -717,7 +723,7 @@ to reject the same content.
 
 A bare account name written into prose is not detectable and is not covered.
 Reading prose in the diff for one is a manual obligation recorded in
-`docs/definition-of-done.md`.
+`docs/policy/definition-of-done/`.
 
 ### Cross-domain reads
 
@@ -733,7 +739,7 @@ tool/version-control/domain-reads
 ```
 
 When it reports something, copy what the other domain owns into the domain
-that reads it; the destination then owns the copy (`docs/architecture.md`,
+that reads it; the destination then owns the copy (`docs/policy/architecture.md`,
 "Default rule: keep implementations separate"). There is no allow list: a
 read across the boundary has no legitimate form.
 
@@ -752,15 +758,30 @@ tool/version-control/design-citations
 
 When it reports something, decide which of the two the sentence is doing. If
 it says where design documents live, name the directory rather than a file:
-`docs/design/` passes and `docs/design/<file>` does not. If it rests on the
+`docs/work/` passes and `docs/work/<file>` does not. If it rests on the
 document's argument, that argument has not been adopted — record the decision,
 promote the candidate or register the measure, and cite that instead. There is
 no allow list.
+
+### Document indexes
+
+`tool/version-control/records` refuses an area README — decisions, candidates
+or work — that names one of the area's documents: a record or candidate by
+its file name, a work item by its `<scope>/<slug>`. The list is printed from
+the headers instead, so a new record never edits a repository file
+(`INV repository/document-index-generated`). It runs on every commit and in
+CI.
+
+```sh
+tool/version-control/records
+tool/version-control/records --table decisions
+```
 
 Branch protection on `dev` and `master` requires the stable `Required checks`
 job. That job fails unless classification and secret scanning pass and every
 selected domain job succeeds. Conditional domain job names are deliberately
 not branch-protection contexts because unselected domains are skipped.
+
 
 ## Documentation ownership
 
@@ -775,17 +796,18 @@ from it.
 | `README.md` | internal | Setup, outputs, and everyday use |
 | `CONTRIBUTING.md` | internal | Domain-scoped workflow and releases |
 | `AGENTS.md` | internal | Stable judgement and safety boundaries |
-| `docs/architecture.md` | internal | Domain authority and dependency policy |
-| `docs/status.md` | internal | Current state |
-| `docs/decisions/` | internal | One record per expensive decision; `README.md` there is the index and format |
-| `docs/troubleshooting.md` | internal | Recurring problems indexed by symptom |
-| `docs/definition-of-done.md` | internal | Domain-specific evidence requirements |
-| `invariants/` | internal | Enumerated invariants and how each one is enforced |
-| `provisional/` | internal | Registered temporary measures and the condition that ends each |
+| `docs/policy/architecture.md` | internal | Domain authority and dependency policy |
+| `docs/status/` | internal | Current state, one file per scope |
+| `docs/README.md` | internal | The map of the document tree and who owns each part |
+| `docs/policy/decisions/` | internal | One record per expensive decision; `README.md` there is the format, `tool/version-control/records --table decisions` the index |
+| `docs/reference/` | internal | Recurring problems indexed by symptom |
+| `docs/policy/definition-of-done/` | internal | Evidence requirements, one file per scope |
+| `docs/policy/invariants/` | internal | Enumerated invariants and how each one is enforced |
+| `docs/provisional/` | internal | Registered temporary measures and the condition that ends each |
 | `.agents/skills/` | internal | Model-neutral workflows specific to this repository |
 | `tool/`, hooks, CI | internal | Executable policy |
-| `docs/candidates/` | external | Observed candidates for adding a rule or removing text; `README.md` there is the index and format |
-| `docs/design/` | external | The argument for a direction, and what its plan predicts; `README.md` there is the index and format |
+| `docs/policy/candidates/` | external | Observed candidates for adding a rule or removing text; `README.md` there is the format, `tool/version-control/records --table candidates` the index |
+| `docs/work/` | external | The argument for a direction, and what its plan predicts; `README.md` there is the format, `tool/version-control/records --table work` the index |
 | `notes/` | none | Untracked maintainer scratch space; no structure, review or retention, and not project context |
 
 The two external locations differ in size, not in standing. A candidate is

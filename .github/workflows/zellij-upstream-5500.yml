@@ -5,7 +5,7 @@
 # signal the tree cannot see arrives. Three signals decide the overlay's
 # life: the pull request's state, which nixpkgs zellij version is current,
 # and the review date in
-# provisional/unixlike/zellij-combining-marks.md. Only the first two are
+# docs/provisional/unixlike/zellij-combining-marks.md. Only the first two are
 # checked here; the third is the registry's own.
 #
 # This file is the whole mechanism, and #175's retirement commit deletes it
@@ -123,18 +123,18 @@ jobs:
 
           retirement_checklist() {
             cat <<'CHECKLIST'
-          Retirement order (docs/decisions/zellij-patched-on-darwin-until-upstream.md):
+          Retirement order (docs/policy/decisions/unixlike/zellij-patched-on-darwin-until-upstream.md):
 
           1. `chore(unixlike-deps): refresh flake.lock` alone, once nixpkgs ships a
              zellij whose source already contains the fix.
           2. One commit that deletes the overlay block in
              `unixlike/modules/zellij/module.nix`, this
              workflow, the `CONTRIBUTING.md` subsection, the `README.md` line, the
-             `Justfile` recipe, `provisional/unixlike/zellij-combining-marks.md`, and
-             all three of `docs/status.md`'s mentions of the measure -- the Unix-like
-             paragraph, the provisional registry count, and the tagged open
-             condition -- and adds a dated line to the decision record and to the
-             `docs/troubleshooting.md` entry.
+             `Justfile` recipe, `docs/provisional/unixlike/zellij-combining-marks.md`, and
+             all three status mentions of the measure -- the Unix-like paragraph and
+             the tagged open condition in `docs/status/unixlike.md`, and the
+             provisional registry count in `docs/status/repository.md` -- and adds a dated line to the decision record and to the
+             `docs/reference/troubleshooting.md` entry.
           3. `git grep zellij-combining-marks` finds only the decision record and the
              troubleshooting entry.
           CHECKLIST
@@ -181,7 +181,7 @@ jobs:
           if [[ "$state" == closed ]]; then
             body=$(printf '%s\n\n%s\n\n%s\n' \
               "zellij-org/zellij#$pr was closed without being merged, so the patch the Darwin overlay carries has no upstream future in its present form." \
-              "Decide between rebasing $PINNED_COMMIT onto a later zellij in a fork and repointing the overlay's url and hash, and retiring the overlay and the workaround with it. provisional/unixlike/zellij-combining-marks.md and docs/decisions/zellij-patched-on-darwin-until-upstream.md carry both paths." \
+              "Decide between rebasing $PINNED_COMMIT onto a later zellij in a fork and repointing the overlay's url and hash, and retiring the overlay and the workaround with it. docs/provisional/unixlike/zellij-combining-marks.md and docs/policy/decisions/unixlike/zellij-patched-on-darwin-until-upstream.md carry both paths." \
               "Opened by .github/workflows/zellij-upstream-5500.yml.")
             ensure_issue "zellij upstream #$pr closed unmerged" \
               "unixlike: zellij upstream #$pr closed unmerged; decide the overlay's future" "$body"

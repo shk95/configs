@@ -353,30 +353,64 @@ expect unclassified "$classify" --files unexpected.file
 # INV repository/scope-ownership
 # The invariant registry is per scope: an entry classifies as the scope that
 # owns it, the format contract as repository, and anything else under
-# invariants/ as nothing, so a misplaced file is refused at commit.
-expect repository "$classify" --files invariants/README.md
-expect repository "$classify" --files invariants/repository/registry-coverage.md
-expect unixlike "$classify" --files invariants/unixlike/import-order.md
-expect windows "$classify" --files invariants/windows/parser-declared.md
+# docs/policy/invariants/ as nothing, so a misplaced file is refused at commit.
+expect repository "$classify" --files docs/policy/invariants/README.md
+expect repository "$classify" --files docs/policy/invariants/repository/registry-coverage.md
+expect unixlike "$classify" --files docs/policy/invariants/unixlike/import-order.md
+expect windows "$classify" --files docs/policy/invariants/windows/parser-declared.md
 # A common scope is restored together with the domain; until then its paths have no owner.
-expect unclassified "$classify" --files invariants/common/example.md
+expect unclassified "$classify" --files docs/policy/invariants/common/example.md
 # The removed scope's placeholder keeps an arm of its own: its deletion is
 # inside every pull-request range that spans it, and an unclassified path
 # cannot be pushed.
 expect repository "$classify" --files invariants/common/.gitkeep
-expect unclassified "$classify" --files invariants/stray.md
-expect unclassified "$classify" --files invariants/linux/x.md
+# The registries' roots before they moved under docs/: a deletion there is
+# inside every range that spans the move.
+expect repository "$classify" --files invariants/README.md
+expect unixlike "$classify" --files invariants/unixlike/import-order.md
+expect windows "$classify" --files provisional/windows/appx-detection.md
+expect unclassified "$classify" --files docs/policy/invariants/stray.md
+expect unclassified "$classify" --files docs/policy/invariants/linux/x.md
 # INV repository/scope-ownership
 # The provisional registry is per scope for the same reason: the scope that
 # carries a temporary measure owns its registration and is the scope an
 # overdue review blocks.
-expect repository "$classify" --files provisional/README.md
-expect unixlike "$classify" --files provisional/unixlike/zellij-overlay.md
-expect windows "$classify" --files provisional/windows/appx-detection.md
-expect repository "$classify" --files provisional/repository/hook-shim.md
-expect unclassified "$classify" --files provisional/stray.md
+expect repository "$classify" --files docs/provisional/README.md
+expect unixlike "$classify" --files docs/provisional/unixlike/zellij-overlay.md
+expect windows "$classify" --files docs/provisional/windows/appx-detection.md
+expect repository "$classify" --files docs/provisional/repository/hook-shim.md
+expect unclassified "$classify" --files docs/provisional/stray.md
+# INV repository/scope-ownership
+# Every other document area is owned the same way: a scope directory, or a
+# file named for a scope, decides; a scope position that names no domain and
+# a file beside an area's contract are refused; any other document is
+# repository's.
+expect unixlike "$classify" --files docs/policy/decisions/unixlike/example.md
+expect windows "$classify" --files docs/policy/candidates/windows/example.md
+expect repository "$classify" --files docs/policy/decisions/repository/unixlike-example.md
+expect unixlike "$classify" --files docs/work/unixlike/example/spec.md
+expect repository "$classify" --files docs/work/repository/example/report.md
+expect unixlike "$classify" --files docs/status/unixlike.md
+expect windows "$classify" --files docs/policy/definition-of-done/windows.md
+expect repository "$classify" --files docs/status/repository.md
+expect repository "$classify" --files docs/work/roadmap.md
+expect repository "$classify" --files docs/policy/architecture.md
+expect repository "$classify" --files docs/reference/troubleshooting.md
+expect repository "$classify" --files docs/README.md
+expect unclassified "$classify" --files docs/work/linux/example/spec.md
+expect unclassified "$classify" --files docs/status/linux.md
+expect unclassified "$classify" --files docs/policy/decisions/stray.md
+expect unclassified "$classify" --files docs/work/stray.md
+# A scope name counts only in its area's scope position: elsewhere inside an
+# area it is refused, as a slug it is just a name, and outside the areas it
+# is an ordinary repository document.
+expect unclassified "$classify" --files docs/work/unixlike.md
+expect unclassified "$classify" --files docs/policy/decisions/windows.md
+expect unclassified "$classify" --files docs/status/unixlike/example.md
+expect repository "$classify" --files docs/work/repository/windows/spec.md
+expect repository "$classify" --files docs/unixlike.md
 expect 'windows
-repository' "$classify" --files windows/setup.ps1 docs/status.md
+repository' "$classify" --files windows/setup.ps1 docs/status/repository.md
 
 # Ownership and check selection are different questions and both are fixtured.
 # classify keeps answering the first, for release tags, promotion and CI job
@@ -395,7 +429,7 @@ kdl_modified=$(printf 'M\tunixlike/modules/zellij/config.kdl')
 kdl_added=$(printf 'A\tunixlike/modules/zellij/extra.kdl')
 module_modified=$(printf 'M\tunixlike/modules/git.nix')
 windows_modified=$(printf 'M\twindows/setup.ps1')
-docs_modified=$(printf 'M\tdocs/status.md')
+docs_modified=$(printf 'M\tdocs/status/repository.md')
 unknown_modified=$(printf 'M\tunexpected.file')
 
 # Nix copies a payload without reading it, so evaluating the flake says nothing
@@ -456,19 +490,31 @@ hook_modified=$(printf 'M\t.githooks/pre-commit')
 workflow_modified=$(printf 'M\t.github/workflows/ci.yml')
 dispatch_modified=$(printf 'M\ttool/dispatch/select')
 vc_modified=$(printf 'M\ttool/version-control/audit')
-entry_modified=$(printf 'M\tinvariants/repository/scope-ownership.md')
-measure_modified=$(printf 'M\tprovisional/unixlike/zellij-overlay.md')
-docs_and_hook=$(printf 'M\tdocs/status.md\nM\t.githooks/pre-push')
+entry_modified=$(printf 'M\tdocs/policy/invariants/repository/scope-ownership.md')
+measure_modified=$(printf 'M\tdocs/provisional/unixlike/zellij-overlay.md')
+docs_and_hook=$(printf 'M\tdocs/status/repository.md\nM\t.githooks/pre-push')
 expect_units 'repository:fixtures' commit "$hook_modified"
 expect_units 'repository:fixtures' push "$hook_modified"
 expect_units 'repository:fixtures' commit "$workflow_modified"
 expect_units 'repository:fixtures' commit "$dispatch_modified"
 expect_units 'repository:fixtures' push "$vc_modified"
 expect_units '' commit "$entry_modified"
-# A provisional entry is owned by the scope that carries the measure, so a
-# Unix-like one selects that domain's payload check exactly as an invariant
-# entry under invariants/unixlike/ does.
-expect_units 'unixlike:payloads' commit "$measure_modified"
+# A document is owned by the scope its directory names, but no domain suite
+# reads one, so a Unix-like provisional entry, invariant, decision or status
+# file, or a Windows one, selects nothing at either stage.
+for stage in commit push; do
+  expect_units '' "$stage" "$measure_modified"
+  expect_units '' "$stage" "$(printf 'M\tdocs/policy/invariants/unixlike/import-order.md')"
+  expect_units '' "$stage" "$(printf 'A\tdocs/policy/decisions/windows/example.md')"
+  expect_units '' "$stage" "$(printf 'M\tdocs/status/unixlike.md\nM\tdocs/status/windows.md')"
+  expect_units '' "$stage" "$(printf 'A\tdocs/work/unixlike/example/spec.md')"
+done
+# Deleting from the registries' old roots selects nothing either.
+for stage in commit push; do
+  expect_units '' "$stage" "$(printf 'D\tprovisional/unixlike/zellij-overlay.md\nD\tinvariants/windows/parser-declared.md')"
+done
+# A misplaced document is still refused.
+expect_units 'unclassified' commit "$(printf 'A\tdocs/status/linux.md')"
 expect_units '' push "$docs_modified"
 expect_units 'repository:fixtures' commit "$docs_and_hook"
 # The three governance scripts the suite scans for the MSYS guard and copies
@@ -2894,7 +2940,7 @@ hygiene_expect_fail() {
 }
 
 # Axis 1, positive: the anchoring rule. A guillemet does not open a path, which
-# is why the Nix error message docs/troubleshooting.md quotes is not one.
+# is why the Nix error message docs/reference/troubleshooting.md quotes is not one.
 hygiene_new
 printf 'error: path %s»/%s/programs/x.nix%s does not exist\n' "'" home "'" \
   >"$hygiene_repo/doc.md"
@@ -3359,16 +3405,16 @@ inv_seq=0
 inv_new() {
   inv_seq=$((inv_seq + 1))
   inv_repo="$test_root/invariants-$inv_seq"
-  mkdir -p "$inv_repo/invariants/repository" "$inv_repo/docs" \
+  mkdir -p "$inv_repo/docs/policy/invariants/repository" "$inv_repo/docs/policy/definition-of-done" "$inv_repo/docs/status" \
     "$inv_repo/tool" "$inv_repo/tests"
   git -C "$inv_repo" init -q -b dev
   git -C "$inv_repo" config user.name Fixture
   git -C "$inv_repo" config user.email fixture@example.invalid
   printf '# Fixture\n\n## Rules\n\ntext\n' >"$inv_repo/AGENTS.md"
-  printf '# Architecture\n\n## Model\n\ntext\n' >"$inv_repo/docs/architecture.md"
+  printf '# Architecture\n\n## Model\n\ntext\n' >"$inv_repo/docs/policy/architecture.md"
   printf '# Definition of done\n\n- [ ] read the diff\n' \
-    >"$inv_repo/docs/definition-of-done.md"
-  printf '# Status\n\n## Why\n\ntext\n' >"$inv_repo/docs/status.md"
+    >"$inv_repo/docs/policy/definition-of-done/repository.md"
+  printf '# Status\n\n## Why\n\ntext\n' >"$inv_repo/docs/status/repository.md"
   : >"$inv_repo/.exec"
 }
 
@@ -3383,7 +3429,7 @@ inv_exec() {
   printf '%s\n' "$1" >>"$inv_repo/.exec"
 }
 inv_entry() {
-  cat >"$inv_repo/invariants/repository/$1.md"
+  cat >"$inv_repo/docs/policy/invariants/repository/$1.md"
 }
 inv_run() {
   git -C "$inv_repo" add -A
@@ -3429,10 +3475,10 @@ inv_base() {
   inv_entry base-rule <<'ENTRY'
 id: repository/base-rule
 statement: The fixture holds.
-rationale: docs/architecture.md § Model
+rationale: docs/policy/architecture.md § Model
 enforced-by: tool tool/probe
 enforced-by: fixture tests/probe.sh
-decision: docs/status.md § Why
+decision: docs/status/repository.md § Why
 
 Body text.
 ENTRY
@@ -3445,7 +3491,7 @@ inv_base
 inv_entry base-rule <<'ENTRY'
 id: repository/base-rule
 statement: The fixture holds.
-rationale: docs/architecture.md § Model
+rationale: docs/policy/architecture.md § Model
 enforced-by: tool tool/probe
 enforced-by: fixture tests/probe.sh
 since: 2026-09-03
@@ -3459,7 +3505,7 @@ inv_entry base-rule <<'ENTRY'
 id: repository/base-rule
 statement: The fixture holds.
 statement: The fixture holds twice.
-rationale: docs/architecture.md § Model
+rationale: docs/policy/architecture.md § Model
 enforced-by: tool tool/probe
 enforced-by: fixture tests/probe.sh
 ENTRY
@@ -3469,7 +3515,7 @@ inv_base
 inv_entry base-rule <<'ENTRY'
 id: repository/base-rule
 statement: The fixture holds.
-rationale: docs/architecture.md § Model
+rationale: docs/policy/architecture.md § Model
 enforced-by: tool tool/probe
 enforced-by: fixture tests/probe.sh
   a continuation line
@@ -3480,18 +3526,18 @@ inv_base
 inv_entry other-name <<'ENTRY'
 id: repository/base-rule
 statement: The fixture holds.
-rationale: docs/architecture.md § Model
+rationale: docs/policy/architecture.md § Model
 enforced-by: tool tool/probe
 enforced-by: fixture tests/probe.sh
 ENTRY
-rm "$inv_repo/invariants/repository/base-rule.md"
+rm "$inv_repo/docs/policy/invariants/repository/base-rule.md"
 inv_expect_fail 'C3 id does not match the path' "C3 id 'repository/base-rule' does not match path"
 
 inv_base
 inv_entry base-rule <<'ENTRY'
 id: repository/base-rule
 statement: The fixture holds.
-rationale: docs/architecture.md § Missing
+rationale: docs/policy/architecture.md § Missing
 enforced-by: tool tool/probe
 enforced-by: fixture tests/probe.sh
 ENTRY
@@ -3501,20 +3547,20 @@ inv_base
 inv_entry base-rule <<'ENTRY'
 id: repository/base-rule
 statement: The fixture holds.
-rationale: docs/status.md § Why
+rationale: docs/status/repository.md § Why
 enforced-by: tool tool/probe
 enforced-by: fixture tests/probe.sh
 ENTRY
-inv_expect_fail 'C9 rationale outside the two layer-2 files' 'C9 rationale must point at AGENTS.md or docs/architecture.md'
+inv_expect_fail 'C9 rationale outside the two layer-2 files' 'C9 rationale must point at AGENTS.md or docs/policy/architecture.md'
 
 inv_base
 inv_entry base-rule <<'ENTRY'
 id: repository/base-rule
 statement: The fixture holds.
-rationale: docs/architecture.md § Model
+rationale: docs/policy/architecture.md § Model
 enforced-by: tool tool/probe
 enforced-by: fixture tests/probe.sh
-decision: docs/status.md § Nowhere
+decision: docs/status/repository.md § Nowhere
 ENTRY
 inv_expect_fail 'C4 decision heading missing' "C4 decision names no heading 'Nowhere'"
 
@@ -3522,7 +3568,7 @@ inv_base
 inv_entry base-rule <<'ENTRY'
 id: repository/base-rule
 statement: The fixture holds.
-rationale: docs/architecture.md § Model
+rationale: docs/policy/architecture.md § Model
 enforced-by: schema tool/absent.nix
 enforced-by: fixture tests/probe.sh
 ENTRY
@@ -3541,7 +3587,7 @@ inv_base
 inv_entry base-rule <<'ENTRY'
 id: repository/base-rule
 statement: The fixture holds.
-rationale: docs/architecture.md § Model
+rationale: docs/policy/architecture.md § Model
 enforced-by: tool tool/probe
 ENTRY
 inv_expect_fail 'C6 tool without fixture' 'C6 schema or tool enforcement needs a fixture too'
@@ -3550,7 +3596,7 @@ inv_base
 inv_entry base-rule <<'ENTRY'
 id: repository/base-rule
 statement: The fixture holds.
-rationale: docs/architecture.md § Model
+rationale: docs/policy/architecture.md § Model
 enforced-by: pending #12
 enforced-by: tool tool/probe
 enforced-by: fixture tests/probe.sh
@@ -3562,7 +3608,7 @@ inv_base
 inv_entry base-rule <<'ENTRY'
 id: repository/base-rule
 statement: The fixture holds.
-rationale: docs/architecture.md § Model
+rationale: docs/policy/architecture.md § Model
 enforced-by: pending issue-12
 owner: repository maintainer
 ENTRY
@@ -3574,7 +3620,7 @@ inv_base
 inv_entry base-rule <<'ENTRY'
 id: repository/base-rule
 statement: The fixture holds.
-rationale: docs/architecture.md § Model
+rationale: docs/policy/architecture.md § Model
 enforced-by: pending #12
 ENTRY
 rm "$inv_repo/tool/probe" "$inv_repo/tests/probe.sh"
@@ -3585,7 +3631,7 @@ inv_base
 inv_entry base-rule <<'ENTRY'
 id: repository/base-rule
 statement: The fixture holds.
-rationale: docs/architecture.md § Model
+rationale: docs/policy/architecture.md § Model
 enforced-by: pending #12
 owner: repository maintainer
 ENTRY
@@ -3597,19 +3643,19 @@ inv_base
 inv_entry base-rule <<'ENTRY'
 id: repository/base-rule
 statement: The fixture holds.
-rationale: docs/architecture.md § Model
+rationale: docs/policy/architecture.md § Model
 enforced-by: manual the reviewer reads the diff
 owner: repository maintainer
 ENTRY
 rm "$inv_repo/tool/probe" "$inv_repo/tests/probe.sh"
 : >"$inv_repo/.exec"
-inv_expect_fail 'C5 manual not in the definition of done' 'C5 manual invariant is not listed in docs/definition-of-done.md'
+inv_expect_fail 'C5 manual not in the definition of done' 'C5 manual invariant is not listed in docs/policy/definition-of-done/repository.md'
 
 inv_base
 inv_entry base-rule <<'ENTRY'
 id: repository/base-rule
 statement: The fixture holds.
-rationale: docs/architecture.md § Model
+rationale: docs/policy/architecture.md § Model
 enforced-by: manual the reviewer reads the diff
 owner: repository maintainer
 ENTRY
@@ -3621,31 +3667,52 @@ rm "$inv_repo/tool/probe" "$inv_repo/tests/probe.sh"
 # own file.
 inv_dod_id=repository/base-rule
 printf -- '- [ ] read the diff (%s %s)\n' INV "$inv_dod_id" \
-  >>"$inv_repo/docs/definition-of-done.md"
+  >>"$inv_repo/docs/policy/definition-of-done/repository.md"
 inv_expect_pass 'a manual entry listed in the definition of done'
+
+# C5 reads the definition of done of the entry's own scope: a Unix-like
+# manual entry listed only in the repository file is not listed, and the same
+# line in the Unix-like file is.
+inv_base
+mkdir -p "$inv_repo/docs/policy/invariants/unixlike"
+cat >"$inv_repo/docs/policy/invariants/unixlike/scoped-rule.md" <<'ENTRY'
+id: unixlike/scoped-rule
+statement: The fixture holds in its own scope.
+rationale: docs/policy/architecture.md § Model
+enforced-by: manual the reviewer reads the diff
+owner: repository maintainer
+ENTRY
+inv_dod_id=unixlike/scoped-rule
+printf -- '- [ ] read the diff (%s %s)\n' INV "$inv_dod_id" \
+  >>"$inv_repo/docs/policy/definition-of-done/repository.md"
+inv_expect_fail 'C5 manual listed only in another scope' \
+  'C5 manual invariant is not listed in docs/policy/definition-of-done/unixlike.md'
+printf '# Definition of done: Unix-like\n\n- [ ] read the diff (%s %s)\n' INV "$inv_dod_id" \
+  >"$inv_repo/docs/policy/definition-of-done/unixlike.md"
+inv_expect_pass 'a manual entry listed in its own scope'
 
 inv_base
 inv_tag tests/orphan.sh repository/never-registered
 inv_expect_fail 'C8 orphan tag' 'C8 names unregistered invariant repository/never-registered'
 
 inv_base
-printf 'id: repository/stray\n' >"$inv_repo/invariants/stray.md"
-inv_expect_fail 'C1 misplaced file' 'invariants/stray.md: C1 not a registry path'
+printf 'id: repository/stray\n' >"$inv_repo/docs/policy/invariants/stray.md"
+inv_expect_fail 'C1 misplaced file' 'docs/policy/invariants/stray.md: C1 not a registry path'
 
 inv_base
-mkdir -p "$inv_repo/invariants/linux"
-cp "$inv_repo/invariants/repository/base-rule.md" "$inv_repo/invariants/linux/base-rule.md"
+mkdir -p "$inv_repo/docs/policy/invariants/linux"
+cp "$inv_repo/docs/policy/invariants/repository/base-rule.md" "$inv_repo/docs/policy/invariants/linux/base-rule.md"
 inv_expect_fail 'C1 unknown scope directory' "C1 unknown scope 'linux'"
 
 inv_base
-mkdir -p "$inv_repo/invariants/repository/nested"
-cp "$inv_repo/invariants/repository/base-rule.md" \
-  "$inv_repo/invariants/repository/nested/base-rule.md"
+mkdir -p "$inv_repo/docs/policy/invariants/repository/nested"
+cp "$inv_repo/docs/policy/invariants/repository/base-rule.md" \
+  "$inv_repo/docs/policy/invariants/repository/nested/base-rule.md"
 inv_expect_fail 'C1 nested entry' 'C1 not a registry path'
 
 inv_base
-cp "$inv_repo/invariants/repository/base-rule.md" \
-  "$inv_repo/invariants/repository/Base_Rule.md"
+cp "$inv_repo/docs/policy/invariants/repository/base-rule.md" \
+  "$inv_repo/docs/policy/invariants/repository/Base_Rule.md"
 inv_expect_fail 'C1 slug grammar' "C1 slug 'Base_Rule'"
 
 inv_base
@@ -3685,7 +3752,7 @@ inv_pester="$inv_repo/tests/Fixture.Tests.ps1"
 inv_entry base-rule <<'ENTRY'
 id: repository/base-rule
 statement: The fixture holds.
-rationale: docs/architecture.md § Model
+rationale: docs/policy/architecture.md § Model
 enforced-by: tool tool/probe
 enforced-by: fixture tests/probe.sh
 enforced-by: fixture tests/Fixture.Tests.ps1
@@ -3897,13 +3964,13 @@ prov_now=2026-09-05
 prov_new() {
   prov_seq=$((prov_seq + 1))
   prov_repo="$test_root/provisional-$prov_seq"
-  mkdir -p "$prov_repo/provisional/unixlike" "$prov_repo/docs/decisions" \
+  mkdir -p "$prov_repo/docs/provisional/unixlike" "$prov_repo/docs/policy/decisions" \
     "$prov_repo/modules"
   git -C "$prov_repo" init -q -b dev
   git -C "$prov_repo" config user.name Fixture
   git -C "$prov_repo" config user.email fixture@example.invalid
-  printf '# Provisional\n\ntext\n' >"$prov_repo/provisional/README.md"
-  printf '# Measure accepted\n\ntext\n' >"$prov_repo/docs/decisions/measure.md"
+  printf '# Provisional\n\ntext\n' >"$prov_repo/docs/provisional/README.md"
+  printf '# Measure accepted\n\ntext\n' >"$prov_repo/docs/policy/decisions/measure.md"
   # The watched path and the tagged measure are different files, so a case
   # that deletes the measure exercises P6 alone.
   printf '_: {}\n' >"$prov_repo/modules/upstream.nix"
@@ -3915,12 +3982,12 @@ prov_tag() {
   printf '_: {\n  # %s %s\n}\n' PROV "$2" >"$prov_repo/$1"
 }
 prov_entry() {
-  cat >"$prov_repo/provisional/$1.md"
+  cat >"$prov_repo/docs/provisional/$1.md"
 }
 # The base entry with one header line replaced, so a case about one key is
 # one line rather than another copy of the entry.
 prov_replace() {
-  prov_file="$prov_repo/provisional/unixlike/probe-measure.md"
+  prov_file="$prov_repo/docs/provisional/unixlike/probe-measure.md"
   awk -v key="$1" -v value="$2" '
     $0 ~ "^" key ": " { print key ": " value; next }
     { print }
@@ -3977,7 +4044,7 @@ exit-when: Upstream merges the change this patch anticipates.
 watch: modules/upstream.nix
 review-by: 2026-12-01
 issue: #175
-decision: docs/decisions/measure.md § Measure accepted
+decision: docs/policy/decisions/measure.md § Measure accepted
 owner: repository maintainer
 
 Body text.
@@ -3992,7 +4059,20 @@ prov_expect_pass 'a registered measure with a tag' '1 registered, 0 overdue' \
 prov_base
 rm "$prov_repo/modules/probe.nix"
 prov_expect_fail 'P6 entry without a tag' \
-  'P6 no tracked file outside provisional/ names unixlike/probe-measure' \
+  'P6 no tracked file outside docs/provisional/ names unixlike/probe-measure' \
+  --date "$prov_now"
+
+# P6 at the registry's own root: an entry that writes its tag in its own
+# prose, as a real entry does to show the form, is still a registration
+# nothing carries. The registry directory is excluded by the root the checker
+# reads, so the exclusion follows the registry wherever it lives.
+prov_base
+rm "$prov_repo/modules/probe.nix"
+prov_own_id=unixlike/probe-measure
+printf '\nThe tree carries it as `%s %s`.\n' PROV "$prov_own_id" \
+  >>"$prov_repo/docs/provisional/unixlike/probe-measure.md"
+prov_expect_fail 'P6 the entry does not carry its own tag' \
+  'P6 no tracked file outside docs/provisional/ names unixlike/probe-measure' \
   --date "$prov_now"
 
 # P7: a tagged line whose registration was deleted, or never written.
@@ -4015,19 +4095,19 @@ exit-when: The longer measure is retired.
 watch: modules/upstream.nix
 review-by: 2026-12-01
 issue: #175
-decision: docs/decisions/measure.md § Measure accepted
+decision: docs/policy/decisions/measure.md § Measure accepted
 owner: repository maintainer
 
 Body text.
 ENTRY
 prov_expect_fail 'P6 a longer slug does not tag a shorter one' \
-  'P6 no tracked file outside provisional/ names unixlike/probe' \
+  'P6 no tracked file outside docs/provisional/ names unixlike/probe' \
   --date "$prov_now"
 
 # P1, P3 and P5: the path, the kind and the decision pointer, one case each.
 prov_base
-cp "$prov_repo/provisional/unixlike/probe-measure.md" \
-  "$prov_repo/provisional/unixlike/Probe_Measure.md"
+cp "$prov_repo/docs/provisional/unixlike/probe-measure.md" \
+  "$prov_repo/docs/provisional/unixlike/Probe_Measure.md"
 prov_expect_fail 'P1 slug grammar' "P1 slug 'Probe_Measure'" --date "$prov_now"
 
 prov_base
@@ -4037,9 +4117,9 @@ prov_expect_fail 'P3 kind outside the three' \
   --date "$prov_now"
 
 prov_base
-prov_replace decision 'docs/decisions/measure.md § Nowhere'
+prov_replace decision 'docs/policy/decisions/measure.md § Nowhere'
 prov_expect_fail 'P5 decision heading missing' \
-  "P5 decision names no heading 'Nowhere' in docs/decisions/measure.md" \
+  "P5 decision names no heading 'Nowhere' in docs/policy/decisions/measure.md" \
   --date "$prov_now"
 
 # P4: a date with the right shape and no such day. Every arithmetic below
@@ -4060,7 +4140,7 @@ since: 2026-09-01
 exit-when: Upstream merges the change this patch anticipates.
 review-by: 2026-12-01
 issue: #175
-decision: docs/decisions/measure.md § Measure accepted
+decision: docs/policy/decisions/measure.md § Measure accepted
 
 Body text.
 ENTRY
@@ -4077,7 +4157,7 @@ since: 2026-09-01
 exit-when: Upstream merges the change this patch anticipates.
 review-by: 2027-06-01
 issue: #175
-decision: docs/decisions/measure.md § Measure accepted
+decision: docs/policy/decisions/measure.md § Measure accepted
 owner: repository maintainer
 
 Body text.
@@ -4095,7 +4175,7 @@ since: 2026-09-01
 exit-when: Upstream merges the change this patch anticipates.
 review-by: 2027-06-01
 issue: #175
-decision: docs/decisions/measure.md § Measure accepted
+decision: docs/policy/decisions/measure.md § Measure accepted
 owner: repository maintainer
 
 Body text.
@@ -4117,7 +4197,7 @@ since: 2026-03-01
 exit-when: Upstream merges the change this patch anticipates.
 review-by: 2026-08-01
 issue: #175
-decision: docs/decisions/measure.md § Measure accepted
+decision: docs/policy/decisions/measure.md § Measure accepted
 owner: repository maintainer
 
 Body text.
@@ -4141,7 +4221,7 @@ prov_expect_pass 'P8 an unselected scope list fails nothing' \
 # A tree with no registry at all is zero entries and passes: the registry
 # exists to be emptied.
 prov_base
-rm -r "$prov_repo/provisional" "$prov_repo/modules/probe.nix"
+rm -r "$prov_repo/docs/provisional" "$prov_repo/modules/probe.nix"
 prov_expect_pass 'an absent registry' '0 registered, 0 overdue' --date "$prov_now"
 
 prov_base
@@ -4290,12 +4370,12 @@ printf '%s\n' "$design_output" | grep -q '^✓ design citations: [1-9][0-9]* tra
 
 design_fixture=$(mktemp -d)
 git -C "$design_fixture" init -q
-mkdir -p "$design_fixture/docs/design" "$design_fixture/invariants/repository" \
+mkdir -p "$design_fixture/docs/work" "$design_fixture/docs/policy/invariants/repository" \
   "$design_fixture/tool/version-control"
-printf '# Restructure\n\nkind: study\n' >"$design_fixture/docs/design/restructure.md"
-printf 'The tree moves, as docs/design/restructure.md argues.\n' >"$design_fixture/docs/architecture.md"
-printf 'id: repository/probe\nrationale: docs/design/restructure.md \302\247 Restructure\n' >"$design_fixture/invariants/repository/probe.md"
-printf '#!/bin/sh\n# Why this shape: docs/design/restructure.md.\nexit 0\n' >"$design_fixture/tool/version-control/probe"
+printf '# Restructure\n\nkind: study\n' >"$design_fixture/docs/work/restructure.md"
+printf 'The tree moves, as docs/work/restructure.md argues.\n' >"$design_fixture/docs/policy/architecture.md"
+printf 'id: repository/probe\nrationale: docs/work/restructure.md \302\247 Restructure\n' >"$design_fixture/docs/policy/invariants/repository/probe.md"
+printf '#!/bin/sh\n# Why this shape: docs/work/restructure.md.\nexit 0\n' >"$design_fixture/tool/version-control/probe"
 git -C "$design_fixture" add -A
 if design_output=$(cd "$design_fixture" && "$design_citations" 2>&1); then
   printf '%s\n' "$design_output" >&2
@@ -4303,8 +4383,8 @@ if design_output=$(cd "$design_fixture" && "$design_citations" 2>&1); then
   exit 1
 fi
 for design_hit in \
-  'docs/architecture.md:1:' \
-  'invariants/repository/probe.md:2:' \
+  'docs/policy/architecture.md:1:' \
+  'docs/policy/invariants/repository/probe.md:2:' \
   'tool/version-control/probe:2:'; do
   printf '%s\n' "$design_output" | grep -qF "$design_hit" || {
     printf '%s\n' "$design_output" >&2
@@ -4316,19 +4396,81 @@ case "$design_fixture" in /tmp/*) rm -rf -- "$design_fixture" ;; esac
 
 design_fixture=$(mktemp -d)
 git -C "$design_fixture" init -q
-mkdir -p "$design_fixture/docs/design" "$design_fixture/docs/decisions" \
-  "$design_fixture/docs/candidates" "$design_fixture/provisional/repository"
-printf 'Arguments live in docs/design/, one file per document, docs/design/<slug>.md.\n' >"$design_fixture/CONTRIBUTING.md"
-printf 'source: docs/design/restructure.md \302\247 Restructure\n' >"$design_fixture/docs/decisions/probe.md"
-printf 'target: docs/design/restructure.md\n' >"$design_fixture/docs/candidates/probe.md"
-printf 'exit-when: docs/design/restructure.md is adopted\n' >"$design_fixture/provisional/repository/probe.md"
-printf 'Superseded by docs/design/restructure.md.\n' >"$design_fixture/docs/design/older.md"
+mkdir -p "$design_fixture/docs/work" "$design_fixture/docs/policy/decisions" \
+  "$design_fixture/docs/policy/candidates" "$design_fixture/docs/provisional/repository" \
+  "$design_fixture/tool/version-control"
+printf 'Arguments live in docs/work/, one file per document, docs/work/<slug>.md.\n' >"$design_fixture/CONTRIBUTING.md"
+printf 'source: docs/work/restructure.md \302\247 Restructure\n' >"$design_fixture/docs/policy/decisions/probe.md"
+printf 'target: docs/work/restructure.md\n' >"$design_fixture/docs/policy/candidates/probe.md"
+printf 'exit-when: docs/work/restructure.md is adopted\n' >"$design_fixture/docs/provisional/repository/probe.md"
+printf 'Superseded by docs/work/restructure.md.\n' >"$design_fixture/docs/work/older.md"
+printf '#!/bin/sh\n# docs/work/repository/*) echo repository ;;\n' >"$design_fixture/tool/version-control/classify"
 git -C "$design_fixture" add -A
 if ! design_output=$(cd "$design_fixture" && "$design_citations" 2>&1); then
   printf '%s\n' "$design_output" >&2
-  echo "design-citations refused a placement rule, a slug template or an inlet's source" >&2
+  echo "design-citations refused a placement rule, a slug template, an inlet's source or the classifier's path table" >&2
   exit 1
 fi
 case "$design_fixture" in /tmp/*) rm -rf -- "$design_fixture" ;; esac
+
+# INV repository/document-index-generated
+# tool/version-control/records refuses an area README that names one of the
+# area's documents, and prints the area's index from the headers. The real
+# repository is the positive case. A throwaway repository holds a decision
+# record the README lists (refused), then the same README without the row
+# (accepted, a slug template still in it), and a record nothing names, which
+# the table must list anyway.
+records="$root/tool/version-control/records"
+
+# Wired the way design-citations is: every commit, and the repository-wide
+# CI scan job.
+grep -q 'evidence_run records tool/version-control/records' "$root/.githooks/pre-commit"
+grep -q 'run: tool/version-control/records' "$root/.github/workflows/ci.yml"
+
+if ! records_output=$(cd "$root" && "$records" 2>&1); then
+  printf '%s\n' "$records_output" >&2
+  echo "the repository's own area READMEs keep a hand-maintained index" >&2
+  exit 1
+fi
+
+records_fixture=$(mktemp -d)
+git -C "$records_fixture" init -q
+mkdir -p "$records_fixture/docs/policy/decisions/unixlike"
+printf '# Records\n\nOne file per record, `<slug>.md`.\n\n| Record |\n|---|\n| listed-choice.md |\n' \
+  >"$records_fixture/docs/policy/decisions/README.md"
+printf '# A listed choice\n\ndate: 2026-01-02\nscope: unixlike\nstatus: accepted\n\ntext\n' \
+  >"$records_fixture/docs/policy/decisions/unixlike/listed-choice.md"
+printf '# An unlisted choice\n\ndate: 2026-01-03\nscope: unixlike\nstatus: accepted\n\ntext\n' \
+  >"$records_fixture/docs/policy/decisions/unixlike/unlisted-choice.md"
+git -C "$records_fixture" add -A
+if records_output=$(cd "$records_fixture" && "$records" 2>&1); then
+  printf '%s\n' "$records_output" >&2
+  echo "records accepted a README that lists its area's documents" >&2
+  exit 1
+fi
+printf '%s\n' "$records_output" | grep -qF 'docs/policy/decisions/README.md:7: listed-choice.md' || {
+  printf '%s\n' "$records_output" >&2
+  echo "records did not name the listing line" >&2
+  exit 1
+}
+printf '# Records\n\nOne file per record, `<slug>.md`.\n' \
+  >"$records_fixture/docs/policy/decisions/README.md"
+git -C "$records_fixture" add -A
+if ! records_output=$(cd "$records_fixture" && "$records" 2>&1); then
+  printf '%s\n' "$records_output" >&2
+  echo "records refused a README that states only its format" >&2
+  exit 1
+fi
+records_table=$(cd "$records_fixture" && "$records" --table decisions)
+printf '%s\n' "$records_table" | grep -qF '|  | 2026-01-03 | unixlike | accepted | An unlisted choice | docs/policy/decisions/unixlike/unlisted-choice.md |' || {
+  printf '%s\n' "$records_table" >&2
+  echo "records --table did not list a record nothing named" >&2
+  exit 1
+}
+if (cd "$records_fixture" && "$records" --table issues) >/dev/null 2>&1; then
+  echo "records accepted an unknown area" >&2
+  exit 1
+fi
+case "$records_fixture" in /tmp/*) rm -rf -- "$records_fixture" ;; esac
 
 echo "version-control fixtures passed"

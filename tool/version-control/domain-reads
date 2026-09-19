@@ -42,7 +42,7 @@
 # usage: tool/version-control/domain-reads
 #
 # Exit 0 verified, 69 unverified, any other status failed. See
-# docs/architecture.md, "Repository governance plane", and .githooks/evidence,
+# docs/policy/architecture.md, "Repository governance plane", and .githooks/evidence,
 # which is the one place that decides what each means.
 
 set -eu
@@ -161,7 +161,7 @@ scan Windows "${open}unixlike[/\\\\]" \
 windows_count=$count
 
 if [ "$status" -ne 0 ]; then
-  echo "  See invariants/repository/no-cross-domain-dependency.md: copy what the other domain" >&2
+  echo "  See docs/policy/invariants/repository/no-cross-domain-dependency.md: copy what the other domain" >&2
   echo "  owns into this one instead of reading it there." >&2
   exit 1
 fi

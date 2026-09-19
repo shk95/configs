@@ -12,9 +12,9 @@ planning read-only unless the user explicitly authorizes a Git mutation.
 
 1. Resolve the repository root with `git rev-parse --show-toplevel` and work
    from it.
-2. Read `AGENTS.md`, `CONTRIBUTING.md`, `docs/architecture.md`, the scope's
-   current state in `docs/status.md` and the decision records it cites,
-   `docs/definition-of-done.md`, and `invariants/<scope>/` for the classified
+2. Read `AGENTS.md`, `CONTRIBUTING.md`, `docs/policy/architecture.md`, the scope's
+   current state in `docs/status/<scope>.md` and the decision records it cites,
+   `docs/policy/definition-of-done/`, and `docs/policy/invariants/<scope>/` for the classified
    scope, completely enough to apply the requested workflow.
 3. Classify the intended scope, then run `tool/doctor.sh <scope>` before relying
    on host-local capabilities. Use the unscoped form only for cross-domain
@@ -34,8 +34,9 @@ planning read-only unless the user explicitly authorizes a Git mutation.
   declaring the value, never by widening the check; `CONTRIBUTING.md` owns that
   procedure. Do not mutate local or remote Git state.
 - **Classify**: Run `tool/version-control/classify` for the requested diff.
-  Confirm one owning scope. `CONTRIBUTING.md`, "Branch and commit flow", owns
-  what a two-scope commit may contain.
+  Confirm one owning scope; a document's scope is the directory, or the
+  scope-named file, that holds it. `CONTRIBUTING.md`, "Branch and commit
+  flow", owns the rule.
 - **Start**: Propose `feature/<scope>-<topic>` or `fix/<scope>-<topic>` from
   `dev`. Fetch, create a branch, or add a worktree only after the user
   explicitly requests that mutation. A worktree made for an implementer is kept,

@@ -1,16 +1,16 @@
 #!/bin/sh
 #
 # Enforce INV repository/registry-coverage: every invariant registered under
-# invariants/ declares an enforcement that exists and names it, and every
+# docs/policy/invariants/ declares an enforcement that exists and names it, and every
 # enforcement that names an invariant is registered.
 #
-# An invariant is one file, invariants/<scope>/<slug>.md, with a header of
+# An invariant is one file, docs/policy/invariants/<scope>/<slug>.md, with a header of
 # `key: value` lines up to the first blank line and free prose after it.
-# invariants/README.md is the format contract; this file is its check.
+# docs/policy/invariants/README.md is the format contract; this file is its check.
 #
 # Rules, as named in failure output:
 #
-#   C1  a tracked path under invariants/ is README.md or <scope>/<slug>.md
+#   C1  a tracked path under docs/policy/invariants/ is README.md or <scope>/<slug>.md
 #       with a known scope and a [a-z0-9-] slug
 #   C2  the header parses: `key: value` lines, known keys, one each of
 #       id, statement, rationale, at most one owner
@@ -19,11 +19,11 @@
 #       tracked file and a heading it contains
 #   C5  each enforced-by locator satisfies its kind: schema and fixture are
 #       tracked files naming the id; tool is also executable; manual is
-#       listed by id in the definition of done; pending is `#<n>`
+#       listed by id in its scope's definition of done; pending is `#<n>`
 #   C6  schema or tool needs a fixture; pending stands alone
 #   C7  manual or pending needs an owner
 #   C8  every `INV <scope>/<slug>` in a tracked file is registered
-#   C9  rationale points at AGENTS.md or docs/architecture.md
+#   C9  rationale points at AGENTS.md or docs/policy/architecture.md
 #   C10 every fixture unit in a declared fixture file names an invariant
 #       (INVARIANTS_ENFORCE_C10=0 restores the report mode, which lists
 #       and counts instead of failing)
@@ -34,7 +34,7 @@
 # usage: tool/version-control/invariants [--table | --untagged]
 #
 # Exit 0 verified, 69 unverified, any other status failed. See
-# docs/architecture.md, "Repository governance plane", and .githooks/evidence,
+# docs/policy/architecture.md, "Repository governance plane", and .githooks/evidence,
 # which is the one place that decides what each means.
 
 set -eu
@@ -86,8 +86,8 @@ esac
 root=$(git rev-parse --show-toplevel)
 cd "$root"
 
-registry=invariants
-dod=docs/definition-of-done.md
+registry=docs/policy/invariants
+dod=docs/policy/definition-of-done
 
 work=$(mktemp -d)
 trap 'rm -rf "$work"' EXIT
@@ -259,8 +259,8 @@ while IFS= read -r path; do
             ;;
           manual)
             needs_owner=1
-            tagged "$dod" "$expected_id" ||
-              fail "$path: C5 manual invariant is not listed in $dod"
+            tagged "$dod/$scope.md" "$expected_id" ||
+              fail "$path: C5 manual invariant is not listed in $dod/$scope.md"
             ;;
           pending)
             needs_owner=1
@@ -300,8 +300,8 @@ while IFS= read -r path; do
   fi
   if [ -n "$rationale" ]; then
     case "${rationale%% § *}" in
-      AGENTS.md | docs/architecture.md) ;;
-      *) fail "$path: C9 rationale must point at AGENTS.md or docs/architecture.md" ;;
+      AGENTS.md | docs/policy/architecture.md) ;;
+      *) fail "$path: C9 rationale must point at AGENTS.md or docs/policy/architecture.md" ;;
     esac
     check_ref "$path" rationale "$rationale"
   fi

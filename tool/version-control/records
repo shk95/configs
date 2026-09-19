@@ -1,0 +1,176 @@
+#!/bin/sh
+#
+# Enforce INV repository/document-index-generated: no document area keeps a
+# hand-maintained list of its own documents; the list is printed from their
+# headers.
+#
+# A list kept by hand in an area's README makes every new record an edit of
+# that README, which is repository's, so a Unix-like decision could never land
+# as a Unix-like change alone; and a list nothing checks drifts from the files
+# it names. The areas are the decision records, the candidates and the work
+# documents. Each keeps a README.md that states its format and nothing that
+# enumerates its documents; the invariant and provisional registries print
+# their own tables (tool/version-control/invariants --table,
+# tool/version-control/provisional --table).
+#
+#   check            no line of an area's README.md names one of that area's
+#                    documents: a record or candidate by its file name, a
+#                    work item by its <scope>/<slug>
+#   --table <area>   print the area's index from the documents' headers:
+#                    decisions, candidates or work
+#
+# The subject is the index, like tool/version-control/hygiene: the invariant
+# is about committed state.
+#
+# usage: tool/version-control/records [--table decisions|candidates|work]
+#
+# Exit 0 verified, 69 unverified, any other status failed. See
+# docs/policy/architecture.md, "Repository governance plane", and
+# .githooks/evidence, which is the one place that decides what each means.
+
+set -eu
+
+# Guards this script's grep and awk calls from Git for Windows' MSYS argument
+# conversion (#79); see tool/version-control/hygiene. Inert elsewhere.
+MSYS_NO_PATHCONV=1
+MSYS2_ARG_CONV_EXCL='*'
+export MSYS_NO_PATHCONV MSYS2_ARG_CONV_EXCL
+
+# The three-state prerequisite contract, restated rather than sourced from a
+# domain's plane for the reason tool/version-control/hygiene gives.
+require_command() {
+  require_missing=
+  for require_name in "$@"; do
+    command -v "$require_name" >/dev/null 2>&1 ||
+      require_missing="$require_missing $require_name"
+  done
+  [ -n "$require_missing" ] || return 0
+
+  if [ "${REQUIRE_NATIVE:-0}" = 1 ]; then
+    printf '\033[31m✗ required tooling is missing:%s\033[0m\n' \
+      "$require_missing" >&2
+    exit 1
+  fi
+
+  printf '· unverified: this host has no%s\n' "$require_missing" >&2
+  exit 69
+}
+
+usage() {
+  echo "usage: tool/version-control/records [--table decisions|candidates|work]" >&2
+  exit 2
+}
+
+area_dir() {
+  case "$1" in
+    decisions) echo docs/policy/decisions ;;
+    candidates) echo docs/policy/candidates ;;
+    work) echo docs/work ;;
+    *) return 1 ;;
+  esac
+}
+
+mode=check
+area=
+case "${1:-}" in
+  "") [ "$#" -eq 0 ] || usage ;;
+  --table)
+    [ "$#" -eq 2 ] || usage
+    mode=table
+    area=$2
+    area_dir "$area" >/dev/null || usage
+    ;;
+  *) usage ;;
+esac
+
+require_command git awk
+
+# The repository being checked, not the one this file lives in, so the
+# fixtures in tool/version-control/test run this exact script against a
+# throwaway repository.
+root=$(git rev-parse --show-toplevel)
+cd "$root"
+
+work=$(mktemp -d)
+trap 'rm -rf "$work"' EXIT
+
+# The documents of an area: every tracked Markdown file below it except the
+# area's own README.md and, for work, the roadmap.
+documents() {
+  git ls-files -- "$1" |
+    awk -v dir="$1" '
+      /\.md$/ && $0 != dir "/README.md" && $0 != dir "/roadmap.md" { print }
+    '
+}
+
+if [ "$mode" = table ]; then
+  dir=$(area_dir "$area")
+  documents "$dir" >"$work/docs"
+  printf '| Kind | Date | Scope | Status | Title | Path |\n'
+  printf '| --- | --- | --- | --- | --- | --- |\n'
+  while IFS= read -r path; do
+    git show ":$path" | awk -v path="$path" '
+      NR == 1 { title = $0; sub(/^# /, "", title); next }
+      /^$/ { if (NR > 2) exit; next }
+      {
+        i = index($0, ": ")
+        if (i == 0) next
+        key = substr($0, 1, i - 1)
+        value = substr($0, i + 2)
+        if (key == "kind") kind = value
+        else if (key == "date" || key == "first-observed") date = value
+        else if (key == "status") status = value
+        else if (key == "scope") scope = scope (scope == "" ? "" : ", ") value
+      }
+      END {
+        printf "| %s | %s | %s | %s | %s | %s |\n", kind, date, scope, status, title, path
+      }
+    '
+  done <"$work/docs"
+  exit 0
+fi
+
+checked=0
+for area in decisions candidates work; do
+  dir=$(area_dir "$area")
+  readme="$dir/README.md"
+  git ls-files --error-unmatch -- "$readme" >/dev/null 2>&1 || continue
+  checked=$((checked + 1))
+  git show ":$readme" >"$work/readme"
+  # A record or candidate is named by its file; a work item is a directory
+  # of generically named files, so it is named by its <scope>/<slug>.
+  if [ "$area" = work ]; then
+    documents "$dir" | awk -F/ 'NF >= 5 { print $3 "/" $4 }' | sort -u >"$work/names"
+  else
+    documents "$dir" | awk -F/ '{ print $NF }' | sort -u >"$work/names"
+  fi
+  # A name is matched whole: a longer file name that merely ends in a shorter
+  # one's name is not a mention of it.
+  while IFS= read -r name; do
+    awk -v name="$name" -v readme="$readme" '
+      {
+        line = $0
+        while ((i = index(line, name)) > 0) {
+          before = i > 1 ? substr(line, i - 1, 1) : ""
+          if (before !~ /[A-Za-z0-9_.-]/) {
+            printf "%s:%d: %s\n", readme, NR, name
+            break
+          }
+          line = substr(line, i + length(name))
+        }
+      }
+    ' "$work/readme"
+  done <"$work/names" >>"$work/hits"
+done
+
+if [ -s "$work/hits" ]; then
+  while IFS= read -r hit; do
+    printf '\033[31m✗ %s\033[0m\n' "$hit" >&2
+  done <"$work/hits"
+  echo "  See docs/policy/invariants/repository/document-index-generated.md: an area's" >&2
+  echo "  README states its format; tool/version-control/records --table <area>" >&2
+  echo "  prints the list." >&2
+  exit 1
+fi
+
+echo "✓ records: $checked area READMEs list none of their documents"

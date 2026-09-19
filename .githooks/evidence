@@ -13,11 +13,11 @@
 # every call site invented its own third state and they disagreed: one reported
 # unverified, two threw, one passed silently, and one had no detection at all.
 # Missing tooling was reported as invalid in some places and as valid in
-# others, and `docs/definition-of-done.md` asks for neither.
+# others, and `docs/policy/definition-of-done/` asks for neither.
 #
 # Locally, unverified reports and passes. A host that cannot run a domain's
 # native tooling must not be blocked from pushing that domain's work —
-# `docs/architecture.md` states that root tooling must not turn one domain's
+# `docs/policy/architecture.md` states that root tooling must not turn one domain's
 # success into a prerequisite for a change in another. CI sets REQUIRE_NATIVE=1
 # so the same signal fails there instead, because the merge gate is the one
 # place where "nobody could check this" must not pass.

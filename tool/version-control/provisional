@@ -1,19 +1,19 @@
 #!/bin/sh
 #
 # Enforce INV repository/provisional-registry-coverage: every temporary
-# measure registered under provisional/ names an exit condition and a review
+# measure registered under docs/provisional/ names an exit condition and a review
 # date, every registration has a tagged measure in the tree, and an overdue
 # registration fails only its own scope.
 #
-# A provisional measure is one file, provisional/<scope>/<slug>.md, with a
+# A provisional measure is one file, docs/provisional/<scope>/<slug>.md, with a
 # header of `key: value` lines up to the first blank line and free prose
-# after it. provisional/README.md is the format contract; this file is its
-# check. The registry is the sibling of invariants/: that one records what
+# after it. docs/provisional/README.md is the format contract; this file is its
+# check. The registry is the sibling of docs/policy/invariants/: that one records what
 # must remain true, this one records what must eventually become false.
 #
 # Rules, as named in failure output:
 #
-#   P1  a tracked path under provisional/ is README.md or <scope>/<slug>.md
+#   P1  a tracked path under docs/provisional/ is README.md or <scope>/<slug>.md
 #       with a known scope, a [a-z0-9-] slug, and an id equal to that
 #       <scope>/<slug>
 #   P2  the header parses: `key: value` lines, known keys, one each of id,
@@ -27,21 +27,21 @@
 #   P5  issue is `#<n>`; decision is `<path> § <heading>` naming a tracked
 #       file and a heading it contains
 #   P6  every entry is named by at least one `PROV <scope>/<slug>` tag in a
-#       tracked file outside provisional/
+#       tracked file outside docs/provisional/
 #   P7  every `PROV <scope>/<slug>` in a tracked file is registered
 #   P8  an entry whose review-by is before the reference date is overdue.
 #       An overdue entry whose scope was named with --scopes fails; any
 #       other overdue entry is reported in the summary only, because
 #       AGENTS.md forbids requiring an unrelated domain to pass.
 #
-# A missing provisional/ directory is zero entries and passes: the registry
+# A missing docs/provisional/ directory is zero entries and passes: the registry
 # exists to be emptied.
 #
 # usage: tool/version-control/provisional [--table] [--scopes <a,b>]
 #                                         [--date <YYYY-MM-DD>]
 #
 # Exit 0 verified, 69 unverified, any other status failed. See
-# docs/architecture.md, "Repository governance plane", and .githooks/evidence,
+# docs/policy/architecture.md, "Repository governance plane", and .githooks/evidence,
 # which is the one place that decides what each means.
 
 set -eu
@@ -135,7 +135,7 @@ done
 root=$(git rev-parse --show-toplevel)
 cd "$root"
 
-registry=provisional
+registry=docs/provisional
 horizon=180
 
 work=$(mktemp -d)
@@ -401,7 +401,7 @@ while IFS= read -r path; do
   # shorter one it starts with, registering a measure nothing carries. An id
   # is [a-z0-9/-] throughout, so it needs no escaping inside the pattern.
   git -c color.grep=never grep --cached -q -E -e "PROV $expected_id(\$|[^a-z0-9-])" \
-    -- ':(exclude)provisional/' ':(exclude)notes/' 2>/dev/null ||
+    -- ":(exclude)$registry/" ':(exclude)notes/' 2>/dev/null ||
     fail "$path: P6 no tracked file outside $registry/ names $expected_id"
 
   printf '%s\n' "$expected_id" >>"$work/ids"

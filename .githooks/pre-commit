@@ -82,24 +82,29 @@ fi
 # unixlike/tool/checks/<name> and cannot reach a repository-scope check,
 # so this calls evidence_run directly.
 evidence_run hygiene tool/version-control/hygiene \
-  || abort "See invariants/repository/hygiene-*.md and tool/version-control/hygiene.allow."
+  || abort "See docs/policy/invariants/repository/hygiene-*.md and tool/version-control/hygiene.allow."
 
 # A read across a domain boundary is repository-wide for the same reason: it
 # is a property of two trees, and cheap to decide from the index.
 evidence_run "domain reads" tool/version-control/domain-reads \
-  || abort "See invariants/repository/no-cross-domain-dependency.md."
+  || abort "See docs/policy/invariants/repository/no-cross-domain-dependency.md."
 
 # A citation of a design document is repository-wide for the same reason: the
 # document and the text citing it can be in any scope, and the answer comes
 # from the index.
 evidence_run "design citations" tool/version-control/design-citations \
-  || abort "See invariants/repository/design-outside-authority.md."
+  || abort "See docs/policy/invariants/repository/design-outside-authority.md."
+
+# A document area's README is checked repository-wide for the same reason:
+# the list it must not keep names documents of every scope.
+evidence_run records tool/version-control/records \
+  || abort "See docs/policy/invariants/repository/document-index-generated.md."
 
 # The invariant registry check is repository-wide for the same reason
 # hygiene is: a fixture renamed in any scope can orphan the tag an entry
 # depends on, so it runs unconditionally rather than through dispatch.
 evidence_run invariants tool/version-control/invariants \
-  || abort "See invariants/README.md."
+  || abort "See docs/policy/invariants/README.md."
 
 # The provisional registry is repository-wide for the same reason: a tagged
 # line deleted in any scope can orphan an entry, and an entry added anywhere
@@ -113,7 +118,7 @@ provisional_scopes_raw=$(tool/version-control/classify --staged) \
 provisional_scopes=$(printf '%s\n' "$provisional_scopes_raw" \
   | grep -vx none | tr '\n' ',' | sed 's/,$//')
 evidence_run provisional tool/version-control/provisional --scopes "$provisional_scopes" \
-  || abort "See provisional/README.md."
+  || abort "See docs/provisional/README.md."
 
 # Hooks are opt-in, so CI mirrors the secret check. A credential that reaches
 # history stays there after the file is deleted, making the staged state the
