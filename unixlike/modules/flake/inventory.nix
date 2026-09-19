@@ -7,7 +7,14 @@ _: {
     gitEmail = "101378576+shk95@users.noreply.github.com";
     wsl = {
       user = "user1";
-      hostName = "nixos";
+    };
+    nixosHosts = {
+      nixos = {
+        system = "x86_64-linux";
+        kind = "wsl";
+        user = "user1";
+        stateVersion = "26.05";
+      };
     };
     darwin = {
       user = "shk";
