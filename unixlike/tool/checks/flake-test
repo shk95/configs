@@ -112,6 +112,11 @@ headless_host=$(hosts_eval '{ }' 'hosts: builtins.concatStringsSep "\n" (builtin
 [ -n "$headless_host" ] && [ "$(printf '%s\n' "$headless_host" | wc -l)" -eq 1 ] ||
   fail "the probes below need exactly one UTM guest, found: $headless_host"
 headless_user=$(hosts_eval '{ }' "hosts: hosts.\"$headless_host\".user")
+# The OrbStack machine, the one host of its kind.
+orbstack_host=$(hosts_eval '{ }' 'hosts: builtins.concatStringsSep "\n" (builtins.filter (n: hosts.${n}.kind == "orbstack") (builtins.attrNames hosts))')
+[ -n "$orbstack_host" ] && [ "$(printf '%s\n' "$orbstack_host" | wc -l)" -eq 1 ] ||
+  fail "the probes below need exactly one OrbStack machine, found: $orbstack_host"
+orbstack_user=$(hosts_eval '{ }' "hosts: hosts.\"$orbstack_host\".user")
 
 # The invariant's other direction: the entry reaches its consumers through
 # the typed option — the output is named by it, the host answers to it (#191)
@@ -202,7 +207,8 @@ darwin_host=$(identity_eval '{ }' darwin.hostName)
 for home in \
   "homeConfigurations.\"$wsl_user\".config.home.packages" \
   "nixosConfigurations.\"$wsl_host\".config.home-manager.users.\"$wsl_user\".home.packages" \
-  "nixosConfigurations.\"$headless_host\".config.home-manager.users.\"$headless_user\".home.packages"
+  "nixosConfigurations.\"$headless_host\".config.home-manager.users.\"$headless_user\".home.packages" \
+  "nixosConfigurations.\"$orbstack_host\".config.home-manager.users.\"$orbstack_user\".home.packages"
 do
   printf '→ %s carries no graphical program\n' "${home%%.config*}"
   names=$(packages_of "$home")
@@ -412,5 +418,53 @@ expect_refusal 'INV unixlike/headless-key-only' 'a passwordless sudo'
 printf '→ the real headless host passes\n'
 failed_assertions "$headless" '{ }'
 expect_clean "the headless host $headless_host"
+
+# ---------------------------------------------------------------------------
+# An OrbStack machine leaves the shared kernel alone
+# ---------------------------------------------------------------------------
+#
+# INV unixlike/orbstack-shared-kernel
+# modules/host/orbstack.nix declares by hand what OrbStack needs from a guest
+# and asserts that no binfmt emulation is registered: the registry belongs to
+# the kernel every OrbStack machine and OrbStack's Docker share. The real
+# host must show the shape OrbStack generates for a guest and pass; each way
+# of declaring a registration, added to it, must be refused.
+
+orbstack="nixosConfigurations.\"$orbstack_host\""
+
+printf '→ the OrbStack machine declares the account, the network and the absence of sshd that OrbStack needs\n'
+shape=$(nix eval --raw --impure --expr "
+  let
+    flake = builtins.getFlake (toString ./.);
+    config = flake.$orbstack.config;
+    account = config.users.users.\${config.host.user};
+    facts = {
+      uid-501 = account.uid == 501;
+      in-wheel-and-orbstack = builtins.elem \"wheel\" account.extraGroups && builtins.elem \"orbstack\" account.extraGroups;
+      orbstack-group = config.users.groups.orbstack.gid == 67278;
+      zsh-login = (account.shell.pname or \"\") == \"zsh\";
+      no-tracked-password = builtins.all (n: account.\${n} == null) [\"password\" \"hashedPassword\" \"hashedPasswordFile\" \"initialPassword\" \"initialHashedPassword\"];
+      immutable-users = !config.users.mutableUsers;
+      sshd-off = !config.services.openssh.enable;
+      networkd-on-eth0 = config.systemd.network.enable && !config.networking.dhcpcd.enable && !config.networking.useDHCP && config.systemd.network.networks.\"50-eth0\".matchConfig.Name == \"eth0\";
+      orbstack-resolv-conf = !config.services.resolved.enable && config.environment.etc.\"resolv.conf\".source == \"/opt/orbstack-guest/etc/resolv.conf\";
+      watchdog-off = config.systemd.services.\"systemd-logind\".serviceConfig.WatchdogSec == 0;
+      channels-off = !config.nix.channel.enable;
+      no-binfmt = config.boot.binfmt.emulatedSystems == [] && config.boot.binfmt.registrations == {};
+      no-certificate = config.security.pki.certificates == [];
+      shared-home-alone = builtins.attrNames config.home-manager.users == [config.host.user];
+    };
+  in builtins.concatStringsSep \" \" (builtins.filter (n: !facts.\${n}) (builtins.attrNames facts))")
+[ -z "$shape" ] || fail "nixosConfigurations.$orbstack_host does not hold: $shape"
+
+printf '→ refuses a binfmt emulation, declared either way\n'
+failed_assertions "$orbstack" '{ boot.binfmt.emulatedSystems = ["x86_64-linux"]; }'
+expect_refusal 'INV unixlike/orbstack-shared-kernel' 'an emulated system'
+failed_assertions "$orbstack" '{ boot.binfmt.registrations.fixture = { interpreter = "/run/current-system/sw/bin/true"; magicOrExtension = "fixture"; recognitionType = "extension"; }; }'
+expect_refusal 'INV unixlike/orbstack-shared-kernel' 'a binfmt registration'
+
+printf '→ the real OrbStack machine passes\n'
+failed_assertions "$orbstack" '{ }'
+expect_clean "the OrbStack machine $orbstack_host"
 
 echo "✓ flake schema fixtures behave"

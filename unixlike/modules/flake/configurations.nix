@@ -57,15 +57,20 @@
       home = [home.shared];
     };
 
+    # An OrbStack machine: what OrbStack needs from the guest
+    # (modules/host/orbstack.nix) — its own account, no sshd and no headless
+    # class, because OrbStack's agent is the way in — and the shared home
+    # alone.
+    orbstack = {
+      system = [nixos.orbstack];
+      home = [home.shared];
+    };
+
     # Declared and not yet installed (modules/host/placeholder.nix): the
     # kind's own class and no home, until the order that installs the host
     # composes one.
     vmware = {
       system = [nixos.vmware];
-      home = [];
-    };
-    orbstack = {
-      system = [nixos.orbstack];
       home = [];
     };
     desktop = {
