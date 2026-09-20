@@ -131,12 +131,22 @@ activation, `just nixos-test` and `just nixos-switch` activated generations
 built from this flake and `just nixos-rollback` returned to the one before
 (`docs/work/unixlike/utm-headless-guest/report.md`). The maintainer means the
 guest to become a graphical machine, which waits for the GNOME orders of
-`docs/work/roadmap.md`. Three more hosts are declared and not installed: `vm`
-(x86_64, VMware), `orbstack` (aarch64) and `desktop` (x86_64) are each the
-least that evaluates for its kind (`unixlike/modules/host/placeholder.nix`)
-and create no account. Their evidence is evaluation alone: none has been
-built, booted or installed, and their state versions and accounts are
-provisional values of the inventory that the installing order confirms. The
+`docs/work/roadmap.md`. `orbstack` (aarch64, an isolated OrbStack machine on
+the Mac, created on 2026-09-20 as a sandbox) is composed from `nixos.orbstack`
+(`unixlike/modules/host/orbstack.nix`), which declares by hand what OrbStack
+needs from a guest — the account OrbStack enters as, its network and
+resolver, no sshd — imports nothing OrbStack generates, registers no binfmt
+emulation on the kernel the machines share
+(`INV unixlike/orbstack-shared-kernel`), and takes the shared home alone. Its
+evidence is evaluation alone: the machine still runs the image OrbStack
+created and has not been switched to the flake
+(`docs/work/unixlike/orbstack-sandbox/report.md`). Two more hosts are
+declared and not installed: `vm` (x86_64, VMware) and `desktop` (x86_64) are
+each the least that evaluates for its kind
+(`unixlike/modules/host/placeholder.nix`) and create no account. Their
+evidence is evaluation alone: neither has been built, booted or installed,
+and their state versions and accounts are provisional values of the
+inventory that the installing order confirms. The
 Nix daemon settings and the no-channel rule are in `modules.nixos.shared`
 and reach every NixOS host, the registered distribution included.
 GUI options are set off explicitly; WSLg is the deferred item of

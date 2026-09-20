@@ -22,37 +22,19 @@
 # with no authorized key; CONTRIBUTING.md § Import the NixOS-WSL distribution
 # lists copying one among the steps. Host keys are generated at first start.
 #
+# An OrbStack machine runs none: OrbStack reaches it through an agent of its
+# own and turns sshd off in the configuration it generates, so the class
+# states the same (modules/host/orbstack.nix).
+#
 # INV unixlike/headless-key-only — the assertions below are the daemon's
 # half of the rule; modules/firewall.nix holds the port's and
 # modules/account.nix the account's. tool/checks/flake-test holds both
 # directions.
 _: {
-  modules.nixos.wsl.services.openssh = {
-    enable = true;
-    ports = [2223];
-    settings = {
-      PasswordAuthentication = false;
-      KbdInteractiveAuthentication = false;
-      PermitRootLogin = "no";
-    };
-  };
-
-  modules.nixos.headless = {
-    lib,
-    config,
-    ...
-  }: let
-    sshd = config.services.openssh;
-    keyed =
-      lib.filterAttrs (
-        _: account:
-          account.openssh.authorizedKeys.keys != [] || account.openssh.authorizedKeys.keyFiles != []
-      )
-      config.users.users;
-  in {
-    services.openssh = {
+  modules.nixos = {
+    wsl.services.openssh = {
       enable = true;
-      ports = [22];
+      ports = [2223];
       settings = {
         PasswordAuthentication = false;
         KbdInteractiveAuthentication = false;
@@ -60,19 +42,45 @@ _: {
       };
     };
 
-    assertions = [
-      {
-        assertion =
-          sshd.enable
-          && !sshd.settings.PasswordAuthentication
-          && !sshd.settings.KbdInteractiveAuthentication
-          && sshd.settings.PermitRootLogin == "no";
-        message = "INV unixlike/headless-key-only: sshd on a headless host accepts a key and nothing else, and never a root login.";
-      }
-      {
-        assertion = keyed == {};
-        message = "INV unixlike/headless-key-only: an authorized key is tracked for ${lib.concatStringsSep ", " (lib.attrNames keyed)}; keys are host-owned, in ~/.ssh/authorized_keys.";
-      }
-    ];
+    orbstack.services.openssh.enable = false;
+
+    headless = {
+      lib,
+      config,
+      ...
+    }: let
+      sshd = config.services.openssh;
+      keyed =
+        lib.filterAttrs (
+          _: account:
+            account.openssh.authorizedKeys.keys != [] || account.openssh.authorizedKeys.keyFiles != []
+        )
+        config.users.users;
+    in {
+      services.openssh = {
+        enable = true;
+        ports = [22];
+        settings = {
+          PasswordAuthentication = false;
+          KbdInteractiveAuthentication = false;
+          PermitRootLogin = "no";
+        };
+      };
+
+      assertions = [
+        {
+          assertion =
+            sshd.enable
+            && !sshd.settings.PasswordAuthentication
+            && !sshd.settings.KbdInteractiveAuthentication
+            && sshd.settings.PermitRootLogin == "no";
+          message = "INV unixlike/headless-key-only: sshd on a headless host accepts a key and nothing else, and never a root login.";
+        }
+        {
+          assertion = keyed == {};
+          message = "INV unixlike/headless-key-only: an authorized key is tracked for ${lib.concatStringsSep ", " (lib.attrNames keyed)}; keys are host-owned, in ~/.ssh/authorized_keys.";
+        }
+      ];
+    };
   };
 }
