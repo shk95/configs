@@ -16,6 +16,19 @@ _: {
         stateVersion = "26.05";
       };
 
+      # Composed (modules/host/utm.nix and the headless class) and not yet
+      # installed. The account and the state version stay provisional: the
+      # installing session confirms or corrects both before anything is
+      # activated, and the state version is the release of the installation
+      # medium's NixOS, not of the pinned nixpkgs if the two differ.
+      utm = {
+        system = "aarch64-linux";
+        kind = "vm";
+        hypervisor = "utm";
+        user = "shk";
+        stateVersion = "26.11";
+      };
+
       # Declared and not yet installed (modules/host/placeholder.nix). Each
       # state version is the pinned nixpkgs release, which the order that
       # installs the host confirms or corrects before anything is activated.
@@ -24,13 +37,6 @@ _: {
         kind = "vm";
         hypervisor = "vmware";
         user = "user1";
-        stateVersion = "26.11";
-      };
-      utm = {
-        system = "aarch64-linux";
-        kind = "vm";
-        hypervisor = "utm";
-        user = "shk";
         stateVersion = "26.11";
       };
       orbstack = {

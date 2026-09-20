@@ -3,7 +3,8 @@
 #
 # INV unixlike/desktop-not-wsl — `home.desktop` is composed below into the
 # Darwin home only; the WSL homes take `shared` and `wsl` and nothing
-# graphical. tool/checks/flake-test is the enforcement.
+# graphical, and the headless guest's home takes `shared` alone.
+# tool/checks/flake-test is the enforcement.
 #
 # INV unixlike/composition-in-one-place — this file is that place.
 # tool/checks/composition refuses a feature file that names a host flavour
@@ -44,15 +45,23 @@
       ];
     };
 
+    # A guest that boots itself: what its hypervisor's machine is
+    # (modules/host/utm.nix), what makes a headless host reachable, and the
+    # shared home alone — nothing graphical, and the coding agents stay on
+    # NixOS-WSL.
+    utm = {
+      system = [
+        nixos.utm
+        nixos.headless
+      ];
+      home = [home.shared];
+    };
+
     # Declared and not yet installed (modules/host/placeholder.nix): the
     # kind's own class and no home, until the order that installs the host
     # composes one.
     vmware = {
       system = [nixos.vmware];
-      home = [];
-    };
-    utm = {
-      system = [nixos.utm];
       home = [];
     };
     orbstack = {

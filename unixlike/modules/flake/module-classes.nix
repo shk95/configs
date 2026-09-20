@@ -34,7 +34,9 @@
 #   homeManager.agents         the coding agents — the NixOS-WSL home only
 #   nixos.shared               every NixOS host
 #   nixos.wsl                  NixOS hosts of kind wsl only
-#   nixos.vmware, nixos.utm, nixos.orbstack, nixos.desktop
+#   nixos.headless             NixOS hosts that boot themselves and have no display
+#   nixos.utm                  NixOS guests under UTM only
+#   nixos.vmware, nixos.orbstack, nixos.desktop
 #                              their kind, a placeholder until it is installed
 #   darwin.system              the nix-darwin system layer only
 #
