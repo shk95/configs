@@ -126,6 +126,8 @@ this work.
 
 Amended 2026-09-20: the increments are regrouped at the evidence lanes and no criterion changes. Increment 2 is the evaluation lane: it verifies AC1 to AC4 and carries their report rows and the status sentence with them. Increment 3 is unchanged and verifies AC5. Increment 4 is the guest's lanes: it verifies AC6 to AC9, records AC10 for the pull requests before it, and ends the report; the roadmap row follows that end in `repository`.
 
+Amended 2026-09-20 (2): the guest was adopted, not installed from the minimal ISO, and no criterion changes. The maintainer had already installed NixOS 25.11 in UTM with the graphical installer before the session on the Mac: an unlabelled EFI system partition on `/boot`, an ext4 root labelled `root`, a swap partition, the host name `nixos` and an installer account. Reinstalling would have proved nothing the criteria ask for, so the two file systems are relabelled `boot` and `nixos` in place, the first switch to this flake's `utm` output is made by naming the output, because the host-bound recipes refuse while the host still answers to `nixos`, and the installer's channel and `/etc/nixos` are removed afterwards. The inventory entry keeps `shk` as the account and takes `25.11` as the state version, the installed release. The swap partition is left unused: nothing the flake declares names it. The maintainer means this guest to become a graphical machine; that stays with the roadmap's GNOME orders, and this spec ends headless as written.
+
 ## Acceptance
 
 | ID | Criterion | Required lanes |
