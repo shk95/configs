@@ -13,22 +13,24 @@
 # modules/account.nix's, and sshd is off in modules/sshd.nix.
 #
 # Left out on purpose. Because this machine is an isolated sandbox: the
-# certificates OrbStack adds, its ssh client fragment for the Mac's agent, the
-# `audio` group it puts the account in, and the x86 platforms it declares for
-# emulated builds. Because they restate a default or configure what is off:
-# the three `documentation.*` options, the dhcpcd options, and
+# certificates OrbStack adds to a machine that is not isolated — it writes
+# none into one created isolated — its ssh client fragment for the Mac's
+# agent, the `audio` group it puts the account in, and the x86 platforms it
+# declares for emulated builds. Because they restate a default or configure
+# what is off: the three `documentation.*` options, the dhcpcd options, and
 # `useDefaultShell`, which modules/shell/orbstack.nix replaces.
 #
 # INV unixlike/orbstack-shared-kernel — every OrbStack machine and OrbStack's
 # Docker run on one kernel, UIDs are mapped one to one, so root here is UID 0
 # on that kernel, and emulation on it is OrbStack's: it masks
 # systemd-binfmt.service in the machine at every boot observed and mounts no
-# binfmt_misc. The machine runs in a user namespace that is not the kernel's
-# initial one; whether that namespace is the machine's alone, and so whether
-# a registration made here could reach another machine, was not determined
-# from inside. This class registers nothing either way and asserts it, the
-# same care modules/wsl.nix takes for WSL's shared registry.
-# tool/checks/flake-test holds both directions.
+# binfmt_misc. Each machine runs in a user namespace of its own, not the
+# kernel's initial one (two machines read side by side on 2026-09-20), so a
+# registration made here would probably stay here. That was not tried:
+# trying it means writing to a registry whose reach is the question. This
+# class registers nothing either way and asserts it, the same care
+# modules/wsl.nix takes for WSL's shared registry. tool/checks/flake-test
+# holds both directions.
 _: {
   modules.nixos.orbstack = {
     lib,
@@ -88,8 +90,9 @@ _: {
       # The debug file system cannot be mounted in the machine: under the
       # first generation of this flake `sys-kernel-debug.mount` failed with
       # "permission denied" at the switch and at every boot, and left the
-      # system degraded (observed 2026-09-20, OrbStack 2.2.3) — the machine
-      # is not in the kernel's initial user namespace. The unit is
+      # system degraded (observed 2026-09-20, OrbStack 2.2.3). It fails the
+      # same way under OrbStack's own image in a machine created isolated;
+      # the machine is not in the kernel's initial user namespace. The unit is
       # one of systemd's upstream defaults, which the container module keeps.
       suppressedSystemUnits = ["sys-kernel-debug.mount"];
     };

@@ -49,12 +49,13 @@ _: {
   # OrbStack generates that and warns against the alternative — and sudo asks
   # for nothing. The UID is the one OrbStack generated, 501: it gives the
   # account the UID of the Mac account that created the machine, and 501 is
-  # what macOS gives a Mac's first account. That it would be another number
-  # on a Mac whose account has another UID is inferred, not observed; the
-  # procedure's reading after an OrbStack update is where it would show. It
-  # is also why the account is a system user given the shape of a normal one:
-  # NixOS keeps normal users at 1000 and above. The login shell is
-  # modules/shell/orbstack.nix.
+  # what macOS gives a Mac's first account. A machine created for an account
+  # of another name got 501 too, so it is the UID and not the name that is
+  # carried over; that it would be another number on a Mac whose account has
+  # another UID is inferred, not observed, and the procedure's reading after
+  # an OrbStack update is where it would show. It is also why the account is
+  # a system user given the shape of a normal one: NixOS keeps normal users
+  # at 1000 and above. The login shell is modules/shell/orbstack.nix.
   modules.nixos.orbstack = {config, ...}: let
     inherit (config.host) user;
   in {
