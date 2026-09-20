@@ -307,19 +307,26 @@ try {
 
     # A precondition belongs to the feature that needs it. An unselected
     # feature must not make this host look broken.
+    #
+    # INV windows/selected-precondition-evaluated — the loop variable is not
+    # `$feature`. PowerShell names are case-insensitive, so that is this
+    # script's `[string[]] $Feature` parameter, whose type constraint turned
+    # every declared feature into the string "System.Collections.Hashtable":
+    # no Id ever matched the selection and no precondition was evaluated, from
+    # the change that added the parameter until this one.
     $preconditionFailures = [System.Collections.Generic.List[string]]::new()
-    foreach ($feature in $manifest.Features) {
-        if ($selected -notcontains [string]$feature.Id) { continue }
-        $preconditionResult = Test-WinEnvFeaturePrecondition -Feature $feature
+    foreach ($declaredFeature in $manifest.Features) {
+        if ($selected -notcontains [string]$declaredFeature.Id) { continue }
+        $preconditionResult = Test-WinEnvFeaturePrecondition -Feature $declaredFeature
         foreach ($failure in $preconditionResult.Failures) {
-            $preconditionFailures.Add("$($feature.Id): $failure")
-            $drift.Add("$($feature.Id) precondition: $failure")
+            $preconditionFailures.Add("$($declaredFeature.Id): $failure")
+            $drift.Add("$($declaredFeature.Id) precondition: $failure")
         }
         # An undecidable precondition is not a failed one. Blocking Apply on it
         # would make a host that cannot ask the question look like a host that
         # answered no.
         foreach ($item in $preconditionResult.Unverified) {
-            Add-UnverifiedEvidence -Category 'UnavailableObservation' -Item "$($feature.Id) precondition: $item"
+            Add-UnverifiedEvidence -Category 'UnavailableObservation' -Item "$($declaredFeature.Id) precondition: $item"
         }
     }
 
