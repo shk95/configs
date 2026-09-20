@@ -4,6 +4,43 @@ kind: report
 spec: docs/work/unixlike/orbstack-sandbox/spec.md
 status: done
 
+## Verification boundary and disposition
+
+Clarified 2026-09-21 after the maintainer's review of the completion record.
+The observations below are those of 2026-09-20; this clarification adds no
+new machine experiment or runtime evidence.
+
+The machines were observed to share a kernel and to have distinct user
+namespaces with one-to-one UID mappings. AC2 verifies that this host declares
+no binfmt emulation or registration and refuses either when added to its
+configuration. AC7 records the service mask and absence of a `binfmt_misc`
+mount in the inspected machine. Neither observation tests the reach of a
+registration made directly inside a machine.
+
+No direct registration was attempted. Whether such a registration would
+affect another machine or OrbStack's container engine remains unverified;
+the spec's amended paragraph suggesting that it would stay in the machine
+is a hypothesis, not a result. Sharing a kernel and mapping UID 0 one to one
+do not establish that registrations propagate between machines.
+
+Disposition for this work: retain `done`, because AC1–AC10 do not require
+that experiment, and record its result as unknown rather than passed or
+failed. The existing `unixlike/orbstack-shared-kernel` invariant assigns
+emulation to OrbStack and explicitly does not depend on the answer. This
+clarification neither changes that rule nor certifies isolation against a
+manual registration.
+
+No separate investigation is started by this clarification. If a future
+change needs machine-owned emulation, relies on binfmt isolation, or finds
+that an OrbStack update changes the observed mask or namespace arrangement,
+the repository maintainer should decide a separate investigation before
+that change relies on either propagation or isolation. Start with read-only
+source and namespace inspection. If a direct registration experiment is
+needed, prepare its affected machines and container workloads, observations,
+cleanup and recovery procedure, and stop conditions for the maintainer's
+explicit approval. Its spec, report and execution issue belong to that new
+work; no such experiment is authorized by this completion record.
+
 ## Acceptance
 
 | ID | State | Evidence |
