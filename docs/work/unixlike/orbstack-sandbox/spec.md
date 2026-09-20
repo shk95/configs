@@ -5,6 +5,7 @@ date: 2026-09-20
 scope: unixlike
 status: approved
 review-by: 2026-10-31
+issue: #311
 
 Agreed with the maintainer in the session of 2026-09-20 on the Mac. Lane
 `orbstack` of `docs/work/roadmap.md`, order 7, taken beside order 6, which
