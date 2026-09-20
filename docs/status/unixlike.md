@@ -158,13 +158,34 @@ machine and the class now suppresses
 (`docs/work/unixlike/orbstack-sandbox/report.md`). `vm` (x86_64, a guest of
 VMware Workstation on a Linux or a Windows host,
 `docs/policy/decisions/unixlike/x86-64-guest-runs-on-vmware-workstation.md`)
-is composed and not installed: `nixos.vmware`
+is composed from `nixos.vmware`
 (`unixlike/modules/host/vmware.nix`), the `nixos.headless` class and the
 shared home alone. Its evidence is evaluation and a build of its toplevel on
-the x86_64 WSL host at c73b5dd; it has not been booted or installed, native
-runtime and activation are unavailable until the maintainer installs it, and
-its state version and account are provisional values of the inventory until
-then (`docs/work/unixlike/vmware-headless-guest/report.md`). `desktop`
+the x86_64 WSL host at c73b5dd. On 2026-09-21 the maintainer installed it from
+the 26.05 minimal medium in UEFI mode, using the account declared in the
+inventory and state version 26.05. The maintainer reported a successful
+installation and disk boot: native runtime answers `vm` and `vmware`, runs
+NixOS `26.11.20260916.b1b8759`, asks for a sudo password and lists no failed
+system unit. The host operating system is Windows; the installation source
+is abc5dae with a local inventory edit selecting the confirmed account and
+state version. The VMware tools and sshd services are active, and a
+password-only SSH attempt was refused while a public-key-only batch-mode
+login succeeded. Copied ISO channel profile links were removed and their
+absence verified. The generation recipe lists generation 1 as current, and
+flake metadata resolves the locked inputs. Native-runtime AC7 is verified.
+Activation: from the installation clone copied into the managed account's
+home, `just nixos-test` and `just nixos-switch` both succeed and report
+`5g17hsxn…-nixos-system-vm`; the running system and boot profile resolve to
+that path, with no failed system unit. Both reuse generation 1 because the
+configuration is unchanged. For rollback verification only, the same flake's
+host extended with the `rollback-check` system tag built `apbk2rh5…` and was
+activated as generation 2 with `--store-path` and `--no-reexec`; the latter
+avoids a re-exec that otherwise tries the absent `nixos-config` before
+activation. `just nixos-rollback` returned from 2 to 1, both system paths
+equalled the saved original, and no unit was failed. Generation 2 remains
+non-current. Test, switch and rollback are verified on this Windows-hosted
+guest; the work report is done
+(`docs/work/unixlike/vmware-headless-guest/report.md`). `desktop`
 (x86_64) is declared and not installed, the least that evaluates for its
 kind (`unixlike/modules/host/placeholder.nix`), with no account; its
 evidence is evaluation alone and its state version and account are
