@@ -30,9 +30,10 @@ Note that `nix flake check` passes with this bug present; see the entry below.
 ### `nix flake check` passes but the configuration is broken
 
 `nix flake check` validates the flake's shape and its standard outputs. It does
-not descend into `homeConfigurations` or `nixosConfigurations` — those are
-arbitrary attributes as far as it is concerned. Forcing the toplevel derivation
-is what actually evaluates them:
+not descend into `homeConfigurations` at all — an arbitrary attribute as far as
+it is concerned — and of a `nixosConfigurations` output it asks only that the
+toplevel is a derivation, which does not instantiate it. Forcing the toplevel
+derivation is what actually evaluates them:
 
 ```sh
 nix eval --raw '.#homeConfigurations."<name>".activationPackage.drvPath'

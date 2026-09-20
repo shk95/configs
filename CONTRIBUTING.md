@@ -443,8 +443,11 @@ also runs on Windows.
 
 ### Import the NixOS-WSL distribution
 
-`just nixos-build`, `just nixos-tarball` (needs sudo) and `just nixos-stage`
-produce the rootfs archive and copy it to a Windows drive;
+`just nixos-build <host>`, `just nixos-tarball <host>` (needs sudo) and
+`just nixos-stage` produce the rootfs archive and copy it to a Windows drive;
+`<host>` is the distribution's entry in the typed inventory of NixOS hosts,
+and a recipe given no name, or one the flake does not export, refuses and
+lists the names it does;
 `docs/reference/troubleshooting.md` records why `wsl --import` will not read it from
 `\\wsl.localhost\...`. Then, from PowerShell or CMD:
 
@@ -473,8 +476,10 @@ the cleanup step there removes.
 ### Update the registered NixOS-WSL distribution
 
 The distribution is updated in place, from a clone of this repository inside
-it, by the recipes in the `nixos-wsl` group. They refuse on any host but the
-NixOS one the flake names, and `just switch` refuses there, because it would
+it, by the `nixos-test`, `nixos-switch`, `nixos-rollback` and
+`nixos-generations` recipes. They act on the output named after the NixOS
+host they run on and refuse where the flake exports none of that name, and
+`just switch` refuses there, because it would
 put the standalone Ubuntu home over the one the system composes. Home Manager
 stays composed into the system, so a dotfile change is also a system switch
 and needs `sudo`
