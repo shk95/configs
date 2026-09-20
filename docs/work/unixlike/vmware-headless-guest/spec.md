@@ -5,6 +5,7 @@ date: 2026-09-20
 scope: unixlike
 status: approved
 review-by: 2026-11-15
+issue: #317
 
 Agreed with the maintainer in the session of 2026-09-20. Lane `vm` of
 `docs/work/roadmap.md`, its order 6; it carries issue 23 as the roadmap
