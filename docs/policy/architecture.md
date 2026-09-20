@@ -116,11 +116,14 @@ flake, mixed with facts about the Mac that created it and marked as
 overwritten, so the domain declares by hand what OrbStack needs from a guest
 and imports none of it: an output that read a path inside one machine would
 evaluate nowhere else, and evaluation is evidence only when it reaches every
-configuration. The machine is a container without a user namespace, so its
-root is root on the one kernel OrbStack runs for every machine and for its
-container engine, and what belongs to that kernel — the binfmt registry
-first — is not the machine's to change; the class registers nothing there
-and asserts it. Whether a machine is isolated from the Mac is the OrbStack
+configuration. The machine is a container whose UIDs are mapped one to one, so
+its root is UID 0 on the one kernel OrbStack runs for every machine and for
+its container engine, and emulation on that kernel is OrbStack's to provide:
+it masks the service that would register one inside a machine. The class
+registers nothing there and asserts it, without resting on how far a
+registration made in a machine would reach: each machine has a user namespace
+of its own, so probably no further than the machine, which was not tried.
+Whether a machine is isolated from the Mac is the OrbStack
 application's state, which the domain records in its procedure and does not
 declare.
 
