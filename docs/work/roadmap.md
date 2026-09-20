@@ -9,13 +9,13 @@ maintainer owns this file, and changing the order is a repository change.
 
 ## Lanes
 
-| Lane | Host | State on 2026-09-20 |
+| Lane | Host | State on 2026-09-21 |
 | --- | --- | --- |
 | darwin | aarch64-darwin | operational; generation 36 activated |
 | utm | aarch64 NixOS guest, UTM on the Mac | installed and headless, adopted in place on 2026-09-20; to become a graphical machine at order 10 |
 | orbstack | aarch64 NixOS OrbStack machine | an isolated sandbox on the Mac, switched to the flake on 2026-09-20; disposable, recreated by its procedure |
 | desktop | x86_64 NixOS, physical AMD APU desktop | declared as host `desktop`, evaluated only; not installed |
-| vm | x86_64 NixOS guest, VMware Workstation on a Linux and a Windows host | declared as host `vm`, evaluated only; not installed |
+| vm | x86_64 NixOS guest, VMware Workstation on a Linux and a Windows host | installed and headless on Windows; native runtime and test/switch/rollback verified on 2026-09-21; Linux-host runtime unverified |
 | kvm | x86_64 NixOS guest, QEMU/KVM on the NixOS desktop | not declared; order 12 declares the host |
 | hyperv | x86_64 NixOS guest, Hyper-V on the Windows host | not declared; order 13 declares the host |
 | wsl-standalone | x86_64 Ubuntu WSL, standalone Home Manager | operational; tagged `unixlike-v2026.08.31` |
@@ -32,8 +32,9 @@ maintainer owns this file, and changing the order is a repository change.
 | 4 | typed NixOS host inventory — done 2026-09-20 | unixlike |
 | — | judgement on the CI decision's `reopen-when` (before 5) — done 2026-09-20 | repository |
 | 5 | headless aarch64 guest on UTM — done 2026-09-20 | unixlike |
-| 6 | headless x86_64 guest on VMware Workstation | unixlike |
+| 6 | headless x86_64 guest on VMware Workstation — done 2026-09-21 | unixlike |
 | 7 | aarch64 OrbStack machine — done 2026-09-20 | unixlike |
+| — | judgement on the CI decision's `reopen-when`, now met by the installed x86_64 guest (before 8) — pending | repository |
 | 8 | shared GNOME Wayland profile and the Linux terminal layer | unixlike |
 | 9 | x86_64 desktop on an AMD APU | unixlike |
 | 10 | GNOME on the VM guests | unixlike |
@@ -64,20 +65,22 @@ and was adopted in place. The maintainer means it to be a graphical machine,
 which the headless spec left out on purpose: order 10 carries that, on the
 account, sshd and firewall this order wrote.
 
-Order 6, VMware (from #23, re-scoped). One guest profile, headless first, on
-both a Linux and a Windows host; GNOME waits for order 10. VMware Workstation
-is chosen so that one guest profile serves both hosts and carries the later
-GNOME stage: `vmwgfx` gives the guest 3D graphics, and on the Windows 10 host
-it runs over the Windows Hypervisor Platform beside WSL2. Hyper-V remains the
-lighter choice for a headless guest on a Windows-only host, but it is
-Windows-only, has no 3D guest graphics, and its enhanced session is xrdp;
-QEMU/KVM is the more native choice on a NixOS host. Neither is closed by
-this choice: orders 12 and 13 take them as lanes of their own beside the
-VMware guest. The decision record lands with order 6. The guest needs VMware Workstation and the Windows domain
-does not manage it: a Windows spec for the host install was planned here
-until 2026-09-20 and abandoned that day, because the domain reconciles what
-it deploys and VMware is a program the maintainer installs by hand. The
-installation is a step of the guest's own procedure.
+Order 6, VMware (from #23, re-scoped). One guest profile for Linux and
+Windows hosts, headless first; GNOME waits for order 10. The choice and its
+costs are recorded in
+`docs/policy/decisions/unixlike/x86-64-guest-runs-on-vmware-workstation.md`.
+On 2026-09-21 the maintainer completed installation, native runtime and
+test/switch/rollback verification on Windows; Linux-host runtime remains
+unverified. The completed report is
+`docs/work/unixlike/vmware-headless-guest/report.md`. VMware Workstation is
+installed by hand as part of the
+guest's procedure and is managed by neither configuration domain.
+
+The installed x86_64 guest now has an account, a service and a port, meeting
+the second `reopen-when` condition of
+`docs/policy/decisions/repository/ci-evidence-without-hosted-runners.md`.
+The maintainer's judgement is pending before order 8; recording that trigger
+adds no runner and changes no CI policy.
 
 Order 7, OrbStack. A host kind of its own, like WSL in having no boot loader
 and a host that injects its integration, so it reuses the flake-only rebuild

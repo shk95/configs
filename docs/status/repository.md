@@ -138,7 +138,10 @@ semantics across independent platform validation and release cycles.
   defect class a hosted runner would have caught occurs twice, or an installed
   x86_64 NixOS guest declares behaviour of its own for a VM test to assert
   (judged and restated on 2026-09-20, when the first NixOS outputs beside the
-  WSL one were placeholders).
+  WSL one were placeholders). The VMware guest was installed on Windows
+  and its native runtime and test/switch/rollback were verified on 2026-09-21,
+  so the second condition is now met. The maintainer's judgement is pending
+  before roadmap order 8; no CI policy has changed.
 - `docs/policy/decisions/repository/powershell-copied-per-domain.md`: reopens when both
   implementations show stable semantics that would justify a common
   component.

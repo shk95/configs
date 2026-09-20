@@ -591,9 +591,14 @@ nowhere else.
    and the account reaches it through sudo:
 
    ```sh
-   nixos-install --no-root-passwd --flake "path:./unixlike#utm"
+   nixos-install --no-root-passwd --no-channel-copy --flake "path:./unixlike#utm"
    nixos-enter --root /mnt -c 'passwd <account>'
    ```
+
+   `--no-channel-copy` leaves the live installer's channel available for
+   tools such as `nix-shell -p git`, but does not copy its profile into the
+   installed system. Turning channels off in the configuration does not
+   remove a profile an earlier installation command already copied.
 
    The account is created without a password
    (`unixlike/modules/account.nix`), so until `passwd` has run nothing can
@@ -605,8 +610,22 @@ nowhere else.
    (`unixlike/modules/sshd.nix`). From then on the guest is reached over ssh
    on port 22 with that key: sshd refuses a password, and the firewall admits
    no other port.
-6. Clone the repository inside the guest. `tool/doctor.sh unixlike` reports
-   whether the host is ready.
+6. Clone the repository into the installed account's home, and run the
+   recipes below from that clone as that account. If the installation used
+   uncommitted inventory corrections, preserve them when transferring the
+   clone; a fresh remote clone does not contain them. `just` is a Home
+   Manager package for the account, not a root login-shell tool; the recipes
+   invoke sudo where needed. `tool/doctor.sh unixlike` reports whether the
+   host is ready.
+
+If an earlier installation omitted `--no-channel-copy`, inspect the installed
+system for root's `.nix-channels`, `.nix-defexpr/channels` and the channel
+profile links under `/nix/var/nix/profiles/per-user/root`. Remove only those
+channel registration files and links after confirming what exists. When
+still in the ISO, these target paths are below `/mnt`; after booting the
+installed system, they are below `/`. Do not remove the system profile or
+Nix store paths. Re-running installation with `--no-channel-copy` prevents
+another copy but does not remove an existing one.
 
 The guest is updated in place from that clone with the recipes that act on
 the output named after the running host: `just nixos-test` builds the system
@@ -684,7 +703,7 @@ this output implies it.
    are `vm`:
 
    ```sh
-   nixos-install --no-root-passwd --flake "path:./unixlike#vm"
+   nixos-install --no-root-passwd --no-channel-copy --flake "path:./unixlike#vm"
    nixos-enter --root /mnt -c 'passwd <account>'
    ```
 
@@ -693,8 +712,10 @@ this output implies it.
    `~/.ssh/authorized_keys`; from then on the guest is reached over ssh on
    port 22 with that key, from the host or, on a bridged network, from the
    network the host is on.
-5. Clone the repository inside the guest. `tool/doctor.sh unixlike` reports
-   whether the host is ready.
+5. Put the repository in the installed account's home and run its recipes
+   as that account, as in the UTM procedure. Preserve any uncommitted
+   inventory corrections from the installation clone. `tool/doctor.sh
+   unixlike` reports whether the host is ready.
 
 The guest is updated in place with the same recipes as the UTM guest, and a
 guest that already runs NixOS is adopted in place by the steps stated there,
