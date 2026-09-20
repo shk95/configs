@@ -449,6 +449,7 @@ shape=$(nix eval --raw --impure --expr "
       networkd-on-eth0 = config.systemd.network.enable && !config.networking.dhcpcd.enable && !config.networking.useDHCP && config.systemd.network.networks.\"50-eth0\".matchConfig.Name == \"eth0\";
       orbstack-resolv-conf = !config.services.resolved.enable && config.environment.etc.\"resolv.conf\".source == \"/opt/orbstack-guest/etc/resolv.conf\";
       watchdog-off = config.systemd.services.\"systemd-logind\".serviceConfig.WatchdogSec == 0;
+      debugfs-mount-suppressed = builtins.elem \"sys-kernel-debug.mount\" config.systemd.suppressedSystemUnits;
       channels-off = !config.nix.channel.enable;
       no-binfmt = config.boot.binfmt.emulatedSystems == [] && config.boot.binfmt.registrations == {};
       no-certificate = config.security.pki.certificates == [];

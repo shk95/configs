@@ -139,6 +139,8 @@ Cut at the evidence lanes and scopes.
    evidence from inside the machine, the status, and the report's end; the
    roadmap row follows in `repository`.
 
+Amended 2026-09-20: corrections to what was read, and no criterion changes. The spec says the machine is an LXC container without a user namespace; that was inferred from its identity UID map. Read again the same day after a reviewing agent questioned it, each machine runs in a user namespace of its own that is not the kernel's initial one — two machines read side by side had different ones — with UIDs mapped one to one, so root in it is still UID 0 on the shared kernel, and a binfmt registration made in it would probably stay in it, which was not tried. The decision stands as written: the class registers nothing and asserts it. The machine was then deleted and created again the way the procedure says, isolated from the start, to read what had been left unread: OrbStack writes no certificate into a machine created isolated, and the rest of what it generates is the same; the debug file system mount fails under OrbStack's own image there too; and the first switch from the image exits non-zero whatever the class holds, because the reload of the message bus times out when its implementation changes between the image's release and the flake's, which a restart settles. The list of what the class leaves out also gains what restates a default or configures what is off: the `documentation.*` options, the dhcpcd options and `useDefaultShell`.
+
 ## Acceptance
 
 | ID | Criterion | Required lanes |
