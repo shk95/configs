@@ -41,7 +41,11 @@ common
 The current Unix-like outputs are:
 
 - `homeConfigurations.user1`: standalone Home Manager for WSL.
-- `nixosConfigurations.nixos`: NixOS-WSL configuration, headless.
+- `nixosConfigurations.<host>`: one per entry of the typed inventory of NixOS
+  hosts. `nixos` is the NixOS-WSL configuration, headless; `vm`, `utm`,
+  `orbstack` and `desktop` are declared and not installed, and have been
+  evaluated only (`docs/status/unixlike.md`). The `nixos-eval`,
+  `nixos-build` and `nixos-tarball` recipes take the host's name.
 - `darwinConfigurations.shk-macbook`: nix-darwin configuration.
 
 Graphical Unix-like applications are a separate Home Manager composition

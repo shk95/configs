@@ -189,10 +189,10 @@ fi
 if grep -Rqs --include='*.nix' 'nixosConfigurations' "$unixlike_flake/flake.nix" "$unixlike_flake/modules" 2>/dev/null; then
   found=1
   if [ -r /etc/os-release ] && grep -q '^ID=nixos' /etc/os-release; then
-    ok "nixosConfigurations — build and switch here (just nixos-test, then just nixos-switch)"
+    ok "nixosConfigurations — build and switch the output named after this host (just nixos-test, then just nixos-switch)"
   else
-    warn "nixosConfigurations — build here, but not switch" \
-         "nixos-rebuild switch needs the target host. The closure still builds and is still verified; only activation is out of reach."
+    warn "nixosConfigurations — build here (just nixos-build <host>), but not switch" \
+         "nixos-rebuild switch needs the target host. A closure for this platform still builds and is still verified; one for another platform is evaluated only."
   fi
 fi
 
