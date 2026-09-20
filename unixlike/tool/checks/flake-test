@@ -332,11 +332,13 @@ printf '→ refuses a NixOS configuration with channels on\n'
 failed_assertions "$nixos" '{lib, ...}: { nix.channel.enable = lib.mkForce true; }'
 expect_refusal 'INV unixlike/nixos-no-channel' 'nix.channel.enable = true'
 
-printf '→ the real NixOS flavour has channels off and searches the flake alone\n'
-failed_assertions "$nixos" '{ }'
-expect_clean 'the NixOS flavour'
-nix_path=$(nix eval --raw "path:$repo#$nixos.config.nix.nixPath" --apply 'builtins.concatStringsSep " "')
-[ "$nix_path" = "nixpkgs=flake:nixpkgs" ] ||
-  fail "nixosConfigurations.$wsl_host searches '$nix_path', expected nixpkgs=flake:nixpkgs alone"
+printf '→ every real NixOS host has channels off and searches the flake alone\n'
+for host in $nixos_hosts; do
+  failed_assertions "nixosConfigurations.\"$host\"" '{ }'
+  expect_clean "the NixOS host $host"
+  nix_path=$(nix eval --raw "path:$repo#nixosConfigurations.\"$host\".config.nix.nixPath" --apply 'builtins.concatStringsSep " "')
+  [ "$nix_path" = "nixpkgs=flake:nixpkgs" ] ||
+    fail "nixosConfigurations.$host searches '$nix_path', expected nixpkgs=flake:nixpkgs alone"
+done
 
 echo "✓ flake schema fixtures behave"

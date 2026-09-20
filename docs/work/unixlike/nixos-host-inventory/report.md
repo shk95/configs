@@ -8,14 +8,14 @@ status: pending
 
 | ID | State | Evidence |
 | --- | --- | --- |
-| AC1 | pending | |
-| AC2 | pending | |
-| AC3 | pending | |
-| AC4 | pending | |
-| AC5 | pending | |
-| AC6 | pending | |
-| AC7 | pending | |
-| AC8 | pending | |
-| AC9 | pending | |
-| AC10 | pending | |
+| AC1 | verified | Evaluation at e7f7b8f: `unixlike/tool/checks/flake-test` accepts the inventory, whose entries are `desktop`, `nixos`, `orbstack`, `utm` and `vm`, each with `system`, `kind`, `hypervisor`, `user` and `stateVersion`, and `nixosConfigurations` exports exactly those names. A search of the tree outside `docs/work/` finds `identity.wsl.hostName` only in the dated text of `nixos-wsl-system-layer-ownership.md`, which its note of 2026-09-19 corrects. |
+| AC2 | verified | Evaluation, `unixlike/tool/checks/flake-test` at e7f7b8f, in the unit tagged `INV unixlike/nixos-host-inventory`: a fixture host beside the inventory's is accepted for each of the five combinations and refused, with the message that names `identity.nixosHosts.fixture-host`, for a `vm` without a hypervisor, a hypervisor on `wsl`, on `desktop` and on `orbstack`, `vmware` on aarch64, `utm` on x86_64, `wsl` and `desktop` on aarch64, `orbstack` on x86_64, and a `wsl` host under another account; a Darwin platform, a kind and a hypervisor outside the enums are refused with the option's type error, and a host without a state version with the missing-value error. Mutation runs at the first version of the schema commit, each restored and each failing the unit: dropping the combination rule, dropping the account rule, making `utm` legal on x86_64, and dropping the host name from the message. |
+| AC3 | verified | Evaluation, same unit at e7f7b8f: for each of the five hosts `networking.hostName` is the entry's name, `system.stateVersion` is the entry's, and the output's platform is the entry's `system`. |
+| AC4 | verified | Evaluation on 2026-09-19 and 2026-09-20: the `drvPath` of `nixosConfigurations.nixos` toplevel, of `homeConfigurations.user1` activation package and of the Darwin system toplevel, taken at 75f4147 before the work, are each identical at d75b2d8 and at e7f7b8f (`4flr7mgw…-nixos-system-nixos`, `l5k66knp…-home-manager-generation`, `bifca69m…-darwin-system`). |
+| AC5 | verified | Evaluation, `unixlike/tool/checks/test` at e7f7b8f on the x86_64 WSL host, exit 0: all five NixOS outputs `eval ✓`, `orbstack` and `utm` reported as `build — targets aarch64-linux`. `eval-coverage-test` proves that a NixOS output whose toplevel is a derivation that does not instantiate — which `nix flake check` passes — is reported `eval ✗` by name beside a sound one and fails the run. |
+| AC6 | verified | Evaluation at e7f7b8f: `tool/checks/composition` (43 feature files name no host and force no value) and `tool/checks/import-order` (the same toplevels in either order) pass inside `unixlike/tool/checks/test`. |
+| AC7 | verified | Evaluation, `unixlike/tool/checks/eval-coverage-test` at e7f7b8f: with a two-host fixture for the running platform and `CHECKS_NIXOS_HOST=this-host` the check builds `this-host` and skips `other-host`; with no NixOS host it builds neither. A mutation that builds every NixOS output on a NixOS host fails the unit, restored. On the WSL host the real run builds no NixOS output. |
+| AC8 | pending | Native runtime on the x86_64 Ubuntu WSL host at 3f66532: `just nixos-eval` refuses with `Name the NixOS host: …`; `just nixos-eval laptop` refuses listing the exported names; `just nixos-eval nixos` and `just nixos-eval utm` print their derivations; `just nixos-tarball vm` refuses a host that is not of kind `wsl`; an argument carrying shell syntax is refused as an unknown name and runs nothing; `just nixos-generations` refuses because the host is not NixOS. Unavailable here and owed by the maintainer inside the NixOS-WSL distribution: `just nixos-generations` acting on `nixos`, which shows `_nixos-host` selecting the output named after the running host. |
+| AC9 | verified | Build on the x86_64 Ubuntu WSL host at e7f7b8f: `just nixos-build nixos` printed `/nix/store/ac7p0dch…-nixos-system-nixos-26.11.20260916.b1b8759`. |
+| AC10 | pending | To read at e7f7b8f: `docs/policy/decisions/unixlike/nixos-hosts-declared-in-typed-inventory.md`, `docs/policy/invariants/unixlike/nixos-host-inventory.md`, the NixOS paragraphs of `docs/status/unixlike.md`. `README.md` and `CONTRIBUTING.md` wait for the `repository` increment. The row waits for that increment and for the repository maintainer's review. |
 | AC11 | pending | |
