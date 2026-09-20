@@ -657,6 +657,51 @@ generations hold no account this flake declares and recreate theirs without
 a password. To exercise `just nixos-rollback`, make a second generation of
 this flake first.
 
+### Install the VMware guest
+
+The x86_64 guest `vm` runs under VMware Workstation on a Linux or a Windows
+host, and the procedure is the same on both
+(`docs/policy/decisions/unixlike/x86-64-guest-runs-on-vmware-workstation.md`).
+It is the UTM procedure above with `vm` for the output and the differences
+below. Everything here is the maintainer's to run: an installation activates
+a system, and neither evaluation nor the build the x86_64 hosts can make of
+this output implies it.
+
+1. Install VMware Workstation on the host by hand. No domain of this
+   repository installs, configures or checks it.
+2. Create a machine for a 64-bit Linux guest that boots the x86_64 minimal
+   ISO, with the firmware type set to UEFI and secure boot off, before the
+   first start: systemd-boot does not start from the BIOS firmware and is
+   not signed. The disk controller and the network type are free — the
+   initrd finds a SCSI, SATA or NVMe disk
+   (`unixlike/modules/host/vmware.nix`), and NAT and a bridged network both
+   hand out an address. The console is the machine's own screen; there is no
+   serial device to add.
+3. Follow steps 2 to 4 of the UTM procedure in the installer, with two
+   changes. The disk is not `/dev/vda`: read its name from `lsblk`
+   (`/dev/sda` on a SCSI or SATA controller, `/dev/nvme0n1` with partitions
+   `p1` and `p2` on NVMe). The entry to confirm and the output to install
+   are `vm`:
+
+   ```sh
+   nixos-install --no-root-passwd --flake "path:./unixlike#vm"
+   nixos-enter --root /mnt -c 'passwd <account>'
+   ```
+
+4. Shut the guest down, disconnect the ISO and start it. Log in on the
+   machine's screen with the password and put a public key in
+   `~/.ssh/authorized_keys`; from then on the guest is reached over ssh on
+   port 22 with that key, from the host or, on a bridged network, from the
+   network the host is on.
+5. Clone the repository inside the guest. `tool/doctor.sh unixlike` reports
+   whether the host is ready.
+
+The guest is updated in place with the same recipes as the UTM guest, and a
+guest that already runs NixOS is adopted in place by the steps stated there,
+with `vm` for the output and the machine's screen for the console. The same
+disk moved to the other host is the same guest; a second installation on
+the other host is a second machine that answers to the same name.
+
 ### Create the OrbStack machine
 
 The aarch64 OrbStack machine on the Mac is a sandbox: isolated, disposable,
