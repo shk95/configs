@@ -73,7 +73,10 @@ a parameter (`INV windows/selected-precondition-evaluated`). Observed on
 build 19044 that day with the recorded selection of seven features: the
 traced check made no call to the evaluator before the change and seven
 after it, and the PowerToys precondition is satisfied on that host, so the
-check's answer did not change there.
+check's answer did not change there. Since the same day a precondition of a
+type the domain does not evaluate, or missing a field its type needs, is
+refused when the manifest loads and no longer first on the host that selects
+its feature (`INV windows/precondition-declared`); `Appx` is the only type.
 
 ## Windows 10 support boundary
 
