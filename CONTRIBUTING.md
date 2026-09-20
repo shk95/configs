@@ -661,8 +661,9 @@ this flake first.
 
 The aarch64 OrbStack machine on the Mac is a sandbox: isolated, disposable,
 and brought under this flake's `orbstack` output after OrbStack has created
-it. Creating, switching and deleting it change a host and are the
-maintainer's to run; evaluation and a build imply none of them.
+it. Creating, isolating, restarting, switching, updating, rolling back and
+deleting it all change a host and are the maintainer's to run; evaluation and
+a build imply none of them.
 
 1. Create the machine isolated, under the inventory's host name and from the
    image whose release the entry's `stateVersion` carries:
@@ -671,6 +672,10 @@ maintainer's to run; evaluation and a build imply none of them.
    `orb restart orbstack`. Isolated, the machine mounts nothing of the Mac
    and gets no ssh agent; the network stays. Isolation is the OrbStack
    application's state and is not declared here.
+   The account OrbStack creates is named after the Mac's, and the first
+   switch keeps only the account the entry's `user` names, with immutable
+   users: where the two differ, create the machine with `--user <user>`, or
+   the switch removes the account OrbStack enters as.
 2. Enter it with `orb -m orbstack`. The image has flakes off, a `nixos`
    channel, and neither `git` nor `just`. Clone the repository and remove
    the channel while the command still exists:
@@ -702,15 +707,17 @@ From then on the machine is updated in place from its clone with
 generation of this flake: the image's generations hold OrbStack's own
 configuration. `/etc/nixos` is left in place on purpose. Nothing reads it —
 the search path names the flake's nixpkgs alone
-(`INV unixlike/nixos-no-channel`) — and it is what the next step compares.
+(`INV unixlike/nixos-no-channel`) — and it is the old side of the comparison
+below.
 
-After an OrbStack update, read `/etc/nixos/orbstack.nix` and
-`/etc/nixos/configuration.nix` in a newly created machine against
+After an OrbStack update, create a new machine and compare its
+`/etc/nixos/orbstack.nix` and `/etc/nixos/configuration.nix` with the ones
+kept in this machine, then carry any difference that OrbStack needs into
 `unixlike/modules/host/orbstack.nix` and `unixlike/modules/account.nix`.
 OrbStack generates those files outside the flake and says it will overwrite
 them; the class declares by hand what they hold that OrbStack needs, and only
-this reading finds a change. What the class leaves out is listed in its
-header.
+this reading finds a change. What the class leaves out on purpose is listed
+in its header, so that it is not read as drift.
 
 Recovery is `orb delete orbstack` and this procedure again, which takes
 minutes; nothing in the machine is meant to be kept.
