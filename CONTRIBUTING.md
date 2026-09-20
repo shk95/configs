@@ -681,9 +681,12 @@ a build imply none of them.
    the channel while the command still exists:
 
    ```sh
-   nix-shell -p git --run 'git clone https://github.com/shk95/configs.git ~/configs'
+   nix-shell -p git --run 'git clone -b <ref> https://github.com/shk95/configs.git ~/configs'
    sudo nix-channel --remove nixos
    ```
+
+   `<ref>` is the branch or tag to switch from. A plain clone checks out
+   `master`, which carries a host only once a promotion has brought it there.
 
 3. Make the first switch by naming the output; `nixos-rebuild` turns flakes
    on for itself:
@@ -693,13 +696,23 @@ a build imply none of them.
    sudo nixos-rebuild switch --flake "path:./unixlike#orbstack"
    ```
 
-   OrbStack's agent, not sshd, is the way in, so the session survives the
-   switch. Open a second `orb -m orbstack` before closing the first.
+   The command exits with status 4 and that is expected from the image: its
+   release and the flake's use different message bus implementations, and the
+   reload of `dbus-broker.service` times out. The system is activated all the
+   same, and the restart below settles it. OrbStack's agent, not sshd, is the
+   way in, so the session survives the switch.
 4. `orb restart orbstack` from the Mac, then read that the machine came back
    whole: `systemctl is-system-running` answers `running`,
    `systemd-binfmt.service` is still masked under `/run/systemd/system`, and
    no `binfmt_misc` is mounted. The kernel is shared by every OrbStack
    machine and by OrbStack's Docker (`INV unixlike/orbstack-shared-kernel`).
+   Then remove what the image's channel left under root, which every later
+   rebuild otherwise warns about:
+
+   ```sh
+   sudo rm -rf /root/.nix-defexpr/channels
+   sudo rm -f /nix/var/nix/profiles/per-user/root/channels /nix/var/nix/profiles/per-user/root/channels-*-link
+   ```
 
 From then on the machine is updated in place from its clone with
 `just nixos-test`, `just nixos-switch`, `just nixos-generations` and

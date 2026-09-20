@@ -121,8 +121,9 @@ its root is UID 0 on the one kernel OrbStack runs for every machine and for
 its container engine, and emulation on that kernel is OrbStack's to provide:
 it masks the service that would register one inside a machine. The class
 registers nothing there and asserts it, without resting on how far a
-registration made in a machine would reach, which was not determined from
-inside one. Whether a machine is isolated from the Mac is the OrbStack
+registration made in a machine would reach: each machine has a user namespace
+of its own, so probably no further than the machine, which was not tried.
+Whether a machine is isolated from the Mac is the OrbStack
 application's state, which the domain records in its procedure and does not
 declare.
 
