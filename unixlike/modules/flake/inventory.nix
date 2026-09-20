@@ -37,9 +37,11 @@ _: {
         stateVersion = "25.11";
       };
 
-      # Declared and not yet installed (modules/host/placeholder.nix). Each
-      # state version is the pinned nixpkgs release, which the order that
-      # installs the host confirms or corrects before anything is activated.
+      # Composed (modules/host/vmware.nix and the headless class) and not yet
+      # installed. The account and the state version stay provisional: the
+      # maintainer confirms or corrects both before anything is installed,
+      # and the state version is the release of the installation medium's
+      # NixOS, not of the pinned nixpkgs if the two differ.
       vm = {
         system = "x86_64-linux";
         kind = "vm";
@@ -47,6 +49,10 @@ _: {
         user = "user1";
         stateVersion = "26.11";
       };
+
+      # Declared and not yet installed (modules/host/placeholder.nix). The
+      # state version is the pinned nixpkgs release, which the order that
+      # installs the host confirms or corrects before anything is activated.
       desktop = {
         system = "x86_64-linux";
         kind = "desktop";
