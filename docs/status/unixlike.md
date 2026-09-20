@@ -114,12 +114,16 @@ that a host lane names evaluates (`INV unixlike/nixos-host-inventory`).
 `unixlike/tool/checks/flake-test` proves each host answers to its entry's
 name (#191). `aarch64-linux` is an evaluated system and is not built here
 (`docs/work/unixlike/nixos-host-inventory/report.md`, done).
-Four more hosts are declared and not installed — `vm` (x86_64, VMware),
-`utm` (aarch64, UTM), `orbstack` (aarch64) and `desktop` (x86_64) — each the
-least that evaluates for its kind (`unixlike/modules/host/placeholder.nix`).
-Their evidence is evaluation alone: none has been built, booted or
-installed, and their state versions and accounts are provisional values of
-the inventory that the installing order confirms; no account is created. The
+Four more hosts are declared and not installed. `utm` (aarch64, UTM) is
+composed from `nixos.utm` (`unixlike/modules/host/utm.nix`), the
+`nixos.headless` class — the entry's account without a tracked password,
+key-only sshd on 22 and a firewall that opens that port alone
+(`INV unixlike/headless-key-only`) — and the shared home alone. `vm` (x86_64,
+VMware), `orbstack` (aarch64) and `desktop` (x86_64) are each the least that
+evaluates for its kind (`unixlike/modules/host/placeholder.nix`) and create
+no account. The evidence for all four is evaluation alone: none has been
+built, booted or installed, and their state versions and accounts are
+provisional values of the inventory that the installing order confirms. The
 Nix daemon settings and the no-channel rule are in `modules.nixos.shared`
 and reach every NixOS host, the registered distribution included.
 GUI options are set off explicitly; WSLg is the deferred item of
