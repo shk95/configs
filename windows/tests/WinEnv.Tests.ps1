@@ -1120,6 +1120,62 @@ Describe 'feature model' {
         $declared | Should -Contain $manifest.Terminal.Feature
     }
 
+    It 'INV windows/precondition-declared: refuses an unknown precondition type and a missing field when the manifest loads' {
+        $valid = @{ Type = 'Appx'; Name = 'Vendor.Palette'; Message = 'repair the vendor suite before applying' }
+        $manifestWith = {
+            param([hashtable] $Precondition)
+            New-FeatureManifest -Override @{
+                Features = @(
+                    @{ Id = 'core'; Name = 'Core'; Required = $true },
+                    @{ Id = 'font'; Name = 'Font' },
+                    @{ Id = 'zellij'; Name = 'Zellij' },
+                    @{ Id = 'terminal'; Name = 'Terminal'; Requires = @('font', 'zellij'); Preconditions = @($Precondition) }
+                )
+            }
+        }
+
+        (Test-Throws { Assert-WinEnvFeatureModel -Manifest (& $manifestWith $valid) }) | Should -Be $false
+
+        $message = ''
+        $unknownType = $valid.Clone(); $unknownType.Type = 'Ouija'
+        try { Assert-WinEnvFeatureModel -Manifest (& $manifestWith $unknownType) } catch { $message = $_.Exception.Message }
+        $message | Should -Match "INV windows/precondition-declared: Feature 'terminal' declares a precondition of unknown type 'Ouija'"
+
+        foreach ($field in 'Message', 'Name') {
+            $message = ''
+            $missing = $valid.Clone(); $missing.Remove($field)
+            try { Assert-WinEnvFeatureModel -Manifest (& $manifestWith $missing) } catch { $message = $_.Exception.Message }
+            $message | Should -Match "declares a Appx precondition without $field"
+            $message = ''
+            $blank = $valid.Clone(); $blank[$field] = ' '
+            try { Assert-WinEnvFeatureModel -Manifest (& $manifestWith $blank) } catch { $message = $_.Exception.Message }
+            $message | Should -Match "declares a Appx precondition without $field"
+        }
+    }
+
+    It 'INV windows/precondition-declared: the repository manifest loads, and every declared type has an evaluator arm' {
+        $manifest = Get-WinEnvManifest -Path (Join-Path $desiredStateRoot 'manifest.json')
+        @($manifest.Features | Where-Object { $_.ContainsKey('Preconditions') }).Count | Should -BeGreaterThan 0
+
+        # A type the loader accepts and the evaluator has no arm for would be
+        # refused on the host instead, which is what this rule exists to stop.
+        $module = Join-Path $repositoryRoot 'src\WinEnv.psm1'
+        $tokens = $null
+        $errors = $null
+        $ast = [System.Management.Automation.Language.Parser]::ParseFile($module, [ref]$tokens, [ref]$errors)
+        $evaluator = @($ast.FindAll({
+                    param($node)
+                    $node -is [System.Management.Automation.Language.FunctionDefinitionAst] -and
+                    $node.Name -eq 'Test-WinEnvFeaturePrecondition'
+                }, $true))
+        $evaluator.Count | Should -Be 1
+        $switch = @($evaluator[0].FindAll({ param($node) $node -is [System.Management.Automation.Language.SwitchStatementAst] }, $true))
+        $switch.Count | Should -Be 1
+        $arms = @($switch[0].Clauses | ForEach-Object { $_.Item1.Extent.Text.Trim("'") } | Sort-Object)
+        $declared = @(& (Get-Module WinEnv) { $script:WinEnvPreconditionField.Keys } | Sort-Object)
+        ($arms -join ',') | Should -Be ($declared -join ',')
+    }
+
     It 'INV windows/feature-owns-every-item: rejects a deployable item that names no feature' {
         $manifest = New-FeatureManifest -Override @{
             ManagedFiles = @(@{ Id = 'orphan'; Source = 'files/orphan.txt'; Target = 'orphan'; Compare = 'Text'; Parser = 'Text' })
@@ -5438,6 +5494,55 @@ Describe 'check entry points' {
 
     It 'INV windows/check-exit-contract: turns a missing prerequisite into a failure when native evidence is required' {
         Invoke-BootstrapCheck -RequireNative '1' | Should -Be 1
+    }
+
+    It 'INV windows/selected-precondition-evaluated: no loop rebinds a parameter of the script block it runs in' {
+        # PowerShell names are case-insensitive and a parameter keeps its type
+        # constraint, so `foreach ($feature in ...)` under a `[string[]]
+        # $Feature` parameter converts every item to a string array and the
+        # body reads properties that are no longer there. setup.ps1 skipped
+        # every feature's preconditions that way. The check past the
+        # prerequisites needs a Windows host, so the rule is held by reading
+        # every script of the domain.
+        $windowsRoot = $repositoryRoot
+        $scripts = @(Get-ChildItem -LiteralPath $windowsRoot -Recurse -File -Include '*.ps1', '*.psm1' |
+                Where-Object { $_.FullName -notmatch '[\\/](tests|desired)[\\/]' })
+        $scripts.Count | Should -BeGreaterThan 5
+
+        $collisions = foreach ($script in $scripts) {
+            $tokens = $null
+            $errors = $null
+            $ast = [System.Management.Automation.Language.Parser]::ParseFile($script.FullName, [ref]$tokens, [ref]$errors)
+            foreach ($loop in $ast.FindAll({ param($node) $node -is [System.Management.Automation.Language.ForEachStatementAst] }, $true)) {
+                $scope = $loop.Parent
+                while ($scope -and $scope -isnot [System.Management.Automation.Language.ScriptBlockAst]) { $scope = $scope.Parent }
+                if (-not $scope -or -not $scope.ParamBlock) { continue }
+                $parameters = @($scope.ParamBlock.Parameters | ForEach-Object { $_.Name.VariablePath.UserPath })
+                if ($parameters -contains $loop.Variable.VariablePath.UserPath) {
+                    '{0}:{1} ${2}' -f $script.Name, $loop.Extent.StartLineNumber, $loop.Variable.VariablePath.UserPath
+                }
+            }
+        }
+        (@($collisions) -join '; ') | Should -Be ''
+
+        # And the loop that evaluates preconditions hands the evaluator the
+        # item it iterates over, once.
+        $setup = Join-Path $repositoryRoot 'tools\setup.ps1'
+        $tokens = $null
+        $errors = $null
+        $ast = [System.Management.Automation.Language.Parser]::ParseFile($setup, [ref]$tokens, [ref]$errors)
+        $calls = @($ast.FindAll({
+                    param($node)
+                    $node -is [System.Management.Automation.Language.CommandAst] -and
+                    $node.GetCommandName() -eq 'Test-WinEnvFeaturePrecondition'
+                }, $true))
+        $calls.Count | Should -Be 1
+        $loop = $calls[0].Parent
+        while ($loop -and $loop -isnot [System.Management.Automation.Language.ForEachStatementAst]) { $loop = $loop.Parent }
+        ($null -ne $loop) | Should -Be $true
+        $loop.Condition.Extent.Text | Should -Be '$manifest.Features'
+        $arguments = $calls[0].CommandElements | ForEach-Object { $_.Extent.Text }
+        $arguments[([array]::IndexOf($arguments, '-Feature') + 1)] | Should -Be $loop.Variable.Extent.Text
     }
 
     It 'INV windows/check-exit-contract: ranks every unverified evidence category exactly once' {

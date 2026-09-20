@@ -38,6 +38,14 @@ $script:DefaultAppxQuery = {
 }
 $script:DefaultRegistrationQuery = { param([string] $PackageId) Get-WinGetRegistration -Id $PackageId }
 
+# INV windows/precondition-declared — the precondition types this module
+# evaluates, and what each must declare beyond Type and Message. A type that
+# is not a key here is refused when the manifest loads, the way a parser or a
+# comparison mode is, and Test-WinEnvFeaturePrecondition has an arm for each.
+$script:WinEnvPreconditionField = @{
+    Appx = @('Name')
+}
+
 # The three host observations the default terminal delegation is decided
 # from, as seams for the same reason: the documented condition is an OS
 # build and revision plus an application version, no single host can be put
@@ -196,6 +204,25 @@ function Assert-WinEnvFeatureModel {
     foreach ($feature in $Manifest.Features) {
         if ($feature.ContainsKey('Lifecycle') -and [string]$feature.Lifecycle -ne 'PowerToys') {
             throw "Feature '$($feature.Id)' declares unknown lifecycle '$($feature.Lifecycle)'."
+        }
+    }
+
+    # INV windows/precondition-declared — refused here, when the manifest
+    # loads, and not first on the host that selects the feature: the
+    # evaluator throws on an unknown type only when it reaches one, and until
+    # 2026-09-20 it reached none (INV windows/selected-precondition-evaluated).
+    foreach ($feature in $Manifest.Features) {
+        if (-not $feature.ContainsKey('Preconditions')) { continue }
+        foreach ($precondition in $feature.Preconditions) {
+            $type = [string]$precondition.Type
+            if (-not $script:WinEnvPreconditionField.ContainsKey($type)) {
+                throw "INV windows/precondition-declared: Feature '$($feature.Id)' declares a precondition of unknown type '$type'."
+            }
+            foreach ($field in @('Message') + $script:WinEnvPreconditionField[$type]) {
+                if (-not $precondition.ContainsKey($field) -or [string]::IsNullOrWhiteSpace([string]$precondition[$field])) {
+                    throw "INV windows/precondition-declared: Feature '$($feature.Id)' declares a $type precondition without $field."
+                }
+            }
         }
     }
 

@@ -63,6 +63,21 @@ with no host, so the `Windows tests` step of a pre-push no longer shows fixture
 pushes, `What if:` lines or fixture glyph lines, and the pull-request body no
 longer carries a disclaimer about them.
 
+Until 2026-09-20 no feature precondition was evaluated by the check or by
+Apply: the loop in `windows/tools/setup.ps1` iterated with `$feature` under
+that script's `[string[]] $Feature` parameter, which turned every declared
+feature into a string, so no Id matched the selection. The evaluator's own
+fixtures passed throughout, because they call it directly. The loop variable
+is renamed, and a fixture reads every Windows script for a loop that rebinds
+a parameter (`INV windows/selected-precondition-evaluated`). Observed on
+build 19044 that day with the recorded selection of seven features: the
+traced check made no call to the evaluator before the change and seven
+after it, and the PowerToys precondition is satisfied on that host, so the
+check's answer did not change there. Since the same day a precondition of a
+type the domain does not evaluate, or missing a field its type needs, is
+refused when the manifest loads and no longer first on the host that selects
+its feature (`INV windows/precondition-declared`); `Appx` is the only type.
+
 ## Windows 10 support boundary
 
 This table is the evidence record `INV windows/support-boundary-named`
