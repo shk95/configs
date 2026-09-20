@@ -37,17 +37,15 @@ _: {
         stateVersion = "25.11";
       };
 
-      # Composed (modules/host/vmware.nix and the headless class) and not yet
-      # installed. The account and the state version stay provisional: the
-      # maintainer confirms or corrects both before anything is installed,
-      # and the state version is the release of the installation medium's
-      # NixOS, not of the pinned nixpkgs if the two differ.
+      # Installed under VMware Workstation on Windows; installation and
+      # test/switch/rollback were confirmed on 2026-09-21. The state version
+      # follows the 26.05 installation medium, not the pinned nixpkgs release.
       vm = {
         system = "x86_64-linux";
         kind = "vm";
         hypervisor = "vmware";
-        user = "user1";
-        stateVersion = "26.11";
+        user = "shk";
+        stateVersion = "26.05";
       };
 
       # Declared and not yet installed (modules/host/placeholder.nix). The
