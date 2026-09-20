@@ -36,7 +36,8 @@
 #   nixos.wsl                  NixOS hosts of kind wsl only
 #   nixos.headless             NixOS hosts that boot themselves and have no display
 #   nixos.utm                  NixOS guests under UTM only
-#   nixos.vmware, nixos.orbstack, nixos.desktop
+#   nixos.orbstack             NixOS machines under OrbStack only
+#   nixos.vmware, nixos.desktop
 #                              their kind, a placeholder until it is installed
 #   darwin.system              the nix-darwin system layer only
 #

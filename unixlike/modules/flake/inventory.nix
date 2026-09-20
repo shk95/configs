@@ -27,6 +27,16 @@ _: {
         stateVersion = "25.11";
       };
 
+      # Composed from modules/host/orbstack.nix. The state version is the
+      # release of the OrbStack image the machine was created from, 25.11,
+      # read in the machine on 2026-09-20.
+      orbstack = {
+        system = "aarch64-linux";
+        kind = "orbstack";
+        user = "shk";
+        stateVersion = "25.11";
+      };
+
       # Declared and not yet installed (modules/host/placeholder.nix). Each
       # state version is the pinned nixpkgs release, which the order that
       # installs the host confirms or corrects before anything is activated.
@@ -35,12 +45,6 @@ _: {
         kind = "vm";
         hypervisor = "vmware";
         user = "user1";
-        stateVersion = "26.11";
-      };
-      orbstack = {
-        system = "aarch64-linux";
-        kind = "orbstack";
-        user = "shk";
         stateVersion = "26.11";
       };
       desktop = {
