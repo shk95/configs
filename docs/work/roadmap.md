@@ -82,6 +82,11 @@ installation is a step of the guest's own procedure.
 Order 7, OrbStack. A host kind of its own, like WSL in having no boot loader
 and a host that injects its integration, so it reuses the flake-only rebuild
 that order 3 settles.
+It was taken on 2026-09-20 beside order 6, which another session holds: the
+two share no outcome — the VMware guest reuses the headless class order 5
+wrote, and an OrbStack machine takes none of it, because OrbStack's agent is
+the way in and sshd is off. The machine is an isolated sandbox with no
+graphical use planned.
 
 Orders 8 to 11 carry #19 and #42 (8), #20 (9), and #24 and #25 (11). The
 deferred item carries #21.
