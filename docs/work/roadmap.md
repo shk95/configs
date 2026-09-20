@@ -16,6 +16,8 @@ maintainer owns this file, and changing the order is a repository change.
 | orbstack | aarch64 NixOS OrbStack machine | declared as host `orbstack`, evaluated only; not installed |
 | desktop | x86_64 NixOS, physical AMD APU desktop | declared as host `desktop`, evaluated only; not installed |
 | vm | x86_64 NixOS guest, VMware Workstation on a Linux and a Windows host | declared as host `vm`, evaluated only; not installed |
+| kvm | x86_64 NixOS guest, QEMU/KVM on the NixOS desktop | not declared; order 12 declares the host |
+| hyperv | x86_64 NixOS guest, Hyper-V on the Windows host | not declared; order 13 declares the host |
 | wsl-standalone | x86_64 Ubuntu WSL, standalone Home Manager | operational; tagged `unixlike-v2026.08.31` |
 | wsl-nixos | x86_64 NixOS-WSL | activated (generation 4); updated in place since that day |
 
@@ -36,6 +38,8 @@ maintainer owns this file, and changing the order is a repository change.
 | 9 | x86_64 desktop on an AMD APU | unixlike |
 | 10 | GNOME on the VM guests | unixlike |
 | 11 | installation and deployment (disko, nixos-anywhere, deploy-rs) | unixlike |
+| 12 | x86_64 guest on QEMU/KVM, on the NixOS desktop | unixlike |
+| 13 | x86_64 guest on Hyper-V, on the Windows host | unixlike |
 | deferred | WSLg on NixOS-WSL | unixlike |
 
 ## What each order carries
@@ -67,8 +71,9 @@ GNOME stage: `vmwgfx` gives the guest 3D graphics, and on the Windows 10 host
 it runs over the Windows Hypervisor Platform beside WSL2. Hyper-V remains the
 lighter choice for a headless guest on a Windows-only host, but it is
 Windows-only, has no 3D guest graphics, and its enhanced session is xrdp;
-QEMU/KVM is the more native choice on a NixOS host. The decision record
-lands with order 6. The guest needs VMware Workstation and the Windows domain
+QEMU/KVM is the more native choice on a NixOS host. Neither is closed by
+this choice: orders 12 and 13 take them as lanes of their own beside the
+VMware guest. The decision record lands with order 6. The guest needs VMware Workstation and the Windows domain
 does not manage it: a Windows spec for the host install was planned here
 until 2026-09-20 and abandoned that day, because the domain reconciles what
 it deploys and VMware is a program the maintainer installs by hand. The
@@ -85,6 +90,32 @@ graphical use planned.
 
 Orders 8 to 11 carry #19 and #42 (8), #20 (9), and #24 and #25 (11). The
 deferred item carries #21.
+
+Orders 12 and 13, added 2026-09-20, keep the numbers before them as the
+documents that cite those numbers have them. Each is a guest profile of its
+own: the VMware guest stays the one profile that serves both hosts, and these
+are the hypervisor each host has without a program installed by hand. Neither
+is a value of the inventory's hypervisor or a placeholder until its order
+starts, which is when the order declares the host, because only the
+combinations a lane has declared evaluate; the inventory's decision record
+is reopened by that order, not by this row. Both reuse the headless class
+and, by then, the GNOME profile of order 8 and the installation tooling of
+order 11.
+
+Order 12, QEMU/KVM. The host is the desktop of order 9, so it cannot come
+before it. What the desktop needs to run a guest — libvirt or plain QEMU,
+the bridge, the account's group — is the desktop's and is declared there;
+the guest is a `vm` host whose machine is QEMU's, as the UTM guest's is on
+aarch64.
+
+Order 13, Hyper-V. A generation 2 machine on the Windows host, beside WSL2
+and the VMware guest. It is a graphical guest in the end, and the cost is
+known before it starts: no 3D guest graphics, so GNOME renders in software,
+and the enhanced session is xrdp. Enabling Hyper-V on the host is the
+maintainer's by hand, as installing VMware Workstation is; the Windows
+domain reconciles what it deploys and does not manage it. Hyper-V needs a
+Windows edition that carries it, which the order reads on the host before
+anything else.
 
 ## Constraints recorded with the order
 
