@@ -152,9 +152,10 @@ pull request when it is complete and green. An increment of a spec is what
 one evidence lane verifies, and the report rows, status and report end that
 verification produces travel in the same pull request, so a spec takes as
 many pull requests as it has evidence lanes and scopes, not as many as it
-has steps (`INV repository/pull-request-spans-an-evidence-lane`). Neither a finished report nor a closed issue certifies
-a domain release or authorizes activation or Apply. The repository
-maintainer owns the roadmap and the decision that a report is done.
+has steps (`INV repository/pull-request-spans-an-evidence-lane`). Neither a
+finished report nor a closed issue certifies a domain release or authorizes
+activation or Apply. The repository maintainer owns the roadmap and the
+decision that a report is done.
 
 ## Working contract
 

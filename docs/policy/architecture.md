@@ -100,6 +100,16 @@ and overlay set every flavour evaluates under are each declared once, in
 home's `pkgs` and by the NixOS and darwin flavours' own `nixpkgs.*` options,
 rather than repeated per class.
 
+A NixOS host that boots itself and has no display is reached over the network
+or not at all, so what it admits is the whole of its exposure. The class that
+makes such a host reachable opens its ssh port and no other, accepts a key and
+nothing else and never a root login, and tracks neither a password nor an
+authorized key, because both are host state the installing step writes. It
+asserts that shape itself, so a service added later that opens a port of its
+own is refused until the rule is changed on purpose. The NixOS-WSL host is not
+of that class: its port and its account's UID are facts about WSL's shared
+network and cgroups.
+
 Unix-like deployment consumes a domain release tag and activates only on a
 matching host after evaluation and native build evidence.
 
