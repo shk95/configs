@@ -155,13 +155,20 @@ image's release differs from the flake's and is settled by a restart, then
 generations of this flake, each exiting 0. The first generation, at 98b1a23,
 ran degraded on `sys-kernel-debug.mount`, which cannot be mounted in the
 machine and the class now suppresses
-(`docs/work/unixlike/orbstack-sandbox/report.md`). Two more hosts are
-declared and not installed: `vm` (x86_64, VMware) and `desktop` (x86_64) are
-each the least that evaluates for its kind
-(`unixlike/modules/host/placeholder.nix`) and create no account. Their
-evidence is evaluation alone: neither has been built, booted or installed,
-and their state versions and accounts are provisional values of the
-inventory that the installing order confirms. The
+(`docs/work/unixlike/orbstack-sandbox/report.md`). `vm` (x86_64, a guest of
+VMware Workstation on a Linux or a Windows host,
+`docs/policy/decisions/unixlike/x86-64-guest-runs-on-vmware-workstation.md`)
+is composed and not installed: `nixos.vmware`
+(`unixlike/modules/host/vmware.nix`), the `nixos.headless` class and the
+shared home alone. Its evidence is evaluation and a build of its toplevel on
+the x86_64 WSL host at c73b5dd; it has not been booted or installed, native
+runtime and activation are unavailable until the maintainer installs it, and
+its state version and account are provisional values of the inventory until
+then (`docs/work/unixlike/vmware-headless-guest/report.md`). `desktop`
+(x86_64) is declared and not installed, the least that evaluates for its
+kind (`unixlike/modules/host/placeholder.nix`), with no account; its
+evidence is evaluation alone and its state version and account are
+provisional. The
 Nix daemon settings and the no-channel rule are in `modules.nixos.shared`
 and reach every NixOS host, the registered distribution included.
 GUI options are set off explicitly; WSLg is the deferred item of
