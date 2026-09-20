@@ -114,14 +114,27 @@ that a host lane names evaluates (`INV unixlike/nixos-host-inventory`).
 `unixlike/tool/checks/flake-test` proves each host answers to its entry's
 name (#191). `aarch64-linux` is an evaluated system and is not built here
 (`docs/work/unixlike/nixos-host-inventory/report.md`, done).
-Four more hosts are declared and not installed. `utm` (aarch64, UTM) is
-composed from `nixos.utm` (`unixlike/modules/host/utm.nix`), the
-`nixos.headless` class — the entry's account without a tracked password,
-key-only sshd on 22 and a firewall that opens that port alone
-(`INV unixlike/headless-key-only`) — and the shared home alone. `vm` (x86_64,
-VMware), `orbstack` (aarch64) and `desktop` (x86_64) are each the least that
-evaluates for its kind (`unixlike/modules/host/placeholder.nix`) and create
-no account. The evidence for all four is evaluation alone: none has been
+`utm` (aarch64, UTM on the Mac) is installed and headless. It is composed
+from `nixos.utm` (`unixlike/modules/host/utm.nix`), the `nixos.headless`
+class — the entry's account without a tracked password, key-only sshd on 22
+and a firewall that opens that port alone (`INV unixlike/headless-key-only`)
+— and the shared home alone. The guest had been installed from the graphical
+installer as NixOS 25.11 and was adopted in place on 2026-09-20: its file
+systems relabelled, a first switch that named the output, the installer's
+channel and configuration removed; its state version is 25.11 and its swap
+partition is unused. Each lane was observed separately, inside the guest at
+629076e unless said otherwise: evaluation on the aarch64 Darwin host and in
+the merge gate; build, the `utm` toplevel; native runtime, the host answers
+to `utm`, the account logs in over ssh with a key and is refused with a
+password, sudo asks for the password, flakes run and no channel exists;
+activation, `just nixos-test` and `just nixos-switch` activated generations
+built from this flake and `just nixos-rollback` returned to the one before
+(`docs/work/unixlike/utm-headless-guest/report.md`). The maintainer means the
+guest to become a graphical machine, which waits for the GNOME orders of
+`docs/work/roadmap.md`. Three more hosts are declared and not installed: `vm`
+(x86_64, VMware), `orbstack` (aarch64) and `desktop` (x86_64) are each the
+least that evaluates for its kind (`unixlike/modules/host/placeholder.nix`)
+and create no account. Their evidence is evaluation alone: none has been
 built, booted or installed, and their state versions and accounts are
 provisional values of the inventory that the installing order confirms. The
 Nix daemon settings and the no-channel rule are in `modules.nixos.shared`

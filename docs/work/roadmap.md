@@ -30,7 +30,7 @@ maintainer owns this file, and changing the order is a repository change.
 | 4 | typed NixOS host inventory — done 2026-09-20 | unixlike |
 | — | judgement on the CI decision's `reopen-when` (before 5) — done 2026-09-20 | repository |
 | 5 | headless aarch64 guest on UTM — done 2026-09-20 | unixlike |
-| 6 | headless x86_64 guest on VMware Workstation | unixlike; a windows spec for the host install |
+| 6 | headless x86_64 guest on VMware Workstation | unixlike |
 | 7 | aarch64 OrbStack machine | unixlike |
 | 8 | shared GNOME Wayland profile and the Linux terminal layer | unixlike |
 | 9 | x86_64 desktop on an AMD APU | unixlike |
@@ -68,7 +68,11 @@ it runs over the Windows Hypervisor Platform beside WSL2. Hyper-V remains the
 lighter choice for a headless guest on a Windows-only host, but it is
 Windows-only, has no 3D guest graphics, and its enhanced session is xrdp;
 QEMU/KVM is the more native choice on a NixOS host. The decision record
-lands with order 6.
+lands with order 6. The guest needs VMware Workstation and the Windows domain
+does not manage it: a Windows spec for the host install was planned here
+until 2026-09-20 and abandoned that day, because the domain reconciles what
+it deploys and VMware is a program the maintainer installs by hand. The
+installation is a step of the guest's own procedure.
 
 Order 7, OrbStack. A host kind of its own, like WSL in having no boot loader
 and a host that injects its integration, so it reuses the flake-only rebuild
