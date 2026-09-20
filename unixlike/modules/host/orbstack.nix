@@ -63,16 +63,27 @@ _: {
       useHostResolvConf = false;
       resolvconf.enable = false;
     };
-    systemd.network = {
-      enable = true;
-      networks."50-eth0" = {
-        matchConfig.Name = "eth0";
-        networkConfig = {
-          DHCP = "ipv4";
-          IPv6AcceptRA = true;
+    systemd = {
+      network = {
+        enable = true;
+        networks."50-eth0" = {
+          matchConfig.Name = "eth0";
+          networkConfig = {
+            DHCP = "ipv4";
+            IPv6AcceptRA = true;
+          };
+          linkConfig.RequiredForOnline = "routable";
         };
-        linkConfig.RequiredForOnline = "routable";
       };
+
+      services = lib.genAttrs unwatched (_: {serviceConfig.WatchdogSec = 0;});
+
+      # OrbStack's kernel refuses a machine the debug file system: under the
+      # first generation of this flake `sys-kernel-debug.mount` failed with
+      # "permission denied" at the switch and at every boot, and left the
+      # system degraded (observed 2026-09-20, OrbStack 2.2.3). The unit is
+      # one of systemd's upstream defaults, which the container module keeps.
+      suppressedSystemUnits = ["sys-kernel-debug.mount"];
     };
 
     # Names are resolved by the Mac, through the file OrbStack mounts.
@@ -84,8 +95,6 @@ _: {
       . /opt/orbstack-guest/etc/profile-early
       . /opt/orbstack-guest/etc/profile-late
     '';
-
-    systemd.services = lib.genAttrs unwatched (_: {serviceConfig.WatchdogSec = 0;});
 
     users.groups.orbstack.gid = 67278;
 
