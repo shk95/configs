@@ -78,8 +78,13 @@ roadmap's GNOME order, and the coding agents stay on NixOS-WSL.
 `docs/policy/decisions/unixlike/` gains a record of the choice the roadmap's
 order 6 paragraph argues: VMware Workstation, so that one guest profile
 serves a Linux and a Windows host and carries the later GNOME stage;
-Hyper-V and QEMU/KVM rejected with their reasons; VMware Workstation itself
-installed by the maintainer by hand and managed by neither domain. The
+VMware Workstation itself installed by the maintainer by hand and managed by
+neither domain. Hyper-V on the Windows host and QEMU/KVM on a NixOS host are
+not rejected: the roadmap takes each as a later lane of its own beside this
+guest, and the record states what each costs against this one — no 3D guest
+graphics and an xrdp session on Hyper-V, a guest profile per host on either.
+This work declares neither: a hypervisor becomes a value of the inventory,
+and gets a class, in the order that takes its lane. The
 record names this spec as its source and lands with the class, because the
 class is what rests on it. The roadmap paragraph then shrinks to the order
 and a pointer, in the `repository` increment.
