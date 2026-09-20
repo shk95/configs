@@ -6,6 +6,12 @@ status: done
 
 ## Verification boundary and disposition
 
+Follow-up: `docs/work/unixlike/binfmt-scope-investigation/report.md` records
+the read-only WSL and OrbStack comparison of 2026-09-21, with primary-source
+review and an unprivileged disposable container. It adds evidence about the
+namespace arrangement, not a direct-registration experiment. The dated
+disposition below is retained as the record that preceded that investigation.
+
 Clarified 2026-09-21 after the maintainer's review of the completion record.
 The observations below are those of 2026-09-20; this clarification adds no
 new machine experiment or runtime evidence.
