@@ -107,6 +107,11 @@ nixos_hosts=$(hosts_eval '{ }' 'hosts: builtins.concatStringsSep "\n" (builtins.
 wsl_host=$(hosts_eval '{ }' 'hosts: builtins.concatStringsSep "\n" (builtins.filter (n: hosts.${n}.kind == "wsl") (builtins.attrNames hosts))')
 [ -n "$wsl_host" ] && [ "$(printf '%s\n' "$wsl_host" | wc -l)" -eq 1 ] ||
   fail "the probes below need exactly one host of kind wsl, found: $wsl_host"
+# The UTM guest is the one host of the headless class.
+headless_host=$(hosts_eval '{ }' 'hosts: builtins.concatStringsSep "\n" (builtins.filter (n: hosts.${n}.hypervisor == "utm") (builtins.attrNames hosts))')
+[ -n "$headless_host" ] && [ "$(printf '%s\n' "$headless_host" | wc -l)" -eq 1 ] ||
+  fail "the probes below need exactly one UTM guest, found: $headless_host"
+headless_user=$(hosts_eval '{ }' "hosts: hosts.\"$headless_host\".user")
 
 # The invariant's other direction: the entry reaches its consumers through
 # the typed option — the output is named by it, the host answers to it (#191)
@@ -180,10 +185,10 @@ hosts_eval "$no_state_version" 'hosts: hosts.fixture-host.stateVersion' 2>&1 >/d
 # INV unixlike/desktop-not-wsl
 # modules/flake/configurations.nix composes `homeManager.desktop` into the
 # Darwin home only. WezTerm is the marker: modules/wezterm.nix declares it in
-# the desktop class alone, so its presence in a WSL home's packages means a
-# graphical class reached a headless home. The Darwin arm proves the probe
-# sees the package where the class is composed, so an empty result is not a
-# pass by accident.
+# the desktop class alone, so its presence in a WSL home's packages, or in the
+# headless guest's, means a graphical class reached a headless home. The
+# Darwin arm proves the probe sees the package where the class is composed,
+# so an empty result is not a pass by accident.
 
 packages_of() {
   nix eval --raw "path:$repo#$1" \
@@ -196,7 +201,8 @@ darwin_host=$(identity_eval '{ }' darwin.hostName)
 
 for home in \
   "homeConfigurations.\"$wsl_user\".config.home.packages" \
-  "nixosConfigurations.\"$wsl_host\".config.home-manager.users.\"$wsl_user\".home.packages"
+  "nixosConfigurations.\"$wsl_host\".config.home-manager.users.\"$wsl_user\".home.packages" \
+  "nixosConfigurations.\"$headless_host\".config.home-manager.users.\"$headless_user\".home.packages"
 do
   printf '→ %s carries no graphical program\n' "${home%%.config*}"
   names=$(packages_of "$home")
@@ -340,5 +346,71 @@ for host in $nixos_hosts; do
   [ "$nix_path" = "nixpkgs=flake:nixpkgs" ] ||
     fail "nixosConfigurations.$host searches '$nix_path', expected nixpkgs=flake:nixpkgs alone"
 done
+
+# ---------------------------------------------------------------------------
+# A headless host is reached by a key, over one port
+# ---------------------------------------------------------------------------
+#
+# INV unixlike/headless-key-only
+# `nixos.headless` declares the account, sshd and the firewall of a host that
+# boots itself, and modules/account.nix, modules/sshd.nix and
+# modules/firewall.nix each assert their part. The real host must show every
+# property and pass; each violation, added to it, must be refused. The UTM
+# guest is the host of the class.
+
+headless="nixosConfigurations.\"$headless_host\""
+
+printf '→ the headless host declares its account, key-only sshd on 22 and a firewall that opens 22 alone\n'
+shape=$(nix eval --raw --impure --expr "
+  let
+    flake = builtins.getFlake (toString ./.);
+    config = flake.$headless.config;
+    account = config.users.users.\${config.host.user};
+    sshd = config.services.openssh;
+    firewall = config.networking.firewall;
+    facts = {
+      normal-user = account.isNormalUser;
+      in-wheel = builtins.elem \"wheel\" account.extraGroups;
+      zsh-login = (account.shell.pname or \"\") == \"zsh\";
+      no-tracked-password = builtins.all (n: account.\${n} == null) [\"password\" \"hashedPassword\" \"hashedPasswordFile\" \"initialPassword\" \"initialHashedPassword\"];
+      no-tracked-key = account.openssh.authorizedKeys.keys == [] && account.openssh.authorizedKeys.keyFiles == [];
+      sudo-asks = config.security.sudo.wheelNeedsPassword;
+      sshd-on-22 = sshd.enable && sshd.ports == [22];
+      no-password-login = !sshd.settings.PasswordAuthentication && !sshd.settings.KbdInteractiveAuthentication;
+      no-root-login = sshd.settings.PermitRootLogin == \"no\";
+      firewall-opens-22-alone = firewall.enable && firewall.allowedTCPPorts == [22] && firewall.allowedUDPPorts == [] && firewall.allowedTCPPortRanges == [] && firewall.allowedUDPPortRanges == [];
+      channels-off = !config.nix.channel.enable;
+      shared-home-alone = builtins.attrNames config.home-manager.users == [config.host.user];
+    };
+  in builtins.concatStringsSep \" \" (builtins.filter (n: !facts.\${n}) (builtins.attrNames facts))")
+[ -z "$shape" ] || fail "nixosConfigurations.$headless_host does not hold: $shape"
+
+printf '→ refuses another open port, on every path to one\n'
+failed_assertions "$headless" '{ networking.firewall.allowedTCPPorts = [8080]; }'
+expect_refusal 'INV unixlike/headless-key-only' 'a second TCP port'
+failed_assertions "$headless" '{ networking.firewall.allowedUDPPorts = [5353]; }'
+expect_refusal 'INV unixlike/headless-key-only' 'a UDP port'
+failed_assertions "$headless" '{ networking.firewall.interfaces.eth0.allowedTCPPorts = [8080]; }'
+expect_refusal 'INV unixlike/headless-key-only' 'a port opened on one interface'
+failed_assertions "$headless" '{lib, ...}: { networking.firewall.enable = lib.mkForce false; }'
+expect_refusal 'INV unixlike/headless-key-only' 'a firewall turned off'
+
+printf '→ refuses a password or a root login over ssh\n'
+failed_assertions "$headless" '{lib, ...}: { services.openssh.settings.PasswordAuthentication = lib.mkForce true; }'
+expect_refusal 'INV unixlike/headless-key-only' 'password authentication'
+failed_assertions "$headless" '{lib, ...}: { services.openssh.settings.PermitRootLogin = lib.mkForce "yes"; }'
+expect_refusal 'INV unixlike/headless-key-only' 'a root login'
+
+printf '→ refuses a tracked key, a tracked password and a passwordless sudo\n'
+failed_assertions "$headless" '{config, ...}: { users.users.${config.host.user}.openssh.authorizedKeys.keys = ["fixture-key"]; }'
+expect_refusal 'INV unixlike/headless-key-only' 'an authorized key in tracked state'
+failed_assertions "$headless" '{config, ...}: { users.users.${config.host.user}.initialPassword = "fixture"; }'
+expect_refusal 'INV unixlike/headless-key-only' 'a password in tracked state'
+failed_assertions "$headless" '{lib, ...}: { security.sudo.wheelNeedsPassword = lib.mkForce false; }'
+expect_refusal 'INV unixlike/headless-key-only' 'a passwordless sudo'
+
+printf '→ the real headless host passes\n'
+failed_assertions "$headless" '{ }'
+expect_clean "the headless host $headless_host"
 
 echo "✓ flake schema fixtures behave"

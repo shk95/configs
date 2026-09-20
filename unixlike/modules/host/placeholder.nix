@@ -37,11 +37,6 @@ in {
       virtualisation.vmware.guest.enable = true;
     };
 
-    utm = {
-      imports = [bootsFromLabelledDisk];
-      services.qemuGuest.enable = true;
-    };
-
     # An OrbStack machine is a container: the host supplies the kernel and
     # there is no boot loader or disk to declare, as on WSL.
     orbstack = {modulesPath, ...}: {

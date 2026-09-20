@@ -5,6 +5,7 @@ date: 2026-09-20
 scope: unixlike
 status: approved
 review-by: 2026-11-15
+issue: #301
 
 Agreed with the maintainer in the session of 2026-09-20. Lane `utm` of
 `docs/work/roadmap.md`, the guest the maintainer took before the VMware one;
@@ -122,6 +123,8 @@ this work.
    the decision record if the installation settled anything a reviewer will
    ask about, `docs/status/unixlike.md`, and the end of the report with the
    roadmap row (`repository`).
+
+Amended 2026-09-20: the increments are regrouped at the evidence lanes and no criterion changes. Increment 2 is the evaluation lane: it verifies AC1 to AC4 and carries their report rows and the status sentence with them. Increment 3 is unchanged and verifies AC5. Increment 4 is the guest's lanes: it verifies AC6 to AC9, records AC10 for the pull requests before it, and ends the report; the roadmap row follows that end in `repository`.
 
 ## Acceptance
 
