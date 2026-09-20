@@ -13,7 +13,7 @@ maintainer owns this file, and changing the order is a repository change.
 | --- | --- | --- |
 | darwin | aarch64-darwin | operational; generation 36 activated |
 | utm | aarch64 NixOS guest, UTM on the Mac | installed and headless, adopted in place on 2026-09-20; to become a graphical machine at order 10 |
-| orbstack | aarch64 NixOS OrbStack machine | declared as host `orbstack`, evaluated only; not installed |
+| orbstack | aarch64 NixOS OrbStack machine | an isolated sandbox on the Mac, switched to the flake on 2026-09-20; disposable, recreated by its procedure |
 | desktop | x86_64 NixOS, physical AMD APU desktop | declared as host `desktop`, evaluated only; not installed |
 | vm | x86_64 NixOS guest, VMware Workstation on a Linux and a Windows host | declared as host `vm`, evaluated only; not installed |
 | kvm | x86_64 NixOS guest, QEMU/KVM on the NixOS desktop | not declared; order 12 declares the host |
@@ -33,7 +33,7 @@ maintainer owns this file, and changing the order is a repository change.
 | — | judgement on the CI decision's `reopen-when` (before 5) — done 2026-09-20 | repository |
 | 5 | headless aarch64 guest on UTM — done 2026-09-20 | unixlike |
 | 6 | headless x86_64 guest on VMware Workstation | unixlike |
-| 7 | aarch64 OrbStack machine | unixlike |
+| 7 | aarch64 OrbStack machine — done 2026-09-20 | unixlike |
 | 8 | shared GNOME Wayland profile and the Linux terminal layer | unixlike |
 | 9 | x86_64 desktop on an AMD APU | unixlike |
 | 10 | GNOME on the VM guests | unixlike |
