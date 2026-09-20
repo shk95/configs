@@ -1120,6 +1120,62 @@ Describe 'feature model' {
         $declared | Should -Contain $manifest.Terminal.Feature
     }
 
+    It 'INV windows/precondition-declared: refuses an unknown precondition type and a missing field when the manifest loads' {
+        $valid = @{ Type = 'Appx'; Name = 'Vendor.Palette'; Message = 'repair the vendor suite before applying' }
+        $manifestWith = {
+            param([hashtable] $Precondition)
+            New-FeatureManifest -Override @{
+                Features = @(
+                    @{ Id = 'core'; Name = 'Core'; Required = $true },
+                    @{ Id = 'font'; Name = 'Font' },
+                    @{ Id = 'zellij'; Name = 'Zellij' },
+                    @{ Id = 'terminal'; Name = 'Terminal'; Requires = @('font', 'zellij'); Preconditions = @($Precondition) }
+                )
+            }
+        }
+
+        (Test-Throws { Assert-WinEnvFeatureModel -Manifest (& $manifestWith $valid) }) | Should -Be $false
+
+        $message = ''
+        $unknownType = $valid.Clone(); $unknownType.Type = 'Ouija'
+        try { Assert-WinEnvFeatureModel -Manifest (& $manifestWith $unknownType) } catch { $message = $_.Exception.Message }
+        $message | Should -Match "INV windows/precondition-declared: Feature 'terminal' declares a precondition of unknown type 'Ouija'"
+
+        foreach ($field in 'Message', 'Name') {
+            $message = ''
+            $missing = $valid.Clone(); $missing.Remove($field)
+            try { Assert-WinEnvFeatureModel -Manifest (& $manifestWith $missing) } catch { $message = $_.Exception.Message }
+            $message | Should -Match "declares a Appx precondition without $field"
+            $message = ''
+            $blank = $valid.Clone(); $blank[$field] = ' '
+            try { Assert-WinEnvFeatureModel -Manifest (& $manifestWith $blank) } catch { $message = $_.Exception.Message }
+            $message | Should -Match "declares a Appx precondition without $field"
+        }
+    }
+
+    It 'INV windows/precondition-declared: the repository manifest loads, and every declared type has an evaluator arm' {
+        $manifest = Get-WinEnvManifest -Path (Join-Path $desiredStateRoot 'manifest.json')
+        @($manifest.Features | Where-Object { $_.ContainsKey('Preconditions') }).Count | Should -BeGreaterThan 0
+
+        # A type the loader accepts and the evaluator has no arm for would be
+        # refused on the host instead, which is what this rule exists to stop.
+        $module = Join-Path $repositoryRoot 'src\WinEnv.psm1'
+        $tokens = $null
+        $errors = $null
+        $ast = [System.Management.Automation.Language.Parser]::ParseFile($module, [ref]$tokens, [ref]$errors)
+        $evaluator = @($ast.FindAll({
+                    param($node)
+                    $node -is [System.Management.Automation.Language.FunctionDefinitionAst] -and
+                    $node.Name -eq 'Test-WinEnvFeaturePrecondition'
+                }, $true))
+        $evaluator.Count | Should -Be 1
+        $switch = @($evaluator[0].FindAll({ param($node) $node -is [System.Management.Automation.Language.SwitchStatementAst] }, $true))
+        $switch.Count | Should -Be 1
+        $arms = @($switch[0].Clauses | ForEach-Object { $_.Item1.Extent.Text.Trim("'") } | Sort-Object)
+        $declared = @(& (Get-Module WinEnv) { $script:WinEnvPreconditionField.Keys } | Sort-Object)
+        ($arms -join ',') | Should -Be ($declared -join ',')
+    }
+
     It 'INV windows/feature-owns-every-item: rejects a deployable item that names no feature' {
         $manifest = New-FeatureManifest -Override @{
             ManagedFiles = @(@{ Id = 'orphan'; Source = 'files/orphan.txt'; Target = 'orphan'; Compare = 'Text'; Parser = 'Text' })
