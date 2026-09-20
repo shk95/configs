@@ -184,7 +184,7 @@ avoids a re-exec that otherwise tries the absent `nixos-config` before
 activation. `just nixos-rollback` returned from 2 to 1, both system paths
 equalled the saved original, and no unit was failed. Generation 2 remains
 non-current. Test, switch and rollback are verified on this Windows-hosted
-guest; the source changes and their PR checks are not yet complete
+guest; the work report is done
 (`docs/work/unixlike/vmware-headless-guest/report.md`). `desktop`
 (x86_64) is declared and not installed, the least that evaluates for its
 kind (`unixlike/modules/host/placeholder.nix`), with no account; its
