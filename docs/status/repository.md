@@ -132,8 +132,10 @@ semantics across independent platform validation and release cycles.
 ## Open conditions
 
 - `docs/policy/decisions/repository/ci-evidence-without-hosted-runners.md`: reopens when a
-  defect class a hosted runner would have caught occurs twice, or a NixOS
-  host configuration exists for VM tests to target.
+  defect class a hosted runner would have caught occurs twice, or an installed
+  x86_64 NixOS guest declares behaviour of its own for a VM test to assert
+  (judged and restated on 2026-09-20, when the first NixOS outputs beside the
+  WSL one were placeholders).
 - `docs/policy/decisions/repository/powershell-copied-per-domain.md`: reopens when both
   implementations show stable semantics that would justify a common
   component.
