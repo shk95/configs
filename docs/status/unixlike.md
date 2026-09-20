@@ -135,9 +135,13 @@ evidence issue (#192) carries the readings.
 
 Since 2026-09-19 the distribution is updated in place
 (`docs/work/unixlike/nixos-wsl-in-place-update/report.md`, done). The
-`nixos-wsl` recipes `nixos-test`, `nixos-switch`, `nixos-rollback` and
-`nixos-generations` run only on the NixOS host the flake names, `nixos-eval`
-runs anywhere, and `home-switch` refuses on NixOS. Channels are off in the
+recipes `nixos-test`, `nixos-switch`, `nixos-rollback` and
+`nixos-generations` act on the output named after the NixOS host they run on
+and refuse where there is none; `nixos-eval`, `nixos-build` and
+`nixos-tarball` run anywhere and take the host as an argument, refusing with
+the list of exported names when it is missing or unknown; and `home-switch`
+refuses on NixOS. `unixlike/tool/checks/test` builds a NixOS output only on
+the host it is named after. Channels are off in the
 configuration (`INV unixlike/nixos-no-channel`), so the search path names the
 flake's nixpkgs alone and an archive built from here registers no channel.
 `CONTRIBUTING.md`, "Update the registered NixOS-WSL distribution", is the
