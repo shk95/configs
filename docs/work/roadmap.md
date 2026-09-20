@@ -12,7 +12,7 @@ maintainer owns this file, and changing the order is a repository change.
 | Lane | Host | State on 2026-09-20 |
 | --- | --- | --- |
 | darwin | aarch64-darwin | operational; generation 36 activated |
-| utm | aarch64 NixOS guest, UTM on the Mac | declared as host `utm`, evaluated only; not installed |
+| utm | aarch64 NixOS guest, UTM on the Mac | installed and headless, adopted in place on 2026-09-20; to become a graphical machine at order 10 |
 | orbstack | aarch64 NixOS OrbStack machine | declared as host `orbstack`, evaluated only; not installed |
 | desktop | x86_64 NixOS, physical AMD APU desktop | declared as host `desktop`, evaluated only; not installed |
 | vm | x86_64 NixOS guest, VMware Workstation on a Linux and a Windows host | declared as host `vm`, evaluated only; not installed |
@@ -29,7 +29,7 @@ maintainer owns this file, and changing the order is a repository change.
 | — | release tag contract: an annotation that states each host's evidence state (before 4) — done 2026-09-19 | repository |
 | 4 | typed NixOS host inventory — done 2026-09-20 | unixlike |
 | — | judgement on the CI decision's `reopen-when` (before 5) — done 2026-09-20 | repository |
-| 5 | headless aarch64 guest on UTM | unixlike |
+| 5 | headless aarch64 guest on UTM — done 2026-09-20 | unixlike |
 | 6 | headless x86_64 guest on VMware Workstation | unixlike; a windows spec for the host install |
 | 7 | aarch64 OrbStack machine | unixlike |
 | 8 | shared GNOME Wayland profile and the Linux terminal layer | unixlike |
@@ -55,6 +55,10 @@ headless layer, which whichever comes first writes and the other reuses, and
 the maintainer took the UTM guest first. Its build, boot and activation
 evidence comes from the Mac, because an aarch64 system is only evaluated on
 the x86_64 hosts.
+The guest existed before the work, installed with the graphical installer,
+and was adopted in place. The maintainer means it to be a graphical machine,
+which the headless spec left out on purpose: order 10 carries that, on the
+account, sshd and firewall this order wrote.
 
 Order 6, VMware (from #23, re-scoped). One guest profile, headless first, on
 both a Linux and a Windows host; GNOME waits for order 10. VMware Workstation

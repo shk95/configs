@@ -622,6 +622,41 @@ every NixOS host of this repository (`INV unixlike/nixos-no-channel`).
 Installing again is recovery, not an update: it replaces the root file
 system, and steps 4 and 5 are owed again afterwards.
 
+A guest that already runs NixOS — one installed with the graphical
+installer — is adopted in place instead, which is how the present guest came
+under this flake on 2026-09-20. Everything that follows changes the host and
+is the maintainer's to run, from one root shell (`sudo -i`), because the
+first switch removes the installer's account from under its own session:
+
+1. Give root a password for the duration, so the console is a way back in
+   under either generation, and lock it again (`passwd -l root`) once the new
+   system has booted.
+2. Relabel the file systems to the names the host is declared with:
+   `e2label <root device> nixos`, and with `/boot` unmounted
+   `fatlabel <EFI device> boot` (`nix-shell -p dosfstools`). The running
+   generation mounts by UUID, so it still boots. `udevadm trigger --settle`
+   and read `/dev/disk/by-label` before going on: a switch made while the
+   root's label has not taken leaves a system that cannot find its root.
+3. Set the `utm` entry's `stateVersion` to the release in the installed
+   `/etc/nixos/configuration.nix`, on a branch, and clone that branch
+   (`nix-shell -p git`). Then remove the installer's channel,
+   `nix-channel --remove nixos`, while the command still exists.
+4. Make the first switch by naming the output,
+   `nixos-rebuild switch --flake "path:./unixlike#utm"`: the host still
+   answers to the installer's name, so the host-bound recipes refuse.
+5. In the same shell, `passwd <account>` and put a public key in the new
+   account's `~/.ssh/authorized_keys`, owned by it; confirm a key login from
+   another terminal before closing the shell or rebooting. The installer's
+   account is gone, and the new one is created locked.
+6. Reboot, log in as the account, remove `/etc/nixos`, the root channel
+   files and the root clone, and clone the repository into the account's
+   home. From there the update recipes above apply.
+
+Do not roll back past the first generation of this flake: the installer's
+generations hold no account this flake declares and recreate theirs without
+a password. To exercise `just nixos-rollback`, make a second generation of
+this flake first.
+
 ### Capture Karabiner drift
 
 On the Mac, `just karabiner-check` reports whether the host still holds the
