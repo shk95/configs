@@ -5440,6 +5440,55 @@ Describe 'check entry points' {
         Invoke-BootstrapCheck -RequireNative '1' | Should -Be 1
     }
 
+    It 'INV windows/selected-precondition-evaluated: no loop rebinds a parameter of the script block it runs in' {
+        # PowerShell names are case-insensitive and a parameter keeps its type
+        # constraint, so `foreach ($feature in ...)` under a `[string[]]
+        # $Feature` parameter converts every item to a string array and the
+        # body reads properties that are no longer there. setup.ps1 skipped
+        # every feature's preconditions that way. The check past the
+        # prerequisites needs a Windows host, so the rule is held by reading
+        # every script of the domain.
+        $windowsRoot = $repositoryRoot
+        $scripts = @(Get-ChildItem -LiteralPath $windowsRoot -Recurse -File -Include '*.ps1', '*.psm1' |
+                Where-Object { $_.FullName -notmatch '[\\/](tests|desired)[\\/]' })
+        $scripts.Count | Should -BeGreaterThan 5
+
+        $collisions = foreach ($script in $scripts) {
+            $tokens = $null
+            $errors = $null
+            $ast = [System.Management.Automation.Language.Parser]::ParseFile($script.FullName, [ref]$tokens, [ref]$errors)
+            foreach ($loop in $ast.FindAll({ param($node) $node -is [System.Management.Automation.Language.ForEachStatementAst] }, $true)) {
+                $scope = $loop.Parent
+                while ($scope -and $scope -isnot [System.Management.Automation.Language.ScriptBlockAst]) { $scope = $scope.Parent }
+                if (-not $scope -or -not $scope.ParamBlock) { continue }
+                $parameters = @($scope.ParamBlock.Parameters | ForEach-Object { $_.Name.VariablePath.UserPath })
+                if ($parameters -contains $loop.Variable.VariablePath.UserPath) {
+                    '{0}:{1} ${2}' -f $script.Name, $loop.Extent.StartLineNumber, $loop.Variable.VariablePath.UserPath
+                }
+            }
+        }
+        (@($collisions) -join '; ') | Should -Be ''
+
+        # And the loop that evaluates preconditions hands the evaluator the
+        # item it iterates over, once.
+        $setup = Join-Path $repositoryRoot 'tools\setup.ps1'
+        $tokens = $null
+        $errors = $null
+        $ast = [System.Management.Automation.Language.Parser]::ParseFile($setup, [ref]$tokens, [ref]$errors)
+        $calls = @($ast.FindAll({
+                    param($node)
+                    $node -is [System.Management.Automation.Language.CommandAst] -and
+                    $node.GetCommandName() -eq 'Test-WinEnvFeaturePrecondition'
+                }, $true))
+        $calls.Count | Should -Be 1
+        $loop = $calls[0].Parent
+        while ($loop -and $loop -isnot [System.Management.Automation.Language.ForEachStatementAst]) { $loop = $loop.Parent }
+        ($null -ne $loop) | Should -Be $true
+        $loop.Condition.Extent.Text | Should -Be '$manifest.Features'
+        $arguments = $calls[0].CommandElements | ForEach-Object { $_.Extent.Text }
+        $arguments[([array]::IndexOf($arguments, '-Feature') + 1)] | Should -Be $loop.Variable.Extent.Text
+    }
+
     It 'INV windows/check-exit-contract: ranks every unverified evidence category exactly once' {
         # The check path past the prerequisites needs a Windows host (the
         # registry, the font store, WinGet), so the wiring is held by reading
