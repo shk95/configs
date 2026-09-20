@@ -37,12 +37,6 @@ in {
       virtualisation.vmware.guest.enable = true;
     };
 
-    # An OrbStack machine is a container: the host supplies the kernel and
-    # there is no boot loader or disk to declare, as on WSL.
-    orbstack = {modulesPath, ...}: {
-      imports = ["${modulesPath}/virtualisation/lxc-container.nix"];
-    };
-
     # Nothing of its own yet: what the machine is made of is the installing
     # order's to declare.
     desktop = {
