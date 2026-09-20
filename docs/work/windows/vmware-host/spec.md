@@ -5,6 +5,7 @@ date: 2026-09-20
 scope: windows
 status: approved
 review-by: 2026-11-15
+issue: #299
 
 Agreed with the maintainer in the session of 2026-09-20. The Windows half of
 the VMware order of `docs/work/roadmap.md`: the guest itself is a Unix-like
