@@ -4,6 +4,16 @@ kind: report
 spec: docs/work/unixlike/vmware-headless-guest/spec.md
 status: pending
 
+The completion evidence below was supplied by the maintainer from the
+Windows-hosted guest during the session of 2026-09-21. After the inventory
+confirmation, evaluation of this working tree produces
+`/nix/store/5g17hsxndjl9gdcilnm775a0fyz4daw2-nixos-system-vm-26.11.20260916.b1b8759`,
+exactly the path the guest ran before and after rollback. This comparison
+is evaluation evidence; the guest's build and activation are observed there.
+On this x86_64 WSL checkout, `unixlike/tool/checks/test` passes with all seven
+configurations evaluated and the standalone home built; it does not build
+the `vm` output here. Formatting and lint, including composition, also pass.
+
 ## Acceptance
 
 | ID | State | Evidence |
@@ -13,8 +23,8 @@ status: pending
 | AC3 | verified | Evaluation at c73b5dd: `flake-test`, in the unit tagged `INV unixlike/desktop-not-wsl`, finds no `wezterm` in the `vm` home's packages and finds it in the Darwin home's; `tool/checks/composition` passes over 49 feature files, none of which names a host flavour. |
 | AC4 | verified | Evaluation at c73b5dd: `unixlike/modules/host/vmware.nix` names the file systems by label and writes no module list; the tree holds no UUID, MAC address or generated hardware configuration for the guest, and `tool/version-control/hygiene` passes over 373 tracked paths. `docs/policy/decisions/unixlike/x86-64-guest-runs-on-vmware-workstation.md` states the choice, that VMware Workstation is installed by hand, and Hyper-V and QEMU/KVM as later lanes with their costs; `tool/version-control/records` and `invariants` pass. |
 | AC5 | verified | Build on the x86_64 WSL host: `nix build` of the `vm` toplevel, the derivation `2k390ll6…` that c73b5dd evaluates to, exits 0 and realises `yi3x4fhq…-nixos-system-vm`. `unixlike/tool/checks/test` does not build it — it reports `vm` as `not activatable here (already in the store)` — so this row rests on the direct build. A build proves the closure realises, not that it boots. |
-| AC6 | pending | |
-| AC7 | pending | |
-| AC8 | pending | |
-| AC9 | pending | |
-| AC10 | pending | |
+| AC6 | verified | Agent review on 2026-09-21 of `CONTRIBUTING.md` at e67e908, merged through #320: "Install the VMware guest" states the x86_64 minimal ISO, UEFI firmware, VMware Workstation installed by hand and all installation actions as the maintainer's to run. Its reviewed requirements are present. The live installation exposed a procedural gap beyond those requirements: the invocation omits `--no-channel-copy`, and the maintainer removed the copied channel links after boot, as AC7 records. |
+| AC7 | verified | Native-runtime evidence supplied by the maintainer on 2026-09-21 after installation and disk boot under VMware on Windows, from abc5dae with the local inventory account and state-version edits: `hostname` answers `vm`, `nixos-version` answers `26.11.20260916.b1b8759`, `systemd-detect-virt` answers `vmware`, `sudo -v` asks for the selected account's password, and `systemctl --failed` lists zero units. `vmware` and `sshd` are active; Nix reports 2.34.8. The password-only SSH probe was refused and a public-key-only, batch-mode `whoami` returned the selected account. After removal of the copied ISO channel links, `ls` finds neither root's `.nix-channels` nor `.nix-defexpr/channels`, nor the root channel profile or its only generation link. `just nixos-generations` lists generation 1 as current, kernel 6.18.52. `nix flake metadata --no-write-lock-file path:./unixlike` succeeds and lists the locked inputs, with nixpkgs at b1b8759. |
+| AC8 | verified | Activation evidence supplied by the maintainer on 2026-09-21 from the installed VMware guest on Windows, using the installation clone copied into the managed account's home: `just nixos-test && just nixos-switch` succeeds. Both report `/nix/store/5g17hsxndjl9gdcilnm775a0fyz4daw2-nixos-system-vm-26.11.20260916.b1b8759` and reuse generation 1. To obtain a distinct generation without changing tracked source, `extendModules` adds only `system.nixos.tags = [ "rollback-check" ]` to this flake's `vm` configuration. Its built system is `/nix/store/apbk2rh5l15r03cp0y0y594xl2a0izc8-nixos-system-vm-rollback-check-26.11.20260916.b1b8759`. `nixos-rebuild switch --store-path` initially fails before activation because its re-exec builds from the absent `nixos-config`; adding `--no-reexec` activates the probe as generation 2. `just nixos-rollback` then reports switching the profile from 2 to 1. Both the running-system and system-profile paths equal the saved original path, the comparison prints PASS, the generation recipe lists 1 as current and 2 as non-current, and no system unit is failed. The probe remains only as a non-current generation. |
+| AC9 | verified | Reviewed against the maintainer's installation and runtime output supplied on 2026-09-21: the minimal ISO is 26.05.10057.cf9d2fb3e50f, booted in UEFI mode, and the selected account successfully logs in. The guest's source is abc5dae247fdae711f21bee863b919098af2560a with exactly the two inventory value edits, user `shk` and stateVersion `26.05`, shown by its Git diff. These match this tree's inventory; its evaluation finds the selected account as the sole managed home, hostName `vm`, stateVersion 26.05 and no failed assertion. The maintainer identifies the VMware host as Windows. `docs/status/unixlike.md` records the installation, source and evaluation, build, native-runtime and activation evidence separately. |
+| AC10 | pending | GitHub read on 2026-09-21: the merged PRs #310 (spec), #319 (evaluation and build) and #320 (installation procedure) each report `Required checks` SUCCESS. The current inventory confirmation and guest evidence are local, uncommitted changes; their pull request and its Required checks remain outstanding. |
