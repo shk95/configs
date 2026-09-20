@@ -103,8 +103,11 @@ Since 2026-09-19 work is planned and verified in documents
 and the report that answers it under `docs/work/<scope>/<slug>/`, checked by
 `tool/version-control/work` on every commit and in CI, with issues holding
 execution state only and `docs/work/roadmap.md` stating lanes and order.
-GitHub milestones are no longer used, a branch is one reviewable increment,
-and no commit message on its way to `dev` and no promotion body carries a
+GitHub milestones are no longer used, a branch is one reviewable increment —
+since 2026-09-20 what one evidence lane verifies, with its report rows and
+status in the same pull request, a rule a reviewer holds and no tool does
+(`INV repository/pull-request-spans-an-evidence-lane`); no spec has yet run
+under it — and no commit message on its way to `dev` and no promotion body carries a
 closing keyword. A push to `dev` that ends a report closes the issue its
 spec names (`.github/workflows/work-closure.yml`), `tool/version-control/audit`
 warns about a spec past its review-by, and `tool/version-control/audit-remote`

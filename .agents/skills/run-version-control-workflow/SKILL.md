@@ -1,6 +1,6 @@
 ---
 name: run-version-control-workflow
-description: Audit and execute this repository's version-control workflow. Use when starting or classifying a change, planning GitHub milestones, preparing commits, integrating topic branches, promoting dev into master, planning a domain release tag, or verifying that Git history, hooks, CI, and branch protection follow the documented unixlike, windows, common, adoption, and repository-governance rules.
+description: Audit and execute this repository's version-control workflow. Use when starting or classifying a change, planning work and its pull requests, preparing commits, integrating topic branches, promoting dev into master, planning a domain release tag, or verifying that Git history, hooks, CI, and branch protection follow the documented unixlike, windows, common, adoption, and repository-governance rules.
 ---
 
 # Run Version Control Workflow
@@ -49,7 +49,12 @@ planning read-only unless the user explicitly authorizes a Git mutation.
   checked by `tool/version-control/work`; anything else carries its evidence
   in the pull request body. Open the execution issue only when
   implementation starts, name the spec on its first line, and keep acceptance
-  criteria and evidence out of it. Create no GitHub milestone. Restate the
+  criteria and evidence out of it. Create no GitHub milestone. Cut a spec's
+  pull requests at its evidence lanes and scopes, not at its steps, and keep
+  the report rows, the status sentence and the report's end in the pull
+  request whose evidence they record; propose a bookkeeping-only pull
+  request only when its evidence was produced outside the repository, and
+  say so in its body. Restate the
   exact issue targets before remote writes, report every created URL, link
   issues with `Refs #<n>`, and never present a finished report or a closed
   issue as release or deployment evidence.

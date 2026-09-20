@@ -20,6 +20,10 @@ own list is the file named for it beside this one (`unixlike.md`,
       fixture was read to confirm it exercises the statement.
 - [ ] Evaluation, build, native runtime check, and deployment evidence are
       reported separately where they apply.
+- [ ] A change that belongs to a spec verifies at least one of its criteria
+      and carries the report rows, status and report end that produces; one
+      that carries only bookkeeping names where its evidence was produced
+      (INV repository/pull-request-spans-an-evidence-lane).
 - [ ] No commit, push, tag, branch change, activation, or Apply occurred without
       explicit authorization.
 
