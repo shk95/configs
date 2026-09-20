@@ -137,9 +137,24 @@ the Mac, created on 2026-09-20 as a sandbox) is composed from `nixos.orbstack`
 needs from a guest — the account OrbStack enters as, its network and
 resolver, no sshd — imports nothing OrbStack generates, registers no binfmt
 emulation on the kernel the machines share
-(`INV unixlike/orbstack-shared-kernel`), and takes the shared home alone. Its
-evidence is evaluation alone: the machine still runs the image OrbStack
-created and has not been switched to the flake
+(`INV unixlike/orbstack-shared-kernel`), and takes the shared home alone. The
+machine was switched to the flake on 2026-09-20, then deleted and created
+again isolated from OrbStack's image to read the procedure end to end, and
+each lane was observed separately, inside the machine that exists now at
+d616c51 unless said otherwise: evaluation, at 9198817, on the aarch64 Darwin
+host and in the merge gate; build, the `orbstack` toplevel; native runtime,
+after a restart from the Mac the host answers to `orbstack`, an OrbStack
+session enters as the account in zsh, sudo works, no channel exists, nothing
+of the Mac is mounted and no ssh agent is forwarded, OrbStack's mask of
+`systemd-binfmt.service` is in place with no `binfmt_misc` mounted, and the
+system is `running` with no failed unit — names resolving and flakes running
+were read in the first machine, at e562c49; activation, a first switch that
+named the output, which exits non-zero on the message bus's reload when the
+image's release differs from the flake's and is settled by a restart, then
+`just nixos-test`, `just nixos-switch` and `just nixos-rollback` between
+generations of this flake, each exiting 0. The first generation, at 98b1a23,
+ran degraded on `sys-kernel-debug.mount`, which cannot be mounted in the
+machine and the class now suppresses
 (`docs/work/unixlike/orbstack-sandbox/report.md`). Two more hosts are
 declared and not installed: `vm` (x86_64, VMware) and `desktop` (x86_64) are
 each the least that evaluates for its kind
