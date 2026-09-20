@@ -32,7 +32,7 @@ maintainer owns this file, and changing the order is a repository change.
 | 4 | typed NixOS host inventory — done 2026-09-20 | unixlike |
 | — | judgement on the CI decision's `reopen-when` (before 5) — done 2026-09-20 | repository |
 | 5 | headless aarch64 guest on UTM — done 2026-09-20 | unixlike |
-| 6 | headless x86_64 guest on VMware Workstation — host verification complete 2026-09-21; report closure awaits PR checks | unixlike |
+| 6 | headless x86_64 guest on VMware Workstation — done 2026-09-21 | unixlike |
 | 7 | aarch64 OrbStack machine — done 2026-09-20 | unixlike |
 | — | judgement on the CI decision's `reopen-when`, now met by the installed x86_64 guest (before 8) — pending | repository |
 | 8 | shared GNOME Wayland profile and the Linux terminal layer | unixlike |
@@ -71,8 +71,9 @@ costs are recorded in
 `docs/policy/decisions/unixlike/x86-64-guest-runs-on-vmware-workstation.md`.
 On 2026-09-21 the maintainer completed installation, native runtime and
 test/switch/rollback verification on Windows; Linux-host runtime remains
-unverified. The report carries that evidence and awaits the final PR checks
-before closure. VMware Workstation is installed by hand as part of the
+unverified. The completed report is
+`docs/work/unixlike/vmware-headless-guest/report.md`. VMware Workstation is
+installed by hand as part of the
 guest's procedure and is managed by neither configuration domain.
 
 The installed x86_64 guest now has an account, a service and a port, meeting
