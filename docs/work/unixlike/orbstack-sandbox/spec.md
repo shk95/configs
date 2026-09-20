@@ -139,6 +139,8 @@ Cut at the evidence lanes and scopes.
    evidence from inside the machine, the status, and the report's end; the
    roadmap row follows in `repository`.
 
+Amended 2026-09-20: a correction to what was read, and no criterion changes. The spec says the machine is an LXC container without a user namespace; that was inferred from its identity UID map. Read again the same day after a reviewing agent questioned it, the machine runs in a user namespace that is not the kernel's initial one, with UIDs mapped one to one, so root in it is still UID 0 on the shared kernel. Whether that namespace is the machine's alone, and so whether a binfmt registration made in it could reach another machine, was not determined from inside. The decision stands as written: the class registers nothing and asserts it. The list of what the class leaves out also gains the `audio` group's companions that restate a default or configure what is off: the `documentation.*` options, the dhcpcd options and `useDefaultShell`.
+
 ## Acceptance
 
 | ID | Criterion | Required lanes |

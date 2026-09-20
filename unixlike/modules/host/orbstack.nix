@@ -12,16 +12,23 @@
 # beside systemd, not from a login. The account it enters as is
 # modules/account.nix's, and sshd is off in modules/sshd.nix.
 #
-# Left out on purpose, because this machine is an isolated sandbox: the
-# certificates OrbStack adds, its ssh client fragment for the Mac's agent, and
-# the x86 platforms it declares for emulated builds.
+# Left out on purpose. Because this machine is an isolated sandbox: the
+# certificates OrbStack adds, its ssh client fragment for the Mac's agent, the
+# `audio` group it puts the account in, and the x86 platforms it declares for
+# emulated builds. Because they restate a default or configure what is off:
+# the three `documentation.*` options, the dhcpcd options, and
+# `useDefaultShell`, which modules/shell/orbstack.nix replaces.
 #
-# INV unixlike/orbstack-shared-kernel — the container has no user namespace,
-# so its root is root on the kernel OrbStack's Docker and every other machine
-# share, and the binfmt registry is that kernel's. OrbStack masks
-# systemd-binfmt.service at every boot; this class registers nothing for it
-# to mask and asserts that, the same care modules/wsl.nix takes for WSL's
-# shared registry. tool/checks/flake-test holds both directions.
+# INV unixlike/orbstack-shared-kernel — every OrbStack machine and OrbStack's
+# Docker run on one kernel, UIDs are mapped one to one, so root here is UID 0
+# on that kernel, and emulation on it is OrbStack's: it masks
+# systemd-binfmt.service in the machine at every boot observed and mounts no
+# binfmt_misc. The machine runs in a user namespace that is not the kernel's
+# initial one; whether that namespace is the machine's alone, and so whether
+# a registration made here could reach another machine, was not determined
+# from inside. This class registers nothing either way and asserts it, the
+# same care modules/wsl.nix takes for WSL's shared registry.
+# tool/checks/flake-test holds both directions.
 _: {
   modules.nixos.orbstack = {
     lib,
@@ -78,10 +85,11 @@ _: {
 
       services = lib.genAttrs unwatched (_: {serviceConfig.WatchdogSec = 0;});
 
-      # OrbStack's kernel refuses a machine the debug file system: under the
+      # The debug file system cannot be mounted in the machine: under the
       # first generation of this flake `sys-kernel-debug.mount` failed with
       # "permission denied" at the switch and at every boot, and left the
-      # system degraded (observed 2026-09-20, OrbStack 2.2.3). The unit is
+      # system degraded (observed 2026-09-20, OrbStack 2.2.3) — the machine
+      # is not in the kernel's initial user namespace. The unit is
       # one of systemd's upstream defaults, which the container module keeps.
       suppressedSystemUnits = ["sys-kernel-debug.mount"];
     };
@@ -101,7 +109,7 @@ _: {
     assertions = [
       {
         assertion = config.boot.binfmt.emulatedSystems == [] && config.boot.binfmt.registrations == {};
-        message = "INV unixlike/orbstack-shared-kernel: a binfmt registration is declared; the registry belongs to the kernel every OrbStack machine and OrbStack's Docker share.";
+        message = "INV unixlike/orbstack-shared-kernel: a binfmt registration is declared; emulation on the kernel every OrbStack machine and OrbStack's Docker share is OrbStack's.";
       }
     ];
   };

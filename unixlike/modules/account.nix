@@ -47,10 +47,14 @@ _: {
   # an agent it injects, with no authentication of their own, so the account
   # has no password to ask for: it is created locked, users are immutable —
   # OrbStack generates that and warns against the alternative — and sudo asks
-  # for nothing. The UID is how OrbStack maps the Mac's first account into
-  # every machine, which is also why the account is a system user given the
-  # shape of a normal one: NixOS keeps normal users at 1000 and above. The
-  # login shell is modules/shell/orbstack.nix.
+  # for nothing. The UID is the one OrbStack generated, 501: it gives the
+  # account the UID of the Mac account that created the machine, and 501 is
+  # what macOS gives a Mac's first account. That it would be another number
+  # on a Mac whose account has another UID is inferred, not observed; the
+  # procedure's reading after an OrbStack update is where it would show. It
+  # is also why the account is a system user given the shape of a normal one:
+  # NixOS keeps normal users at 1000 and above. The login shell is
+  # modules/shell/orbstack.nix.
   modules.nixos.orbstack = {config, ...}: let
     inherit (config.host) user;
   in {
