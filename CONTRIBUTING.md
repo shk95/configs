@@ -657,6 +657,64 @@ generations hold no account this flake declares and recreate theirs without
 a password. To exercise `just nixos-rollback`, make a second generation of
 this flake first.
 
+### Create the OrbStack machine
+
+The aarch64 OrbStack machine on the Mac is a sandbox: isolated, disposable,
+and brought under this flake's `orbstack` output after OrbStack has created
+it. Creating, switching and deleting it change a host and are the
+maintainer's to run; evaluation and a build imply none of them.
+
+1. Create the machine isolated, under the inventory's host name and from the
+   image whose release the entry's `stateVersion` carries:
+   `orb create --isolated nixos:25.11 orbstack`. An existing machine is
+   isolated with `orb config set machine.orbstack.isolated true` and
+   `orb restart orbstack`. Isolated, the machine mounts nothing of the Mac
+   and gets no ssh agent; the network stays. Isolation is the OrbStack
+   application's state and is not declared here.
+2. Enter it with `orb -m orbstack`. The image has flakes off, a `nixos`
+   channel, and neither `git` nor `just`. Clone the repository and remove
+   the channel while the command still exists:
+
+   ```sh
+   nix-shell -p git --run 'git clone https://github.com/shk95/configs.git ~/configs'
+   sudo nix-channel --remove nixos
+   ```
+
+3. Make the first switch by naming the output; `nixos-rebuild` turns flakes
+   on for itself:
+
+   ```sh
+   cd ~/configs
+   sudo nixos-rebuild switch --flake "path:./unixlike#orbstack"
+   ```
+
+   OrbStack's agent, not sshd, is the way in, so the session survives the
+   switch. Open a second `orb -m orbstack` before closing the first.
+4. `orb restart orbstack` from the Mac, then read that the machine came back
+   whole: `systemctl is-system-running` answers `running`,
+   `systemd-binfmt.service` is still masked under `/run/systemd/system`, and
+   no `binfmt_misc` is mounted. The kernel is shared by every OrbStack
+   machine and by OrbStack's Docker (`INV unixlike/orbstack-shared-kernel`).
+
+From then on the machine is updated in place from its clone with
+`just nixos-test`, `just nixos-switch`, `just nixos-generations` and
+`just nixos-rollback`, as the other NixOS hosts are. Roll back only to a
+generation of this flake: the image's generations hold OrbStack's own
+configuration. `/etc/nixos` is left in place on purpose. Nothing reads it —
+the search path names the flake's nixpkgs alone
+(`INV unixlike/nixos-no-channel`) — and it is what the next step compares.
+
+After an OrbStack update, read `/etc/nixos/orbstack.nix` and
+`/etc/nixos/configuration.nix` in a newly created machine against
+`unixlike/modules/host/orbstack.nix` and `unixlike/modules/account.nix`.
+OrbStack generates those files outside the flake and says it will overwrite
+them; the class declares by hand what they hold that OrbStack needs, and only
+this reading finds a change. What the class leaves out is listed in its
+header.
+
+Recovery is `orb delete orbstack` and this procedure again, which takes
+minutes; nothing in the machine is meant to be kept.
+
 ### Capture Karabiner drift
 
 On the Mac, `just karabiner-check` reports whether the host still holds the
