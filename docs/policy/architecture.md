@@ -110,6 +110,20 @@ own is refused until the rule is changed on purpose. The NixOS-WSL host is not
 of that class: its port and its account's UID are facts about WSL's shared
 network and cgroups.
 
+A NixOS machine under OrbStack is a third kind. OrbStack writes the
+configuration such a machine needs into the machine itself, outside the
+flake, mixed with facts about the Mac that created it and marked as
+overwritten, so the domain declares by hand what OrbStack needs from a guest
+and imports none of it: an output that read a path inside one machine would
+evaluate nowhere else, and evaluation is evidence only when it reaches every
+configuration. The machine is a container without a user namespace, so its
+root is root on the one kernel OrbStack runs for every machine and for its
+container engine, and what belongs to that kernel — the binfmt registry
+first — is not the machine's to change; the class registers nothing there
+and asserts it. Whether a machine is isolated from the Mac is the OrbStack
+application's state, which the domain records in its procedure and does not
+declare.
+
 Unix-like deployment consumes a domain release tag and activates only on a
 matching host after evaluation and native build evidence.
 
