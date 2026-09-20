@@ -3,7 +3,7 @@
 #
 # INV unixlike/desktop-not-wsl — `home.desktop` is composed below into the
 # Darwin home only; the WSL homes take `shared` and `wsl` and nothing
-# graphical, and the headless guest's home takes `shared` alone.
+# graphical, and a headless guest's home takes `shared` alone.
 # tool/checks/flake-test is the enforcement.
 #
 # INV unixlike/composition-in-one-place — this file is that place.
@@ -66,13 +66,20 @@
       home = [home.shared];
     };
 
+    # The x86_64 guest under VMware Workstation, composed as the UTM guest
+    # is: its hypervisor's machine (modules/host/vmware.nix), the headless
+    # class and the shared home alone.
+    vmware = {
+      system = [
+        nixos.vmware
+        nixos.headless
+      ];
+      home = [home.shared];
+    };
+
     # Declared and not yet installed (modules/host/placeholder.nix): the
     # kind's own class and no home, until the order that installs the host
     # composes one.
-    vmware = {
-      system = [nixos.vmware];
-      home = [];
-    };
     desktop = {
       system = [nixos.desktop];
       home = [];

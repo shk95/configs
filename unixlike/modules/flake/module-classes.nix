@@ -37,8 +37,8 @@
 #   nixos.headless             NixOS hosts that boot themselves and have no display
 #   nixos.utm                  NixOS guests under UTM only
 #   nixos.orbstack             NixOS machines under OrbStack only
-#   nixos.vmware, nixos.desktop
-#                              their kind, a placeholder until it is installed
+#   nixos.vmware               NixOS guests under VMware Workstation only
+#   nixos.desktop              its kind, a placeholder until it is installed
 #   darwin.system              the nix-darwin system layer only
 #
 # INV unixlike/composition-in-one-place — a feature file writes into a class

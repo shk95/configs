@@ -32,11 +32,6 @@ _: let
   };
 in {
   modules.nixos = {
-    vmware = {
-      imports = [bootsFromLabelledDisk];
-      virtualisation.vmware.guest.enable = true;
-    };
-
     # Nothing of its own yet: what the machine is made of is the installing
     # order's to declare.
     desktop = {
