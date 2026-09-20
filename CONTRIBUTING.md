@@ -550,6 +550,78 @@ system, so it loses `/home`, the account's password and
 `~/.ssh/authorized_keys`; steps 2 and 3 of the import, and the cleanup step
 above, are owed again afterwards.
 
+### Install the UTM guest
+
+The aarch64 guest on the Mac is installed by hand from the NixOS minimal ISO
+and from this flake's `utm` output; partitioning and deployment tooling are a
+later order of `docs/work/roadmap.md`. Everything here is the maintainer's to
+run: an installation activates a system, and neither evaluation nor a build
+implies it. An aarch64 system is only evaluated on the x86_64 hosts, so its
+build, runtime and activation evidence comes from inside the guest and from
+nowhere else.
+
+1. In UTM, create a virtualised Linux machine (aarch64) that boots the
+   aarch64 minimal ISO with UEFI: a VirtIO disk, the shared network, and a
+   serial device, which is the console the guest is reached on before its
+   network is (`unixlike/modules/host/utm.nix`).
+2. In the installer, as root, create the two file systems under the labels
+   the host is declared with. Nothing detected on the machine is stored, so
+   the labels are the whole contract with the disk:
+
+   ```sh
+   parted /dev/vda -- mklabel gpt
+   parted /dev/vda -- mkpart ESP fat32 1MiB 1GiB
+   parted /dev/vda -- set 1 esp on
+   parted /dev/vda -- mkpart root ext4 1GiB 100%
+   mkfs.fat -F 32 -n boot /dev/vda1
+   mkfs.ext4 -L nixos /dev/vda2
+   mount /dev/disk/by-label/nixos /mnt
+   mkdir -p /mnt/boot
+   mount -o umask=077 /dev/disk/by-label/boot /mnt/boot
+   ```
+
+3. Confirm the inventory entry before anything is installed. `nixos-version`
+   in the installer names the release of the installation medium; the `utm`
+   entry of `unixlike/modules/flake/inventory.nix` carries that release as
+   its `stateVersion`, not the pinned nixpkgs' if the two differ, and the
+   account the guest is to have as its `user`. Correct either on a branch
+   and install from that branch.
+4. Clone the repository inside the installer (`nix-shell -p git`) and
+   install from the clone. Root keeps no password, because sshd refuses root
+   and the account reaches it through sudo:
+
+   ```sh
+   nixos-install --no-root-passwd --flake "path:./unixlike#utm"
+   nixos-enter --root /mnt -c 'passwd <account>'
+   ```
+
+   The account is created without a password
+   (`unixlike/modules/account.nix`), so until `passwd` has run nothing can
+   log in or become root, and the password set this way survives every later
+   activation.
+5. Shut the guest down, remove the ISO in UTM and start it. Log in on the
+   serial console with the password and put a public key in
+   `~/.ssh/authorized_keys`; keys are host-owned
+   (`unixlike/modules/sshd.nix`). From then on the guest is reached over ssh
+   on port 22 with that key: sshd refuses a password, and the firewall admits
+   no other port.
+6. Clone the repository inside the guest. `tool/doctor.sh unixlike` reports
+   whether the host is ready.
+
+The guest is updated in place from that clone with the recipes that act on
+the output named after the running host: `just nixos-test` builds the system
+and activates it without making it the boot default, `just nixos-switch`
+makes it the default, `just nixos-generations` lists it, and
+`just nixos-rollback` returns to the generation before. Unlike NixOS-WSL the
+guest has a boot loader, so a generation that cannot start is also left
+behind by choosing the previous one in the systemd-boot menu on the console.
+Home Manager is composed into the system here too, so a dotfile change is a
+system switch. A rebuild that names no flake stops on the search path, as on
+every NixOS host of this repository (`INV unixlike/nixos-no-channel`).
+
+Installing again is recovery, not an update: it replaces the root file
+system, and steps 4 and 5 are owed again afterwards.
+
 ### Capture Karabiner drift
 
 On the Mac, `just karabiner-check` reports whether the host still holds the
