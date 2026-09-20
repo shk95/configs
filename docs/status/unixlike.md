@@ -112,7 +112,8 @@ and named after it, `modules.nixos.shared` gives the host that name and the
 entry's state version, and only a combination of system, kind and hypervisor
 that a host lane names evaluates (`INV unixlike/nixos-host-inventory`).
 `unixlike/tool/checks/flake-test` proves each host answers to its entry's
-name (#191). `aarch64-linux` is an evaluated system and is not built here.
+name (#191). `aarch64-linux` is an evaluated system and is not built here
+(`docs/work/unixlike/nixos-host-inventory/report.md`, done).
 Four more hosts are declared and not installed — `vm` (x86_64, VMware),
 `utm` (aarch64, UTM), `orbstack` (aarch64) and `desktop` (x86_64) — each the
 least that evaluates for its kind (`unixlike/modules/host/placeholder.nix`).
