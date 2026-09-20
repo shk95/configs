@@ -58,8 +58,11 @@ A branch is one reviewable increment: one issue, or what one judgement
 covers. Cut it from `origin/dev`, and merge it through one pull request when
 it is complete and green
 (`docs/policy/decisions/repository/work-planned-and-verified-in-documents.md`). A spec
-takes as many pull requests as it needs; "Plan and verify work" below is how
-they are planned.
+takes as many pull requests as it has evidence lanes and scopes, not as many
+as it has steps: an increment is what one evidence lane verifies, and the
+bookkeeping a verification produces travels with it
+(`INV repository/pull-request-spans-an-evidence-lane`). "Plan and verify
+work" below is how they are planned.
 
 A commit marks a judgement point. It carries the change one decision
 produced, however many files that is, and is not split further merely because
@@ -355,7 +358,8 @@ the format; this is the procedure.
    per scope. An increment may classify differently from its spec, and its
    commit and pull request stay single-scope.
 2. Write `spec.md`: the problem, the decisions with what was rejected, the
-   increments, and an `## Acceptance` table naming for each criterion the
+   increments — one for each evidence lane and scope the criteria need, not
+   one for each step — and an `## Acceptance` table naming for each criterion the
    evidence lanes that must be verified. A criterion no check can decide
    names `review`. Set `review-by` to the date by which someone could tell
    whether the work is done. Argue a direction first in `study.md` when it
@@ -368,10 +372,21 @@ the format; this is the procedure.
    acceptance criteria. Add `issue: #<n>` to the spec's header. A report
    issue that already exists — a bug, an upstream watch — links the spec and
    becomes the execution issue.
-5. Work in increments, one branch and one pull request each. Link the issue
-   with `Refs #<n>`; a closing keyword is refused
-   (`INV repository/no-closing-keyword`). Record evidence in the report row
-   as each criterion is verified, per lane and never upgraded.
+5. Work in increments, one branch and one pull request each. An increment is
+   what one evidence lane verifies, not a step: the criteria an evaluation
+   decides are one, the ones only a host decides are another. Its pull
+   request carries what the verification produces — the report rows, written
+   in a commit after the one the evidence was taken at, the status sentence,
+   and the report's end when it verifies the last criterion. The spec and its
+   report may be that pull request's first commit; they go ahead alone when
+   the spec needs review first or the work is handed to another host or
+   session. Gather what the spec owes in another scope into one pull request
+   for that scope, and merge it before the spec's last pull request when a
+   criterion rests on it. A pull request that carries only bookkeeping says
+   in its body where its evidence was produced. Link the issue with
+   `Refs #<n>`; a closing keyword is refused
+   (`INV repository/no-closing-keyword`). Evidence is recorded per lane and
+   never upgraded.
 6. To change a criterion after the report exists, add a paragraph to the spec
    that opens `Amended YYYY-MM-DD` and names the criterion. The checker
    refuses a criterion removed or rewritten without one.

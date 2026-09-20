@@ -45,6 +45,13 @@ differently — a Unix-like spec whose procedure lives in `CONTRIBUTING.md` has
 a `repository` increment — and each increment's commit and pull request
 stays single-scope. Work whose outcome spans scopes is one spec per scope.
 
+An increment is what one evidence lane verifies, not a step of the work. A
+spec lists one for the criteria an evaluation decides, one for those only a
+host decides, and one for each other scope it owes something in; the report
+rows a pull request verifies, the status sentence and the report's end
+travel in that pull request and are not increments of their own
+(`INV repository/pull-request-spans-an-evidence-lane`).
+
 ## Format
 
 Line 1 is `# <Title>`; then a header of `key: value` lines up to the first

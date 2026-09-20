@@ -65,3 +65,45 @@ Rejected:
   is a second list nothing checks.
 - Closing issues with keywords on the promotion. It ties closure to an event
   that certifies nothing about the work.
+
+On 2026-09-20 the increment was given its edge: a pull request of a spec
+spans an evidence lane. The first two days under this record were measured at
+e7670a6. Of the forty pull requests merged into `dev` between 2026-09-14 and
+2026-09-20, twenty-three changed one to three files, twenty-six lived less
+than thirty minutes, and about twelve carried nothing but a report row, a
+report's end, a status sentence or a roadmap row; the typed host inventory
+took six pull requests, three of which held its implementation. The sentence
+above did not ask for that. The procedure's reading of it did — "one branch
+and one pull request each" for increments a spec had listed step by step —
+and so did bookkeeping that followed its evidence into a pull request of its
+own.
+
+An increment is what one evidence lane verifies. A pull request of a spec
+verifies at least one acceptance criterion in its required lanes and carries
+what that verification produces: the report rows, the status sentence and,
+when it verifies the last criterion, the report's end. The evidence is
+produced at a commit of the branch and the row that cites it is a later
+commit of the same branch. A spec and its report may enter with the first
+implementing pull request, as its first commit, so the bar is still set
+before the work in history; they enter alone when the spec needs review
+before work starts or the work is handed to another host or session. What a
+spec owes in another scope — a procedure in `CONTRIBUTING.md`, a roadmap
+row — is gathered into one pull request for that scope, merged before the
+spec's last pull request when a criterion rests on it, so that the last one
+ends the report. The roadmap row that records an end necessarily follows it,
+and is the one bookkeeping pull request a spec may leave. A pull request
+that carries only bookkeeping is otherwise legitimate when its evidence was
+produced outside the repository — a maintainer's installation, a host
+session — and its body says so; that is why a reviewer holds this rule and
+no tool does (`INV repository/pull-request-spans-an-evidence-lane`).
+
+Rejected on 2026-09-20: a branch as long as a roadmap lane, which is the
+superseded record's branch under another name, would wait on a maintainer's
+installation for days against a `dev` that requires an up-to-date branch,
+and still could not carry the other scope's part; relaxing single-scope pull
+requests, because evidence, release tags and CI jobs are selected by scope;
+and a tool that refuses a bookkeeping-only pull request, because the
+legitimate case above is indistinguishable from the path list. This
+paragraph is revisited when a pull request grows past what one review can
+hold, or when one lane's evidence is again spread over several pull
+requests.
