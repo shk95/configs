@@ -122,9 +122,10 @@ whose issue the workflow also closed. A release tag annotation now states
 each host's evidence in a block of its own, which the audit holds every tag
 but the two of 2026-08-31 to
 (`docs/work/repository/release-tag-contract/report.md`); no tag has been
-created in that form yet. The CI reconsideration work item is open
-(`docs/work/repository/ci-headless-runtime/report.md`); `docs/work/roadmap.md`
-names what comes next.
+created in that form yet. The CI reconsideration work item is done
+(`docs/work/repository/ci-headless-runtime/report.md`): the existing required
+Unix-like job now boots the generic headless class and exercises its account,
+ssh and firewall contract without adding a runner or workflow.
 
 ## Common
 
@@ -135,14 +136,12 @@ semantics across independent platform validation and release cycles.
 
 ## Open conditions
 
-- `docs/policy/decisions/repository/ci-evidence-without-hosted-runners.md`: reopens when a
-  defect class a hosted runner would have caught occurs twice, or an installed
-  x86_64 NixOS guest declares behaviour of its own for a VM test to assert
-  (judged and restated on 2026-09-20, when the first NixOS outputs beside the
-  WSL one were placeholders). The VMware guest was installed on Windows
-  and its native runtime and test/switch/rollback were verified on 2026-09-21,
-  so the second condition is now met. The maintainer's judgement is pending
-  before roadmap order 8; no CI policy has changed.
+- `docs/policy/decisions/repository/ci-evidence-without-hosted-runners.md`: the
+  installed VMware guest triggered review on 2026-09-21, and the maintainer
+  accepted one minimal booted headless check in the existing required
+  Unix-like job. It reopens if that check becomes unreliable or impractical,
+  another installed host gains runtime behaviour a hosted test can assert, or
+  a defect class an additional hosted runner would have caught occurs twice.
 - `docs/policy/decisions/repository/powershell-copied-per-domain.md`: reopens when both
   implementations show stable semantics that would justify a common
   component.

@@ -34,7 +34,7 @@ maintainer owns this file, and changing the order is a repository change.
 | 5 | headless aarch64 guest on UTM — done 2026-09-20 | unixlike |
 | 6 | headless x86_64 guest on VMware Workstation — done 2026-09-21 | unixlike |
 | 7 | aarch64 OrbStack machine — done 2026-09-20 | unixlike |
-| — | judgement on the CI decision's `reopen-when`, now met by the installed x86_64 guest (before 8) — pending | repository |
+| — | judgement on the CI decision's `reopen-when`, met by the installed x86_64 guest — minimal VM check accepted on the existing required job 2026-09-21 | repository |
 | 8 | shared GNOME Wayland profile and the Linux terminal layer | unixlike |
 | 9 | x86_64 desktop on an AMD APU | unixlike |
 | 10 | GNOME on the VM guests | unixlike |
@@ -79,8 +79,10 @@ guest's procedure and is managed by neither configuration domain.
 The installed x86_64 guest now has an account, a service and a port, meeting
 the second `reopen-when` condition of
 `docs/policy/decisions/repository/ci-evidence-without-hosted-runners.md`.
-The maintainer's judgement is pending before order 8; recording that trigger
-adds no runner and changes no CI policy.
+The maintainer accepted one minimal booted headless check in the existing
+required Unix-like job on 2026-09-21. It adds no runner or workflow; account,
+ssh and firewall runtime are now affected-dispatch evidence for Unix-like pull
+requests.
 
 Order 7, OrbStack. A host kind of its own, like WSL in having no boot loader
 and a host that injects its integration, so it reuses the flake-only rebuild
