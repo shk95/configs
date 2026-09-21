@@ -83,7 +83,11 @@ in {
           server.succeed("printf '%s:%s\\n' ${testUser} test-password | chpasswd")
 
           ssh_options = "-o StrictHostKeyChecking=no -o UserKnownHostsFile=/dev/null -o ConnectTimeout=5"
-          server.succeed(f"ip netns exec test-client ssh {ssh_options} -i /tmp/test-key ${testUser}@192.0.2.1 true")
+          # Nested KVM can leave `ip netns exec` waiting after sshd has closed
+          # a successful session. The remote marker proves that the key ran a
+          # command; the timeout bounds cleanup of the namespace wrapper.
+          server.succeed(f"timeout --kill-after=5s 60s ip netns exec test-client ssh {ssh_options} -i /tmp/test-key ${testUser}@192.0.2.1 'touch /tmp/key-login-ok' || test -e /tmp/key-login-ok")
+          server.succeed("test -e /tmp/key-login-ok")
           server.fail(f"ip netns exec test-client sshpass -p test-password ssh {ssh_options} -o PubkeyAuthentication=no -o PreferredAuthentications=password -o NumberOfPasswordPrompts=1 ${testUser}@192.0.2.1 true")
 
           server.succeed("install -d -m 700 /root/.ssh")
