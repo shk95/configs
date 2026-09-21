@@ -118,7 +118,11 @@ name (#191). `aarch64-linux` is an evaluated system and is not built here
 from `nixos.utm` (`unixlike/modules/host/utm.nix`), the `nixos.headless`
 class — the entry's account without a tracked password, key-only sshd on 22
 and a firewall that opens that port alone (`INV unixlike/headless-key-only`)
-— and the shared home alone. The guest had been installed from the graphical
+— and the shared home alone. The x86_64 flake check also boots that class and
+reaches it from a separate network namespace: the declared account accepts a
+disposable key, password and root logins fail, sudo asks for a password, and
+the firewall refuses a listening port other than ssh. The guest had been
+installed from the graphical
 installer as NixOS 25.11 and was adopted in place on 2026-09-20: its file
 systems relabelled, a first switch that named the output, the installer's
 channel and configuration removed; its state version is 25.11 and its swap
