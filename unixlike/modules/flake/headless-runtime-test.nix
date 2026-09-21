@@ -29,6 +29,18 @@ in {
           ];
 
           host = vmHost // {name = "vm";};
+
+          # Neither DHCP nor an RSA host key is part of this fixture's
+          # contract. Avoid their timeouts and key generation cost so a TCG
+          # boot keeps enough margin below the driver's connection timeout.
+          networking.useDHCP = false;
+          services.openssh.hostKeys = [
+            {
+              path = "/etc/ssh/ssh_host_ed25519_key";
+              type = "ed25519";
+            }
+          ];
+
           environment.systemPackages = [
             pkgs.iproute2
             pkgs.netcat
