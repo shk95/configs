@@ -5,6 +5,7 @@ enforced-by: schema unixlike/modules/sshd.nix
 enforced-by: schema unixlike/modules/firewall.nix
 enforced-by: schema unixlike/modules/account.nix
 enforced-by: fixture unixlike/tool/checks/flake-test
+enforced-by: fixture unixlike/modules/flake/headless-runtime-test.nix
 
 A headless host is reached over the network or not at all, so what it admits
 is the whole of its exposure. The class that makes such a host reachable
@@ -22,3 +23,9 @@ facts about WSL's shared network and cgroups, it has no firewall of its own
 to hold, and its daemon is declared beside this one with the same settings.
 The fixture evaluates the real host of the class for each property and
 extends it with each violation in turn.
+
+The runtime fixture boots the headless class on x86_64 Linux. It writes a
+disposable password and key after boot, reaches sshd through a separate
+network namespace, and proves that a key reaches the account while a password
+and a root login do not, sudo still asks for a password, and a listening port
+other than ssh remains unreachable through the firewall.
