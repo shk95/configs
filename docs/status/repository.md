@@ -122,8 +122,9 @@ whose issue the workflow also closed. A release tag annotation now states
 each host's evidence in a block of its own, which the audit holds every tag
 but the two of 2026-08-31 to
 (`docs/work/repository/release-tag-contract/report.md`); no tag has been
-created in that form yet. No work item is open; `docs/work/roadmap.md` names
-what comes next.
+created in that form yet. The CI reconsideration work item is open
+(`docs/work/repository/ci-headless-runtime/report.md`); `docs/work/roadmap.md`
+names what comes next.
 
 ## Common
 
