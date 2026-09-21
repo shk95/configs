@@ -8,7 +8,7 @@ status: done
 
 | ID | State | Evidence |
 | --- | --- | --- |
-| AC1 | verified | Native runtime at `018eee4`: `nix build --no-link --print-build-logs path:./unixlike#checks.x86_64-linux.headless-runtime` booted under QEMU TCG and exited 0 after observing the account, sudo, key-only ssh, root refusal and blocked-port assertions. The first build, including 26 changed system derivations, took 5:36.56; the VM script took 317.59 seconds and connected its backdoor after 225.17 seconds. |
+| AC1 | verified | Native runtime at `973bec8`: `nix build --no-link --print-build-logs path:./unixlike#checks.x86_64-linux.headless-runtime` booted under QEMU TCG and exited 0 after observing the account, sudo, key-only ssh, root refusal and blocked-port assertions. The build took 4:55.15; the VM script took 277.56 seconds and the successful ssh assertion completed in 22.42 seconds. |
 
 ## Cost and recovery observation
 
@@ -20,3 +20,9 @@ DHCP timeout and RSA host-key generation consumed about 90 seconds. Commit
 `018eee4` removed those two fixture-only costs, retained the tested contract
 and produced the verified run above. Hosted cost remains the repository work
 item's affected-dispatch evidence.
+
+The first hosted run used KVM and reached the successful public-key session in
+about 18 guest seconds, but its `ip netns exec` wrapper did not return after
+sshd closed the session. The job reached its 60-minute limit. Commit `973bec8`
+uses a guest-side marker to prove the remote command ran and bounds wrapper
+cleanup with `timeout`; the TCG run above verifies the revised assertion.
