@@ -133,6 +133,10 @@ _: {
       enableCompletion = true;
       syntaxHighlighting.enable = true;
 
+      # Preserve the state-version 25.11 location explicitly before Home
+      # Manager changes its default. Existing homes keep ~/.zshrc in place.
+      dotDir = config.home.homeDirectory;
+
       # Replaces the implicit $EDITOR-derived selection described above.
       defaultKeymap = "viins";
 

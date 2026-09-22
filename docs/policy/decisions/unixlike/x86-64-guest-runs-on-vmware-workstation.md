@@ -9,7 +9,7 @@ reopen-when: VMware Workstation stops running beside WSL2 on the Windows host or
 source: docs/work/unixlike/vmware-headless-guest/spec.md § Decisions
 
 The maintainer works on a Windows host and means to work on a NixOS one, and
-wants the same x86_64 NixOS guest on both: headless first, a GNOME machine
+wants the same x86_64 NixOS guest on both: headless first, a graphical machine
 later. Each host has a hypervisor of its own, so the choice was between one
 guest profile under a hypervisor both hosts can run and one profile for each
 host.
@@ -20,7 +20,7 @@ The `vm` host of the inventory is a guest of VMware Workstation. Its class
 (`unixlike/modules/host/vmware.nix`) names nothing about the host's
 operating system, so the same output is installed on either host. Two facts
 carry the choice. `vmwgfx` gives the guest 3D graphics, which the later
-GNOME stage needs to render on the GPU. On the Windows host, VMware
+graphical stage needs to render on the GPU. On the Windows host, VMware
 Workstation runs over the Windows Hypervisor Platform, so it coexists with
 WSL2 instead of displacing it.
 
@@ -35,8 +35,8 @@ it deploys. The installation is a step of the guest's procedure in
 
 Hyper-V on the Windows host is the lighter choice for a headless guest and
 needs no program installed by hand. It is Windows-only, it gives the guest
-no 3D graphics, so GNOME would render in software, and its enhanced session
-is xrdp.
+no 3D graphics, so the Wayland session would render in software, and its
+enhanced session is xrdp.
 
 QEMU/KVM is the native choice on a NixOS host and needs no program
 installed by hand either. It does not run on the Windows host beside WSL2.
