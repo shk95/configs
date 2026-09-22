@@ -122,6 +122,15 @@ in {
           fd
           jq
           yq-go
+          nix-output-monitor
+          nix-tree
+          procs
+          duf
+          dust
+          trash-cli
+          hyperfine
+          jc
+          sad
           file
           gawk
           gnused
@@ -149,10 +158,16 @@ in {
           caddy
           curl
           mkcert
+          mtr
           nmap
+          gping
+          doggo
+          dnsutils
           rclone
+          rsync
           socat
           wget
+          croc
 
           # languages / build tools
           go
@@ -183,6 +198,18 @@ in {
         # The locked nixpkgs marks bettercap broken on Darwin. Homebrew owns the
         # macOS formula while Linux homes still receive the same command from Nix.
         ++ lib.optionals pkgs.stdenv.hostPlatform.isLinux [pkgs.bettercap];
+    };
+
+    homeManager.linuxGraphical = {pkgs, ...}: {
+      home.packages = with pkgs; [
+        brightnessctl
+        freerdp
+        imv
+        pavucontrol
+        remmina
+        wf-recorder
+        wl-clipboard
+      ];
     };
 
     nixos.wsl = systemRule wslUser;

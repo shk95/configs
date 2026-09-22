@@ -1,7 +1,7 @@
 # The store every aspect file writes into, and the reason the pattern works at
 # all.
 #
-# Merging is the whole mechanism. Fifteen files each set
+# Merging is the whole mechanism. Concern files set a class such as
 # `modules.homeManager.shared`, and `deferredModule` combines them into one module
 # that imports all of them — so a feature contributes to a configuration without
 # knowing which other features exist, and without anything holding a list of
@@ -28,6 +28,7 @@
 #
 #   homeManager.shared         every Unix-like home
 #   homeManager.desktop        graphical Unix-like homes, not WSL
+#   homeManager.linuxGraphical Linux-only graphical session and applications
 #   homeManager.wsl            both WSL flavours
 #   homeManager.wslStandalone  standalone only — no system layer underneath
 #   homeManager.darwin         Darwin-only user behavior
@@ -35,6 +36,7 @@
 #   nixos.shared               every NixOS host
 #   nixos.wsl                  NixOS hosts of kind wsl only
 #   nixos.headless             NixOS hosts that boot themselves and have no display
+#   nixos.graphical            reusable Niri graphical services, composed after order 8
 #   nixos.utm                  NixOS guests under UTM only
 #   nixos.orbstack             NixOS machines under OrbStack only
 #   nixos.vmware               NixOS guests under VMware Workstation only

@@ -39,8 +39,8 @@ _: {
     };
 
     # open-vm-tools without its X11 half. nixpkgs derives the same value from
-    # the absent X server; it is written here because the GNOME order is the
-    # one that means to change it.
+    # the absent X server; it is written here because the installed-host
+    # graphical order is the one that means to change it.
     virtualisation.vmware.guest = {
       enable = true;
       headless = true;

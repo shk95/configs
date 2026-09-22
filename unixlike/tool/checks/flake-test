@@ -108,7 +108,8 @@ wsl_host=$(hosts_eval '{ }' 'hosts: builtins.concatStringsSep "\n" (builtins.fil
 [ -n "$wsl_host" ] && [ "$(printf '%s\n' "$wsl_host" | wc -l)" -eq 1 ] ||
   fail "the probes below need exactly one host of kind wsl, found: $wsl_host"
 # The hosts of the headless class are the guests: every host of kind `vm`,
-# under either hypervisor, until the GNOME order gives one a display.
+# under either hypervisor, until the installed-host graphical order composes
+# the graphical classes into one.
 headless_hosts=$(hosts_eval '{ }' 'hosts: builtins.concatStringsSep " " (builtins.filter (n: hosts.${n}.kind == "vm") (builtins.attrNames hosts))')
 for hypervisor in utm vmware; do
   hosts_eval '{ }' "hosts: builtins.toJSON (builtins.any (n: hosts.\${n}.hypervisor == \"$hypervisor\") (builtins.attrNames hosts))" | grep -qx true ||
@@ -138,6 +139,18 @@ for host in $nixos_hosts; do
   declared=$(hosts_eval '{ }' "hosts: hosts.\"$host\".system")
   applied=$(nix eval --raw "path:$repo#nixosConfigurations.\"$host\".pkgs.stdenv.hostPlatform.system")
   [ "$applied" = "$declared" ] || fail "nixosConfigurations.$host targets $applied, its entry declares $declared"
+
+  # Roadmap order 8 defines and tests the graphical classes in isolation.
+  # Order 10 alone may compose them into an installed host. These option
+  # markers make an accidental early composition fail at evaluation time.
+  for option in \
+    programs.niri.enable \
+    services.greetd.enable \
+    services.pipewire.enable
+  do
+    graphical=$(nix eval --json "path:$repo#nixosConfigurations.\"$host\".config.$option")
+    [ "$graphical" = false ] || fail "nixosConfigurations.$host enables $option before the installed-host graphical order"
+  done
 done
 
 printf '→ accepts each combination a host lane names\n'
@@ -186,7 +199,7 @@ hosts_eval "$no_state_version" 'hosts: hosts.fixture-host.stateVersion' 2>&1 >/d
   fail "identity.nix refused a host without a state version, but not for the missing value"
 
 # ---------------------------------------------------------------------------
-# The desktop class stays out of the WSL homes
+# Graphical classes stay out of headless homes
 # ---------------------------------------------------------------------------
 #
 # INV unixlike/desktop-not-wsl
@@ -194,8 +207,9 @@ hosts_eval "$no_state_version" 'hosts: hosts.fixture-host.stateVersion' 2>&1 >/d
 # Darwin home only. WezTerm is the marker: modules/wezterm.nix declares it in
 # the desktop class alone, so its presence in a WSL home's packages, or in the
 # headless guest's, means a graphical class reached a headless home. The
-# Darwin arm proves the probe sees the package where the class is composed,
-# so an empty result is not a pass by accident.
+# Darwin arm proves the probe sees the desktop package where that class is
+# composed. Noctalia and XWayland Satellite mark the Linux graphical class,
+# which no declared host consumes before the installed-host graphical order.
 
 packages_of() {
   nix eval --raw "path:$repo#$1" \
@@ -216,9 +230,11 @@ for home in \
 do
   printf '→ %s carries no graphical program\n' "${home%%.config*}"
   names=$(packages_of "$home")
-  if printf '%s\n' "$names" | grep -qx wezterm; then
-    fail "$home carries wezterm, a desktop-class program"
-  fi
+  for marker in wezterm noctalia xwayland-satellite; do
+    if printf '%s\n' "$names" | grep -qx "$marker"; then
+      fail "$home carries $marker, a graphical-class program"
+    fi
+  done
 done
 
 printf '→ the Darwin home carries it\n'
