@@ -3,7 +3,7 @@
 date: 2026-08-16
 scope: repository
 status: accepted
-reopen-when: a defect class a hosted runner would have caught occurs twice, or an installed x86_64 NixOS guest declares behaviour of its own — an account, a service, a port — for a VM test to assert
+reopen-when: the required headless VM check becomes unreliable or makes ordinary Unix-like changes impractical, another installed host gains runtime behaviour a hosted test can assert, or a defect class an additional hosted runner would have caught occurs twice
 source: 9f1e8ce:docs/status.md § Windows authority split
 source: 9f1e8ce:docs/status.md § CI runners are not added
 
@@ -40,3 +40,23 @@ first condition has not occurred: the one failure the gate caught in that
 work was a fixture flake missing an attribute the gate's Nix reads, a defect
 of the verification machinery. The condition is restated above so that it
 fires when a test would have something to prove.
+
+2026-09-21: The installed VMware guest gave the generic headless class the
+account, ssh and firewall behaviour the second condition required. The
+maintainer accepts one minimal `runNixOSTest` check in the existing required
+Unix-like job. It imports the real shared and headless classes, uses one guest
+and a network namespace, and keeps the faster evaluation fixture for its
+positive and negative declaration coverage. No runner or workflow is added.
+
+The final local TCG run took 4:55.15, of which the VM script took 277.56
+seconds. The first hosted KVM run reached the successful public-key session
+but exposed a test-harness defect: `ip netns exec` did not return after sshd
+closed the session, so the job reached its 60-minute limit. A guest marker now
+proves the remote command ran and a timeout bounds wrapper cleanup. The next
+hosted run passed, and the up-to-date-base run
+[`35571092957`](https://github.com/shk95/configs/actions/runs/35571092957)
+passed the required workflow in 8:30; its Unix-like job took 8:06 and
+`unixlike/tool/checks/test` took 3:01. That cost is accepted for Unix-like pull
+requests. This is affected-dispatch evidence for the generic headless contract,
+not VMware native-runtime or activation evidence. The consumed condition is
+replaced above with the circumstances that would require another judgement.
