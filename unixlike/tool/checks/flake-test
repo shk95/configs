@@ -107,14 +107,19 @@ nixos_hosts=$(hosts_eval '{ }' 'hosts: builtins.concatStringsSep "\n" (builtins.
 wsl_host=$(hosts_eval '{ }' 'hosts: builtins.concatStringsSep "\n" (builtins.filter (n: hosts.${n}.kind == "wsl") (builtins.attrNames hosts))')
 [ -n "$wsl_host" ] && [ "$(printf '%s\n' "$wsl_host" | wc -l)" -eq 1 ] ||
   fail "the probes below need exactly one host of kind wsl, found: $wsl_host"
-# The hosts of the headless class are the guests: every host of kind `vm`,
-# under either hypervisor, until the installed-host graphical order composes
-# the graphical classes into one.
-headless_hosts=$(hosts_eval '{ }' 'hosts: builtins.concatStringsSep " " (builtins.filter (n: hosts.${n}.kind == "vm") (builtins.attrNames hosts))')
+# Every self-booting host keeps the headless account, SSH and recovery class.
+# The guests remain headless until order 10; order 9 composes the graphical
+# classes into the desktop while retaining that recovery path.
+guest_hosts=$(hosts_eval '{ }' 'hosts: builtins.concatStringsSep " " (builtins.filter (n: hosts.${n}.kind == "vm") (builtins.attrNames hosts))')
+headless_hosts=$(hosts_eval '{ }' 'hosts: builtins.concatStringsSep " " (builtins.filter (n: hosts.${n}.kind == "vm" || hosts.${n}.kind == "desktop") (builtins.attrNames hosts))')
 for hypervisor in utm vmware; do
   hosts_eval '{ }' "hosts: builtins.toJSON (builtins.any (n: hosts.\${n}.hypervisor == \"$hypervisor\") (builtins.attrNames hosts))" | grep -qx true ||
-    fail "the probes below need a guest under $hypervisor, found: $headless_hosts"
+    fail "the probes below need a guest under $hypervisor, found: $guest_hosts"
 done
+# The physical desktop, the one host of its kind.
+desktop_host=$(hosts_eval '{ }' 'hosts: builtins.concatStringsSep "\n" (builtins.filter (n: hosts.${n}.kind == "desktop") (builtins.attrNames hosts))')
+[ -n "$desktop_host" ] && [ "$(printf '%s\n' "$desktop_host" | wc -l)" -eq 1 ] ||
+  fail "the probes below need exactly one desktop, found: $desktop_host"
 # The OrbStack machine, the one host of its kind.
 orbstack_host=$(hosts_eval '{ }' 'hosts: builtins.concatStringsSep "\n" (builtins.filter (n: hosts.${n}.kind == "orbstack") (builtins.attrNames hosts))')
 [ -n "$orbstack_host" ] && [ "$(printf '%s\n' "$orbstack_host" | wc -l)" -eq 1 ] ||
@@ -140,16 +145,19 @@ for host in $nixos_hosts; do
   applied=$(nix eval --raw "path:$repo#nixosConfigurations.\"$host\".pkgs.stdenv.hostPlatform.system")
   [ "$applied" = "$declared" ] || fail "nixosConfigurations.$host targets $applied, its entry declares $declared"
 
-  # Roadmap order 8 defines and tests the graphical classes in isolation.
-  # Order 10 alone may compose them into an installed host. These option
-  # markers make an accidental early composition fail at evaluation time.
+  # Roadmap order 9 composes the graphical classes into the desktop alone.
+  # Order 10 may add them to the guests. These markers make either a missing
+  # desktop class or an early guest composition fail at evaluation time.
+  kind=$(hosts_eval '{ }' "hosts: hosts.\"$host\".kind")
+  expected=false
+  [ "$kind" = desktop ] && expected=true
   for option in \
     programs.niri.enable \
     services.greetd.enable \
     services.pipewire.enable
   do
     graphical=$(nix eval --json "path:$repo#nixosConfigurations.\"$host\".config.$option")
-    [ "$graphical" = false ] || fail "nixosConfigurations.$host enables $option before the installed-host graphical order"
+    [ "$graphical" = "$expected" ] || fail "nixosConfigurations.$host has $option=$graphical, expected $expected for kind $kind"
   done
 done
 
@@ -199,17 +207,14 @@ hosts_eval "$no_state_version" 'hosts: hosts.fixture-host.stateVersion' 2>&1 >/d
   fail "identity.nix refused a host without a state version, but not for the missing value"
 
 # ---------------------------------------------------------------------------
-# Graphical classes stay out of headless homes
+# Graphical classes stay out of non-graphical homes
 # ---------------------------------------------------------------------------
 #
 # INV unixlike/desktop-not-wsl
 # modules/flake/configurations.nix composes `homeManager.desktop` into the
-# Darwin home only. WezTerm is the marker: modules/wezterm.nix declares it in
-# the desktop class alone, so its presence in a WSL home's packages, or in the
-# headless guest's, means a graphical class reached a headless home. The
-# Darwin arm proves the probe sees the desktop package where that class is
-# composed. Noctalia and XWayland Satellite mark the Linux graphical class,
-# which no declared host consumes before the installed-host graphical order.
+# Darwin and physical desktop homes. WezTerm is the cross-platform marker;
+# Noctalia and XWayland Satellite mark the Linux graphical class. Their
+# presence in a WSL or guest home means a graphical class escaped its row.
 
 packages_of() {
   nix eval --raw "path:$repo#$1" \
@@ -223,7 +228,7 @@ darwin_host=$(identity_eval '{ }' darwin.hostName)
 for home in \
   "homeConfigurations.\"$wsl_user\".config.home.packages" \
   "nixosConfigurations.\"$wsl_host\".config.home-manager.users.\"$wsl_user\".home.packages" \
-  $(for host in $headless_hosts; do
+  $(for host in $guest_hosts; do
     printf '%s\n' "nixosConfigurations.\"$host\".config.home-manager.users.\"$(hosts_eval '{ }' "hosts: hosts.\"$host\".user")\".home.packages"
   done) \
   "nixosConfigurations.\"$orbstack_host\".config.home-manager.users.\"$orbstack_user\".home.packages"
@@ -237,11 +242,68 @@ do
   done
 done
 
+printf '→ the physical desktop home carries both graphical classes\n'
+desktop_user=$(hosts_eval '{ }' "hosts: hosts.\"$desktop_host\".user")
+desktop_home="nixosConfigurations.\"$desktop_host\".config.home-manager.users.\"$desktop_user\".home.packages"
+names=$(packages_of "$desktop_home")
+for marker in wezterm noctalia xwayland-satellite; do
+  if ! printf '%s\n' "$names" | grep -qx "$marker"; then
+    fail "the physical desktop home has no $marker; its graphical classes are incomplete"
+  fi
+done
+
 printf '→ the Darwin home carries it\n'
 darwin_home="darwinConfigurations.\"$darwin_host\".config.home-manager.users.\"$darwin_user\".home.packages"
 names=$(packages_of "$darwin_home")
 if ! printf '%s\n' "$names" | grep -qx wezterm; then
   fail "the Darwin home has no wezterm; the probe cannot see the desktop class"
+fi
+
+# ---------------------------------------------------------------------------
+# The physical desktop has a portable machine contract
+# ---------------------------------------------------------------------------
+#
+# INV unixlike/amd-apu-desktop-portable-base
+# The real host proves every member of the portable contract in the positive
+# direction. The assertion probes below replace one storage fact and one
+# graphics fact to prove that the class refuses both kinds of drift.
+
+printf '→ the physical desktop declares encrypted Btrfs and the AMD APU base\n'
+desktop="nixosConfigurations.\"$desktop_host\""
+shape=$(nix eval --raw --impure --expr "
+  let
+    flake = builtins.getFlake (toString ./.);
+    config = flake.$desktop.config;
+    contains = value: list: builtins.elem value list;
+    mount = path: subvolume:
+      config.fileSystems.\${path}.device == \"/dev/mapper/cryptroot\"
+      && config.fileSystems.\${path}.fsType == \"btrfs\"
+      && contains \"subvol=\${subvolume}\" config.fileSystems.\${path}.options
+      && contains \"compress=zstd\" config.fileSystems.\${path}.options
+      && contains \"noatime\" config.fileSystems.\${path}.options;
+    luks = config.boot.initrd.luks.devices.cryptroot;
+    facts = {
+      uefi-boot = config.boot.loader.systemd-boot.enable && config.boot.loader.efi.canTouchEfiVariables;
+      manual-luks = luks.device == \"/dev/disk/by-label/cryptroot\" && luks.keyFile == null && luks.crypttabExtraOpts == [];
+      btrfs-root = mount \"/\" \"@\";
+      btrfs-home = mount \"/home\" \"@home\";
+      btrfs-nix = mount \"/nix\" \"@nix\";
+      private-esp = config.fileSystems.\"/boot\".device == \"/dev/disk/by-label/boot\" && config.fileSystems.\"/boot\".fsType == \"vfat\" && contains \"umask=0077\" config.fileSystems.\"/boot\".options;
+      zram-alone = config.swapDevices == [] && config.zramSwap.enable && config.zramSwap.algorithm == \"zstd\" && config.zramSwap.memoryPercent == 50;
+      amdgpu-initrd = config.hardware.amdgpu.initrd.enable && contains \"amdgpu\" config.boot.initrd.kernelModules;
+      amd-firmware = config.hardware.enableRedistributableFirmware && config.hardware.cpu.amd.updateMicrocode;
+      mesa-graphics = config.hardware.graphics.enable && config.hardware.graphics.enable32Bit && (config.hardware.graphics.package.pname or \"\") == \"mesa\";
+      network-manager = config.networking.networkmanager.enable && !config.networking.useDHCP;
+      headless-recovery = config.services.openssh.enable && config.networking.firewall.allowedTCPPorts == [22];
+      niri-session = config.programs.niri.enable && config.services.greetd.enable;
+    };
+  in builtins.concatStringsSep \" \" (builtins.filter (n: !facts.\${n}) (builtins.attrNames facts))")
+[ -z "$shape" ] || fail "nixosConfigurations.$desktop_host does not hold: $shape"
+
+if [ -e "$repo/modules/host/hardware-configuration.nix" ] ||
+  grep -R -E '/dev/disk/by-uuid|UUID=' "$repo/modules/host/desktop.nix" "$repo/modules/amd-apu.nix" >/dev/null
+then
+  fail "the physical desktop carries an unreviewed generated hardware file or UUID"
 fi
 
 # Evaluates the failed assertions of a configuration extended with one more
@@ -290,6 +352,18 @@ expect_clean() {
 
 assertion_diagnostics=$(mktemp)
 trap 'rm -f "$assertion_diagnostics"' EXIT
+
+printf '→ refuses a physical desktop with a different encrypted root device\n'
+failed_assertions "$desktop" '{lib, ...}: { boot.initrd.luks.devices.cryptroot.device = lib.mkForce "/dev/sda2"; }'
+expect_refusal 'INV unixlike/amd-apu-desktop-portable-base' 'a physical desktop with a different encrypted root device'
+
+printf '→ refuses a physical desktop without early AMDGPU loading\n'
+failed_assertions "$desktop" '{lib, ...}: { hardware.amdgpu.initrd.enable = lib.mkForce false; }'
+expect_refusal 'INV unixlike/amd-apu-desktop-portable-base' 'a physical desktop without early AMDGPU loading'
+
+printf '→ the real physical desktop satisfies its portable base assertions\n'
+failed_assertions "$desktop" '{ }'
+expect_clean 'the physical desktop'
 
 home="homeConfigurations.\"$wsl_user\""
 nixos="nixosConfigurations.\"$wsl_host\""

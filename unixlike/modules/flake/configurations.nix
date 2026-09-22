@@ -77,12 +77,20 @@
       home = [home.shared];
     };
 
-    # Declared and not yet installed (modules/host/placeholder.nix): the
-    # kind's own class and no home, until the order that installs the host
-    # composes one.
+    # The physical AMD APU desktop. The headless class remains its account,
+    # SSH and recovery path; the shared graphical classes supply Niri and
+    # Noctalia. Installation and physical runtime evidence remain separate.
     desktop = {
-      system = [nixos.desktop];
-      home = [];
+      system = [
+        nixos.desktop
+        nixos.headless
+        nixos.graphical
+      ];
+      home = [
+        home.shared
+        home.desktop
+        home.linuxGraphical
+      ];
     };
   };
 
