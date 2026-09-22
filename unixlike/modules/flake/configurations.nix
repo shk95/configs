@@ -51,6 +51,7 @@
     utm = {
       system = [
         nixos.utm
+        nixos.installExt4
         nixos.headless
         nixos.graphical
       ];
@@ -75,6 +76,7 @@
     vmware = {
       system = [
         nixos.vmware
+        nixos.installExt4
         nixos.headless
         nixos.graphical
       ];
@@ -91,6 +93,7 @@
     desktop = {
       system = [
         nixos.desktop
+        nixos.installLuksBtrfs
         nixos.headless
         nixos.graphical
       ];

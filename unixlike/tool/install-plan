@@ -1,0 +1,107 @@
+#!/bin/sh
+
+# Write one reviewable nixos-anywhere wrapper flake. This command never opens,
+# formats or mounts the selected device; the generated command remains for the
+# maintainer to authorize after comparing the path with the target's lsblk and
+# /dev/disk/by-id output.
+
+set -eu
+
+usage() {
+  echo "usage: unixlike/tool/install-plan <host> </dev/disk/by-id/...> <new-plan-directory>" >&2
+  exit 2
+}
+
+[ "$#" -eq 3 ] || usage
+host=$1
+disk=$2
+plan=$3
+
+case "$host" in
+  *[!a-z0-9-]* | "")
+    echo "host must contain only lowercase letters, digits and hyphens" >&2
+    exit 2
+    ;;
+esac
+
+case "$disk" in
+  /dev/disk/by-id/?*) ;;
+  *)
+    echo "installation target must be an explicit /dev/disk/by-id/... path" >&2
+    exit 2
+    ;;
+esac
+
+[ ! -e "$plan" ] || {
+  echo "plan directory already exists: $plan" >&2
+  exit 2
+}
+
+repo=$(git rev-parse --show-toplevel)
+flake="path:$repo/unixlike"
+
+names=$(nix eval --raw "$flake#nixosConfigurations" \
+  --apply 'configs: builtins.concatStringsSep " " (builtins.attrNames configs)')
+case " $names " in
+  *" $host "*) ;;
+  *)
+    echo "the flake exports no NixOS host '$host'; it exports: $names" >&2
+    exit 2
+    ;;
+esac
+
+disk_names=$(nix eval --raw "$flake#nixosConfigurations.\"$host\".config.disko.devices.disk" \
+  --apply 'disks: builtins.concatStringsSep " " (builtins.attrNames disks)' 2>/dev/null || true)
+[ "$disk_names" = main ] || {
+  if [ -z "$disk_names" ]; then
+    echo "host '$host' has no installable disko layout" >&2
+  else
+    echo "host '$host' does not have the supported one-disk layout named main: $disk_names" >&2
+  fi
+  exit 2
+}
+
+source_url=$(printf '%s' "$repo/unixlike" | jq -Rs '"path:" + .')
+disk_value=$(printf '%s' "$disk" | jq -Rs .)
+
+mkdir -p "$plan"
+cat >"$plan/flake.nix" <<EOF
+{
+  inputs.configs.url = $source_url;
+
+  outputs = { configs, ... }: {
+    nixosConfigurations.$host = configs.nixosConfigurations.$host.extendModules {
+      modules = [
+        { disko.devices.disk.main.device = $disk_value; }
+      ];
+    };
+  };
+}
+EOF
+
+if ! nix flake lock --quiet "path:$plan" 2>"$plan/lock.err"; then
+  cat "$plan/lock.err" >&2
+  exit 1
+fi
+rm "$plan/lock.err"
+planned=$(nix eval --raw "path:$plan#nixosConfigurations.\"$host\".config.disko.devices.disk.main.device")
+[ "$planned" = "$disk" ] || {
+  echo "generated plan evaluated to a different device: $planned" >&2
+  exit 1
+}
+
+revision=$(git rev-parse HEAD)
+cat >"$plan/PLAN" <<EOF
+host=$host
+disk=$disk
+source=$revision
+
+Read-only disposable installation test:
+  nix run path:$repo/unixlike#nixos-anywhere -- --flake path:$plan#$host --vm-test
+
+DESTRUCTIVE remote installation, only after reviewing this file and the target:
+  nix run path:$repo/unixlike#nixos-anywhere -- --flake path:$plan#$host --target-host <installer-user>@<target>
+EOF
+
+printf 'wrote installation plan for %s on %s at %s\n' "$host" "$disk" "$plan"
+printf 'review %s/flake.nix, %s/flake.lock and %s/PLAN; no disk was touched\n' "$plan" "$plan" "$plan"

@@ -1,11 +1,6 @@
-# The physical desktop's portable machine contract. Labels and Btrfs
-# subvolumes are values the installation procedure creates; no observed disk,
-# UUID, controller or monitor fact is invented here.
-#
-# The LUKS device has no key file, token or crypttab option, so systemd stage 1
-# asks for its passphrase. The EFI partition remains outside the container;
-# root, home and the Nix store are separate subvolumes of the one encrypted
-# Btrfs file system.
+# The physical desktop's portable machine contract. The installation class
+# owns its UEFI, labelled LUKS and Btrfs layout; this class keeps the physical
+# host's swap and network choices and asserts the combined result.
 _: {
   modules.nixos.desktop = {config, ...}: let
     contains = value: list: builtins.elem value list;
@@ -18,38 +13,6 @@ _: {
       && contains "noatime" config.fileSystems.${path}.options;
     luks = config.boot.initrd.luks.devices.cryptroot;
   in {
-    boot = {
-      loader = {
-        systemd-boot.enable = true;
-        efi.canTouchEfiVariables = true;
-      };
-
-      initrd.luks.devices.cryptroot.device = "/dev/disk/by-label/cryptroot";
-    };
-
-    fileSystems = {
-      "/" = {
-        device = "/dev/mapper/cryptroot";
-        fsType = "btrfs";
-        options = ["subvol=@" "compress=zstd" "noatime"];
-      };
-      "/home" = {
-        device = "/dev/mapper/cryptroot";
-        fsType = "btrfs";
-        options = ["subvol=@home" "compress=zstd" "noatime"];
-      };
-      "/nix" = {
-        device = "/dev/mapper/cryptroot";
-        fsType = "btrfs";
-        options = ["subvol=@nix" "compress=zstd" "noatime"];
-      };
-      "/boot" = {
-        device = "/dev/disk/by-label/boot";
-        fsType = "vfat";
-        options = ["umask=0077"];
-      };
-    };
-
     # The physical host has no disk swap in desired state. The zram module's
     # defaults use one zstd-compressed device capped at half of RAM.
     swapDevices = [];

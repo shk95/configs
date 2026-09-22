@@ -1,0 +1,97 @@
+#!/bin/sh
+
+# Ask the pinned nixos-anywhere CLI to run disko's disposable installation
+# test. The wrapper changes only which already-evaluated test derivation the
+# CLI selects: QEMU may use KVM, but can fall back to TCG.
+
+set -eu
+
+usage() {
+  echo "usage: unixlike/tool/install-vm-test [--check] <host>" >&2
+  exit 2
+}
+
+check_only=false
+if [ "${1:-}" = --check ]; then
+  check_only=true
+  shift
+fi
+[ "$#" -eq 1 ] || usage
+host=$1
+
+case "$host" in
+  *[!a-z0-9-]* | "")
+    echo "host must contain only lowercase letters, digits and hyphens" >&2
+    exit 2
+    ;;
+esac
+
+flake=$(CDPATH= cd -- "$(dirname -- "$0")/.." && pwd)
+source_flake="path:$flake"
+
+names=$(nix eval --raw "$source_flake#nixosConfigurations" \
+  --apply 'configs: builtins.concatStringsSep " " (builtins.attrNames configs)')
+case " $names " in
+  *" $host "*) ;;
+  *)
+    echo "the flake exports no NixOS host '$host'; it exports: $names" >&2
+    exit 2
+    ;;
+esac
+
+portable_attr="nixosConfigurations.\"$host\".config.system.build.installTestPortable"
+if ! expected=$(nix eval --raw "$source_flake#$portable_attr.drvPath" 2>/dev/null); then
+  echo "host '$host' has no portable disko installation test" >&2
+  exit 2
+fi
+
+host_system=$(nix eval --raw "$source_flake#nixosConfigurations.\"$host\".pkgs.stdenv.hostPlatform.system")
+current_system=$(nix eval --raw --impure --expr builtins.currentSystem)
+[ "$host_system" = "$current_system" ] || {
+  echo "host '$host' targets $host_system; run its installation test on that architecture" >&2
+  exit 2
+}
+
+work=$(mktemp -d)
+trap 'rm -rf "$work"' EXIT
+source_url=$(printf '%s' "$flake" | jq -Rs '"path:" + .')
+
+cat >"$work/flake.nix" <<EOF
+{
+  inputs.configs.url = $source_url;
+
+  outputs = { configs, ... }: let
+    original = configs.nixosConfigurations.$host;
+  in {
+    nixosConfigurations.$host = original // {
+      config = original.config // {
+        system = original.config.system // {
+          build = original.config.system.build // {
+            installTest = original.config.system.build.installTestPortable;
+          };
+        };
+      };
+    };
+  };
+}
+EOF
+
+if ! nix flake lock --quiet "path:$work" 2>"$work/lock.err"; then
+  cat "$work/lock.err" >&2
+  exit 1
+fi
+rm "$work/lock.err"
+selected=$(nix eval --raw "path:$work#nixosConfigurations.\"$host\".config.system.build.installTest.drvPath")
+[ "$selected" = "$expected" ] || {
+  echo "nixos-anywhere wrapper selected $selected instead of $expected" >&2
+  exit 1
+}
+
+if [ "$check_only" = true ]; then
+  printf '%s\n' "$selected"
+  exit 0
+fi
+
+exec nix run "$source_flake#nixos-anywhere" -- \
+  --flake "path:$work#$host" \
+  --vm-test

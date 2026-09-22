@@ -20,24 +20,6 @@
 # INV unixlike/nixos-host-inventory
 _: {
   modules.nixos.vmware = {config, ...}: {
-    # The machine must be created with UEFI firmware; systemd-boot does not
-    # start from the BIOS one.
-    boot.loader = {
-      systemd-boot.enable = true;
-      efi.canTouchEfiVariables = true;
-    };
-
-    fileSystems = {
-      "/" = {
-        device = "/dev/disk/by-label/nixos";
-        fsType = "ext4";
-      };
-      "/boot" = {
-        device = "/dev/disk/by-label/boot";
-        fsType = "vfat";
-      };
-    };
-
     # The graphical guest uses nixpkgs' full open-vm-tools integration. This
     # adds the vmblock mount and user wrapper used for desktop integration;
     # the shared graphical class still owns the session itself.
