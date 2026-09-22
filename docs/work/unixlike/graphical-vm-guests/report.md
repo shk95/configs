@@ -5,8 +5,9 @@ spec: docs/work/unixlike/graphical-vm-guests/spec.md
 status: pending
 
 Automatic implementation commit `5b20df4` composes and checks both guest
-outputs. This report remains pending for the repository-scope procedure and
-the two installed-guest evidence increments. No guest was activated.
+outputs. The repository-scope procedure is reviewed; this report remains
+pending for the two installed-guest evidence increments. No guest was
+activated.
 
 ## Acceptance
 
@@ -17,7 +18,7 @@ the two installed-guest evidence increments. No guest was activated.
 | AC3 | verified | `nix flake check --no-build path:./unixlike` evaluates the UTM output for aarch64, and its host assertion plus positive and negative fixture require the QEMU guest service, both serial-console parameters, the graphical services, key-only SSH and port 22 alone. Its evaluated toplevel is `/nix/store/bdf9k51kl3pn063s90nw67xcsjd8r1bi-nixos-system-utm-26.11.20260916.b1b8759.drv`; no aarch64 build is claimed. |
 | AC4 | verified | Native x86_64 runtime at `5b20df4`: `nix build --no-link` succeeds for `/nix/store/my7fmjhcvm132h1wwg8jhg3mrlnql5m3-vm-test-run-configs-graphical-runtime` and `/nix/store/l9iik30kxxajmvg60xhkb8pppmh3ap9x-vm-test-run-configs-headless-runtime`. The first boots the actual shared graphical classes and validates their services, files and programs; the second separately boots and exercises the account, SSH and firewall recovery contract. |
 | AC5 | verified | `unixlike/tool/checks/flake-test` requires all `desktop` and `vm` hosts to enable Niri, greetd and PipeWire and to contain the graphical home markers, while both WSL homes and OrbStack contain none. Review found no change to the physical desktop row. |
-| AC6 | pending | |
+| AC6 | verified | Review of `CONTRIBUTING.md` at `e346c36`, merged through #342: “Activate the graphical profile on the VM guests” records capacity before and after realising the candidate, compares closures, and refuses garbage collection as a way to make the activation fit. It orders VMware before UTM and test before switch, requires a second SSH session and hypervisor console, names Niri/Noctalia, input, audio, network and hypervisor observations, and gives test failure, systemd-boot and previous-generation recovery paths. Every activation command is explicitly the maintainer's to authorize and run. |
 | AC7 | pending | |
 | AC8 | pending | |
 | AC9 | verified | GitHub Actions run `35776083090` passed the Unix-like job and the aggregate required check at merge-ready head `6a15e9e`. The lane reran the format, lint, payload, Karabiner, flake, composition, evaluation-coverage, prerequisite, booted-VM and import-order checks; the booted-VM step completed in 5m09s. |
