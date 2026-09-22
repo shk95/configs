@@ -21,4 +21,4 @@ increments.
 | AC6 | pending | |
 | AC7 | pending | |
 | AC8 | pending | |
-| AC9 | pending | |
+| AC9 | verified | GitHub read on 2026-09-23: PR #336 at `54f1d42` passes `Required checks`; its Unix-like job, including every host evaluation, the desktop assertions and both booted VM tests, passes in 10m43s ([run 35768088857](https://github.com/shk95/configs/actions/runs/35768088857)). This report remains pending for the repository-scope procedure and physical evidence, and this report-only head must pass the protected gate again before merging. |
