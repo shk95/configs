@@ -723,6 +723,185 @@ with `vm` for the output and the machine's screen for the console. The same
 disk moved to the other host is the same guest; a second installation on
 the other host is a second machine that answers to the same name.
 
+### Install the AMD APU desktop
+
+The physical x86_64 host `desktop` is installed by hand from the NixOS
+minimal ISO and this flake's `desktop` output. Every command in this section
+is the maintainer's to run. Partitioning irreversibly erases the selected
+disk, installation activates a system, and evaluation or a build authorizes
+neither action. Keep the installer booted in UEFI mode with secure boot off:
+the declared systemd-boot loader is not signed.
+
+1. Before changing a disk, inspect the machine and the installation medium:
+
+   ```sh
+   test -d /sys/firmware/efi && echo UEFI || echo BIOS
+   nixos-version
+   lsblk -o NAME,SIZE,TYPE,FSTYPE,LABEL,MOUNTPOINTS,MODEL
+   lspci -nnk
+   ```
+
+   Stop if the first command answers `BIOS`. Confirm that the `desktop` entry
+   in `unixlike/modules/flake/inventory.nix` names the account the installed
+   host is to have and uses the installation medium's release as its
+   `stateVersion`. Correct either on a branch before installation. The pinned
+   nixpkgs release is not evidence for the state version.
+2. Become root with `sudo -i`. Set `target_disk` to one whole disk, display it
+   again, and require the exact confirmation before the first destructive
+   command. Do not paste the block with `REPLACE_ME` unchanged:
+
+   ```sh
+   target_disk=/dev/REPLACE_ME
+   test -b "$target_disk"
+   test "$(lsblk -dnro TYPE "$target_disk")" = disk
+   lsblk -o NAME,SIZE,TYPE,FSTYPE,LABEL,MOUNTPOINTS,MODEL "$target_disk"
+   printf 'This erases every partition on %s. Type: erase %s\n' "$target_disk" "$target_disk"
+   read -r confirmation
+   test "$confirmation" = "erase $target_disk" || exit 1
+   parted --script "$target_disk" -- mklabel gpt
+   parted --script "$target_disk" -- mkpart ESP fat32 1MiB 1025MiB
+   parted --script "$target_disk" -- set 1 esp on
+   parted --script "$target_disk" -- mkpart cryptroot 1025MiB 100%
+   partprobe "$target_disk"
+   udevadm settle
+   esp=$(lsblk -nrpo NAME,PARTN "$target_disk" | awk '$2 == 1 { print $1 }')
+   crypt_partition=$(lsblk -nrpo NAME,PARTN "$target_disk" | awk '$2 == 2 { print $1 }')
+   test -b "$esp"
+   test -b "$crypt_partition"
+   printf 'ESP: %s\nLUKS: %s\n' "$esp" "$crypt_partition"
+   ```
+
+   The two derived paths handle both names such as `/dev/sda1` and names such
+   as `/dev/nvme0n1p1`. Stop if either path is empty or names an unexpected
+   device.
+3. Create the labels and subvolumes the configuration declares. The LUKS2
+   passphrase is host state: choose it at the prompt, keep it outside the
+   repository, and expect to enter it at every boot. There is no disk swap.
+
+   ```sh
+   mkfs.fat -F 32 -n boot "$esp"
+   cryptsetup luksFormat --type luks2 --label cryptroot "$crypt_partition"
+   udevadm settle
+   test -b /dev/disk/by-label/cryptroot
+   cryptsetup open /dev/disk/by-label/cryptroot cryptroot
+   mkfs.btrfs -L nixos /dev/mapper/cryptroot
+   mount /dev/mapper/cryptroot /mnt
+   btrfs subvolume create /mnt/@
+   btrfs subvolume create /mnt/@home
+   btrfs subvolume create /mnt/@nix
+   umount /mnt
+   mount -o subvol=@,compress=zstd,noatime /dev/mapper/cryptroot /mnt
+   mkdir -p /mnt/home /mnt/nix /mnt/boot
+   mount -o subvol=@home,compress=zstd,noatime /dev/mapper/cryptroot /mnt/home
+   mount -o subvol=@nix,compress=zstd,noatime /dev/mapper/cryptroot /mnt/nix
+   mount -o umask=0077 /dev/disk/by-label/boot /mnt/boot
+   lsblk -o NAME,SIZE,TYPE,FSTYPE,LABEL,MOUNTPOINTS,MODEL
+   findmnt -R /mnt
+   ```
+
+4. Review the host's observed hardware before installing. Clone the exact
+   branch or tag intended for installation with `nix-shell -p git`, then run
+   the generator only as a probe:
+
+   ```sh
+   nix-shell -p git --run 'git clone -b <ref> https://github.com/shk95/configs.git /root/configs'
+   cd /root/configs
+   nixos-generate-config --root /mnt --show-hardware-config > /tmp/desktop-hardware.nix
+   less /tmp/desktop-hardware.nix
+   nix build --no-link "path:./unixlike#nixosConfigurations.desktop.config.system.build.toplevel"
+   ```
+
+   Compare the generated initrd modules, kernel modules, CPU support and file
+   systems with the portable declarations in
+   `unixlike/modules/host/desktop.nix` and `unixlike/modules/amd-apu.nix`.
+   Do not copy the generated file or its UUIDs into the tree wholesale. If
+   the machine needs a controller, kernel option or other fact absent from
+   the portable base, stop and add only that reviewed fact through a
+   Unix-like pull request; install from its reviewed branch after it builds.
+5. Install from the reviewed clone and create the account's host-owned
+   password. Root keeps no password:
+
+   ```sh
+   nixos-install --no-root-passwd --no-channel-copy --flake "path:./unixlike#desktop"
+   nixos-enter --root /mnt -c 'passwd <account>'
+   ```
+
+   Shut down, remove the ISO, and boot the disk. The initrd must prompt for
+   the LUKS passphrase before the graphical login appears. Log in on the
+   console, put the public key in `~/.ssh/authorized_keys`, and confirm a key
+   login before relying on ssh for recovery. The key is host state and never
+   enters the repository.
+6. Clone the same reviewed source into the installed account's home. Record
+   evaluation, build, native runtime and activation separately. The first two
+   can be repeated from the clone without changing the host:
+
+   ```sh
+   tool/doctor.sh unixlike
+   just nixos-eval
+   nix build --no-link "path:./unixlike#nixosConfigurations.desktop.config.system.build.toplevel"
+   hostname
+   nixos-version
+   systemctl --failed
+   nix shell --inputs-from path:./unixlike nixpkgs#pciutils --command lspci -nnk
+   niri msg outputs
+   wpctl status
+   nmcli general status
+   nix shell --inputs-from path:./unixlike nixpkgs#mesa-demos --command glxinfo -B
+   nix shell --inputs-from path:./unixlike nixpkgs#vulkan-tools --command vulkaninfo --summary
+   nix shell --inputs-from path:./unixlike nixpkgs#libva-utils --command vainfo
+   ```
+
+   Native evidence identifies the AMD display controller and `amdgpu` kernel
+   driver, hardware rather than software rendering, a usable Vulkan device
+   and VA-API driver, every connected display, Korean input in a real
+   application, audible output, and the intended network connection. A
+   command exiting zero does not replace observing the display, input or
+   audio result.
+7. Reboot once and repeat the LUKS unlock, login, display, input, audio and
+   network observations. Test rollback only with explicit activation
+   authorization. A system tag makes a distinct probe generation without a
+   tracked source edit; `--no-reexec` keeps `nixos-rebuild --store-path` from
+   trying the absent channel-era `nixos-config` path:
+
+   ```sh
+   rollback_before=$(readlink -f /run/current-system)
+   rollback_probe=$(
+     nix build --impure --no-link --print-out-paths --expr \
+       'let f = builtins.getFlake (toString ./unixlike); p = f.nixosConfigurations.desktop.extendModules { modules = [ { system.nixos.tags = [ "rollback-check" ]; } ]; }; in p.config.system.build.toplevel'
+   )
+   sudo nixos-rebuild switch --no-reexec --store-path "$rollback_probe"
+   test "$(readlink -f /run/current-system)" = "$rollback_probe"
+   test "$(readlink -f /nix/var/nix/profiles/system)" = "$rollback_probe"
+   just nixos-rollback
+   test "$(readlink -f /run/current-system)" = "$rollback_before"
+   test "$(readlink -f /nix/var/nix/profiles/system)" = "$rollback_before"
+   just nixos-generations
+   systemctl --failed
+   ```
+
+   A normal update uses `just nixos-test` before `just nixos-switch`, and
+   `just nixos-generations` lists the paths.
+
+If a new generation cannot boot, choose the previous generation from the
+systemd-boot menu. If no installed generation boots, start the minimal ISO,
+open and mount the existing layout, and enter it for repair:
+
+```sh
+sudo -i
+cryptsetup open /dev/disk/by-label/cryptroot cryptroot
+mount -o subvol=@,compress=zstd,noatime /dev/mapper/cryptroot /mnt
+mkdir -p /mnt/home /mnt/nix /mnt/boot
+mount -o subvol=@home,compress=zstd,noatime /dev/mapper/cryptroot /mnt/home
+mount -o subvol=@nix,compress=zstd,noatime /dev/mapper/cryptroot /mnt/nix
+mount -o umask=0077 /dev/disk/by-label/boot /mnt/boot
+nixos-enter --root /mnt
+```
+
+From there, repair the source or make the earlier system profile current and
+reinstall its boot entry. Repartitioning is recovery only when the encrypted
+file system is intentionally being discarded; it is not an update or a
+rollback.
+
 ### Create the OrbStack machine
 
 The aarch64 OrbStack machine on the Mac is a sandbox: isolated, disposable,
