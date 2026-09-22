@@ -20,4 +20,4 @@ the two installed-guest evidence increments. No guest was activated.
 | AC6 | pending | |
 | AC7 | pending | |
 | AC8 | pending | |
-| AC9 | pending | |
+| AC9 | verified | GitHub Actions run `35776083090` passed the Unix-like job and the aggregate required check at merge-ready head `6a15e9e`. The lane reran the format, lint, payload, Karabiner, flake, composition, evaluation-coverage, prerequisite, booted-VM and import-order checks; the booted-VM step completed in 5m09s. |
