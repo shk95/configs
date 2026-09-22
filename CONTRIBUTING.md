@@ -723,6 +723,110 @@ with `vm` for the output and the machine's screen for the console. The same
 disk moved to the other host is the same guest; a second installation on
 the other host is a second machine that answers to the same name.
 
+### Activate the graphical profile on the VM guests
+
+The installed VMware and UTM guests adopt the shared Niri and Noctalia
+profile in that order. Everything in this section runs inside a guest and is
+the maintainer's to run. Building and inspecting the candidate are read-only;
+`just nixos-test`, `just nixos-switch`, reboot and rollback activate the guest
+and each requires explicit authorization. Keep the hypervisor console open
+and a second key-authenticated SSH session connected throughout the first
+activation.
+
+1. In the guest's repository clone, check out the reviewed ref and verify
+   that the running host names the output it is about to build. Realise the
+   complete candidate before any activation, then compare its closure with
+   the current generation and read free space again:
+
+   ```sh
+   host=$(hostname)
+   case "$host" in vm|utm) ;; *) printf 'not a graphical VM guest: %s\n' "$host" >&2; exit 1 ;; esac
+   tool/doctor.sh unixlike
+   df -h / /nix /boot
+   candidate=$(nix build --no-link --print-out-paths "path:./unixlike#nixosConfigurations.$host.config.system.build.toplevel")
+   current=$(readlink -f /run/current-system)
+   nix path-info -Sh "$current" "$candidate"
+   nix store diff-closures "$current" "$candidate"
+   df -h / /nix /boot
+   ```
+
+   A successful build proves that this candidate is realised; it does not
+   prove room for future generations. Continue only if the file system still
+   has useful headroom while retaining the current generation for rollback.
+   Do not garbage-collect to make the change fit: increase the virtual disk
+   and its file system deliberately, then repeat the read-only block. Record
+   the two `df` readings, candidate path and closure report as capacity
+   evidence. The aarch64 UTM result must be built inside UTM or by another
+   native aarch64 builder; an x86_64 evaluation is not that build evidence.
+2. With activation authorized, run `just nixos-test`. It activates the
+   candidate without changing the boot default. From the second SSH session,
+   confirm the key-only route survived and no unit failed:
+
+   ```sh
+   just nixos-test
+   test "$(readlink -f /run/current-system)" = "$candidate"
+   systemctl is-active sshd greetd
+   systemctl --failed
+   ```
+
+   On the hypervisor console, greetd must offer the Niri session. Log in and
+   check the result from a terminal inside that session:
+
+   ```sh
+   niri msg outputs
+   pgrep -a -u "$USER" niri
+   noctalia config validate ~/.config/noctalia/config.toml
+   noctalia msg panel-toggle launcher
+   wpctl status
+   nmcli general status
+   ```
+
+   Open WezTerm and Ghostty, exercise the Noctalia launcher and control
+   centre, enter Korean text in a real graphical application, play audible
+   output, and confirm the expected network connection. On VMware also read
+   `systemctl status 'run-vmblock\x2dfuse.mount' vmware.service` and exercise
+   any clipboard or pointer integration the host exposes. A command exiting
+   zero does not replace observing the screen, input, sound or integration.
+   If any check fails, keep the SSH session open, run `just nixos-rollback`,
+   and do not make the candidate the boot default.
+3. After the test activation holds, authorize and run `just nixos-switch`.
+   Confirm that both the running system and boot profile name the candidate,
+   then reboot from the hypervisor console:
+
+   ```sh
+   just nixos-switch
+   test "$(readlink -f /run/current-system)" = "$candidate"
+   test "$(readlink -f /nix/var/nix/profiles/system)" = "$candidate"
+   just nixos-generations
+   sudo systemctl reboot
+   ```
+
+   Enter through the console after reboot, repeat the graphical, Korean input,
+   audio and network observations, and confirm a new key-authenticated SSH
+   connection. If the new default does not boot, select the preceding
+   generation in the systemd-boot menu.
+4. Prove rollback while both generations remain. From the same reviewed
+   source, move both system paths to the preceding generation, confirm the
+   SSH route, then switch the intended graphical candidate back into place:
+
+   ```sh
+   just nixos-rollback
+   rollback_target=$(readlink -f /run/current-system)
+   test "$rollback_target" != "$candidate"
+   test "$(readlink -f /nix/var/nix/profiles/system)" = "$rollback_target"
+   systemctl is-active sshd
+   just nixos-switch
+   test "$(readlink -f /run/current-system)" = "$candidate"
+   test "$(readlink -f /nix/var/nix/profiles/system)" = "$candidate"
+   ```
+
+   Record activation, reboot and rollback separately from the earlier build
+   and runtime observations.
+
+Finish these steps and record the VMware evidence before starting UTM. A
+working graphical VMware guest is not evidence for aarch64 UTM rendering or
+for UTM's native build.
+
 ### Install the AMD APU desktop
 
 The physical x86_64 host `desktop` is installed by hand from the NixOS
