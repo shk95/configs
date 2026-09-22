@@ -45,11 +45,14 @@ declaring.
 ## The desktop keeps the recovery base
 
 The composition table gives the physical host `nixos.desktop`,
-`nixos.headless` and `nixos.graphical`, and gives its home the shared, desktop
-and Linux graphical classes. The headless layer retains the password-backed
-sudo account, key-only SSH and one-port firewall as a recovery route; the
-graphical layers add Niri and Noctalia without weakening it. The VM guests do
-not receive those graphical classes until roadmap order 10.
+`nixos.installLuksBtrfs`, `nixos.headless` and `nixos.graphical`, and gives its
+home the shared, desktop and Linux graphical classes. The installation class
+now owns the storage shape described above; the machine class owns zram,
+networking and the assertion over the combined shape. The headless layer
+retains the password-backed sudo account, key-only SSH and one-port firewall
+as a recovery route; the graphical layers add Niri and Noctalia without
+weakening it. Roadmap order 10 also composed those graphical classes into the
+two VM guests.
 
 The inventory's account and state version remain provisional. Evaluation and
 build use them, but the installing step confirms or corrects them from the

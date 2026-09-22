@@ -1,0 +1,55 @@
+#!/bin/sh
+
+# INV unixlike/install-target-explicit
+
+set -eu
+. "$(CDPATH= cd -- "$(dirname -- "$0")" && pwd)/prerequisite"
+require_command nix
+require_command jq
+
+flake=$(CDPATH= cd -- "$(dirname -- "$0")/../.." && pwd)
+repo=$(CDPATH= cd -- "$flake/.." && pwd)
+tool="$flake/tool/install-plan"
+vm_test_tool="$flake/tool/install-vm-test"
+work=$(mktemp -d)
+trap 'rm -rf "$work"' EXIT
+
+fail() {
+  printf '\033[31m✗ %s\033[0m\n' "$1" >&2
+  exit 1
+}
+
+expect_refusal() {
+  label=$1
+  shift
+  if "$tool" "$@" >"$work/refusal.out" 2>&1; then
+    fail "install-plan accepted $label"
+  fi
+}
+
+cd "$repo"
+target=/dev/disk/by-id/configs-install-plan-fixture
+plan="$work/plan"
+"$tool" vm "$target" "$plan" >"$work/valid.out"
+
+[ -f "$plan/flake.nix" ] || fail "install-plan wrote no wrapper flake"
+[ -f "$plan/flake.lock" ] || fail "install-plan wrote no lock"
+[ -f "$plan/PLAN" ] || fail "install-plan wrote no review file"
+[ "$(nix eval --raw "path:$plan#nixosConfigurations.vm.config.disko.devices.disk.main.device")" = "$target" ] \
+  || fail "the wrapper flake did not select the reviewed disk"
+grep -Fxq "host=vm" "$plan/PLAN" || fail "the review file omitted the host"
+grep -Fxq "disk=$target" "$plan/PLAN" || fail "the review file omitted the disk"
+
+expect_refusal "a kernel-order disk path" vm /dev/sda "$work/kernel-path"
+expect_refusal "an unknown host" missing "$target" "$work/missing"
+expect_refusal "a host without a disk layout" nixos "$target" "$work/wsl"
+expect_refusal "an existing plan directory" vm "$target" "$plan"
+expect_refusal "more than one host or disk" vm "$target" "$work/extra" extra
+
+portable=$("$vm_test_tool" --check vm)
+[ -n "$portable" ] || fail "install-vm-test did not select the disposable VM proof"
+if "$vm_test_tool" --check nixos >"$work/vm-refusal.out" 2>&1; then
+  fail "install-vm-test accepted a host without a disk layout"
+fi
+
+echo "✓ install plan requires one installable host and one persistent disk path"

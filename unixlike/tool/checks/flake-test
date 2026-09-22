@@ -365,6 +365,51 @@ failed_assertions "$desktop" '{ }'
 expect_clean 'the physical desktop'
 
 # ---------------------------------------------------------------------------
+# Installation layouts retain an inert target
+# ---------------------------------------------------------------------------
+#
+# INV unixlike/install-target-explicit
+# The real installable hosts keep a deliberately unusable by-id target until
+# install-plan creates a reviewed wrapper. The schema must also refuse a
+# kernel-order path even when another module tries to force one into a host.
+
+vmware="nixosConfigurations.\"$vmware_host\""
+
+printf '→ every installable host retains one inert persistent target\n'
+for host in $vmware_host $utm_host $desktop_host; do
+  target=$(nix eval --raw "path:$repo#nixosConfigurations.\"$host\".config.disko.devices.disk.main.device")
+  [ "$target" = /dev/disk/by-id/INSTALL_TARGET_REQUIRED ] ||
+    fail "nixosConfigurations.$host selected an installation target: $target"
+  enabled=$(nix eval --json "path:$repo#nixosConfigurations.\"$host\".config.disko.enableConfig")
+  [ "$enabled" = false ] || fail "nixosConfigurations.$host lets disko replace its runtime mounts"
+done
+
+for host in $vmware_host $utm_host; do
+  partitions="nixosConfigurations.\"$host\".config.disko.devices.disk.main.content.partitions"
+  [ "$(nix eval --raw "path:$repo#$partitions.ESP.content.format")" = vfat ] ||
+    fail "nixosConfigurations.$host has no vfat EFI installation partition"
+  [ "$(nix eval --raw "path:$repo#$partitions.root.content.format")" = ext4 ] ||
+    fail "nixosConfigurations.$host has no ext4 installation root"
+done
+
+desktop_luks="nixosConfigurations.\"$desktop_host\".config.disko.devices.disk.main.content.partitions.cryptroot.content"
+[ "$(nix eval --raw "path:$repo#$desktop_luks.type")" = luks ] ||
+  fail "nixosConfigurations.$desktop_host has no LUKS installation container"
+[ "$(nix eval --json "path:$repo#$desktop_luks.extraFormatArgs")" = '["--label","cryptroot"]' ] ||
+  fail "nixosConfigurations.$desktop_host does not label the LUKS container"
+[ "$(nix eval --raw "path:$repo#$desktop_luks.content.subvolumes" --apply 's: builtins.concatStringsSep " " (builtins.attrNames s)')" = '@ @home @nix' ] ||
+  fail "nixosConfigurations.$desktop_host does not create the reviewed Btrfs subvolumes"
+
+portable_drv=$(nix eval --raw "path:$repo#nixosConfigurations.\"$vmware_host\".config.system.build.installTestPortable.drvPath")
+nix derivation show "$portable_drv" |
+  grep -Eq '"requiredSystemFeatures"[[:space:]]*:[[:space:]]*"nixos-test"' ||
+  fail "the portable install test still requires KVM or lost the NixOS test feature"
+
+printf '→ refuses a kernel-order installation target in desired state\n'
+failed_assertions "$vmware" '{lib, ...}: { disko.devices.disk.main.device = lib.mkForce "/dev/sda"; }'
+expect_refusal 'INV unixlike/install-target-explicit' 'a kernel-order installation target'
+
+# ---------------------------------------------------------------------------
 # Graphical VM guests retain integration and recovery
 # ---------------------------------------------------------------------------
 #
@@ -591,3 +636,5 @@ failed_assertions "$orbstack" '{ }'
 expect_clean "the OrbStack machine $orbstack_host"
 
 echo "✓ flake schema fixtures behave"
+
+"$repo/tool/checks/install-plan-test"

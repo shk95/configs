@@ -23,22 +23,7 @@ _: {
     imports = ["${modulesPath}/profiles/qemu-guest.nix"];
 
     boot = {
-      loader = {
-        systemd-boot.enable = true;
-        efi.canTouchEfiVariables = true;
-      };
       kernelParams = ["console=tty0" "console=ttyAMA0"];
-    };
-
-    fileSystems = {
-      "/" = {
-        device = "/dev/disk/by-label/nixos";
-        fsType = "ext4";
-      };
-      "/boot" = {
-        device = "/dev/disk/by-label/boot";
-        fsType = "vfat";
-      };
     };
 
     services.qemuGuest.enable = true;

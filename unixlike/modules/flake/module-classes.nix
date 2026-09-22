@@ -37,6 +37,8 @@
 #   nixos.wsl                  NixOS hosts of kind wsl only
 #   nixos.headless             NixOS hosts that boot themselves and have no display
 #   nixos.graphical            reusable Niri graphical services, composed after order 8
+#   nixos.installExt4          UEFI and labelled ext4 layout for booting guests
+#   nixos.installLuksBtrfs     UEFI and encrypted Btrfs layout for the desktop
 #   nixos.utm                  NixOS guests under UTM only
 #   nixos.orbstack             NixOS machines under OrbStack only
 #   nixos.vmware               NixOS guests under VMware Workstation only
