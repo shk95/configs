@@ -40,7 +40,7 @@
 #   nixos.utm                  NixOS guests under UTM only
 #   nixos.orbstack             NixOS machines under OrbStack only
 #   nixos.vmware               NixOS guests under VMware Workstation only
-#   nixos.desktop              its kind, a placeholder until it is installed
+#   nixos.desktop              physical AMD APU, storage and networking
 #   darwin.system              the nix-darwin system layer only
 #
 # INV unixlike/composition-in-one-place — a feature file writes into a class

@@ -201,11 +201,18 @@ activation. `just nixos-rollback` returned from 2 to 1, both system paths
 equalled the saved original, and no unit was failed. Generation 2 remains
 non-current. Test, switch and rollback are verified on this Windows-hosted
 guest; the work report is done
-(`docs/work/unixlike/vmware-headless-guest/report.md`). `desktop`
-(x86_64) is declared and not installed, the least that evaluates for its
-kind (`unixlike/modules/host/placeholder.nix`), with no account; its
-evidence is evaluation alone and its state version and account are
-provisional. The
+(`docs/work/unixlike/vmware-headless-guest/report.md`). `desktop` (x86_64) is
+not installed. Its desired state composes the headless account/SSH recovery
+class and the Niri/Noctalia graphical classes over a physical AMD APU base. It
+declares UEFI systemd-boot, manual unlock of a labelled LUKS2 container, Btrfs
+`@`, `@home` and `@nix` subvolumes, zram, AMDGPU with firmware and microcode,
+Mesa and NetworkManager
+(`docs/policy/decisions/unixlike/amd-apu-desktop-uses-labelled-luks-btrfs.md`).
+The tracked source contains no generated hardware file, disk UUID or monitor
+value. Its account and state version remain provisional until the physical
+installer confirms or corrects them. Evaluation and x86_64 build are the only
+available evidence; hardware runtime and activation remain pending in
+`docs/work/unixlike/amd-apu-desktop/report.md`. The
 Nix daemon settings and the no-channel rule are in `modules.nixos.shared`
 and reach every NixOS host, the registered distribution included.
 GUI options are set off explicitly; WSLg is the deferred item of

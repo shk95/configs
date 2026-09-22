@@ -48,9 +48,9 @@ _: {
         stateVersion = "26.05";
       };
 
-      # Declared and not yet installed (modules/host/placeholder.nix). The
-      # state version is the pinned nixpkgs release, which the order that
-      # installs the host confirms or corrects before anything is activated.
+      # Desired state is built, but the physical host is not yet installed.
+      # The account and state version remain provisional until the installing
+      # order confirms or corrects both before anything is activated.
       desktop = {
         system = "x86_64-linux";
         kind = "desktop";
