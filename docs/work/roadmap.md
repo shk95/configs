@@ -35,7 +35,7 @@ maintainer owns this file, and changing the order is a repository change.
 | 6 | headless x86_64 guest on VMware Workstation — done 2026-09-21 | unixlike |
 | 7 | aarch64 OrbStack machine — done 2026-09-20 | unixlike |
 | — | judgement on the CI decision's `reopen-when`, met by the installed x86_64 guest — minimal VM check accepted on the existing required job 2026-09-21 | repository |
-| 8 | shared Niri and Noctalia Wayland profile, Linux graphical home layer, and utility adoption | unixlike |
+| 8 | shared Niri and Noctalia Wayland profile, Linux graphical home layer, and utility adoption — done 2026-09-23 | unixlike |
 | 9 | x86_64 desktop on an AMD APU | unixlike |
 | 10 | Niri and Noctalia on the VM guests, verified on VMware first | unixlike |
 | 11 | installation and deployment (disko, nixos-anywhere, deploy-rs) | unixlike |
