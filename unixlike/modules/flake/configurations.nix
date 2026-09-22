@@ -2,8 +2,8 @@
 # configuration. Feature files contribute modules; they do not name hosts.
 #
 # INV unixlike/desktop-not-wsl — `home.desktop` is composed below into the
-# Darwin home only; the WSL homes take `shared` and `wsl` and nothing
-# graphical, and a headless guest's home takes `shared` alone.
+# Darwin, physical-desktop and graphical-guest homes; the WSL homes take
+# `shared` and `wsl` and nothing graphical.
 # tool/checks/flake-test is the enforcement.
 #
 # INV unixlike/composition-in-one-place — this file is that place.
@@ -45,16 +45,20 @@
       ];
     };
 
-    # A guest that boots itself: what its hypervisor's machine is
-    # (modules/host/utm.nix), what makes a headless host reachable, and the
-    # shared home alone — nothing graphical, and the coding agents stay on
-    # NixOS-WSL.
+    # The aarch64 graphical guest: its UTM machine and serial recovery path,
+    # the headless account/SSH layer, and the shared Niri/Noctalia classes.
+    # The coding agents stay on NixOS-WSL.
     utm = {
       system = [
         nixos.utm
         nixos.headless
+        nixos.graphical
       ];
-      home = [home.shared];
+      home = [
+        home.shared
+        home.desktop
+        home.linuxGraphical
+      ];
     };
 
     # An OrbStack machine: what OrbStack needs from the guest
@@ -66,15 +70,19 @@
       home = [home.shared];
     };
 
-    # The x86_64 guest under VMware Workstation, composed as the UTM guest
-    # is: its hypervisor's machine (modules/host/vmware.nix), the headless
-    # class and the shared home alone.
+    # The x86_64 graphical guest under VMware Workstation, with the same
+    # headless recovery and shared graphical layers as the UTM guest.
     vmware = {
       system = [
         nixos.vmware
         nixos.headless
+        nixos.graphical
       ];
-      home = [home.shared];
+      home = [
+        home.shared
+        home.desktop
+        home.linuxGraphical
+      ];
     };
 
     # The physical AMD APU desktop. The headless class remains its account,

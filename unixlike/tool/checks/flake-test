@@ -108,14 +108,15 @@ wsl_host=$(hosts_eval '{ }' 'hosts: builtins.concatStringsSep "\n" (builtins.fil
 [ -n "$wsl_host" ] && [ "$(printf '%s\n' "$wsl_host" | wc -l)" -eq 1 ] ||
   fail "the probes below need exactly one host of kind wsl, found: $wsl_host"
 # Every self-booting host keeps the headless account, SSH and recovery class.
-# The guests remain headless until order 10; order 9 composes the graphical
-# classes into the desktop while retaining that recovery path.
+# The guests and the physical desktop also compose the graphical classes.
 guest_hosts=$(hosts_eval '{ }' 'hosts: builtins.concatStringsSep " " (builtins.filter (n: hosts.${n}.kind == "vm") (builtins.attrNames hosts))')
 headless_hosts=$(hosts_eval '{ }' 'hosts: builtins.concatStringsSep " " (builtins.filter (n: hosts.${n}.kind == "vm" || hosts.${n}.kind == "desktop") (builtins.attrNames hosts))')
-for hypervisor in utm vmware; do
-  hosts_eval '{ }' "hosts: builtins.toJSON (builtins.any (n: hosts.\${n}.hypervisor == \"$hypervisor\") (builtins.attrNames hosts))" | grep -qx true ||
-    fail "the probes below need a guest under $hypervisor, found: $guest_hosts"
-done
+utm_host=$(hosts_eval '{ }' 'hosts: builtins.concatStringsSep "\n" (builtins.filter (n: hosts.${n}.hypervisor == "utm") (builtins.attrNames hosts))')
+[ -n "$utm_host" ] && [ "$(printf '%s\n' "$utm_host" | wc -l)" -eq 1 ] ||
+  fail "the probes below need exactly one UTM guest, found: $utm_host"
+vmware_host=$(hosts_eval '{ }' 'hosts: builtins.concatStringsSep "\n" (builtins.filter (n: hosts.${n}.hypervisor == "vmware") (builtins.attrNames hosts))')
+[ -n "$vmware_host" ] && [ "$(printf '%s\n' "$vmware_host" | wc -l)" -eq 1 ] ||
+  fail "the probes below need exactly one VMware guest, found: $vmware_host"
 # The physical desktop, the one host of its kind.
 desktop_host=$(hosts_eval '{ }' 'hosts: builtins.concatStringsSep "\n" (builtins.filter (n: hosts.${n}.kind == "desktop") (builtins.attrNames hosts))')
 [ -n "$desktop_host" ] && [ "$(printf '%s\n' "$desktop_host" | wc -l)" -eq 1 ] ||
@@ -145,12 +146,11 @@ for host in $nixos_hosts; do
   applied=$(nix eval --raw "path:$repo#nixosConfigurations.\"$host\".pkgs.stdenv.hostPlatform.system")
   [ "$applied" = "$declared" ] || fail "nixosConfigurations.$host targets $applied, its entry declares $declared"
 
-  # Roadmap order 9 composes the graphical classes into the desktop alone.
-  # Order 10 may add them to the guests. These markers make either a missing
-  # desktop class or an early guest composition fail at evaluation time.
+  # The physical desktop and both VM guests are graphical. These markers make
+  # a missing class or a leak into WSL or OrbStack fail at evaluation time.
   kind=$(hosts_eval '{ }' "hosts: hosts.\"$host\".kind")
   expected=false
-  [ "$kind" = desktop ] && expected=true
+  case "$kind" in desktop|vm) expected=true ;; esac
   for option in \
     programs.niri.enable \
     services.greetd.enable \
@@ -207,14 +207,14 @@ hosts_eval "$no_state_version" 'hosts: hosts.fixture-host.stateVersion' 2>&1 >/d
   fail "identity.nix refused a host without a state version, but not for the missing value"
 
 # ---------------------------------------------------------------------------
-# Graphical classes stay out of non-graphical homes
+# Graphical classes reach graphical homes and stay out of the rest
 # ---------------------------------------------------------------------------
 #
 # INV unixlike/desktop-not-wsl
 # modules/flake/configurations.nix composes `homeManager.desktop` into the
-# Darwin and physical desktop homes. WezTerm is the cross-platform marker;
+# Darwin, physical desktop and VM guest homes. WezTerm is the cross-platform marker;
 # Noctalia and XWayland Satellite mark the Linux graphical class. Their
-# presence in a WSL or guest home means a graphical class escaped its row.
+# presence in a WSL or OrbStack home means a graphical class escaped its row.
 
 packages_of() {
   nix eval --raw "path:$repo#$1" \
@@ -228,9 +228,6 @@ darwin_host=$(identity_eval '{ }' darwin.hostName)
 for home in \
   "homeConfigurations.\"$wsl_user\".config.home.packages" \
   "nixosConfigurations.\"$wsl_host\".config.home-manager.users.\"$wsl_user\".home.packages" \
-  $(for host in $guest_hosts; do
-    printf '%s\n' "nixosConfigurations.\"$host\".config.home-manager.users.\"$(hosts_eval '{ }' "hosts: hosts.\"$host\".user")\".home.packages"
-  done) \
   "nixosConfigurations.\"$orbstack_host\".config.home-manager.users.\"$orbstack_user\".home.packages"
 do
   printf '→ %s carries no graphical program\n' "${home%%.config*}"
@@ -242,14 +239,16 @@ do
   done
 done
 
-printf '→ the physical desktop home carries both graphical classes\n'
-desktop_user=$(hosts_eval '{ }' "hosts: hosts.\"$desktop_host\".user")
-desktop_home="nixosConfigurations.\"$desktop_host\".config.home-manager.users.\"$desktop_user\".home.packages"
-names=$(packages_of "$desktop_home")
-for marker in wezterm noctalia xwayland-satellite; do
-  if ! printf '%s\n' "$names" | grep -qx "$marker"; then
-    fail "the physical desktop home has no $marker; its graphical classes are incomplete"
-  fi
+printf '→ every graphical NixOS home carries both graphical classes\n'
+for host in $desktop_host $guest_hosts; do
+  user=$(hosts_eval '{ }' "hosts: hosts.\"$host\".user")
+  graphical_home="nixosConfigurations.\"$host\".config.home-manager.users.\"$user\".home.packages"
+  names=$(packages_of "$graphical_home")
+  for marker in wezterm noctalia xwayland-satellite; do
+    if ! printf '%s\n' "$names" | grep -qx "$marker"; then
+      fail "$host has no $marker; its graphical classes are incomplete"
+    fi
+  done
 done
 
 printf '→ the Darwin home carries it\n'
@@ -364,6 +363,32 @@ expect_refusal 'INV unixlike/amd-apu-desktop-portable-base' 'a physical desktop 
 printf '→ the real physical desktop satisfies its portable base assertions\n'
 failed_assertions "$desktop" '{ }'
 expect_clean 'the physical desktop'
+
+# ---------------------------------------------------------------------------
+# Graphical VM guests retain integration and recovery
+# ---------------------------------------------------------------------------
+#
+# INV unixlike/graphical-guests-keep-recovery
+# Each real guest proves the merged graphical and recovery shape. Forcing the
+# VMware guest back to its headless tools and removing UTM's QEMU agent are
+# representative violations of the two hypervisor-specific halves.
+
+vmware="nixosConfigurations.\"$vmware_host\""
+utm="nixosConfigurations.\"$utm_host\""
+
+printf '→ refuses a graphical VMware guest with headless tools\n'
+failed_assertions "$vmware" '{lib, ...}: { virtualisation.vmware.guest.headless = lib.mkForce true; }'
+expect_refusal 'INV unixlike/graphical-guests-keep-recovery' 'a graphical VMware guest with headless tools'
+
+printf '→ refuses a graphical UTM guest without its QEMU agent\n'
+failed_assertions "$utm" '{lib, ...}: { services.qemuGuest.enable = lib.mkForce false; }'
+expect_refusal 'INV unixlike/graphical-guests-keep-recovery' 'a graphical UTM guest without its QEMU agent'
+
+printf '→ the real graphical VM guests retain integration and recovery\n'
+failed_assertions "$vmware" '{ }'
+expect_clean 'the VMware guest'
+failed_assertions "$utm" '{ }'
+expect_clean 'the UTM guest'
 
 home="homeConfigurations.\"$wsl_user\""
 nixos="nixosConfigurations.\"$wsl_host\""

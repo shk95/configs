@@ -19,7 +19,7 @@
 #
 # INV unixlike/nixos-host-inventory
 _: {
-  modules.nixos.vmware = {
+  modules.nixos.vmware = {config, ...}: {
     # The machine must be created with UEFI firmware; systemd-boot does not
     # start from the BIOS one.
     boot.loader = {
@@ -38,16 +38,32 @@ _: {
       };
     };
 
-    # open-vm-tools without its X11 half. nixpkgs derives the same value from
-    # the absent X server; it is written here because the installed-host
-    # graphical order is the one that means to change it.
+    # The graphical guest uses nixpkgs' full open-vm-tools integration. This
+    # adds the vmblock mount and user wrapper used for desktop integration;
+    # the shared graphical class still owns the session itself.
     virtualisation.vmware.guest = {
       enable = true;
-      headless = true;
+      headless = false;
     };
 
     # VMware's NAT and bridged networks both hand out an address; nothing
     # about it is fixed.
     networking.useDHCP = true;
+
+    # INV unixlike/graphical-guests-keep-recovery
+    assertions = [
+      {
+        assertion =
+          config.virtualisation.vmware.guest.enable
+          && !config.virtualisation.vmware.guest.headless
+          && (config.virtualisation.vmware.guest.package.pname or "") == "open-vm-tools"
+          && config.programs.niri.enable
+          && config.services.greetd.enable
+          && config.services.pipewire.enable
+          && config.services.openssh.enable
+          && config.networking.firewall.allowedTCPPorts == [22];
+        message = "INV unixlike/graphical-guests-keep-recovery: the VMware guest must retain full hypervisor integration, the graphical profile and key-only recovery";
+      }
+    ];
   };
 }

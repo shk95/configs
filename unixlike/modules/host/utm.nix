@@ -13,7 +13,11 @@
 #
 # INV unixlike/nixos-host-inventory
 _: {
-  modules.nixos.utm = {modulesPath, ...}: {
+  modules.nixos.utm = {
+    config,
+    modulesPath,
+    ...
+  }: {
     # The virtio disk, network and SCSI modules the initrd needs to find the
     # labelled file systems, as nixpkgs keeps them for a QEMU guest.
     imports = ["${modulesPath}/profiles/qemu-guest.nix"];
@@ -41,5 +45,21 @@ _: {
 
     # UTM's shared network hands out an address; nothing about it is fixed.
     networking.useDHCP = true;
+
+    # INV unixlike/graphical-guests-keep-recovery
+    assertions = [
+      {
+        assertion =
+          config.services.qemuGuest.enable
+          && builtins.elem "console=tty0" config.boot.kernelParams
+          && builtins.elem "console=ttyAMA0" config.boot.kernelParams
+          && config.programs.niri.enable
+          && config.services.greetd.enable
+          && config.services.pipewire.enable
+          && config.services.openssh.enable
+          && config.networking.firewall.allowedTCPPorts == [22];
+        message = "INV unixlike/graphical-guests-keep-recovery: the UTM guest must retain QEMU and serial integration, the graphical profile and key-only recovery";
+      }
+    ];
   };
 }
