@@ -125,11 +125,13 @@ that a host lane names evaluates (`INV unixlike/nixos-host-inventory`).
 `unixlike/tool/checks/flake-test` proves each host answers to its entry's
 name (#191). `aarch64-linux` is an evaluated system and is not built here
 (`docs/work/unixlike/nixos-host-inventory/report.md`, done).
-`utm` (aarch64, UTM on the Mac) is installed and headless. It is composed
-from `nixos.utm` (`unixlike/modules/host/utm.nix`), the `nixos.headless`
+`utm` (aarch64, UTM on the Mac) is installed with a headless generation
+active. Its desired state is composed from `nixos.utm`
+(`unixlike/modules/host/utm.nix`), the `nixos.headless`
 class — the entry's account without a tracked password, key-only sshd on 22
 and a firewall that opens that port alone (`INV unixlike/headless-key-only`)
-— and the shared home alone. The x86_64 flake check also boots that class and
+— and the shared Niri and Noctalia graphical system and home classes. The
+x86_64 flake check also boots the shared headless class and
 reaches it from a separate network namespace: the declared account accepts a
 disposable key, password and root logins fail, sudo asks for a password, and
 the firewall refuses a listening port other than ssh. The guest had been
@@ -144,10 +146,10 @@ to `utm`, the account logs in over ssh with a key and is refused with a
 password, sudo asks for the password, flakes run and no channel exists;
 activation, `just nixos-test` and `just nixos-switch` activated generations
 built from this flake and `just nixos-rollback` returned to the one before
-(`docs/work/unixlike/utm-headless-guest/report.md`). The maintainer means the
-guest to become a graphical machine, which waits for the installed-host
-graphical order of
-`docs/work/roadmap.md`. `orbstack` (aarch64, an isolated OrbStack machine on
+(`docs/work/unixlike/utm-headless-guest/report.md`). The new graphical desired
+state has not been built or activated on the aarch64 guest; its runtime and
+activation remain pending in
+`docs/work/unixlike/graphical-vm-guests/report.md`. `orbstack` (aarch64, an isolated OrbStack machine on
 the Mac, created on 2026-09-20 as a sandbox) is composed from `nixos.orbstack`
 (`unixlike/modules/host/orbstack.nix`), which declares by hand what OrbStack
 needs from a guest — the account OrbStack enters as, its network and
@@ -176,7 +178,8 @@ VMware Workstation on a Linux or a Windows host,
 `docs/policy/decisions/unixlike/x86-64-guest-runs-on-vmware-workstation.md`)
 is composed from `nixos.vmware`
 (`unixlike/modules/host/vmware.nix`), the `nixos.headless` class and the
-shared home alone. Its evidence is evaluation and a build of its toplevel on
+shared Niri and Noctalia graphical system and home classes. Its earlier
+headless evidence is evaluation and a build of its toplevel on
 the x86_64 WSL host at c73b5dd. On 2026-09-21 the maintainer installed it from
 the 26.05 minimal medium in UEFI mode, using the account declared in the
 inventory and state version 26.05. The maintainer reported a successful
@@ -200,7 +203,12 @@ avoids a re-exec that otherwise tries the absent `nixos-config` before
 activation. `just nixos-rollback` returned from 2 to 1, both system paths
 equalled the saved original, and no unit was failed. Generation 2 remains
 non-current. Test, switch and rollback are verified on this Windows-hosted
-guest; the work report is done
+guest. Its desired state now also composes the shared Niri and Noctalia
+graphical profile and full open-vm-tools integration, but no graphical
+activation or runtime observation has occurred; those remain pending in
+`docs/work/unixlike/graphical-vm-guests/report.md`
+(`docs/policy/decisions/unixlike/vm-guests-share-the-graphical-profile.md`).
+The headless work report is done
 (`docs/work/unixlike/vmware-headless-guest/report.md`). `desktop` (x86_64) is
 not installed. Its desired state composes the headless account/SSH recovery
 class and the Niri/Noctalia graphical classes over a physical AMD APU base. It
