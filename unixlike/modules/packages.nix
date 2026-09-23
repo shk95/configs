@@ -127,7 +127,6 @@ in {
           procs
           duf
           dust
-          trash-cli
           hyperfine
           jc
           sad
@@ -195,9 +194,10 @@ in {
           gnupg
           which
         ]
-        # The locked nixpkgs marks bettercap broken on Darwin. Homebrew owns the
-        # macOS formula while Linux homes still receive the same command from Nix.
-        ++ lib.optionals pkgs.stdenv.hostPlatform.isLinux [pkgs.bettercap];
+        # Darwin gets its native trash command from shell/darwin-home.nix;
+        # including trash-cli there would collide at bin/trash. The locked
+        # nixpkgs also marks bettercap broken on Darwin, where Homebrew owns it.
+        ++ lib.optionals pkgs.stdenv.hostPlatform.isLinux [pkgs.trash-cli pkgs.bettercap];
     };
 
     homeManager.linuxGraphical = {pkgs, ...}: {
