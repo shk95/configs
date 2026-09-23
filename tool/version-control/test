@@ -4750,6 +4750,86 @@ work_expect_fail() {
   fi
 }
 
+worktree_run() {
+  (cd "$work_repo" && "$work_check" --working-tree docs/work/unixlike/probe 2>&1)
+}
+
+worktree_expect_fail() {
+  work_label=$1
+  work_want=$2
+  if work_output=$(worktree_run); then
+    printf '%s\n' "$work_output" >&2
+    echo "work accepted a working-tree violation: $work_label" >&2
+    exit 1
+  fi
+  if ! printf '%s\n' "$work_output" | grep -qF "$work_want"; then
+    printf '%s\n' "$work_output" >&2
+    echo "work did not name the working-tree violation: $work_label" >&2
+    exit 1
+  fi
+}
+
+# The local mode reads precisely one item, including untracked files, and
+# names that source. The default still reads the index alone.
+work_new
+work_output=$(worktree_run) || {
+  printf '%s\n' "$work_output" >&2
+  echo "work refused a valid untracked pair" >&2
+  exit 1
+}
+printf '%s\n' "$work_output" |
+  grep -qF '1 work items, 1 specs paired with a report (working tree: docs/work/unixlike/probe)' || {
+    printf '%s\n' "$work_output" >&2
+    echo "work did not identify the untracked item it checked" >&2
+    exit 1
+  }
+work_output=$(cd "$work_repo" && "$work_check")
+printf '%s\n' "$work_output" | grep -qF '0 work items, 0 specs paired with a report (index)' || {
+  printf '%s\n' "$work_output" >&2
+  echo "work did not identify that the untracked pair is absent from the index" >&2
+  exit 1
+}
+
+work_new
+rm "$work_item/report.md"
+worktree_expect_fail "an untracked spec without a report" 'spec.md: W2 has no report.md beside it'
+work_new
+work_spec unixlike 'the output evaluates' 'evaluation, vibes'
+worktree_expect_fail "an unknown lane in an untracked spec" 'W4 criterion AC1 names an unknown lane: vibes'
+work_new
+printf 'notes\n' >"$work_item/notes.md"
+worktree_expect_fail "an unexpected untracked file" 'notes.md: W1'
+work_new
+git -C "$work_repo" add -A
+work_spec unixlike 'the output evaluates' 'evaluation, vibes'
+worktree_expect_fail "an unstaged change to a tracked spec" 'W4 criterion AC1 names an unknown lane: vibes'
+work_output=$(cd "$work_repo" && "$work_check")
+printf '%s\n' "$work_output" | grep -qF '(index)' || {
+  printf '%s\n' "$work_output" >&2
+  echo "work did not keep the staged pair as the index subject" >&2
+  exit 1
+}
+
+work_new
+if work_output=$(cd "$work_repo" && "$work_check" --working-tree docs/work/unixlike/absent 2>&1); then
+  echo "work accepted a missing working-tree item" >&2
+  exit 1
+fi
+printf '%s\n' "$work_output" | grep -qF 'docs/work/unixlike/absent: no work files found in the working tree' || {
+  printf '%s\n' "$work_output" >&2
+  echo "work did not name the missing item" >&2
+  exit 1
+}
+if work_output=$(cd "$work_repo" && "$work_check" --working-tree docs/work/unixlike/../probe 2>&1); then
+  echo "work accepted a noncanonical working-tree path" >&2
+  exit 1
+fi
+printf '%s\n' "$work_output" | grep -qF 'invalid work item path:' || {
+  printf '%s\n' "$work_output" >&2
+  echo "work did not name the invalid path" >&2
+  exit 1
+}
+
 # The valid pair, with a carried study that spans two scopes beside the area's
 # own two files.
 work_new
