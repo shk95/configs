@@ -12,10 +12,10 @@ maintainer owns this file, and changing the order is a repository change.
 | Lane | Host | State on 2026-09-23 |
 | --- | --- | --- |
 | darwin | aarch64-darwin | operational; generation 36 activated |
-| utm | aarch64 NixOS guest, UTM on the Mac | installed and headless, adopted in place on 2026-09-20; to become a graphical machine at order 10 |
+| utm | aarch64 NixOS guest, UTM on the Mac | graphical; native build, runtime, switch/reboot and rollback/restoration verified on 2026-09-23 |
 | orbstack | aarch64 NixOS OrbStack machine | an isolated sandbox on the Mac, switched to the flake on 2026-09-20; disposable, recreated by its procedure |
 | desktop | x86_64 NixOS, physical AMD APU desktop | declared as host `desktop`, evaluated only; not installed |
-| vm | x86_64 NixOS guest, VMware Workstation on a Linux and a Windows host | installed and headless on Windows; native runtime and test/switch/rollback verified on 2026-09-21; Linux-host runtime unverified |
+| vm | x86_64 NixOS guest, VMware Workstation on a Linux and a Windows host | graphical on Windows; native build, runtime, switch/reboot and rollback/restoration verified on 2026-09-23; Linux-host runtime unverified |
 | kvm | x86_64 NixOS guest, QEMU/KVM on the NixOS desktop | not declared; order 12 declares the host |
 | hyperv | x86_64 NixOS guest, Hyper-V on the Windows host | not declared; order 13 declares the host |
 | wsl-standalone | x86_64 Ubuntu WSL, standalone Home Manager | operational; tagged `unixlike-v2026.08.31` |
@@ -37,7 +37,7 @@ maintainer owns this file, and changing the order is a repository change.
 | — | judgement on the CI decision's `reopen-when`, met by the installed x86_64 guest — minimal VM check accepted on the existing required job 2026-09-21 | repository |
 | 8 | shared Niri and Noctalia Wayland profile, Linux graphical home layer, and utility adoption — done 2026-09-23 | unixlike |
 | 9 | x86_64 desktop on an AMD APU | unixlike |
-| 10 | Niri and Noctalia on the VM guests, verified on VMware first | unixlike |
+| 10 | Niri and Noctalia on the VM guests — done 2026-09-23 | unixlike |
 | 11 | installation and deployment (disko, nixos-anywhere, deploy-rs) | unixlike |
 | 12 | x86_64 guest on QEMU/KVM, on the NixOS desktop | unixlike |
 | 13 | x86_64 guest on Hyper-V, on the Windows host | unixlike |
@@ -130,11 +130,17 @@ ImageMagick, Graphviz, FFmpeg and `qrtool`. A utility with configuration owns
 its concern module; an unconfigured package may join the existing package
 module. The order's work item fixes the accepted set before implementation.
 
-Order 10 applies the shared graphical classes to the UTM and VMware guests
-without removing their headless base. VMware on the Windows host is the first
-native runtime and activation target because its test, switch and rollback
-path is already verified; UTM follows with native aarch64 evidence. The work
-checks guest disk capacity before either activation.
+Order 10 applied the shared graphical classes to the UTM and VMware guests
+without removing their headless base. The original plan put VMware on the
+Windows host first; the maintainer requested UTM first on 2026-09-23, and
+the spec's dated AC8 amendment records that change. Both guests supplied
+their own native build, graphical runtime, switch/reboot and
+rollback/restoration evidence after capacity checks. VMware required 3D
+acceleration and a larger disk; both guests required live-user-session
+activation guards for immediate restoration from a headless generation.
+The completed report is
+`docs/work/unixlike/graphical-vm-guests/report.md`. Linux-hosted VMware
+runtime remains unverified.
 
 The former GNOME issues #19 and #42 are historical context, not execution
 authority for orders 8 and 10. A new spec, report and execution issue are
