@@ -81,6 +81,12 @@ of this flake.
 
 ## Acceptance
 
+Amended 2026-09-23: AC8 no longer requires VMware to precede UTM. The
+maintainer requested UTM first on that date; each guest still owes its own
+native build, graphical runtime, activation, reboot and rollback evidence.
+This amendment also supersedes the guest ordering in Decisions and increment
+4; no evidence requirement is removed.
+
 | ID | Criterion | Required lanes |
 | --- | --- | --- |
 | AC1 | The UTM and VMware compositions retain their hypervisor and headless classes and add the shared graphical system and home classes; the composition table alone makes that selection. | evaluation |
@@ -90,5 +96,5 @@ of this flake.
 | AC5 | NixOS-WSL and OrbStack remain non-graphical, and the physical desktop composition is unchanged. | evaluation, review |
 | AC6 | The guest update procedure checks realised capacity before activation, orders test before switch, names graphical observations and preserves SSH, boot-menu and rollback recovery without claiming they ran. | review |
 | AC7 | On the installed VMware guest, native build, test activation, Niri/Noctalia login, rendering, Korean input, audio, networking, reboot, switch and rollback succeed with sufficient disk capacity. | build, native runtime, activation |
-| AC8 | After VMware, the installed UTM guest supplies the same native aarch64 build, graphical runtime, activation, reboot and rollback evidence. | build, native runtime, activation |
+| AC8 | The installed UTM guest supplies its own native aarch64 build, graphical runtime, activation, reboot and rollback evidence, independently of the VMware execution order. | build, native runtime, activation |
 | AC9 | `Required checks` passes on the head of every pull request of this work before it merges. | evaluation |

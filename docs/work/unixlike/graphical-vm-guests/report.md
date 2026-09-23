@@ -6,7 +6,10 @@ status: pending
 
 Automatic implementation commit `5b20df4` composes and checks both guest
 outputs. The repository-scope procedure is reviewed; this report remains
-pending for the VMware installed-guest evidence increment. At the maintainer's
+pending for review/CI closeout of the VMware recovery fix `1fe78ff`.
+VMware has supplied native build, graphical runtime,
+switch, reboot and a repaired rollback/restoration test, as recorded below.
+At the maintainer's
 request, UTM native build and test activation began on 2026-09-23 before the
 VMware increment. The UTM graphical candidate is now the boot default after
 switch, reboot, rollback and restoration. The initially failed immediate
@@ -22,9 +25,94 @@ re-switch path was repaired and passed a repeat test; AC8 is verified.
 | AC4 | verified | Native x86_64 runtime at `5b20df4`: `nix build --no-link` succeeds for `/nix/store/my7fmjhcvm132h1wwg8jhg3mrlnql5m3-vm-test-run-configs-graphical-runtime` and `/nix/store/l9iik30kxxajmvg60xhkb8pppmh3ap9x-vm-test-run-configs-headless-runtime`. The first boots the actual shared graphical classes and validates their services, files and programs; the second separately boots and exercises the account, SSH and firewall recovery contract. |
 | AC5 | verified | `unixlike/tool/checks/flake-test` requires all `desktop` and `vm` hosts to enable Niri, greetd and PipeWire and to contain the graphical home markers, while both WSL homes and OrbStack contain none. Review found no change to the physical desktop row. |
 | AC6 | verified | Review of `CONTRIBUTING.md` at `e346c36`, merged through #342: “Activate the graphical profile on the VM guests” records capacity before and after realising the candidate, compares closures, and refuses garbage collection as a way to make the activation fit. It orders VMware before UTM and test before switch, requires a second SSH session and hypervisor console, names Niri/Noctalia, input, audio, network and hypervisor observations, and gives test failure, systemd-boot and previous-generation recovery paths. Every activation command is explicitly the maintainer's to authorize and run. |
-| AC7 | pending | |
+| AC7 | verified | On 2026-09-23, VMware passed native build, graphical login, both terminals, Korean input, pointer, audio, network, switch and reboot. An immediate headless-to-graphical restoration failure was repaired; the fixed candidate passed test activation, rollback/restoration and reboot. The maintainer confirmed Niri and Ghostty again after the final reboot. Details follow. |
 | AC8 | verified | UTM built the final aarch64 candidate natively, passed on-screen Niri/Noctalia, Ghostty/WezTerm, Korean input, pointer, sound and network observations, switched and rebooted it, and returned successfully from a headless test activation with the still-running user bus. The maintainer requested UTM before VMware; details follow. |
-| AC9 | verified | GitHub Actions run `35776083090` passed the Unix-like job and the aggregate required check at merge-ready head `6a15e9e`. The lane reran the format, lint, payload, Karabiner, flake, composition, evaluation-coverage, prerequisite, booted-VM and import-order checks; the booted-VM step completed in 5m09s. |
+| AC9 | pending | Prior implementation: GitHub Actions run `35776083090` passed the Unix-like job and the aggregate required check at merge-ready head `6a15e9e`, including the booted-VM step in 5m09s. The VMware recovery fix `1fe78ff` awaits PR CI; its evaluation, native build and runtime evidence below do not replace that gate. |
+
+## VMware installed-guest evidence, 2026-09-23
+
+- **Source and capacity.** The existing installation checkout retains its
+  local inventory edit. An archive of reviewed source `1056a35` was built in
+  `/tmp/configs-vmware-1056a35`, without changing that checkout. The maintainer
+  enlarged the virtual disk from 20 to 40 GiB. After saving the partition
+  table on the guest, the agent extended only the final root partition,
+  preserving its start sector, and grew the mounted ext4 file system.
+  `sfdisk --verify` reported no errors; root then measured 39 GiB with
+  31 GiB free. No partition was formatted and no Nix garbage collection ran.
+- **Native build.** The guest built
+  `/nix/store/1bkavsb96m8brk7kh8qxvjlx4z4ihhp4-nixos-system-vm-26.11.20260916.b1b8759`.
+  `nix path-info -Sh` measured the candidate at 10.4 GiB and the existing
+  headless generation at 5.2 GiB. After the build, root retained 25 GiB free
+  and the EFI file system 980 MiB free.
+- **Test activation.** With the maintainer's authorization and a second SSH
+  session retained, `just nixos-test` exited successfully. The running system
+  moved to the candidate while the boot profile remained
+  `/nix/store/5g17hsxndjl9gdcilnm775a0fyz4daw2-nixos-system-vm-26.11.20260916.b1b8759`.
+  The old headless target did not start greetd automatically; starting
+  `graphical.target` brought up greetd. Fresh key-authenticated SSH worked,
+  sshd, greetd, Home Manager, VMware tools and the vmblock mount were active,
+  and neither the system nor user manager listed a failed unit. Niri and
+  Noctalia validated the installed configuration; an HTTPS request to GitHub
+  returned 200. These checks do not yet prove a graphical login or rendering,
+  physical input, audible output or host clipboard integration.
+- **First console attempt.** The maintainer could log in through greetd but
+  observed a black screen. Niri and Noctalia remained running with no failed
+  user unit, but Niri logged `VMware: No 3D enabled`, rejected the software
+  EGL renderer and reported `no allocator available for device`. Its output
+  query returned no display. The kernel reported the legacy shader model.
+  Thus a successful test activation did not establish graphical runtime.
+  VMware display acceleration must be checked on the host before repeating
+  the graphical test; the graphical candidate has not become the boot default.
+- **3D acceleration retry.** After the maintainer enabled VMware display
+  acceleration and booted the guest again, vmwgfx reported the `3D`
+  capability and shader model `SM_5_1X`, replacing the earlier legacy model.
+  The same candidate passed `just nixos-test` again and `graphical.target`
+  started successfully. The maintainer confirmed Niri/Noctalia rendering and
+  Ghostty through Mod+Return. Niri initialized its primary renderer and
+  registered `Virtual-1` at 1718x928 and 60 Hz. Fcitx5, PipeWire,
+  WirePlumber and the VMware user integration process were running; system
+  and user managers had no failed units. An HTTPS request returned 200.
+  A two-second 440 Hz tone played successfully through PipeWire. The
+  maintainer confirmed audible output, Korean input, WezTerm through
+  Mod+Shift+Return and pointer interaction with the Noctalia panel.
+- **Switch and reboot.** `just nixos-switch` succeeded and registered the
+  graphical candidate as generation 3, with both system paths equal and no
+  failed system unit. An orderly `systemctl reboot` changed the boot ID.
+  A fresh SSH connection found both
+  system paths still at the graphical candidate, with sshd, greetd, Home
+  Manager and VMware tools active and zero failed system units. The maintainer
+  confirmed the graphical session, Ghostty and Korean input after reboot.
+- **Rollback defect and repair.** `just nixos-rollback` returned both system
+  paths to generation 2, the earlier `rollback-check` headless generation
+  `/nix/store/apbk2rh5l15r03cp0y0y594xl2a0izc8-nixos-system-vm-rollback-check-26.11.20260916.b1b8759`.
+  SSH survived and no unit failed. Immediate re-switch to the first graphical
+  candidate exited 4: Home Manager failed at `dconfSettings` with
+  `org.freedesktop.DBus.Error.ServiceUnknown`. This was a failed restoration,
+  even though the system and boot profile had moved to the graphical candidate.
+  The VMware module now refreshes the live user bus before dconf settings and
+  clears an unreachable inherited X display before `onFilesChange`, using the
+  same guards already exercised on UTM. No other host's configuration changed.
+- **Repeated recovery test.** Source `1056a35` with the uncommitted VMware
+  recovery fix (subsequently committed as `1fe78ff`) built natively as
+  `/nix/store/jsrs1wx2672720vq15351287jl82vmag-nixos-system-vm-26.11.20260916.b1b8759`.
+  `just nixos-test` succeeded and recovered Home Manager. Another
+  `just nixos-rollback` returned to the headless generation while retaining
+  the user bus, whose activatable names lacked dconf, and stale `DISPLAY=:0`.
+  Immediate `just nixos-switch` then exited 0: Home Manager completed
+  `reloadDconfServices`, `dconfSettings`, `discardStaleXDisplay` and
+  `onFilesChange` on its first start. Both system paths named the fixed
+  graphical candidate and no system unit failed. `nix flake check --no-build`
+  passed on the guest; formatting and composition checks passed locally.
+  An orderly reboot changed the boot ID again; both system paths still named the
+  fixed candidate, and sshd, greetd, Home Manager and VMware tools were active
+  with zero failed system units. Root retained 25 GiB free. The maintainer
+  confirmed Niri and Ghostty after this final reboot; SSH also observed both
+  processes and zero failed user units. SHA-256 comparison confirmed that
+  the guest's VMware module matches the local edited source. Independent
+  read-only verification also matched the complete tracked `unixlike/` and
+  `Justfile` content between the local tree and guest, and re-evaluation
+  returned the running candidate. Commit `1fe78ff` preserves that fix;
+  its PR CI result remains pending.
 
 ## UTM installed-guest evidence, 2026-09-23
 
