@@ -39,10 +39,11 @@
 #       lanes, unless the head's spec carries an `Amended` paragraph the base
 #       did not have that names the criterion
 #
-# The subject is the index, like tool/version-control/hygiene: the invariant
-# is about committed state. --staged compares HEAD with the index, which is
-# the commit about to be made; --range compares two commits, which is a pull
-# request or a push.
+# The default subject is the index, like tool/version-control/hygiene: the
+# invariant is about committed state. --working-tree names one local item and
+# reads its current files, including untracked files, for early W1-W6 feedback.
+# --staged compares HEAD with the index, which is the commit about to be made;
+# --range compares two commits, which is a pull request or a push.
 #
 # --overdue lists the specs whose review-by has passed while the report is
 # still pending, and fails nothing: tool/version-control/audit is where an
@@ -60,7 +61,7 @@
 #                               open; needs an authenticated gh, and is what
 #                               tool/version-control/audit-remote reports
 #
-# usage: tool/version-control/work [--staged | --range <base> <head>]
+# usage: tool/version-control/work [--working-tree <item> | --staged | --range <base> <head>]
 #        tool/version-control/work --overdue [--date <YYYY-MM-DD>]
 #        tool/version-control/work --terminal | --unclosed
 #        tool/version-control/work --became-terminal <base> <head>
@@ -99,7 +100,7 @@ require_command() {
 }
 
 usage() {
-  echo "usage: tool/version-control/work [--staged | --range <base> <head>]" >&2
+  echo "usage: tool/version-control/work [--working-tree docs/work/<scope>/<slug> | --staged | --range <base> <head>]" >&2
   echo "       tool/version-control/work --overdue [--date <YYYY-MM-DD>]" >&2
   echo "       tool/version-control/work --terminal | --unclosed" >&2
   echo "       tool/version-control/work --became-terminal <base> <head>" >&2
@@ -110,8 +111,19 @@ mode=tree
 base=
 head=
 reference=
+work_item=
 case "${1:-}" in
   "") [ "$#" -eq 0 ] || usage ;;
+  --working-tree)
+    [ "$#" -eq 2 ] || usage
+    mode=working-tree
+    work_item=$2
+    if ! printf '%s\n' "$work_item" |
+      awk '/^docs\/work\/(unixlike|windows|repository|common)\/[a-z0-9]+(-[a-z0-9]+)*$/ { valid = 1 } END { exit !valid }'; then
+      echo "invalid work item path: $work_item" >&2
+      usage
+    fi
+    ;;
   --staged)
     [ "$#" -eq 1 ] || usage
     mode=range
@@ -155,14 +167,23 @@ cd "$root"
 tmp=$(mktemp -d)
 trap 'rm -rf "$tmp"' EXIT
 
-# A document at a revision; the empty revision is the index.
+# A document at a revision; the empty revision is the index, except for the
+# explicitly selected working-tree mode.
 blob() {
-  if [ -n "$1" ]; then git show "$1:$2"; else git show ":$2"; fi
+  if [ -n "$1" ]; then
+    git show "$1:$2"
+  elif [ "$mode" = working-tree ]; then
+    sed -n '1,$p' "$2"
+  else
+    git show ":$2"
+  fi
 }
 
 blob_exists() {
   if [ -n "$1" ]; then
     git cat-file -e "$1:$2" 2>/dev/null
+  elif [ "$mode" = working-tree ]; then
+    [ -f "$2" ]
   else
     git ls-files --error-unmatch -- "$2" >/dev/null 2>&1
   fi
@@ -284,7 +305,16 @@ case "$mode" in
     ;;
 esac
 
-git ls-files -- docs/work >"$tmp/files"
+if [ "$mode" = working-tree ]; then
+  git ls-files --cached --others --exclude-standard -- "$work_item" |
+    sort -u >"$tmp/files"
+  if [ ! -s "$tmp/files" ]; then
+    echo "$work_item: no work files found in the working tree" >&2
+    exit 1
+  fi
+else
+  git ls-files -- docs/work >"$tmp/files"
+fi
 
 if [ "$mode" = overdue ]; then
   [ -n "$reference" ] || reference=$(date +%Y-%m-%d)
@@ -497,4 +527,15 @@ if [ -s "$tmp/fail" ]; then
   exit 1
 fi
 
-echo "✓ work: $items work items, $pairs specs paired with a report"
+case "$mode" in
+  working-tree) source_label="working tree: $work_item" ;;
+  range)
+    if [ -n "$head" ]; then
+      source_label="index and amendment range: $base..$head"
+    else
+      source_label="staged index and amendment base: $base"
+    fi
+    ;;
+  *) source_label=index ;;
+esac
+echo "✓ work: $items work items, $pairs specs paired with a report ($source_label)"

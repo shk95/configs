@@ -43,10 +43,18 @@ planning read-only unless the user explicitly authorizes a Git mutation.
   with the ability to resume that implementer in it, until the pull request
   from its branch has merged: review feedback returns to the same worktree,
   and one removed earlier costs a fresh setup for every fix.
-- **Work**: Follow `CONTRIBUTING.md`, "Plan and verify work". Work with more
-  than one acceptance criterion or more than one pull request gets a spec and
-  a report under `docs/work/<scope>/<slug>/`, created in the same commit and
-  checked by `tool/version-control/work`; anything else carries its evidence
+- **Work**: Follow `CONTRIBUTING.md`, "Plan and verify work". Before editing
+  implementation for work with more than one acceptance criterion or more
+  than one pull request, draft its spec and a report with pending rows under
+  `docs/work/<scope>/<slug>/`. Name the decisions, rejected alternatives,
+  evidence-lane increments and required lanes, then run
+  `tool/version-control/work --working-tree docs/work/<scope>/<slug>` against
+  that exact item. Resolve failures before proceeding. If a decision changes,
+  update the spec before continuing; once the report exists, follow the dated
+  amendment rule. This read-only worktree check is early feedback, not staged
+  or committed evidence. The spec and report enter the same commit and
+  `tool/version-control/work --staged` checks that proposed commit when
+  staging is explicitly authorized. Any other change carries its evidence
   in the pull request body. Open the execution issue only when
   implementation starts, name the spec on its first line, and keep acceptance
   criteria and evidence out of it. Create no GitHub milestone. Cut a spec's

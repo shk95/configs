@@ -366,7 +366,11 @@ the format; this is the procedure.
    needs a survey or a measurement, quoting each measurement with the date
    and the commit it was taken at.
 3. Create `report.md` in the same commit, with one `pending` row per
-   criterion. Stage both and run `tool/version-control/work`.
+   criterion. Before implementation, run
+   `tool/version-control/work --working-tree docs/work/<scope>/<slug>` for
+   read-only feedback on the new pair, including untracked files. This does
+   not validate the proposed commit. When staging is authorized, stage both
+   and run `tool/version-control/work --staged`; the hook runs that check too.
 4. When implementation starts, open the execution issue. Its first line names
    the spec path; it holds the increments as a checklist and carries no
    acceptance criteria. Add `issue: #<n>` to the spec's header. A report

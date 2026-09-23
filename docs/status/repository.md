@@ -103,6 +103,11 @@ Since 2026-09-19 work is planned and verified in documents
 and the report that answers it under `docs/work/<scope>/<slug>/`, checked by
 `tool/version-control/work` on every commit and in CI, with issues holding
 execution state only and `docs/work/roadmap.md` stating lanes and order.
+The canonical agent workflow now calls for a local preflight of a new spec
+and pending report before implementation. `tool/version-control/work
+--working-tree docs/work/<scope>/<slug>` reads that one item, including
+untracked files, for early W1-W6 feedback; it does not replace the index,
+staged or commit-range checks.
 GitHub milestones are no longer used, a branch is one reviewable increment —
 since 2026-09-20 what one evidence lane verifies, with its report rows and
 status in the same pull request, a rule a reviewer holds and no tool does
