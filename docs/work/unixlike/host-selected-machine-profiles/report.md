@@ -8,14 +8,22 @@ status: pending
 
 | ID | State | Evidence |
 | --- | --- | --- |
-| AC1 | pending | |
-| AC2 | pending | |
-| AC3 | pending | |
-| AC4 | pending | |
+| AC1 | verified | On commit `17e970c`, the schema portion of `unixlike/tool/checks/flake-test` accepted each declared host and refused an extra or missing host choice, an unknown or unavailable profile, and a repeated profile. |
+| AC2 | verified | On commit `17e970c`, the same fixture found Codex in the NixOS-WSL home when `agents` was selected and absent when omitted; `unixlike/tool/checks/composition-test` found 63 feature files naming no host or forced class decision. |
+| AC3 | verified | On 2026-09-23, `nix eval` compared five NixOS toplevel derivation paths, the standalone Home Manager activation derivation and the Darwin system derivation against `1314520`; all seven paths matched. `nix flake check --no-build path:./unixlike` passed with incompatible Linux-system checks omitted on this Mac. |
+| AC4 | pending | The Unix-like decision, invariants and status are in `17e970c`; the repository-owned architecture text and a commit-based review remain. |
 
 ## Evidence lanes
 
-- Evaluation: pending verification against the implementing commit.
-- Build: not yet observed for the affected NixOS targets.
+- Evaluation: the profile fixtures, `unixlike/tool/checks/composition-test`,
+  `unixlike/tool/checks/import-order-test`, seven derivation-path comparisons
+  and `nix flake check --no-build path:./unixlike` passed on 2026-09-23.
+  `unixlike/tool/checks/flake-test` reached `✓ flake schema fixtures behave`,
+  then its chained `install-plan-test` failed because the default macOS
+  temporary path resolves through the `/var` symlink, which Nix refuses.
+  The complete chained script therefore did not pass. The flake check omitted
+  incompatible `aarch64-linux` and `x86_64-linux` checks on this Mac.
+- Build: unavailable on this `aarch64-darwin` host for the affected Linux
+  targets. Matching derivation paths are evaluation evidence, not a build.
 - Native runtime: not observed.
 - Activation: not requested or performed.
