@@ -2,11 +2,12 @@
 
 kind: report
 spec: docs/work/unixlike/graphical-vm-guests/spec.md
-status: pending
+status: done
 
 Automatic implementation commit `5b20df4` composes and checks both guest
-outputs. The repository-scope procedure is reviewed; this report remains
-pending for review/CI closeout of the VMware recovery fix `1fe78ff`.
+outputs. The repository-scope procedure is reviewed. Both installed guests
+have supplied their native evidence, and the VMware recovery fix `1fe78ff`
+passed the required CI gate. The report is complete on 2026-09-23.
 VMware has supplied native build, graphical runtime,
 switch, reboot and a repaired rollback/restoration test, as recorded below.
 At the maintainer's
@@ -27,7 +28,7 @@ re-switch path was repaired and passed a repeat test; AC8 is verified.
 | AC6 | verified | Review of `CONTRIBUTING.md` at `e346c36`, merged through #342: “Activate the graphical profile on the VM guests” records capacity before and after realising the candidate, compares closures, and refuses garbage collection as a way to make the activation fit. It orders VMware before UTM and test before switch, requires a second SSH session and hypervisor console, names Niri/Noctalia, input, audio, network and hypervisor observations, and gives test failure, systemd-boot and previous-generation recovery paths. Every activation command is explicitly the maintainer's to authorize and run. |
 | AC7 | verified | On 2026-09-23, VMware passed native build, graphical login, both terminals, Korean input, pointer, audio, network, switch and reboot. An immediate headless-to-graphical restoration failure was repaired; the fixed candidate passed test activation, rollback/restoration and reboot. The maintainer confirmed Niri and Ghostty again after the final reboot. Details follow. |
 | AC8 | verified | UTM built the final aarch64 candidate natively, passed on-screen Niri/Noctalia, Ghostty/WezTerm, Korean input, pointer, sound and network observations, switched and rebooted it, and returned successfully from a headless test activation with the still-running user bus. The maintainer requested UTM before VMware; details follow. |
-| AC9 | pending | Prior implementation: GitHub Actions run `35776083090` passed the Unix-like job and the aggregate required check at merge-ready head `6a15e9e`, including the booted-VM step in 5m09s. The VMware recovery fix `1fe78ff` awaits PR CI; its evaluation, native build and runtime evidence below do not replace that gate. |
+| AC9 | verified | Prior implementation passed run `35776083090` at `6a15e9e`. The VMware recovery source `1fe78ff` passed the Unix-like job and `Required checks` in [run 35859977954](https://github.com/shk95/configs/actions/runs/35859977954). PR #354 must also pass the same gate on its final documentation head before merging; branch protection enforces that final gate. |
 
 ## VMware installed-guest evidence, 2026-09-23
 
@@ -112,7 +113,8 @@ re-switch path was repaired and passed a repeat test; AC8 is verified.
   read-only verification also matched the complete tracked `unixlike/` and
   `Justfile` content between the local tree and guest, and re-evaluation
   returned the running candidate. Commit `1fe78ff` preserves that fix;
-  its PR CI result remains pending.
+  its PR CI passed in run `35859977954`. The report's final documentation
+  head remains subject to the same required gate before merge.
 
 ## UTM installed-guest evidence, 2026-09-23
 
