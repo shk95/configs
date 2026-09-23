@@ -76,7 +76,12 @@ Composition, identity, and ownership in this domain rest on ten rules, each
 registered under `docs/policy/invariants/unixlike/`. One file maps module classes to
 hosts, and a feature file writes into a class without naming a host or
 forcing another class's decision, so where a program reaches is read in one
-place. A graphical class is composed only into a home that has a display; the
+place. For NixOS, a machine kind names its required classes and the optional
+profiles it offers; each host makes a typed profile choice separate from its
+identity. That one composition file validates the choice and decides the
+imports, so a host does not import a feature class directly
+(`docs/policy/decisions/unixlike/hosts-select-offered-machine-profiles.md`).
+A graphical class is composed only into a home that has a display; the
 WSL homes take no graphical program, because their terminal is declared in the
 Windows domain. Host identity is a typed option set whose values live in the
 inventory, so an evaluator refuses a wrong shape before any host is composed,
