@@ -1,6 +1,5 @@
-# Typed schema only. Concrete, non-secret host inventory lives in
-# `inventory.nix`; keeping the two separate makes it clear which values are
-# machine declarations and which are reusable option contracts.
+# Typed schemas only. Concrete, non-secret host identity and profile choices
+# live in `inventory.nix`; the two option namespaces remain separate.
 #
 # INV unixlike/typed-identity — this file is the schema; tool/checks/flake-test
 # proves it accepts the inventory and refuses a wrong shape.
@@ -57,6 +56,18 @@
         identity.nixosHosts.${name}: a host of kind wsl receives the WSL home classes, which are written for identity.wsl.user (${config.identity.wsl.user}), and declares ${host.user}.''
     else host;
 in {
+  options.hostSelections.nixos = mkOption {
+    type = types.attrsOf (types.submodule {
+      options.profiles = mkOption {
+        type = types.listOf (types.enum ["agents"]);
+        default = [];
+        description = "Optional machine profiles selected by this NixOS host.";
+      };
+    });
+    default = {};
+    description = "NixOS host profile choices, keyed by inventory host name.";
+  };
+
   options.identity = {
     gitName = mkOption {
       type = types.str;

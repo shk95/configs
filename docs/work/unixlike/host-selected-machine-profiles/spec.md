@@ -31,6 +31,16 @@ The `nixos` host selects it. UTM, VMware and the physical desktop continue to
 require their graphical classes and recovery layer. This is a change in
 composition authority, not a request to activate any host.
 
+## Increments
+
+1. The Unix-like evaluation lane verifies the typed selection, positive and
+   negative fixtures, and seven unchanged output derivations for AC1-AC3.
+2. The repository scope reviews and records the host-choice boundary in
+   `docs/policy/architecture.md`; it does not carry Unix-like implementation.
+3. The Unix-like review lane checks the decision, invariant and current-state
+   documents with that architecture text and records AC4. The report ends in
+   this lane only after the evidence is read.
+
 ## Acceptance
 
 | ID | Criterion | Required lanes |

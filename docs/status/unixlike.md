@@ -11,6 +11,13 @@ nix-darwin, each importing `homeManager.shared`. `homeManager.wsl`,
 `homeManager.wslStandalone`, `homeManager.desktop`, and `homeManager.darwin`
 are the platform classes layered on top
 (`docs/policy/decisions/unixlike/home-manager-platform-classes.md`).
+NixOS host identity and profile choice are separate typed options. The
+machine-kind rows provide required classes and offered profiles; each host
+explicitly selects profiles it uses. `nixos` selects the `agents` profile,
+while the VM guests and desktop retain their required graphical classes
+(`docs/policy/decisions/unixlike/hosts-select-offered-machine-profiles.md`).
+The seven existing output derivations are unchanged by this selection refactor;
+a matching Linux host has not yet supplied a new native build for it.
 
 SDKMAN is adopted but not owned
 (`docs/policy/decisions/unixlike/sdkman-adopted-not-owned.md`). Its hook is the last

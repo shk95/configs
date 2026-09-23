@@ -1,6 +1,6 @@
 # The coding agents, as a class of their own. Composed only where they are
-# wanted: modules/flake/configurations.nix gives `homeManager.agents` to the
-# NixOS-WSL home and to no other, so the standalone Ubuntu home and the
+# wanted: the NixOS-WSL host selects the `agents` profile interpreted by
+# modules/flake/configurations.nix, so the standalone Ubuntu home and the
 # Darwin home are unchanged by this file — the mechanism that keeps
 # `homeManager.desktop` out of the WSL homes, used the other way round
 # (#195; docs/policy/decisions/unixlike/home-manager-platform-classes.md).
