@@ -24,6 +24,11 @@ status: pending
   The complete chained script therefore did not pass. The flake check omitted
   incompatible `aarch64-linux` and `x86_64-linux` checks on this Mac.
 - Build: unavailable on this `aarch64-darwin` host for the affected Linux
-  targets. Matching derivation paths are evaluation evidence, not a build.
+  targets. The 2026-09-23 pre-push test also attempted the unchanged Darwin
+  toplevel and failed: `trash-cli` and `trash` both provide `bin/trash` in
+  `home-manager-path`. The Darwin derivation path matches the base commit,
+  so this is not evidence of a new output regression, but it is a real failed
+  build and the push was refused. Matching derivation paths are evaluation
+  evidence, not a completed build.
 - Native runtime: not observed.
 - Activation: not requested or performed.
