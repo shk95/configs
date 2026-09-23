@@ -2,11 +2,17 @@
 # 3b13291216bbea04169360b9d8a18a210d816c04. The KDL is rewritten for this
 # repository's applications and contains no host, monitor or personal path.
 _: {
-  modules.homeManager.linuxGraphical = {pkgs, ...}: let
+  modules.homeManager.linuxGraphical = {
+    config,
+    lib,
+    pkgs,
+    ...
+  }: let
     rawConfig = pkgs.writeText "niri-config.kdl" ''
       input {
           keyboard {
               xkb {}
+              ${lib.optionalString (config.configs.niri.repeatDelayMs != null) "repeat-delay ${toString config.configs.niri.repeatDelayMs}"}
           }
           touchpad {
               tap
@@ -125,7 +131,15 @@ _: {
         cp ${rawConfig} "$out"
       '';
   in {
-    home.packages = [pkgs.xwayland-satellite];
-    xdg.configFile."niri/config.kdl".source = validatedConfig;
+    options.configs.niri.repeatDelayMs = lib.mkOption {
+      type = lib.types.nullOr lib.types.ints.positive;
+      default = null;
+      description = "Delay in milliseconds before Niri repeats a held key; null keeps Niri's default.";
+    };
+
+    config = {
+      home.packages = [pkgs.xwayland-satellite];
+      xdg.configFile."niri/config.kdl".source = validatedConfig;
+    };
   };
 }
