@@ -42,6 +42,11 @@ hypervisor would otherwise fail late, in whatever option it assumed.
 kind with no row does not evaluate. It remains the only file that decides
 what reaches a host.
 
+Extended 2026-09-23: the machine-kind rows now distinguish required classes
+from named optional profiles. A separate typed host choice selects among
+profiles offered by the row; this file still owns the resulting imports
+(`docs/policy/decisions/unixlike/hosts-select-offered-machine-profiles.md`).
+
 ## A host is declared for every lane, four as placeholders
 
 The maintainer chose to declare `vm`, `utm`, `orbstack` and `desktop` now,

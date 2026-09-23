@@ -10,16 +10,16 @@
 # tool/checks/composition refuses a feature file that names a host flavour
 # or forces a class's decision.
 #
-# `home.agents` — the coding agents — is composed into the NixOS-WSL home
-# only; the standalone Ubuntu home and the Darwin home are unchanged by it
-# (modules/agents.nix).
+# `home.agents` — the coding agents — is offered to WSL NixOS hosts and
+# selected by `hostSelections.nixos.nixos`; the standalone Ubuntu home and
+# the Darwin home are unchanged by it (modules/agents.nix).
 #
 # INV unixlike/nixos-host-inventory — every NixOS output is generated from
 # `identity.nixosHosts`, named after its entry, and told about itself through
 # `host` (modules/host/nixos.nix), so the output name, the inventory name and
 # `networking.hostName` cannot drift (#191). `nixosCompositions` is the one
-# table from a host's kind — for a `vm`, its hypervisor — to the classes it
-# receives; a host whose kind has no row does not evaluate.
+# table from a host's kind — for a `vm`, its hypervisor — to required classes
+# and offered profiles. A host whose kind has no row does not evaluate.
 {
   lib,
   config,
@@ -27,39 +27,44 @@
   withSystem,
   ...
 }: let
-  inherit (lib) attrValues mapAttrs optionalAttrs;
+  inherit (lib) attrNames attrValues concatMap mapAttrs optionalAttrs unique;
   inherit (config.identity) wsl darwin nixosHosts;
+  hostSelections = config.hostSelections.nixos;
   home = config.modules.homeManager;
   nixos = config.modules.nixos;
 
   nixosCompositions = {
     wsl = {
-      system = [
+      required.system = [
         inputs.nixos-wsl.nixosModules.default
         nixos.wsl
       ];
-      home = [
+      required.home = [
         home.shared
         home.wsl
-        home.agents
       ];
+      optional.agents = {
+        system = [];
+        home = [home.agents];
+      };
     };
 
     # The aarch64 graphical guest: its UTM machine and serial recovery path,
     # the headless account/SSH layer, and the shared Niri/Noctalia classes.
     # The coding agents stay on NixOS-WSL.
     utm = {
-      system = [
+      required.system = [
         nixos.utm
         nixos.installExt4
         nixos.headless
         nixos.graphical
       ];
-      home = [
+      required.home = [
         home.shared
         home.desktop
         home.linuxGraphical
       ];
+      optional = {};
     };
 
     # An OrbStack machine: what OrbStack needs from the guest
@@ -67,43 +72,55 @@
     # class, because OrbStack's agent is the way in — and the shared home
     # alone.
     orbstack = {
-      system = [nixos.orbstack];
-      home = [home.shared];
+      required = {
+        system = [nixos.orbstack];
+        home = [home.shared];
+      };
+      optional = {};
     };
 
     # The x86_64 graphical guest under VMware Workstation, with the same
     # headless recovery and shared graphical layers as the UTM guest.
     vmware = {
-      system = [
+      required.system = [
         nixos.vmware
         nixos.installExt4
         nixos.headless
         nixos.graphical
       ];
-      home = [
+      required.home = [
         home.shared
         home.desktop
         home.linuxGraphical
       ];
+      optional = {};
     };
 
     # The physical AMD APU desktop. The headless class remains its account,
     # SSH and recovery path; the shared graphical classes supply Niri and
     # Noctalia. Installation and physical runtime evidence remain separate.
     desktop = {
-      system = [
+      required.system = [
         nixos.desktop
         nixos.installLuksBtrfs
         nixos.headless
         nixos.graphical
       ];
-      home = [
+      required.home = [
         home.shared
         home.desktop
         home.linuxGraphical
       ];
+      optional = {};
     };
   };
+
+  # Every inventory host makes a choice, even when it selects no optional
+  # profile. Extra selection entries are rejected rather than silently unused.
+  checkedSelections =
+    if attrNames hostSelections != attrNames nixosHosts
+    then throw "hostSelections.nixos must name exactly the hosts in identity.nixosHosts."
+    else hostSelections;
 
   nixosHost = name: host: let
     key =
@@ -113,11 +130,23 @@
     composition =
       nixosCompositions.${key}
       or (throw "identity.nixosHosts.${name}: no composition is written for ${key} in modules/flake/configurations.nix.");
+    profiles = let
+      chosen = checkedSelections.${name}.profiles;
+    in
+      if unique chosen != chosen
+      then throw "hostSelections.nixos.${name}: profiles must not be repeated."
+      else chosen;
+    selected = map (profile:
+      composition.optional.${profile}
+      or (throw "hostSelections.nixos.${name}: profile ${profile} is unavailable for ${key}."))
+    profiles;
+    systemModules = composition.required.system ++ concatMap (profile: profile.system) selected;
+    homeModules = composition.required.home ++ concatMap (profile: profile.home) selected;
   in
     inputs.nixpkgs.lib.nixosSystem {
       inherit (host) system;
       modules =
-        composition.system
+        systemModules
         ++ [
           inputs.home-manager.nixosModules.home-manager
           nixos.shared
@@ -128,8 +157,8 @@
             home-manager = {
               useGlobalPkgs = true;
               useUserPackages = true;
-              users = optionalAttrs (composition.home != []) {
-                ${host.user}.imports = composition.home;
+              users = optionalAttrs (homeModules != []) {
+                ${host.user}.imports = homeModules;
               };
             };
           }

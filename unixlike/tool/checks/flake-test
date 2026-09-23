@@ -206,6 +206,71 @@ hosts_eval "$no_state_version" 'hosts: hosts.fixture-host.stateVersion' 2>&1 >/d
   grep -q 'nixosHosts.fixture-host.stateVersion.* was accessed but has no value defined' ||
   fail "identity.nix refused a host without a state version, but not for the missing value"
 
+# INV unixlike/nixos-host-inventory and INV unixlike/composition-in-one-place:
+# host choices are typed separately from identity, and the one composition
+# file accepts only profiles offered by that host's machine kind.
+selection_eval() {
+  nix eval --json --impure --expr "
+    let
+      inputs = (builtins.getFlake (toString ./.)).inputs;
+      flake = inputs.flake-parts.lib.mkFlake { inherit inputs; } {
+        imports = [
+          (inputs.import-tree ./modules)
+          { hostSelections.nixos.$1 = inputs.nixpkgs.lib.mkForce $2; }
+        ];
+      };
+    in builtins.any
+      (p: (p.pname or p.name) == \"codex\")
+      flake.nixosConfigurations.$3.config.home-manager.users.\"$user\".home.packages"
+}
+
+printf '→ a host may omit an optional machine profile\n'
+[ "$(selection_eval nixos.profiles '[]' nixos)" = false ] ||
+  fail "NixOS-WSL retained the agents profile after opting out"
+
+printf '→ a host may select an offered machine profile\n'
+[ "$(selection_eval nixos.profiles '["agents"]' nixos)" = true ] ||
+  fail "NixOS-WSL did not receive the selected agents profile"
+
+printf '→ rejects a profile unavailable for the machine kind\n'
+if selection_eval vm.profiles '["agents"]' vm >/dev/null 2>&1; then
+  fail "the VMware machine accepted the agents profile"
+fi
+
+printf '→ rejects an unregistered host selection\n'
+if selection_eval extra-host.profiles '[]' nixos >/dev/null 2>&1; then
+  fail "a selection without an inventory host was accepted"
+fi
+
+printf '→ rejects a host without a selection\n'
+if nix eval --raw --impure --expr '
+  let
+    inputs = (builtins.getFlake (toString ./.)).inputs;
+    flake = inputs.flake-parts.lib.mkFlake { inherit inputs; } {
+      imports = [
+        (inputs.import-tree ./modules)
+        { hostSelections.nixos = inputs.nixpkgs.lib.mkForce {
+          utm.profiles = [];
+          orbstack.profiles = [];
+          vm.profiles = [];
+          desktop.profiles = [];
+        }; }
+      ];
+    };
+  in flake.nixosConfigurations.nixos.config.system.build.toplevel.drvPath' >/dev/null 2>&1; then
+  fail "a host without a selection was accepted"
+fi
+
+printf '→ rejects an unknown profile name\n'
+if selection_eval nixos.profiles '["unlisted"]' nixos >/dev/null 2>&1; then
+  fail "the host selection accepted an unknown profile name"
+fi
+
+printf '→ rejects a repeated profile\n'
+if selection_eval nixos.profiles '["agents" "agents"]' nixos >/dev/null 2>&1; then
+  fail "the host selection accepted a repeated profile"
+fi
+
 # ---------------------------------------------------------------------------
 # Graphical classes reach graphical homes and stay out of the rest
 # ---------------------------------------------------------------------------

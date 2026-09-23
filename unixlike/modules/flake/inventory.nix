@@ -64,4 +64,12 @@ _: {
       system = "aarch64-darwin";
     };
   };
+
+  hostSelections.nixos = {
+    nixos.profiles = ["agents"];
+    utm.profiles = [];
+    orbstack.profiles = [];
+    vm.profiles = [];
+    desktop.profiles = [];
+  };
 }
