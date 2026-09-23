@@ -32,6 +32,30 @@ _: {
     # about it is fixed.
     networking.useDHCP = true;
 
+    home-manager.users.${config.host.user} = {
+      lib,
+      pkgs,
+      ...
+    }: {
+      # A headless rollback removes dconf's service while the user bus can
+      # remain alive. Refresh it before applying the graphical home again.
+      home.activation.reloadDconfServices = lib.hm.dag.entryBefore ["dconfSettings"] ''
+        if [[ -v DBUS_SESSION_BUS_ADDRESS ]]; then
+          ${pkgs.systemd}/bin/busctl --user call \
+            org.freedesktop.DBus /org/freedesktop/DBus \
+            org.freedesktop.DBus ReloadConfig
+        fi
+      '';
+
+      # The stopped Xwayland session can also leave an obsolete DISPLAY in
+      # the user manager. Do not send Xresources to an unreachable server.
+      home.activation.discardStaleXDisplay = lib.hm.dag.entryBefore ["onFilesChange"] ''
+        if [[ -v DISPLAY ]] && ! ${pkgs.xrdb}/bin/xrdb -query >/dev/null 2>&1; then
+          unset DISPLAY
+        fi
+      '';
+    };
+
     # INV unixlike/graphical-guests-keep-recovery
     assertions = [
       {
