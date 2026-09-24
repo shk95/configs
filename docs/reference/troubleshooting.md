@@ -516,20 +516,22 @@ fallback the terminal substitutes per-glyph and the row's metrics stop lining up
 which is the misalignment that usually gets described as breakage rather than
 the boxes themselves.
 
-**Check which side you are actually on.** If GUI applications under WSLg render
-Korean and the terminal does not, it is the terminal, and nothing in this
-repository is involved:
+**Check which side renders the text.** Windows Terminal uses Windows fonts;
+Linux-side tools that render text into files may use fontconfig. The latter can
+be inspected with:
 
 ```sh
 fc-match 'sans-serif:lang=ko'      # what Linux resolves Korean to
 ```
 
 That command answering `Noto Sans CJK JP` is not the bug — see the comment in
-`home/fonts.nix` for why the family name says JP while the coverage is Korean.
+`unixlike/modules/fonts/wsl.nix` for why the family name says JP while the
+coverage is Korean.
 
-Nothing answering at all is a real gap, and it is the NixOS-WSL case:
-`fonts.enableDefaultPackages` is `false` and `fonts.packages` is empty there, so
-that flavour has no font of any kind until one is declared.
+Nothing answering at all is a real gap for a Linux-side renderer. In
+NixOS-WSL, `fonts.enableDefaultPackages` is `false` and `fonts.packages` is
+empty, so that flavour needs a Home Manager font declaration for such tools.
+This does not provide a WSL GUI application layer.
 
 ### Hangul jamo vanish inside zellij on macOS
 

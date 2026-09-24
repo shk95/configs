@@ -51,8 +51,10 @@ The current Unix-like outputs are:
 - `darwinConfigurations.shk-macbook`: nix-darwin configuration.
 
 Graphical Unix-like applications are a separate Home Manager composition
-class. Darwin currently consumes it; both WSL outputs deliberately do not, so
-they use a Windows-owned terminal without also building a Linux GUI terminal.
+class. Both WSL outputs are command-line configurations and deliberately
+exclude Linux GUI applications and WSLg integration. They use a Windows-owned
+terminal. Adding WSL GUI support requires a Unix-like policy revision before
+any implementation is planned.
 Ghostty is installed by Homebrew on Darwin while Home Manager owns its shared
 Unix-like configuration.
 
