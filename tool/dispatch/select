@@ -1,9 +1,8 @@
 #!/bin/sh
 #
 # Decide which checks a change needs. That is a different question from who
-# owns the change, and answering both with one function is why editing
-# assets/zellij/config.kdl ran a whole flake evaluation for a file Nix never
-# parses.
+# owns the change. When the two answers were coupled, editing a Zellij
+# payload ran a whole flake evaluation even though Nix only copied that file.
 #
 # tool/version-control/classify answers ownership: which domain may change a
 # path, which release tag covers it, which CI job is selected. It keeps that

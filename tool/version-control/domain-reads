@@ -7,7 +7,7 @@
 # so a Unix-like check that opens a file under windows/ or a Windows script
 # that opens a file under the Unix-like module tree makes one domain's
 # evidence depend on the other's tree. The two known cases were exactly
-# that: the Windows suite byte-compared assets/wezterm/fonts.json, and the
+# that: the Windows suite byte-compared a Unix-like WezTerm font payload, and the
 # merge-gate job parsed every PowerShell file in the checkout. Similarity
 # between copies is never a failure; a read across the boundary is.
 #

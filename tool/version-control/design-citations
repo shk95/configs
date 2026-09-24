@@ -1,15 +1,13 @@
 #!/bin/sh
 #
-# Enforce INV repository/design-outside-authority: nothing that carries
-# authority cites a design document.
+# Enforce INV repository/design-outside-authority: a work document is not
+# authority for a repository rule.
 #
-# A design document under docs/work/ argues for a direction and binds
-# nothing until an inlet accepts it. If a rationale paragraph, a registry
-# entry, a procedure or a script could cite one, the argument would acquire
-# the force of the thing citing it without passing any inlet, and the
-# repository would enforce a direction nobody accepted. The four inlets are
-# reviewed on their own terms and are where a document is named as a source:
-# a decision record, a candidate, a provisional entry, and an issue.
+# A spec, report or study under docs/work/ binds only its own work. A durable
+# result belongs in a decision record or invariant, and a temporary measure
+# in the provisional registry. Decision records and provisional entries may
+# name the work as their source. Candidates record observations and issues
+# record execution; neither adopts a rule.
 #
 # The rule separates citing a document from naming the directory, which is
 # the distinction the tree already draws for every other document directory:
@@ -20,11 +18,6 @@
 #             anywhere: the format contract and the order of work hold no
 #             argument, so naming either borrows none
 #
-# So the ownership table, the placement paragraph in AGENTS.md, the procedure
-# in CONTRIBUTING.md and the registry entry itself all say where design
-# documents live without citing one, while a decision record's `source:` line
-# names the document it adopted from.
-#
 #   subject   every tracked path
 #   except    docs/work/  docs/policy/decisions/  docs/policy/candidates/  docs/provisional/
 #             docs/status/, which carries no authority and links the report
@@ -34,11 +27,11 @@
 #             tool/version-control/classify, whose case arms name the area's
 #             paths as a table and cite no document
 #
-# The inlets are excluded whole rather than by header key: a decision record
-# argues in prose as well as in `source:`, and a checker that read only the
-# key would push the same citation one line down. This script and the fixture
-# that proves it are excluded because both have to write the form they refuse,
-# the way the Windows suite carries a cross-domain path in the fixture that
+# Permitted locations are excluded whole rather than by header key: a decision
+# record argues in prose as well as in `source:`, and checking only the key
+# would push the same citation one line down. This script and its fixture are
+# excluded because both have to write the form they refuse, the way the
+# Windows suite carries a cross-domain path in the fixture that
 # proves its own scan.
 #
 # Three limits are accepted and are what a reviewer reads for by hand: a
@@ -118,7 +111,7 @@ set -- . \
 git ls-files -- "$@" >"$work/files"
 scanned=$(wc -l <"$work/files" | tr -d ' ')
 if [ "$scanned" -eq 0 ]; then
-  printf '\033[31m✗ scan did not run: no tracked path outside the adoption inlets\033[0m\n' >&2
+  printf '\033[31m✗ scan did not run: no tracked path outside permitted locations\033[0m\n' >&2
   exit 1
 fi
 
@@ -146,11 +139,10 @@ if [ -s "$work/hits" ]; then
   while IFS= read -r hit; do
     printf '\033[31m✗ %s\033[0m\n' "$hit" >&2
   done <"$work/hits"
-  echo "  See docs/policy/invariants/repository/design-outside-authority.md: a design document is" >&2
-  echo "  argued, not adopted. Cite the decision record, candidate or provisional entry" >&2
-  echo "  that accepted it, and name the directory rather than the document where the" >&2
-  echo "  sentence is about where design documents live." >&2
+  echo "  See docs/policy/invariants/repository/design-outside-authority.md: a work item" >&2
+  echo "  does not authorize a rule. Cite the adopted decision, invariant or provisional" >&2
+  echo "  entry; name docs/work/ alone when describing the document location." >&2
   exit 1
 fi
 
-echo "✓ design citations: $scanned tracked paths outside the adoption inlets cite no design document"
+echo "✓ design citations: $scanned tracked paths outside permitted locations cite no work item"

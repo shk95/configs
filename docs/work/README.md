@@ -14,14 +14,13 @@ checklist, their order, blockers, links to pull requests. It carries no
 acceptance criteria and is never a source of evidence; what matters after it
 closes is written into the report.
 
-A work document is not policy. It binds only the work it describes, and
-nothing in `AGENTS.md`, `CONTRIBUTING.md`, `docs/policy/`, the provisional
-registry, the tools, the hooks or CI rests on one. A durable rule that a
-piece of work produces lands in a decision record or an invariant, which
-names the document as its source; adoption through such an inlet is what
-makes a direction binding, and the repository maintainer owns it.
+A work document is not policy. It binds only the work it describes. A durable
+rule it produces belongs in a decision record or invariant, and a temporary
+measure in the provisional registry. A decision record or provisional entry
+may name the work as its source; rule-bearing material cites the adopted
+result. The repository maintainer owns the adoption decision.
 `tool/version-control/design-citations` refuses a work item's path from
-anything that carries authority
+rule-bearing material
 (`INV repository/design-outside-authority`). The status files may link a
 report instead of repeating it, and this file may be named from anywhere,
 because a format contract holds no argument.

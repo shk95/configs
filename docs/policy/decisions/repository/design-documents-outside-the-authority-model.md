@@ -71,8 +71,7 @@ the charter in `docs/work/README.md` is the whole of that warning. Documents
 are never deleted, so the directory only grows and `superseded` is its only
 retirement. Porting the three documents that opened the area costs a
 translation: they were written as Korean HTML artefacts, and the repository is
-public and its text is English (`CONTRIBUTING.md`, "Documentation
-ownership"). And the checked rule
+public and its text is English (`CONTRIBUTING.md`). And the checked rule
 is lexical: it separates citing a document from naming the directory, so a
 citation written in words rather than as a path passes, and a reviewer is what
 catches it.
@@ -85,3 +84,10 @@ objection to a document written by the work to describe itself was that
 nothing would own it; a report is owned by its spec and checked against it.
 Everything else here stands: a work document carries no authority, the
 traffic runs one way, and the inlets are where a direction becomes binding.
+
+2026-09-24: the four inlets listed above no longer describe how a rule is
+adopted. The later work model gives issues execution state only, and
+candidates remain observations until they are deleted on promotion. Neither
+adopts a rule. A durable result enters a decision record or invariant; a
+temporary measure enters the provisional registry. Status may link a report
+as evidence of current state. The direct-citation boundary remains in force.

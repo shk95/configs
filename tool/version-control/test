@@ -4480,22 +4480,16 @@ if ! inv_real_output=$(cd "$root" && "$invariants" 2>&1); then
 fi
 
 # ---------------------------------------------------------------------------
-# Design documents are cited only by the adoption inlets
+# Work documents do not authorize repository rules
 # ---------------------------------------------------------------------------
 #
 # INV repository/design-outside-authority
-# tool/version-control/design-citations scans the index for a citation of a
-# document under the design area from anything that carries authority. The
-# real repository is the positive case. The negative is a throwaway
-# repository where a rationale paragraph, a registry entry and a script each
-# cite one; the scan must name every file and line. A third repository names
-# the directory in a placement rule, writes the slug template a format
-# contract carries, and cites documents from the four inlets and from a
-# sibling design document; it must pass, because a citation names a document
-# while a placement rule names the directory. The same two repositories carry
-# the rule as it stands for work items: a work item's path is refused in each
-# place that carries authority, accepted from current state and the map of
-# the tree, and the area's own two files are accepted from anything.
+# tool/version-control/design-citations scans the index for a work-item path
+# in authority-bearing material. The real repository is the positive case.
+# A fixture must refuse references from policy, procedures, hooks, CI and
+# domain code. Another must allow placement rules, slug templates, source
+# references in decision and provisional entries, candidate observations,
+# status evidence links, the document map and work-area format files.
 design_citations="$root/tool/version-control/design-citations"
 
 # Wired the way domain-reads is: every commit, and the repository-wide CI
@@ -4505,7 +4499,7 @@ grep -q 'run: tool/version-control/design-citations' "$root/.github/workflows/ci
 
 if ! design_output=$(cd "$root" && "$design_citations" 2>&1); then
   printf '%s\n' "$design_output" >&2
-  echo "the repository's own authority documents cite a design document" >&2
+  echo "the repository's own authority documents cite a work item" >&2
   exit 1
 fi
 # A positive count, or a broken pathspec has retired the scan.
@@ -4538,7 +4532,7 @@ printf 'The form is docs/work/README.md; the reason is docs/work/unixlike/probe/
 git -C "$design_fixture" add -A
 if design_output=$(cd "$design_fixture" && "$design_citations" 2>&1); then
   printf '%s\n' "$design_output" >&2
-  echo "design-citations accepted an authority document that cites a design document" >&2
+  echo "design-citations accepted an authority document that cites a work item" >&2
   exit 1
 fi
 for design_hit in \

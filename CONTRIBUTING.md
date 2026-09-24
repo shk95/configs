@@ -4,6 +4,8 @@ This is the workflow for people and tools. `AGENTS.md` contains stable
 judgement and safety rules, `docs/policy/architecture.md` defines domain ownership,
 and `README.md` contains usage.
 
+Repository text is English because the repository is public.
+
 ## Prepare a clone
 
 ```sh
@@ -428,10 +430,7 @@ deletion is as easy to get wrong as an addition. Both pass through
 `docs/policy/candidates/` first. `docs/policy/candidates/README.md` is the format; this is
 the procedure.
 
-1. Record the observation as `docs/policy/candidates/<slug>.md` with `kind:
-   addition` or `kind: deletion`, the target it would change, the criterion
-   that promotes it and the date or event that drops it. Write what was met
-   and where, not the rule you would like to exist.
+1. Record what was met and where, not the rule you would like to exist.
 2. Add a dated line under `Occurrences` each time the same thing is met
    again, with the evidence.
 3. Promote when the criterion is met: make the change in its owning scope
@@ -1371,12 +1370,7 @@ read across the boundary has no legitimate form.
 ### Design citations
 
 `tool/version-control/design-citations` scans the index for a citation of a
-work item from anything that carries authority. The adoption inlets are
-excluded, so a decision record, a candidate and a provisional entry may name
-the document they adopted from; the status files and `docs/README.md` may
-name one too, and the area's own `README.md` and `roadmap.md` pass anywhere. It runs on every commit beside the hygiene
-scan and in CI, because the document and the text citing it can be in any
-scope.
+work item from authority-bearing files. It runs on every commit and in CI.
 
 ```sh
 tool/version-control/design-citations
@@ -1385,9 +1379,8 @@ tool/version-control/design-citations
 When it reports something, decide which of the two the sentence is doing. If
 it says where work documents live, name the directory rather than a file:
 `docs/work/` passes and `docs/work/<file>` does not. If it rests on the
-document's argument, that argument has not been adopted — record the decision,
-promote the candidate or register the measure, and cite that instead. There is
-no allow list.
+document's argument, put the accepted rule in a decision record or invariant,
+or register a temporary measure, and cite that instead. There is no allow list.
 
 ### Document indexes
 
@@ -1407,42 +1400,3 @@ Branch protection on `dev` and `master` requires the stable `Required checks`
 job. That job fails unless classification and secret scanning pass and every
 selected domain job succeeds. Conditional domain job names are deliberately
 not branch-protection contexts because unselected domains are skipped.
-
-
-## Documentation ownership
-
-`Authority` says whether a location binds the repository. An internal
-location is authority: it is read as a rule, it is the context an agent works
-under, and it is where an obligation may rest. An external location argues,
-observes or proposes, and binds nothing until an internal location adopts
-from it.
-
-| Location | Authority | Responsibility |
-| --- | --- | --- |
-| `README.md` | internal | Setup, outputs, and everyday use |
-| `CONTRIBUTING.md` | internal | Domain-scoped workflow and releases |
-| `AGENTS.md` | internal | Stable judgement and safety boundaries |
-| `docs/policy/architecture.md` | internal | Domain authority and dependency policy |
-| `docs/status/` | internal | Current state, one file per scope |
-| `docs/README.md` | internal | The map of the document tree and who owns each part |
-| `docs/policy/decisions/` | internal | One record per expensive decision; `README.md` there is the format, `tool/version-control/records --table decisions` the index |
-| `docs/reference/` | internal | Recurring problems indexed by symptom |
-| `docs/policy/definition-of-done/` | internal | Evidence requirements, one file per scope |
-| `docs/policy/invariants/` | internal | Enumerated invariants and how each one is enforced |
-| `docs/provisional/` | internal | Registered temporary measures and the condition that ends each |
-| `.agents/skills/` | internal | Model-neutral workflows specific to this repository |
-| `tool/`, hooks, CI | internal | Executable policy |
-| `docs/policy/candidates/` | external | Observed candidates for adding a rule or removing text; `README.md` there is the format, `tool/version-control/records --table candidates` the index |
-| `docs/work/` | external | A spec, the report that answers it, and the study behind it; `README.md` there is the format, `roadmap.md` the order of work, `tool/version-control/records --table work` the index |
-| `notes/` | none | Untracked maintainer scratch space; no structure, review or retention, and not project context |
-
-The two external locations differ in size, not in standing. A candidate is
-one observation waiting to become a sentence in an internal document; a
-work item is a whole piece of work that may produce several. Neither is
-cited by an internal location, and a work item is never deleted, because an
-adoption record names it as its source.
-
-Cross-project methods are maintained in the separate sibling `skills` project
-and adopted explicitly. They do not become a source of project policy.
-
-Repository text is English because the repository is public.
