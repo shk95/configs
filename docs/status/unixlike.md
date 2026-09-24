@@ -17,8 +17,15 @@ values are checked before composition; host-owned system and home modules
 have explicit extension points. All seven current outputs still come from the
 provider inventory through those constructors during migration. An external
 consumer fixture passes without importing provider-internal files, and the
-seven toplevel derivation paths equal the pre-API `dev` tree. No external host
-owns a final output yet (`docs/policy/decisions/unixlike/provider-constructors-own-composition.md`).
+seven toplevel derivation paths equal the pre-API `dev` tree. The public
+`configs-host-template` now evaluates a synthetic output against the pinned
+provider merge; its setup documents host-owned SOPS + age delivery. The one
+private `configs-hosts` repository declares all seven current outputs with
+independent flakes and locks. Their derivation paths match the pre-API tree;
+the Darwin consumer built natively. Installed Linux and WSL consumers still
+need native build and runtime evidence, so the provider inventory and outputs
+remain in place
+(`docs/policy/decisions/unixlike/provider-constructors-own-composition.md`).
 
 Unix-like Home Manager hosts are standalone Ubuntu WSL, NixOS-WSL, and
 nix-darwin, each importing `homeManager.shared`. `homeManager.wsl`,
