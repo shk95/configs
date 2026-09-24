@@ -498,40 +498,31 @@ that another Homebrew font package is needed.
 
 ### Korean renders as boxes in the terminal, and declaring a font changes nothing
 
-Because the terminal's font is not a Linux setting. Windows Terminal draws with
-a font named in its own `settings.json` and reads it from Windows — a font in
-the Nix store is invisible to it, so `home/fonts.nix` cannot fix this and adding
-a Nerd Font there would only spend 194 MiB proving it.
-
-The fix is on the Windows side, in the profile's font, as a fallback list:
+Windows Terminal draws with a font named in its own `settings.json` and reads
+it from Windows. A font in the Linux Nix store is invisible to it, so changing
+`unixlike/modules/fonts/wsl.nix` cannot fix terminal glyphs. The Windows
+desired state installs and selects D2Coding independently:
 
 ```json
-"font": { "face": "Cascadia Mono, Malgun Gothic" }
+"font": { "face": "D2KodingLigature Nerd Font Mono" }
 ```
 
 `settings.json` is at
 `%LOCALAPPDATA%\Packages\Microsoft.WindowsTerminal_8wekyb3d8bbwe\LocalState\settings.json`.
-The second name is what covers Hangul when the first does not; without a
-fallback the terminal substitutes per-glyph and the row's metrics stop lining up,
-which is the misalignment that usually gets described as breakage rather than
-the boxes themselves.
+Check that this Windows font is installed and selected in the active profile.
 
 **Check which side renders the text.** Windows Terminal uses Windows fonts;
 Linux-side tools that render text into files may use fontconfig. The latter can
 be inspected with:
 
 ```sh
-fc-match 'sans-serif:lang=ko'      # what Linux resolves Korean to
+fc-match 'D2KodingLigature Nerd Font Mono:lang=ko'
 ```
 
-That command answering `Noto Sans CJK JP` is not the bug — see the comment in
-`unixlike/modules/fonts/wsl.nix` for why the family name says JP while the
-coverage is Korean.
-
-Nothing answering at all is a real gap for a Linux-side renderer. In
-NixOS-WSL, `fonts.enableDefaultPackages` is `false` and `fonts.packages` is
-empty, so that flavour needs a Home Manager font declaration for such tools.
-This does not provide a WSL GUI application layer.
+Both WSL Home Manager outputs declare D2Coding and enable fontconfig for
+Linux-side renderers. Ubuntu may also have distribution fonts, while NixOS-WSL
+has no system font packages. This does not provide a WSL GUI application layer
+or change the font used by Windows Terminal.
 
 ### Hangul jamo vanish inside zellij on macOS
 
