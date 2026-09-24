@@ -1,30 +1,41 @@
 # Roadmap
 
-Lanes and order, not schedule. A lane is a host this repository configures or
-means to; the rows below state the sequence work is taken in, and an item
-without a number is a decision that must be made before the number it precedes.
-Existing order numbers remain stable for references even when work is deferred.
-Each numbered item becomes a work item under this directory when it starts; the
-index is `tool/version-control/records --table work`. The repository
-maintainer owns this file, and changing the order is a repository change.
+Lanes and order, not schedule. A lane is a host this repository currently
+configures or a host intended to consume its Unix-like API after migration.
+Table position is the current sequence of work. Existing item numbers remain
+references in their specs and reports when priority changes, so a deferred
+item keeps its number when a new item moves ahead of it; an item without a
+number is a decision that must be made before the item it precedes. An item
+owned here becomes a work item under this directory when it starts; an
+external repository holds its own execution record. The local index is
+`tool/version-control/records --table work`. The repository maintainer owns
+this file, and changing the order is a repository change.
+
+On 2026-09-24 the maintainer put the physical Unix-like module layout and
+external host consumption ahead of the unfinished host and deployment work.
+The public host template is a separate repository and belongs to the same
+transition. Completed work and its evidence remain historical. The pending
+criteria in the desktop and installation reports are deferred, not verified
+or erased; after the transition, their remaining implementation and evidence
+are revised for the new owner before work resumes.
 
 ## Lanes
 
-| Lane | Host | State on 2026-09-23 |
+| Lane | Host | State entering the 2026-09-24 transition |
 | --- | --- | --- |
 | darwin | aarch64-darwin | operational; generation 36 activated |
 | utm | aarch64 NixOS guest, UTM on the Mac | graphical; native build, runtime, switch/reboot and rollback/restoration verified on 2026-09-23 |
 | orbstack | aarch64 NixOS OrbStack machine | an isolated sandbox on the Mac, switched to the flake on 2026-09-20; disposable, recreated by its procedure |
 | desktop | x86_64 NixOS, physical AMD APU desktop | declared as host `desktop`; evaluated and built natively on x86_64, not installed; physical-host work at order 9 deferred |
 | vm | x86_64 NixOS guest, VMware Workstation on a Linux and a Windows host | graphical on Windows; native build, runtime, switch/reboot and rollback/restoration verified on 2026-09-23; Linux-host runtime unverified |
-| kvm | x86_64 NixOS guest, QEMU/KVM on the NixOS desktop | not declared; order 12 deferred with its desktop prerequisite |
-| hyperv | x86_64 NixOS guest, Hyper-V on the Windows host | not declared; order 13 declares the host |
+| kvm | x86_64 NixOS guest, QEMU/KVM on the NixOS desktop | not declared; item 12 is deferred behind the host transition |
+| hyperv | x86_64 NixOS guest, Hyper-V on the Windows host | not declared; item 13 is deferred behind the host transition |
 | wsl-standalone | x86_64 Ubuntu WSL, standalone Home Manager | operational; tagged `unixlike-v2026.08.31` |
 | wsl-nixos | x86_64 NixOS-WSL | activated (generation 4); updated in place since that day |
 
 ## Order
 
-| Order | Work | Scope |
+| Item | Work in current sequence | Scope |
 | --- | --- | --- |
 | 1 | docs layout — done 2026-09-19 | repository |
 | 2 | work model — done 2026-09-19 | repository |
@@ -38,11 +49,52 @@ maintainer owns this file, and changing the order is a repository change.
 | — | judgement on the CI decision's `reopen-when`, met by the installed x86_64 guest — minimal VM check accepted on the existing required job 2026-09-21 | repository |
 | 8 | shared Niri and Noctalia Wayland profile, Linux graphical home layer, and utility adoption — done 2026-09-23 | unixlike |
 | 10 | Niri and Noctalia on the VM guests — done 2026-09-23 | unixlike |
-| 11 | installation and deployment (disko, nixos-anywhere, deploy-rs); physical desktop evidence waits for order 9 | unixlike |
-| 13 | x86_64 guest on Hyper-V, on the Windows host | unixlike |
+| 14 | physical Unix-like module grouping; preserve existing outputs | unixlike |
+| 15 | typed provider API and consumer contract; retain current outputs during comparison | unixlike |
+| 16 | public host-repository template with an evaluated example | external template repository |
+| 17 | migrate real hosts to private consumer repositories, with SOPS + age and per-host verification; retire real host inventory from `configs` after adoption | unixlike and external host repositories, in separate increments |
+| 9 | x86_64 desktop on an AMD APU — evaluation and native build verified; physical evidence pending; resume after item 17 | unixlike and external host repository, to be revised |
+| 11 | installation and deployment (disko, nixos-anywhere, deploy-rs) — disposable-VM installation verified; remaining deployment and real-host evidence resume after item 17 | unixlike and external host repository, to be revised |
+| 12 | x86_64 guest on QEMU/KVM, on the NixOS desktop — after items 9 and 11 | unixlike and external host repository, to be revised |
+| 13 | x86_64 guest on Hyper-V, on the Windows host — after item 11 | unixlike and external host repository, to be revised |
 | deferred | WSLg on NixOS-WSL | unixlike |
-| 9 (deferred) | x86_64 desktop on an AMD APU; resume before order 12 | unixlike |
-| 12 (deferred) | x86_64 guest on QEMU/KVM, on the NixOS desktop; resume after order 9 | unixlike |
+
+## Transition before the remaining host work
+
+Item 14 groups the physical module tree by what a reader is looking for,
+without making a directory name decide a Nix module class. Its specification
+and file inventory are in `docs/work/unixlike/module-layout/`. The existing
+seven host outputs remain the comparison baseline; no host is activated.
+
+Item 15 turns the existing machine-kind table and typed selection checks into
+an external consumer API. It keeps current outputs until a consumer can
+reproduce them and gives this repository synthetic host fixtures after real
+inventory leaves. Its specification is
+`docs/work/unixlike/host-provider-api/`.
+
+Item 16 is a public template repository. A synthetic host exercises the
+published API in its CI. It documents SOPS + age setup without shipping a
+real identity, recipient or encrypted host value. A generated repository
+owns its future edits; template updates do not change an existing host.
+
+Item 17 moves actual instances into private host repositories, first an
+isolated OrbStack machine and then each operational host with its own
+evaluation, native build and runtime evidence. Each host chooses a pinned
+`configs` revision, owns its identity and SOPS + age recipients, and exposes
+its own final flake output. No activation follows from a matching evaluation
+or build. Once every existing instance has a verified consumer owner, the
+real inventory and final host outputs leave `configs`; provider fixtures
+replace their contract coverage. The repository hygiene check currently
+reads the real inventory, so its replacement declaration and fixtures must
+land before that inventory is removed. The number and boundaries of private
+repositories are fixed before the first migration.
+
+Items 9 and 11 already have approved specs and reports with automatic
+evidence. Their pending criteria stay pending during the transition. Before
+the physical desktop or deployment work resumes, the owner and evidence
+location of each remaining criterion are amended visibly in those specs and
+the roadmap. Items 12 and 13 are planned after that revision. Windows host
+configuration remains in the Windows domain throughout.
 
 ## What each order carries
 
@@ -159,12 +211,13 @@ is reopened by that order, not by this row. Both reuse the headless class
 and, by then, the graphical classes of order 8 and the installation tooling
 of order 11.
 
-Orders 9 and 12 are deferred as of 2026-09-23. Order 9's automatic
-configuration, evaluation and native build remain recorded in its pending
-report; its physical-host evidence is outstanding. Order 12 has not started.
-When resumed, order 9 precedes order 12. Order 11 may continue without
-installing the desktop, but any physical desktop installation and deployment
-evidence it owes waits for order 9.
+Order 9's automatic configuration, evaluation and native build remain
+recorded in its pending report; its physical-host work was deferred on
+2026-09-23. Order 11's verified disposable-VM installation evidence remains in
+its pending report. On 2026-09-24 the remaining work in orders 9 and 11,
+and the unstarted orders 12 and 13, moved behind items 14 through 17. When
+resumed, order 9 precedes order 12, and order 11 precedes orders 12 and 13.
+Physical desktop installation and deployment evidence waits for order 9.
 
 Order 12, QEMU/KVM. The host is the desktop of order 9, so it cannot come
 before it. What the desktop needs to run a guest — libvirt or plain QEMU,
