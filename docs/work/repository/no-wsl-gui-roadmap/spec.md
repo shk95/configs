@@ -5,6 +5,7 @@ date: 2026-09-24
 scope: repository
 status: approved
 review-by: 2026-09-25
+issue: #359
 
 ## Problem
 

@@ -57,7 +57,6 @@ are revised for the new owner before work resumes.
 | 11 | installation and deployment (disko, nixos-anywhere, deploy-rs) — disposable-VM installation verified; remaining deployment and real-host evidence resume after item 17 | unixlike and external host repository, to be revised |
 | 12 | x86_64 guest on QEMU/KVM, on the NixOS desktop — after items 9 and 11 | unixlike and external host repository, to be revised |
 | 13 | x86_64 guest on Hyper-V, on the Windows host — after item 11 | unixlike and external host repository, to be revised |
-| deferred | WSLg on NixOS-WSL | unixlike |
 
 ## Transition before the remaining host work
 
@@ -197,8 +196,11 @@ runtime remains unverified.
 
 The former GNOME issues #19 and #42 are historical context, not execution
 authority for orders 8 and 10. A new spec, report and execution issue are
-created when order 8 starts. Order 9 carries #20, order 11 carries #24 and
-#25, and the deferred item carries #21.
+created when order 8 starts. Order 9 carries #20, and order 11 carries #24
+and #25. The former WSLg item from #21 was removed on 2026-09-24: WSL GUI
+is outside the Unix-like domain's intended WSL outputs. Any proposal to add
+it begins by revising the Unix-like architecture and invariant, not by
+restoring a deferred work item.
 
 Orders 12 and 13, added 2026-09-20, keep the numbers before them as the
 documents that cite those numbers have them. Each is a guest profile of its
