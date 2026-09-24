@@ -5,10 +5,9 @@ configures or a host intended to consume its Unix-like API after migration.
 Table position is the current sequence of work. Existing item numbers remain
 references in their specs and reports when priority changes, so a deferred
 item keeps its number when a new item moves ahead of it; an item without a
-number is a decision that
-must be made before the item it precedes. An item owned here becomes a work
-item under this directory when it starts; an external repository holds its own
-execution record. The local index is
+number is a decision that must be made before the item it precedes. An item
+owned here becomes a work item under this directory when it starts; an
+external repository holds its own execution record. The local index is
 `tool/version-control/records --table work`. The repository maintainer owns
 this file, and changing the order is a repository change.
 
@@ -27,7 +26,7 @@ are revised for the new owner before work resumes.
 | darwin | aarch64-darwin | operational; generation 36 activated |
 | utm | aarch64 NixOS guest, UTM on the Mac | graphical; native build, runtime, switch/reboot and rollback/restoration verified on 2026-09-23 |
 | orbstack | aarch64 NixOS OrbStack machine | an isolated sandbox on the Mac, switched to the flake on 2026-09-20; disposable, recreated by its procedure |
-| desktop | x86_64 NixOS, physical AMD APU desktop | declared as host `desktop`, evaluated only; not installed |
+| desktop | x86_64 NixOS, physical AMD APU desktop | declared as host `desktop`; evaluated and built natively on x86_64, not installed; physical-host work at order 9 deferred |
 | vm | x86_64 NixOS guest, VMware Workstation on a Linux and a Windows host | graphical on Windows; native build, runtime, switch/reboot and rollback/restoration verified on 2026-09-23; Linux-host runtime unverified |
 | kvm | x86_64 NixOS guest, QEMU/KVM on the NixOS desktop | not declared; item 12 is deferred behind the host transition |
 | hyperv | x86_64 NixOS guest, Hyper-V on the Windows host | not declared; item 13 is deferred behind the host transition |
@@ -54,8 +53,8 @@ are revised for the new owner before work resumes.
 | 15 | typed provider API and consumer contract; retain current outputs during comparison | unixlike |
 | 16 | public host-repository template with an evaluated example | external template repository |
 | 17 | migrate real hosts to private consumer repositories, with SOPS + age and per-host verification; retire real host inventory from `configs` after adoption | unixlike and external host repositories, in separate increments |
-| 9 | x86_64 desktop on an AMD APU — physical evidence pending; resume after item 17 | unixlike and external host repository, to be revised |
-| 11 | installation and deployment (disko, nixos-anywhere, deploy-rs) — partially verified; resume after item 17 | unixlike and external host repository, to be revised |
+| 9 | x86_64 desktop on an AMD APU — evaluation and native build verified; physical evidence pending; resume after item 17 | unixlike and external host repository, to be revised |
+| 11 | installation and deployment (disko, nixos-anywhere, deploy-rs) — disposable-VM installation verified; remaining deployment and real-host evidence resume after item 17 | unixlike and external host repository, to be revised |
 | 12 | x86_64 guest on QEMU/KVM, on the NixOS desktop — after items 9 and 11 | unixlike and external host repository, to be revised |
 | 13 | x86_64 guest on Hyper-V, on the Windows host — after item 11 | unixlike and external host repository, to be revised |
 | deferred | WSLg on NixOS-WSL | unixlike |
@@ -211,6 +210,14 @@ combinations a lane has declared evaluate; the inventory's decision record
 is reopened by that order, not by this row. Both reuse the headless class
 and, by then, the graphical classes of order 8 and the installation tooling
 of order 11.
+
+Order 9's automatic configuration, evaluation and native build remain
+recorded in its pending report; its physical-host work was deferred on
+2026-09-23. Order 11's verified disposable-VM installation evidence remains in
+its pending report. On 2026-09-24 the remaining work in orders 9 and 11,
+and the unstarted orders 12 and 13, moved behind items 14 through 17. When
+resumed, order 9 precedes order 12, and order 11 precedes orders 12 and 13.
+Physical desktop installation and deployment evidence waits for order 9.
 
 Order 12, QEMU/KVM. The host is the desktop of order 9, so it cannot come
 before it. What the desktop needs to run a guest — libvirt or plain QEMU,
