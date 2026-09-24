@@ -1,8 +1,8 @@
 # Fonts, and a boundary this repository cannot cross.
 #
-# **What Nix can fix.** Anything that renders text inside Linux: WSLg GUI
-# applications (DISPLAY and WAYLAND_DISPLAY are both set on this host), and any
-# tool that draws its own glyphs through fontconfig. On the Ubuntu flavour this
+# **What Nix can fix.** Linux-side tools that render text into files through
+# fontconfig can use these fonts. This does not enable or plan WSL GUI support.
+# On the Ubuntu flavour this
 # looks unnecessary, and today it is — `fc-match sans:lang=ko` already answers
 # NanumGothic, because the distro ships it. That is the trap. The NixOS flavour
 # has no distro:
@@ -10,8 +10,8 @@
 #   nixosConfigurations.<host>.config.fonts.enableDefaultPackages  false
 #   nixosConfigurations.<host>.config.fonts.packages               [ ]
 #
-# Zero fonts, so Korean has nothing to resolve to at all and every CJK glyph is
-# a box. Contributed to `homeManager.wsl` rather than to `nixos.wsl` deliberately: it
+# Zero fonts, so a Linux-side renderer has nothing to resolve Korean to.
+# Contributed to `homeManager.wsl` rather than to `nixos.wsl` deliberately: it
 # is the flavour with the problem that gains, and the flavour without one loses
 # nothing.
 #

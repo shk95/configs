@@ -6,7 +6,7 @@ status: accepted
 issue: #190
 issue: #191
 issue: #195
-reopen-when: the NixOS-WSL host gains a display, or a second NixOS host composes `modules.nixos.wsl`.
+reopen-when: the Unix-like architecture and `INV unixlike/desktop-not-wsl` are revised to permit WSL GUI, or a second NixOS host composes `modules.nixos.wsl`.
 
 `modules/wsl.nix` was written as an experiment: a system layer kept almost
 empty, so that whether one earned its place could be answered by what had to
@@ -75,8 +75,8 @@ layer of this repository already declares. It admitted eight things.
 8. **The state version**, already in `modules/state-version.nix`.
 
 Two GUI options are set to their defaults explicitly rather than inherited:
-`wsl.useWindowsDriver` and `wsl.startMenuLaunchers`, both `false`. The host
-has no display, #21 owns WSLg, and `INV unixlike/desktop-not-wsl` keeps
+`wsl.useWindowsDriver` and `wsl.startMenuLaunchers`, both `false`. Neither WSL
+output supports GUI applications, and `INV unixlike/desktop-not-wsl` keeps
 graphical programs out of the WSL homes; a default that moved would
 otherwise reach this host unseen. `hardware.graphics.enable` is forced on by
 nixos-wsl itself and could be turned off only with `mkForce`, which
@@ -86,6 +86,11 @@ stays at its defaults, interop on and the Windows `PATH` appended, because
 the Windows domain's checks run from a Unix-like clone through Windows
 executables; `wsl.docker-desktop` and `wsl.usbip` stay at nixos-wsl's
 defaults, because neither is a headless concern.
+
+Amended 2026-09-24: The former WSLg proposal in #21 is no longer deferred
+work. A need for WSL GUI first requires an explicit revision of the Unix-like
+architecture and `INV unixlike/desktop-not-wsl`, then a separate implementation
+plan. The explicit `false` settings and the existing host output are unchanged.
 
 Selecting the login shell reverses a sentence `modules/shell.nix` carried
 since 2026-08-30, that the repository never chooses one. That sentence

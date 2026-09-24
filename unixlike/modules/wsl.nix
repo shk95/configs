@@ -38,9 +38,10 @@ in {
       # comment below records the two attempts that proved it.
       interop.register = false;
 
-      # Both are GUI: the Windows OpenGL driver, and Start Menu shortcuts for
-      # graphical applications. This host has no display and #21 owns WSLg
-      # (INV unixlike/desktop-not-wsl).
+      # Both are GUI: the Windows OpenGL driver and Start Menu shortcuts for
+      # graphical applications. WSL GUI is outside the intended output;
+      # changing that starts with the architecture and
+      # INV unixlike/desktop-not-wsl, not a host-local toggle.
       useWindowsDriver = false;
       startMenuLaunchers = false;
 
