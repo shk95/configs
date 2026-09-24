@@ -8,7 +8,7 @@ Evaluation and `unixlike/tool/checks/payloads` stop at syntax; a key can parse a
 still be one the pinned tool no longer accepts. Such a tool migrates the key
 by rewriting its own file, and under Home Manager that file is a symlink
 into the read-only store, so the write-back fails closed and the tool never
-starts (`git.paging` in `unixlike/modules/lazygit.nix`, found by review before #161
+starts (`git.paging` in `unixlike/modules/programs/lazygit.nix`, found by review before #161
 merged, not by any check). A wrong default cited in a comment for the same
 tool family (full-border.yazi) came from the same gap. The evidence is the
 reviewer's reading and one start of the built binary against the rendered

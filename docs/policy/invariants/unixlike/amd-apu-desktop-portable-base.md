@@ -1,9 +1,9 @@
 id: unixlike/amd-apu-desktop-portable-base
 statement: The physical desktop preserves its reviewed encrypted storage, compressed-memory swap, AMD graphics, desktop networking and recovery shape until physical evidence revises that contract.
 rationale: docs/policy/architecture.md § Unix-like domain
-enforced-by: schema unixlike/modules/host/desktop.nix
-enforced-by: schema unixlike/modules/installation.nix
-enforced-by: schema unixlike/modules/amd-apu.nix
+enforced-by: schema unixlike/modules/machines/desktop.nix
+enforced-by: schema unixlike/modules/foundation/installation.nix
+enforced-by: schema unixlike/modules/machines/amd-apu.nix
 enforced-by: fixture unixlike/tool/checks/flake-test
 decision: docs/policy/decisions/unixlike/amd-apu-desktop-uses-labelled-luks-btrfs.md § The portable base names created values, not observed hardware
 

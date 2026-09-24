@@ -2,7 +2,7 @@
 # Fixtures for the flake's own schema: the typed identity contract in
 # modules/flake/identity.nix, the class composition in
 # modules/flake/configurations.nix, and the two assertion-backed rules in
-# modules/shell/shared.nix and modules/packages.nix. All are enforced by evaluation,
+# modules/foundation/shell/shared.nix and modules/foundation/packages.nix. All are enforced by evaluation,
 # so the fixtures are evaluations — a value the schema must accept, a value it
 # must refuse, a package that must reach one class of home and not another,
 # and a module that must make a configuration's assertions fail.
@@ -372,8 +372,8 @@ shape=$(nix eval --raw --impure --expr "
   in builtins.concatStringsSep \" \" (builtins.filter (n: !facts.\${n}) (builtins.attrNames facts))")
 [ -z "$shape" ] || fail "nixosConfigurations.$desktop_host does not hold: $shape"
 
-if [ -e "$repo/modules/host/hardware-configuration.nix" ] ||
-  grep -R -E '/dev/disk/by-uuid|UUID=' "$repo/modules/host/desktop.nix" "$repo/modules/amd-apu.nix" >/dev/null
+if [ -e "$repo/modules/machines/hardware-configuration.nix" ] ||
+  grep -R -E '/dev/disk/by-uuid|UUID=' "$repo/modules/machines/desktop.nix" "$repo/modules/machines/amd-apu.nix" >/dev/null
 then
   fail "the physical desktop carries an unreviewed generated hardware file or UUID"
 fi
@@ -517,7 +517,7 @@ darwin="darwinConfigurations.\"$darwin_host\""
 # ---------------------------------------------------------------------------
 #
 # INV unixlike/version-manager-last
-# modules/shell/shared.nix contributes the SDKMAN hook at `mkAfter` and asserts on
+# modules/foundation/shell/shared.nix contributes the SDKMAN hook at `mkAfter` and asserts on
 # the merged initialisation text, so a PATH line any module contributes later
 # is refused at evaluation; a JDK declared as a package is refused the same
 # way. The real home must pass both.
@@ -543,7 +543,7 @@ expect_clean 'the WSL home'
 # ---------------------------------------------------------------------------
 #
 # INV unixlike/package-ownership
-# modules/packages.nix asserts, per home, that no package name is defined by
+# modules/foundation/packages.nix asserts, per home, that no package name is defined by
 # two owners, and per system layer that no name this repository declares is
 # in both the system packages and the managed home. `ripgrep` is already in
 # the shared list, so a second declaration of it is the violation; the real
@@ -572,7 +572,7 @@ expect_clean 'the Darwin flavour'
 # ---------------------------------------------------------------------------
 #
 # INV unixlike/nixos-no-channel
-# modules/nix/shared.nix turns channels off and asserts it. A module that
+# modules/foundation/nix/shared.nix turns channels off and asserts it. A module that
 # turns them back on is the violation; the real configuration must pass, and
 # its search path must then name the flake's nixpkgs and nothing else, which
 # is what makes a rebuild without `--flake` stop before it builds anything.
@@ -596,8 +596,8 @@ done
 #
 # INV unixlike/headless-key-only
 # `nixos.headless` declares the account, sshd and the firewall of a host that
-# boots itself, and modules/account.nix, modules/sshd.nix and
-# modules/firewall.nix each assert their part. The real host must show every
+# boots itself, and modules/foundation/account.nix, modules/foundation/sshd.nix and
+# modules/foundation/firewall.nix each assert their part. The real host must show every
 # property and pass; each violation, added to it, must be refused. The
 # guests are the hosts of the class, and every one of them is put through
 # both directions.
@@ -664,7 +664,7 @@ done
 # ---------------------------------------------------------------------------
 #
 # INV unixlike/orbstack-shared-kernel
-# modules/host/orbstack.nix declares by hand what OrbStack needs from a guest
+# modules/machines/orbstack.nix declares by hand what OrbStack needs from a guest
 # and asserts that no binfmt emulation is registered: the registry belongs to
 # the kernel every OrbStack machine and OrbStack's Docker share. The real
 # host must show the shape OrbStack generates for a guest and pass; each way

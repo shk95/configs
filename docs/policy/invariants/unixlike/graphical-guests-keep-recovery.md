@@ -1,8 +1,8 @@
 id: unixlike/graphical-guests-keep-recovery
 statement: Each self-booting VM guest retains its hypervisor integration and key-only recovery layer while consuming the shared graphical environment.
 rationale: docs/policy/architecture.md § Unix-like domain
-enforced-by: schema unixlike/modules/host/utm.nix
-enforced-by: schema unixlike/modules/host/vmware.nix
+enforced-by: schema unixlike/modules/machines/utm.nix
+enforced-by: schema unixlike/modules/machines/vmware.nix
 enforced-by: fixture unixlike/tool/checks/flake-test
 decision: docs/policy/decisions/unixlike/vm-guests-share-the-graphical-profile.md § Composition owns the shared environment
 

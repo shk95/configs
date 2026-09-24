@@ -1,7 +1,7 @@
 id: unixlike/orbstack-shared-kernel
 statement: A NixOS machine under OrbStack registers no binfmt emulation, because emulation on the kernel it shares with every other machine and with the container engine beside it is OrbStack's to provide.
 rationale: AGENTS.md § Rules that are expensive to break
-enforced-by: schema unixlike/modules/host/orbstack.nix
+enforced-by: schema unixlike/modules/machines/orbstack.nix
 enforced-by: fixture unixlike/tool/checks/flake-test
 
 Every OrbStack machine and OrbStack's Docker run on one kernel, and a

@@ -5,6 +5,7 @@ date: 2026-09-24
 scope: unixlike
 status: approved
 review-by: 2026-11-24
+issue: #367
 
 The maintainer chose on 2026-09-24 to put a physical module grouping ahead
 of the unfinished host roadmap. The proposed file mapping and the older

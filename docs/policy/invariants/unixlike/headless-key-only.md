@@ -1,9 +1,9 @@
 id: unixlike/headless-key-only
 statement: A headless NixOS host that boots itself admits its ssh port and no other, its ssh daemon accepts a key and nothing else and never a root login, and neither a password nor an authorized key for it is tracked.
 rationale: docs/policy/architecture.md § Unix-like domain
-enforced-by: schema unixlike/modules/sshd.nix
-enforced-by: schema unixlike/modules/firewall.nix
-enforced-by: schema unixlike/modules/account.nix
+enforced-by: schema unixlike/modules/foundation/sshd.nix
+enforced-by: schema unixlike/modules/foundation/firewall.nix
+enforced-by: schema unixlike/modules/foundation/account.nix
 enforced-by: fixture unixlike/tool/checks/flake-test
 enforced-by: fixture unixlike/modules/flake/headless-runtime-test.nix
 

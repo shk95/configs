@@ -1,5 +1,5 @@
 #!/bin/sh
-# Fixtures for modules/karabiner/tool, the projection that owns the Karabiner
+# Fixtures for modules/programs/karabiner/tool, the projection that owns the Karabiner
 # desired state.
 #
 # The tool reads a Mac. These cases give it files instead, through --host,
@@ -23,9 +23,9 @@ set -e
 repo=$(CDPATH= cd -- "$(dirname -- "$0")/../.." && pwd)
 cd "$repo"
 
-tool=modules/karabiner/tool
-payload=modules/karabiner/karabiner.json
-hotkeys=modules/karabiner/symbolic-hotkeys.json
+tool=modules/programs/karabiner/tool
+payload=modules/programs/karabiner/karabiner.json
+hotkeys=modules/programs/karabiner/symbolic-hotkeys.json
 
 # The fixtures build their host documents with jq, resolved the way the tool
 # resolves it, so this check has the same host requirements as the rest of the

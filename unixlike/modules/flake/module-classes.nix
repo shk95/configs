@@ -63,10 +63,43 @@
 {lib, ...}: let
   inherit (lib) mapAttrs mkOption sort types;
 
+  # Keep the definition order that the flat concern tree had. The physical
+  # navigation groups must not reorder list-valued options in existing hosts.
+  # This key changes only sorting; each fragment still declares its own class.
+  stableFileKey = file:
+    lib.replaceStrings
+    [
+      "/modules/machines/desktop.nix"
+      "/modules/machines/orbstack.nix"
+      "/modules/machines/utm.nix"
+      "/modules/machines/vmware.nix"
+      "/modules/machines/amd-apu.nix"
+      "/modules/platforms/darwin.nix"
+      "/modules/foundation/nixos.nix"
+      "/modules/platforms/"
+      "/modules/foundation/"
+      "/modules/desktop/"
+      "/modules/programs/"
+    ]
+    [
+      "/modules/host/desktop.nix"
+      "/modules/host/orbstack.nix"
+      "/modules/host/utm.nix"
+      "/modules/host/vmware.nix"
+      "/modules/amd-apu.nix"
+      "/modules/host/darwin.nix"
+      "/modules/host/nixos.nix"
+      "/modules/"
+      "/modules/"
+      "/modules/"
+      "/modules/"
+    ]
+    file;
+
   keyedByFile = module:
     module
     // {
-      imports = sort (a: b: (a._file or "") < (b._file or "")) (module.imports or []);
+      imports = sort (a: b: stableFileKey (a._file or "") < stableFileKey (b._file or "")) (module.imports or []);
     };
 
   # Mirrors what flake-parts does for its own `flake.nixosModules`. `_class` makes

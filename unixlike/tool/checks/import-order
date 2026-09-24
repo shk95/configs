@@ -42,7 +42,7 @@ printf '→ composing every host in walk order and reversed%s\n' "${extra:+ (wit
 
 # `self` is the real flake, so a module that read `inputs.self.<output>`
 # would see the walk-order composition in both runs; today only `outPath` is
-# read (modules/packages.nix), which is the same either way.
+# read (modules/foundation/packages.nix), which is the same either way.
 result=$(nix eval --impure --json --expr "
   let
     flake = builtins.getFlake (toString ./.);

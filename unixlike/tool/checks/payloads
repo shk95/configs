@@ -106,7 +106,7 @@ if [ -n "$kdl" ]; then
 fi
 
 # The Unix-like copy of the profile is deployed to Unix-like homes by
-# modules/powershell/module.nix, so pwsh here is the native parser for it rather than
+# modules/programs/powershell/module.nix, so pwsh here is the native parser for it rather than
 # a foreign syntax check standing in for Windows evidence.
 powershell=$(paths_for powershell)
 if [ -n "$powershell" ]; then
