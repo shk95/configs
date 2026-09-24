@@ -318,20 +318,20 @@ expect() {
   fi
 }
 
-expect unixlike "$classify" --files unixlike/modules/git.nix
+expect unixlike "$classify" --files unixlike/modules/programs/git.nix
 # INV repository/scope-ownership
-# unixlike/modules/karabiner/tool is the Unix-like domain's own Mac tooling:
+# unixlike/modules/programs/karabiner/tool is the Unix-like domain's own Mac tooling:
 # it reads and writes a Unix-like payload, its evidence lane is a Mac, and
 # no governance host can produce it. Owned by unixlike, like the modules
 # and the checks beside it.
-expect unixlike "$classify" --files unixlike/modules/karabiner/tool
+expect unixlike "$classify" --files unixlike/modules/programs/karabiner/tool
 # INV repository/scope-ownership
 # The domain owns one tree. .envrc and the Justfile answer from the same arm,
 # because those two stay at the root: direnv reads the first there, and where
 # the second belongs is a separate decision. A similar prefix outside the
 # domain has no owner, and neither do the locations the tree was moved from.
 expect unixlike "$classify" --files unixlike/flake.nix
-expect unixlike "$classify" --files unixlike/modules/git.nix
+expect unixlike "$classify" --files unixlike/modules/programs/git.nix
 expect unixlike "$classify" --files unixlike/payloads.json
 expect unixlike "$classify" --files unixlike/tool/checks/test
 expect unixlike "$classify" --files .envrc
@@ -426,9 +426,9 @@ expect_units() {
   fi
 }
 
-kdl_modified=$(printf 'M\tunixlike/modules/zellij/config.kdl')
-kdl_added=$(printf 'A\tunixlike/modules/zellij/extra.kdl')
-module_modified=$(printf 'M\tunixlike/modules/git.nix')
+kdl_modified=$(printf 'M\tunixlike/modules/programs/zellij/config.kdl')
+kdl_added=$(printf 'A\tunixlike/modules/programs/zellij/extra.kdl')
+module_modified=$(printf 'M\tunixlike/modules/programs/git.nix')
 windows_modified=$(printf 'M\twindows/setup.ps1')
 docs_modified=$(printf 'M\tdocs/status/repository.md')
 unknown_modified=$(printf 'M\tunexpected.file')
@@ -448,10 +448,10 @@ expect_units 'unixlike:test' push "$kdl_added"
 expect_units 'unixlike:test' push "$module_modified"
 
 # INV repository/local-gate-selects-by-effect
-# unixlike/modules/karabiner/tool holds the projection the Karabiner
+# unixlike/modules/programs/karabiner/tool holds the projection the Karabiner
 # payloads are compared and applied by, so a change to it can alter what
 # the Unix-like suite says; it selects the same units a module does.
-darwin_tool_modified=$(printf 'M\tunixlike/modules/karabiner/tool')
+darwin_tool_modified=$(printf 'M\tunixlike/modules/programs/karabiner/tool')
 expect_units 'unixlike:format
 unixlike:lint
 unixlike:payloads' commit "$darwin_tool_modified"
@@ -461,12 +461,12 @@ expect_units 'unixlike:test' push "$darwin_tool_modified"
 # A payload beside its module narrows the same way a payload tree used to, and
 # the module next to it does not: under the concern-first layout the file's
 # suffix is what separates what the evaluator reads from what it copies.
-unixlike_module_modified=$(printf 'M\tunixlike/modules/git.nix')
+unixlike_module_modified=$(printf 'M\tunixlike/modules/programs/git.nix')
 expect_units 'unixlike:test' push "$unixlike_module_modified"
-concern_kdl_modified=$(printf 'M\tunixlike/modules/zellij/config.kdl')
+concern_kdl_modified=$(printf 'M\tunixlike/modules/programs/zellij/config.kdl')
 expect_units 'unixlike:payloads' commit "$concern_kdl_modified"
 expect_units '' push "$concern_kdl_modified"
-concern_module_modified=$(printf 'M\tunixlike/modules/zellij/module.nix')
+concern_module_modified=$(printf 'M\tunixlike/modules/programs/zellij/module.nix')
 expect_units 'unixlike:test' push "$concern_module_modified"
 
 # A rename carries two paths on one line. Both have to reach classify, or a
@@ -1096,7 +1096,7 @@ fi
 # interop) runs the checks under its own native `pwsh`; only an actual Windows
 # host uses `pwsh.exe`; a host with neither reports the checks unverified
 # rather than failing. Isolated from whatever pwsh binaries this suite's own
-# host happens to have — unixlike/modules/powershell/module.nix installs a
+# host happens to have — unixlike/modules/programs/powershell/module.nix installs a
 # Unix-like `pwsh` into every home this repository configures, and a WSL
 # host additionally reaches a `pwsh.exe` through Windows interop, which is
 # the exact shape #113 regressed on — by hiding any real pwsh/pwsh.exe from
@@ -1378,11 +1378,11 @@ cp -R "$root/tool/dispatch" "$commit_root/tool/dispatch"
 # stand-in for either side would leave that decision proving nothing. The host
 # it reads is faked through --host and --hotkeys-host, which is the whole
 # reason those flags exist.
-karabiner_assets=$root/unixlike/modules/karabiner
-mkdir -p "$commit_root/unixlike/modules/karabiner"
+karabiner_assets=$root/unixlike/modules/programs/karabiner
+mkdir -p "$commit_root/unixlike/modules/programs/karabiner"
 cp "$karabiner_assets/tool" "$karabiner_assets/karabiner.json" \
   "$karabiner_assets/symbolic-hotkeys.json" \
-  "$commit_root/unixlike/modules/karabiner/"
+  "$commit_root/unixlike/modules/programs/karabiner/"
 # The pre-commit hook this fixture enables also runs
 # tool/version-control/invariants, whose own cases are below; here it is a
 # stand-in so only the behaviour under test decides the outcome.
@@ -1398,7 +1398,7 @@ chmod +x "$commit_root/tool/version-control/provisional"
 # declaration of record and rejects an allow entry naming a document this
 # repository does not have. Supply both, through printf arguments so the
 # naming context lives in the fixture rather than in this file.
-mkdir -p "$commit_root/unixlike/modules/flake"
+mkdir -p "$commit_root/unixlike/modules/flake" "$commit_root/unixlike/modules/platforms"
 printf '_: {\n  identity = { %s = "%s"; };\n}\n' gitName Fixture \
   >"$commit_root/unixlike/modules/flake/inventory.nix"
 : >"$commit_root/tool/version-control/hygiene.allow"
@@ -1407,7 +1407,7 @@ printf '_: {\n  identity = { %s = "%s"; };\n}\n' gitName Fixture \
 # tapped cask whose sort key is its last path segment rather than the whole
 # string, and a masApps attrset whose alphabetized main block is followed by a
 # `# safari extensions` section that an insertion must never enter.
-cat >"$commit_root/unixlike/modules/homebrew.nix" <<'FIXTURE'
+cat >"$commit_root/unixlike/modules/platforms/homebrew.nix" <<'FIXTURE'
 _: {
   modules.darwin.system = _: {
     homebrew = {
@@ -1508,7 +1508,7 @@ stub_commit_check() {
 }
 
 casks_now() {
-  sed -n '/casks = \[/,/\];/p' "$commit_root/unixlike/modules/homebrew.nix" \
+  sed -n '/casks = \[/,/\];/p' "$commit_root/unixlike/modules/platforms/homebrew.nix" \
     | sed -n 's/^ *"\(.*\)"$/\1/p' | tr '\n' ' '
 }
 
@@ -1535,7 +1535,7 @@ if [ "$(commit_git show -s --format=%s HEAD)" \
   exit 1
 fi
 if [ "$(commit_git diff-tree --no-commit-id --name-only -r HEAD)" \
-  != unixlike/modules/homebrew.nix ]; then
+  != unixlike/modules/platforms/homebrew.nix ]; then
   echo "commit helper touched more than the homebrew module" >&2
   exit 1
 fi
@@ -1557,12 +1557,12 @@ if [ "$(commit_git show -s --format=%s HEAD)" \
   echo "commit helper used an unexpected message for a formula removal" >&2
   exit 1
 fi
-if grep -q 'Broken on Darwin' "$commit_root/unixlike/modules/homebrew.nix"; then
+if grep -q 'Broken on Darwin' "$commit_root/unixlike/modules/platforms/homebrew.nix"; then
   echo "commit helper left a removed entry's comment behind" >&2
   exit 1
 fi
-grep -q 'Portable command-line tools' "$commit_root/unixlike/modules/homebrew.nix"
-grep -q '"displayplacer"' "$commit_root/unixlike/modules/homebrew.nix"
+grep -q 'Portable command-line tools' "$commit_root/unixlike/modules/platforms/homebrew.nix"
+grep -q '"displayplacer"' "$commit_root/unixlike/modules/platforms/homebrew.nix"
 
 # ---------------------------------------------------------------------------
 # tool/version-control/commit mas add/remove
@@ -1573,12 +1573,12 @@ grep -q '"displayplacer"' "$commit_root/unixlike/modules/homebrew.nix"
 # an insertion must never enter (#92).
 
 masapps_main_now() {
-  sed -n '/masApps = {/,/# safari extensions/p' "$commit_root/unixlike/modules/homebrew.nix" \
+  sed -n '/masApps = {/,/# safari extensions/p' "$commit_root/unixlike/modules/platforms/homebrew.nix" \
     | sed -n 's/^ *\([A-Za-z_][A-Za-z0-9_-]*\) = [0-9]*;$/\1/p' | tr '\n' ' '
 }
 
 masapps_safari_now() {
-  sed -n '/# safari extensions/,/};/p' "$commit_root/unixlike/modules/homebrew.nix" \
+  sed -n '/# safari extensions/,/};/p' "$commit_root/unixlike/modules/platforms/homebrew.nix" \
     | sed -n 's/^ *\([A-Za-z_][A-Za-z0-9_-]*\) = [0-9]*;$/\1/p' | tr '\n' ' '
 }
 
@@ -1602,7 +1602,7 @@ if [ "$(commit_git show -s --format=%s HEAD)" \
   exit 1
 fi
 if [ "$(commit_git diff-tree --no-commit-id --name-only -r HEAD)" \
-  != unixlike/modules/homebrew.nix ]; then
+  != unixlike/modules/platforms/homebrew.nix ]; then
   echo "commit helper touched more than the homebrew module for a mas addition" >&2
   exit 1
 fi
@@ -1630,7 +1630,7 @@ if [ "$(masapps_safari_now)" != 'bitwarden wblock ' ]; then
 fi
 # The blank line separating the two sections must survive the insertion.
 if ! awk '/zzz = 999999999;/ { getline; if ($0 == "") found = 1 } END { exit !found }' \
-  "$commit_root/unixlike/modules/homebrew.nix"; then
+  "$commit_root/unixlike/modules/platforms/homebrew.nix"; then
   echo "commit helper dropped the blank line before the safari extensions section" >&2
   exit 1
 fi
@@ -1713,12 +1713,12 @@ fi
 printf '%s\n' "$mas_name_output" | grep -q 'Not a usable Nix attribute name'
 
 # require_untouched applies to masApps exactly as it does to brews and casks.
-printf '\n' >>"$commit_root/unixlike/modules/homebrew.nix"
+printf '\n' >>"$commit_root/unixlike/modules/platforms/homebrew.nix"
 if run_commit y mas add untouched-guard 111111111 >/dev/null; then
   echo "commit helper acted on masApps with uncommitted changes in the file" >&2
   exit 1
 fi
-commit_git checkout -q -- unixlike/modules/homebrew.nix
+commit_git checkout -q -- unixlike/modules/platforms/homebrew.nix
 
 # What every mas edit above produced must still satisfy alejandra, the
 # formatter unixlike/tool/checks/format delegates to through `nix fmt`.
@@ -1726,8 +1726,8 @@ commit_git checkout -q -- unixlike/modules/homebrew.nix
 # has no flake.nix of its own, so alejandra runs directly rather than through
 # that indirection; it is still the same binary the real pipeline calls.
 if command -v alejandra >/dev/null 2>&1; then
-  if ! alejandra --check --quiet --quiet -- "$commit_root/unixlike/modules/homebrew.nix"; then
-    echo "commit helper left unixlike/modules/homebrew.nix unformatted after mas edits" >&2
+  if ! alejandra --check --quiet --quiet -- "$commit_root/unixlike/modules/platforms/homebrew.nix"; then
+    echo "commit helper left unixlike/modules/platforms/homebrew.nix unformatted after mas edits" >&2
     exit 1
   fi
 else
@@ -1768,9 +1768,9 @@ printf '%s\n' "$name_output" | grep -q 'Not a usable package name'
 # copy of it, so the whole edit is refused instead. Committed by hand first, so
 # the refusal is the readability guard and not the uncommitted-changes one.
 sed 's/^\( *\)"displayplacer"$/\1"displayplacer" # broken/' \
-  "$commit_root/unixlike/modules/homebrew.nix" >"$test_root/trailing.nix"
-cp "$test_root/trailing.nix" "$commit_root/unixlike/modules/homebrew.nix"
-commit_git add -- unixlike/modules/homebrew.nix
+  "$commit_root/unixlike/modules/platforms/homebrew.nix" >"$test_root/trailing.nix"
+cp "$test_root/trailing.nix" "$commit_root/unixlike/modules/platforms/homebrew.nix"
+commit_git add -- unixlike/modules/platforms/homebrew.nix
 if ! annotate_output=$(
   unset GIT_DIR GIT_WORK_TREE GIT_INDEX_FILE
   cd "$commit_root" || exit 1
@@ -1787,7 +1787,7 @@ if trailing_output=$(run_commit y brew add displayplacer); then
   exit 1
 fi
 printf '%s\n' "$trailing_output" | grep -q 'bare quoted name'
-if [ "$(grep -c '"displayplacer"' "$commit_root/unixlike/modules/homebrew.nix")" != 1 ]; then
+if [ "$(grep -c '"displayplacer"' "$commit_root/unixlike/modules/platforms/homebrew.nix")" != 1 ]; then
   echo "commit helper duplicated an entry it could not read" >&2
   exit 1
 fi
@@ -1834,12 +1834,12 @@ fi
 commit_git reset -q -- unrelated
 rm -f "$commit_root/unrelated"
 
-printf '\n' >>"$commit_root/unixlike/modules/homebrew.nix"
+printf '\n' >>"$commit_root/unixlike/modules/platforms/homebrew.nix"
 if run_commit y cask add zzz >/dev/null; then
   echo "commit helper acted on a file with uncommitted changes" >&2
   exit 1
 fi
-commit_git checkout -q -- unixlike/modules/homebrew.nix
+commit_git checkout -q -- unixlike/modules/platforms/homebrew.nix
 
 # INV repository/scope-ownership
 # An unclassified path is fatal at both gates, so the helper refuses before it
@@ -2058,10 +2058,10 @@ STUB
 # INV unixlike/host-written-payload-projected
 #
 # The capture direction of the same projection
-# unixlike/modules/karabiner/module.nix applies: what the payloads declare
+# unixlike/modules/programs/karabiner/module.nix applies: what the payloads declare
 # decides what is read back, and what else the host keeps in that file is
 # runtime that is neither reported as drift nor captured. The real
-# unixlike/modules/karabiner/tool and the real payloads are in the
+# unixlike/modules/programs/karabiner/tool and the real payloads are in the
 # throwaway repository above; only the host is faked, through the flags
 # that exist for it, so the two directions of the rule are the fixture's
 # subject rather than a stand-in's.
@@ -2082,9 +2082,9 @@ run_capture() {
 
 capture_payloads_untouched() {
   for capture_payload in karabiner.json symbolic-hotkeys.json; do
-    if ! cmp -s "$commit_root/unixlike/modules/karabiner/$capture_payload" \
+    if ! cmp -s "$commit_root/unixlike/modules/programs/karabiner/$capture_payload" \
       "$karabiner_assets/$capture_payload"; then
-      echo "capture karabiner rewrote unixlike/modules/karabiner/$capture_payload while $1" >&2
+      echo "capture karabiner rewrote unixlike/modules/programs/karabiner/$capture_payload while $1" >&2
       exit 1
     fi
   done
@@ -2170,8 +2170,8 @@ if ! capture_output=$(run_capture n --dry-run --host "$capture_host" \
   exit 1
 fi
 for capture_line in \
-  '^edit: unixlike/modules/karabiner/karabiner.json$' \
-  '^edit: unixlike/modules/karabiner/symbolic-hotkeys.json$' \
+  '^edit: unixlike/modules/programs/karabiner/karabiner.json$' \
+  '^edit: unixlike/modules/programs/karabiner/symbolic-hotkeys.json$' \
   '^-    "check_for_updates": false$' \
   '^+    "check_for_updates": true$' \
   '^-      "enabled": false,$' \
@@ -2214,6 +2214,7 @@ publish_body="$test_root/publish-pr-body"
 )
 
 mkdir -p "$publish_root/unixlike/tool/checks" "$publish_root/unixlike/modules/flake" \
+  "$publish_root/unixlike/modules/platforms" \
   "$publish_root/tool" \
   "$publish_root/stub" "$publish_root/nogh"
 cp -R "$root/.githooks" "$publish_root/.githooks"
@@ -2234,7 +2235,7 @@ chmod +x "$publish_root/tool/version-control/audit"
 printf '_: {\n  identity = { %s = "%s"; };\n}\n' gitName Fixture \
   >"$publish_root/unixlike/modules/flake/inventory.nix"
 : >"$publish_root/tool/version-control/hygiene.allow"
-cat >"$publish_root/unixlike/modules/homebrew.nix" <<'FIXTURE'
+cat >"$publish_root/unixlike/modules/platforms/homebrew.nix" <<'FIXTURE'
 _: {
   modules.darwin.system = _: {
     homebrew = {
@@ -2834,8 +2835,8 @@ publish_git branch prune-merged dev
 # A commit dev does not have makes this a permanent non-candidate, however
 # stale its name looks.
 publish_git switch -q -c prune-unique dev
-printf '\n# prune-unique fixture marker\n' >>"$publish_root/unixlike/modules/homebrew.nix"
-publish_git add unixlike/modules/homebrew.nix
+printf '\n# prune-unique fixture marker\n' >>"$publish_root/unixlike/modules/platforms/homebrew.nix"
+publish_git add unixlike/modules/platforms/homebrew.nix
 publish_git commit -q -m 'chore(unixlike): create prune-unique fixture commit'
 publish_git switch -q dev
 # Also an ancestor of origin/dev, but the branch prune runs from: surviving
@@ -3159,7 +3160,7 @@ printf '  %s = "%s";\n' user eve >"$hygiene_repo/module.nix"
 hygiene_expect_fail 'axis 2, a quoted Nix assignment' "undeclared name 'eve'"
 
 # A bare right-hand side after the spaced ` = ` form is an expression, not a
-# name; unixlike/modules/home-account.nix assigns one on every evaluation.
+# name; unixlike/modules/foundation/home-account.nix assigns one on every evaluation.
 hygiene_new
 printf '  %s = config.identity.wsl.%s;\n' username user >"$hygiene_repo/module.nix"
 hygiene_expect_pass 'axis 2, a bare expression is not a name'
@@ -4430,10 +4431,10 @@ printf '%s\n' "$domain_reads_output" | grep -q '^✓ domain reads: [1-9][0-9]* U
 
 domain_reads_fixture=$(mktemp -d)
 git -C "$domain_reads_fixture" init -q
-mkdir -p "$domain_reads_fixture/unixlike/tool/checks" "$domain_reads_fixture/unixlike/modules/karabiner" \
+mkdir -p "$domain_reads_fixture/unixlike/tool/checks" "$domain_reads_fixture/unixlike/modules/programs/karabiner" \
   "$domain_reads_fixture/windows/tools" "$domain_reads_fixture/unixlike/modules"
 printf '#!/bin/sh\ncat windows/desired/manifest.json\n' >"$domain_reads_fixture/unixlike/tool/checks/probe"
-printf '#!/bin/sh\ncat windows/desired/files/probe.json\n' >"$domain_reads_fixture/unixlike/modules/karabiner/probe"
+printf '#!/bin/sh\ncat windows/desired/files/probe.json\n' >"$domain_reads_fixture/unixlike/modules/programs/karabiner/probe"
 printf '_: {\n  home.file."probe".source = ../windows/desired/files/probe;\n}\n' >"$domain_reads_fixture/unixlike/modules/probe.nix"
 printf '$fonts = Get-Content (Join-Path $root %s)\n' "'unixlike\\modules\\wezterm\\fonts.json'" >"$domain_reads_fixture/windows/tools/probe.ps1"
 printf 'Import-Module (Join-Path $root %s)\n' "'unixlike/modules/flake/probe.nix'" >"$domain_reads_fixture/windows/tools/module.psm1"
@@ -4445,7 +4446,7 @@ if domain_reads_output=$(cd "$domain_reads_fixture" && "$domain_reads" 2>&1); th
 fi
 for domain_reads_hit in \
   'unixlike/tool/checks/probe:2:' \
-  'unixlike/modules/karabiner/probe:2:' \
+  'unixlike/modules/programs/karabiner/probe:2:' \
   'unixlike/modules/probe.nix:2:' \
   'windows/tools/probe.ps1:1:' \
   'windows/tools/module.psm1:1:'; do
@@ -4461,8 +4462,8 @@ domain_reads_fixture=$(mktemp -d)
 git -C "$domain_reads_fixture" init -q
 mkdir -p "$domain_reads_fixture/windows/src" "$domain_reads_fixture/windows/desired/files" "$domain_reads_fixture/unixlike/modules"
 printf '# The Windows domain declares this terminal in windows/desired/files/terminal/settings.json.\n_: {\n  home.file."probe".text = "windows-terminal"; # not windows/\n}\n' >"$domain_reads_fixture/unixlike/modules/probe.nix"
-printf '<#\n    .SYNOPSIS\n    Copied from unixlike/modules/powershell/profile.ps1; see its module and the flake.\n#>\n# unixlike/tool/checks/payloads parses the Unix-like copy.\n$own = Join-Path $root %s <# not unixlike/ #>\nif ($args.Count -ne $#) { $x = ${#own} }\n' "'desired\\files\\profile.ps1'" >"$domain_reads_fixture/windows/src/probe.psm1"
-printf '$profile = %s\n' "'unixlike/modules/powershell/profile.ps1'" >"$domain_reads_fixture/windows/desired/files/payload.ps1"
+printf '<#\n    .SYNOPSIS\n    Copied from unixlike/modules/programs/powershell/profile.ps1; see its module and the flake.\n#>\n# unixlike/tool/checks/payloads parses the Unix-like copy.\n$own = Join-Path $root %s <# not unixlike/ #>\nif ($args.Count -ne $#) { $x = ${#own} }\n' "'desired\\files\\profile.ps1'" >"$domain_reads_fixture/windows/src/probe.psm1"
+printf '$profile = %s\n' "'unixlike/modules/programs/powershell/profile.ps1'" >"$domain_reads_fixture/windows/desired/files/payload.ps1"
 git -C "$domain_reads_fixture" add -A
 if ! domain_reads_output=$(cd "$domain_reads_fixture" && "$domain_reads" 2>&1); then
   printf '%s\n' "$domain_reads_output" >&2

@@ -63,6 +63,10 @@ patterns, and the three tools that enumerated Unix-like locations no longer
 repeat a list (`docs/policy/decisions/unixlike/unixlike-domain-owns-its-tree.md`,
 `docs/policy/decisions/unixlike/concern-first-inside-the-domain.md`).
 
+On 2026-09-24 the physical module tree was regrouped under `flake`,
+`machines`, `platforms`, `foundation`, `desktop`, and `programs`. The concern
+remains the unit inside each group; group names do not choose module classes.
+
 Two things changed with it. The payload declaration moved to
 `unixlike/payloads.json` and the scanned tree became the module tree, so the
 Karabiner script is declared and parsed like the data payloads, in a `shell`

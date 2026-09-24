@@ -1,7 +1,7 @@
 # PROV unixlike/zellij-combining-marks
 #
 # Watch zellij-org/zellij#5500, the patch the Darwin zellij overlay in
-# unixlike/modules/zellij/module.nix carries, and open one issue when a
+# unixlike/modules/programs/zellij/module.nix carries, and open one issue when a
 # signal the tree cannot see arrives. Three signals decide the overlay's
 # life: the pull request's state, which nixpkgs zellij version is current,
 # and the review date in
@@ -58,7 +58,7 @@ jobs:
         shell: bash
         run: |
           set -euo pipefail
-          overlay=unixlike/modules/zellij/module.nix
+          overlay=unixlike/modules/programs/zellij/module.nix
           # The overlay pins the pull request's commit range base...head; the
           # head is the commit the pull request must still carry.
           range=$(sed -n 's|.*/zellij/compare/\([0-9a-f]\{40\}\)\.\.\.\([0-9a-f]\{40\}\)\.patch.*|\1...\2|p' "$overlay")
@@ -128,7 +128,7 @@ jobs:
           1. `chore(unixlike-deps): refresh flake.lock` alone, once nixpkgs ships a
              zellij whose source already contains the fix.
           2. One commit that deletes the overlay block in
-             `unixlike/modules/zellij/module.nix`, this
+             `unixlike/modules/programs/zellij/module.nix`, this
              workflow, the `CONTRIBUTING.md` subsection, the `README.md` line, the
              `Justfile` recipe, `docs/provisional/unixlike/zellij-combining-marks.md`, and
              all three status mentions of the measure -- the Unix-like paragraph and
@@ -200,7 +200,7 @@ jobs:
           if ! grep -qx "$PINNED_COMMIT" <<<"$commits"; then
             body=$(printf '%s\n\n%s\n\n%s\n' \
               "$PINNED_COMMIT is no longer in the commit list of zellij-org/zellij#$pr, so the branch was rewritten and the overlay fetches a commit the pull request no longer claims." \
-              "Re-read the pull request, pick the commit that now carries the fix, and repoint the overlay's url and hash in unixlike/modules/zellij/module.nix." \
+              "Re-read the pull request, pick the commit that now carries the fix, and repoint the overlay's url and hash in unixlike/modules/programs/zellij/module.nix." \
               "Opened by .github/workflows/zellij-upstream-5500.yml.")
             ensure_issue "zellij upstream #$pr was rewritten" \
               "unixlike: zellij upstream #$pr was rewritten; re-pin the overlay" "$body"

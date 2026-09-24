@@ -39,8 +39,10 @@ the flake are its composition authority.
 It owns one tree, `unixlike/`, which holds:
 
 - the flake and its lock;
-- feature and host modules under `modules/`, where the first level names a
-  concern and the class a fragment reaches is read in the file that writes it;
+- feature and host modules under `modules/`, grouped for navigation as
+  `flake`, `machines`, `platforms`, `foundation`, `desktop`, and `programs`;
+  a concern lives inside one group and the class a fragment reaches is read
+  in the file that writes it;
 - the Unix-like source payloads those modules consume, each beside the module
   that delivers it, and any script a module interpolates beside the same one;
 - Unix-like evaluation, build, and activation tooling under `tool/`.

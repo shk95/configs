@@ -23,7 +23,7 @@ produce, refusals included; `tool/doctor.sh` shows the count.
 unixlike
   flake.nix                   flake definition and lock (unixlike/flake.lock)
   payloads.json               the payload declaration
-  modules/                    flake-parts modules, one concern per entry
+  modules/                    flake-parts modules grouped by concern
   tool/checks/                the Unix-like check suite
 
 windows
@@ -163,7 +163,7 @@ just darwin-switch     # target Mac only; requires sudo
 
 ### Git commands that get no alias
 
-`unixlike/modules/git.nix` declares this repository's
+`unixlike/modules/programs/git.nix` declares this repository's
 `programs.git.settings.alias` set and, beside it, a comment naming the Git
 commands that deliberately stay unaliased because knowing them is more useful
 than shortening them:
@@ -177,14 +177,14 @@ than shortening them:
 - `git show HEAD@{1}` with `git reflog` to recover a previous position.
 - `git range-diff` to compare two versions of a series.
 
-See the comment in `unixlike/modules/git.nix` for the reasoning; this list only
+See the comment in `unixlike/modules/programs/git.nix` for the reasoning; this list only
 repeats the names so a maintainer can find them without opening a Nix module.
 
 ### Markdown and fuzzy search
 
 `glow README.md` renders a document; `glow` opens the Markdown browser (Enter
 opens a document, Esc returns, q quits). Both use the bundled `light` style.
-The generated `glow/glow.yml` is read-only: edit `unixlike/modules/glow.nix`,
+The generated `glow/glow.yml` is read-only: edit `unixlike/modules/programs/glow.nix`,
 not `glow config`. XDG configuration is installed on every home; Darwin also
 gets the native `~/Library/Preferences/glow/glow.yml` fallback.
 `GLOW_CONFIG_HOME` can select an alternative config directory. The glow wrapper

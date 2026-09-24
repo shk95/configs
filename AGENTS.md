@@ -26,10 +26,11 @@ answers `unixlike` for lives under it, except `.envrc` and the `Justfile`,
 which stay at the root because direnv reads the first there and where the
 second belongs is a separate decision, and the domain's documents, which
 live in the Unix-like scope directories under `docs/`. Files below `unixlike/modules/` are
-flake-parts modules collected by import-tree. The first level there names a
-concern and the class a fragment reaches is read in the file that writes it,
-so a concern with one fragment is one file, and a concern with more, or with a
-payload or a script beside it, is a directory.
+flake-parts modules collected by import-tree. The first level groups concerns
+as `flake`, `machines`, `platforms`, `foundation`, `desktop`, and `programs`.
+Inside a group, a concern with one fragment is one file, and a concern with
+more, or with a payload or a script beside it, is a directory. The class a
+fragment reaches is read in the file that writes it, never from its directory.
 `unixlike/modules/flake/configurations.nix` is the only place that decides
 which deferred module classes reach a Unix-like host.
 

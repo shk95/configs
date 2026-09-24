@@ -166,7 +166,7 @@ This subsection is disposable and carries the tag
 `PROV unixlike/zellij-combining-marks`, so it is deleted with the measure it
 describes.
 
-`unixlike/modules/zellij/module.nix` carries upstream zellij-org/zellij#5500
+`unixlike/modules/programs/zellij/module.nix` carries upstream zellij-org/zellij#5500
 for Darwin until nixpkgs ships a zellij whose source already has the fix;
 `docs/provisional/unixlike/zellij-combining-marks.md` registers the measure and
 names the condition that ends it. The overlay names no zellij version: it
@@ -446,7 +446,8 @@ does not follow one as a rule.
 
 ## Unix-like changes
 
-1. Put feature-oriented declarations under `unixlike/modules/`.
+1. Put feature-oriented declarations under the appropriate navigation group
+   in `unixlike/modules/`; the file declares its class.
 2. Put Unix-like source payloads in their owning Unix-like asset location.
 3. Keep host composition in `unixlike/modules/flake/configurations.nix`.
 4. Run narrow formatting, lint, evaluation, and native build checks.
@@ -474,12 +475,12 @@ lists the names it does;
    home.
 2. `wsl -d NixOS -u root -- passwd <account>` sets the account's password.
    The account is created locked and sudo asks for a password
-   (`unixlike/modules/wsl.nix`), so until this has run nothing inside can become
+   (`unixlike/modules/platforms/wsl.nix`), so until this has run nothing inside can become
    root; WSL's `-u root` needs no Linux authentication, and the password
    set this way survives every later activation.
 3. If the host is to be reached over ssh, copy an `authorized_keys` into
    `\\wsl.localhost\NixOS\home\<account>\.ssh\`. Keys are host-owned
-   (`unixlike/modules/ssh.nix`); the port is the one `unixlike/modules/sshd.nix`
+   (`unixlike/modules/foundation/ssh.nix`); the port is the one `unixlike/modules/foundation/sshd.nix`
    declares, and any mapping beyond the Windows host is Windows state.
 4. `wsl -d NixOS`. The account logs into zsh, flakes are on, and
    `tool/doctor.sh unixlike` reports the host ready.
@@ -531,7 +532,7 @@ is the maintainer's to run: building and evaluating never imply it.
    --terminate`. When it holds, `just nixos-switch` makes it the default, and
    `just nixos-generations` lists it.
 4. If the change touched `/etc/wsl.conf` — anything under `wsl.*` in
-   `unixlike/modules/wsl.nix` — run `wsl --terminate NixOS` from Windows and
+   `unixlike/modules/platforms/wsl.nix` — run `wsl --terminate NixOS` from Windows and
    start the distribution again: WSL reads that file only at boot.
 5. A rebuild that names no flake is expected to fail: `nixos-rebuild switch`
    stops on the search path, which carries no `nixos-config`. nixos-wsl's
@@ -541,7 +542,7 @@ is the maintainer's to run: building and evaluating never imply it.
 Roll back with `just nixos-rollback`, which switches to the previous
 generation; WSL has no boot loader to choose one from. It works only while
 that generation still exists, and the store is collected weekly with
-everything older than fourteen days (`unixlike/modules/nix/shared.nix`), so
+everything older than fourteen days (`unixlike/modules/foundation/nix/shared.nix`), so
 that is the window. `just nixos-switch` after a rollback activates the
 current configuration again. While that configuration is unchanged it is the
 same generation again and not a further one: Nix reuses the highest-numbered
@@ -566,7 +567,7 @@ nowhere else.
 1. In UTM, create a virtualised Linux machine (aarch64) that boots the
    aarch64 minimal ISO with UEFI: a VirtIO disk, the shared network, and a
    serial device, which is the console the guest is reached on before its
-   network is (`unixlike/modules/host/utm.nix`).
+   network is (`unixlike/modules/machines/utm.nix`).
 2. In the installer, as root, create the two file systems under the labels
    the host is declared with. Nothing detected on the machine is stored, so
    the labels are the whole contract with the disk:
@@ -604,13 +605,13 @@ nowhere else.
    remove a profile an earlier installation command already copied.
 
    The account is created without a password
-   (`unixlike/modules/account.nix`), so until `passwd` has run nothing can
+   (`unixlike/modules/foundation/account.nix`), so until `passwd` has run nothing can
    log in or become root, and the password set this way survives every later
    activation.
 5. Shut the guest down, remove the ISO in UTM and start it. Log in on the
    serial console with the password and put a public key in
    `~/.ssh/authorized_keys`; keys are host-owned
-   (`unixlike/modules/sshd.nix`). From then on the guest is reached over ssh
+   (`unixlike/modules/foundation/sshd.nix`). From then on the guest is reached over ssh
    on port 22 with that key: sshd refuses a password, and the firewall admits
    no other port.
 6. Clone the repository into the installed account's home, and run the
@@ -696,7 +697,7 @@ this output implies it.
    first start: systemd-boot does not start from the BIOS firmware and is
    not signed. The disk controller and the network type are free — the
    initrd finds a SCSI, SATA or NVMe disk
-   (`unixlike/modules/host/vmware.nix`), and NAT and a bridged network both
+   (`unixlike/modules/machines/vmware.nix`), and NAT and a bridged network both
    hand out an address. The console is the machine's own screen; there is no
    serial device to add.
 3. Follow steps 2 to 4 of the UTM procedure in the installer, with two
@@ -920,7 +921,7 @@ the declared systemd-boot loader is not signed.
 
    Compare the generated initrd modules, kernel modules, CPU support and file
    systems with the portable declarations in
-   `unixlike/modules/host/desktop.nix` and `unixlike/modules/amd-apu.nix`.
+   `unixlike/modules/machines/desktop.nix` and `unixlike/modules/machines/amd-apu.nix`.
    Do not copy the generated file or its UUIDs into the tree wholesale. If
    the machine needs a controller, kernel option or other fact absent from
    the portable base, stop and add only that reviewed fact through a
@@ -1078,7 +1079,7 @@ below.
 After an OrbStack update, create a new machine and compare its
 `/etc/nixos/orbstack.nix` and `/etc/nixos/configuration.nix` with the ones
 kept in this machine, then carry any difference that OrbStack needs into
-`unixlike/modules/host/orbstack.nix` and `unixlike/modules/account.nix`.
+`unixlike/modules/machines/orbstack.nix` and `unixlike/modules/foundation/account.nix`.
 OrbStack generates those files outside the flake and says it will overwrite
 them; the class declares by hand what they hold that OrbStack needs, and only
 this reading finds a change. What the class leaves out on purpose is listed
@@ -1090,7 +1091,7 @@ minutes; nothing in the machine is meant to be kept.
 ### Capture Karabiner drift
 
 On the Mac, `just karabiner-check` reports whether the host still holds the
-members `unixlike/modules/karabiner/` declares, and `just karabiner-capture`
+members `unixlike/modules/programs/karabiner/` declares, and `just karabiner-capture`
 reads drift that belongs in desired state back into the payloads and commits
 it.
 

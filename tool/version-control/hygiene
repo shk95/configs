@@ -117,8 +117,8 @@ violation() {
 # ---------------------------------------------------------------------------
 
 # A name, in the sense of an account or host label. `$` and `{` are outside the
-# class on purpose: `/home/${user}` in unixlike/modules/home-account.nix and
-# `/Users/${user}` in unixlike/modules/host/darwin.nix are interpolations of
+# class on purpose: `/home/${user}` in unixlike/modules/foundation/home-account.nix and
+# `/Users/${user}` in unixlike/modules/platforms/darwin.nix are interpolations of
 # a declared value, not names, and do not match at all.
 name='[A-Za-z0-9._-]+'
 
@@ -153,7 +153,7 @@ absolute_home="($posix_home)|($windows_home)|($unc_home)"
 # A quoted right-hand side is a literal in every language here. A bare one is
 # only a literal where the separator is not the spaced ` = ` form; after ` = ` a
 # bare token is an expression -- `user = config.identity.wsl.user` in
-# unixlike/modules/home-account.nix names no account.
+# unixlike/modules/foundation/home-account.nix names no account.
 keys='(user|username|hostName|hostname|USER|USERNAME|HOSTNAME|COMPUTERNAME)'
 key_start='(^|[^A-Za-z0-9_])'
 assignment=$(printf '%s%s"?([ \t]*[=:][ \t]*("%s"|'\''%s'\'')|(=|[ \t]*:)[ \t]*%s)' \
