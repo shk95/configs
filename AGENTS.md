@@ -110,11 +110,11 @@ When adding a repository rule, separate its concerns before implementation:
   outside the authority model: a spec with its acceptance criteria and the
   evidence lanes each requires, a report that answers every criterion, and
   optionally the study that argued the direction. A work document binds only
-  the work it describes. It becomes binding on the repository only through
-  an inlet that is reviewed on its own terms: a decision record, a promoted
-  candidate, a registered provisional measure, or an issue, each naming the
-  document as its source. Nothing that carries authority may cite a work
-  item (`INV repository/design-outside-authority`), and an agent reads one
+  the work it describes. A durable rule it produces belongs in a decision
+  record or invariant; a temporary measure belongs in the provisional
+  registry. A decision record or provisional entry may name the work as its
+  source. Other rule-bearing material cites the adopted result
+  (`INV repository/design-outside-authority`). An agent reads a work item
   when a task, an issue or a record points at it, never as a rule to follow.
 
 Each obligation has one authoritative source. Procedures and tools implement

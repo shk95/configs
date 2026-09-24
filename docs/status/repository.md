@@ -111,9 +111,9 @@ staged or commit-range checks.
 GitHub milestones are no longer used, a branch is one reviewable increment —
 since 2026-09-20 what one evidence lane verifies, with its report rows and
 status in the same pull request, a rule a reviewer holds and no tool does
-(`INV repository/pull-request-spans-an-evidence-lane`); no spec has yet run
-under it — and no commit message on its way to `dev` and no promotion body carries a
-closing keyword. A push to `dev` that ends a report closes the issue its
+(`INV repository/pull-request-spans-an-evidence-lane`); no commit message on
+its way to `dev` and no promotion body carries a closing keyword. A push to
+`dev` that ends a report closes the issue its
 spec names (`.github/workflows/work-closure.yml`), `tool/version-control/audit`
 warns about a spec past its review-by, and `tool/version-control/audit-remote`
 reports an issue left open beside a terminal report; the workflow closed its
