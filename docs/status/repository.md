@@ -67,6 +67,15 @@ On 2026-09-24 the physical module tree was regrouped under `flake`,
 `machines`, `platforms`, `foundation`, `desktop`, and `programs`. The concern
 remains the unit inside each group; group names do not choose module classes.
 
+On the same day the Unix-like provider API reached `dev`. The public
+`shk95/configs-host-template` evaluates a synthetic pinned consumer in CI and
+is marked as a GitHub template. One private repository,
+`shk95/configs-hosts`, was generated from it and holds the seven current host
+flakes with separate locks. The template is a one-time copy, not a continuing
+composition authority. The original provider outputs remain while the private
+consumers collect host-specific native and runtime evidence
+(`docs/policy/decisions/repository/one-private-host-repository-from-public-template.md`).
+
 Two things changed with it. The payload declaration moved to
 `unixlike/payloads.json` and the scanned tree became the module tree, so the
 Karabiner script is declared and parsed like the data payloads, in a `shell`

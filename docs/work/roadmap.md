@@ -50,8 +50,8 @@ are revised for the new owner before work resumes.
 | 8 | shared Niri and Noctalia Wayland profile, Linux graphical home layer, and utility adoption — done 2026-09-23 | unixlike |
 | 10 | Niri and Noctalia on the VM guests — done 2026-09-23 | unixlike |
 | 14 | physical Unix-like module grouping; preserve existing outputs — done 2026-09-24 | unixlike |
-| 15 | typed provider API and consumer contract; retain current outputs during comparison | unixlike |
-| 16 | public host-repository template with an evaluated example | external template repository |
+| 15 | typed provider API and consumer contract; retain current outputs during comparison — done 2026-09-24 | unixlike |
+| 16 | public host-repository template with an evaluated example — done 2026-09-24 | external template repository |
 | 17 | migrate all seven current outputs to one private consumer repository, `configs-hosts`, with SOPS + age and per-host verification; retire real host inventory from `configs` after adoption | unixlike and external host repository, in separate increments |
 | 9 | x86_64 desktop on an AMD APU — evaluation and native build verified; physical evidence pending; resume after item 17 | unixlike and external host repository, to be revised |
 | 11 | installation and deployment (disko, nixos-anywhere, deploy-rs) — disposable-VM installation verified; remaining deployment and real-host evidence resume after item 17 | unixlike and external host repository, to be revised |
@@ -66,14 +66,14 @@ specification, file inventory and report are in
 `docs/work/unixlike/module-layout/`. The existing seven host outputs remain
 the comparison baseline; no host was activated by this work.
 
-Item 15 turns the existing machine-kind table and typed selection checks into
-an external consumer API. It keeps current outputs until a consumer can
-reproduce them and gives this repository synthetic host fixtures after real
-inventory leaves. Its specification is
+Item 15 turned the existing machine-kind table and typed selection checks into
+an external consumer API. It keeps current outputs while consumer adoption is
+verified and will give this repository synthetic host fixtures after real
+inventory leaves. Its specification and current report are
 `docs/work/unixlike/host-provider-api/`.
 
-Item 16 is the public `configs-host-template` repository. A synthetic host exercises the
-published API in its CI. It documents SOPS + age setup without shipping a
+Item 16 produced the public `configs-host-template` repository. A synthetic
+host exercises the pinned provider API in its CI. It documents SOPS + age setup without shipping a
 real identity, recipient or encrypted host value. A generated repository
 owns its future edits; template updates do not change an existing host.
 
@@ -88,7 +88,8 @@ replace their contract coverage. The repository hygiene check currently
 reads the real inventory, so its replacement declaration and fixtures must
 land before that inventory is removed. The maintainer fixed the one-repository
 boundary on 2026-09-24, before the first migration. The public template is a
-one-time starting point; the private repository owns future edits independently.
+one-time starting point; the private repository owns future edits independently
+(`docs/policy/decisions/repository/one-private-host-repository-from-public-template.md`).
 
 Items 9 and 11 already have approved specs and reports with automatic
 evidence. Their pending criteria stay pending during the transition. Before
