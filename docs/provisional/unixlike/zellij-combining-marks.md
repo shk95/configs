@@ -25,7 +25,7 @@ unaffected: the overlay yields `{}` there, and the checks build sources, not a
 Linux zellij.
 
 Every disposable line carries `PROV unixlike/zellij-combining-marks`. The set
-is the overlay block in `unixlike/modules/zellij/module.nix` — the shared
+is the overlay block in `unixlike/modules/programs/zellij/module.nix` — the shared
 builder, the overlay and the three flake checks — the watcher
 `.github/workflows/zellij-upstream-5500.yml`, the `zellij-patch-check` recipe
 in the `Justfile`, the "zellij overlay" subsection in `CONTRIBUTING.md`, the

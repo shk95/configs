@@ -18,15 +18,16 @@ into `config.modules.<class>.<name>`, where the class is a value in the file
 rather than a place in the tree
 (`docs/policy/decisions/unixlike/home-manager-platform-classes.md`).
 
-The module tree keeps one root, `unixlike/modules/`, and its first level
-names a concern. The class a fragment reaches is read in the file that
-writes it and never from a directory: `modules/<concern>/shared.nix`,
-`modules/<concern>/darwin.nix`, `modules/<concern>/wsl.nix`. A concern
-that is one fragment stays one file, `modules/bat.nix`; a directory is for
-a concern with more than one fragment or with material beside its module.
+The module tree keeps one root, `unixlike/modules/`. Its first level groups
+concerns for navigation as `flake`, `machines`, `platforms`, `foundation`,
+`desktop`, and `programs`; the concern is the file or directory inside a
+group. The class a fragment reaches is read in the file that writes it and
+never from a directory. A concern that is one fragment stays one file, such
+as `modules/programs/bat.nix`; a directory is for a concern with more than
+one fragment or with material beside its module.
 What a concern owns sits beside its module: the payload the module
-delivers and the script it interpolates. The three-directory join
-Karabiner has today, `modules/`, `assets/` and `tool/darwin/`, becomes one
+delivers and the script it interpolates. Karabiner's earlier three-directory
+join under `modules/`, `assets/` and `tool/darwin/` became one concern
 directory. Composition keeps a directory of its own, `modules/flake/`,
 which `tool/checks/composition` already exempts as the composition file's
 home.
@@ -75,14 +76,15 @@ Rejected:
   (`docs/policy/decisions/repository/powershell-copied-per-domain.md`), and part of what
   keeps them safely apart is distance; the scope segment comes first.
 
-What it costs. Nothing moves in this change; the layout is adopted by the
-migrating change. When it is, the `darwin-` and `wsl-` prefixes leave the
-file names and the directory carries them, so a prefix grep becomes a
-directory listing. `import-tree` walks recursively and the class merge is
+What it costs. The original decision established the concern-first domain
+tree; the 2026-09-24 grouping changed its first-level placement without
+changing composition. `import-tree` walks recursively and the class merge is
 keyed by defining file (`INV unixlike/import-order-independence`), so depth
 changes no derivation; a concern directory must not begin with `_`, which
 `import-tree` skips, and a payload or script beside a module is ignored by
-the walk because only `.nix` files are collected. `packages.nix`, the
+the walk because only `.nix` files are collected. The class merge uses the
+pre-grouping concern path as its stable sort key so the seven existing host
+derivations do not change when physical paths change. `packages.nix`, the
 shared package list, is a one-file concern and stays one. The `_file`
 attribution `modules.<class>.<name>` stays as it is. The Windows domain
 groups the same way by declaration, in `windows/desired/manifest.json`, and

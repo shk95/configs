@@ -1,7 +1,7 @@
 id: unixlike/nixos-no-channel
 statement: The NixOS host carries no channel, so the only source a rebuild can take is this flake.
 rationale: AGENTS.md § Goal and authority
-enforced-by: schema unixlike/modules/nix/shared.nix
+enforced-by: schema unixlike/modules/foundation/nix/shared.nix
 enforced-by: fixture unixlike/tool/checks/flake-test
 decision: docs/policy/decisions/unixlike/nixos-wsl-system-layer-ownership.md § The NixOS-WSL system layer declares only what Home Manager cannot
 

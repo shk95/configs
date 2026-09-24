@@ -287,7 +287,7 @@ darwin-generations:
 # Compare this Mac's Karabiner file and symbolic hotkeys with the payloads.
 [group('darwin')]
 karabiner-check:
-    unixlike/modules/karabiner/tool check
+    unixlike/modules/programs/karabiner/tool check
 
 # Read this Mac's Karabiner drift back into the payloads and commit it.
 [group('darwin')]
@@ -364,7 +364,7 @@ nixos-install-vm-test host="":
 # build and activate without touching the boot profile, then switch. WSL has
 # no boot loader, so a rollback is a switch to the previous generation, and it
 # is possible only while that generation is inside the garbage collector's
-# window (unixlike/modules/nix/shared.nix). CONTRIBUTING.md, "Update the
+# window (unixlike/modules/foundation/nix/shared.nix). CONTRIBUTING.md, "Update the
 # registered NixOS-WSL distribution", is the procedure.
 
 # Build and activate the NixOS system without making it the boot default.
@@ -450,19 +450,19 @@ nixos-stage dest="/mnt/c/WSL":
 ############################################################################
 
 # Make the Home Manager zsh the login shell — standalone Ubuntu and Darwin.
-# NixOS selects it declaratively (unixlike/modules/shell/wsl.nix) and is refused here.
+# NixOS selects it declaratively (unixlike/modules/foundation/shell/wsl.nix) and is refused here.
 [group('setup')]
 switch-shell:
     #!/usr/bin/env bash
     set -euo pipefail
 
     if [ -e /etc/NIXOS ]; then
-      echo "NixOS selects the login shell in unixlike/modules/shell/wsl.nix; nothing to switch here." >&2
+      echo "NixOS selects the login shell in unixlike/modules/foundation/shell/wsl.nix; nothing to switch here." >&2
       exit 1
     fi
 
     case "$(uname -s)" in
-      # Registered in /etc/shells by unixlike/modules/shell/darwin.nix; the store path
+      # Registered in /etc/shells by unixlike/modules/foundation/shell/darwin.nix; the store path
       # behind it changes with every zsh update, this one does not.
       Darwin) TARGET_SHELL="/run/current-system/sw/bin/zsh" ;;
       # The standalone Home Manager profile.

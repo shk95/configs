@@ -1,7 +1,7 @@
 id: unixlike/install-target-explicit
 statement: Every automated NixOS installation names one installable inventory host and one persistent disk path explicitly; desired state never discovers or guesses the destructive target.
 rationale: docs/policy/architecture.md § Unix-like domain
-enforced-by: schema unixlike/modules/installation.nix
+enforced-by: schema unixlike/modules/foundation/installation.nix
 enforced-by: fixture unixlike/tool/checks/flake-test
 enforced-by: fixture unixlike/tool/checks/install-plan-test
 decision: docs/policy/decisions/unixlike/install-targets-are-explicit-runtime-inputs.md § Installation targets are explicit runtime inputs
