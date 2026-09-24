@@ -60,7 +60,7 @@ command aborts instead of adding the files you actually meant.
 ### `experimental Nix feature 'nix-command' is disabled`
 
 There is no `~/.config/nix/nix.conf` yet, which is the state of any machine
-before its first `home-manager switch` — `unixlike/modules/nix/shared.nix` is
+before its first `home-manager switch` — `unixlike/modules/foundation/nix/shared.nix` is
 what writes it. Export `NIX_CONFIG="experimental-features = nix-command
 flakes"` for the session rather than writing the file by hand: home-manager
 refuses to clobber an unmanaged file, so hand-writing it turns the first switch
@@ -73,7 +73,7 @@ On the NixOS-WSL flavour the file that matters is `/etc/nix/nix.conf`, which is
 generated from `nix.settings`, and the standalone class that writes the home
 file is not composed there. The distribution imported on 2026-09-06 hit this
 exact message from a system whose whole configuration is a flake;
-`unixlike/modules/nix/shared.nix` declares the setting for that flavour too,
+`unixlike/modules/foundation/nix/shared.nix` declares the setting for that flavour too,
 and it reaches the host on its next activation. The same `NIX_CONFIG` export
 covers the session until then.
 
@@ -285,7 +285,7 @@ If `CanaryZZ` is gone, it was a flush — nothing deletes that name by name.
 stop `systemd-shutdown` calling the flush, but it can make the call decline.
 `disable_binfmt()` opens with `binfmt_mounted_and_writable()`, which ends in
 `access_fd(fd, W_OK)` — so a distribution whose *own* view of the registry is
-read-only skips it. `unixlike/modules/wsl.nix` declares that as
+read-only skips it. `unixlike/modules/platforms/wsl.nix` declares that as
 `systemd.services.wsl-binfmt-protect`:
 
 ```sh
@@ -388,7 +388,7 @@ the copy, and prints the exact command. It takes about four seconds over drvfs.
 ### `sudo: a password is required` right after `wsl --import`
 
 The account a fresh import creates has no password — its `/etc/shadow` field is
-`!` — and `unixlike/modules/wsl.nix` makes sudo ask for one, because the host
+`!` — and `unixlike/modules/platforms/wsl.nix` makes sudo ask for one, because the host
 is reachable over ssh and a key alone must not be root. Nothing is broken; step
 2 of `CONTRIBUTING.md § Import the NixOS-WSL distribution` has not run yet:
 
@@ -500,7 +500,7 @@ that another Homebrew font package is needed.
 
 Windows Terminal draws with a font named in its own `settings.json` and reads
 it from Windows. A font in the Linux Nix store is invisible to it, so changing
-`unixlike/modules/fonts/wsl.nix` cannot fix terminal glyphs. The Windows
+`unixlike/modules/desktop/fonts/wsl.nix` cannot fix terminal glyphs. The Windows
 desired state installs and selects D2Coding independently:
 
 ```json
@@ -691,7 +691,7 @@ never wrote down until now.
 
 `pre-push` now runs the Windows checks under this host's own `pwsh` on any
 Unix-like host, including WSL — the same binary
-`unixlike/modules/powershell/module.nix` installs into every home this
+`unixlike/modules/programs/powershell/module.nix` installs into every home this
 repository configures. `check-desired-state.ps1` and the Pester suite both run
 cleanly under it; the suite's `WIN_ENV_E2E` cases self-skip there, and
 `windows-latest` remains the native gate for what a Linux `pwsh` cannot

@@ -59,7 +59,7 @@ running systemd is.
 ## If you add another distribution
 
 Give it this, once per boot, as root — it is what
-`unixlike/modules/wsl.nix` declares for the NixOS flavour:
+`unixlike/modules/platforms/wsl.nix` declares for the NixOS flavour:
 
 ```sh
 mount --make-private /proc/sys/fs/binfmt_misc      # don't propagate to the others
@@ -81,4 +81,4 @@ new distribution and `rw` everywhere else.
 - the investigation is under the
   `cat: /proc/sys/fs/binfmt_misc/WSLInterop` entry in
   `docs/reference/troubleshooting.md`, and the two fixes that looked right and were
-  not are described in `unixlike/modules/wsl.nix`.
+  not are described in `unixlike/modules/platforms/wsl.nix`.

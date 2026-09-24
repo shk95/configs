@@ -93,15 +93,15 @@ hooks_enabled() {
     done | grep -q yes
 }
 
-homebrew_module=unixlike/modules/homebrew.nix
+homebrew_module=unixlike/modules/platforms/homebrew.nix
 
 # The two payloads `capture karabiner` reads back, and the tool that knows how
 # to read them off a host. The Karabiner tool owns the projection, the
 # platform guard and the host defaults; this command only decides that a
 # capture is a commit.
-karabiner_tool=unixlike/modules/karabiner/tool
-karabiner_payload=unixlike/modules/karabiner/karabiner.json
-karabiner_hotkeys=unixlike/modules/karabiner/symbolic-hotkeys.json
+karabiner_tool=unixlike/modules/programs/karabiner/tool
+karabiner_payload=unixlike/modules/programs/karabiner/karabiner.json
+karabiner_hotkeys=unixlike/modules/programs/karabiner/symbolic-hotkeys.json
 
 # One scratch directory for the candidate edit, the pull-request body and the
 # copy of the hook's output. Trapped on the signals a prompt is interrupted
@@ -144,15 +144,15 @@ options:
                            of the host's symbolic hotkey dictionary
 
 commands:
-  brew add <formula>       declare a Homebrew formula in unixlike/modules/homebrew.nix
+  brew add <formula>       declare a Homebrew formula in unixlike/modules/platforms/homebrew.nix
   brew remove <formula>    remove a Homebrew formula
   cask add <cask>          declare a Homebrew cask
   cask remove <cask>       remove a Homebrew cask
-  mas add <name> <id>      declare a Mac App Store app in unixlike/modules/homebrew.nix
+  mas add <name> <id>      declare a Mac App Store app in unixlike/modules/platforms/homebrew.nix
   mas remove <name>        remove a Mac App Store app
   flake refresh [<input>]  refresh flake.lock, every input or one
   capture karabiner        read this Mac's Karabiner state back into
-                           unixlike/modules/karabiner/
+                           unixlike/modules/programs/karabiner/
   prune                    delete local branches already merged into origin/dev
 
 mas add/remove edit the masApps attrset: <name> is the Nix attribute and <id>
@@ -161,7 +161,7 @@ CLI itself is already a declared Homebrew formula, so it needs no command of
 its own.
 
 capture karabiner is the reverse of the activation:
-unixlike/modules/karabiner/tool projects this host onto the members the two
+unixlike/modules/programs/karabiner/tool projects this host onto the members the two
 payloads declare, and each
 projection that differs becomes the payload's new content. Runtime keys the
 host also holds are neither read nor written. It runs on a Mac only, refuses
@@ -1312,9 +1312,9 @@ flake_command() {
 # INV unixlike/host-written-payload-projected
 #
 # The reverse direction of the activation
-# unixlike/modules/karabiner/module.nix declares: the same projection that
+# unixlike/modules/programs/karabiner/module.nix declares: the same projection that
 # decides what `apply` writes decides what a capture reads back.
-# unixlike/modules/karabiner/tool owns it, so nothing here reads the host
+# unixlike/modules/programs/karabiner/tool owns it, so nothing here reads the host
 # document, names a runtime key, or re-derives which members the payloads
 # own.
 #
@@ -1346,7 +1346,7 @@ capture_command() {
     || refuse "$karabiner_tool is missing or not executable." \
       "That script owns the projection this command commits."
 
-  # The default unixlike/modules/karabiner/tool documents, restated only so
+  # The default unixlike/modules/programs/karabiner/tool documents, restated only so
   # that a missing file is a refusal rather than a capture of an empty
   # document.
   # --host overrides it, which is how a fixture hands in a host of its own.
@@ -1401,7 +1401,7 @@ capture_command() {
   done
   if [ "$capture_changed" -eq 0 ]; then
     refuse "There is nothing to capture." \
-      "Both payloads already hold this host's projection, which is what unixlike/modules/karabiner/tool check reports in one line."
+      "Both payloads already hold this host's projection, which is what unixlike/modules/programs/karabiner/tool check reports in one line."
   fi
 
   for capture_payload in "$karabiner_payload" "$karabiner_hotkeys"; do
