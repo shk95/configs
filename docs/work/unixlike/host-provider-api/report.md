@@ -19,7 +19,7 @@ status: pending
 
 ## Evidence lanes
 
-- Evaluation: `provider-api-test` passes across a separate consumer flake for all three constructors and checks negative cases; all seven current output derivation paths match the clean `e8730ce` baseline. `nix flake check --no-build`, `composition-test`, and `import-order-test` pass on aarch64 Darwin. The existing local `flake-test` passed its schema fixtures, while its later installation fixture stopped because macOS `/var` is a symlink. The Linux CI run remains pending.
+- Evaluation: `provider-api-test` passes across a separate consumer flake for all three constructors and checks negative cases; all seven current output derivation paths match the clean `e8730ce` baseline. `nix flake check --no-build`, `composition-test`, and `import-order-test` pass on aarch64 Darwin. The existing local `flake-test` passed its schema fixtures, while its later installation fixture stopped because macOS `/var` is a symlink. The first Linux CI run passed `flake-test` but found that the graphical runtime fixture, which composes classes without a constructor, lacked typed Home Manager identity. That fixture now supplies it and its test derivation evaluates locally; a Linux rerun is pending.
 - Build: The existing Darwin output built natively on aarch64 macOS after the API refactor. The standalone x86_64 Linux home awaits the Linux CI job; migrated hosts still need their own matching builds.
 - Native runtime: pending in each migrated host.
 - Activation: not requested; any future action is recorded per host.

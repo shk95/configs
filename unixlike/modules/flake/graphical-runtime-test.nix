@@ -7,6 +7,7 @@
   vmHost = config.identity.nixosHosts.vm;
   testUser = vmHost.user;
   home = config.modules.homeManager;
+  inherit (config.identity) gitName gitEmail;
 in {
   perSystem = {
     pkgs,
@@ -37,6 +38,29 @@ in {
               home.shared
               home.desktop
               home.linuxGraphical
+              # This runtime fixture composes classes directly rather than
+              # calling a host constructor, so it supplies the same typed
+              # host-owned values that a constructor normally provides.
+              ({lib, ...}: {
+                options.providerIdentity = {
+                  user = lib.mkOption {
+                    type = lib.types.str;
+                    readOnly = true;
+                  };
+                  gitName = lib.mkOption {
+                    type = lib.types.str;
+                    readOnly = true;
+                  };
+                  gitEmail = lib.mkOption {
+                    type = lib.types.str;
+                    readOnly = true;
+                  };
+                };
+                config.providerIdentity = {
+                  user = testUser;
+                  inherit gitName gitEmail;
+                };
+              })
             ];
           };
 
