@@ -1,11 +1,12 @@
-{config, ...}: let
-  user = config.identity.darwin.user;
-in {
+_: {
   modules.darwin.system = {
     pkgs,
     lib,
+    config,
     ...
-  }: {
+  }: let
+    user = config.providerIdentity.user;
+  in {
     nix = {
       # Determinate uses its own daemon to manage the Nix installation that
       # conflicts with nix-darwin's native Nix management.

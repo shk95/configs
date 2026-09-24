@@ -1,7 +1,7 @@
-{config, ...}: let
-  inherit (config.identity.darwin) hostName user;
-in {
-  modules.darwin.system = {
+_: {
+  modules.darwin.system = {config, ...}: let
+    inherit (config.providerIdentity) hostName user;
+  in {
     networking = {
       inherit hostName;
       computerName = hostName;
@@ -13,7 +13,9 @@ in {
     };
   };
 
-  modules.homeManager.darwin = {
+  modules.homeManager.darwin = {config, ...}: let
+    user = config.providerIdentity.user;
+  in {
     home = {
       username = user;
       homeDirectory = "/Users/${user}";

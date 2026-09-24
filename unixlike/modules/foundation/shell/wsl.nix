@@ -29,10 +29,14 @@
 # the per-user profile and the wrappers all on PATH.
 # modules/shell/darwin.nix takes the `programs.zsh` route because nix-darwin's
 # environment is loaded from /etc/zshrc.
-{config, ...}: let
-  user = config.identity.wsl.user;
-in {
-  modules.nixos.wsl = {pkgs, ...}: {
+_: {
+  modules.nixos.wsl = {
+    pkgs,
+    config,
+    ...
+  }: let
+    user = config.host.user;
+  in {
     users.users.${user} = {
       shell = pkgs.zsh;
       ignoreShellProgramCheck = true;
