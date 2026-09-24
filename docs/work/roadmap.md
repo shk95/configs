@@ -1,9 +1,10 @@
 # Roadmap
 
 Lanes and order, not schedule. A lane is a host this repository configures or
-means to; an order is the sequence work is taken in, and an item without a
-number is a decision that must be made before the number it precedes. Each
-numbered item becomes a work item under this directory when it starts; the
+means to; the rows below state the sequence work is taken in, and an item
+without a number is a decision that must be made before the number it precedes.
+Existing order numbers remain stable for references even when work is deferred.
+Each numbered item becomes a work item under this directory when it starts; the
 index is `tool/version-control/records --table work`. The repository
 maintainer owns this file, and changing the order is a repository change.
 
@@ -14,9 +15,9 @@ maintainer owns this file, and changing the order is a repository change.
 | darwin | aarch64-darwin | operational; generation 36 activated |
 | utm | aarch64 NixOS guest, UTM on the Mac | graphical; native build, runtime, switch/reboot and rollback/restoration verified on 2026-09-23 |
 | orbstack | aarch64 NixOS OrbStack machine | an isolated sandbox on the Mac, switched to the flake on 2026-09-20; disposable, recreated by its procedure |
-| desktop | x86_64 NixOS, physical AMD APU desktop | declared as host `desktop`, evaluated only; not installed |
+| desktop | x86_64 NixOS, physical AMD APU desktop | declared as host `desktop`; evaluated and built natively on x86_64, not installed; physical-host work at order 9 deferred |
 | vm | x86_64 NixOS guest, VMware Workstation on a Linux and a Windows host | graphical on Windows; native build, runtime, switch/reboot and rollback/restoration verified on 2026-09-23; Linux-host runtime unverified |
-| kvm | x86_64 NixOS guest, QEMU/KVM on the NixOS desktop | not declared; order 12 declares the host |
+| kvm | x86_64 NixOS guest, QEMU/KVM on the NixOS desktop | not declared; order 12 deferred with its desktop prerequisite |
 | hyperv | x86_64 NixOS guest, Hyper-V on the Windows host | not declared; order 13 declares the host |
 | wsl-standalone | x86_64 Ubuntu WSL, standalone Home Manager | operational; tagged `unixlike-v2026.08.31` |
 | wsl-nixos | x86_64 NixOS-WSL | activated (generation 4); updated in place since that day |
@@ -36,12 +37,12 @@ maintainer owns this file, and changing the order is a repository change.
 | 7 | aarch64 OrbStack machine — done 2026-09-20 | unixlike |
 | — | judgement on the CI decision's `reopen-when`, met by the installed x86_64 guest — minimal VM check accepted on the existing required job 2026-09-21 | repository |
 | 8 | shared Niri and Noctalia Wayland profile, Linux graphical home layer, and utility adoption — done 2026-09-23 | unixlike |
-| 9 | x86_64 desktop on an AMD APU | unixlike |
 | 10 | Niri and Noctalia on the VM guests — done 2026-09-23 | unixlike |
-| 11 | installation and deployment (disko, nixos-anywhere, deploy-rs) | unixlike |
-| 12 | x86_64 guest on QEMU/KVM, on the NixOS desktop | unixlike |
+| 11 | installation and deployment (disko, nixos-anywhere, deploy-rs); physical desktop evidence waits for order 9 | unixlike |
 | 13 | x86_64 guest on Hyper-V, on the Windows host | unixlike |
 | deferred | WSLg on NixOS-WSL | unixlike |
+| 9 (deferred) | x86_64 desktop on an AMD APU; resume before order 12 | unixlike |
+| 12 (deferred) | x86_64 guest on QEMU/KVM, on the NixOS desktop; resume after order 9 | unixlike |
 
 ## What each order carries
 
@@ -157,6 +158,13 @@ combinations a lane has declared evaluate; the inventory's decision record
 is reopened by that order, not by this row. Both reuse the headless class
 and, by then, the graphical classes of order 8 and the installation tooling
 of order 11.
+
+Orders 9 and 12 are deferred as of 2026-09-23. Order 9's automatic
+configuration, evaluation and native build remain recorded in its pending
+report; its physical-host evidence is outstanding. Order 12 has not started.
+When resumed, order 9 precedes order 12. Order 11 may continue without
+installing the desktop, but any physical desktop installation and deployment
+evidence it owes waits for order 9.
 
 Order 12, QEMU/KVM. The host is the desktop of order 9, so it cannot come
 before it. What the desktop needs to run a guest — libvirt or plain QEMU,
