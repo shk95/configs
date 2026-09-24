@@ -10,51 +10,12 @@
 }: let
   inherit (lib) mkOption types;
 
-  # The combinations the host lanes name. A host is one of these or it does
-  # not evaluate: a guest module written for one platform or hypervisor would
-  # otherwise fail late, in whatever option it assumed.
-  legalHosts = [
-    {
-      system = "x86_64-linux";
-      kind = "wsl";
-      hypervisor = null;
-    }
-    {
-      system = "x86_64-linux";
-      kind = "vm";
-      hypervisor = "vmware";
-    }
-    {
-      system = "aarch64-linux";
-      kind = "vm";
-      hypervisor = "utm";
-    }
-    {
-      system = "aarch64-linux";
-      kind = "orbstack";
-      hypervisor = null;
-    }
-    {
-      system = "x86_64-linux";
-      kind = "desktop";
-      hypervisor = null;
-    }
-  ];
-
-  describe = host:
-    "${host.system} ${host.kind}"
-    + lib.optionalString (host.hypervisor != null) " on ${host.hypervisor}";
-
+  contract = import ./_host-contract.nix {inherit lib;};
   checkedHost = name: host:
-    if !(lib.elem {inherit (host) system kind hypervisor;} legalHosts)
-    then
-      throw ''
-        identity.nixosHosts.${name}: ${describe host} is not a host this repository configures. The legal combinations are: ${lib.concatMapStringsSep "; " describe legalHosts}.''
-    else if host.kind == "wsl" && host.user != config.identity.wsl.user
-    then
-      throw ''
-        identity.nixosHosts.${name}: a host of kind wsl receives the WSL home classes, which are written for identity.wsl.user (${config.identity.wsl.user}), and declares ${host.user}.''
-    else host;
+    contract.checkHost {
+      inherit name host;
+      wslUser = config.identity.wsl.user;
+    };
 in {
   options.hostSelections.nixos = mkOption {
     type = types.attrsOf (types.submodule {
@@ -93,31 +54,7 @@ in {
       default = {};
       apply = lib.mapAttrs checkedHost;
       description = "Every NixOS host, by host name.";
-      type = types.attrsOf (types.submodule {
-        options = {
-          system = mkOption {
-            type = types.enum ["x86_64-linux" "aarch64-linux"];
-            description = "Platform the host runs.";
-          };
-          kind = mkOption {
-            type = types.enum ["wsl" "orbstack" "vm" "desktop"];
-            description = "What the host is; selects its composition.";
-          };
-          hypervisor = mkOption {
-            type = types.nullOr (types.enum ["vmware" "utm"]);
-            default = null;
-            description = "Hypervisor of a host of kind vm; null for every other kind.";
-          };
-          user = mkOption {
-            type = types.str;
-            description = "Primary account.";
-          };
-          stateVersion = mkOption {
-            type = types.str;
-            description = "NixOS release the host was first installed with.";
-          };
-        };
-      });
+      type = types.attrsOf contract.hostType;
     };
 
     darwin = {

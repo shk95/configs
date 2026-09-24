@@ -11,16 +11,14 @@
 # modules/editor/wsl.nix, modules/timezone.nix and modules/sshd.nix, one
 # feature each; the host name comes from the host's inventory entry
 # (modules/host/nixos.nix).
-{config, ...}: let
-  user = config.identity.wsl.user;
-in {
-  # `config` below is the NixOS configuration; the flake-level one was read
-  # into `user` above.
+_: {
   modules.nixos.wsl = {
     pkgs,
     config,
     ...
-  }: {
+  }: let
+    user = config.host.user;
+  in {
     wsl = {
       enable = true;
       # The account WSL logs into. The same unix account the home-manager

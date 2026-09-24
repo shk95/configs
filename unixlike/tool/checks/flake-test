@@ -15,6 +15,8 @@ set -e
 . "$(CDPATH= cd -- "$(dirname -- "$0")" && pwd)/prerequisite"
 require_command nix
 
+"$(CDPATH= cd -- "$(dirname -- "$0")" && pwd)/provider-api-test"
+
 repo=$(CDPATH= cd -- "$(dirname -- "$0")/../.." && pwd)
 cd "$repo"
 

@@ -1,7 +1,11 @@
-{config, ...}: let
-  inherit (config.identity) gitName gitEmail;
-in {
-  modules.homeManager.shared = {lib, ...}: {
+_: {
+  modules.homeManager.shared = {
+    lib,
+    config,
+    ...
+  }: let
+    inherit (config.providerIdentity) gitName gitEmail;
+  in {
     # `programs.git` generates ~/.config/git/config; for it to take effect,
     # ~/.gitconfig must not exist (git reads both, and the later one wins).
     #

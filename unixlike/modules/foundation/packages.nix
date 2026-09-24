@@ -29,14 +29,7 @@
 # root/system account needs it. Put macOS applications and tools whose behavior
 # depends on Homebrew in `darwin-homebrew.nix`. Everything else belongs here so
 # adding a system layer never removes it from the standalone configuration.
-{
-  config,
-  inputs,
-  ...
-}: let
-  wslUser = config.identity.wsl.user;
-  darwinUser = config.identity.darwin.user;
-
+{inputs, ...}: let
   # A definition made from an input's own tree is the evaluator's, whatever
   # the file; every other file, this repository's included, is its own owner.
   # A repository file is named by its path alone: flake-parts appends
@@ -212,7 +205,7 @@ in {
       ];
     };
 
-    nixos.wsl = systemRule wslUser;
-    darwin.system = systemRule darwinUser;
+    nixos.wsl = {config, ...}: {imports = [(systemRule config.host.user)];};
+    darwin.system = {config, ...}: {imports = [(systemRule config.providerIdentity.user)];};
   };
 }

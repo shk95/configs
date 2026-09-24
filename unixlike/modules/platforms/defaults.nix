@@ -1,7 +1,7 @@
-{config, ...}: let
-  user = config.identity.darwin.user;
-in {
-  modules.darwin.system = _: {
+_: {
+  modules.darwin.system = {config, ...}: let
+    user = config.providerIdentity.user;
+  in {
     # Add ability to used TouchID for sudo authentication
     security.pam.services.sudo_local.touchIdAuth = true;
 

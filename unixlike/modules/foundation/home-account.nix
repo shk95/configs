@@ -5,10 +5,10 @@
 # the user account, so defining them again there is a conflict rather than a
 # duplicate; and `programs.home-manager` installs the very tool the NixOS module
 # already provides.
-{config, ...}: let
-  user = config.identity.wsl.user;
-in {
-  modules.homeManager.wslStandalone = {
+_: {
+  modules.homeManager.wslStandalone = {config, ...}: let
+    user = config.providerIdentity.user;
+  in {
     home = {
       username = user;
       homeDirectory = "/home/${user}";

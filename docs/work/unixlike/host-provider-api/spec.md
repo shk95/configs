@@ -7,7 +7,7 @@ status: approved
 review-by: 2026-12-24
 
 The maintainer chose on 2026-09-24 to make `configs` a provider consumed by
-private host repositories. A separate public template demonstrates the
+one private host repository. A separate public template demonstrates the
 contract. Physical grouping under `docs/work/unixlike/module-layout/`
 precedes implementation here; the completed host evidence remains historical.
 
@@ -23,7 +23,7 @@ leaves no supported API for an external host flake.
 
 The existing inventory is explicitly non-secret; moving it is an ownership
 change, not a claim that it currently contains credentials. The private
-consumers will own SOPS + age recipients and encrypted host data. Plaintext
+consumer will own SOPS + age recipients and encrypted host data. Plaintext
 secrets must not enter flake evaluation or build outputs.
 
 ## Decisions
@@ -71,7 +71,7 @@ as dated historical evidence, not presented as current provider runtime.
 
 ### Keep repository scopes and deployment decisions separate
 
-The public template and private host repositories have their own history and
+The public template and private host repository have their own history and
 checks. The repository-owned roadmap, architecture, release/tag meaning and
 procedures are changed in repository-scope increments; Unix-like modules,
 tests and status change in Unix-like increments. The provider release can
@@ -85,7 +85,7 @@ authorizes host activation.
    then compare all present host outputs against the pre-refactor baseline.
 2. In the public template repository, exercise the API with a synthetic
    host and document SOPS + age setup without a real recipient or secret.
-3. In private consumer repositories, migrate one host at a time and record
+3. In the private consumer repository, migrate one host at a time and record
    evaluation, native build and runtime separately. Activation stays behind
    an explicit request for each host.
 4. In a Unix-like increment, remove real host values and outputs only after
@@ -114,5 +114,12 @@ authorizes host activation.
 
 No physical module move, secret plaintext, implicit flake-input refresh,
 Windows desired-state change, automatic deployment or host activation belongs
-to this provider work. The public template and private consumers are separate
+to this provider work. The public template and private consumer are separate
 repositories; their own changes are not claimed as commits in this one.
+
+Amended 2026-09-24: The maintainer fixed the private repository boundary before
+the first migration. All seven current outputs move to one private consumer
+repository, `configs-hosts`; each host keeps its own `flake.nix` and lock so it
+can choose its provider revision independently. The public
+`configs-host-template` remains a separate, one-time starting point. No
+acceptance criterion changes.
