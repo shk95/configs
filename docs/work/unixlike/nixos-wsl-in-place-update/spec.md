@@ -110,7 +110,8 @@ needs the account password, so the maintainer runs them.
 
 - The host inventory and a second NixOS output; `_nixos-target`'s
   one-output assumption is replaced there (roadmap order 4).
-- WSLg (deferred on the roadmap).
+- WSLg (excluded from this work at the time; removed from the roadmap on
+  2026-09-24 under the Unix-like no-WSL-GUI rule).
 - `.wslconfig` and any Windows-side state.
 
 ## Amendments

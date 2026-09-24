@@ -280,6 +280,8 @@ fi
 # Darwin, physical desktop and VM guest homes. WezTerm is the cross-platform marker;
 # Noctalia and XWayland Satellite mark the Linux graphical class. Their
 # presence in a WSL or OrbStack home means a graphical class escaped its row.
+# NixOS-WSL must also keep its Windows graphics-driver and graphical Start
+# Menu integrations disabled.
 
 packages_of() {
   nix eval --raw "path:$repo#$1" \
@@ -302,6 +304,12 @@ do
       fail "$home carries $marker, a graphical-class program"
     fi
   done
+done
+
+for option in useWindowsDriver startMenuLaunchers; do
+  printf '→ NixOS-WSL keeps wsl.%s disabled\n' "$option"
+  value=$(nix eval --json "path:$repo#nixosConfigurations.\"$wsl_host\".config.wsl.$option")
+  [ "$value" = false ] || fail "NixOS-WSL enables wsl.$option"
 done
 
 printf '→ every graphical NixOS home carries both graphical classes\n'

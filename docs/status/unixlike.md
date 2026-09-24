@@ -282,9 +282,10 @@ nodes and remote activations
 (`docs/work/unixlike/installation-and-deployment/report.md`). The
 Nix daemon settings and the no-channel rule are in `modules.nixos.shared`
 and reach every NixOS host, the registered distribution included.
-GUI options are set off explicitly; WSLg is the deferred item of
-`docs/work/roadmap.md` (it was #21 until 2026-09-19) and `INV
-unixlike/desktop-not-wsl` stands. The coding agents (`claude-code`, `codex`)
+GUI options are set off explicitly. Neither WSL output supports Linux GUI
+applications or WSLg, and no WSL GUI work is planned. A future need first
+requires revising the Unix-like architecture and `INV unixlike/desktop-not-wsl`.
+The coding agents (`claude-code`, `codex`)
 are a Home Manager class, `homeManager.agents`, composed into this home only
 (#195). The distribution was imported on 2026-09-06 from the toplevel the
 Ubuntu clone built at `dev` 92c5986, and generation 2 the same day is the first

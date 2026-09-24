@@ -22,7 +22,8 @@ overlays, not parallel implementations:
 program that happens to run on more than one Unix-like kernel. Graphical
 terminal emulators belong to `homeManager.desktop`, which Darwin consumes and
 both WSL outputs omit. A future graphical Linux configuration can adopt the
-same class without turning WSL into a desktop host by implication.
+same class. Neither WSL output may do so without first revising the Unix-like
+architecture and `INV unixlike/desktop-not-wsl`.
 
 Ghostty keeps its native `xterm-ghostty` terminfo locally. Its shell
 integration tries to install that entry on SSH destinations and falls back to

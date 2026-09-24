@@ -5,6 +5,7 @@ date: 2026-09-24
 scope: unixlike
 status: approved
 review-by: 2026-09-25
+issue: #360
 
 ## Problem
 
