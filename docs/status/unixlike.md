@@ -22,9 +22,11 @@ seven toplevel derivation paths equal the pre-API `dev` tree. The public
 provider merge; its setup documents host-owned SOPS + age delivery. The one
 private `configs-hosts` repository declares all seven current outputs with
 independent flakes and locks. Their derivation paths match the pre-API tree;
-the Darwin, OrbStack and UTM consumers built natively. Other installed Linux and
-WSL consumers still need native builds, and each consumer needs runtime
-evidence, so the provider inventory and outputs
+the Darwin, OrbStack and UTM consumers built natively. The isolated OrbStack
+consumer was test-activated and verified in its running guest, while its boot
+profile retained the preceding generation. Other installed Linux and WSL
+consumers still need native builds, and the remaining installed consumers need
+runtime evidence, so the provider inventory and outputs
 remain in place
 (`docs/policy/decisions/unixlike/provider-constructors-own-composition.md`).
 
