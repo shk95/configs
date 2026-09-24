@@ -1,5 +1,5 @@
 #!/bin/sh
-# Fixtures for tool/darwin/karabiner, the projection that owns the Karabiner
+# Fixtures for modules/karabiner/tool, the projection that owns the Karabiner
 # desired state.
 #
 # The tool reads a Mac. These cases give it files instead, through --host,

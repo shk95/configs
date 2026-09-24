@@ -34,10 +34,10 @@ _: {
           truncation_symbol = "…/";
         };
 
-        # Emoji, not the default ``, which is a Nerd Font glyph. The terminal
-        # here is Windows Terminal and its font is a Windows setting this flake
-        # cannot reach, so relying on a Nerd Font would mean relying on a value
-        # declared somewhere this repository does not own. See modules/fonts.nix.
+        # Emoji, not the default ``, which is a Nerd Font glyph. The WSL homes
+        # render in Windows Terminal, whose font is a Windows setting this
+        # flake cannot reach. A Nerd Font here would depend on that setting;
+        # modules/fonts/wsl.nix only configures fonts inside the Linux home.
         git_branch.symbol = "🌿 ";
 
         git_status = {

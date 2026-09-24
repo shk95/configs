@@ -32,13 +32,11 @@ _: {
     # Operandi ANSI 0-15 colours, background, foreground, or selection grey,
     # verified in the pinned nixpkgs ghostty package's
     # `share/ghostty/themes/Modus Operandi` — background `#FFFFFF`,
-    # foreground `#000000`, selection `#BDBDBD` — the same file the whole
-    # Modus Operandi adoption copies from and the same citation style
-    # `assets/wezterm/config/appearance.lua` uses for its own Flexoki
-    # palette. `modules/ghostty.nix` and that WezTerm file carry these same
-    # values once #163 lands. No invented hex. `hi_fg` and the four box outlines
-    # (`cpu_box`/`mem_box`/`net_box`/`proc_box`) are ANSI 4/2/5/6, matching
-    # `shown_boxes` below. `selected_bg`, `meter_bg`, `div_line` and
+    # foreground `#000000`, selection `#BDBDBD` — the same source
+    # `modules/wezterm/config/appearance.lua` transcribes and
+    # `modules/ghostty.nix` selects by name. No invented hex. `hi_fg` and the
+    # four box outlines (`cpu_box`/`mem_box`/`net_box`/`proc_box`) are ANSI
+    # 4/2/5/6, matching `shown_boxes` below. `selected_bg`, `meter_bg`, `div_line` and
     # `free_start` share the selection grey rather than an ANSI index,
     # because dividers and meters read as UI chrome rather than data.
     # `inactive_fg`/`graph_text`/`free_mid` are ANSI 8 (ANSI 15 is the same
@@ -74,11 +72,9 @@ _: {
     # decided.
     #
     # Activation note: Home Manager refuses to overwrite a file it does not
-    # already manage. The host's `~/.config/btop/btop.conf` is exactly such
-    # a file, so it must be moved aside (or the activation run with
-    # `-b backup`) before the next `home-manager switch` on that host;
-    # `~/.config/btop/themes/` is empty there today, so no theme file needs
-    # the same treatment.
+    # already manage. The WSL host had such a `~/.config/btop/btop.conf` when
+    # this module was added; check it and move it aside (or use `-b backup`)
+    # before switching if it remains unmanaged.
     programs.btop = {
       enable = true;
       settings = {

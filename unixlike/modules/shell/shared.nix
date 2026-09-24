@@ -87,7 +87,7 @@ _: {
     #
     # zsh only edits zsh, and which shell a host logs into is decided per
     # evaluator: the NixOS-WSL system layer selects zsh
-    # (modules/wsl-shell.nix), `modules/darwin-shell.nix` registers zsh as a
+    # (modules/shell/wsl.nix), `modules/shell/darwin.nix` registers zsh as a
     # permitted shell and leaves the selection to macOS, and the standalone
     # Ubuntu home cannot select at all — there the choice is `chsh`, run
     # out-of-band by `Justfile`'s `switch-shell` recipe (see

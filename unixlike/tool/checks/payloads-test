@@ -3,7 +3,7 @@
 #
 # INV unixlike/payload-declared-and-parsed
 #
-# The positive case is the real assets/ tree. The negatives are the ways a
+# The positive case is the real modules/ tree. The negatives are the ways a
 # payload can escape validation — content that does not parse, a file no
 # declaration mentions, a declaration whose file is gone — plus the way a
 # format can, which is being declared with no validator behind it.
@@ -18,7 +18,7 @@ cd "$repo"
 # ---------------------------------------------------------------------------
 #
 # INV unixlike/payload-declared-and-parsed
-printf '→ accepts assets\n'
+printf '→ accepts payloads\n'
 tool/checks/payloads
 
 for case in broken-lua undeclared stale unknown-format; do

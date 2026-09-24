@@ -74,7 +74,7 @@ in {
 
     # sudo asks for the account's password. nixos-wsl defaults this to false
     # because the account it creates has no password, and with sshd reachable
-    # from outside (modules/wsl-sshd.nix) that would make any accepted key
+    # from outside (modules/sshd.nix) that would make any accepted key
     # equal to root. The password itself is host state: `users.mutableUsers`
     # stays at its default, so `passwd` sets it once and every later
     # activation keeps it. A fresh import starts locked, and until
