@@ -150,20 +150,14 @@ show_release_notes false
 // frames, tab bar and status line dark inside a light terminal. Naming a light
 // theme is no longer the guess it once was: every home
 // modules/flake/configurations.nix composes renders inside a terminal whose
-// colour scheme a file of this repository declares, and the two that never
-// report that scheme are both declared light — WezTerm on Modus Operandi in
-// assets/wezterm/config/appearance.lua, and Windows Terminal in the Windows
-// domain's own payload, which adopts this family by copy on that domain's
-// schedule rather than from here. So the static line at the end of this file
-// tells them what is already true rather than guessing at it — true about
-// lightness, which is the only thing it claims. The blocks below bake literal
-// values (#ffffff, #bdbdbd and the rest) rather than reading the host's own
-// palette, so until #164 lands the WSL homes paint this white-page theme
-// inside a Windows Terminal still on Flexoki Light's #FFFCF0 paper: both are
-// light, the rule holds, and the two whites simply do not match until that
-// copy is applied. Ghostty reports and drives the pair itself. The premise is
-// recorded once, with the declaring files and the condition that would reopen
-// it, in
+// colour scheme a file of this repository declares. WezTerm selects Modus
+// Operandi in modules/wezterm/config/appearance.lua, and the Windows domain
+// declares that scheme by copy for Windows Terminal; the latter reaches a
+// host only through Windows Apply. WezTerm has no scheme-reporting mode in
+// the pinned build, and Windows Terminal 1.23 was probed silent, so the
+// static line below selects light for them. The blocks bake literal values
+// rather than reading a host palette. Ghostty reports
+// and drives the pair itself. The premise and its reopening condition are in
 // docs/policy/decisions/unixlike/composed-homes-render-in-declared-terminals.md.
 //
 // Two settings carry it, and they do not fight. `theme_dark` and `theme_light`
@@ -173,7 +167,7 @@ show_release_notes false
 // file is the static answer for a terminal that never sends that report, and
 // it is authoritative only until one arrives, so it costs a reporting terminal
 // nothing. `modus-operandi` is the light member of the family
-// assets/wezterm/config/appearance.lua and modules/ghostty.nix select;
+// modules/wezterm/config/appearance.lua and modules/ghostty.nix select;
 // `modus-vivendi` is named as the other branch of the pair, the palette a
 // terminal reporting dark would be given, not as a theme this repository
 // selects.
@@ -269,8 +263,8 @@ show_release_notes false
 //                      and no `?997;1n` or `?997;2n` in front of it.
 //
 // Two of the three are silent, so the static `theme` below is what the WezTerm
-// desktops and the WSL homes actually render. It lives in this file rather
-// than in modules/zellij.nix because every composed home now needs the same
+// desktops and the WSL homes receive. It lives in this file rather than in
+// modules/zellij/module.nix because every composed home now needs the same
 // line for the same reason, and this is the one place the keymap and the
 // palettes already live.
 themes {

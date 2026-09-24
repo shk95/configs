@@ -1,4 +1,4 @@
-# The NixOS-WSL account logs into the zsh that modules/shell.nix configures.
+# The NixOS-WSL account logs into the zsh that modules/shell/shared.nix configures.
 # Selecting a login shell is something a home cannot do: under NixOS the
 # account's shell and /etc/shells are both generated from declarations. The
 # standalone Ubuntu flavour has no such layer and keeps `just switch-shell`
@@ -27,7 +27,7 @@
 # and pam_env gives a login its PATH before any shell runs. Read back on the
 # host through the passwd shell itself — zsh 5.9.2 with the system profile,
 # the per-user profile and the wrappers all on PATH.
-# modules/darwin-shell.nix takes the `programs.zsh` route because nix-darwin's
+# modules/shell/darwin.nix takes the `programs.zsh` route because nix-darwin's
 # environment is loaded from /etc/zshrc.
 {config, ...}: let
   user = config.identity.wsl.user;

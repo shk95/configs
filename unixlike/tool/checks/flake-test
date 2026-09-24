@@ -2,7 +2,7 @@
 # Fixtures for the flake's own schema: the typed identity contract in
 # modules/flake/identity.nix, the class composition in
 # modules/flake/configurations.nix, and the two assertion-backed rules in
-# modules/shell.nix and modules/packages.nix. All are enforced by evaluation,
+# modules/shell/shared.nix and modules/packages.nix. All are enforced by evaluation,
 # so the fixtures are evaluations — a value the schema must accept, a value it
 # must refuse, a package that must reach one class of home and not another,
 # and a module that must make a configuration's assertions fail.
@@ -517,7 +517,7 @@ darwin="darwinConfigurations.\"$darwin_host\""
 # ---------------------------------------------------------------------------
 #
 # INV unixlike/version-manager-last
-# modules/shell.nix contributes the SDKMAN hook at `mkAfter` and asserts on
+# modules/shell/shared.nix contributes the SDKMAN hook at `mkAfter` and asserts on
 # the merged initialisation text, so a PATH line any module contributes later
 # is refused at evaluation; a JDK declared as a package is refused the same
 # way. The real home must pass both.

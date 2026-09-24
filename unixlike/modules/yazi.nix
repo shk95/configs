@@ -9,18 +9,18 @@ _: {
       settings = {
         # Upstream's table is `mgr`, not `manager`. The lock now pins yazi
         # 26.8.15; 26.5.6 was the pin until the 2026-08-31 lock refresh, and
-        # is still the host's currently activated version — a fact about
-        # the host, not evidence about what the lock resolves to today. The
+        # was still the host's activated version at that review — a fact about
+        # the host then, not evidence about what the lock resolves to now. The
         # pinned preset `yazi-config/preset/yazi-default.toml` has a `[mgr]`
         # table and no `[manager]`; `yazi-config/src` contains no occurrence
         # of the string `manager` at all. Yazi ignores an unknown table
         # instead of refusing it, so the two settings this module used to
         # declare under `manager` rendered into `yazi.toml` but were
         # silently dropped at load on the pinned version. The pinned Home
-        # Manager module's own `settings` example (line 154 of
-        # `modules/programs/yazi.nix`) writes `mgr = { show_hidden = ...;
-        # }` directly — the closer witness, since it is the same option
-        # this module sets — and its `keymap` example likewise uses
+        # Manager module's own `settings` example (line 154 of the pinned
+        # Home Manager source at `modules/programs/yazi.nix`) writes
+        # `mgr = { show_hidden = ...; }` directly — the closer witness, since
+        # it is the same option this module sets — and its `keymap` example uses
         # `mgr.prepend_keymap`, confirming the same rename on the keymap
         # side. `show_hidden` and `sort_dir_first` are carried over under
         # the corrected table name; `sort_by` and `linemode` are new, added

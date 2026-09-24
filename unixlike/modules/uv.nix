@@ -1,6 +1,6 @@
-# Replaces conda, whose hook is gone from modules/shell.nix. `~/miniconda3` is
-# still on disk and still wired into the unmanaged ~/.bashrc; nothing here removes
-# either.
+# Replaces conda; modules/shell/shared.nix no longer sources its hook. This
+# module does not remove an unmanaged `~/miniconda3` installation or a hook
+# in `~/.bashrc`.
 #
 # No `settings`. uv reads ~/.config/uv/uv.toml and this module will write it, but
 # every value worth setting is already uv's default, and a file full of restated

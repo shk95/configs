@@ -37,7 +37,7 @@ _: {
         gui = {
           # Both sides of the domain boundary declare a Nerd Font for the
           # terminals this repository configures: modules/ghostty.nix and
-          # WezTerm's font list (assets/wezterm/fonts.json) set
+          # WezTerm's font list (modules/wezterm/fonts.json) set
           # D2KodingLigature Nerd Font Mono on the Unix-like side, and the
           # Windows Terminal payload
           # (windows/desired/files/terminal/settings.json) sets the same

@@ -3,7 +3,7 @@
 # INV unixlike/host-written-payload-projected
 #
 # Karabiner-Elements is a Homebrew cask, declared once in
-# `modules/darwin-homebrew.nix`, and stays there: this file declares no
+# `modules/homebrew.nix`, and stays there: this file declares no
 # package and no service. `docs/policy/decisions/unixlike/homebrew-owns-mac-apps.md` is the
 # rule, and nothing about managing the configuration changes who owns the
 # application.
@@ -14,7 +14,7 @@
 # store would survive exactly until the first change made in the user
 # interface, and the store path is read-only, so the save would either fail or
 # replace the link with a plain file that no longer tracks the payload.
-# `tool/darwin/karabiner apply` writes a copy instead, restricted to the
+# `modules/karabiner/tool apply` writes a copy instead, restricted to the
 # top-level keys the payload declares, and leaves the host's own runtime keys
 # in place. `docs/policy/decisions/unixlike/karabiner-desired-state-by-projection.md` records
 # that choice and what was rejected.
@@ -39,7 +39,7 @@
 # gnugrep, gnused, jq, ncurses and Nix — and the caller's PATH is appended only
 # when `home.emptyActivationPath` is false, which on this home it is not. So
 # /usr/bin is absent, and `defaults`, `plutil` and `activateSettings` would not
-# resolve by name. Nothing is added to PATH here: `tool/darwin/karabiner`
+# resolve by name. Nothing is added to PATH here: `modules/karabiner/tool`
 # resolves those three itself, from PATH first and from their absolute macOS
 # location second, so the fixtures can still shim them and the activation still
 # finds them.

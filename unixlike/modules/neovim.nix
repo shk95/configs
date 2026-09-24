@@ -29,7 +29,7 @@ _: {
       # never answers Neovim's background query. That query is an OSC 11 request
       # for the background colour, which is not the CSI 996 colour-scheme report
       # zellij's theme pair depends on and Windows Terminal 1.23 was probed not
-      # to send (see assets/zellij/config.kdl). Whether Windows Terminal answers
+      # to send (see modules/zellij/config.kdl). Whether Windows Terminal answers
       # OSC 11 has not been observed from here; it is the one open question in
       # this comment, and it is a native runtime check on the WSL host rather
       # than something to assert either way.

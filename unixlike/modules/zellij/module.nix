@@ -1,12 +1,10 @@
 # Unix-like Zellij configuration. This began as an explicit adoption of the
 # Windows keymap; each domain owns its copy and may change it independently.
 #
-# Colours are no longer split by class, and the asset is why. `programs.zellij`
-# offers `themes` and `settings.theme`, but this module deliberately copies the
-# KDL asset verbatim rather than letting Home Manager render one, so anything a
-# class wanted to say about colour would have to be a per-class copy of that
-# asset. Nothing wants to: the asset carries the whole answer and every class
-# receives the same bytes.
+# Colours are no longer split by class. `programs.zellij` offers `themes` and
+# `settings.theme`, but this module supplies the KDL payload as `extraConfig`.
+# Home Manager renders it into config.kdl with its own header, and every class
+# receives the same payload.
 #
 # That answer is a `theme_dark`/`theme_light` pair, which zellij switches
 # between from the host terminal's own colour-scheme report (CSI 2031 /
@@ -20,24 +18,21 @@
 #
 # Pinning light for every class rather than for one is honest because every
 # home this repository composes renders in a terminal whose scheme the
-# repository itself declares, the WSL homes included: their Windows Terminal is
-# set to a light scheme by windows/desired/files/terminal/settings.json, in the
-# Windows domain, which names the family it adopts on its own schedule and has
-# no obligation to move when this side does. Reading that file is a
+# repository itself declares, the WSL homes included: Windows Terminal's
+# desired state selects a light scheme in
+# windows/desired/files/terminal/settings.json. The Windows domain names the
+# family it adopts on its own schedule and has no obligation to move when
+# this side does. Reading that file is a
 # cross-domain read by a person and not by code; nothing here imports or opens
 # it. The premise and the condition that would reopen it are recorded in
 # docs/policy/decisions/unixlike/composed-homes-render-in-declared-terminals.md.
 #
 # INV unixlike/composition-in-one-place — this file contributes one definition
-# of `programs.zellij.extraConfig`, which Home Manager renders into
-# config.kdl, and the zsh function that sends a bare `zellij` to that asset's
-# session. It forces no value and names no host, so it decides
-# nothing about which class wins; the composition file decides which classes a
-# home gets. The keymap stays in exactly one place and no second payload
-# appears under assets/; the file a host receives is Home Manager's rendering —
-# a blank line and an `// extraConfig` marker, then the asset — rather than a
-# link to the asset byte for byte, and tool/checks/payloads parses the asset,
-# which is what every rendering is built from.
+# of `programs.zellij.extraConfig` and the zsh function that sends a bare
+# `zellij` to that payload's session. It forces no value and names no host;
+# the composition file decides which classes a home gets. Home Manager adds
+# a blank line and an `// extraConfig` marker before the KDL, while
+# tool/checks/payloads parses the source payload.
 #
 # PROV unixlike/zellij-combining-marks
 #

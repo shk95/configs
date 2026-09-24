@@ -80,3 +80,9 @@ own sixteen colours — `modules/bat.nix`, `modules/skim.nix`,
 the deferral rule was worth writing down. What changes a scheme reaches is
 therefore a measure of the rule, not a reopening of it; `reopen-when` above
 still names the two conditions that would reopen it, and neither happened.
+
+Amended 2026-09-24: The concern-first move relocated the Unix-like declaring
+files cited above to `unixlike/modules/wezterm/config/appearance.lua`,
+`unixlike/modules/ghostty.nix`, and `unixlike/modules/zellij/config.kdl`.
+The earlier paths identify those files at the time of the decision. The
+declared light scheme and the reopening condition are unchanged.
