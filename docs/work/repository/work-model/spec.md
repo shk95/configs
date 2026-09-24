@@ -218,6 +218,11 @@ Recorded with the roadmap:
 - The content of issues #18–#25 and #42 is carried into the roadmap items
   above and into the specs that start them; #21 into the deferred item.
 
+This table records the plan as approved on 2026-09-19. The WSLg row inherited
+from #21 was removed from the current roadmap on 2026-09-24; it is not a
+remaining work item. WSL GUI support would begin with a Unix-like policy
+revision, not with execution of this historical row.
+
 ## GitHub reorganisation
 
 Remote writes, each restated before it runs:

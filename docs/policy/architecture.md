@@ -81,10 +81,15 @@ profiles it offers; each host makes a typed profile choice separate from its
 identity. That one composition file validates the choice and decides the
 imports, so a host does not import a feature class directly
 (`docs/policy/decisions/unixlike/hosts-select-offered-machine-profiles.md`).
-A graphical class is composed only into a home that has a display; the
-WSL homes take no graphical program, because their terminal is declared in the
-Windows domain. Host identity is a typed option set whose values live in the
-inventory, so an evaluator refuses a wrong shape before any host is composed,
+A graphical class is composed only into a home that has a display. Both WSL
+homes are command-line configurations: they receive no Linux GUI programs,
+graphical session, or WSLg integration. Their terminal is declared in the
+Windows domain. WSL GUI support is not planned or deferred work. If it becomes
+necessary, first revise this rule and `INV unixlike/desktop-not-wsl` through
+the Unix-like governance workflow, then plan implementation and host evidence.
+
+Host identity is a typed option set whose values live in the inventory, so an
+evaluator refuses a wrong shape before any host is composed,
 and no untyped argument carries identity around the module system. Module
 files are collected by a directory walk, so nothing order-sensitive may depend
 on that order. A package has one declaring module: a feature module when it
