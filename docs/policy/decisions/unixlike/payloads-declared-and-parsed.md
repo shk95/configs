@@ -33,3 +33,9 @@ escaping quietly, and a declared format with no validator fails too. It is
 an adoption by copying of the Windows manifest's idea, which is the
 mechanism the architecture already prescribed; the two declarations stay
 independent.
+
+Amended 2026-09-24: The concern-first move placed the payloads beside their
+modules under `unixlike/modules/` and moved the declaration to
+`unixlike/payloads.json`. `unixlike/tool/checks/payloads` scans that module
+tree. The paths and file count above describe the 2026-08-16 layout; the
+declaration and parser contract did not change.
