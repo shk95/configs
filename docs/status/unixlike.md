@@ -39,12 +39,13 @@ maintainer confirmed Niri, both terminals, Noctalia, Korean input, sound,
 network and pointer behavior after reboot; SSH and services remained healthy.
 Bidirectional clipboard transfer failed on both the consumer and preceding
 generations. The maintainer excluded that known failure from VMware consumer
-completion; clipboard functionality remains broken. NixOS-WSL now has a native
-consumer build and qualified temporary runtime evidence: the candidate stayed
-reachable with Home Manager and Windows-started interop working, but
-`nixos-rebuild test` exited unsuccessfully on a getty unit already failed in
-the preceding generation. The preceding generation was restored. A successful
-activation or maintainer decision on this baseline failure remains pending.
+completion; clipboard functionality remains broken. NixOS-WSL has a native
+consumer build and temporary runtime evidence. Its first test exited
+unsuccessfully on a getty unit already failed in the preceding generation;
+after that failure cleared, a second `nixos-rebuild test` and restoration both
+succeeded. Fresh SSH, Home Manager and Windows-started interop worked under
+the candidate. A DNS lookup timed out under both candidate and restored
+preceding systems, so its cause remains open. No permanent switch was made.
 Standalone WSL Home still needs a native build and runtime evidence, so the
 provider inventory and outputs remain in place
 (`docs/policy/decisions/unixlike/provider-constructors-own-composition.md`).
