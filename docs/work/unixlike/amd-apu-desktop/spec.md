@@ -108,3 +108,16 @@ increment and ends only when those observations exist.
 | AC7 | The installed physical host identifies its AMD APU and proves hardware rendering, Vulkan and VA-API plus usable displays, Korean input, audio and networking. | native runtime |
 | AC8 | An explicitly authorized activation, disk boot, reboot and previous-generation rollback succeed on the physical host. | activation, native runtime |
 | AC9 | `Required checks` passes on the head of every pull request of this work before it merges. | evaluation |
+
+## Ownership amendment, 2026-09-25
+
+The automatic evidence above describes the former final `desktop` output and
+remains historical evidence. Item 17 moved that provisional final instance,
+its account and state version, and its future installation to private
+`configs-hosts/hosts/desktop/`. The public provider keeps the AMD desktop,
+headless, graphical and storage classes and exercises them through synthetic
+fixtures. In the private consumer, confirm the provisional identity and
+installation medium before installation; its native final build and physical
+runtime must be recorded there. AC7 and AC8 remain pending until the physical
+machine supplies the observations and authorized activation. The final
+desktop report here links that consumer evidence when the work resumes.
