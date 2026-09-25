@@ -28,9 +28,13 @@ booted and boot-profile system links matched the consumer candidate. The UTM
 consumer was test-activated, permanently switched and verified after a guest
 reboot, with graphical, Korean input and audio behavior confirmed by the
 maintainer. A rollback to the preceding generation succeeded and the consumer
-was restored. The VMware consumer has not been activated. NixOS-WSL and
-standalone WSL Home still need native builds, and the remaining installed
-consumers need runtime evidence, so the
+was restored. The VMware consumer passed a test activation but the maintainer
+found bidirectional host clipboard transfer broken. The maintainer confirmed
+the same failure on the preceding generation, so it was not introduced by the
+consumer. The preceding running generation was restored without changing the
+boot default. VMware consumer runtime remains pending. NixOS-WSL and standalone
+WSL Home still need native
+builds, and the remaining installed consumers need runtime evidence, so the
 provider inventory and outputs remain in place
 (`docs/policy/decisions/unixlike/provider-constructors-own-composition.md`).
 
