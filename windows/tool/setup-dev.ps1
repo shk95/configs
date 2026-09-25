@@ -16,7 +16,7 @@ PS> Get-Content .\windows\toolchain.json
 Read-only. Review the exact tools and versions before installing them.
 
 .EXAMPLE
-PS> .\windows\tools\setup-dev.ps1
+PS> .\windows\tool\setup-dev.ps1
 
 Changes the host. Installs missing pinned contributor tools from WinGet and
 PowerShell Gallery, then refreshes PATH for the current process.
@@ -36,7 +36,7 @@ param()
 # Install the tooling a Windows contributor needs to check their own work.
 #
 # The Unix-like domain declares its contributor tooling in
-# modules/flake/dev-shell.nix and `nix develop` installs it. Windows had no
+# unixlike/modules/flake/dev-shell.nix and `nix develop` installs it. Windows had no
 # equivalent, which is why a Windows clone could not run its own checks:
 # nothing in this repository installed Lua or Pester, and only the CI workflow
 # knew which versions were expected.

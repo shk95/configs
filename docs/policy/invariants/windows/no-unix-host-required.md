@@ -9,7 +9,7 @@ copy is held to the Windows manifest alone, because similarity between
 independently owned copies is never a failure. The fixture scans every
 script under the Windows tree as PowerShell tokens and refuses a string, a
 bare argument, or a token nested in an expandable string that names a
-Unix-like root — the payload and module trees, the flake, its checks — so a
+Unix-like tree, including its payloads, modules, flake and checks, so a
 comment that mentions one is not a read and a new script is covered on
 arrival; a path built at run time from pieces is the one shape a lexical
 scan cannot see. The repository's own git metadata, resolved from the repository

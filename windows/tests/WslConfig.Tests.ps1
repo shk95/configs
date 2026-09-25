@@ -189,7 +189,7 @@ Describe 'WSL capture prerequisites' {
         # Run the actual collector without the rest of setup's package,
         # registry and lifecycle operations. Observations are injected; no
         # Windows process, Apply or WSL restart is part of this fixture.
-        $ast = [System.Management.Automation.Language.Parser]::ParseFile((Join-Path $windowsRoot 'tools/setup.ps1'), [ref]$null, [ref]$null)
+        $ast = [System.Management.Automation.Language.Parser]::ParseFile((Join-Path $windowsRoot 'tool/setup.ps1'), [ref]$null, [ref]$null)
         $loop = $ast.Find({ param($node)
                 $node -is [System.Management.Automation.Language.ForEachStatementAst] -and
                 $node.Extent.Text.StartsWith('foreach ($definition in $managedFiles)')

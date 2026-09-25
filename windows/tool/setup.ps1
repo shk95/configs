@@ -39,18 +39,18 @@ Selects only required features, currently core.
 Selects every feature declared by the manifest.
 
 .EXAMPLE
-PS> .\windows\tools\setup.ps1 -Check -Minimal
+PS> .\windows\tool\setup.ps1 -Check -Minimal
 
 Read-only. Checks only the required feature set.
 
 .EXAMPLE
-PS> .\windows\tools\setup.ps1 -Check -Feature terminal
+PS> .\windows\tool\setup.ps1 -Check -Feature terminal
 
 Read-only. Checks terminal and the font, zellij, and core dependencies that
 make that selection deployable.
 
 .EXAMPLE
-PS> .\windows\tools\setup.ps1 -Force -Add wezterm
+PS> .\windows\tool\setup.ps1 -Force -Add wezterm
 
 Changes the host. Extends the recorded selection and forces reconciliation,
 while retaining every normal refusal and precondition.

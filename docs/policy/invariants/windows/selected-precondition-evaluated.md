@@ -11,5 +11,5 @@ evaluated from the change that added the parameter onward; the functions'
 own fixtures passed throughout because they call the evaluator directly. The
 check past the prerequisites needs a Windows host, so the fixture reads every
 script of the domain for the collision and holds the loop to handing the
-evaluator the item it iterates over. `windows/tools/setup.ps1` carries the
+evaluator the item it iterates over. `windows/tool/setup.ps1` carries the
 tag beside the loop, for the reader.
