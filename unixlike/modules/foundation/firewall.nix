@@ -12,7 +12,7 @@ _: {
   };
 
   # A host that boots itself admits the ssh port and nothing else. The port is
-  # not written here: sshd opens what it listens on (modules/sshd.nix), and
+  # not written here: sshd opens what it listens on (modules/foundation/sshd.nix), and
   # the assertion holds the firewall to exactly that, on every interface, so a
   # service added later that opens its own port is refused until this rule is
   # changed on purpose.

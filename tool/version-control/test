@@ -817,7 +817,7 @@ fi
 # The history form judges dev and master as origin/ holds them, both
 # together, and the full form stays local-first. A remote gains a promotion
 # and a release tag on it; a clone fetches both without moving its local
-# branches, the way `git fetch` in windows/tools/capture.ps1 does.
+# branches, the way `git fetch` in the Windows capture verb does.
 audit_remote="$test_root/audit-advanced.git"
 git clone -q --bare "$audit_bare" "$audit_remote"
 audit_stale="$test_root/audit-stale"
@@ -1136,9 +1136,9 @@ cp -R "$root/tool/dispatch" "$hook_root/tool/dispatch"
 printf '#!/bin/sh\nexit 0\n' >"$hook_root/tool/version-control/audit"
 chmod +x "$hook_root/tool/version-control/audit"
 
-printf '#!/bin/sh\nexit 0\n' >"$hook_root/pwsh-only/pwsh"
+printf '#!/bin/sh\nprintf "stub pwsh: %%s\\n" "$*"\nexit 0\n' >"$hook_root/pwsh-only/pwsh"
 printf '#!/bin/sh\nexit 0\n' >"$hook_root/pwshexe-only/pwsh.exe"
-printf '#!/bin/sh\nexit 0\n' >"$hook_root/win-host/pwsh.exe"
+printf '#!/bin/sh\nprintf "stub pwsh: %%s\\n" "$*"\nexit 0\n' >"$hook_root/win-host/pwsh.exe"
 chmod +x "$hook_root/pwsh-only/pwsh" "$hook_root/pwshexe-only/pwsh.exe" \
   "$hook_root/win-host/pwsh.exe"
 cat >"$hook_root/win-host/uname" <<'STUB'
@@ -1221,6 +1221,14 @@ if ! printf '%s\n' "$unix_output" | grep -q 'Windows desired-state check'; then
   echo "pre-push did not run the Windows checks under a Unix-like pwsh" >&2
   exit 1
 fi
+printf '%s\n' "$unix_output" | grep -qF -- '-File ./windows/win-env.ps1 validate' || {
+  echo "pre-push did not use the public Windows validate verb" >&2
+  exit 1
+}
+printf '%s\n' "$unix_output" | grep -qF -- '-File ./windows/win-env.ps1 test' || {
+  echo "pre-push did not use the public Windows test verb" >&2
+  exit 1
+}
 if printf '%s\n' "$unix_output" | grep -q 'CI must supply evidence'; then
   echo "pre-push reported the Windows checks unverified despite a Unix-like pwsh" >&2
   exit 1
@@ -1266,6 +1274,19 @@ if ! printf '%s\n' "$win_output" | grep -q 'Windows desired-state check'; then
   echo "pre-push skipped the Windows checks on a native Windows host with pwsh.exe" >&2
   exit 1
 fi
+printf '%s\n' "$win_output" | grep -qF -- '-File ./windows/win-env.ps1 validate' || {
+  echo "pre-push did not use the public entry point on native Windows" >&2
+  exit 1
+}
+printf '#!/bin/sh\ncase " $* " in *" validate "*) exit 1 ;; esac\nexit 0\n' >"$hook_root/pwsh-only/pwsh"
+if failed_windows_output=$(run_pre_push "$hook_root/pwsh-only"); then
+  echo "pre-push accepted a failing Windows validate verb" >&2
+  exit 1
+fi
+printf '%s\n' "$failed_windows_output" | grep -q 'Windows desired-state check' || {
+  echo "pre-push did not report the failing Windows verb" >&2
+  exit 1
+}
 
 # The three-state check protocol. A check that could not run must report and
 # let the push through locally, and must fail under REQUIRE_NATIVE, which is
@@ -2575,7 +2596,7 @@ publish_wrote_nothing "refusing on master"
 publish_git switch -q dev
 
 # #90: --publish is a Unix-like flow with a PowerShell counterpart in
-# windows/tools/capture.ps1, and uname_stub above proves that guard the same
+# the Windows capture verb, and uname_stub above proves that guard the same
 # way the capture cases prove theirs.
 
 # Positive: a Unix-like uname still reaches the ordinary preflight, gh
@@ -2607,7 +2628,7 @@ for publish_uname_win in MINGW64_NT-10.0-19045 MSYS_NT-10.0-19045 CYGWIN_NT-10.0
   fi
   publish_path="$publish_root/stub:$PATH"
   printf '%s\n' "$win_out" | grep -q 'not supported on native Windows'
-  printf '%s\n' "$win_out" | grep -q 'capture\.ps1 -Feature <id> -Publish'
+  printf '%s\n' "$win_out" | grep -q 'win-env\.ps1 capture -Feature <id> -Publish'
   if [ -s "$publish_log" ]; then
     echo "commit --publish consulted gh on native Windows ($publish_uname_win)" >&2
     exit 1
@@ -4457,8 +4478,20 @@ domain_reads="$root/tool/version-control/domain-reads"
 # second known read across the boundary, so its absence is asserted too.
 grep -q 'evidence_run "domain reads" tool/version-control/domain-reads' "$root/.githooks/pre-commit"
 grep -q 'run: tool/version-control/domain-reads' "$root/.github/workflows/ci.yml"
+for windows_ci_verb in setup-dev validate test; do
+  windows_ci_next=$(grep -F -A1 ".\windows\win-env.ps1 $windows_ci_verb" "$root/.github/workflows/ci.yml" | sed -n '2p')
+  if [ "$windows_ci_next" != '          if ($LASTEXITCODE -ne 0) { exit $LASTEXITCODE }' ]; then
+    echo "Windows CI does not stop on the $windows_ci_verb verb status" >&2
+    exit 1
+  fi
+done
+windows_winget_next=$(grep -F -A1 'winget install --id Zellij.Zellij' "$root/.github/workflows/ci.yml" | sed -n '2p')
+if [ "$windows_winget_next" != '          if ($LASTEXITCODE -ne 0) { exit $LASTEXITCODE }' ]; then
+  echo "Windows CI does not stop on Zellij installation failure" >&2
+  exit 1
+fi
 if grep -q 'Get-ChildItem -Recurse' "$root/.github/workflows/ci.yml"; then
-  echo "the CI workflow walks the checkout for PowerShell files; windows/tools/test.ps1 owns that parse" >&2
+  echo "the CI workflow walks the checkout for PowerShell files; the Windows test verb owns that parse" >&2
   exit 1
 fi
 
@@ -4477,12 +4510,12 @@ printf '%s\n' "$domain_reads_output" | grep -q '^✓ domain reads: [1-9][0-9]* U
 domain_reads_fixture=$(mktemp -d)
 git -C "$domain_reads_fixture" init -q
 mkdir -p "$domain_reads_fixture/unixlike/tool/checks" "$domain_reads_fixture/unixlike/modules/programs/karabiner" \
-  "$domain_reads_fixture/windows/tools" "$domain_reads_fixture/unixlike/modules"
+  "$domain_reads_fixture/windows/probe" "$domain_reads_fixture/unixlike/modules"
 printf '#!/bin/sh\ncat windows/desired/manifest.json\n' >"$domain_reads_fixture/unixlike/tool/checks/probe"
 printf '#!/bin/sh\ncat windows/desired/files/probe.json\n' >"$domain_reads_fixture/unixlike/modules/programs/karabiner/probe"
 printf '_: {\n  home.file."probe".source = ../windows/desired/files/probe;\n}\n' >"$domain_reads_fixture/unixlike/modules/probe.nix"
-printf '$fonts = Get-Content (Join-Path $root %s)\n' "'unixlike\\modules\\wezterm\\fonts.json'" >"$domain_reads_fixture/windows/tools/probe.ps1"
-printf 'Import-Module (Join-Path $root %s)\n' "'unixlike/modules/flake/probe.nix'" >"$domain_reads_fixture/windows/tools/module.psm1"
+printf '$fonts = Get-Content (Join-Path $root %s)\n' "'unixlike\\modules\\wezterm\\fonts.json'" >"$domain_reads_fixture/windows/probe/probe.ps1"
+printf 'Import-Module (Join-Path $root %s)\n' "'unixlike/modules/flake/probe.nix'" >"$domain_reads_fixture/windows/probe/module.psm1"
 git -C "$domain_reads_fixture" add -A
 if domain_reads_output=$(cd "$domain_reads_fixture" && "$domain_reads" 2>&1); then
   printf '%s\n' "$domain_reads_output" >&2
@@ -4493,8 +4526,8 @@ for domain_reads_hit in \
   'unixlike/tool/checks/probe:2:' \
   'unixlike/modules/programs/karabiner/probe:2:' \
   'unixlike/modules/probe.nix:2:' \
-  'windows/tools/probe.ps1:1:' \
-  'windows/tools/module.psm1:1:'; do
+  'windows/probe/probe.ps1:1:' \
+  'windows/probe/module.psm1:1:'; do
   printf '%s\n' "$domain_reads_output" | grep -qF "$domain_reads_hit" || {
     printf '%s\n' "$domain_reads_output" >&2
     echo "domain-reads did not name $domain_reads_hit" >&2

@@ -675,7 +675,9 @@ evidence. Exit status 69 carries this state everywhere in the repository, and
 `REQUIRE_NATIVE=1` turns it back into a failure — CI sets that, hooks do not.
 
 The same line appears for `zellij.exe`, a `luac` compiler, Pester, and native
-PowerShell. Install the Windows ones with `.\windows\tools\setup-dev.ps1`.
+PowerShell. `.\windows\win-env.ps1 setup-dev` installs Lua and Pester from
+`windows/toolchain.json`. Zellij and native PowerShell need their own host
+installation; setup-dev does not provision them.
 
 ### `git push` from WSL fails the Windows checks with a PowerShell security error
 

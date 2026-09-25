@@ -1,5 +1,5 @@
 # The account of a host that boots itself logs into the zsh that
-# modules/shell/shared.nix configures, selected the way modules/shell/wsl.nix
+# modules/foundation/shell/shared.nix configures, selected the way modules/foundation/shell/wsl.nix
 # selects it and for the reasons recorded there: `shell` writes the passwd
 # entry and puts zsh in the system profile, `environment.shells` writes
 # /etc/shells, and `programs.zsh.enable` stays off because the Home Manager

@@ -10,7 +10,7 @@
 # The machine is a container: OrbStack supplies the kernel, there is no boot
 # loader or disk to declare, and sessions come from an agent OrbStack injects
 # beside systemd, not from a login. The account it enters as is
-# modules/account.nix's, and sshd is off in modules/sshd.nix.
+# modules/foundation/account.nix's, and sshd is off in modules/foundation/sshd.nix.
 #
 # Left out on purpose. Because this machine is an isolated sandbox: the
 # certificates OrbStack adds to a machine that is not isolated — it writes
@@ -18,7 +18,7 @@
 # agent, the `audio` group it puts the account in, and the x86 platforms it
 # declares for emulated builds. Because they restate a default or configure
 # what is off: the three `documentation.*` options, the dhcpcd options, and
-# `useDefaultShell`, which modules/shell/orbstack.nix replaces.
+# `useDefaultShell`, which modules/foundation/shell/orbstack.nix replaces.
 #
 # INV unixlike/orbstack-shared-kernel — every OrbStack machine and OrbStack's
 # Docker run on one kernel, UIDs are mapped one to one, so root here is UID 0
@@ -29,7 +29,7 @@
 # registration made here would probably stay here. That was not tried:
 # trying it means writing to a registry whose reach is the question. This
 # class registers nothing either way and asserts it, the same care
-# modules/wsl.nix takes for WSL's shared registry. tool/checks/flake-test
+# modules/platforms/wsl.nix takes for WSL's shared registry. tool/checks/flake-test
 # holds both directions.
 _: {
   modules.nixos.orbstack = {

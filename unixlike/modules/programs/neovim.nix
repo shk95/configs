@@ -14,7 +14,7 @@ _: {
       # `nvim` follows whichever terminal it opens in instead of this flake
       # declaring a background on the terminal's behalf.
       #
-      # That is the same deference `modules/bat.nix` chooses with `ansi`, and
+      # That is the same deference `modules/programs/bat.nix` chooses with `ansi`, and
       # it survives the premise that used to be given for it. This module is in
       # `homeManager.shared`, which also reaches the WSL homes, and those render
       # inside Windows Terminal — a scheme the Windows domain declares, which

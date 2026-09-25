@@ -37,18 +37,18 @@ Selects only required features, currently core.
 Selects every feature declared by the manifest.
 
 .EXAMPLE
-PS> .\windows\tools\bootstrap.ps1 -Check -Feature terminal
+PS> .\windows\tool\bootstrap.ps1 -Check -Feature terminal
 
 Read-only. Checks terminal plus its required font, zellij, and core features.
 
 .EXAMPLE
-PS> $env:REQUIRE_NATIVE = '1'; .\windows\tools\bootstrap.ps1 -Check
+PS> $env:REQUIRE_NATIVE = '1'; .\windows\tool\bootstrap.ps1 -Check
 
 Read-only. Treats evidence that this host cannot obtain as failure instead of
 exit 69. Remove the environment variable when that policy is no longer wanted.
 
 .EXAMPLE
-PS> .\windows\tools\bootstrap.ps1 -Add wezterm
+PS> .\windows\tool\bootstrap.ps1 -Add wezterm
 
 Changes the host. Installs PowerShell 7 if necessary and adds WezTerm plus its
 dependencies to the recorded selection.

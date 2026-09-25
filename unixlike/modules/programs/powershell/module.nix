@@ -6,7 +6,7 @@
 # Pester is here as well, because it is PowerShell module content rather than a
 # package of its own: nixpkgs carries no Pester, so this fetches the PSGallery
 # package — a zip with the module at its root — and places it where pwsh looks
-# first on a Unix-like host. That is what lets `windows/tools/test.ps1` find the
+# first on a Unix-like host. That is what lets `windows/win-env.ps1 test` find the
 # exact version it requires and lets `pre-push` run the Windows suite under this
 # home's own pwsh instead of reporting it unverified. The version is the same
 # 5.7.1 that `windows/toolchain.json` declares for Windows contributors, as an

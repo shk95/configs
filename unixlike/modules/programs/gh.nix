@@ -2,7 +2,7 @@ _: {
   # `gh` was a plain entry in the package list. Declaring the program instead is
   # what generates the git credential helper, and that turned out to matter: the
   # pre-activation inventory found the helper living in an unmanaged ~/.gitconfig,
-  # which modules/git.nix moves aside. Every remote here is HTTPS, so without
+  # which modules/programs/git.nix moves aside. Every remote here is HTTPS, so without
   # this, activation would take push authentication with it.
   #
   # The hosts are named explicitly rather than left to the default so that a

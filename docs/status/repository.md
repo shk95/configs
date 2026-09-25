@@ -46,7 +46,8 @@ decision and has not been made.
 
 `tool/version-control/domain-reads` runs on every commit and in CI beside
 the hygiene scan; the Windows CI job no longer walks the checkout for
-PowerShell files, and `windows/tools/test.ps1` is the one place every script
+PowerShell files. CI and pre-push call the Windows `validate` and `test` verbs
+through `windows/win-env.ps1`; the test verb is the one place every script
 under the Windows tree is parsed for syntax (`check-desired-state.ps1`
 still parses the PowerShell payload it validates). `pre-push` runs the
 history form of the audit, which judges `dev`, `master` and release-tag

@@ -47,9 +47,12 @@ PowerShell 7 is missing, or 1 under `REQUIRE_NATIVE=1`
 parser here could read, and a default terminal delegation the host is below
 the documented boundary for or cannot be decided against it, rank the same
 way (#53, #54). Since #208, summaries distinguish a known support limit from
-an unavailable observation without changing that rank. Since 2026-09-05 `windows/win-env.ps1` is the domain's one
-entry point, and `bootstrap.ps1` and `setup.ps1` sit under `windows/tools/`
-(`docs/policy/decisions/windows/windows-entry-point-in-domain.md`).
+an unavailable observation without changing that rank. Since 2026-09-05
+`windows/win-env.ps1` is the domain's one entry point
+(`docs/policy/decisions/windows/windows-entry-point-in-domain.md`). As of
+2026-09-25 its private scripts sit under `windows/tool/`; the unused
+`check-powershell.ps1` wrapper is removed. The Windows suite's tree-isolation
+fixture reads current `unixlike/` paths, including its payload and tool files.
 
 Since #241, `capture -Publish` on a run that found no drift resumes an earlier
 capture's unfinished publish from the topic branch that carries it, for
@@ -64,7 +67,7 @@ pushes, `What if:` lines or fixture glyph lines, and the pull-request body no
 longer carries a disclaimer about them.
 
 Until 2026-09-20 no feature precondition was evaluated by the check or by
-Apply: the loop in `windows/tools/setup.ps1` iterated with `$feature` under
+Apply: the loop in `setup.ps1` iterated with `$feature` under
 that script's `[string[]] $Feature` parameter, which turned every declared
 feature into a string, so no Id matched the selection. The evaluator's own
 fixtures passed throughout, because they call it directly. The loop variable

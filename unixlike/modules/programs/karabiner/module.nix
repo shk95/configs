@@ -3,7 +3,7 @@
 # INV unixlike/host-written-payload-projected
 #
 # Karabiner-Elements is a Homebrew cask, declared once in
-# `modules/homebrew.nix`, and stays there: this file declares no
+# `modules/platforms/homebrew.nix`, and stays there: this file declares no
 # package and no service. `docs/policy/decisions/unixlike/homebrew-owns-mac-apps.md` is the
 # rule, and nothing about managing the configuration changes who owns the
 # application.

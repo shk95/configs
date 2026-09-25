@@ -3271,7 +3271,7 @@ function ConvertTo-WinEnvCondensedPushEvidence {
 
         .DESCRIPTION
         A capture's push runs .githooks/pre-push, which -- when the Windows
-        checks are selected -- runs windows/tools/test.ps1's whole Pester
+        checks are selected -- runs windows/win-env.ps1 test, the whole Pester
         suite as one of its steps. Most of that run is scaffolding nobody
         reviewing a pull request needs: discovery banners and a pass mark per
         test or container. What a reviewer does need survives regardless of
@@ -3895,7 +3895,7 @@ function New-WinEnvPullRequestBody {
     }
 
     [void]$lines.Add('')
-    [void]$lines.Add('Opened by windows/tools/capture.ps1 -Publish. Auto-merge is armed, so the')
+    [void]$lines.Add('Opened by windows/win-env.ps1 capture -Publish. Auto-merge is armed, so the')
     [void]$lines.Add('merge commit happens when `Required checks` pass and not before.')
 
     return ($lines -join [Environment]::NewLine) + [Environment]::NewLine

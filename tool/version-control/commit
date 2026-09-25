@@ -526,7 +526,7 @@ publish_preflight() {
   case $(uname -s 2>/dev/null) in
     MINGW* | MSYS* | CYGWIN*)
       refuse "commit --publish is not supported on native Windows." \
-        "Use windows/tools/capture.ps1 -Feature <id> -Publish instead."
+        "Use windows/win-env.ps1 capture -Feature <id> -Publish instead."
       ;;
   esac
 

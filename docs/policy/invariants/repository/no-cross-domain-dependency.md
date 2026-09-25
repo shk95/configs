@@ -9,9 +9,9 @@ Two violations were known: the Windows Pester suite byte-compared
 file in the checkout, reaching `assets/powershell/profile.ps1`. Both made a
 Unix-like edit fail Windows evidence. The Windows domain removed the first
 from its own suite (`INV windows/no-unix-host-required`); the merge-gate job
-dropped its parse loop, because `windows/tools/test.ps1` already parses the
+dropped its parse loop, because the Windows test verb already parses the
 Windows tree. The tool scans the code of each domain in the index — comments
-stripped, payload trees excluded, since a payload reads nothing — for a path
+stripped, Windows desired payloads excluded, since they read nothing — for a path
 that names the other domain's tree, and the fixture runs it over a throwaway
 repository that reads across the boundary in each direction and over one
 that only mentions the other tree in a comment (#124).

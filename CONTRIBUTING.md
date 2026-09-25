@@ -526,11 +526,10 @@ Native read-only verification is:
 .\windows\win-env.ps1 check
 ```
 
-`win-env.ps1` is the domain's one entry point: each verb runs one script under
-`windows/tools/` (`setup-dev.ps1`, `check-desired-state.ps1`, `test.ps1`,
-`bootstrap.ps1 -Check`) and returns that script's exit status unchanged, so
+`win-env.ps1` is the domain's one entry point: each verb runs its target script
+and returns that script's exit status unchanged, so
 the evidence a verb produces is the script's; a command the script refuses
-ends the run at 1. CI and the hooks run those scripts directly.
+ends the run at 1. CI and the hooks use the same public verbs.
 
 A branch that has not been pushed yet can still reach a native Windows
 clone of this repository through the filesystem: in that clone, fetch the
@@ -561,7 +560,7 @@ produced any `-Check` or Apply evidence, because a check that passed under a
 minimal selection says nothing about the features it excluded.
 
 A change made in an application's own UI moves back into desired state with
-`.\windows\win-env.ps1 capture` (`windows/tools/capture.ps1`), which reads the
+`.\windows\win-env.ps1 capture`, which reads the
 managed targets, writes only
 this repository's payloads — a JSON payload pretty-printed to this
 repository's two-space style — and ends at one confirmation before committing.
@@ -608,8 +607,8 @@ The resumed pull request says its commits came from an earlier run, and when
 nothing was pushed it says no pre-push hook ran rather than showing hook
 output.
 
-`windows/tools/test.ps1` leaves out the Pester cases that run `capture.ps1`
-end to end in a child PowerShell, and says which ones it skipped. Set
+The local test verb leaves out the Pester cases that run `capture.ps1` end to
+end in a child PowerShell, and says which ones it skipped. Set
 `WIN_ENV_E2E=1` to run them; the `windows-latest` CI job does, so the merge
 gate covers them and a local push stays quick.
 

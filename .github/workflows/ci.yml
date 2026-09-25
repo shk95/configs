@@ -106,22 +106,22 @@ jobs:
       - name: Validate desired state and test PowerShell
         shell: pwsh
         run: |
-          .\windows\tools\setup-dev.ps1
+          .\windows\win-env.ps1 setup-dev
+          if ($LASTEXITCODE -ne 0) { exit $LASTEXITCODE }
           winget install --id Zellij.Zellij --exact --source winget --accept-source-agreements --accept-package-agreements --disable-interactivity
+          if ($LASTEXITCODE -ne 0) { exit $LASTEXITCODE }
           $machinePath = [Environment]::GetEnvironmentVariable('Path', 'Machine')
           $userPath = [Environment]::GetEnvironmentVariable('Path', 'User')
           $env:Path = "$machinePath;$userPath;$env:Path"
-          # No parse loop here: windows/tools/test.ps1 parses every script
+          # No parse loop here: the Windows test verb parses every script
           # under windows/ before the suite runs, and a loop from the checkout
           # root reached the Unix-like PowerShell payload
           # (INV repository/no-cross-domain-dependency).
-          # These report through their exit status rather than by throwing, so
-          # the status has to be read. Without this the block would run on past
-          # a failed desired-state check and the step would take its result
-          # from whatever ran last.
-          .\windows\tools\check-desired-state.ps1
+          # Every verb returns an exit status, including caught errors. Read
+          # it immediately so a later command cannot replace a failed result.
+          .\windows\win-env.ps1 validate
           if ($LASTEXITCODE -ne 0) { exit $LASTEXITCODE }
-          .\windows\tools\test.ps1
+          .\windows\win-env.ps1 test
           if ($LASTEXITCODE -ne 0) { exit $LASTEXITCODE }
 
   # The job key stays `secrets`: the required-checks gate, its SECRETS_RESULT

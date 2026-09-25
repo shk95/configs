@@ -30,7 +30,6 @@ windows
   windows/win-env.ps1         the one entry point: check, apply, capture, validate, test, setup-dev, font
   windows/desired/            native manifest and owned payloads
   windows/src/                PowerShell reconciliation engine
-  windows/tools/              the scripts the entry point runs
   windows/tests/              native Windows tests
 
 common
@@ -199,23 +198,22 @@ and `n`/`N` still provide native history search.
 ## Windows
 
 From native Windows, `windows\win-env.ps1` is the one entry point. Each verb
-runs one script under `windows\tools\` and returns that script's exit status
+runs one domain script and returns that script's exit status
 unchanged; `win-env.ps1 help` prints the table.
 
 ```powershell
-.\windows\win-env.ps1 setup-dev    # tools\setup-dev.ps1: install the contributor toolchain
-.\windows\win-env.ps1 validate     # tools\check-desired-state.ps1: parse every declared payload
-.\windows\win-env.ps1 test         # tools\test.ps1: the Pester suite
-.\windows\win-env.ps1 check        # tools\bootstrap.ps1 -Check: read-only, is an Apply needed
-.\windows\win-env.ps1 font         # tools\Test-FontRendering.ps1: the glyph check
+.\windows\win-env.ps1 setup-dev    # install the contributor toolchain
+.\windows\win-env.ps1 validate     # parse every declared payload
+.\windows\win-env.ps1 test         # run the Pester suite
+.\windows\win-env.ps1 check        # read-only, is an Apply needed
+.\windows\win-env.ps1 font         # print the glyph check
 ```
 
 Arguments after the verb reach the script unchanged, so `check -Feature
 terminal` and `capture -Feature powertoys -Publish` mean what the sections
 below say, and a command the script refuses ends the run at 1. A verb it does
 not know is refused with exit status 64, which no check outcome uses. CI and
-the hooks call the scripts under `windows\tools\` directly; the entry point
-forwards to the same files.
+the hooks use these same public verbs.
 
 `setup-dev.ps1` installs the contributor toolchain once, from
 `windows/toolchain.json`. CI installs from the same declaration, so local

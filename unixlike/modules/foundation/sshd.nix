@@ -15,7 +15,7 @@
 # `nixos.headless` takes 22, and the rest is the same daemon. The two
 # fragments stay apart because the port is the point of each.
 #
-# Keys are host-owned, as everywhere in this repository (modules/ssh.nix):
+# Keys are host-owned, as everywhere in this repository (modules/foundation/ssh.nix):
 # `~/.ssh/authorized_keys` on the host rather than
 # `users.users.<user>.openssh.authorizedKeys`, which would put a public key
 # into tracked desired state. A fresh import or installation therefore starts
@@ -24,11 +24,11 @@
 #
 # An OrbStack machine runs none: OrbStack reaches it through an agent of its
 # own and turns sshd off in the configuration it generates, so the class
-# states the same (modules/host/orbstack.nix).
+# states the same (modules/machines/orbstack.nix).
 #
 # INV unixlike/headless-key-only — the assertions below are the daemon's
-# half of the rule; modules/firewall.nix holds the port's and
-# modules/account.nix the account's. tool/checks/flake-test holds both
+# half of the rule; modules/foundation/firewall.nix holds the port's and
+# modules/foundation/account.nix the account's. tool/checks/flake-test holds both
 # directions.
 _: {
   modules.nixos = {
