@@ -13,6 +13,9 @@ their results intersect, and feature dependencies are not added. With neither,
 the script considers the selection recorded on an applied host or all declared
 features on a host with no state.
 
+Run a writing capture from a linked Git worktree. A primary checkout may still
+preview with -WhatIf or resume a publish that has no payload changes.
+
 On dev, capture creates a feature branch from the clone's origin/dev, but only
 when local dev exactly matches that remote-tracking ref. On another topic
 branch it commits on that branch. master is always refused. Use -WhatIf to
@@ -240,6 +243,14 @@ function Invoke-GitCommand {
     }
     if ($status -ne 0) { return @() }
     return @($output | ForEach-Object { [string]$_ } | Where-Object { $_ })
+}
+
+function Test-LinkedWorktree {
+    # Git reports the same directory for both values in the primary checkout.
+    # A linked worktree has its own administrative directory under worktrees/.
+    $gitDir = @(Invoke-GitCommand -Argument @('rev-parse', '--path-format=absolute', '--git-dir'))[0]
+    $commonDir = @(Invoke-GitCommand -Argument @('rev-parse', '--path-format=absolute', '--git-common-dir'))[0]
+    return -not [string]::Equals($gitDir, $commonDir, [StringComparison]::OrdinalIgnoreCase)
 }
 
 function Get-RepositoryRelativePath {
@@ -690,6 +701,11 @@ try {
         Write-Host ''
         Write-Host 'What if: nothing was written and no commit was made.'
         exit 0
+    }
+
+    if (-not (Test-LinkedWorktree)) {
+        Stop-Capture -Message 'A writing capture requires a linked Git worktree.' `
+            -Detail 'Create a task worktree from origin/dev and rerun capture there. -WhatIf remains available here.'
     }
 
     Write-Host ''
