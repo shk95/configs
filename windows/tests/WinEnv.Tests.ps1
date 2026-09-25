@@ -3975,6 +3975,15 @@ exit 1
                     "{`n  `"size`": 10`n}`n")
             }
 
+            # Keep the primary checkout as a read-only anchor. Real capture
+            # runs in the linked worktree, including the dev-to-topic switch.
+            $primary = $fixture.Repo
+            $linked = Join-Path $fixture.Base 'linked'
+            & git -C $primary switch -q --detach HEAD | Out-Null
+            & git -C $primary worktree add -q $linked dev | Out-Null
+            $fixture.Repo = $linked
+            $fixture | Add-Member -NotePropertyName Primary -NotePropertyValue $primary
+
             # The host this capture reads. It drifted from both payloads.
             $hostDirectory = Join-Path $fixture.Base 'host'
             [void](New-Item -ItemType Directory -Path $hostDirectory -Force)
@@ -4953,6 +4962,40 @@ exit 0
     }
 
     Context 'the whole run, from a drifted host file to a pull request' {
+        It 'refuses a writing capture in the primary checkout before branch, payload, or index changes' {
+            Skip-WithoutEndToEnd 'primary checkout refusal'
+
+            $fixture = New-PublishWorkspace
+            $fixture.Repo = $fixture.Primary
+            $fixture.Capture = Join-Path $fixture.Primary 'windows/tool/capture.ps1'
+            & git -C $fixture.Repo switch -q -c feature/windows-primary-fixture | Out-Null
+            $before = (& git -C $fixture.Repo rev-parse HEAD).Trim()
+
+            $run = Invoke-Capture -Fixture $fixture -Argument @('-Feature', 'core', '-Publish') -Answer 'y'
+
+            $run.ExitCode | Should -Be 1
+            ($run.Output -join [Environment]::NewLine) | Should -Match 'requires a linked Git worktree'
+            (& git -C $fixture.Repo rev-parse HEAD).Trim() | Should -Be $before
+            @(& git -C $fixture.Repo status --porcelain).Count | Should -Be 0
+            @(& git -C $fixture.Repo for-each-ref --format='%(refname)' refs/heads) |
+                Should -Not -Contain 'refs/heads/feature/windows-capture-core'
+        }
+
+        It 'keeps -WhatIf available in the primary checkout without writing' {
+            Skip-WithoutEndToEnd 'primary checkout preview'
+
+            $fixture = New-PublishWorkspace
+            $fixture.Repo = $fixture.Primary
+            $fixture.Capture = Join-Path $fixture.Primary 'windows/tool/capture.ps1'
+            & git -C $fixture.Repo switch -q -c feature/windows-primary-fixture | Out-Null
+
+            $run = Invoke-Capture -Fixture $fixture -Argument @('-Feature', 'core', '-WhatIf')
+
+            $run.ExitCode | Should -Be 0
+            ($run.Output -join [Environment]::NewLine) | Should -Match 'What if: nothing was written'
+            @(& git -C $fixture.Repo status --porcelain).Count | Should -Be 0
+        }
+
         It 'branches, commits, pushes, opens one pull request and arms auto-merge after one y' {
             Skip-WithoutEndToEnd 'the happy path'
 
