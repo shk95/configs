@@ -566,6 +566,14 @@ every Unix-like derivation hash separable from the source change beside it
 (`INV repository/conventional-subject`, `INV repository/flake-lock-isolated`).
 
 Source flows one way from topic branches through `dev` into `master`.
+Each source change is authored in a linked worktree for its topic branch.
+The primary checkout remains the integration point and a place for read-only
+inspection; its index and tracked files do not carry a task's edits. This
+keeps concurrent tasks separate without changing the single-scope branch and
+pull-request flow. A commit from the primary checkout is refused locally;
+editor writes are controlled by the start procedure because Git cannot
+intercept them. A separate native host clone may inspect and check an
+unpublished branch without becoming its authoring worktree.
 `master` accepts only a same-repository `dev` pull request and preserves that
 boundary with a merge commit. It does not flow its promotion merge commit back
 to `dev`. Consequently `dev` protection requires the proposed head to include

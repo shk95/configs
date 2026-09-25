@@ -1520,6 +1520,14 @@ commit_git branch master
 # would make every one of them exercise that path too.
 commit_git switch -q -c feature/unixlike-fixture
 
+# INV repository/change-authoring-in-linked-worktree: helper fixtures author
+# their source in a linked worktree; the primary checkout stays on dev.
+commit_primary=$commit_root
+git -C "$commit_primary" switch -q dev
+commit_root="$test_root/commit-linked"
+git -C "$commit_primary" worktree add -q "$commit_root" feature/unixlike-fixture
+mkdir -p "$commit_root/unixlike/tool/checks"
+
 commit_stub_path="$commit_root/stub"
 
 run_commit() {
@@ -2375,6 +2383,14 @@ publish_git commit -q -m 'feat(repository): create publish fixture'
 publish_git push -q --set-upstream origin dev
 publish_git config core.hooksPath .githooks
 publish_git branch master
+
+# INV repository/change-authoring-in-linked-worktree: leave the primary
+# checkout on a fixture-only branch so the helper can use dev, master and
+# topic branches inside the linked worktree below.
+publish_primary=$publish_root
+publish_git switch -q -c feature/repository-fixture-primary
+publish_root="$test_root/publish-linked"
+git -C "$publish_primary" worktree add -q "$publish_root" dev
 
 publish_path="$publish_root/stub:$PATH"
 
@@ -3416,8 +3432,13 @@ git -C "$hygiene_hook_root" init -q -b dev
 git -C "$hygiene_hook_root" config user.name Fixture
 git -C "$hygiene_hook_root" config user.email fixture@example.invalid
 printf 'fixture\n' >"$hygiene_hook_root/file"
-git -C "$hygiene_hook_root" add file
+git -C "$hygiene_hook_root" add .
 git -C "$hygiene_hook_root" commit -q -m 'feat(repository): create hygiene hook fixture'
+# INV repository/change-authoring-in-linked-worktree
+hygiene_hook_primary=$hygiene_hook_root
+hygiene_hook_root="$test_root/hygiene-hook-linked"
+git -C "$hygiene_hook_primary" worktree add -q -b feature/repository-hygiene-hook "$hygiene_hook_root"
+mkdir -p "$hygiene_hook_root/unixlike/modules"
 # A Unix-like path, so the hook does not select repository:fixtures and re-enter
 # this script.
 printf '_: {}\n' >"$hygiene_hook_root/unixlike/modules/fixture.nix"
@@ -3541,8 +3562,13 @@ git -C "$secret_hook_root" init -q -b dev
 git -C "$secret_hook_root" config user.name Fixture
 git -C "$secret_hook_root" config user.email fixture@example.invalid
 printf 'fixture\n' >"$secret_hook_root/file"
-git -C "$secret_hook_root" add file
+git -C "$secret_hook_root" add .
 git -C "$secret_hook_root" commit -q -m 'feat(repository): create secret hook fixture'
+# INV repository/change-authoring-in-linked-worktree
+secret_hook_primary=$secret_hook_root
+secret_hook_root="$test_root/secret-hook-linked"
+git -C "$secret_hook_primary" worktree add -q -b feature/repository-secret-hook "$secret_hook_root"
+mkdir -p "$secret_hook_root/unixlike/modules" "$secret_hook_root/stub"
 printf '_: {}\n' >"$secret_hook_root/unixlike/modules/fixture.nix"
 git -C "$secret_hook_root" add unixlike/modules/fixture.nix
 
@@ -4014,8 +4040,13 @@ git -C "$inv_hook_root" init -q -b dev
 git -C "$inv_hook_root" config user.name Fixture
 git -C "$inv_hook_root" config user.email fixture@example.invalid
 printf 'fixture\n' >"$inv_hook_root/file"
-git -C "$inv_hook_root" add file
+git -C "$inv_hook_root" add .
 git -C "$inv_hook_root" commit -q -m 'feat(repository): create invariants hook fixture'
+# INV repository/change-authoring-in-linked-worktree
+inv_hook_primary=$inv_hook_root
+inv_hook_root="$test_root/invariants-hook-linked"
+git -C "$inv_hook_primary" worktree add -q -b feature/repository-invariants-hook "$inv_hook_root"
+mkdir -p "$inv_hook_root/unixlike/modules"
 printf '_: {}\n' >"$inv_hook_root/unixlike/modules/fixture.nix"
 git -C "$inv_hook_root" add unixlike/modules/fixture.nix
 
@@ -4081,7 +4112,7 @@ printf '#!/bin/sh\nexit 0\n' >"$inv_hook_root/unixlike/tool/checks/format"
 chmod +x "$inv_hook_root/unixlike/tool/checks/format"
 
 # INV repository/hook-evidence-recorded
-inv_hook_log="$inv_hook_root/.git/hooks-evidence.log"
+inv_hook_log="$inv_hook_primary/.git/hooks-evidence.log"
 if [ ! -f "$inv_hook_log" ]; then
   echo "pre-commit recorded no hook evidence" >&2
   exit 1
@@ -5354,6 +5385,87 @@ closure_audit_output=$(cd "$closure_audit" && "$audit" 2>&1) || true
 printf '%s\n' "$closure_audit_output" | grep -qF 'warning: overdue spec: docs/work/unixlike/probe/spec.md: review-by 2026-02-05 has passed' || {
   printf '%s\n' "$closure_audit_output" >&2
   echo "audit did not warn about a spec past its review-by" >&2
+  exit 1
+}
+
+# ---------------------------------------------------------------------------
+# A source commit belongs to a linked worktree
+# ---------------------------------------------------------------------------
+# INV repository/change-authoring-in-linked-worktree
+authoring_root="$test_root/authoring-primary"
+authoring_linked="$test_root/authoring-linked"
+mkdir -p "$authoring_root/tool/version-control" "$authoring_root/.githooks"
+git -C "$authoring_root" init -q -b dev
+git -C "$authoring_root" config user.name Fixture
+git -C "$authoring_root" config user.email fixture@example.invalid
+cp "$root/tool/version-control/require-linked-worktree" "$authoring_root/tool/version-control/require-linked-worktree"
+cp "$root/tool/version-control/commit" "$authoring_root/tool/version-control/commit"
+cp "$root/.githooks/evidence" "$authoring_root/.githooks/evidence"
+chmod +x "$authoring_root/tool/version-control/require-linked-worktree" "$authoring_root/tool/version-control/commit"
+printf 'fixture\n' >"$authoring_root/source"
+git -C "$authoring_root" add source
+git -C "$authoring_root" -c core.hooksPath=/dev/null commit -q -m 'feat(repository): create authoring fixture'
+git -C "$authoring_root" worktree add -q -b feature/repository-authoring "$authoring_linked"
+
+if authoring_output=$(cd "$authoring_root" && "$root/tool/version-control/require-linked-worktree" 2>&1); then
+  echo "the primary checkout passed the linked-worktree guard" >&2
+  exit 1
+fi
+printf '%s\n' "$authoring_output" | grep -qF 'INV repository/change-authoring-in-linked-worktree' || {
+  printf '%s\n' "$authoring_output" >&2
+  echo "the guard did not name the primary-checkout violation" >&2
+  exit 1
+}
+(cd "$authoring_linked" && "$root/tool/version-control/require-linked-worktree") || {
+  echo "the linked worktree failed the authoring guard" >&2
+  exit 1
+}
+if authoring_output=$(cd "$authoring_root" && "$root/.githooks/pre-commit" 2>&1); then
+  echo "pre-commit accepted the primary checkout" >&2
+  exit 1
+fi
+printf '%s\n' "$authoring_output" | grep -qF 'INV repository/change-authoring-in-linked-worktree' || {
+  printf '%s\n' "$authoring_output" >&2
+  echo "pre-commit did not invoke the worktree guard first" >&2
+  exit 1
+}
+if ! (cd "$authoring_root" && tool/version-control/commit --help >/dev/null); then
+  echo "the primary checkout could not read helper help" >&2
+  exit 1
+fi
+if ! (cd "$authoring_root" && tool/version-control/commit prune >/dev/null); then
+  echo "the primary checkout could not run standalone branch maintenance" >&2
+  exit 1
+fi
+if authoring_output=$(cd "$authoring_root" && tool/version-control/commit --dry-run brew add fixture 2>&1); then
+  echo "the commit helper accepted the primary checkout" >&2
+  exit 1
+fi
+printf '%s\n' "$authoring_output" | grep -qF 'INV repository/change-authoring-in-linked-worktree' || {
+  printf '%s\n' "$authoring_output" >&2
+  echo "the commit helper did not refuse before editing" >&2
+  exit 1
+}
+
+# A linked caller must create siblings of the primary checkout, and removal
+# follows the topic branch even for a user-pinned worktree with another name.
+cp "$root/tool/worktree.sh" "$authoring_root/tool/worktree.sh"
+chmod +x "$authoring_root/tool/worktree.sh"
+authoring_remote="$test_root/authoring-remote.git"
+git init -q --bare "$authoring_remote"
+git -C "$authoring_root" remote add origin "$authoring_remote"
+git -C "$authoring_root" push -q origin dev
+(cd "$authoring_linked" && "$authoring_root/tool/worktree.sh" new repository-from-linked feature >/dev/null)
+authoring_sibling="$test_root/authoring-primary-wt/feature-repository-from-linked"
+[ -d "$authoring_sibling" ] || {
+  echo "the linked caller did not create a sibling of the primary checkout" >&2
+  exit 1
+}
+authoring_pinned="$test_root/pinned-base"
+git -C "$authoring_root" worktree add -q -b fix/repository-pinned "$authoring_pinned" HEAD
+(cd "$authoring_linked" && "$authoring_root/tool/worktree.sh" done repository-pinned >/dev/null)
+[ ! -e "$authoring_pinned" ] || {
+  echo "worktree done did not find the topic branch at its pinned path" >&2
   exit 1
 }
 

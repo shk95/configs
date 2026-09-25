@@ -24,19 +24,21 @@
 
 set -e
 
-# Guards the `grep -E "/(feature|fix)-${name}\$"` call below from Git for
-# Windows' MSYS argument conversion, which rewrites a leading-`/` argv
-# element into a Windows path before grep sees it. See
+# Guards text-tool arguments from Git for Windows' MSYS argument conversion,
+# which can rewrite a leading-`/` argv element into a Windows path. See
 # tool/version-control/hygiene for the full explanation and the observed
 # failure (#79). Inert everywhere else.
 MSYS_NO_PATHCONV=1
 MSYS2_ARG_CONV_EXCL='*'
 export MSYS_NO_PATHCONV MSYS2_ARG_CONV_EXCL
 
+# Resolve the primary checkout even when this script is invoked from one of
+# its linked worktrees. All task worktrees share one sibling directory.
 cd "$(dirname "$0")/.." || exit 1
-root=$(pwd)
+root=$(git worktree list --porcelain | sed -n '1s/^worktree //p')
+[ -n "$root" ] || { echo "cannot find the primary worktree" >&2; exit 1; }
 wt_root="$(dirname "$root")/$(basename "$root")-wt"
-integration=${INTEGRATION_BRANCH:-dev}
+integration=dev
 
 usage() {
   echo "usage: tool/worktree.sh new <name> [feature|fix]"
@@ -80,14 +82,15 @@ case "${1:-}" in
   done)
     name=${2:?"name required"}
     validate_name "$name"
-    # Match on the directory, which is what `git worktree remove` takes, and
-    # which is named <kind>-<name> inside the -wt folder. sed rather than awk so
-    # a path containing spaces survives.
-    #
-    dir=$(git worktree list --porcelain \
-          | sed -n 's/^worktree //p' \
-          | grep -E "/(feature|fix)-${name}\$" \
-          | head -1)
+    # Find the branch, not the directory name. A worktree pinned to a user's
+    # base commit can have a different directory name and still be removable
+    # once its pull request has merged.
+    dir=$(git worktree list --porcelain | awk -v name="$name" '
+      /^worktree / { path = substr($0, 10) }
+      /^branch / && ($2 == "refs/heads/feature/" name || $2 == "refs/heads/fix/" name) {
+        print path; exit
+      }
+    ')
     [ -n "$dir" ] || { echo "no worktree matching '$name'" >&2; exit 1; }
 
     git worktree remove "$dir"

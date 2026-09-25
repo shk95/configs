@@ -308,6 +308,11 @@ if [ "$group" = prune ]; then
   exit 0
 fi
 
+# INV repository/change-authoring-in-linked-worktree
+# Help and standalone maintenance above do not author source. Refuse all edit
+# commands here, before their branch or payload can change.
+tool/version-control/require-linked-worktree
+
 item=
 input=
 mas_id=
