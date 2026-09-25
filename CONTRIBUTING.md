@@ -561,7 +561,8 @@ minimal selection says nothing about the features it excluded.
 
 A change made in an application's own UI moves back into desired state with
 `.\windows\win-env.ps1 capture`, run from a linked task worktree on the
-Windows host. Create it from `origin/dev` before writing. The primary clone
+Windows host. Run `bash tool/worktree.sh new windows-capture-settings feature`
+from the primary clone to create it from `origin/dev` before writing. The primary clone
 may run `capture -WhatIf` to inspect the proposed diff and may resume a
 publish with no new payload change. A writing run in the primary clone
 refuses before switching branches, staging, or editing a payload. Capture

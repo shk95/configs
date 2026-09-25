@@ -364,7 +364,7 @@ command and one confirmation:
 
 Run a writing capture in a linked task worktree. From the primary checkout,
 `-WhatIf` can still preview the diff without writing. Create the linked
-worktree on the Windows host with `tool/worktree.sh new windows-capture-settings
+worktree on the Windows host with `bash tool/worktree.sh new windows-capture-settings
 feature`, then run the following commands from that worktree.
 
 ```powershell
