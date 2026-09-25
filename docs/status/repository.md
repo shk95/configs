@@ -72,13 +72,14 @@ On the same day the Unix-like provider API reached `dev`. The public
 is marked as a GitHub template. One private repository,
 `shk95/configs-hosts`, was generated from it and holds the seven current host
 flakes with separate locks. The template is a one-time copy, not a continuing
-composition authority. The original provider outputs remain while the private
-consumers collect host-specific native and runtime evidence
+composition authority. The original provider outputs remained while the private
+consumers collected host-specific native and runtime evidence
 (`docs/policy/decisions/repository/one-private-host-repository-from-public-template.md`).
 The repository-wide hygiene scanner now reads its admitted names from
-`tool/version-control/hygiene.names` in the Git index. Its current entries
-preserve the former inventory-derived allowance until provider-side host
-instances are retired; the declaration then shrinks with them.
+`tool/version-control/hygiene.names` in the Git index. After the seven private
+consumers were verified, the provider replaced its real inventory and final
+outputs with synthetic fixtures. The name declaration admits the synthetic
+fixtures and the remaining independently owned desired state.
 
 Two things changed with it. The payload declaration moved to
 `unixlike/payloads.json` and the scanned tree became the module tree, so the
@@ -140,9 +141,10 @@ classifier's handling of the registries' old roots, a provisional measure
 that ends when the move reaches `master` (#275). The work model is done too
 (`docs/work/repository/work-model/report.md`), and so is the in-place
 NixOS-WSL update (`docs/work/unixlike/nixos-wsl-in-place-update/report.md`),
-whose issue the workflow also closed. A release tag annotation now states
-each host's evidence in a block of its own, which the audit holds every tag
-but the two of 2026-08-31 to
+whose issue the workflow also closed. A Windows release tag annotation states
+each host's evidence in a block of its own. New Unix-like provider tags state
+provider API and fixture evidence once, without certifying a private host;
+the audit retains the two tags of 2026-08-31 as historical exceptions
 (`docs/work/repository/release-tag-contract/report.md`); no tag has been
 created in that form yet. The CI reconsideration work item is done
 (`docs/work/repository/ci-headless-runtime/report.md`): the existing required

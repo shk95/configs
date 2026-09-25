@@ -65,12 +65,11 @@ else
   candidate="$base.$((max + 1))"
 fi
 
-# A unixlike or windows release states its evidence in a block per host; a
-# common release deploys nowhere and states it once. tool/version-control/audit
-# holds a created tag to the same form.
+# Windows states evidence per host. The Unix-like provider and common domains
+# state it once; neither tag certifies a private host consumer.
 states='passed | unavailable | not applicable'
 printf 'tag: %s\ntarget: %s\nannotation-template:\n  Domain: %s\n' "$candidate" "$target" "$domain"
-if [ "$domain" = common ]; then
+if [ "$domain" != windows ]; then
   cat <<EOF
   Evaluation: <$states; include reference>
   Build: <$states; include reference>

@@ -90,9 +90,11 @@ Windows domain. WSL GUI support is not planned or deferred work. If it becomes
 necessary, first revise this rule and `INV unixlike/desktop-not-wsl` through
 the Unix-like governance workflow, then plan implementation and host evidence.
 
-Host identity is a typed option set whose values live in the inventory, so an
-evaluator refuses a wrong shape before any host is composed,
-and no untyped argument carries identity around the module system. Module
+Host identity reaches the provider through typed constructor arguments owned
+by a consumer. The provider's in-repository declarations are synthetic
+fixtures covering each machine kind; real host identities and final outputs
+live in the private consumer. An evaluator refuses a wrong shape before any
+host is composed, and no untyped argument carries identity around the module system. Module
 files are collected by a directory walk, so nothing order-sensitive may depend
 on that order. A package has one declaring module: a feature module when it
 generates the package's configuration, otherwise the shared list, and a system
@@ -139,8 +141,10 @@ Whether a machine is isolated from the Mac is the OrbStack
 application's state, which the domain records in its procedure and does not
 declare.
 
-Unix-like deployment consumes a domain release tag and activates only on a
-matching host after evaluation and native build evidence.
+An installed Unix-like host consumes its independently pinned private flake
+and activates only after evaluation and native build evidence for that host.
+A `configs` Unix-like release tag certifies the provider API and fixtures,
+not a final consumer output or deployment.
 
 ## Windows domain
 
@@ -278,7 +282,8 @@ includes its own removal.
 ## Change and dependency rules
 
 ```text
-unixlike change ──> Unix-like checks ──> unixlike release ──> activation
+unixlike change ──> provider checks ──> unixlike release ──> private consumer adoption
+private host change ──> host checks ──> host release ──> authorized activation
 
 windows change  ──> Windows checks  ──> windows release  ──> Apply
 
@@ -538,15 +543,14 @@ evidence record and distinguishes evaluation, build, and native-runtime checks.
 Activation and Apply remain later deployment events and are never inferred
 from the tag.
 
-A domain configures more than one host, and one line per lane cannot say
-which host it speaks for: a reader could not tell a host that passed from one
-nobody ran. A `unixlike` or `windows` annotation therefore states the three
-lanes once for each host the release speaks for, in a block opened by
-`Host: <label>`, and each value opens with `passed`, `unavailable` or
-`not applicable`. A `common` release deploys nowhere and states them once. A
-label names a kind of host and never a machine: a tag is immutable and
-public, and the hygiene scan never reads one. The annotation declares its own
-hosts, because a repository tool must not evaluate a domain to learn them
+A Windows annotation states the three lanes once for each host the release
+speaks for, in a block opened by `Host: <label>`. Unix-like provider and
+`common` annotations state the lanes once at domain level: neither tag
+certifies a private Unix-like host. Each value opens with `passed`,
+`unavailable` or `not applicable`. A Windows label names a kind of host and
+never a machine: a tag is immutable and public, and the hygiene scan never
+reads one. The Windows annotation declares its own hosts, because a
+repository tool must not evaluate a domain to learn them
 (`docs/policy/decisions/repository/release-annotation-states-each-host.md`).
 
 The annotated tag is the only release record; the repository creates no

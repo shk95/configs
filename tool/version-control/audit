@@ -227,11 +227,10 @@ if [ -n "$master_ref" ] && [ -n "$dev_ref" ]; then
 fi
 
 # The annotation of a release tag, one defect per line and nothing when it
-# follows the form. A unixlike or windows tag states its evidence in a block
-# per host, `Host: <label>` followed by the three lanes, and carries no lane
-# outside a block; a common tag deploys nowhere and keeps the three lanes at
-# the domain level. A lane's value opens with one of three states. A label
-# names a kind of host, and only its grammar is decidable here.
+# follows the form. Windows states evidence per host. Unix-like provider and
+# common tags state the three lanes at domain level; their releases certify no
+# real host. A lane's value opens with one of three states. Historical tags
+# before these forms are excepted below by immutable name.
 annotation_defects() {
   git for-each-ref --format='%(contents)' "refs/tags/$1" | awk -v domain="$2" '
     function close_block(   i) {
@@ -248,7 +247,7 @@ annotation_defects() {
       label = $0; sub(/^Host:[ \t]*/, "", label)
       in_block = 1; hosts++
       for (i = 1; i <= 3; i++) seen[lanes[i]] = 0
-      if (domain == "common") print "a common tag carries a host block: " label
+      if (domain != "windows") print "a " domain " tag carries a host block: " label
       if (label !~ /^[a-z0-9][a-z0-9-]*$/) print "host label is outside [a-z0-9][a-z0-9-]*: " label
       else if (labels[label]++) print "host label is repeated: " label
       next
@@ -261,7 +260,7 @@ annotation_defects() {
         print lane " is none of passed, unavailable, not applicable: " value
       if (in_block) {
         if (seen[lane]++) print "host " label " repeats " lane
-      } else if (domain == "common") {
+      } else if (domain != "windows") {
         if (top[lane]++) print lane " is repeated"
       } else {
         print lane " stands outside a host block"
@@ -271,7 +270,7 @@ annotation_defects() {
     END {
       close_block()
       if (!domain_seen) print "lacks Domain: " domain
-      if (domain == "common") {
+      if (domain != "windows") {
         for (i = 1; i <= 3; i++) if (top[lanes[i]] == 0) print "lacks " lanes[i]
       } else if (hosts == 0) {
         print "has no host block"

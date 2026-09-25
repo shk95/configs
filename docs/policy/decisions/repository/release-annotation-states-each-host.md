@@ -62,3 +62,12 @@ with an earlier date in its name would pass as one of them.
 
 Cost: an annotation is longer, and a release that speaks for many hosts
 repeats three lines for each.
+
+Amended 2026-09-25 for the Unix-like provider transition: `configs` no longer
+owns final Unix-like host outputs. A new Unix-like tag states evaluation, build
+and native runtime evidence once for the provider API and synthetic fixtures;
+it carries no `Host:` block and certifies no private consumer. Windows keeps
+its per-host blocks. The immutable `unixlike-v2026.08.31` tag retains its
+original historical interpretation through the named legacy exception. The
+private consumer repository records each host's release and deployment
+independently.
