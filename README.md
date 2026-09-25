@@ -38,17 +38,13 @@ common
                               (created only when sharing is justified)
 ```
 
-The current Unix-like outputs are:
-
-- `homeConfigurations.user1`: standalone Home Manager for WSL.
-- `nixosConfigurations.<host>`: one per entry of the typed inventory of NixOS
-  hosts. `nixos` is the NixOS-WSL configuration, headless; `utm` is the
-  headless guest under UTM on the Mac and `orbstack` the isolated OrbStack
-  machine there, both installed; `vm` and `desktop` are declared and not
-  installed, and have been evaluated only (`docs/status/unixlike.md`). The
-  `nixos-eval`, `nixos-build` and `nixos-tarball` recipes take the host's
-  name.
-- `darwinConfigurations.shk-macbook`: nix-darwin configuration.
+The Unix-like flake exports typed constructors through `lib.mkNixos`,
+`lib.mkDarwin` and `lib.mkHome`. Real host identities and final outputs live in
+the private `configs-hosts` repository, where each host pins this provider in
+its own flake and lock. The outputs in this repository use synthetic
+`fixture-*` names and the `example` account to exercise all five NixOS machine
+kinds, Darwin and standalone Home Manager. They are test instances, not
+deployment targets (`docs/status/unixlike.md`).
 
 Graphical Unix-like applications are a separate Home Manager composition
 class. Both WSL outputs are command-line configurations and deliberately
@@ -59,7 +55,8 @@ Ghostty is installed by Homebrew on Darwin while Home Manager owns its shared
 Unix-like configuration.
 
 Portable interactive programs are declared once in `homeManager.shared` and
-reach all three Unix-like outputs. Platform Home Manager classes add only
+reach the consumer outputs through the provider constructors. Platform Home
+Manager classes add only
 platform-specific behavior. Darwin Homebrew declarations are reserved for
 macOS applications, Mac App Store items, and explicit exceptions that the
 locked nixpkgs cannot provide on Darwin.
@@ -130,8 +127,7 @@ before implementation while this repository retains authority for the result.
 Source promotion uses `tool/version-control/plan-promotion` before a
 `dev`-to-`master` pull request; promotion is not a release or deployment.
 
-The Justfile exposes the same checks and target-specific runners without
-duplicating the configured user or host name:
+The Justfile exposes the provider checks:
 
 ```sh
 just doctor
@@ -141,25 +137,15 @@ just payloads
 just test
 just check
 
-just home-eval
-just home-build
-just darwin-eval
-just darwin-build
-just darwin-check
-
 just zellij-patch-check v0.45.1
 just karabiner-check   # target Mac only; compares the Karabiner payloads
 just karabiner-capture # target Mac only; reads the drift back and commits it
 just karabiner-test
 ```
 
-The `*-eval`, `*-build`, and `*-check` commands do not activate a configuration.
-Activation remains explicit and host-specific:
-
-```sh
-just home-switch       # intended Ubuntu WSL host only
-just darwin-switch     # target Mac only; requires sudo
-```
+Host-specific Justfile recipes refuse to use the provider's synthetic
+outputs. Evaluate, build and activate a real host from its reviewed private
+consumer flake under `configs-hosts/hosts/<host>/`.
 
 ### Git commands that get no alias
 

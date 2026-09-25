@@ -1,6 +1,4 @@
-# Names currently admitted in committed desired state. Remove entries when
-# their host-owned declarations leave this provider repository.
-101378576+shk95@users.noreply.github.com
+# Names admitted in current provider fixtures and independently owned desired state.
 25.11
 26.05
 26.11
@@ -16,9 +14,6 @@ fixture-utm
 fixture-vm
 fixture-wsl
 orbstack
-shk
-shk-macbook
-user1
 utm
 vm
 vmware
