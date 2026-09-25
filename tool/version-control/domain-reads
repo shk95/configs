@@ -15,7 +15,8 @@
 # comments (`#`) and PowerShell block comments (`<# … #>`) are stripped before
 # the patterns are applied, which is what lets a Nix module say "the Windows
 # domain declares this terminal" and a Windows script cite a Nix file for the
-# reader. Payload trees are not scanned; a payload is data and reads nothing.
+# reader. Windows desired payload files are not scanned; they are data and
+# read nothing. Unix-like colocated payloads remain in the scanned tree.
 #
 #   Unix-like code   unixlike/, plus .envrc and the Justfile at the root
 #                    must not name  windows/
