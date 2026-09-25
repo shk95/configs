@@ -12,7 +12,7 @@
 # and tool/checks/flake-test holds both directions. A home refuses a package
 # name that two owners define, where an owner is a file of this repository or
 # the evaluator's own modules taken together (Home Manager contributes `bat`
-# on behalf of modules/bat.nix; that is one owner, and a second listing here
+# on behalf of modules/programs/bat.nix; that is one owner, and a second listing here
 # would be the other). A system layer refuses a name this repository declares
 # in both its system packages and the managed home, because installing the
 # same interactive package into both is not a way to make it more available;
@@ -128,7 +128,7 @@ in {
           gnused
           pup
 
-          # git tooling beyond programs.git — gh is modules/gh.nix, which also
+          # git tooling beyond programs.git — gh is modules/programs/gh.nix, which also
           # generates the credential helper
           tig
           gitflow
@@ -179,7 +179,7 @@ in {
 
           # session / monitoring
           tmux
-          # btop is modules/btop.nix, which generates its configuration.
+          # btop is modules/programs/btop.nix, which generates its configuration.
           pstree
 
           tree

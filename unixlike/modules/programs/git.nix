@@ -128,7 +128,7 @@ _: {
           # deferring to the terminal's sixteen colours, because no ANSI colour
           # is faint enough to sit behind a whole diff line; `true-color` is
           # what lets it choose one. That is the opposite bargain from
-          # modules/bat.nix, and the difference is deliberate: bat can defer
+          # modules/programs/bat.nix, and the difference is deliberate: bat can defer
           # because syntax highlighting is foreground-only, delta cannot
           # because its subject is a background.
           true-color = "always";
@@ -172,7 +172,7 @@ _: {
       # bundled bat theme from the same family as the two terminals, the way
       # `light` above still does for the diff bands. Modus has no such bundled
       # delta/bat theme to name — no more than Flexoki did before it — and
-      # modules/bat.nix already declines to guess a named theme for the same
+      # modules/programs/bat.nix already declines to guess a named theme for the same
       # reason: `ansi` defers to the terminal's own sixteen colours instead,
       # which on this class is Modus Operandi because WezTerm and Ghostty
       # declare it, and needs no bundled theme to track it.
