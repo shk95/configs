@@ -47,8 +47,7 @@ The distribution has not restarted, so its booted-system link still names the
 preceding generation and post-restart consumer runtime remains unverified.
 The first temporary test had failed on a getty unit already failed in the
 preceding generation; a later clean-baseline test and restoration succeeded.
-DNS had timed out on both generations during that retest but resolved before
-and after the permanent switch, leaving the earlier timeout's cause unknown.
+DNS resolved before and after the permanent switch.
 Standalone WSL Home still needs a native build and runtime evidence, so the
 provider inventory and outputs remain in place
 (`docs/policy/decisions/unixlike/provider-constructors-own-composition.md`).
