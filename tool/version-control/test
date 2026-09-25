@@ -3043,18 +3043,11 @@ hygiene_seq=0
 hygiene_new() {
   hygiene_seq=$((hygiene_seq + 1))
   hygiene_repo="$test_root/hygiene-$hygiene_seq"
-  mkdir -p "$hygiene_repo/tool/version-control" "$hygiene_repo/unixlike/modules/flake"
+  mkdir -p "$hygiene_repo/tool/version-control"
   git -C "$hygiene_repo" init -q -b dev
   git -C "$hygiene_repo" config user.name Fixture
   git -C "$hygiene_repo" config user.email fixture@example.invalid
-  # The declaration of record for axis 2, written through printf arguments so
-  # that the naming context lives in the fixture rather than in this file.
-  {
-    printf '_: {\n  identity = {\n'
-    printf '    %s = "%s";\n' gitName declared-name
-    printf '    %s = "%s";\n' hostName declared-host
-    printf '  };\n}\n'
-  } >"$hygiene_repo/unixlike/modules/flake/inventory.nix"
+  printf '%s\n' declared-name declared-host >"$hygiene_repo/tool/version-control/hygiene.names"
   : >"$hygiene_repo/tool/version-control/hygiene.allow"
 }
 
@@ -3123,7 +3116,7 @@ if ! printf '%s\n' "$hygiene_output" | grep -qF "undeclared name 'eve'"; then
 fi
 
 # Axis 2, positive and negative: a name is only decidable inside a naming
-# context, and the allowed set is every literal the inventory declares.
+# context, and the allowed set is the repository-owned declaration.
 hygiene_new
 printf '%s: %s\n' hostname declared-host >"$hygiene_repo/host.yml"
 hygiene_expect_pass 'axis 2, a declared host name'
@@ -3170,29 +3163,26 @@ hygiene_expect_pass 'axis 2, a bare expression is not a name'
 # index, so the pre-commit hook and CI could disagree about the same commit.
 hygiene_new
 printf '{ %s = "%s"; }\n' user eve >"$hygiene_repo/module.nix"
-hygiene_expect_fail 'axis 2, a leak against the staged inventory' "undeclared name 'eve'"
-{
-  printf '_: {\n  identity = {\n'
-  printf '    %s = "%s";\n' gitName declared-name
-  printf '    %s = "%s";\n' hostName declared-host
-  printf '    %s = "%s";\n' leak eve
-  printf '  };\n}\n'
-} >"$hygiene_repo/unixlike/modules/flake/inventory.nix"
+hygiene_expect_fail 'axis 2, a leak against the staged declaration' "undeclared name 'eve'"
+printf '%s\n' declared-name declared-host eve >"$hygiene_repo/tool/version-control/hygiene.names"
 if (cd "$hygiene_repo" && "$hygiene") >/dev/null 2>&1; then
-  echo "hygiene widened the declared set from an unstaged inventory" >&2
+  echo "hygiene widened the declared set from an unstaged declaration" >&2
   exit 1
 fi
 # Staged, the same edit does take effect: the index is the authority, not the
 # file's absence or presence on disk.
-hygiene_expect_pass 'axis 2, a name declared by the staged inventory'
+hygiene_expect_pass 'axis 2, a name declared by the staged declaration'
 
-# The extraction must fail closed. An inventory whose literals move out of
-# reach cannot silently retire the axis, which is what #18 makes a live
-# possibility.
+# The extraction must fail closed. An empty or absent declaration cannot
+# silently retire the axis.
 hygiene_new
-printf '_: {\n  identity = {};\n}\n' >"$hygiene_repo/unixlike/modules/flake/inventory.nix"
+: >"$hygiene_repo/tool/version-control/hygiene.names"
 printf 'clean\n' >"$hygiene_repo/file"
 hygiene_expect_fail 'axis 2, an empty declared-name extraction' 'no declared name'
+
+hygiene_new
+rm "$hygiene_repo/tool/version-control/hygiene.names"
+hygiene_expect_fail 'axis 2, an absent name declaration' 'no declared name'
 
 # Axis 3, positive: a near-miss basename the denylist must not claim.
 hygiene_new

@@ -1,5 +1,5 @@
 id: repository/hygiene-declared-names
-statement: An account or host name appears in committed desired state only when the inventory declares it, and an inventory that cannot be read is a failure rather than a permission.
+statement: An account or host name appears in committed desired state only when the repository-owned name declaration admits it, and a declaration that cannot be read is a failure rather than a permission.
 rationale: docs/policy/architecture.md § Desired-state hygiene
 enforced-by: tool tool/version-control/hygiene
 enforced-by: fixture tool/version-control/test

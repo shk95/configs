@@ -29,14 +29,13 @@ given a runner of their own, because that script is the only thing the
 `repository:fixtures` unit and the CI repository job invoke, and a check whose
 fixtures nothing runs is not enforced.
 
-Axis 2 reads `modules/flake/inventory.nix` by extracting its double-quoted
-literals rather than evaluating it. A structured read does work, but it needs
-an impure evaluation and would make Nix a prerequisite for a governance check,
-which the three-state contract would then have to report as unverified on every
-host without one. Literal extraction keeps the requirement at a POSIX shell and
-Git and stays correct when the inventory grows fields. It over-accepts, which
-is the safe direction for an allowlist, and it fails closed when the extraction
-comes back empty, so a reformat cannot retire the axis quietly.
+Amended 2026-09-25 for the host-provider transition: Axis 2 reads
+`tool/version-control/hygiene.names` from the Git index. Its one-name-per-line
+declaration replaces the old Unix-like inventory as the scan's input, so the
+repository-wide check does not depend on one configuration domain. It still
+needs only a POSIX shell and Git and fails closed when the declaration is
+absent or empty. The initial set preserves the names the old inventory
+admitted; entries leave as their desired state moves to the private consumer.
 
 The condition for removing it is the one the payload declaration already sets:
 coverage enforced in both directions, positive and negative fixtures for every
