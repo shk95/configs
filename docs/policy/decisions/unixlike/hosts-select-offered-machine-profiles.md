@@ -23,3 +23,8 @@ The first optional profile is `agents`, offered by NixOS-WSL and selected by
 the existing `nixos` host. The graphical classes remain required for the
 UTM and VMware guests and physical desktop; their existing recovery and
 graphical contracts are not weakened. Existing outputs are preserved.
+
+Amended 2026-09-25: `fixture-wsl` selects `agents` in the provider's
+synthetic coverage. Real consumers make profile choices in their own flakes;
+the provider constructor still refuses unknown, repeated and unavailable
+profiles.

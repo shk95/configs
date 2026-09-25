@@ -20,6 +20,31 @@ require_command nix
 repo=$(CDPATH= cd -- "$(dirname -- "$0")/../.." && pwd)
 cd "$repo"
 
+# The provider exports synthetic coverage only. A real host declaration or
+# final output reintroduced here must fail before any fixture is evaluated.
+[ ! -e modules/flake/inventory.nix ] || {
+  printf 'provider: real host inventory has returned\n' >&2
+  exit 1
+}
+fixture_names=$(nix eval --raw path:.#nixosConfigurations \
+  --apply 'x: builtins.concatStringsSep " " (builtins.attrNames x)')
+[ "$fixture_names" = 'fixture-desktop fixture-orbstack fixture-utm fixture-vm fixture-wsl' ] || {
+  printf 'provider: unexpected NixOS outputs: %s\n' "$fixture_names" >&2
+  exit 1
+}
+home_names=$(nix eval --raw path:.#homeConfigurations \
+  --apply 'x: builtins.concatStringsSep " " (builtins.attrNames x)')
+[ "$home_names" = example ] || {
+  printf 'provider: unexpected Home Manager outputs: %s\n' "$home_names" >&2
+  exit 1
+}
+darwin_names=$(nix eval --raw path:.#darwinConfigurations \
+  --apply 'x: builtins.concatStringsSep " " (builtins.attrNames x)')
+[ "$darwin_names" = fixture-mac ] || {
+  printf 'provider: unexpected Darwin outputs: %s\n' "$darwin_names" >&2
+  exit 1
+}
+
 fail() {
   printf '\033[31m✗ %s\033[0m\n' "$1" >&2
   exit 1
@@ -36,7 +61,7 @@ identity_eval() {
       flake = builtins.getFlake (toString ./.);
       lib = flake.inputs.nixpkgs.lib;
       eval = lib.evalModules {
-        modules = [ ./modules/flake/identity.nix ./modules/flake/inventory.nix $1 ];
+        modules = [ ./modules/flake/identity.nix ./modules/flake/fixtures.nix $1 ];
       };
     in eval.config.identity.$2"
 }
@@ -85,7 +110,7 @@ hosts_eval() {
       flake = builtins.getFlake (toString ./.);
       lib = flake.inputs.nixpkgs.lib;
       eval = lib.evalModules {
-        modules = [ ./modules/flake/identity.nix ./modules/flake/inventory.nix $1 ];
+        modules = [ ./modules/flake/identity.nix ./modules/flake/fixtures.nix $1 ];
       };
     in ($2) eval.config.identity.nixosHosts"
 }
@@ -227,20 +252,20 @@ selection_eval() {
 }
 
 printf '→ a host may omit an optional machine profile\n'
-[ "$(selection_eval nixos.profiles '[]' nixos)" = false ] ||
+[ "$(selection_eval fixture-wsl.profiles '[]' fixture-wsl)" = false ] ||
   fail "NixOS-WSL retained the agents profile after opting out"
 
 printf '→ a host may select an offered machine profile\n'
-[ "$(selection_eval nixos.profiles '["agents"]' nixos)" = true ] ||
+[ "$(selection_eval fixture-wsl.profiles '["agents"]' fixture-wsl)" = true ] ||
   fail "NixOS-WSL did not receive the selected agents profile"
 
 printf '→ rejects a profile unavailable for the machine kind\n'
-if selection_eval vm.profiles '["agents"]' vm >/dev/null 2>&1; then
+if selection_eval fixture-vm.profiles '["agents"]' fixture-vm >/dev/null 2>&1; then
   fail "the VMware machine accepted the agents profile"
 fi
 
 printf '→ rejects an unregistered host selection\n'
-if selection_eval extra-host.profiles '[]' nixos >/dev/null 2>&1; then
+if selection_eval extra-host.profiles '[]' fixture-wsl >/dev/null 2>&1; then
   fail "a selection without an inventory host was accepted"
 fi
 
@@ -252,24 +277,24 @@ if nix eval --raw --impure --expr '
       imports = [
         (inputs.import-tree ./modules)
         { hostSelections.nixos = inputs.nixpkgs.lib.mkForce {
-          utm.profiles = [];
-          orbstack.profiles = [];
-          vm.profiles = [];
-          desktop.profiles = [];
+          fixture-utm.profiles = [];
+          fixture-orbstack.profiles = [];
+          fixture-vm.profiles = [];
+          fixture-desktop.profiles = [];
         }; }
       ];
     };
-  in flake.nixosConfigurations.nixos.config.system.build.toplevel.drvPath' >/dev/null 2>&1; then
+  in flake.nixosConfigurations.fixture-wsl.config.system.build.toplevel.drvPath' >/dev/null 2>&1; then
   fail "a host without a selection was accepted"
 fi
 
 printf '→ rejects an unknown profile name\n'
-if selection_eval nixos.profiles '["unlisted"]' nixos >/dev/null 2>&1; then
+if selection_eval fixture-wsl.profiles '["unlisted"]' fixture-wsl >/dev/null 2>&1; then
   fail "the host selection accepted an unknown profile name"
 fi
 
 printf '→ rejects a repeated profile\n'
-if selection_eval nixos.profiles '["agents" "agents"]' nixos >/dev/null 2>&1; then
+if selection_eval fixture-wsl.profiles '["agents" "agents"]' fixture-wsl >/dev/null 2>&1; then
   fail "the host selection accepted a repeated profile"
 fi
 

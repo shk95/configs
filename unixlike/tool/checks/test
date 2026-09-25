@@ -23,9 +23,9 @@
 # unfetchable source passes both. It survives here only to report the size of a
 # build that was skipped, which is information rather than verification.
 #
-# Every configuration is evaluated. Configurations targeting the current
-# system are built when this host can activate them; foreign configurations
-# remain explicit evaluation-only evidence until a native runner builds them.
+# Every synthetic configuration is evaluated. Native fixture builds prove the
+# provider can realise an output; foreign configurations remain evaluation-only
+# until a matching runner builds them. No output here is a host activation target.
 #
 # INV unixlike/eval-covers-every-host — evaluation is evidence only when it
 # reached every configuration. A flavour the flake exports but that lists
@@ -71,10 +71,9 @@ toplevel_attr() {
 # very little for a great deal more — a minimal NixOS closure is upwards of
 # 600 MiB, and CI starts from an empty store every run.
 #
-# So build what this host could actually activate, and say plainly what was
-# not built. `nixos-rebuild switch` needs a NixOS host, and that host can
-# activate one output only, the one named after it (the typed inventory names
-# every NixOS output after its host); home-manager runs anywhere. Set
+# So build a native fixture when this host has a matching platform, and say
+# plainly what was not built. Synthetic NixOS names are never activation
+# targets; Home Manager fixtures can build on Linux. Set
 # CHECKS_BUILD_ALL=1 to build everything regardless — worth doing deliberately
 # when a flavour changes, and cheap locally once the store is warm.
 #

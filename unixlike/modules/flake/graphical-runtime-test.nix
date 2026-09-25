@@ -4,7 +4,7 @@
   lib,
   ...
 }: let
-  vmHost = config.identity.nixosHosts.vm;
+  vmHost = config.identity.nixosHosts.fixture-vm;
   testUser = vmHost.user;
   home = config.modules.homeManager;
   inherit (config.identity) gitName gitEmail;

@@ -4,34 +4,17 @@ default:
 
 [private]
 _home-target:
-    @nix eval --raw path:./unixlike#homeConfigurations --apply 'configs: let names = builtins.attrNames configs; in assert builtins.length names == 1; builtins.head names'
+    @echo 'This flake exports synthetic fixtures only. Use the host flake in configs-hosts.' >&2; exit 1
 
 [private]
 _darwin-target:
-    @nix eval --raw path:./unixlike#darwinConfigurations --apply 'configs: let names = builtins.attrNames configs; in assert builtins.length names == 1; builtins.head names'
+    @echo 'This flake exports synthetic fixtures only. Use the host flake in configs-hosts.' >&2; exit 1
 
-# The flake exports one NixOS output per host of the typed inventory
-# (unixlike/modules/flake/inventory.nix), so a recipe names the host it means.
-# Prints the name when the flake exports it; refuses, listing the names it
-# does export, when it does not or when none was given.
+# Host-specific recipes are retained as refusal points for callers that used
+# this provider checkout before adoption. Real hosts are owned by configs-hosts.
 [private]
 _nixos-target host="":
-    #!/usr/bin/env bash
-    set -euo pipefail
-    host={{ quote(host) }}
-    names=$(nix eval --raw path:./unixlike#nixosConfigurations --apply 'configs: builtins.concatStringsSep " " (builtins.attrNames configs)')
-    for name in ${names}; do
-      if [ "${name}" = "${host}" ]; then
-        printf '%s\n' "${name}"
-        exit 0
-      fi
-    done
-    if [ -z "${host}" ]; then
-      echo "Name the NixOS host: ${names}." >&2
-    else
-      echo "The flake exports no NixOS host '${host}'. It exports: ${names}." >&2
-    fi
-    exit 1
+    @echo 'This flake exports synthetic fixtures only. Use the host flake in configs-hosts.' >&2; exit 1
 
 # The recipes that touch a NixOS system act on the output named after the
 # host they run on, and on no other: a rebuild under another name would
@@ -337,7 +320,7 @@ nixos-build host="":
 # writes only the named plan directory and never touches the target device.
 [group('nixos')]
 nixos-install-plan host disk plan:
-    unixlike/tool/install-plan {{ quote(host) }} {{ quote(disk) }} {{ quote(plan) }}
+    @echo 'Use the host flake in configs-hosts for installation planning.' >&2; exit 1
 
 # Run the same disko installation proof that nixos-anywhere --vm-test selects,
 # then boot the installed result on disposable QEMU disks. The portable form

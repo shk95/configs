@@ -53,6 +53,7 @@ current_system=$(nix eval --raw --impure --expr builtins.currentSystem)
 }
 
 work=$(mktemp -d)
+work=$(CDPATH= cd -- "$work" && pwd -P)
 trap 'rm -rf "$work"' EXIT
 source_url=$(printf '%s' "$flake" | jq -Rs '"path:" + .')
 
