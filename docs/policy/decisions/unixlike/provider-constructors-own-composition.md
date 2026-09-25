@@ -34,3 +34,10 @@ exported attributes and proves both accepted and refused consumer inputs.
 The public template is a separate example and the private consumer repository
 is its own owner after creation. Template changes do not automatically change
 an existing host; a host intentionally updates its pinned `configs` revision.
+
+Amended 2026-09-25: all seven real outputs now have private consumer owners.
+The provider's former inventory is replaced by synthetic fixture values.
+Those outputs exercise the constructors and machine-kind coverage only;
+their `fixture-*` names do not identify deployable hosts. Host-specific
+evaluation, native build, runtime and activation evidence stays with each
+private consumer.

@@ -3,7 +3,7 @@
   lib,
   ...
 }: let
-  vmHost = config.identity.nixosHosts.vm;
+  vmHost = config.identity.nixosHosts.fixture-vm;
   testUser = vmHost.user;
 in {
   perSystem = {
@@ -28,7 +28,7 @@ in {
             config.modules.nixos.headless
           ];
 
-          host = vmHost // {name = "vm";};
+          host = vmHost // {name = "fixture-vm";};
 
           # Neither DHCP nor an RSA host key is part of this fixture's
           # contract. Avoid their timeouts and key generation cost so a TCG

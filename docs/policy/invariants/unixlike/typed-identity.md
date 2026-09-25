@@ -1,10 +1,10 @@
 id: unixlike/typed-identity
-statement: Host identity is declared through typed options whose values live in the inventory, never through untyped arguments passed around the module system.
+statement: Host identity reaches provider composition through typed constructor inputs, never through untyped arguments passed around the module system; the provider's local values are synthetic fixtures.
 rationale: docs/policy/architecture.md § Unix-like domain
 enforced-by: schema unixlike/modules/flake/identity.nix
 enforced-by: fixture unixlike/tool/checks/flake-test
 
-The contract and the values are two files on purpose: `identity.nix` is the
-schema and `inventory.nix` the non-secret declaration, so a wrong shape is
-refused by the evaluator before any host configuration is composed. An
-untyped special argument would carry the same values with no refusal at all.
+`identity.nix` checks the provider's synthetic fixtures, and
+`configurations.nix` validates the consumer's typed constructor arguments.
+The evaluator refuses a wrong shape before composing a host. Real values
+remain in the private consumer.

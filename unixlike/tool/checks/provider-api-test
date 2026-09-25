@@ -18,17 +18,17 @@ cat > "$consumer_dir/flake.nix" <<EOF
   outputs = {configs, ...}: {
     nixosConfigurations.example = configs.lib.mkNixos {
       name = "example";
-      host = {system = "aarch64-linux"; kind = "orbstack"; user = "user1"; stateVersion = "25.11";};
+      host = {system = "aarch64-linux"; kind = "orbstack"; user = "example"; stateVersion = "25.11";};
       profiles = [];
       git = {name = "Example"; email = "example@example.invalid";};
     };
     darwinConfigurations.example-mac = configs.lib.mkDarwin {
-      host = {system = "aarch64-darwin"; hostName = "utm"; user = "user1";};
+      host = {system = "aarch64-darwin"; hostName = "fixture-mac"; user = "example";};
       git = {name = "Example"; email = "example@example.invalid";};
     };
     homeConfigurations.example = configs.lib.mkHome {
       system = "x86_64-linux";
-      user = "shk";
+      user = "example";
       git = {name = "Example"; email = "example@example.invalid";};
     };
   };
@@ -40,15 +40,15 @@ if ! lock_result=$(nix flake lock "path:$consumer_dir" 2>&1); then
   exit 1
 fi
 [ "$(nix eval --raw "path:$consumer_dir#nixosConfigurations.example.config.networking.hostName")" = example ]
-[ "$(nix eval --raw "path:$consumer_dir#darwinConfigurations.example-mac.config.networking.hostName")" = utm ]
-[ "$(nix eval --raw "path:$consumer_dir#homeConfigurations.example.config.home.username")" = shk ]
+[ "$(nix eval --raw "path:$consumer_dir#darwinConfigurations.example-mac.config.networking.hostName")" = fixture-mac ]
+[ "$(nix eval --raw "path:$consumer_dir#homeConfigurations.example.config.home.username")" = example ]
 
 eval_api() {
   nix eval --raw --impure --expr "
     let
       provider = builtins.getFlake (toString ./.);
       git = { name = \"Example\"; email = \"example@example.invalid\"; };
-      nixosHost = { system = \"aarch64-linux\"; kind = \"orbstack\"; user = \"user1\"; stateVersion = \"25.11\"; };
+      nixosHost = { system = \"aarch64-linux\"; kind = \"orbstack\"; user = \"example\"; stateVersion = \"25.11\"; };
     in $1"
 }
 
@@ -76,24 +76,24 @@ refuse() {
 accept 'NixOS host name' example \
   '(provider.lib.mkNixos { name = "example"; host = nixosHost; profiles = []; inherit git; }).config.networking.hostName'
 accept 'NixOS consumer Git identity' example@example.invalid \
-  '(provider.lib.mkNixos { name = "example"; host = nixosHost; profiles = []; inherit git; }).config.home-manager.users.user1.programs.git.settings.user.email'
+  '(provider.lib.mkNixos { name = "example"; host = nixosHost; profiles = []; inherit git; }).config.home-manager.users.example.programs.git.settings.user.email'
 accept 'NixOS system extension' yes \
   '(provider.lib.mkNixos { name = "example"; host = nixosHost; profiles = []; inherit git; systemModules = [{ environment.variables.CONSUMER = "yes"; }]; }).config.environment.variables.CONSUMER'
 accept 'NixOS home extension' yes \
-  '(provider.lib.mkNixos { name = "example"; host = nixosHost; profiles = []; inherit git; homeModules = [{ home.sessionVariables.CONSUMER = "yes"; }]; }).config.home-manager.users.user1.home.sessionVariables.CONSUMER'
-accept 'Darwin host name' utm \
-  '(provider.lib.mkDarwin { host = { system = "aarch64-darwin"; hostName = "utm"; user = "user1"; }; inherit git; }).config.networking.hostName'
+  '(provider.lib.mkNixos { name = "example"; host = nixosHost; profiles = []; inherit git; homeModules = [{ home.sessionVariables.CONSUMER = "yes"; }]; }).config.home-manager.users.example.home.sessionVariables.CONSUMER'
+accept 'Darwin host name' fixture-mac \
+  '(provider.lib.mkDarwin { host = { system = "aarch64-darwin"; hostName = "fixture-mac"; user = "example"; }; inherit git; }).config.networking.hostName'
 accept 'Darwin consumer Git identity' example@example.invalid \
-  '(provider.lib.mkDarwin { host = { system = "aarch64-darwin"; hostName = "utm"; user = "user1"; }; inherit git; }).config.home-manager.users.user1.programs.git.settings.user.email'
-accept 'standalone home user' shk \
-  '(provider.lib.mkHome { system = "x86_64-linux"; user = "shk"; inherit git; }).config.home.username'
+  '(provider.lib.mkDarwin { host = { system = "aarch64-darwin"; hostName = "fixture-mac"; user = "example"; }; inherit git; }).config.home-manager.users.example.programs.git.settings.user.email'
+accept 'standalone home user' example \
+  '(provider.lib.mkHome { system = "x86_64-linux"; user = "example"; inherit git; }).config.home.username'
 accept 'standalone home Git identity' example@example.invalid \
-  '(provider.lib.mkHome { system = "x86_64-linux"; user = "shk"; inherit git; }).config.programs.git.settings.user.email'
+  '(provider.lib.mkHome { system = "x86_64-linux"; user = "example"; inherit git; }).config.programs.git.settings.user.email'
 
 refuse 'missing identity' 'lib.mkHome: missing required field git' \
-  '(provider.lib.mkHome { system = "x86_64-linux"; user = "shk"; }).config.home.username'
+  '(provider.lib.mkHome { system = "x86_64-linux"; user = "example"; }).config.home.username'
 refuse 'missing Git address' 'lib.mkHome.git: missing required field email' \
-  '(provider.lib.mkHome { system = "x86_64-linux"; user = "shk"; git = {name = "Example";}; }).config.home.username'
+  '(provider.lib.mkHome { system = "x86_64-linux"; user = "example"; git = {name = "Example";}; }).config.home.username'
 refuse 'missing NixOS state version' 'host.stateVersion' \
   '(provider.lib.mkNixos { name = "example"; host = builtins.removeAttrs nixosHost ["stateVersion"]; profiles = []; inherit git; }).config.networking.hostName'
 refuse 'illegal machine combination' 'identity.nixosHosts.example: aarch64-linux vm on vmware is not a host' \

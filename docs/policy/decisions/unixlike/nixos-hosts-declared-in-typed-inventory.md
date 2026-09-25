@@ -83,3 +83,9 @@ default, so that nothing is selected implicitly.
 Cost: four outputs exist for machines that do not, every evaluation run
 instantiates them, and a reader must know that a declared host is not an
 installed one; `docs/status/unixlike.md` carries that statement.
+
+Amended 2026-09-25: the five in-repository instances are now synthetic
+`fixture-*` outputs. Real host entries and final output names are owned by
+`configs-hosts`. The provider continues to enforce legal machine combinations,
+name agreement and profile choice through its typed constructors and
+synthetic fixtures. The old Justfile host recipes refuse provider fixtures.

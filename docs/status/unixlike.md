@@ -14,10 +14,11 @@ navigation; each module still declares its own class, and
 The flake now exports typed `lib.mkNixos`, `lib.mkDarwin`, and `lib.mkHome`
 constructors for external consumers. Their host, account, Git and profile
 values are checked before composition; host-owned system and home modules
-have explicit extension points. All seven current outputs still come from the
-provider inventory through those constructors during migration. An external
-consumer fixture passes without importing provider-internal files, and the
-seven toplevel derivation paths equal the pre-API `dev` tree. The public
+have explicit extension points. The provider's seven current outputs use
+synthetic `fixture-*` and `example` identities; real host inventory and final
+outputs live in `configs-hosts`. An external consumer fixture passes without
+importing provider-internal files. Before retirement, all seven real toplevel
+derivation paths equalled the pre-API `dev` tree. The public
 `configs-host-template` now evaluates a synthetic output against the pinned
 provider merge; its setup documents host-owned SOPS + age delivery. The one
 private `configs-hosts` repository declares all seven current outputs with
@@ -53,7 +54,8 @@ Standalone Ubuntu WSL Home was activated after an explicit request on
 2026-09-25. A fresh SSH connection confirmed its consumer Home Manager
 profile, interactive CLI tools, user systemd and Windows interop. The
 preceding generation was activated for rollback, then the consumer restored
-as generation 13. The provider inventory and outputs remain pending retirement
+as generation 13. Provider checks now cover synthetic instances; no real host
+identity or final output remains in this flake
 (`docs/policy/decisions/unixlike/provider-constructors-own-composition.md`).
 
 Unix-like Home Manager hosts are standalone Ubuntu WSL, NixOS-WSL, and
@@ -63,7 +65,8 @@ are the platform classes layered on top
 (`docs/policy/decisions/unixlike/home-manager-platform-classes.md`).
 NixOS host identity and profile choice are separate typed options. The
 machine-kind rows provide required classes and offered profiles; each host
-explicitly selects profiles it uses. `nixos` selects the `agents` profile,
+explicitly selects profiles it uses. The synthetic `fixture-wsl` selects the
+`agents` profile,
 while the VM guests and desktop retain their required graphical classes
 (`docs/policy/decisions/unixlike/hosts-select-offered-machine-profiles.md`).
 The seven existing output derivations are unchanged by this selection refactor;
@@ -193,11 +196,11 @@ shell and sudo password requirement, the binfmt protection, the system
 `EDITOR` and time zone, and key-only sshd on 2223 — and nothing a standalone
 home can declare
 (`docs/policy/decisions/unixlike/nixos-wsl-system-layer-ownership.md`). The
-host is the entry `nixos` of `identity.nixosHosts`, the typed inventory of
-NixOS hosts: every `nixosConfigurations` output is generated from an entry
-and named after it, `modules.nixos.shared` gives the host that name and the
-entry's state version, and only a combination of system, kind and hypervisor
-that a host lane names evaluates (`INV unixlike/nixos-host-inventory`).
+host was formerly the entry `nixos` of `identity.nixosHosts`. That entry is
+now owned by the private consumer. The provider's synthetic instances prove
+that output name, host name and state version agree, and that only the five
+supported combinations of system, kind and hypervisor evaluate
+(`INV unixlike/nixos-host-inventory`).
 `unixlike/tool/checks/flake-test` proves each host answers to its entry's
 name (#191). `aarch64-linux` is an evaluated system and is not built here
 (`docs/work/unixlike/nixos-host-inventory/report.md`, done).
