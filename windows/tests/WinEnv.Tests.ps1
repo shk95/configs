@@ -9,7 +9,7 @@ BeforeAll {
     $desiredStateRoot = Join-Path $repositoryRoot 'desired'
     Import-Module (Join-Path $repositoryRoot 'src\WinEnv.psm1') -Force
     # Invoke-Pester can be called without test.ps1; the suite defends itself.
-    . (Join-Path $repositoryRoot 'tools\isolate-git.ps1')
+    . (Join-Path $repositoryRoot 'tool\isolate-git.ps1')
 
     function Test-Throws {
         param([scriptblock] $ScriptBlock)
@@ -2596,7 +2596,7 @@ Describe 'unverified evidence presentation' {
         # Exercise the functions setup.ps1 actually runs without dot-sourcing
         # the host reconciliation around them. Reading their definitions from
         # its AST makes this fixture fail when production formatting diverges.
-        $setupPath = Join-Path $repositoryRoot 'tools\setup.ps1'
+        $setupPath = Join-Path $repositoryRoot 'tool\setup.ps1'
         $tokens = $null
         $errors = $null
         $setupAst = [System.Management.Automation.Language.Parser]::ParseFile(
@@ -3347,7 +3347,7 @@ Describe 'capture' {
         # whether the commit's pre-commit hook actually ran, which #77 has
         # since shown happens under Git for Windows
         # (docs/policy/decisions/repository/hooks-run-under-git-for-windows.md).
-        $capturePath = Join-Path $repositoryRoot 'tools\capture.ps1'
+        $capturePath = Join-Path $repositoryRoot 'tool\capture.ps1'
         (Test-Path -LiteralPath $capturePath -PathType Leaf) | Should -Be $true
 
         $tokens = $null; $errors = $null
@@ -3372,7 +3372,7 @@ Describe 'capture' {
         # fixture of its own. What this suite asserts on any platform without
         # running the script is that the call happens exactly once, ahead of
         # the first host read, and that finding it false is what stops the run.
-        $capturePath = Join-Path $repositoryRoot 'tools\capture.ps1'
+        $capturePath = Join-Path $repositoryRoot 'tool\capture.ps1'
         $tokens = $null; $errors = $null
         $tree = [System.Management.Automation.Language.Parser]::ParseFile($capturePath, [ref]$tokens, [ref]$errors)
         $errors.Count | Should -Be 0
@@ -3414,7 +3414,7 @@ Describe 'capture' {
             return
         }
 
-        $capturePath = Join-Path $repositoryRoot 'tools\capture.ps1'
+        $capturePath = Join-Path $repositoryRoot 'tool\capture.ps1'
         $pwsh = (Get-Process -Id $PID).Path
         $output = @(& $pwsh -NoLogo -NoProfile -NonInteractive -File $capturePath 2>&1)
         $LASTEXITCODE | Should -Be 1
@@ -3430,7 +3430,7 @@ Describe 'capture' {
         # ever be testing which console the suite ran on. The source is the
         # same on every platform, and one Read-Host is itself the invariant:
         # a second question would be a second confirmation.
-        $capturePath = Join-Path $repositoryRoot 'tools\capture.ps1'
+        $capturePath = Join-Path $repositoryRoot 'tool\capture.ps1'
         $tokens = $null; $errors = $null
         $tree = [System.Management.Automation.Language.Parser]::ParseFile($capturePath, [ref]$tokens, [ref]$errors)
 
@@ -3458,7 +3458,7 @@ Describe 'capture' {
         # text, so the prose that explains why these flags are absent does not
         # itself trip the guard.
         $sources = @(
-            (Join-Path $repositoryRoot 'tools\capture.ps1'),
+            (Join-Path $repositoryRoot 'tool\capture.ps1'),
             (Join-Path $repositoryRoot 'src\WinEnv.psm1'))
         foreach ($source in $sources) {
             $tokens = $null; $errors = $null
@@ -3960,13 +3960,13 @@ exit 1
 
             $fixture = New-PublishRepository -Populate {
                 param([string] $repo)
-                foreach ($relative in @('windows/src', 'windows/tools', 'windows/desired/files')) {
+                foreach ($relative in @('windows/src', 'windows/tool', 'windows/desired/files')) {
                     [void](New-Item -ItemType Directory -Path (Join-Path $repo $relative) -Force)
                 }
                 Copy-Item -LiteralPath (Join-Path $repositoryRoot 'src\WinEnv.psm1') `
                     -Destination (Join-Path $repo 'windows/src/WinEnv.psm1')
-                Copy-Item -LiteralPath (Join-Path $repositoryRoot 'tools\capture.ps1') `
-                    -Destination (Join-Path $repo 'windows/tools/capture.ps1')
+                Copy-Item -LiteralPath (Join-Path $repositoryRoot 'tool\capture.ps1') `
+                    -Destination (Join-Path $repo 'windows/tool/capture.ps1')
                 [IO.File]::WriteAllText((Join-Path $repo 'windows/desired/manifest.json'),
                     ($manifest | ConvertTo-Json -Depth 10))
                 [IO.File]::WriteAllText((Join-Path $repo 'windows/desired/files/sample.json'),
@@ -3983,7 +3983,7 @@ exit 1
 
             return $fixture | Add-Member -NotePropertyName HostDirectory -NotePropertyValue $hostDirectory -PassThru |
                 Add-Member -NotePropertyName Capture `
-                    -NotePropertyValue (Join-Path $fixture.Repo 'windows/tools/capture.ps1') -PassThru
+                    -NotePropertyValue (Join-Path $fixture.Repo 'windows/tool/capture.ps1') -PassThru
         }
 
         function Invoke-Capture {
@@ -4071,7 +4071,7 @@ exit 1
             $body = New-WinEnvPullRequestBody -Branch 'feature/windows-capture-font' `
                 -Feature @('font') -ManagedFile @('fontPayload (windows/desired/files/font.json)') `
                 -Commit @('feat(windows): capture font settings from the host') `
-                -Command 'windows/tools/capture.ps1 -Feature font -Publish' -Build '22631' `
+                -Command 'windows/win-env.ps1 capture -Feature font -Publish' -Build '22631' `
                 -Evidence @(([char]27 + '[31m') + '→ hygiene' + ([char]27 + '[0m')) `
                 -PushEvidence @('→ Windows tests', 'Tests Passed: 164, Failed: 0')
 
@@ -4079,7 +4079,7 @@ exit 1
             $body | Should -Match ([regex]::Escape('Branch: feature/windows-capture-font'))
             $body | Should -Match 'Feature selection: font'
             $body | Should -Match 'Windows build: 22631'
-            $body | Should -Match ([regex]::Escape('Command: windows/tools/capture.ps1 -Feature font -Publish'))
+            $body | Should -Match ([regex]::Escape('Command: windows/win-env.ps1 capture -Feature font -Publish'))
             $body | Should -Match ([regex]::Escape('- fontPayload (windows/desired/files/font.json)'))
             $body | Should -Match ([regex]::Escape('- feat(windows): capture font settings from the host'))
             $body | Should -Match '→ hygiene'
@@ -4096,7 +4096,7 @@ exit 1
             $body = New-WinEnvPullRequestBody -Branch 'feature/windows-capture-font' -Feature @('font') `
                 -ManagedFile @('fontPayload (windows/desired/files/font.json)') `
                 -Commit @('feat(windows): capture font settings from the host') `
-                -Command 'windows/tools/capture.ps1 -Publish' -Build ''
+                -Command 'windows/win-env.ps1 capture -Publish' -Build ''
             $body | Should -Match 'Windows build: undetermined'
         }
 
@@ -4104,7 +4104,7 @@ exit 1
             $body = New-WinEnvPullRequestBody -Branch 'feature/windows-capture-font' -Feature @('font') `
                 -ManagedFile @('fontPayload (windows/desired/files/font.json)') `
                 -Commit @('feat(windows): capture font settings from the host') `
-                -Command 'windows/tools/capture.ps1 -Publish' -Build '22631'
+                -Command 'windows/win-env.ps1 capture -Publish' -Build '22631'
             $body | Should -Match ([regex]::Escape('(the commit output, once the commit runs)'))
             $body | Should -Match ([regex]::Escape("(the pre-push hook's output, once the push runs)"))
         }
@@ -4113,7 +4113,7 @@ exit 1
             $body = New-WinEnvPullRequestBody -Branch 'feature/windows-capture-font' -Feature @('font') `
                 -ManagedFile @('fontPayload (windows/desired/files/font.json)') `
                 -Commit @('feat(windows): capture font settings from the host') `
-                -Command 'windows/tools/capture.ps1 -Feature font -Publish' -Build '22631' -Resumed -NotPushed
+                -Command 'windows/win-env.ps1 capture -Feature font -Publish' -Build '22631' -Resumed -NotPushed
 
             $body | Should -Match ([regex]::Escape('Resumed: this run captured nothing and publishes commits an earlier capture run made.'))
             $body | Should -Match ([regex]::Escape('Not reproduced: an earlier capture run made these commits'))
@@ -4126,7 +4126,7 @@ exit 1
             $body = New-WinEnvPullRequestBody -Branch 'feature/windows-capture-font' -Feature @('font') `
                 -ManagedFile @('fontPayload (windows/desired/files/font.json)') `
                 -Commit @('feat(windows): capture font settings from the host') `
-                -Command 'windows/tools/capture.ps1 -Publish' -Build '22631' `
+                -Command 'windows/win-env.ps1 capture -Publish' -Build '22631' `
                 -Carried @('1234abc an earlier commit on this branch')
             $body | Should -Match ([regex]::Escape('- 1234abc an earlier commit on this branch'))
         }
@@ -4291,7 +4291,7 @@ exit 0
             $body = New-WinEnvPullRequestBody -Branch 'feature/windows-capture-font' -Feature @('font') `
                 -ManagedFile @('fontPayload (windows/desired/files/font.json)') `
                 -Commit @('feat(windows): capture font settings from the host') `
-                -Command 'windows/tools/capture.ps1 -Publish' -Build '22631' `
+                -Command 'windows/win-env.ps1 capture -Publish' -Build '22631' `
                 -Evidence @("a line with a stray$([char]0x1A) control byte") `
                 -PushEvidence @("· a$([char]9)tabbed dot line", "Tests Passed: 1, Failed: 0")
 
@@ -4380,7 +4380,7 @@ exit 0
             $body = New-WinEnvPullRequestBody -Branch 'feature/windows-capture-font' -Feature @('font') `
                 -ManagedFile @('fontPayload (windows/desired/files/font.json)') `
                 -Commit @('feat(windows): capture font settings from the host') `
-                -Command 'windows/tools/capture.ps1 -Publish' -Build '22631' -PushEvidence $line
+                -Command 'windows/win-env.ps1 capture -Publish' -Build '22631' -PushEvidence $line
 
             # The suite's module-level publish fixtures capture what they
             # print, so the body carries no disclaimer about fixture lines,
@@ -4537,25 +4537,25 @@ exit 0
         It 'INV windows/capture-publishes-through-dev: refuses a capture-subject commit that changes a path outside windows/desired, a rename into it included' {
             $fixture = New-PublishRepository
             & git -C $fixture.Repo switch -q -c $CaptureBranch | Out-Null
-            Add-FixtureCommit -Repo $fixture.Repo -Path 'windows/tools/capture.ps1'
+            Add-FixtureCommit -Repo $fixture.Repo -Path 'windows/tool/capture.ps1'
 
             $script = Get-WinEnvCaptureResumeCommit -RepositoryRoot $fixture.Repo -Branch $CaptureBranch
             $script.Status | Should -Be 'Refused'
-            $script.Message | Should -Match ([regex]::Escape('windows/tools/capture.ps1'))
+            $script.Message | Should -Match ([regex]::Escape('windows/tool/capture.ps1'))
 
             $moved = New-PublishRepository -Populate {
                 param([string] $repo)
-                [void](New-Item -ItemType Directory -Path (Join-Path $repo 'windows/tools') -Force)
-                [IO.File]::WriteAllText((Join-Path $repo 'windows/tools/moved.json'), '{"moved":true}')
+                [void](New-Item -ItemType Directory -Path (Join-Path $repo 'windows/tool') -Force)
+                [IO.File]::WriteAllText((Join-Path $repo 'windows/tool/moved.json'), '{"moved":true}')
             }
             & git -C $moved.Repo switch -q -c $CaptureBranch | Out-Null
             [void](New-Item -ItemType Directory -Path (Join-Path $moved.Repo 'windows/desired/files') -Force)
-            & git -C $moved.Repo mv windows/tools/moved.json windows/desired/files/moved.json | Out-Null
+            & git -C $moved.Repo mv windows/tool/moved.json windows/desired/files/moved.json | Out-Null
             & git -C $moved.Repo commit -q -m 'feat(windows): capture font settings from the host' | Out-Null
 
             $rename = Get-WinEnvCaptureResumeCommit -RepositoryRoot $moved.Repo -Branch $CaptureBranch
             $rename.Status | Should -Be 'Refused'
-            $rename.Message | Should -Match ([regex]::Escape('windows/tools/moved.json'))
+            $rename.Message | Should -Match ([regex]::Escape('windows/tool/moved.json'))
         }
 
         It 'refuses a merge commit even when it carries the capture subject' {
@@ -4691,7 +4691,7 @@ exit 0
                 Feature     = @('font')
                 ManagedFile = @('fontPayload (windows/desired/files/font.json)')
                 Commit      = @('feat(windows): capture font settings from the host')
-                Command     = 'windows/tools/capture.ps1 -Feature font -Publish'
+                Command     = 'windows/win-env.ps1 capture -Feature font -Publish'
                 Build       = '22631'
             }
             $ResumedBodyParameter = $BodyParameter.Clone()
@@ -4996,7 +4996,7 @@ exit 0
             $body | Should -Match 'Windows build:'
             $body | Should -Match ([regex]::Escape('- sample (windows/desired/files/sample.json)'))
             $body | Should -Match ([regex]::Escape('- feat(windows): capture core settings from the host'))
-            $body | Should -Match ([regex]::Escape('Command: windows/tools/capture.ps1 -Feature core -Publish'))
+            $body | Should -Match ([regex]::Escape('Command: windows/win-env.ps1 capture -Feature core -Publish'))
             # The commit's own output, copied rather than intercepted.
             $body | Should -Match '1 file changed'
             # And the push's, which on a Windows host is where the domain's
@@ -5305,7 +5305,7 @@ exit 0
 
 Describe 'repository isolation' {
     BeforeAll {
-        $isolate = Join-Path $repositoryRoot 'tools\isolate-git.ps1'
+        $isolate = Join-Path $repositoryRoot 'tool\isolate-git.ps1'
         $pwshPath = (Get-Process -Id $PID).Path
 
         # Runs one git command in a child pwsh whose environment names a decoy
@@ -5351,12 +5351,12 @@ Describe 'Windows tree isolation' {
         # the tokens a path can be -- a string, a bare command argument, and
         # the tokens nested inside an expandable string -- so a comment that
         # mentions a Unix-like path is not a read. The pattern names the
-        # Unix-like roots -- the payload and module trees, the flake, its
-        # checks -- rather than every path above windows/, because the
+        # Unix-like root, which owns payloads, modules, the flake and checks,
+        # rather than every path above windows/, because the
         # applied-commit code legitimately resolves the repository's own git
         # metadata from the repository root. Case-sensitive on purpose:
-        # PowerShell's own 'Modules' directory is not the Nix module tree.
-        $UnixLikeTreePattern = '(^|[\\/''" ])(assets|modules)([\\/]|$)|flake\.(nix|lock)|tool[\\/]checks'
+        # PowerShell's own paths are not the Unix-like domain tree.
+        $UnixLikeTreePattern = '(^|[\\/''" ])unixlike[\\/]'
         $StringTokenKinds = @('StringLiteral', 'StringExpandable', 'HereStringLiteral', 'HereStringExpandable')
 
         function Get-UnixLikeTreeReference {
@@ -5392,32 +5392,35 @@ Describe 'Windows tree isolation' {
 
     It 'INV windows/no-unix-host-required: the scan names a script that reads a Unix-like payload and passes a comment that mentions one' {
         # The offending path is assembled from pieces so this file, which
-        # the case above scans, does not carry the shape it looks for. Three
-        # spellings of the same read: a quoted string, a bare argument, and
-        # a string nested inside an expandable one.
-        $unixPayload = 'as' + 'sets' + '\wezterm\fonts.json'
-        $unixRoot = 'as' + 'sets'
+        # the case above scans, does not carry the shape it looks for. Four
+        # shapes of current reads: a quoted payload, a bare tool path, a
+        # nested expandable string, and a module path.
+        $unixPayload = 'unix' + 'like' + '\payloads.json'
+        $unixTool = 'unix' + 'like' + '\tool\install-plan'
+        $unixRoot = 'unix' + 'like'
         $offender = Join-Path $TestDrive 'reads-unixlike.ps1'
         [IO.File]::WriteAllText($offender, (@(
                     "`$fonts = Get-Content (Join-Path `$root '$unixPayload')"
-                    "`$fonts = Get-Content (Join-Path `$root $unixPayload)"
-                    "`$fonts = Get-Content `"`$root/`$(Join-Path '$unixRoot' 'wezterm')`""
+                    "`$fonts = Get-Content (Join-Path `$root $unixTool)"
+                    "`$fonts = Get-Content `"`$root/$unixPayload`""
+                    "`$fonts = Get-Content (Join-Path `$root '$unixRoot\modules\programs\probe.nix')"
                 ) -join "`n") + "`n")
         $hit = @(Get-UnixLikeTreeReference -Path $offender)
-        $hit.Count | Should -Be 3
+        $hit.Count | Should -Be 4
         $hit[0] | Should -Match 'reads-unixlike\.ps1:1: '
         $hit[1] | Should -Match 'reads-unixlike\.ps1:2: '
         $hit[2] | Should -Match 'reads-unixlike\.ps1:3: '
+        $hit[3] | Should -Match 'reads-unixlike\.ps1:4: '
 
         $mention = Join-Path $TestDrive 'mentions-unixlike.ps1'
-        [IO.File]::WriteAllText($mention, "# The Unix-like copy lives under $($unixPayload.Replace('\', '/')).`n`$own = 'files\wezterm\fonts.json'`n")
+        [IO.File]::WriteAllText($mention, "# The Unix-like copy lives under $($unixPayload.Replace('\', '/')).`n`$own = 'windows\tool\capture.ps1'`n")
         @(Get-UnixLikeTreeReference -Path $mention).Count | Should -Be 0
     }
 }
 
 Describe 'check entry points' {
     BeforeAll {
-        $bootstrap = Join-Path $repositoryRoot 'tools\bootstrap.ps1'
+        $bootstrap = Join-Path $repositoryRoot 'tool\bootstrap.ps1'
         $entryPoint = Join-Path $repositoryRoot 'win-env.ps1'
         $pwshPath = (Get-Process -Id $PID).Path
 
@@ -5527,7 +5530,7 @@ Describe 'check entry points' {
 
         # And the loop that evaluates preconditions hands the evaluator the
         # item it iterates over, once.
-        $setup = Join-Path $repositoryRoot 'tools\setup.ps1'
+        $setup = Join-Path $repositoryRoot 'tool\setup.ps1'
         $tokens = $null
         $errors = $null
         $ast = [System.Management.Automation.Language.Parser]::ParseFile($setup, [ref]$tokens, [ref]$errors)
@@ -5551,7 +5554,7 @@ Describe 'check entry points' {
         # setup.ps1: the one call that ranks the run consumes one total made
         # from unavailable sources, unavailable observations and known support
         # limits. The clean line is suppressed by any of the three.
-        $setup = Join-Path $repositoryRoot 'tools\setup.ps1'
+        $setup = Join-Path $repositoryRoot 'tool\setup.ps1'
         $tokens = $null
         $errors = $null
         $ast = [System.Management.Automation.Language.Parser]::ParseFile($setup, [ref]$tokens, [ref]$errors)
@@ -5622,7 +5625,7 @@ Describe 'check entry points' {
         $refused.Output | Should -Match 'Parameter set cannot be resolved'
     }
 
-    It 'INV windows/entry-point-forwards-status: every verb names a script under tools that ends in an explicit exit' {
+    It 'INV windows/entry-point-forwards-status: every verb names a script under tool that ends in an explicit exit' {
         $tokens = $null
         $errors = $null
         $ast = [System.Management.Automation.Language.Parser]::ParseFile($entryPoint, [ref]$tokens, [ref]$errors)
@@ -5633,7 +5636,7 @@ Describe 'check entry points' {
             ForEach-Object { $_.Item2.Extent.Text.Trim("'") })
         $scripts.Count | Should -Be 7 -Because 'the table names check, apply, capture, validate, test, setup-dev and font; a new verb updates this count'
         foreach ($script in $scripts) {
-            $path = Join-Path (Join-Path $repositoryRoot 'tools') $script
+            $path = Join-Path (Join-Path $repositoryRoot 'tool') $script
             $path | Should -Exist
             # In-process, the status the entry point returns is $LASTEXITCODE,
             # which a script that falls off its end leaves at whatever its last

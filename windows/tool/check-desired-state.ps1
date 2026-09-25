@@ -13,13 +13,13 @@ Requires complete parser evidence. Missing native tooling becomes exit 1
 instead of exit 69. Setting REQUIRE_NATIVE=1 has the same effect.
 
 .EXAMPLE
-PS> .\windows\tools\check-desired-state.ps1
+PS> .\windows\tool\check-desired-state.ps1
 
 Read-only. Parses all sources possible on the current host and identifies any
 source that remains unverified.
 
 .EXAMPLE
-PS> .\windows\tools\check-desired-state.ps1 -RequireNativeTooling
+PS> .\windows\tool\check-desired-state.ps1 -RequireNativeTooling
 
 Read-only. Fails unless every declared source and Lua example can be parsed.
 

@@ -50,19 +50,19 @@ plan when combined with -Publish. It then exits without writing a payload,
 creating a branch, committing, pushing, or opening a pull request.
 
 .EXAMPLE
-PS> .\windows\tools\capture.ps1 -Feature powertoys -WhatIf
+PS> .\windows\tool\capture.ps1 -Feature powertoys -WhatIf
 
 Read-only. Shows whether the managed PowerToys files can be captured and the
 exact repository diff that would result.
 
 .EXAMPLE
-PS> .\windows\tools\capture.ps1 -Feature terminal -Id windowsTerminal
+PS> .\windows\tool\capture.ps1 -Feature terminal -Id windowsTerminal
 
 Changes the repository after confirmation. Captures only the intersection of
 the terminal feature and the windowsTerminal managed-file ID, then commits it.
 
 .EXAMPLE
-PS> .\windows\tools\capture.ps1 -Feature powertoys -Publish
+PS> .\windows\tool\capture.ps1 -Feature powertoys -Publish
 
 Changes the repository and GitHub after confirmation. Captures and commits the
 payloads, pushes the branch, opens or reuses a pull request, and arms auto-merge.
@@ -173,11 +173,11 @@ param(
 # else; every write goes to this repository's desired state, and only after
 # the confirmation.
 #
-#   .\windows\tools\capture.ps1                     # every applied feature
-#   .\windows\tools\capture.ps1 -Feature powertoys  # one feature
-#   .\windows\tools\capture.ps1 -Id windowsTerminal # one managed file
-#   .\windows\tools\capture.ps1 -Publish            # commit, push, pull request, auto-merge
-#   .\windows\tools\capture.ps1 -WhatIf             # decide and diff, write nothing
+#   .\windows\tool\capture.ps1                     # every applied feature
+#   .\windows\tool\capture.ps1 -Feature powertoys  # one feature
+#   .\windows\tool\capture.ps1 -Id windowsTerminal # one managed file
+#   .\windows\tool\capture.ps1 -Publish            # commit, push, pull request, auto-merge
+#   .\windows\tool\capture.ps1 -WhatIf             # decide and diff, write nothing
 
 $ErrorActionPreference = 'Stop'
 # PowerShell 7.4 and newer turn a non-zero native exit status into a
@@ -421,7 +421,7 @@ foreach ($plan in $refused) { Write-Refusal -Message "refused: $($plan.Id)" -Det
 # What the operator typed, rebuilt from the bound parameters rather than from
 # the raw command line: every value here has already been validated against
 # the manifest or the branch-naming policy.
-$invocationPart = @('windows/tools/capture.ps1')
+$invocationPart = @('windows/win-env.ps1', 'capture')
 if ($requestedFeature.Count) { $invocationPart += '-Feature ' + ($requestedFeature -join ',') }
 if ($requestedId.Count) { $invocationPart += '-Id ' + ($requestedId -join ',') }
 if ($Branch) { $invocationPart += "-Branch $Branch" }
@@ -759,7 +759,7 @@ foreach ($featureId in $features) {
 
     $subject = $commitSubject[$featureId]
     $body = @(
-        'Captured from this host''s managed targets by windows/tools/capture.ps1,',
+        'Captured from this host''s managed targets by windows/win-env.ps1 capture,',
         'with placeholders restored. Managed files:',
         ''
     ) + @($group | ForEach-Object { "- $($_.Id) ($($_.Source))" })

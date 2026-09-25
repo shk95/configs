@@ -47,7 +47,7 @@ https://github.com/shk95/configs/blob/dev/CONTRIBUTING.md#windows-changes
 #>
 # win-env: the Windows domain's one entry point.
 #
-# Every verb runs exactly one script under tools\ and returns that script's
+# Every verb runs exactly one script under tool\ and returns that script's
 # exit status unchanged, so the check contract -- 0 converged, 2 drifted,
 # 69 unverified, 1 failed -- reaches the operator through this file exactly
 # as it does through the script. The verb table below is the whole policy
@@ -78,7 +78,7 @@ https://github.com/shk95/configs/blob/dev/CONTRIBUTING.md#windows-changes
 param([string] $Command)
 
 $ErrorActionPreference = 'Stop'
-$toolsRoot = Join-Path $PSScriptRoot 'tools'
+$toolRoot = Join-Path $PSScriptRoot 'tool'
 
 $verbs = [ordered]@{
     'check'     = @{ Script = 'bootstrap.ps1'; Arguments = @{ Check = $true }; Summary = 'read-only: is an Apply needed; exits 0 converged, 2 drift, 69 unverified' }
@@ -95,7 +95,7 @@ function Get-Usage {
     foreach ($name in $verbs.Keys) {
         $verb = $verbs[$name]
         $fixed = @($verb.Arguments.Keys | ForEach-Object { '-' + $_ })
-        $target = 'tools\' + $verb.Script
+        $target = 'tool\' + $verb.Script
         if ($fixed.Count) { $target += ' ' + ($fixed -join ' ') }
         $lines += ('  {0,-10} {1,-36} {2}' -f $name, $target, $verb.Summary)
     }
@@ -107,8 +107,8 @@ function Get-Usage {
     $lines += ''
     $lines += 'Detailed help (these commands do not run the target script):'
     $lines += '  Get-Help .\windows\win-env.ps1 -Detailed'
-    $lines += '  Get-Help .\windows\tools\bootstrap.ps1 -Full'
-    $lines += '  Get-Help .\windows\tools\capture.ps1 -Examples'
+    $lines += '  Get-Help .\windows\tool\bootstrap.ps1 -Full'
+    $lines += '  Get-Help .\windows\tool\capture.ps1 -Examples'
     return ($lines -join [Environment]::NewLine)
 }
 
@@ -129,7 +129,7 @@ if (-not $verbs.Contains($Command)) {
 }
 
 $verb = $verbs[$Command]
-$scriptPath = Join-Path $toolsRoot $verb.Script
+$scriptPath = Join-Path $toolRoot $verb.Script
 $fixed = $verb.Arguments
 
 $global:LASTEXITCODE = 0

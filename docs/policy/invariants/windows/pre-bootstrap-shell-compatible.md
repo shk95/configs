@@ -3,7 +3,7 @@ statement: Every Windows script that can run before the domain installs its own 
 rationale: docs/policy/architecture.md § Windows domain
 enforced-by: fixture windows/tests/WinEnv.Tests.ps1
 
-Two scripts can run before pwsh 7 exists on a host: `tools/bootstrap.ps1`,
+Two scripts can run before pwsh 7 exists on a host: `tool/bootstrap.ps1`,
 which installs it, and `win-env.ps1`, which stands in front of bootstrap for
 `apply` and `check`. Both therefore carry no `#Requires`, import no module
 and use only syntax Windows PowerShell 5.1 accepts. Nothing else asks the

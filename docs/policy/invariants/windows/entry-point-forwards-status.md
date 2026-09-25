@@ -13,7 +13,7 @@ prerequisite reachable, where a forwarded check can only end at 69, so an
 unknown verb's 64 proves both the refusal and that nothing ran; they also
 hold that a script refusing its arguments ends the run at 1, which the
 entry point's own error preference guarantees rather than the script, and
-that every verb names a file that exists under the tools directory and ends
+that every verb names a file that exists under the tool directory and ends
 in an explicit exit, because a script run in-process that falls off its end
 leaves the status at whatever its last native call set; no target did so
 when the rule was written, and the fixture keeps it that way. The usage

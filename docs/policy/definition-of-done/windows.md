@@ -4,12 +4,12 @@ The checklist a Windows change owes on top of `repository.md` beside this
 file, which every change owes.
 
 - [ ] The change is owned and semantically validated by the Windows domain.
-- [ ] `windows/win-env.ps1 validate` (`windows/tools/check-desired-state.ps1`)
+- [ ] `windows/win-env.ps1 validate`
       validates the manifest and every PowerShell, JSON, INI, KDL, and Lua
       source with native tooling, and names any source it had no parser for
       instead of failing or skipping it.
 - [ ] Pester passes under native PowerShell when reconciliation behavior changed.
-- [ ] `windows/win-env.ps1 check` (`windows/tools/bootstrap.ps1 -Check`) is
+- [ ] `windows/win-env.ps1 check` is
       observed on native Windows when package detection, target paths,
       registry behavior, fonts, configuration parsing, or application
       lifecycle behavior changed.
