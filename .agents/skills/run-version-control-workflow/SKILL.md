@@ -39,7 +39,12 @@ planning read-only unless the user explicitly authorizes a Git mutation.
   flow", owns the rule.
 - **Start**: Propose `feature/<scope>-<topic>` or `fix/<scope>-<topic>` from
   `dev`. Fetch, create a branch, or add a worktree only after the user
-  explicitly requests that mutation. A worktree made for an implementer is kept,
+  explicitly requests that mutation. Before editing tracked source, use a
+  linked worktree dedicated to the task and its topic branch; keep the primary
+  checkout for inspection and integration. For a user-pinned base commit,
+  verify the exact commit in the linked worktree before editing and check its
+  relationship to `origin/dev` before publication. A worktree made for an
+  implementer is kept,
   with the ability to resume that implementer in it, until the pull request
   from its branch has merged: review feedback returns to the same worktree,
   and one removed earlier costs a fresh setup for every fix.

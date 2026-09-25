@@ -53,6 +53,10 @@ export MSYS_NO_PATHCONV MSYS2_ARG_CONV_EXCL
 root=$(git rev-parse --show-toplevel)
 cd "$root"
 
+# INV repository/change-authoring-in-linked-worktree
+# Refuse before this helper writes its templated edit or changes a branch.
+tool/version-control/require-linked-worktree
+
 script_dir=$(CDPATH= cd -- "$(dirname -- "$0")" && pwd)
 classify="$script_dir/classify"
 select_checks="$root/tool/dispatch/select"

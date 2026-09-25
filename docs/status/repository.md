@@ -16,6 +16,13 @@ both branches require only the `Required checks` gate.
 `dev` through a pull request with a merge commit; squash and rebase merges
 are disabled.
 
+Source authoring now uses a task-dedicated linked worktree. The primary
+checkout remains available for inspection and integration. The routine
+commit helper refuses the primary checkout before editing, and the local
+pre-commit hook refuses a primary-checkout commit when tracked hooks are
+enabled. Editor writes have no Git hook; the start workflow and reviewer
+check cover that part. CI cannot infer an editor's worktree from a commit.
+
 The merge gate is CI's `Required checks`, demanded whenever a change falls
 in a domain that check covers.
 

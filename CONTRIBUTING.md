@@ -48,6 +48,26 @@ to the other.
 
 ## Branch and commit flow
 
+Start a source change in its own linked worktree, with one topic branch for the
+reviewable increment. Keep the primary checkout available for read-only
+inspection and integration. `tool/worktree.sh new <scope>-<topic> [feature|fix]`
+fetches `origin/dev`, creates the branch and its sibling worktree, and prepares
+its local dependencies. For a requested fixed base commit, create the linked
+worktree at that exact commit and attach a topic branch there before editing;
+verify that the commit is the intended `origin/dev` base before publishing.
+The branch and worktree are kept for review feedback until their pull request
+merges. `tool/worktree.sh done <scope>-<topic>` then removes the worktree.
+
+`tool/version-control/require-linked-worktree` is a preflight for scripts that
+write source. The pre-commit hook also refuses commits from the primary
+checkout, including direct `git commit`; the routine commit helper refuses
+there before it edits. Git cannot intercept an editor writing a file, so the
+agent workflow and this start procedure keep editing in the linked worktree,
+while the commit guard catches a misplaced change before it enters history.
+Read-only checks, integration, promotion and release operations may use the
+primary checkout. A native Windows clone may check an unpublished branch as
+described below; it does not author that branch's source change.
+
 ```text
 master <- dev <- feature/<domain>-<topic> or fix/<domain>-<topic>
 ```
@@ -115,14 +135,15 @@ formula or cask, a `unixlike/flake.lock` refresh —
 checks, and the message, then applies it and commits on your confirmation. It
 refuses on `master` and never bypasses a hook.
 
-Run it from `dev`. On any other branch it commits where it stands, and with
-`--publish` it arms auto-merge on the pull request already open from that
-head, which on a branch carrying other work would merge that work
-unfinished. Every edit it templates is `unixlike`, so on a `repository`
-branch it would also produce a two-scope commit.
+Run it from a linked worktree on a branch dedicated to that edit. On a topic
+branch it commits where it stands, and with `--publish` it arms auto-merge on
+the pull request already open from that head, which on a branch carrying
+other work would merge that work unfinished. Every edit it templates is
+`unixlike`, so on a `repository` branch it would also produce a two-scope
+commit. The primary `dev` checkout is refused before the helper edits.
 
 Add `--publish` and that one confirmation carries the change the rest of the
-way. On `dev` the helper branches to `feature/<scope>-<topic>` from
+way. If `dev` is checked out in a linked worktree, the helper branches to `feature/<scope>-<topic>` from
 `origin/dev`; on any other branch it commits where it is. It then pushes,
 opens a pull request against `dev`, arms auto-merge, and prints the
 pull-request URL. It never waits on CI and never merges: `Required checks` and

@@ -26,6 +26,8 @@ own list is the file named for it beside this one (`unixlike.md`,
       (INV repository/pull-request-spans-an-evidence-lane).
 - [ ] No commit, push, tag, branch change, activation, or Apply occurred without
       explicit authorization.
+- [ ] The source edit was authored in its task-dedicated linked worktree
+      (INV repository/change-authoring-in-linked-worktree).
 
 ## Repository governance
 
