@@ -22,7 +22,12 @@ seven toplevel derivation paths equal the pre-API `dev` tree. The public
 provider merge; its setup documents host-owned SOPS + age delivery. The one
 private `configs-hosts` repository declares all seven current outputs with
 independent flakes and locks. Their derivation paths match the pre-API tree;
-the Darwin, OrbStack, UTM and VMware consumers built natively. The isolated OrbStack
+the Darwin, OrbStack, UTM and VMware consumers built natively. The Darwin
+consumer was permanently switched on the aarch64 Mac on 2026-09-25. Its
+running system and profile match the consumer candidate; Home Manager files
+and Karabiner match, and the maintainer confirmed both terminals, zsh,
+Zellij, Karabiner shortcuts and Korean input. The preceding generation remains
+available. The isolated OrbStack
 consumer was permanently switched and verified after a restart: its running,
 booted and boot-profile system links matched the consumer candidate. The UTM
 consumer was test-activated, permanently switched and verified after a guest
@@ -35,8 +40,8 @@ network and pointer behavior after reboot; SSH and services remained healthy.
 Bidirectional clipboard transfer failed on both the consumer and preceding
 generations. The maintainer excluded that known failure from VMware consumer
 completion; clipboard functionality remains broken. NixOS-WSL and standalone
-WSL Home still need native builds, and the remaining installed consumers need
-runtime evidence, so the provider inventory and outputs remain in place
+WSL Home still need native builds and runtime evidence, so the provider
+inventory and outputs remain in place
 (`docs/policy/decisions/unixlike/provider-constructors-own-composition.md`).
 
 Unix-like Home Manager hosts are standalone Ubuntu WSL, NixOS-WSL, and
