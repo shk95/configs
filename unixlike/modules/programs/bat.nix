@@ -2,7 +2,7 @@ _: {
   modules.homeManager.shared = {pkgs, ...}: {
     # Declared as a program rather than a package, which is what writes the config
     # below — and `programs.bat` contributes the package itself, so it does not
-    # also belong in modules/packages.nix.
+    # also belong in modules/foundation/packages.nix.
     programs.bat = {
       enable = true;
 

@@ -1,14 +1,14 @@
 # The account of a NixOS host that boots itself: the one its inventory entry
-# names, read from what modules/host/nixos.nix tells the host about itself,
+# names, read from what modules/foundation/nixos.nix tells the host about itself,
 # so no host is named here. The NixOS-WSL account is not this one — its UID
-# is a fact about WSL's shared cgroups and stays in modules/wsl.nix.
+# is a fact about WSL's shared cgroups and stays in modules/platforms/wsl.nix.
 #
 # The account is created without a password. `users.mutableUsers` stays at
 # its default, so the installing step sets one with `passwd` and every later
 # activation keeps it; until then the account is locked, and sshd takes a key
-# only (modules/sshd.nix). sudo asks for that password: with sshd reachable,
+# only (modules/foundation/sshd.nix). sudo asks for that password: with sshd reachable,
 # a passwordless wheel would make any accepted key equal to root. The login
-# shell is modules/shell/headless.nix.
+# shell is modules/foundation/shell/headless.nix.
 #
 # INV unixlike/headless-key-only — the assertion below is the account's half
 # of the rule; tool/checks/flake-test holds both directions.
@@ -55,7 +55,7 @@ _: {
   # another UID is inferred, not observed, and the procedure's reading after
   # an OrbStack update is where it would show. It is also why the account is
   # a system user given the shape of a normal one: NixOS keeps normal users
-  # at 1000 and above. The login shell is modules/shell/orbstack.nix.
+  # at 1000 and above. The login shell is modules/foundation/shell/orbstack.nix.
   modules.nixos.orbstack = {config, ...}: let
     inherit (config.host) user;
   in {

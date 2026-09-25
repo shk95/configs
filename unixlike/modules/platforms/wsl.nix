@@ -7,10 +7,10 @@
 # `environment.systemPackages` at all. This file holds the WSL integration,
 # the account's identity and the kernel-global protection; the Nix daemon
 # settings, the login shell, the system editor, the time zone and sshd the
-# same decision names are in modules/nix/shared.nix, modules/shell/wsl.nix,
-# modules/editor/wsl.nix, modules/timezone.nix and modules/sshd.nix, one
+# same decision names are in modules/foundation/nix/shared.nix, modules/foundation/shell/wsl.nix,
+# modules/platforms/editor/wsl.nix, modules/foundation/timezone.nix and modules/foundation/sshd.nix, one
 # feature each; the host name comes from the host's inventory entry
-# (modules/host/nixos.nix).
+# (modules/foundation/nixos.nix).
 _: {
   modules.nixos.wsl = {
     pkgs,
@@ -72,7 +72,7 @@ _: {
 
     # sudo asks for the account's password. nixos-wsl defaults this to false
     # because the account it creates has no password, and with sshd reachable
-    # from outside (modules/sshd.nix) that would make any accepted key
+    # from outside (modules/foundation/sshd.nix) that would make any accepted key
     # equal to root. The password itself is host state: `users.mutableUsers`
     # stays at its default, so `passwd` sets it once and every later
     # activation keeps it. A fresh import starts locked, and until
