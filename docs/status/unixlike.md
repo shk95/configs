@@ -28,14 +28,15 @@ booted and boot-profile system links matched the consumer candidate. The UTM
 consumer was test-activated, permanently switched and verified after a guest
 reboot, with graphical, Korean input and audio behavior confirmed by the
 maintainer. A rollback to the preceding generation succeeded and the consumer
-was restored. The VMware consumer passed a test activation but the maintainer
-found bidirectional host clipboard transfer broken. The maintainer confirmed
-the same failure on the preceding generation, so it was not introduced by the
-consumer. The preceding running generation was restored without changing the
-boot default. VMware consumer runtime remains pending. NixOS-WSL and standalone
-WSL Home still need native
-builds, and the remaining installed consumers need runtime evidence, so the
-provider inventory and outputs remain in place
+was restored. The VMware consumer passed a test activation, permanent switch,
+rebooted graphical runtime check and rollback/restoration on 2026-09-25. The
+maintainer confirmed Niri, both terminals, Noctalia, Korean input, sound,
+network and pointer behavior after reboot; SSH and services remained healthy.
+Bidirectional clipboard transfer failed on both the consumer and preceding
+generations. The maintainer excluded that known failure from VMware consumer
+completion; clipboard functionality remains broken. NixOS-WSL and standalone
+WSL Home still need native builds, and the remaining installed consumers need
+runtime evidence, so the provider inventory and outputs remain in place
 (`docs/policy/decisions/unixlike/provider-constructors-own-composition.md`).
 
 Unix-like Home Manager hosts are standalone Ubuntu WSL, NixOS-WSL, and
