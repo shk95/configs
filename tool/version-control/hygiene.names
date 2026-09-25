@@ -1,0 +1,26 @@
+# Names currently admitted in committed desired state. Remove entries when
+# their host-owned declarations leave this provider repository.
+101378576+shk95@users.noreply.github.com
+25.11
+26.05
+26.11
+aarch64-darwin
+aarch64-linux
+agents
+desktop
+example
+fixture-desktop
+fixture-mac
+fixture-orbstack
+fixture-utm
+fixture-vm
+fixture-wsl
+orbstack
+shk
+shk-macbook
+user1
+utm
+vm
+vmware
+wsl
+x86_64-linux

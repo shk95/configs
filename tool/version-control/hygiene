@@ -99,8 +99,8 @@ root=$(git rev-parse --show-toplevel)
 cd "$root"
 
 allow_file=tool/version-control/hygiene.allow
-# The declaration this scan reads its allowed names from.
-inventory=unixlike/modules/flake/inventory.nix
+# The repository-owned declaration of names allowed in desired state.
+names_file=tool/version-control/hygiene.names
 
 work=$(mktemp -d)
 trap 'rm -rf "$work"' EXIT
@@ -270,21 +270,16 @@ scan() {
 # Declared names
 # ---------------------------------------------------------------------------
 
-# Every double-quoted string literal in the inventory. Extracting literals
-# rather than reading the attribute set is what keeps this check's requirements
-# at a POSIX shell and Git, and it is layout-independent by construction: when
-# the inventory grows host fields, their values join the allowed set with no
-# change here. It over-accepts -- `aarch64-darwin` is not a name -- and an
-# over-broad allowlist is the safe direction for an allowlist. Read from the
-# index for the same reason the allow file is.
+# The declaration is read from the index, like the scanned desired state.
+# It can shrink as host identities leave this repository. Blank lines and
+# whole-line comments are ignored; an absent or empty declaration fails closed.
 : >"$work/declared"
-git show ":$inventory" 2>/dev/null |
-  sed -n 's/.*"\([^"]*\)".*/\1/p' | sort -u >"$work/declared"
+git show ":$names_file" 2>/dev/null |
+  sed -e 's/^#.*//' -e '/^[[:space:]]*$/d' | sort -u >"$work/declared"
 
-# An empty extraction must fail rather than accept everything, so a reformat of
-# the inventory cannot silently retire this axis.
+# A missing declaration cannot silently retire this axis.
 if [ ! -s "$work/declared" ]; then
-  violation "no declared name could be extracted from $inventory; axis 2 cannot be decided"
+  violation "no declared name could be extracted from $names_file; axis 2 cannot be decided"
 fi
 
 declared() { grep -qxF -- "$1" "$work/declared"; }

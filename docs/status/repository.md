@@ -75,6 +75,10 @@ flakes with separate locks. The template is a one-time copy, not a continuing
 composition authority. The original provider outputs remain while the private
 consumers collect host-specific native and runtime evidence
 (`docs/policy/decisions/repository/one-private-host-repository-from-public-template.md`).
+The repository-wide hygiene scanner now reads its admitted names from
+`tool/version-control/hygiene.names` in the Git index. Its current entries
+preserve the former inventory-derived allowance until provider-side host
+instances are retired; the declaration then shrinks with them.
 
 Two things changed with it. The payload declaration moved to
 `unixlike/payloads.json` and the scanned tree became the module tree, so the
