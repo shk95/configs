@@ -4,6 +4,7 @@ date: 2026-09-25
 scope: repository
 status: approved
 review-by: 2026-10-25
+issue: #400
 
 The maintainer requires source changes and commits to take place in a task's
 linked worktree. Reading, checking and native Windows verification in a
