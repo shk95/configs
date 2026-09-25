@@ -111,3 +111,17 @@ on the named host.
 | AC8 | The procedure separates plan review, destructive formatting, installation, remote test activation, runtime confirmation, switch and rollback and states which commands require explicit authorization. | review |
 | AC9 | A real installation and each remote deployment lane record native build, runtime, activation and rollback evidence independently. | build, native runtime, activation |
 | AC10 | `Required checks` passes on the head of every pull request of this work before it merges. | evaluation |
+
+## Ownership amendment, 2026-09-25
+
+The verified storage classes, synthetic install-plan checks and disposable VM
+installation remain provider evidence. Their original `vm`, `utm` and
+`desktop` final-output paths in the criteria above identify the historical
+test targets; current provider tests use synthetic fixtures. Private
+`configs-hosts` owns final instances, deploy-rs nodes, SSH aliases, guarded
+single-host deployment and the real-host procedure. It must choose and verify
+its own release source; a `configs` Unix-like provider tag cannot authorize
+or certify a private deployment. AC6–AC10 stay pending until the consumer
+implements and verifies those lanes and a real host supplies the relevant
+native build, runtime, activation and rollback evidence. The report here
+will link each consumer increment while retaining the earlier provider proof.

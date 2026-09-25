@@ -9,6 +9,11 @@ desktop base. The repository-scope installation procedure is merged. This
 report remains pending because all physical-host evidence is a separate
 increment.
 
+The 2026-09-25 provider transition retired the public final `desktop` output.
+AC1–AC6 and AC9 below are dated evidence from that output and its provider
+classes. Private `configs-hosts/hosts/desktop/` owns the provisional final
+instance and future native and physical evidence. AC7 and AC8 remain pending.
+
 ## Acceptance
 
 | ID | State | Evidence |

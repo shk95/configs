@@ -8,6 +8,11 @@ The automatic installation increment is verified. Deployment topology, the
 operator procedure and all installed-host evidence remain pending. No real
 disk was formatted, no host was installed and no configuration was activated.
 
+On 2026-09-25 the provider transition moved final instances to private
+`configs-hosts`. AC2–AC5 below retain historical provider and former-output
+evidence. The still-pending AC1 and AC6–AC10 require consumer-owned final
+nodes, guarded deployment and physical proof; their states are unchanged.
+
 ## Acceptance
 
 | ID | State | Evidence |

@@ -323,15 +323,14 @@ installer confirms or corrects them. Evaluation and x86_64 build are the only
 available evidence; hardware runtime and activation remain pending in
 `docs/work/unixlike/amd-apu-desktop/report.md`.
 
-The three ordinary booting hosts now expose disko installation layouts. Their
-tracked target is the unusable
-`/dev/disk/by-id/INSTALL_TARGET_REQUIRED`; `just nixos-install-plan` writes a
-new wrapper flake only after the maintainer supplies one installable inventory
-host and one persistent by-id path. `just nixos-install-vm-test vm` formats
-only disposable QEMU disks, installs the actual VMware-shaped output and boots
-it; the test may use KVM or TCG and does not connect to an installed host.
-Physical formatting and installation remain pending, as do all deploy-rs
-nodes and remote activations
+The provider's ordinary booting machine kinds expose reusable disko layouts.
+Their tracked target is the unusable
+`/dev/disk/by-id/INSTALL_TARGET_REQUIRED`; `unixlike/tool/install-plan` and
+`install-vm-test` now exercise synthetic fixtures. The earlier disposable
+QEMU installation of the former VMware-shaped output remains historical
+native evidence. A private consumer must supply its own selected host and
+persistent by-id disk path. Physical formatting and installation remain
+pending, as do consumer-owned deploy-rs nodes and remote activations
 (`docs/work/unixlike/installation-and-deployment/report.md`). The
 Nix daemon settings and the no-channel rule are in `modules.nixos.shared`
 and reach every NixOS host, the registered distribution included.
@@ -356,22 +355,16 @@ and `.exe` interop survived unchanged. Restarting NixOS made the generated
 both managers returned to `running` with no failed units. The milestone's
 evidence issue (#192) carries the readings.
 
-Since 2026-09-19 the distribution is updated in place
-(`docs/work/unixlike/nixos-wsl-in-place-update/report.md`, done). The
-recipes `nixos-test`, `nixos-switch`, `nixos-rollback` and
-`nixos-generations` act on the output named after the NixOS host they run on
-and refuse where there is none; `nixos-eval`, `nixos-build` and
-`nixos-tarball` run anywhere and take the host as an argument, refusing with
-the list of exported names when it is missing or unknown; and `home-switch`
-refuses on NixOS. `unixlike/tool/checks/test` builds a NixOS output only on
-the host it is named after
-(`docs/policy/decisions/unixlike/nixos-hosts-declared-in-typed-inventory.md`). Channels are off in the
-configuration (`INV unixlike/nixos-no-channel`), so the search path names the
-flake's nixpkgs alone and an archive built from here registers no channel.
-`CONTRIBUTING.md`, "Update the registered NixOS-WSL distribution", is the
-procedure.
+The distribution's 2026-09-19 in-place update used the then-current public
+host output (`docs/work/unixlike/nixos-wsl-in-place-update/report.md`, done).
+That host now takes updates from its reviewed private consumer flake. The
+provider's host-specific Justfile recipes refuse synthetic outputs and
+`unixlike/tool/checks/test` verifies only provider fixtures. Channels are
+off in the provider configuration (`INV unixlike/nixos-no-channel`); the
+private consumer records its final build and activation separately
+(`docs/policy/decisions/unixlike/nixos-hosts-declared-in-typed-inventory.md`).
 
-The host took that path the same day. A rebuild without a flake failed on
+The host took that historical path the same day. A rebuild without a flake failed on
 the search path before and after, as predicted; the cleanup removed
 `/etc/nixos` and the channel the import had added and never updated;
 `just nixos-test` and `just nixos-switch` activated generation 4, whose
