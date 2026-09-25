@@ -560,8 +560,12 @@ produced any `-Check` or Apply evidence, because a check that passed under a
 minimal selection says nothing about the features it excluded.
 
 A change made in an application's own UI moves back into desired state with
-`.\windows\win-env.ps1 capture`, which reads the
-managed targets, writes only
+`.\windows\win-env.ps1 capture`, run from a linked task worktree on the
+Windows host. Create it from `origin/dev` before writing. The primary clone
+may run `capture -WhatIf` to inspect the proposed diff and may resume a
+publish with no new payload change. A writing run in the primary clone
+refuses before switching branches, staging, or editing a payload. Capture
+reads the managed targets and writes only
 this repository's payloads — a JSON payload pretty-printed to this
 repository's two-space style — and ends at one confirmation before committing.
 Preview it with `-WhatIf` first. It restates the guards of

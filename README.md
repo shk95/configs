@@ -95,6 +95,8 @@ formula or cask, a `unixlike/flake.lock` refresh — reaches `dev` in one
 command:
 
 ```sh
+tool/worktree.sh new unixlike-brew-add feature
+cd ../configs-wt/feature-unixlike-brew-add
 tool/version-control/commit --dry-run --publish brew add <formula>
 tool/version-control/commit --publish brew add <formula>
 ```
@@ -359,6 +361,11 @@ Apply writes a payload to the host. The other direction has a tool of its own,
 so a setting changed through PowerToys, Windows Terminal, WezTerm, the managed
 PowerShell profile, `.wslconfig` or Zellij becomes desired state with one
 command and one confirmation:
+
+Run a writing capture in a linked task worktree. From the primary checkout,
+`-WhatIf` can still preview the diff without writing. Create the linked
+worktree on the Windows host with `tool/worktree.sh new windows-capture-settings
+feature`, then run the following commands from that worktree.
 
 ```powershell
 .\windows\win-env.ps1 capture                          # every feature this host applied

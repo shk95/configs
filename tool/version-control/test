@@ -5394,12 +5394,14 @@ printf '%s\n' "$closure_audit_output" | grep -qF 'warning: overdue spec: docs/wo
 # INV repository/change-authoring-in-linked-worktree
 authoring_root="$test_root/authoring-primary"
 authoring_linked="$test_root/authoring-linked"
-mkdir -p "$authoring_root/tool/version-control"
+mkdir -p "$authoring_root/tool/version-control" "$authoring_root/.githooks"
 git -C "$authoring_root" init -q -b dev
 git -C "$authoring_root" config user.name Fixture
 git -C "$authoring_root" config user.email fixture@example.invalid
 cp "$root/tool/version-control/require-linked-worktree" "$authoring_root/tool/version-control/require-linked-worktree"
-chmod +x "$authoring_root/tool/version-control/require-linked-worktree"
+cp "$root/tool/version-control/commit" "$authoring_root/tool/version-control/commit"
+cp "$root/.githooks/evidence" "$authoring_root/.githooks/evidence"
+chmod +x "$authoring_root/tool/version-control/require-linked-worktree" "$authoring_root/tool/version-control/commit"
 printf 'fixture\n' >"$authoring_root/source"
 git -C "$authoring_root" add source
 git -C "$authoring_root" -c core.hooksPath=/dev/null commit -q -m 'feat(repository): create authoring fixture'
@@ -5427,13 +5429,43 @@ printf '%s\n' "$authoring_output" | grep -qF 'INV repository/change-authoring-in
   echo "pre-commit did not invoke the worktree guard first" >&2
   exit 1
 }
-if authoring_output=$(cd "$authoring_root" && "$root/tool/version-control/commit" --dry-run 2>&1); then
+if ! (cd "$authoring_root" && tool/version-control/commit --help >/dev/null); then
+  echo "the primary checkout could not read helper help" >&2
+  exit 1
+fi
+if ! (cd "$authoring_root" && tool/version-control/commit prune >/dev/null); then
+  echo "the primary checkout could not run standalone branch maintenance" >&2
+  exit 1
+fi
+if authoring_output=$(cd "$authoring_root" && tool/version-control/commit --dry-run brew add fixture 2>&1); then
   echo "the commit helper accepted the primary checkout" >&2
   exit 1
 fi
 printf '%s\n' "$authoring_output" | grep -qF 'INV repository/change-authoring-in-linked-worktree' || {
   printf '%s\n' "$authoring_output" >&2
   echo "the commit helper did not refuse before editing" >&2
+  exit 1
+}
+
+# A linked caller must create siblings of the primary checkout, and removal
+# follows the topic branch even for a user-pinned worktree with another name.
+cp "$root/tool/worktree.sh" "$authoring_root/tool/worktree.sh"
+chmod +x "$authoring_root/tool/worktree.sh"
+authoring_remote="$test_root/authoring-remote.git"
+git init -q --bare "$authoring_remote"
+git -C "$authoring_root" remote add origin "$authoring_remote"
+git -C "$authoring_root" push -q origin dev
+(cd "$authoring_linked" && "$authoring_root/tool/worktree.sh" new repository-from-linked feature >/dev/null)
+authoring_sibling="$test_root/authoring-primary-wt/feature-repository-from-linked"
+[ -d "$authoring_sibling" ] || {
+  echo "the linked caller did not create a sibling of the primary checkout" >&2
+  exit 1
+}
+authoring_pinned="$test_root/pinned-base"
+git -C "$authoring_root" worktree add -q -b fix/repository-pinned "$authoring_pinned" HEAD
+(cd "$authoring_linked" && "$authoring_root/tool/worktree.sh" done repository-pinned >/dev/null)
+[ ! -e "$authoring_pinned" ] || {
+  echo "worktree done did not find the topic branch at its pinned path" >&2
   exit 1
 }
 

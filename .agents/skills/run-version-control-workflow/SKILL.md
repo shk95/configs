@@ -42,8 +42,11 @@ planning read-only unless the user explicitly authorizes a Git mutation.
   explicitly requests that mutation. Before editing tracked source, use a
   linked worktree dedicated to the task and its topic branch; keep the primary
   checkout for inspection and integration. For a user-pinned base commit,
-  verify the exact commit in the linked worktree before editing and check its
-  relationship to `origin/dev` before publication. A worktree made for an
+  verify the exact commit in the linked worktree while it is still detached;
+  attach the task branch only after branch creation is authorized, and verify
+  its relationship to `origin/dev` before publication. Before a writing
+  helper runs, check that its current directory is this linked worktree.
+  A worktree made for an
   implementer is kept,
   with the ability to resume that implementer in it, until the pull request
   from its branch has merged: review feedback returns to the same worktree,
@@ -81,8 +84,9 @@ planning read-only unless the user explicitly authorizes a Git mutation.
   `gh pr update-branch`. Do
   not merge, push, or change branches without explicit authorization.
   `tool/worktree.sh done` removes an implementer's worktree and runs only at
-  the point Start names; the publish helper prunes the merged branch, never
-  the worktree.
+  the point Start names, including a user-pinned worktree whose path differs
+  from the helper's default; the publish helper prunes the merged branch,
+  never the worktree.
 - **Promote**: Run `tool/version-control/plan-promotion`. Permit only a
   same-repository `dev` to `master` pull request, ensure no competing promotion
   is open, and introduce no fix in the promotion itself. Require `Required
