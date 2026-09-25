@@ -39,8 +39,9 @@ maintainer confirmed Niri, both terminals, Noctalia, Korean input, sound,
 network and pointer behavior after reboot; SSH and services remained healthy.
 Bidirectional clipboard transfer failed on both the consumer and preceding
 generations. The maintainer excluded that known failure from VMware consumer
-completion; clipboard functionality remains broken. NixOS-WSL and standalone
-WSL Home still need native builds and runtime evidence, so the provider
+completion; clipboard functionality remains broken. NixOS-WSL now has a native
+consumer build but still needs consumer runtime evidence. Standalone WSL Home
+still needs a native build and runtime evidence, so the provider
 inventory and outputs remain in place
 (`docs/policy/decisions/unixlike/provider-constructors-own-composition.md`).
 
