@@ -40,12 +40,14 @@ network and pointer behavior after reboot; SSH and services remained healthy.
 Bidirectional clipboard transfer failed on both the consumer and preceding
 generations. The maintainer excluded that known failure from VMware consumer
 completion; clipboard functionality remains broken. NixOS-WSL has a native
-consumer build and temporary runtime evidence. Its first test exited
-unsuccessfully on a getty unit already failed in the preceding generation;
-after that failure cleared, a second `nixos-rebuild test` and restoration both
-succeeded. Fresh SSH, Home Manager and Windows-started interop worked under
-the candidate. A DNS lookup timed out under both candidate and restored
-preceding systems, so its cause remains open. No permanent switch was made.
+consumer build and was permanently switched to consumer generation 5 on
+2026-09-25. The running system and system profile match that candidate; a
+fresh `ssh homewsl` session, Home Manager, Windows interop and DNS worked.
+The distribution has not restarted, so its booted-system link still names the
+preceding generation and post-restart consumer runtime remains unverified.
+The first temporary test had failed on a getty unit already failed in the
+preceding generation; a later clean-baseline test and restoration succeeded.
+DNS resolved before and after the permanent switch.
 Standalone WSL Home still needs a native build and runtime evidence, so the
 provider inventory and outputs remain in place
 (`docs/policy/decisions/unixlike/provider-constructors-own-composition.md`).
