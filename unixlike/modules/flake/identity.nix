@@ -1,8 +1,8 @@
-# Typed schemas only. Concrete, non-secret host identity and profile choices
-# live in `inventory.nix`; the two option namespaces remain separate.
+# Typed schemas only. Synthetic test identities and profile choices live in
+# `fixtures.nix`; real host values live in the private consumer.
 #
 # INV unixlike/typed-identity — this file is the schema; tool/checks/flake-test
-# proves it accepts the inventory and refuses a wrong shape.
+# proves it accepts the synthetic fixtures and refuses a wrong shape.
 {
   lib,
   config,

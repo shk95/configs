@@ -75,6 +75,7 @@ fi
 # reported as not activatable, as all of them are anywhere else.
 printf '→ builds only the NixOS output named after the host it runs on\n'
 hosts_flake=$(mktemp -d)
+hosts_flake=$(CDPATH= cd -- "$hosts_flake" && pwd -P)
 trap 'rm -rf "$hosts_flake"' EXIT
 here=$(nix eval --raw --impure --expr 'builtins.currentSystem')
 sed "s/@system@/$here/g" "$fixtures/nixos-hosts/flake.nix.in" > "$hosts_flake/flake.nix"

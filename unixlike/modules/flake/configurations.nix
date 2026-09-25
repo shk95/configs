@@ -11,8 +11,8 @@
 # or forces a class's decision.
 #
 # `home.agents` — the coding agents — is offered to WSL NixOS hosts and
-# selected by `hostSelections.nixos.nixos`; the standalone Ubuntu home and
-# the Darwin home are unchanged by it (modules/agents.nix).
+# selected by the synthetic WSL fixture; consumers make their own choices
+# (modules/agents.nix).
 #
 # INV unixlike/nixos-host-inventory — every NixOS output is generated from
 # `identity.nixosHosts`, named after its entry, and told about itself through
