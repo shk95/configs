@@ -52,11 +52,11 @@ are revised for the new owner before work resumes.
 | 14 | physical Unix-like module grouping; preserve existing outputs — done 2026-09-24 | unixlike |
 | 15 | typed provider API and consumer contract; retain current outputs during comparison — done 2026-09-24 | unixlike |
 | 16 | public host-repository template with an evaluated example — done 2026-09-24 | external template repository |
-| 17 | migrate all seven current outputs to one private consumer repository, `configs-hosts`, with SOPS + age and per-host verification; retire real host inventory from `configs` after adoption | unixlike and external host repository, in separate increments |
-| 9 | x86_64 desktop on an AMD APU — evaluation and native build verified; physical evidence pending; resume after item 17 | unixlike and external host repository, to be revised |
-| 11 | installation and deployment (disko, nixos-anywhere, deploy-rs) — disposable-VM installation verified; remaining deployment and real-host evidence resume after item 17 | unixlike and external host repository, to be revised |
-| 12 | x86_64 guest on QEMU/KVM, on the NixOS desktop — after items 9 and 11 | unixlike and external host repository, to be revised |
-| 13 | x86_64 guest on Hyper-V, on the Windows host — after item 11 | unixlike and external host repository, to be revised |
+| 17 | migrate all seven current outputs to private `configs-hosts`, verify each host, and retire public real-host inventory — done 2026-09-25 | unixlike and external host repository, in separate increments |
+| 9 | x86_64 desktop on an AMD APU — provider evaluation and native build verified historically; private consumer owns the provisional final output; physical evidence pending there | unixlike provider class; external host repository final instance and physical evidence |
+| 11 | installation and deployment (disko, nixos-anywhere, deploy-rs) — provider storage classes and disposable-VM proof verified; private consumer owns final nodes and real-host deployment evidence | unixlike provider class; external host repository final nodes, guarded deployment and physical evidence |
+| 12 | x86_64 guest on QEMU/KVM, on the NixOS desktop — after items 9 and 11 | unixlike provider kind; external host repository final instance and runtime evidence |
+| 13 | x86_64 guest on Hyper-V, on the Windows host — after item 11 | unixlike provider kind; external host repository final instance and runtime evidence |
 
 ## Transition before the remaining host work
 
@@ -67,9 +67,9 @@ specification, file inventory and report are in
 the comparison baseline; no host was activated by this work.
 
 Item 15 turned the existing machine-kind table and typed selection checks into
-an external consumer API. It keeps current outputs while consumer adoption is
-verified and will give this repository synthetic host fixtures after real
-inventory leaves. Its specification and current report are
+an external consumer API. Item 17 replaced the former host outputs with
+synthetic provider fixtures after private consumer adoption. Its specification
+and report are
 `docs/work/unixlike/host-provider-api/`.
 
 Item 16 produced the public `configs-host-template` repository. A synthetic
@@ -77,28 +77,30 @@ host exercises the pinned provider API in its CI. It documents SOPS + age setup 
 real identity, recipient or encrypted host value. A generated repository
 owns its future edits; template updates do not change an existing host.
 
-Item 17 moves all seven current outputs into one private `configs-hosts`
+Item 17 moved all seven former outputs into one private `configs-hosts`
 repository, first an isolated OrbStack machine and then each operational host with its own
 evaluation, native build and runtime evidence. Each host chooses a pinned
 `configs` revision in its own flake and lock, owns its identity and SOPS + age recipients, and exposes
-its own final flake output. No activation follows from a matching evaluation
-or build. Once every existing instance has a verified consumer owner, the
-real inventory and final host outputs leave `configs`; provider fixtures
-replace their contract coverage. The repository hygiene check currently
-reads the real inventory, so its replacement declaration and fixtures must
-land before that inventory is removed. The maintainer fixed the one-repository
+its own final flake output. The physical desktop remains uninstalled, with a
+private provisional output and evaluation only. Provider fixtures now cover
+the API without publishing real host identities or final outputs. The
+repository hygiene check uses its independent name declaration. The maintainer fixed the one-repository
 boundary on 2026-09-24, before the first migration. The public template is a
 one-time starting point; the private repository owns future edits independently
 (`docs/policy/decisions/repository/one-private-host-repository-from-public-template.md`).
 
-Items 9 and 11 already have approved specs and reports with automatic
-evidence. Their pending criteria stay pending during the transition. Before
-the physical desktop or deployment work resumes, the owner and evidence
-location of each remaining criterion are amended visibly in those specs and
-the roadmap. Items 12 and 13 are planned after that revision. Windows host
+Items 9 and 11 retain their approved specs and reports with historical
+automatic evidence. Their pending criteria remain pending in the private
+consumer's final-instance and physical evidence lanes; the provider owns
+the reusable desktop and storage classes. Items 12 and 13 will use the same
+owner split when work resumes. Windows host
 configuration remains in the Windows domain throughout.
 
 ## What each order carries
+
+The descriptions below record each order's original scope and evidence. For
+the current final-output owner after item 17, use the order table above and
+the amended specs and reports.
 
 Order 4, typed NixOS host inventory (from #18, re-scoped). A host declares
 its system (`x86_64-linux`, `aarch64-linux`), its kind (`wsl`, `orbstack`,

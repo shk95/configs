@@ -627,7 +627,6 @@ printf '%s\n' "$first_plan" | grep -q '^tag: unixlike-v2030.01.02$'
 
 git -C "$test_root" tag -a unixlike-v2030.01.02 \
   -m 'Domain: unixlike' \
-  -m 'Host: fixture-host' \
   -m 'Evaluation: passed; fixture' \
   -m 'Build: passed; fixture' \
   -m 'Native runtime: passed; fixture'
@@ -951,8 +950,9 @@ if (cd "$test_root" && "$audit") >/dev/null 2>&1; then
 fi
 git -C "$test_root" tag -d windows-v2030.01.02 >/dev/null
 
-# INV repository/release-tag-contract: the annotation states each host's
-# evidence in a block of its own. Each case is one tag on master, judged by
+# INV repository/release-tag-contract: Windows states each host's evidence in
+# its own block; the Unix-like provider states its evidence once. Each case is
+# one tag on master, judged by
 # the real audit and removed; a refusal must name the tag and the defect.
 tag_case() {
   # tag_case <accept|refuse> <tag> <expected output, a grep pattern> <annotation>
@@ -972,7 +972,7 @@ tag_case() {
   echo "audit did not $1 $2 with: $3" >&2
   exit 1
 }
-two_hosts='Domain: unixlike
+two_hosts='Domain: windows
 
 Host: darwin
   Evaluation: passed; fixture
@@ -985,21 +985,39 @@ Host: wsl-nixos
   Evaluation: passed; fixture
 
 Deployment: not performed by release'
-tag_case accept unixlike-v2030.06.01 '^ok: release tag is annotated, evidenced, and master-reachable: unixlike-v2030.06.01$' "$two_hosts"
+tag_case accept windows-v2030.06.01 '^ok: release tag is annotated, evidenced, and master-reachable: windows-v2030.06.01$' "$two_hosts"
 tag_case accept common-v2030.06.01 '^ok: .*: common-v2030.06.01$' 'Domain: common
 Evaluation: passed; fixture
 Build: not applicable
 Native runtime: not applicable; deploys nowhere
 Deployment: not performed by release'
 
+tag_case refuse unixlike-v2030.06.03 'lacks Native runtime (unixlike-v2030.06.03)$' 'Domain: unixlike
+Evaluation: passed
+Build: passed'
+tag_case refuse unixlike-v2030.06.04 'a unixlike tag carries a host block: darwin (unixlike-v2030.06.04)$' 'Domain: unixlike
+Host: darwin
+Evaluation: passed
+Build: passed
+Native runtime: passed'
+tag_case refuse unixlike-v2030.06.05 'Build is repeated (unixlike-v2030.06.05)$' 'Domain: unixlike
+Evaluation: passed
+Build: passed
+Build: passed
+Native runtime: passed'
+tag_case refuse unixlike-v2030.06.06 'Native runtime is none of passed, unavailable, not applicable: probably (unixlike-v2030.06.06)$' 'Domain: unixlike
+Evaluation: passed
+Build: passed
+Native runtime: probably'
+
 old_form='Evaluation: passed; fixture
 Build: passed; fixture
 Native runtime: passed; fixture'
-tag_case refuse unixlike-v2030.06.02 'has no host block (unixlike-v2030.06.02)$' "Domain: unixlike
+tag_case accept unixlike-v2030.06.02 '^ok: .*: unixlike-v2030.06.02$' "Domain: unixlike
 $old_form"
 tag_case refuse windows-v2030.06.02 'Build stands outside a host block (windows-v2030.06.02)$' "Domain: windows
 $old_form"
-tag_case refuse unixlike-v2030.06.03 'host darwin lacks Native runtime (unixlike-v2030.06.03)$' 'Domain: unixlike
+tag_case refuse windows-v2030.06.04 'host darwin lacks Native runtime (windows-v2030.06.04)$' 'Domain: windows
 Host: darwin
 Evaluation: passed
 Build: passed
@@ -1007,34 +1025,34 @@ Host: wsl-nixos
 Evaluation: passed
 Build: passed
 Native runtime: passed'
-tag_case refuse unixlike-v2030.06.04 'host darwin repeats Build (unixlike-v2030.06.04)$' 'Domain: unixlike
+tag_case refuse windows-v2030.06.05 'host darwin repeats Build (windows-v2030.06.05)$' 'Domain: windows
 Host: darwin
 Evaluation: passed
 Build: passed
 Build: passed
 Native runtime: passed'
-tag_case refuse unixlike-v2030.06.05 'Evaluation stands outside a host block (unixlike-v2030.06.05)$' 'Domain: unixlike
+tag_case refuse windows-v2030.06.06 'Evaluation stands outside a host block (windows-v2030.06.06)$' 'Domain: windows
 Evaluation: passed
 Host: darwin
 Evaluation: passed
 Build: passed
 Native runtime: passed'
-tag_case refuse unixlike-v2030.06.06 'Native runtime is none of passed, unavailable, not applicable: probably (unixlike-v2030.06.06)$' 'Domain: unixlike
+tag_case refuse windows-v2030.06.07 'Native runtime is none of passed, unavailable, not applicable: probably (windows-v2030.06.07)$' 'Domain: windows
 Host: darwin
 Evaluation: passed
 Build: passed
 Native runtime: probably'
-tag_case refuse unixlike-v2030.06.07 'Build is none of passed, unavailable, not applicable: passedish; fixture (unixlike-v2030.06.07)$' 'Domain: unixlike
+tag_case refuse windows-v2030.06.08 'Build is none of passed, unavailable, not applicable: passedish; fixture (windows-v2030.06.08)$' 'Domain: windows
 Host: darwin
 Evaluation: passed
 Build: passedish; fixture
 Native runtime: passed'
-tag_case refuse unixlike-v2030.06.08 'host label is outside .*: Some-Machine.local (unixlike-v2030.06.08)$' 'Domain: unixlike
+tag_case refuse windows-v2030.06.09 'host label is outside .*: Some-Machine.local (windows-v2030.06.09)$' 'Domain: windows
 Host: Some-Machine.local
 Evaluation: passed
 Build: passed
 Native runtime: passed'
-tag_case refuse unixlike-v2030.06.09 'host label is repeated: darwin (unixlike-v2030.06.09)$' 'Domain: unixlike
+tag_case refuse windows-v2030.06.10 'host label is repeated: darwin (windows-v2030.06.10)$' 'Domain: windows
 Host: darwin
 Evaluation: passed
 Build: passed
@@ -1057,8 +1075,8 @@ Evaluation: passed
 Build: passed
 Native runtime: passed'
 
-# The two tags that predate the form are excepted by name, and the list is
-# closed: the same annotation under any other name is refused above.
+# The two tags that predate the host-block form are excepted by name. The
+# Unix-like domain-level form is now valid for provider-only releases.
 tag_case accept unixlike-v2026.08.31 '^ok: .*: unixlike-v2026.08.31$' "Domain: unixlike
 $old_form"
 tag_case accept windows-v2026.08.31 '^ok: .*: windows-v2026.08.31$' "Domain: windows
@@ -1066,7 +1084,7 @@ $old_form"
 tag_case refuse windows-v2026.08.31 'lacks Build: (windows-v2026.08.31)$' 'Domain: windows
 Evaluation: passed
 Native runtime: passed'
-tag_case refuse unixlike-v2026.08.31.1 'has no host block (unixlike-v2026.08.31.1)$' "Domain: unixlike
+tag_case accept unixlike-v2026.08.31.1 '^ok: .*: unixlike-v2026.08.31.1$' "Domain: unixlike
 $old_form"
 
 # The planner templates the form the audit holds, per domain, and creates
@@ -1083,6 +1101,12 @@ common_plan=$(cd "$test_root" && "$plan_release" common master 2030.07.01)
 printf '%s\n' "$common_plan" | grep -q '^  Build: <passed | unavailable | not applicable' &&
   ! printf '%s\n' "$common_plan" | grep -q 'Host:' || {
   echo "plan-release did not template domain-level lanes for common" >&2
+  exit 1
+}
+unixlike_plan=$(cd "$test_root" && "$plan_release" unixlike master 2030.07.01)
+printf '%s\n' "$unixlike_plan" | grep -q '^  Build: <passed | unavailable | not applicable' &&
+  ! printf '%s\n' "$unixlike_plan" | grep -q 'Host:' || {
+  echo "plan-release did not template provider-level lanes for unixlike" >&2
   exit 1
 }
 if [ "$(git -C "$test_root" tag)" != "$tags_before" ]; then

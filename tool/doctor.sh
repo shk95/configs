@@ -166,48 +166,9 @@ fi
 
 if [ "$scope" = all ] || [ "$scope" = unixlike ]; then
   echo
-  echo "Flavours declared by the flake"
-# unixlike/tool/checks/test builds every configuration on the host it runs
-# on, so what matters here is only whether each one can also be *activated*
-# from this machine. Building and activating are different questions: a
-# NixOS closure
-# builds on any Linux box, and only switching to it needs the real host.
-
-found=0
-
-if grep -Rqs --include='*.nix' 'homeConfigurations' "$unixlike_flake/flake.nix" "$unixlike_flake/modules" 2>/dev/null; then
-  found=1
-  # NixOS composes its home into the system: the standalone home builds there
-  # and is never activated there (`just home-switch` refuses).
-  if [ -e /etc/NIXOS ]; then
-    ok "homeConfigurations — build here; this host's home comes with the system"
-  else
-    ok "homeConfigurations — build and switch here (just home-switch)"
-  fi
-fi
-
-if grep -Rqs --include='*.nix' 'nixosConfigurations' "$unixlike_flake/flake.nix" "$unixlike_flake/modules" 2>/dev/null; then
-  found=1
-  if [ -r /etc/os-release ] && grep -q '^ID=nixos' /etc/os-release; then
-    ok "nixosConfigurations — build and switch the output named after this host (just nixos-test, then just nixos-switch)"
-  else
-    warn "nixosConfigurations — build here (just nixos-build <host>), but not switch" \
-         "nixos-rebuild switch needs the target host. A closure for this platform still builds and is still verified; one for another platform is evaluated only."
-  fi
-fi
-
-if grep -Rqs --include='*.nix' 'darwinConfigurations' "$unixlike_flake/flake.nix" "$unixlike_flake/modules" 2>/dev/null; then
-  found=1
-  if [ "$(uname -s)" = Darwin ]; then
-    ok "darwinConfigurations — build and switch here"
-  else
-    warn "darwinConfigurations — evaluate here, but build and switch on Darwin" \
-         "The Linux check evaluates its complete derivation; native build and activation remain Darwin evidence."
-  fi
-fi
-
-  [ "$found" -eq 1 ] || warn "no Unix-like host configurations in the flake sources" \
-       "unixlike/tool/checks/test has nothing to verify."
+  echo "Provider fixtures"
+  ok "Unix-like flake outputs are synthetic test instances; real host flakes live in configs-hosts"
+  ok "Run Unix-like evaluation and build checks here; activate only from a reviewed host consumer"
 
   echo
   echo "Karabiner (Darwin only)"
@@ -243,4 +204,4 @@ if [ "$failed" -eq 1 ]; then
   printf "${red}Not ready.${off} Fix the ✗ items above before starting work.\n"
   exit 1
 fi
-printf "${green}Ready.${off} Warnings above only limit which flavours you can build or switch here.\n"
+printf "${green}Ready.${off} Warnings above limit which provider checks run here.\n"

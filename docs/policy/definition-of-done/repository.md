@@ -125,7 +125,8 @@ own list is the file named for it beside this one (`unixlike.md`,
 - [ ] The release tag is annotated, matches the domain naming convention, and
       targets a commit reachable from `master`.
 - [ ] The annotation names the domain and reports evaluation, build, and native
-      runtime evidence separately, for each host the release speaks for.
+      runtime evidence separately: per host for Windows, and once for Unix-like
+      provider or common releases.
 - [ ] The annotation was read before the tag was created for a machine name,
       an account name or a machine-unique identifier in a host label or a
       reference, which no scanner decides, and that reading is reported as
