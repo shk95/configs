@@ -22,8 +22,8 @@ _: {
   # else declares it. Found on the imported host, whose whole configuration is a
   # flake and whose daemon refused `nix-command`
   # (docs/policy/decisions/unixlike/nixos-wsl-system-layer-ownership.md). The rest mirrors
-  # modules/nix/darwin.nix: the account that rebuilds the host is trusted — the
-  # host's own, read from what modules/host/nixos.nix tells it about itself —
+  # modules/foundation/nix/darwin.nix: the account that rebuilds the host is trusted — the
+  # host's own, read from what modules/foundation/nixos.nix tells it about itself —
   # and the store is collected weekly — generations older than two weeks go
   # with the garbage, so that is the rollback window.
   #

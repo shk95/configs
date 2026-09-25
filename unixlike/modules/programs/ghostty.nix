@@ -27,7 +27,7 @@ _: {
         # transcribed from, which is what makes the two terminals exact
         # rather than merely similar. So the dual form here needs no extra
         # file: Ghostty answers the terminal's own light/dark appearance
-        # rather than the colour-scheme query modules/zellij/module.nix describes,
+        # rather than the colour-scheme query modules/programs/zellij/module.nix describes,
         # and switches between the two names on its own.
         theme = "light:Modus Operandi,dark:Modus Vivendi";
         minimum-contrast = 1.1;

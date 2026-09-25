@@ -37,7 +37,7 @@ _: {
         # Emoji, not the default ``, which is a Nerd Font glyph. The WSL homes
         # render in Windows Terminal, whose font is a Windows setting this
         # flake cannot reach. A Nerd Font here would depend on that setting;
-        # modules/fonts/wsl.nix only configures fonts inside the Linux home.
+        # modules/desktop/fonts/wsl.nix only configures fonts inside the Linux home.
         git_branch.symbol = "🌿 ";
 
         git_status = {
@@ -93,7 +93,7 @@ _: {
         # with no colour is the fix rather than a half-written style: it uses
         # the terminal's own foreground, which is the one colour guaranteed to
         # contrast with the terminal's own background, whichever background
-        # that turns out to be. That is the same deference `modules/bat.nix`
+        # that turns out to be. That is the same deference `modules/programs/bat.nix`
         # makes with its `ansi` theme, and the only kind this class can
         # honestly make while it also reaches the WSL homes. `format`,
         # `time_format` and `disabled` are untouched; only the colour was

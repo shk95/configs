@@ -1,12 +1,12 @@
 _: {
   modules.homeManager.shared = {
     # `programs.btop` contributes its own package, so INV
-    # unixlike/package-ownership keeps btop out of modules/packages.nix — the
-    # same shape modules/bat.nix and modules/lazygit.nix use for their
+    # unixlike/package-ownership keeps btop out of modules/foundation/packages.nix — the
+    # same shape modules/programs/bat.nix and modules/programs/lazygit.nix use for their
     # packages (docs/policy/decisions/unixlike/package-ownership-by-generating-module.md).
     #
     # btop cannot defer to the terminal's sixteen ANSI colours the way
-    # modules/bat.nix (`theme = "ansi"`) and modules/skim.nix (`--color=16`)
+    # modules/programs/bat.nix (`theme = "ansi"`) and modules/programs/skim.nix (`--color=16`)
     # do: every bundled btop theme is a full palette, `--tty`/`force_tty`
     # degrades the whole interface to 16 colours and ANSI graph symbols
     # rather than picking a theme from them, and btop's own internal
@@ -34,7 +34,7 @@ _: {
     # `share/ghostty/themes/Modus Operandi` — background `#FFFFFF`,
     # foreground `#000000`, selection `#BDBDBD` — the same source
     # `modules/wezterm/config/appearance.lua` transcribes and
-    # `modules/ghostty.nix` selects by name. No invented hex. `hi_fg` and the
+    # `modules/programs/ghostty.nix` selects by name. No invented hex. `hi_fg` and the
     # four box outlines (`cpu_box`/`mem_box`/`net_box`/`proc_box`) are ANSI
     # 4/2/5/6, matching `shown_boxes` below. `selected_bg`, `meter_bg`, `div_line` and
     # `free_start` share the selection grey rather than an ANSI index,

@@ -1,5 +1,5 @@
 # The OrbStack machine's account logs into the zsh that
-# modules/shell/shared.nix configures, selected the way modules/shell/wsl.nix
+# modules/foundation/shell/shared.nix configures, selected the way modules/foundation/shell/wsl.nix
 # selects it and for the reasons recorded there. OrbStack's agent starts the
 # account's passwd shell, so the entry is what a session gets.
 _: {

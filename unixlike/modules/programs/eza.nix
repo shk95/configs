@@ -14,7 +14,7 @@ _: {
       # permission bits, `1;90` for their placeholders and `34` for the date.
       # Every one of those is an index into the terminal's own palette, so eza
       # renders in whatever colours the terminal declares — the same deference
-      # `modules/bat.nix` makes with its `ansi` theme. The familiar "dark blue
+      # `modules/programs/bat.nix` makes with its `ansi` theme. The familiar "dark blue
       # directories on white" complaint is about a terminal whose ANSI blue is
       # #0000ee; under Modus Operandi it is #0031a9, which reaches 10.4:1
       # against that scheme's #ffffff page.

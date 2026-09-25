@@ -2,7 +2,7 @@
 # `visudo` — without putting the interactive CLI inventory in
 # systemPackages. The store path keeps the command available to the system
 # while Home Manager owns the user-facing Neovim package and configuration;
-# modules/editor/darwin.nix is the same declaration for the Darwin layer.
+# modules/platforms/editor/darwin.nix is the same declaration for the Darwin layer.
 _: {
   modules.nixos.wsl = {
     lib,

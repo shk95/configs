@@ -12,11 +12,11 @@
 #
 # `home.agents` — the coding agents — is offered to WSL NixOS hosts and
 # selected by the synthetic WSL fixture; consumers make their own choices
-# (modules/agents.nix).
+# (modules/programs/agents.nix).
 #
 # INV unixlike/nixos-host-inventory — every NixOS output is generated from
 # `identity.nixosHosts`, named after its entry, and told about itself through
-# `host` (modules/host/nixos.nix), so the output name, the inventory name and
+# `host` (modules/foundation/nixos.nix), so the output name, the inventory name and
 # `networking.hostName` cannot drift (#191). `nixosCompositions` is the one
 # table from a host's kind — for a `vm`, its hypervisor — to required classes
 # and offered profiles. A host whose kind has no row does not evaluate.
@@ -138,7 +138,7 @@
     };
 
     # An OrbStack machine: what OrbStack needs from the guest
-    # (modules/host/orbstack.nix) — its own account, no sshd and no headless
+    # (modules/machines/orbstack.nix) — its own account, no sshd and no headless
     # class, because OrbStack's agent is the way in — and the shared home
     # alone.
     orbstack = {

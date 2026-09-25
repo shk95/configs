@@ -5,7 +5,7 @@
 # values: both come from the entry, so the output name, the inventory name
 # and `networking.hostName` cannot drift (#191), and
 # `wsl.wslConf.network.hostname` defaults to the last, so /etc/wsl.conf
-# follows without a second declaration. modules/host/darwin.nix is the Darwin
+# follows without a second declaration. modules/platforms/darwin.nix is the Darwin
 # half of the same rule.
 #
 # INV unixlike/nixos-host-inventory
@@ -35,7 +35,7 @@ _: {
       networking.hostName = config.host.name;
       # The release the host was first installed with, not a number copied
       # from Home Manager's, which tracks a different schedule
-      # (modules/state-version.nix).
+      # (modules/foundation/state-version.nix).
       system.stateVersion = config.host.stateVersion;
     };
   };
