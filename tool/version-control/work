@@ -100,10 +100,10 @@ require_command() {
 }
 
 usage() {
-  echo "usage: tool/version-control/work [--working-tree docs/work/<scope>/<slug> | --staged | --range <base> <head>]" >&2
-  echo "       tool/version-control/work --overdue [--date <YYYY-MM-DD>]" >&2
-  echo "       tool/version-control/work --terminal | --unclosed" >&2
-  echo "       tool/version-control/work --became-terminal <base> <head>" >&2
+  echo "usage: tool/configs work [--working-tree docs/work/<scope>/<slug> | --staged | --range <base> <head>]" >&2
+  echo "       tool/configs work --overdue [--date <YYYY-MM-DD>]" >&2
+  echo "       tool/configs work --terminal | --unclosed" >&2
+  echo "       tool/configs work --became-terminal <base> <head>" >&2
   exit 2
 }
 

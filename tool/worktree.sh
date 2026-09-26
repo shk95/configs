@@ -41,9 +41,9 @@ wt_root="$(dirname "$root")/$(basename "$root")-wt"
 integration=dev
 
 usage() {
-  echo "usage: tool/worktree.sh new <name> [feature|fix]"
-  echo "       tool/worktree.sh list"
-  echo "       tool/worktree.sh done <name>    (once its pull request has merged)"
+  echo "usage: tool/configs worktree new <name> [feature|fix]"
+  echo "       tool/configs worktree list"
+  echo "       tool/configs worktree done <name>    (once its pull request has merged)"
   exit 1
 }
 

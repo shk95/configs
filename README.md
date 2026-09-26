@@ -15,7 +15,7 @@ See `docs/policy/architecture.md` for the domain and release model.
 
 The invariants each domain must keep, and how each one is enforced, are
 enumerated under `docs/policy/invariants/`. The hooks record every outcome they
-produce, refusals included; `tool/doctor.sh` shows the count.
+produce, refusals included; `tool/configs doctor` shows the count.
 
 ## Architecture
 
@@ -69,13 +69,15 @@ Nix to author, validate, or consume.
 
 Prepare the clone and inspect available host capabilities:
 
+`tool/configs help` lists the repository commands intended for direct use.
+
 ```sh
-tool/setup
-tool/setup --fix
-tool/doctor.sh
+tool/configs setup
+tool/configs setup --fix
+tool/configs doctor
 ```
 
-Pass a scope such as `tool/doctor.sh repository` when a foreign-platform
+Pass a scope such as `tool/configs doctor repository` when a foreign-platform
 capability is irrelevant to the current change.
 
 Allow the repository's committed direnv environment once per clone:
@@ -95,10 +97,10 @@ formula or cask, a `unixlike/flake.lock` refresh — reaches `dev` in one
 command:
 
 ```sh
-tool/worktree.sh new unixlike-brew-add feature
+tool/configs worktree new unixlike-brew-add feature
 cd ../configs-wt/feature-unixlike-brew-add
-tool/version-control/commit --dry-run --publish brew add <formula>
-tool/version-control/commit --publish brew add <formula>
+tool/configs commit --dry-run --publish brew add <formula>
+tool/configs commit --publish brew add <formula>
 ```
 
 The first shows the edit, the branch, the selected checks, the commit message,
@@ -125,7 +127,7 @@ The separate sibling `skills` project provides `design-project-governance` for
 introducing a project rule. It separates durable policy, human procedure, agent
 orchestration, executable enforcement, current adoption, and per-run evidence
 before implementation while this repository retains authority for the result.
-Source promotion uses `tool/version-control/plan-promotion` before a
+Source promotion uses `tool/configs plan-promotion` before a
 `dev`-to-`master` pull request; promotion is not a release or deployment.
 
 The Justfile exposes the provider checks:
@@ -364,7 +366,7 @@ command and one confirmation:
 
 Run a writing capture in a linked task worktree. From the primary checkout,
 `-WhatIf` can still preview the diff without writing. Create the linked
-worktree on the Windows host with `bash tool/worktree.sh new windows-capture-settings
+worktree on the Windows host with `bash tool/configs worktree new windows-capture-settings
 feature`, then run the following commands from that worktree.
 
 ```powershell

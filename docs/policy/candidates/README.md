@@ -37,5 +37,5 @@ on purpose.
 ## Index
 
 The list is printed from the documents' headers, not kept here:
-`tool/version-control/records --table candidates`
+`tool/configs records --table candidates`
 (`INV repository/document-index-generated`).

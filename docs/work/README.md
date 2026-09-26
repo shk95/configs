@@ -34,7 +34,7 @@ thinking that promises nothing stays untracked in `notes/`.
 `tool/version-control/work` checks every work item. A failure names its rule
 as `W1` to `W7`; the checker's header defines each. It runs on every commit
 and in CI. With no argument it reads the index. For early feedback before
-staging, run `tool/version-control/work --working-tree
+staging, run `tool/configs work --working-tree
 docs/work/<scope>/<slug>`: it reads that one item from the filesystem,
 including untracked files, and applies W1-W6. It does not replace the staged
 or commit-range check, which also holds W7 across revisions. The success
@@ -150,5 +150,5 @@ document does not.
 ## Index
 
 The list is printed from the documents' headers, not kept here:
-`tool/version-control/records --table work`
+`tool/configs records --table work`
 (`INV repository/document-index-generated`).

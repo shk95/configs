@@ -8,7 +8,7 @@ item keeps its number when a new item moves ahead of it; an item without a
 number is a decision that must be made before the item it precedes. An item
 owned here becomes a work item under this directory when it starts; an
 external repository holds its own execution record. The local index is
-`tool/version-control/records --table work`. The repository maintainer owns
+`tool/configs records --table work`. The repository maintainer owns
 this file, and changing the order is a repository change.
 
 On 2026-09-24 the maintainer put the physical Unix-like module layout and

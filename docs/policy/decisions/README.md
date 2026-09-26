@@ -35,5 +35,5 @@ decision` is the procedure.
 ## Index
 
 The list is printed from the documents' headers, not kept here:
-`tool/version-control/records --table decisions`
+`tool/configs records --table decisions`
 (`INV repository/document-index-generated`).
