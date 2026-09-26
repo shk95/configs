@@ -18,7 +18,7 @@ operator_fixture=$(mktemp -d)
 mkdir -p "$operator_fixture/tool/version-control"
 cp "$root/tool/configs" "$operator_fixture/tool/configs"
 for route in \
-  setup:setup doctor:doctor.sh worktree:worktree.sh \
+  setup:setup doctor:doctor.sh worktree:worktree.sh session:work-session.sh \
   commit:version-control/commit classify:version-control/classify \
   work:version-control/work records:version-control/records \
   invariants:version-control/invariants provisional:version-control/provisional \
@@ -96,7 +96,7 @@ msys_scan() {
   msys_root=$1
   if git -C "$msys_root" rev-parse --git-dir >/dev/null 2>&1; then
     msys_list=$(git -C "$msys_root" ls-files -- tool/version-control tool/dispatch \
-      tool/configs tool/doctor.sh tool/setup tool/worktree.sh .githooks)
+      tool/configs tool/doctor.sh tool/setup tool/worktree.sh tool/work-session.sh .githooks)
   else
     msys_list=$(cd "$msys_root" && find . -type f | sed 's|^\./||' | sort)
   fi
@@ -192,13 +192,16 @@ grep -q 'run: tool/version-control/required-checks' \
 # pushed tips or the commit under test, so their own subjects are judged.
 grep -q 'evidence_run audit tool/version-control/audit --history \$pushed_tips || exit 1$' "$root/.githooks/pre-push"
 grep -q 'run: tool/version-control/audit --history HEAD$' "$root/.github/workflows/ci.yml"
-# INV repository/local-gate-selects-by-effect: the merge gate runs the whole
-# suite and never consults the local gate's selector.
+# INV repository/local-gate-selects-by-effect: CI selects whole suites by
+# effect, retaining ownership separately for unconditional policy scans.
 grep -q 'run: tool/version-control/test$' "$root/.github/workflows/ci.yml"
-if grep -q 'dispatch/select' "$root/.github/workflows/ci.yml"; then
-  echo "the CI workflow consults tool/dispatch/select, which is the local gate's" >&2
-  exit 1
-fi
+grep -q 'tool/dispatch/select ci' "$root/.github/workflows/ci.yml"
+for scope in repository unixlike windows; do
+  grep -q "if: needs.classify.outputs.${scope}_checks == 'true'" "$root/.github/workflows/ci.yml"
+  grep -q "needs.classify.outputs.${scope}_checks }}" "$root/.github/workflows/ci.yml"
+done
+grep -q 'base=$(tool/dispatch/ci-base)' "$root/.github/workflows/ci.yml"
+grep -q 'run: tool/version-control/work --range "\$CI_BASE" HEAD' "$root/.github/workflows/ci.yml"
 
 # INV repository/merge-gate-requires-native
 # Every job that runs a check converts unverified into failure; the two jobs
@@ -313,6 +316,25 @@ fi
 if (PROMOTION_SCOPE=true PROMOTION_RESULT=failure run_gate) >/dev/null 2>&1; then
   echo "required-checks accepted a failed promotion gate" >&2
   exit 1
+fi
+
+# INV repository/required-checks-gate: intended skips are accepted; missing,
+# cancelled, malformed or contradictory results cannot become a green gate.
+for result in skipped cancelled failure; do
+  if (UNIXLIKE_SCOPE=true UNIXLIKE_RESULT=$result run_gate) >/dev/null 2>&1; then
+    echo "gate accepted selected job result $result" >&2; exit 1
+  fi
+done
+for selection in unknown null; do
+  if (WINDOWS_SCOPE=$selection run_gate) >/dev/null 2>&1; then
+    echo "gate accepted invalid selection $selection" >&2; exit 1
+  fi
+done
+if (WINDOWS_RESULT=success run_gate) >/dev/null 2>&1; then
+  echo 'gate accepted an unselected job running' >&2; exit 1
+fi
+if (CLASSIFY_RESULT=failure run_gate) >/dev/null 2>&1; then
+  echo 'gate accepted failed selection' >&2; exit 1
 fi
 
 # INV repository/promotion-source
@@ -572,7 +594,61 @@ expect_units 'repository:fixtures' commit "$worktree_modified"
 expect_units 'repository:fixtures' commit "$(printf 'M\ttool/configs')"
 expect_units 'repository:fixtures' push "$(printf 'M\ttool/configs')"
 expect_units 'repository:fixtures' push "$hook_deleted"
+expect_units 'repository:fixtures' commit "$(printf 'M\ttool/work-session.sh')"
 expect_units '' commit "$codeowners_modified"
+
+# INV repository/local-gate-selects-by-effect
+# CI uses ownership only after removing documents. Unlike local push, it
+# deliberately does not narrow payloads. Cross-domain moves cover both ends.
+for change in "$docs_modified" "$entry_modified" "$measure_modified"; do
+  expect_units '' ci "$change"
+done
+expect_units '' ci "$(printf 'M\tdocs/status/unixlike.md\nM\tdocs/status/windows.md')"
+expect_units 'unixlike:suite' ci "$concern_kdl_modified"
+expect_units 'unixlike:suite' ci "$unixlike_module_modified"
+expect_units 'unixlike:suite' ci "$(printf 'M\tunixlike/flake.lock')"
+expect_units 'unixlike:suite' ci "$(printf 'D\tunixlike/modules/old.nix')"
+expect_units 'unixlike:suite' ci "$renamed_into_assets"
+expect_units 'unixlike:suite
+windows:suite' ci "$(printf 'R100\tunixlike/modules/old.ps1\twindows/desired/new.ps1')"
+expect_units 'windows:suite' ci "$windows_modified"
+expect_units 'repository:fixtures' ci "$(printf 'M\ttool/work-session.sh')"
+for path in .github/workflows/ci.yml tool/dispatch/select tool/dispatch/ci-base tool/version-control/classify tool/version-control/required-checks; do
+  expect_units 'repository:fixtures
+unixlike:suite
+windows:suite' ci "$(printf 'M\t%s' "$path")"
+done
+for input in "$unknown_modified" "$(printf 'M\tdocs/status/linux.md')" 'M' "$(printf 'R100\tdocs/a.md')"; do
+  if printf '%s\n' "$input" | "$root/tool/dispatch/select" ci >/dev/null 2>&1; then
+    echo 'CI selector accepted unknown or malformed input' >&2; exit 1
+  fi
+done
+
+# INV repository/local-gate-selects-by-effect
+# Native stack events can advertise trunk base_ref with a layer base SHA.
+# Refuse them before producing any range rather than silently testing a layer.
+event_sha=$(git -C "$root" rev-parse HEAD)
+event_base() {
+  EVENT_NAME=${EVENT_NAME:-pull_request} PR_BASE=$event_sha \
+    PR_BASE_REF=${PR_BASE_REF:-dev} EVENT_BASE_REF=${EVENT_BASE_REF:-dev} \
+    PR_STACK=${PR_STACK:-null} PUSH_BASE=${PUSH_BASE:-$event_sha} \
+    "$root/tool/dispatch/ci-base"
+}
+[ "$(event_base)" = "$event_sha" ]
+[ "$(EVENT_NAME=push event_base)" = "$event_sha" ]
+[ "$(EVENT_NAME=push PUSH_BASE=0000000000000000000000000000000000000000 event_base)" = "$(git hash-object -t tree /dev/null)" ]
+if (PR_STACK='{"base":{"ref":"dev"}}' event_base) >/dev/null 2>&1; then
+  echo 'CI accepted an unsupported native stack' >&2; exit 1
+fi
+if (PR_BASE_REF=feature/repository-layer event_base) >/dev/null 2>&1; then
+  echo 'CI accepted layer-only stack coverage' >&2; exit 1
+fi
+if (EVENT_BASE_REF=master event_base) >/dev/null 2>&1; then
+  echo 'CI accepted mismatched event bases' >&2; exit 1
+fi
+if (EVENT_NAME=push PUSH_BASE=bad event_base) >/dev/null 2>&1; then
+  echo 'CI accepted an invalid event SHA' >&2; exit 1
+fi
 
 # INV repository/local-gate-selects-by-effect
 # Codex project paths select no local units; the hooks' unconditional scans
@@ -1619,7 +1695,8 @@ if [ -n "$(commit_git status --porcelain --untracked-files=no)" ] \
   exit 1
 fi
 
-if ! run_commit y cask add af >/dev/null; then
+if ! commit_output=$(run_commit y cask add af); then
+  printf '%s\n' "$commit_output" >&2
   echo "the commit helper refused a valid cask addition" >&2
   exit 1
 fi
@@ -5510,5 +5587,8 @@ git -C "$authoring_root" worktree add -q -b fix/repository-pinned "$authoring_pi
   echo "worktree done did not find the topic branch at its pinned path" >&2
   exit 1
 }
+
+# INV repository/worker-checkpoint
+"$root/tool/version-control/session-test"
 
 echo "version-control fixtures passed"

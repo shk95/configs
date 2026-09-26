@@ -60,3 +60,13 @@ passed the required workflow in 8:30; its Unix-like job took 8:06 and
 requests. This is affected-dispatch evidence for the generic headless contract,
 not VMware native-runtime or activation evidence. The consumed condition is
 replaced above with the circumstances that would require another judgement.
+
+2026-09-26: documentation-only PR #392 paid a 13:02 Unix-like job (run
+36109055733), versus 12:42 for lock refresh #408 (run 36216060416). The
+maintainer accepts CI effect selection: ownership still selects policy-scan
+scope, but documents do not select platform suites. Actual platform inputs
+still require their complete native suite; shared dispatch changes exercise
+all suites. This amends the ownership-only condition in the opening paragraph,
+not the runtime guarantees of a selected suite. Internal suite optimization and
+safe removal of PR/push repetition remain separate work; a successful PR is
+not evidence for a changed integration tree.
