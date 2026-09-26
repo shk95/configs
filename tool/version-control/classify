@@ -91,7 +91,7 @@ while IFS= read -r path; do
       ;;
     AGENTS.md|CLAUDE.md|CONTRIBUTING.md|README.md|LICENSE|docs/*|\
     .agents/*|.claude/*|.codex/*|.github/*|.githooks/*|.editorconfig|.gitattributes|\
-    .gitignore|tool/configs|tool/setup|tool/doctor.sh|tool/worktree.sh|tool/version-control/*|\
+    .gitignore|tool/configs|tool/setup|tool/doctor.sh|tool/worktree.sh|tool/work-session.sh|tool/version-control/*|\
     tool/dispatch/*)
       echo repository
       ;;
