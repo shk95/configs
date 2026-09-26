@@ -75,7 +75,7 @@ case "${1:-}" in
   --table) mode=table ;;
   --untagged) mode=untagged ;;
   *)
-    echo "usage: tool/version-control/invariants [--table | --untagged]" >&2
+    echo "usage: tool/configs invariants [--table | --untagged]" >&2
     exit 2
     ;;
 esac

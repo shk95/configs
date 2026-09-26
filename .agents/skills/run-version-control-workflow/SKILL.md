@@ -16,7 +16,7 @@ planning read-only unless the user explicitly authorizes a Git mutation.
    current state in `docs/status/<scope>.md` and the decision records it cites,
    `docs/policy/definition-of-done/`, and `docs/policy/invariants/<scope>/` for the classified
    scope, completely enough to apply the requested workflow.
-3. Classify the intended scope, then run `tool/doctor.sh <scope>` before relying
+3. Classify the intended scope, then run `tool/configs doctor <scope>` before relying
    on host-local capabilities. Use the unscoped form only for cross-domain
    inventory. Treat a missing foreign-domain capability as unavailable
    evidence, not as failure of an unrelated domain.
@@ -25,15 +25,15 @@ planning read-only unless the user explicitly authorizes a Git mutation.
 
 ## Select one operation
 
-- **Audit**: Run `tool/version-control/audit`,
-  `tool/version-control/hygiene`, `tool/version-control/domain-reads` and
-  `tool/version-control/provisional`.
+- **Audit**: Run `tool/configs audit`,
+  `tool/configs hygiene`, `tool/configs domain-reads` and
+  `tool/configs provisional`.
   When `gh` is authenticated, also run
-  `tool/version-control/audit-remote`. Explain every warning or failure with
+  `tool/configs audit-remote`. Explain every warning or failure with
   the governing context file. A hygiene finding is fixed by removing or
   declaring the value, never by widening the check; `CONTRIBUTING.md` owns that
   procedure. Do not mutate local or remote Git state.
-- **Classify**: Run `tool/version-control/classify` for the requested diff.
+- **Classify**: Run `tool/configs classify` for the requested diff.
   Confirm one owning scope; a document's scope is the directory, or the
   scope-named file, that holds it. `CONTRIBUTING.md`, "Branch and commit
   flow", owns the rule.
@@ -56,12 +56,12 @@ planning read-only unless the user explicitly authorizes a Git mutation.
   than one pull request, draft its spec and a report with pending rows under
   `docs/work/<scope>/<slug>/`. Name the decisions, rejected alternatives,
   evidence-lane increments and required lanes, then run
-  `tool/version-control/work --working-tree docs/work/<scope>/<slug>` against
+  `tool/configs work --working-tree docs/work/<scope>/<slug>` against
   that exact item. Resolve failures before proceeding. If a decision changes,
   update the spec before continuing; once the report exists, follow the dated
   amendment rule. This read-only worktree check is early feedback, not staged
   or committed evidence. The spec and report enter the same commit and
-  `tool/version-control/work --staged` checks that proposed commit when
+  `tool/configs work --staged` checks that proposed commit when
   staging is explicitly authorized. Any other change carries its evidence
   in the pull request body. Open the execution issue only when
   implementation starts, name the spec on its first line, and keep acceptance
@@ -83,17 +83,17 @@ planning read-only unless the user explicitly authorizes a Git mutation.
   a stale branch up by merging `dev` into it locally and pushing, never with
   `gh pr update-branch`. Do
   not merge, push, or change branches without explicit authorization.
-  `tool/worktree.sh done` removes an implementer's worktree and runs only at
+  `tool/configs worktree done` removes an implementer's worktree and runs only at
   the point Start names, including a user-pinned worktree whose path differs
   from the helper's default; the publish helper prunes the merged branch,
   never the worktree.
-- **Promote**: Run `tool/version-control/plan-promotion`. Permit only a
+- **Promote**: Run `tool/configs plan-promotion`. Permit only a
   same-repository `dev` to `master` pull request, ensure no competing promotion
   is open, and introduce no fix in the promotion itself. Require `Required
   checks`, resolved conversations, and explicit authorization before a merge
   commit. Run both audits afterward. Do not reverse-merge the promotion commit
   into `dev`; do not infer release or deployment.
-- **Release**: Run `tool/version-control/plan-release <domain> [commit]` first.
+- **Release**: Run `tool/configs plan-release <domain> [commit]` first.
   Require the Definition of Done evidence and an annotated, new, immutable tag
   reachable from `master`. Creating and pushing the tag are separate mutations
   and each requires explicit authorization. Create no GitHub Release; the

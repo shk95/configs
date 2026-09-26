@@ -102,6 +102,10 @@ When adding a repository rule, separate its concerns before implementation:
 - Put repeatable agent orchestration in a canonical `.agents/skills/` skill.
 - Put deterministic classification and enforcement in `tool/`, hooks, CI, and
   remote repository settings.
+- Give repository operators one documented command entry point. Hooks, CI and
+  implementation scripts call the underlying tools directly; a test may call
+  the entry point to prove its public contract. Keep each configuration
+  domain's operator commands and implementation inside that domain's boundary.
 - Put current adoption state and migration gaps in `docs/status/<scope>.md` and
   expensive choices in `docs/policy/decisions/`; put per-run proof in CI, pull
   requests, and release evidence.
@@ -166,7 +170,7 @@ decision that a report is done.
    every decision record those entries and that state cite.
 2. Classify the task as `unixlike`, `windows`, `common`, `repository`, or an
    explicit transfer.
-3. Use `tool/doctor.sh` before relying on host-local capabilities.
+3. Use `tool/configs doctor` before relying on host-local capabilities.
 4. Change only the owning domain. Treat a cross-domain copy as a separate,
    reviewable adoption change.
 5. Run narrow domain checks before broader checks. Do not require an unrelated

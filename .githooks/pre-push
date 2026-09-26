@@ -111,11 +111,11 @@ if selected windows:desired-state || selected windows:tests; then
   if [ -n "$windows_pwsh" ]; then
     if selected windows:desired-state; then
       evidence_run "Windows desired-state check" \
-        "$windows_pwsh" -NoProfile -File ./windows/win-env.ps1 validate || exit 1
+        "$windows_pwsh" -NoProfile -File ./windows/tool/check-desired-state.ps1 || exit 1
     fi
     if selected windows:tests; then
       evidence_run "Windows tests" \
-        "$windows_pwsh" -NoProfile -File ./windows/win-env.ps1 test || exit 1
+        "$windows_pwsh" -NoProfile -File ./windows/tool/test.ps1 || exit 1
     fi
   else
     evidence_unavailable "Windows checks" "native PowerShell is unavailable" || exit 1

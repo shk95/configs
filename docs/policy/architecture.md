@@ -433,6 +433,13 @@ The hooks a clone runs are audited as a directory rather than a string, and
 the outcomes the hooks produce are recorded outside the working tree so that
 the local gate's yield can be measured.
 
+Repository operations expose an operator entry point that names intentional
+commands and forwards to their implementations. Hooks and CI depend on the
+implementation contracts directly. Tests may execute an entry point to prove
+the command a person receives. Domain host commands remain under their
+own domain interfaces; repository governance does not become a host
+deployment authority.
+
 ## Invariant registry
 
 The third layer of this repository's specification — what must remain true

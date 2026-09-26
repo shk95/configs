@@ -23,6 +23,12 @@ pre-commit hook refuses a primary-checkout commit when tracked hooks are
 enabled. Editor writes have no Git hook; the start workflow and reviewer
 check cover that part. CI cannot infer an editor's worktree from a commit.
 
+`tool/configs` now lists repository operations intended for an operator or
+an agent acting for one. It forwards to the existing implementation scripts
+without adding policy or domain deployment. Hooks and CI call implementation
+tools directly. Windows keeps `windows/win-env.ps1` as its domain operator
+entry point; Unix-like users continue to use the `Justfile`.
+
 The merge gate is CI's `Required checks`, demanded whenever a change falls
 in a domain that check covers.
 
@@ -46,9 +52,10 @@ decision and has not been made.
 
 `tool/version-control/domain-reads` runs on every commit and in CI beside
 the hygiene scan; the Windows CI job no longer walks the checkout for
-PowerShell files. CI and pre-push call the Windows `validate` and `test` verbs
-through `windows/win-env.ps1`; the test verb is the one place every script
-under the Windows tree is parsed for syntax (`check-desired-state.ps1`
+PowerShell files. CI and pre-push call the Windows validation and test
+implementations under `windows/tool/` directly; the test implementation is
+the one place every script under the Windows tree is parsed for syntax
+(`check-desired-state.ps1`
 still parses the PowerShell payload it validates). `pre-push` runs the
 history form of the audit, which judges `dev`, `master` and release-tag
 reachability against `origin/dev` and `origin/master` when a fetch left

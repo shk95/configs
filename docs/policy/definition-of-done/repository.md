@@ -41,6 +41,10 @@ own list is the file named for it beside this one (`unixlike.md`,
       requires it instead of conditional domain job names.
 - [ ] Model-specific skill locations only discover the canonical Agent Skills
       workflow and do not duplicate its policy (INV repository/adapters-pointer-only).
+- [ ] A reviewer confirms documented repository operator commands use
+      `tool/configs`, hooks and CI call implementation tools directly, and
+      neither operator entry point crosses into another domain's deployment
+      (INV repository/operator-entry-boundary).
 - [ ] Committed desired state carries no undeclared user or host name, no
       absolute home path, no tracked runtime state, and no machine-unique
       identifier, and every exclusion is declared with its reason
@@ -74,7 +78,7 @@ own list is the file named for it beside this one (`unixlike.md`,
 
 - [ ] The pull request is from this repository's `dev` to `master`, and no
       other promotion pull request is open.
-- [ ] `tool/version-control/plan-promotion` reports all commits and scopes.
+- [ ] `tool/configs plan-promotion` reports all commits and scopes.
 - [ ] The promotion contains no source fix authored only for the promotion.
 - [ ] `Required checks` passes and conversations are resolved.
 - [ ] The pull request uses a merge commit and explicit merge authorization.

@@ -26,7 +26,7 @@ set -eu
 # a detached, hook-less, branch-less shape by construction, so the merge gate
 # asks for history alone rather than for findings it would have to ignore.
 usage() {
-  echo "usage: tool/version-control/audit [--history [<revision>...]]" >&2
+  echo "usage: tool/configs audit [--history [<revision>...]]" >&2
   exit 2
 }
 mode=full
