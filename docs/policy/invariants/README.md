@@ -10,7 +10,7 @@ registry exists and how it relates to the other documents.
 direction, every `INV <scope>/<slug>` tag in the tree. A failure names its
 rule as `C1` to `C10`; the checker's header defines each. It runs on every commit
 and in CI. It reads the index, like the hygiene scan, so stage a new entry
-before running it by hand. `tool/version-control/invariants --table` prints
+before running it by hand. `tool/configs invariants --table` prints
 the registry as a table; it still reports any failure on stderr but exits 0
 either way.
 

@@ -25,6 +25,6 @@ changes of that domain. A scope position that names no domain is refused; any
 other file here is `repository`'s
 (`docs/policy/decisions/repository/documents-classified-by-scope.md`).
 
-Indexes are printed, not kept: `tool/version-control/invariants --table`,
-`tool/version-control/provisional --table`, and
-`tool/version-control/records --table decisions|candidates|work`.
+Indexes are printed, not kept: `tool/configs invariants --table`,
+`tool/configs provisional --table`, and
+`tool/configs records --table decisions|candidates|work`.

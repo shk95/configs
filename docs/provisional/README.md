@@ -15,7 +15,7 @@ temporary measure becomes permanent by neglect.
 direction, every `PROV <scope>/<slug>` tag in the tree. A failure names its
 rule as `P1` to `P8`; the checker's header defines each. It runs on every
 commit and in CI. It reads the index, like the hygiene scan, so stage a new
-entry before running it by hand. `tool/version-control/provisional --table`
+entry before running it by hand. `tool/configs provisional --table`
 prints the registry as a table. An absent registry is zero entries and
 passes: this directory exists to be emptied.
 
