@@ -2,7 +2,8 @@
 
 Lanes and order, not schedule. A lane is a host this repository currently
 configures or a host intended to consume its Unix-like API after migration.
-Table position is the current sequence of work. Existing item numbers remain
+The current-priorities table gives the next sequence; deferred and historical
+outcomes are not pickup-ready work. Existing item numbers remain
 references in their specs and reports when priority changes, so a deferred
 item keeps its number when a new item moves ahead of it; an item without a
 number is a decision that must be made before the item it precedes. An item
