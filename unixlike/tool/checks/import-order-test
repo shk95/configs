@@ -25,7 +25,8 @@ fail() {
 #
 # INV unixlike/import-order-independence
 printf '→ accepts modules/\n'
-tool/checks/import-order
+# An inherited fixture override must never replace the real-tree proof.
+(unset CHECKS_IMPORT_MODULES; tool/checks/import-order)
 
 printf '→ accepts a minimal stable composition\n'
 CHECKS_IMPORT_MODULES="$repo/tool/checks/fixtures/import-order/minimal" tool/checks/import-order
