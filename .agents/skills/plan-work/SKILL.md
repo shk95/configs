@@ -33,7 +33,8 @@ outcomes have scope-owned specs; link the dependency rather than copying it.
 Keep ready-to-pick-up lanes distinct from unresolved design. The execution
 issue's checklist names the lanes and links active PRs; it stores no evidence
 or copies of PR state. Re-query it and open PRs before assigning a lane. A
-single planner assigns each lane; GitHub issue edits are not an atomic claim.
+single planner assigns each lane and records its continuation owner in the
+execution issue before handoff; GitHub issue edits are not an atomic claim.
 If competing claims appear, stop duplicate implementation and resolve ownership.
 
 The plan records assumptions, not a frozen execution base. At pickup the

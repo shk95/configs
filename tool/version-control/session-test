@@ -54,6 +54,8 @@ if printf 'invalid\n' | sh tool/work-session.sh checkpoint handed-off >/dev/null
   echo 'suspended task handed off without resumption' >&2; exit 1
 fi
 printf 'Reviewed checkpoint\n' | sh tool/work-session.sh checkpoint active >/dev/null
+grep -q '^Approved changed plan$' .work-session.md
+grep -q '^Previous checkpoint before replan:$' .work-session.md
 printf 'Remote delivery verified\n' | sh tool/work-session.sh checkpoint handed-off >/dev/null
 sh tool/work-session.sh inspect > "$fixture/inspection"
 grep -q '^state: handed-off$' "$fixture/inspection"

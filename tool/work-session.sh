@@ -126,6 +126,10 @@ case "$command" in
     awk 'NF == 0 {exit} !/^state: / && !/^updated: / {print}' "$state" > "$lock/note"
     printf 'state: %s\nupdated: %s\n\n' "$next" "$(date -u +%Y-%m-%dT%H:%M:%SZ)" >> "$lock/note"
     cat "$lock/body" >> "$lock/note"
+    if [ "$current:$next" = suspended:active ]; then
+      printf '\nResumed checkpoint:\n' >> "$lock/note"
+      cat "$state" >> "$lock/note"
+    fi
     ;;
   *) usage >&2; exit 2 ;;
 esac
