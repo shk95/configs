@@ -141,11 +141,12 @@ and pending report before implementation. `tool/configs work
 --working-tree docs/work/<scope>/<slug>` reads that one item, including
 untracked files, for early W1-W6 feedback; it does not replace the index,
 staged or commit-range checks.
-GitHub milestones are no longer used, a branch is one reviewable increment —
-since 2026-09-20 what one evidence lane verifies, with its report rows and
-status in the same pull request, a rule a reviewer holds and no tool does
-(`INV repository/pull-request-spans-an-evidence-lane`); no commit message on
-its way to `dev` and no promotion body carries a closing keyword. A push to
+GitHub milestones are no longer used. Since 2026-09-26 a branch delivers one
+coherent same-scope outcome, which may span several evidence lanes, with the
+report rows and status it produces in the same pull request. This replaces
+the 2026-09-20 lane-per-PR interpretation; a reviewer holds the rule and no
+tool does (`INV repository/pull-request-spans-an-evidence-lane`). No commit
+message on its way to `dev` and no promotion body carries a closing keyword. A push to
 `dev` that ends a report closes the issue its
 spec names (`.github/workflows/work-closure.yml`), `tool/version-control/audit`
 warns about a spec past its review-by, and `tool/version-control/audit-remote`
@@ -166,11 +167,11 @@ created in that form yet. The CI reconsideration work item is done
 Unix-like job now boots the generic headless class and exercises its account,
 ssh and firewall contract without adding a runner or workflow.
 
-## Agent workflow transition (2026-09-26)
+## Adopted agent workflow (2026-09-26)
 
-The GitHub-centered operating contract is prepared in the agent-workflow PR;
-it takes effect when integrated into dev. Planning, execution, integration,
-inspection and reclamation have canonical project skills. The session helper
+The GitHub-centered operating contract reached dev in PR #416 on 2026-09-26.
+Planning, execution, integration, inspection and reclamation have canonical
+project skills. The session helper
 records local handoffs; it does not enforce process liveness or credentials.
 See docs/policy/decisions/repository/github-agent-workflow.md.
 
@@ -179,8 +180,18 @@ conversations and administrator enforcement; force pushes and deletion are
 forbidden. No remote settings were changed. No blanket required human review
 or CODEOWNERS identities were introduced. Native stacks remain unsupported in
 production pending trunk CI and admission verification; Merge Queue is not used.
-CI effect selection and domain test-efficiency changes are separate delivery
-PRs, and post-merge validation remains until safe equivalence is demonstrated.
+CI effect selection reached dev in PR #413. Documentation retains its owning
+scope and repository-wide policy scans while selecting no platform or
+repository fixture suite. Executable platform inputs still select the whole
+platform suite; shared dispatch and gate inputs select all suites. Unknown
+inputs and unsupported native-stack events fail selection. See
+docs/policy/decisions/repository/local-gate-selects-by-effect.md.
+
+The independent domain follow-ups also reached dev: PR #415 reduces repeated
+Unix-like verification work, and PR #414 adds Windows suite and slow-test
+timing without removing tests or demonstrating a speedup. Their reports retain
+the measured evidence and its limits. Post-merge validation remains until safe
+equivalence is demonstrated; no cross-run result reuse is implemented.
 
 ## Common
 
