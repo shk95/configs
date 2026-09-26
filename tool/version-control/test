@@ -11,6 +11,44 @@ check_promotion="$root/tool/version-control/check-promotion"
 check_promotion_queue="$root/tool/version-control/check-promotion-queue"
 plan_promotion="$root/tool/version-control/plan-promotion"
 
+# INV repository/operator-entry-boundary
+# Every published repository command selects exactly its own implementation,
+# preserving the caller's arguments and status. Unknown commands execute none.
+operator_fixture=$(mktemp -d)
+mkdir -p "$operator_fixture/tool/version-control"
+cp "$root/tool/configs" "$operator_fixture/tool/configs"
+for route in \
+  setup:setup doctor:doctor.sh worktree:worktree.sh \
+  commit:version-control/commit classify:version-control/classify \
+  work:version-control/work records:version-control/records \
+  invariants:version-control/invariants provisional:version-control/provisional \
+  hygiene:version-control/hygiene domain-reads:version-control/domain-reads \
+  design-citations:version-control/design-citations test:version-control/test \
+  audit:version-control/audit audit-remote:version-control/audit-remote \
+  plan-promotion:version-control/plan-promotion \
+  plan-release:version-control/plan-release \
+  hook-evidence:version-control/hook-evidence; do
+  command=${route%%:*}
+  target=${route#*:}
+  printf '#!/bin/sh\nprintf "operator-target=%%s\\n%%s\\n%%s\\n" %s "$1" "$2"\nexit 37\n' "$target" >"$operator_fixture/tool/$target"
+  chmod +x "$operator_fixture/tool/$target"
+  operator_status=0
+  operator_output=$("$operator_fixture/tool/configs" "$command" alpha 'two words') || operator_status=$?
+  if [ "$operator_status" -ne 37 ] || [ "$operator_output" != "$(printf 'operator-target=%s\nalpha\ntwo words' "$target")" ]; then
+    echo "operator command $command did not forward arguments and status to $target" >&2
+    exit 1
+  fi
+done
+operator_status=0
+"$operator_fixture/tool/configs" unknown >"$operator_fixture/out" 2>&1 || operator_status=$?
+if [ "$operator_status" -ne 64 ] || ! grep -q 'unknown repository command' "$operator_fixture/out" || grep -q 'operator-target=' "$operator_fixture/out"; then
+  echo 'operator interface did not refuse an unknown command with status 64' >&2
+  exit 1
+fi
+"$operator_fixture/tool/configs" help >"$operator_fixture/out"
+grep -q 'Windows host operations use windows/win-env.ps1' "$operator_fixture/out" || exit 1
+rm -rf "$operator_fixture"
+
 # Fixture repositories must own their indexes. An alternate parent index is
 # useful to callers such as staged-state tests, but must not leak through
 # `git -C` into the temporary repository below.
@@ -58,7 +96,7 @@ msys_scan() {
   msys_root=$1
   if git -C "$msys_root" rev-parse --git-dir >/dev/null 2>&1; then
     msys_list=$(git -C "$msys_root" ls-files -- tool/version-control tool/dispatch \
-      tool/doctor.sh tool/setup tool/worktree.sh .githooks)
+      tool/configs tool/doctor.sh tool/setup tool/worktree.sh .githooks)
   else
     msys_list=$(cd "$msys_root" && find . -type f | sed 's|^\./||' | sort)
   fi
@@ -410,6 +448,7 @@ expect unclassified "$classify" --files docs/policy/decisions/windows.md
 expect unclassified "$classify" --files docs/status/unixlike/example.md
 expect repository "$classify" --files docs/work/repository/windows/spec.md
 expect repository "$classify" --files docs/unixlike.md
+expect repository "$classify" --files tool/configs
 expect 'windows
 repository' "$classify" --files windows/setup.ps1 docs/status/repository.md
 
@@ -530,6 +569,8 @@ codeowners_modified=$(printf 'M\t.github/CODEOWNERS')
 expect_units 'repository:fixtures' commit "$doctor_modified"
 expect_units 'repository:fixtures' push "$setup_modified"
 expect_units 'repository:fixtures' commit "$worktree_modified"
+expect_units 'repository:fixtures' commit "$(printf 'M\ttool/configs')"
+expect_units 'repository:fixtures' push "$(printf 'M\ttool/configs')"
 expect_units 'repository:fixtures' push "$hook_deleted"
 expect_units '' commit "$codeowners_modified"
 
@@ -1221,12 +1262,12 @@ if ! printf '%s\n' "$unix_output" | grep -q 'Windows desired-state check'; then
   echo "pre-push did not run the Windows checks under a Unix-like pwsh" >&2
   exit 1
 fi
-printf '%s\n' "$unix_output" | grep -qF -- '-File ./windows/win-env.ps1 validate' || {
-  echo "pre-push did not use the public Windows validate verb" >&2
+printf '%s\n' "$unix_output" | grep -qF -- '-File ./windows/tool/check-desired-state.ps1' || {
+  echo "pre-push did not use the internal Windows validation script" >&2
   exit 1
 }
-printf '%s\n' "$unix_output" | grep -qF -- '-File ./windows/win-env.ps1 test' || {
-  echo "pre-push did not use the public Windows test verb" >&2
+printf '%s\n' "$unix_output" | grep -qF -- '-File ./windows/tool/test.ps1' || {
+  echo "pre-push did not use the internal Windows test script" >&2
   exit 1
 }
 if printf '%s\n' "$unix_output" | grep -q 'CI must supply evidence'; then
@@ -1274,17 +1315,17 @@ if ! printf '%s\n' "$win_output" | grep -q 'Windows desired-state check'; then
   echo "pre-push skipped the Windows checks on a native Windows host with pwsh.exe" >&2
   exit 1
 fi
-printf '%s\n' "$win_output" | grep -qF -- '-File ./windows/win-env.ps1 validate' || {
-  echo "pre-push did not use the public entry point on native Windows" >&2
+printf '%s\n' "$win_output" | grep -qF -- '-File ./windows/tool/check-desired-state.ps1' || {
+  echo "pre-push did not use the internal validation script on native Windows" >&2
   exit 1
 }
-printf '#!/bin/sh\ncase " $* " in *" validate "*) exit 1 ;; esac\nexit 0\n' >"$hook_root/pwsh-only/pwsh"
+printf '#!/bin/sh\ncase " $* " in *"check-desired-state.ps1 "*) exit 1 ;; esac\nexit 0\n' >"$hook_root/pwsh-only/pwsh"
 if failed_windows_output=$(run_pre_push "$hook_root/pwsh-only"); then
-  echo "pre-push accepted a failing Windows validate verb" >&2
+  echo "pre-push accepted a failing Windows validation script" >&2
   exit 1
 fi
 printf '%s\n' "$failed_windows_output" | grep -q 'Windows desired-state check' || {
-  echo "pre-push did not report the failing Windows verb" >&2
+  echo "pre-push did not report the failing Windows validation script" >&2
   exit 1
 }
 
@@ -2446,7 +2487,7 @@ printf '%s\n' "$publish_dry" | grep -q '^  Scope: unixlike$'
 printf '%s\n' "$publish_dry" \
   | grep -q '^  Selected checks: unixlike:format, unixlike:lint, unixlike:payloads$'
 printf '%s\n' "$publish_dry" \
-  | grep -q '^  Command: tool/version-control/commit --dry-run --publish cask add af$'
+  | grep -q '^  Command: tool/configs commit --dry-run --publish cask add af$'
 printf '%s\n' "$publish_dry" \
   | grep -q '^  git push --set-upstream origin feature/unixlike-cask-add-af$'
 printf '%s\n' "$publish_dry" \
@@ -2517,7 +2558,7 @@ printf '%s\n' "$publish_out" | grep -q '^https://github.com/owner/repo/pull/7$'
 grep -q '^Scope: unixlike$' "$publish_body"
 grep -q '^Selected checks: unixlike:format, unixlike:lint, unixlike:payloads$' \
   "$publish_body"
-grep -q '^Command: tool/version-control/commit --publish cask add af$' "$publish_body"
+grep -q '^Command: tool/configs commit --publish cask add af$' "$publish_body"
 grep -q '^→ format$' "$publish_body"
 grep -q '^→ hygiene$' "$publish_body"
 grep -q 'Required checks' "$publish_body"
@@ -2833,7 +2874,7 @@ if [ "$(publish_remote_git rev-parse refs/heads/feature/unixlike-mas-add-pages)"
   exit 1
 fi
 grep -q '^Scope: unixlike$' "$publish_body"
-grep -q '^Command: tool/version-control/commit --publish mas add pages 409201541$' \
+grep -q '^Command: tool/configs commit --publish mas add pages 409201541$' \
   "$publish_body"
 printf '%s\n' "$mas_publish_out" | grep -q '^https://github.com/owner/repo/pull/7$'
 publish_git switch -q dev
@@ -4478,10 +4519,11 @@ domain_reads="$root/tool/version-control/domain-reads"
 # second known read across the boundary, so its absence is asserted too.
 grep -q 'evidence_run "domain reads" tool/version-control/domain-reads' "$root/.githooks/pre-commit"
 grep -q 'run: tool/version-control/domain-reads' "$root/.github/workflows/ci.yml"
-for windows_ci_verb in setup-dev validate test; do
-  windows_ci_next=$(grep -F -A1 ".\windows\win-env.ps1 $windows_ci_verb" "$root/.github/workflows/ci.yml" | sed -n '2p')
+for windows_ci_script in setup-dev.ps1 check-desired-state.ps1 test.ps1; do
+  windows_ci_prefix='pwsh -NoProfile -File .\windows\tool\'
+  windows_ci_next=$(grep -F -A1 "${windows_ci_prefix}${windows_ci_script}" "$root/.github/workflows/ci.yml" | sed -n '2p')
   if [ "$windows_ci_next" != '          if ($LASTEXITCODE -ne 0) { exit $LASTEXITCODE }' ]; then
-    echo "Windows CI does not stop on the $windows_ci_verb verb status" >&2
+    echo "Windows CI does not stop on the $windows_ci_script process status" >&2
     exit 1
   fi
 done

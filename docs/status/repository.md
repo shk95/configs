@@ -23,12 +23,18 @@ pre-commit hook refuses a primary-checkout commit when tracked hooks are
 enabled. Editor writes have no Git hook; the start workflow and reviewer
 check cover that part. CI cannot infer an editor's worktree from a commit.
 
+`tool/configs` now lists repository operations intended for an operator or
+an agent acting for one. It forwards to the existing implementation scripts
+without adding policy or domain deployment. Hooks and CI call implementation
+tools directly. Windows keeps `windows/win-env.ps1` as its domain operator
+entry point; Unix-like users continue to use the `Justfile`.
+
 The merge gate is CI's `Required checks`, demanded whenever a change falls
 in a domain that check covers.
 
 The invariant registry has no pending entry and no untagged fixture unit, and
 `tool/version-control/invariants` enforces C10 (no untagged fixture unit) by
-default; `tool/version-control/invariants --table` prints the entries and
+default; `tool/configs invariants --table` prints the entries and
 their number, which this file does not repeat. Enforced is not the same as held: the manual
 `INV windows/support-boundary-named` records that the terminal delegation
 item still passes its read-back below the Windows 10 boundary (#53).
@@ -38,7 +44,7 @@ invisible to C10 (`docs/policy/decisions/repository/fixture-tags-name-proven-inv
 
 The provisional registry exists since 2026-09-05, when #175 registered its
 first entry; `docs/provisional/README.md` is the contract and
-`tool/version-control/provisional --table` prints the entries.
+`tool/configs provisional --table` prints the entries.
 `tool/version-control/provisional` checks it in both directions on every
 commit and in the CI scan job. The exit criteria `unixlike/flake.nix` states in
 comments are the known gap: moving them into the registry is a separate
@@ -46,9 +52,10 @@ decision and has not been made.
 
 `tool/version-control/domain-reads` runs on every commit and in CI beside
 the hygiene scan; the Windows CI job no longer walks the checkout for
-PowerShell files. CI and pre-push call the Windows `validate` and `test` verbs
-through `windows/win-env.ps1`; the test verb is the one place every script
-under the Windows tree is parsed for syntax (`check-desired-state.ps1`
+PowerShell files. CI and pre-push call the Windows validation and test
+implementations under `windows/tool/` directly; the test implementation is
+the one place every script under the Windows tree is parsed for syntax
+(`check-desired-state.ps1`
 still parses the PowerShell payload it validates). `pre-push` runs the
 history form of the audit, which judges `dev`, `master` and release-tag
 reachability against `origin/dev` and `origin/master` when a fetch left
@@ -130,7 +137,7 @@ and the report that answers it under `docs/work/<scope>/<slug>/`, checked by
 `tool/version-control/work` on every commit and in CI, with issues holding
 execution state only and `docs/work/roadmap.md` stating lanes and order.
 The canonical agent workflow now calls for a local preflight of a new spec
-and pending report before implementation. `tool/version-control/work
+and pending report before implementation. `tool/configs work
 --working-tree docs/work/<scope>/<slug>` reads that one item, including
 untracked files, for early W1-W6 feedback; it does not replace the index,
 staged or commit-range checks.

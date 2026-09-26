@@ -77,7 +77,7 @@ require_command() {
 require_command git awk
 
 usage() {
-  echo "usage: tool/version-control/provisional [--table] [--scopes <a,b>] [--date <YYYY-MM-DD>]" >&2
+  echo "usage: tool/configs provisional [--table] [--scopes <a,b>] [--date <YYYY-MM-DD>]" >&2
   exit 2
 }
 

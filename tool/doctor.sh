@@ -24,7 +24,7 @@ scope=${1:-all}
 case "$scope" in
   all|unixlike|windows|common|repository) ;;
   *)
-    echo "usage: tool/doctor.sh [unixlike|windows|common|repository]" >&2
+    echo "usage: tool/configs doctor [unixlike|windows|common|repository]" >&2
     exit 2
     ;;
 esac
@@ -133,7 +133,7 @@ if hooks_enabled; then
 else
   # A hard failure: without this a clone commits with no local policy or secret
   # scan. CI remains a backstop, not the primary feedback loop.
-  bad "git hooks are NOT enabled" "Inspect with 'tool/setup', then enable with 'tool/setup --fix'."
+  bad "git hooks are NOT enabled" "Inspect with 'tool/configs setup', then enable with 'tool/configs setup --fix'."
 fi
 
 # INV repository/hook-evidence-recorded: silent when the log is absent, since

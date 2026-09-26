@@ -57,7 +57,7 @@ require_command() {
 }
 
 usage() {
-  echo "usage: tool/version-control/records [--table decisions|candidates|work]" >&2
+  echo "usage: tool/configs records [--table decisions|candidates|work]" >&2
   exit 2
 }
 
@@ -168,7 +168,7 @@ if [ -s "$work/hits" ]; then
     printf '\033[31m✗ %s\033[0m\n' "$hit" >&2
   done <"$work/hits"
   echo "  See docs/policy/invariants/repository/document-index-generated.md: an area's" >&2
-  echo "  README states its format; tool/version-control/records --table <area>" >&2
+  echo "  README states its format; tool/configs records --table <area>" >&2
   echo "  prints the list." >&2
   exit 1
 fi

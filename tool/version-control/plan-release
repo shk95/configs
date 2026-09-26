@@ -16,7 +16,7 @@ root=$(git rev-parse --show-toplevel)
 cd "$root"
 
 usage() {
-  echo "usage: tool/version-control/plan-release <unixlike|windows|common> [commit] [YYYY.MM.DD]" >&2
+  echo "usage: tool/configs plan-release <unixlike|windows|common> [commit] [YYYY.MM.DD]" >&2
   exit 2
 }
 

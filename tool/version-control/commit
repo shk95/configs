@@ -115,7 +115,7 @@ trap 'rm -rf "$work"; exit 130' INT HUP TERM
 
 # What the operator typed, recorded for the pull-request body. Every argument
 # that reaches it has already passed valid_name or the subcommand table.
-invocation="tool/version-control/commit $*"
+invocation="tool/configs commit $*"
 
 publish=0
 dry_run=0
@@ -132,7 +132,7 @@ plan_units_line=
 
 usage_text() {
   cat <<'EOF'
-usage: tool/version-control/commit [--dry-run] [--publish] <command>
+usage: tool/configs commit [--dry-run] [--publish] <command>
 
 options:
   --dry-run                show everything that would happen and write nothing
@@ -611,7 +611,7 @@ report_plan() {
     # Listing units nothing will run is worse than saying so: the commit would
     # look gated when no check ran at all.
     evidence_unavailable "pre-commit checks" \
-      "core.hooksPath is ${hooks_path:-unset}, does not resolve to .githooks; fix with tool/setup --fix" \
+      "core.hooksPath is ${hooks_path:-unset}, does not resolve to .githooks; fix with tool/configs setup --fix" \
       || exit 1
     plan_units_line="unavailable; this clone runs no hooks"
   fi
@@ -660,7 +660,7 @@ build_pr_body() {
     fi
     printf '```\n'
 
-    printf '\nOpened by tool/version-control/commit. Auto-merge is armed, so the\n'
+    printf '\nOpened by tool/configs commit. Auto-merge is armed, so the\n'
     printf 'merge commit happens when `Required checks` pass and not before.\n'
   } >"$pr_body_file"
 }

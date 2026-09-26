@@ -8,16 +8,22 @@ Repository text is English because the repository is public.
 
 ## Prepare a clone
 
+`tool/configs help` lists repository operations intended for a person or an
+agent acting for one. The command forwards to the implementation under
+`tool/`; hooks and CI invoke those implementations directly. Windows host
+commands remain under `windows/win-env.ps1`, and Unix-like host commands use
+the `Justfile`.
+
 ```sh
-tool/setup
-tool/setup --fix
-tool/doctor.sh
+tool/configs setup
+tool/configs setup --fix
+tool/configs doctor
 ```
 
-`tool/setup` changes only the clone-local hooks setting and only with `--fix`.
-`tool/doctor.sh` is read-only. `tool/doctor.sh` also prints a one-line
+`tool/configs setup` changes only the clone-local hooks setting and only with `--fix`.
+`tool/configs doctor` is read-only. `tool/configs doctor` also prints a one-line
 summary of the outcomes the hooks have recorded on this clone;
-`tool/version-control/hook-evidence` prints the full count. Pass `unixlike`,
+`tool/configs hook-evidence` prints the full count. Pass `unixlike`,
 `windows`, `common`, or `repository` to check only that scope; omit the
 scope for a complete host inventory. A missing foreign-platform capability
 does not block scoped work.
@@ -50,13 +56,13 @@ to the other.
 
 Start a source change in its own linked worktree, with one topic branch for the
 reviewable increment. Keep the primary checkout available for read-only
-inspection and integration. `tool/worktree.sh new <scope>-<topic> [feature|fix]`
+inspection and integration. `tool/configs worktree new <scope>-<topic> [feature|fix]`
 fetches `origin/dev`, creates the branch and its sibling worktree, and prepares
 its local dependencies. For a requested fixed base commit, create the linked
 worktree at that exact commit and attach a topic branch there before editing;
 verify that the commit is the intended `origin/dev` base before publishing.
 The branch and worktree are kept for review feedback until their pull request
-merges. `tool/worktree.sh done <scope>-<topic>` then removes the worktree.
+merges. `tool/configs worktree done <scope>-<topic>` then removes the worktree.
 
 `tool/version-control/require-linked-worktree` is a preflight for scripts that
 write source. The pre-commit hook also refuses commits from the primary
@@ -131,7 +137,7 @@ may contain accepted history from the others.
 
 For a routine desired-state edit whose message is a template — a Homebrew
 formula or cask, a `unixlike/flake.lock` refresh —
-`tool/version-control/commit` shows the edit, the classification, the selected
+`tool/configs commit` shows the edit, the classification, the selected
 checks, and the message, then applies it and commits on your confirmation. It
 refuses on `master` and never bypasses a hook.
 
@@ -166,8 +172,8 @@ evaluation, build, and native-runtime evidence separately, including explicit
 once for each host the release speaks for, in a block opened by
 `Host: <label>`. Unix-like provider and `common` annotations report them
 once at domain level; neither certifies a private Unix-like host.
-`tool/version-control/plan-release` prints the template, and
-`tool/version-control/audit` refuses a tag that departs from it. A Windows
+`tool/configs plan-release` prints the template, and
+`tool/configs audit` refuses a tag that departs from it. A Windows
 label is lowercase letters, digits and hyphens and names a kind of host,
 never a machine; keep machine names, account names
 and machine identifiers out of the references too, because a pushed tag
@@ -194,7 +200,7 @@ for Darwin until nixpkgs ships a zellij whose source already has the fix;
 names the condition that ends it. The overlay names no zellij version: it
 applies the range with no fuzz to whatever zellij the lock brings in, so a
 `unixlike/flake.lock` refresh that moves zellij is the ordinary one commit,
-`tool/version-control/commit flake refresh`.
+`tool/configs commit flake refresh`.
 
 The flake checks `zellij-combining-marks`,
 `zellij-combining-marks-refuses-a-patched-tree` and
@@ -231,7 +237,7 @@ repository. Keep at most one such pull request open. The repository maintainer
 owns the promotion decision. There is no operational bypass; a different flow
 requires an accepted policy change first.
 
-1. Fetch `dev` and `master`, then run `tool/version-control/plan-promotion`.
+1. Fetch `dev` and `master`, then run `tool/configs plan-promotion`.
 2. Review every commit and owning scope in `master..dev`. Do not add a fix to
    the promotion pull request; land the fix through its owning branch into
    `dev`, then refresh the promotion.
@@ -289,11 +295,11 @@ procedure.
    If nothing enforces it yet, open an
    issue and declare `pending #<n>` with an owner. Tag the fixture *unit* —
    the `Describe` or the banner section — or the pre-commit hook refuses the
-   commit; `tool/version-control/invariants --untagged` names the unit.
+   commit; `tool/configs invariants --untagged` names the unit.
 5. Put the tag `INV <scope>/<slug>` in every declared locator: a header
    comment in a script, the test name or a comment above a fixture, the
    loader's refusal message.
-6. Run `tool/version-control/invariants`. It runs again on every commit.
+6. Run `tool/configs invariants`. It runs again on every commit.
 
 Removing an invariant removes its file and every tag that named it; the check
 refuses an orphan tag. Weakening a statement is a governance change and is
@@ -326,13 +332,13 @@ the same change that adds it, not afterwards.
    PowerShell block, the running text of a document. A document explaining the
    registry writes the placeholder form and never a literal id.
 7. Stage the entry and the tagged lines, then run
-   `tool/version-control/provisional`. It reads the index, so an unstaged
+   `tool/configs provisional`. It reads the index, so an unstaged
    entry is invisible to it. It runs again on every commit and in CI.
 
 ## Retire, extend or promote a provisional measure
 
 Every entry ends one of three ways, and `review-by` is the date the choice is
-made rather than deferred. `tool/version-control/provisional --table` prints
+made rather than deferred. `tool/configs provisional --table` prints
 what is registered and when each entry is next due.
 
 Retire it when `exit-when` came true:
@@ -391,10 +397,10 @@ the format; this is the procedure.
    and the commit it was taken at.
 3. Create `report.md` in the same commit, with one `pending` row per
    criterion. Before implementation, run
-   `tool/version-control/work --working-tree docs/work/<scope>/<slug>` for
+   `tool/configs work --working-tree docs/work/<scope>/<slug>` for
    read-only feedback on the new pair, including untracked files. This does
    not validate the proposed commit. When staging is authorized, stage both
-   and run `tool/version-control/work --staged`; the hook runs that check too.
+   and run `tool/configs work --staged`; the hook runs that check too.
 4. When implementation starts, open the execution issue. Its first line names
    the spec path; it holds the increments as a checklist and carries no
    acceptance criteria. Add `issue: #<n>` to the spec's header. A report
@@ -421,23 +427,23 @@ the format; this is the procedure.
 7. End the report as `done`, `abandoned` or `superseded`. The push to `dev`
    that carries it closes the execution issue with a comment linking the
    report (`INV repository/issue-closes-from-report`); nothing else closes
-   one automatically, and `tool/version-control/audit-remote` reports an
+   one automatically, and `tool/configs audit-remote` reports an
    issue left open beside a terminal report. A durable rule the work produced lands
    in a decision record or an invariant that names the document as its
    source, never by citing the work item from a document that carries
-   authority; `tool/version-control/design-citations` refuses that citation.
+   authority; `tool/configs design-citations` refuses that citation.
 
 `docs/work/roadmap.md` states lanes and order, not schedule; change it when
 the order of work changes. GitHub milestones are not used. A spec whose
 `review-by` has passed while its report is pending is overdue:
-`tool/version-control/work --overdue` lists it.
+`tool/configs work --overdue` lists it.
 
 ## Record a decision
 
 Write a record when a choice is expensive to reverse or a reviewer will ask
 why it was made. Add a file under `docs/policy/decisions/<scope>/` with the
 header and format `docs/policy/decisions/README.md` defines; nothing lists it
-by hand, `tool/version-control/records --table decisions` does.
+by hand, `tool/configs records --table decisions` does.
 Reversing a decision creates a new record, sets the old one to
 `status: superseded` with `superseded-by`, and moves every pointer to it in
 the same commit — the checker cannot tell a superseded record from a live
@@ -561,7 +567,7 @@ minimal selection says nothing about the features it excluded.
 
 A change made in an application's own UI moves back into desired state with
 `.\windows\win-env.ps1 capture`, run from a linked task worktree on the
-Windows host. Run `bash tool/worktree.sh new windows-capture-settings feature`
+Windows host. Run `bash tool/configs worktree new windows-capture-settings feature`
 from the primary clone to create it from `origin/dev` before writing. The primary clone
 may run `capture -WhatIf` to inspect the proposed diff and may resume a
 publish with no new payload change. A writing run in the primary clone
@@ -686,15 +692,15 @@ scope of the change, because a renamed fixture in any scope can orphan the tag
 an entry depends on.
 
 ```sh
-tool/version-control/test
-tool/version-control/invariants
-tool/version-control/provisional
-tool/version-control/domain-reads
-tool/version-control/design-citations
-tool/version-control/records
-tool/version-control/audit
-tool/version-control/audit-remote  # when gh is authenticated
-tool/version-control/hook-evidence
+tool/configs test
+tool/configs invariants
+tool/configs provisional
+tool/configs domain-reads
+tool/configs design-citations
+tool/configs records
+tool/configs audit
+tool/configs audit-remote  # when gh is authenticated
+tool/configs hook-evidence
 ```
 
 `tool/version-control/audit --history` runs on every push and in the
@@ -708,7 +714,7 @@ does not carry: a stray local `*-v*` tag still fails the push until it is
 deleted. The full form, which also judges this clone — local branch names,
 the hooks setting — and reads the local branches first, is a read-only look
 by hand, because a clone's scratch branch is not a property of the change
-being pushed. `tool/version-control/plan-release` checks reachability from
+being pushed. `tool/configs plan-release` checks reachability from
 the local `master`, because it plans a tag this clone creates.
 
 The history form also judges, through `.githooks/commit-msg`, the non-merge
@@ -727,7 +733,7 @@ secret scan and outside domain dispatch, and again in CI, because the invariant
 is repository-wide rather than scoped to the domain being changed.
 
 ```sh
-tool/version-control/hygiene
+tool/configs hygiene
 ```
 
 When it reports something, in order of preference:
@@ -766,7 +772,7 @@ the hygiene scan and in CI, because a read across the boundary is a property
 of two trees rather than of the domain being changed.
 
 ```sh
-tool/version-control/domain-reads
+tool/configs domain-reads
 ```
 
 When it reports something, copy what the other domain owns into the domain
@@ -780,7 +786,7 @@ read across the boundary has no legitimate form.
 work item from authority-bearing files. It runs on every commit and in CI.
 
 ```sh
-tool/version-control/design-citations
+tool/configs design-citations
 ```
 
 When it reports something, decide which of the two the sentence is doing. If
@@ -799,8 +805,8 @@ the headers instead, so a new record never edits a repository file
 CI.
 
 ```sh
-tool/version-control/records
-tool/version-control/records --table decisions
+tool/configs records
+tool/configs records --table decisions
 ```
 
 Branch protection on `dev` and `master` requires the stable `Required checks`

@@ -1,0 +1,60 @@
+#!/bin/sh
+# Repository operator interface. Hooks and CI invoke the implementation
+# scripts directly; this file only chooses a documented command and forwards
+# its arguments and exit status.
+# INV repository/operator-entry-boundary
+
+set -eu
+
+tool_dir=$(CDPATH= cd -- "$(dirname -- "$0")" && pwd)
+
+usage() {
+  cat <<'EOF'
+usage: tool/configs <command> [arguments]
+
+Clone and task:  setup  doctor  worktree  commit
+Review:          classify  work  records  invariants  provisional
+                hygiene  domain-reads  design-citations  test
+Integration:     audit  audit-remote  plan-promotion  plan-release
+Evidence:        hook-evidence
+
+Use 'tool/configs <command> --help' where the target supports it.
+Windows host operations use windows/win-env.ps1; Unix-like host operations
+use just. This entry point does not deploy a domain or bypass confirmation.
+EOF
+}
+
+command=${1:-help}
+if [ "$#" -gt 0 ]; then shift; fi
+case "$command" in
+  help)
+    [ "$#" -eq 0 ] || { usage >&2; exit 64; }
+    usage
+    exit 0
+    ;;
+  setup) target=setup ;;
+  doctor) target=doctor.sh ;;
+  worktree) target=worktree.sh ;;
+  commit) target=version-control/commit ;;
+  classify) target=version-control/classify ;;
+  work) target=version-control/work ;;
+  records) target=version-control/records ;;
+  invariants) target=version-control/invariants ;;
+  provisional) target=version-control/provisional ;;
+  hygiene) target=version-control/hygiene ;;
+  domain-reads) target=version-control/domain-reads ;;
+  design-citations) target=version-control/design-citations ;;
+  test) target=version-control/test ;;
+  audit) target=version-control/audit ;;
+  audit-remote) target=version-control/audit-remote ;;
+  plan-promotion) target=version-control/plan-promotion ;;
+  plan-release) target=version-control/plan-release ;;
+  hook-evidence) target=version-control/hook-evidence ;;
+  *)
+    echo "unknown repository command: $command" >&2
+    usage >&2
+    exit 64
+    ;;
+esac
+
+exec "$tool_dir/$target" "$@"

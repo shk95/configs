@@ -18,7 +18,7 @@ case "${1:-}" in
   '') ;;
   --reset) mode=reset ;;
   *)
-    echo "usage: tool/version-control/hook-evidence [--reset]" >&2
+    echo "usage: tool/configs hook-evidence [--reset]" >&2
     exit 2
     ;;
 esac
