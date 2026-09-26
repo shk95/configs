@@ -16,6 +16,8 @@
 # no host cannot break a host.
 #
 # usage: tool/checks/import-order [<extra module directory>]
+# CHECKS_IMPORT_MODULES substitutes a fixture module tree, using the same
+# locked inputs, collection, composition and toplevel comparison as production.
 #
 # The optional directory's files are added to the module set, which is how
 # tool/checks/import-order-test proves the check refuses an order-sensitive
@@ -29,6 +31,13 @@ require_command nix
 
 repo=$(CDPATH= cd -- "$(dirname "$0")/../.." && pwd)
 cd "$repo"
+
+if [ -n "${CHECKS_IMPORT_MODULES:-}" ]; then
+  module_root=$(CDPATH= cd -- "$CHECKS_IMPORT_MODULES" && pwd -P)
+  module_expr="\"$module_root\""
+else
+  module_expr='(flake.outPath + "/modules")'
+fi
 
 extra=
 if [ -n "${1:-}" ]; then
@@ -49,7 +58,7 @@ result=$(nix eval --impure --json --expr "
     inputs = flake.inputs // { self = flake; };
     lib = inputs.nixpkgs.lib;
     tree = inputs.import-tree.withLib lib;
-    modules = tree.leafs (flake.outPath + \"/modules\") $extra_expr;
+    modules = tree.leafs $module_expr $extra_expr;
     compose = files: inputs.flake-parts.lib.mkFlake { inherit inputs; } { imports = files; };
     toplevels = outputs: {
       homeConfigurations = lib.mapAttrs (_: c: c.activationPackage.drvPath) outputs.homeConfigurations;

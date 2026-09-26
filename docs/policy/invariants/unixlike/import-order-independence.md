@@ -12,7 +12,10 @@ files contribute to — `home.packages` was the case the check found — is
 keyed by file rather than by the walk. The proof is by evaluation: every
 host is composed twice, in walk order and reversed, and each toplevel
 derivation path must be identical, because that path hashes everything that
-reaches the host. The fixture adds a pair of files contributing to one
+reaches the host. The detector fixture uses minimal synthetic outputs for all
+three flavours,
+with the same collection, composition and comparison engine. It accepts a
+stable list and adds a pair of files contributing to one
 flake-level list at the same order and requires the check to refuse it. The
 check evaluates every host twice, so the merge gate runs it and the local
 gate does not (#128).
