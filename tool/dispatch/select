@@ -5,10 +5,8 @@
 # payload ran a whole flake evaluation even though Nix only copied that file.
 #
 # tool/version-control/classify answers ownership: which domain may change a
-# path, which release tag covers it, which CI job is selected. It keeps that
-# job. This selects check units for a local gate, where fast feedback is the
-# point. CI deliberately does not use it: a merge gate optimises for
-# completeness and runs a domain's whole suite.
+# path and which release tag covers it. Local stages select check units;
+# CI selects whole suites conservatively, independently of ownership.
 #
 # INV repository/local-gate-selects-by-effect: a unit is selected only for a
 # change that can alter its result. The version-control fixture suite copies
@@ -22,7 +20,7 @@
 # Reads `<status><TAB><path>` lines as `git diff --name-status` produces them,
 # and writes one `<domain>:<check>` unit per line.
 #
-# usage: tool/dispatch/select <commit|push>
+# usage: tool/dispatch/select <commit|push|ci>
 
 set -eu
 
@@ -34,9 +32,9 @@ export MSYS_NO_PATHCONV MSYS2_ARG_CONV_EXCL
 
 stage=${1:-}
 case "$stage" in
-  commit | push) ;;
+  commit | push | ci) ;;
   *)
-    echo "usage: tool/dispatch/select <commit|push>" >&2
+    echo "usage: tool/dispatch/select <commit|push|ci>" >&2
     exit 2
     ;;
 esac
@@ -52,7 +50,19 @@ trap 'rm -f "$changes" "$paths"' EXIT
 # anything reads it: leaving the two joined hid the destination from classify
 # entirely, and a payload moved into assets/ was never selected for the payload
 # check.
-awk -F'\t' '{ for (i = 2; i <= NF; i++) if ($i != "") print $1 "\t" $i }' >"$changes"
+awk -F'\t' '
+  NF == 0 { next }
+  {
+    rename = ($1 ~ /^[RC][0-9]+$/)
+    if ((!rename && ($1 !~ /^[AMDTUXB]$/ || NF != 2)) ||
+        (rename && NF != 3)) { bad = 1; next }
+    for (i = 2; i <= NF; i++) {
+      if ($i == "" || $i ~ /^"/) { bad = 1; continue }
+      print $1 "\t" $i
+    }
+  }
+  END { exit bad ? 1 : 0 }
+' >"$changes" || { echo 'Invalid name-status input' >&2; exit 1; }
 cut -f2- <"$changes" | sort -u >"$paths"
 
 # A document is owned by the scope its directory names, but no domain suite
@@ -71,6 +81,28 @@ fi
 
 has_scope() { printf '%s\n' "$scopes" | grep -qx "$1"; }
 
+# CI deliberately keeps platform payloads broad. No transitive dependency
+# model is claimed. Governance changes which can alter selection or gating
+# exercise every suite; unknown ownership is a failure, never an empty plan.
+if [ "$stage" = ci ]; then
+  if has_scope unclassified; then
+    echo 'Unclassified CI input' >&2
+    exit 1
+  fi
+  if has_scope common; then
+    echo 'Common CI suite is not defined' >&2
+    exit 1
+  fi
+  if grep -Eq '^(\.github/workflows/|tool/dispatch/|tool/version-control/(classify|required-checks)$)' "$paths"; then
+    printf '%s\n' repository:fixtures unixlike:suite windows:suite
+  else
+    if has_scope repository; then echo repository:fixtures; fi
+    if has_scope unixlike; then echo unixlike:suite; fi
+    if has_scope windows; then echo windows:suite; fi
+  fi
+  exit 0
+fi
+
 # Narrowing is deliberately conservative. A payload that was added or removed
 # can change what a module references, and a rename shows up as both, so only a
 # tree of modified payloads is allowed to skip evaluation.
@@ -81,7 +113,7 @@ while IFS="$tab" read -r status path || [ -n "${status:-}" ]; do
   [ -n "${path:-}" ] || continue
   case "$path" in
     .githooks/* | .github/workflows/* | tool/dispatch/* | tool/version-control/* \
-      | tool/configs | tool/setup | tool/doctor.sh | tool/worktree.sh)
+      | tool/configs | tool/setup | tool/doctor.sh | tool/worktree.sh | tool/work-session.sh)
       fixtures=1
       ;;
   esac

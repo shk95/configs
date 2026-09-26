@@ -2,7 +2,8 @@
 
 Lanes and order, not schedule. A lane is a host this repository currently
 configures or a host intended to consume its Unix-like API after migration.
-Table position is the current sequence of work. Existing item numbers remain
+The current-priorities table gives the next sequence; deferred and historical
+outcomes are not pickup-ready work. Existing item numbers remain
 references in their specs and reports when priority changes, so a deferred
 item keeps its number when a new item moves ahead of it; an item without a
 number is a decision that must be made before the item it precedes. An item
@@ -33,9 +34,31 @@ are revised for the new owner before work resumes.
 | wsl-standalone | x86_64 Ubuntu WSL, standalone Home Manager | operational; tagged `unixlike-v2026.08.31` |
 | wsl-nixos | x86_64 NixOS-WSL | activated (generation 4); updated in place since that day |
 
-## Order
+## Current priorities
 
-| Item | Work in current sequence | Scope |
+| Item | Outcome | Plan / disposition |
+| --- | --- | --- |
+| 18 | GitHub-centered agent workflow, then test efficiency | docs/work/repository/agent-workflow/spec.md; approved 2026-09-26, execution tracked by its issue |
+
+Standalone work does not need a roadmap row. The planner maintains priorities,
+dependencies and disposition here; PR state remains on GitHub. Completion needs
+the maintainer's acceptance and a report reference, not a copied merged flag.
+
+## Deferred outcomes
+
+| Item | Remaining outcome and dependency | Owner |
+| --- | --- | --- |
+| 9 | x86_64 desktop on an AMD APU — provider evaluation and native build verified historically; private consumer owns the provisional final output; physical evidence pending there | unixlike provider class; external host repository final instance and physical evidence |
+| 11 | installation and deployment (disko, nixos-anywhere, deploy-rs) — provider storage classes and disposable-VM proof verified; private consumer owns final nodes and real-host deployment evidence | unixlike provider class; external host repository final nodes, guarded deployment and physical evidence |
+| 12 | x86_64 guest on QEMU/KVM, on the NixOS desktop — after items 9 and 11 | unixlike provider kind; external host repository final instance and runtime evidence |
+| 13 | x86_64 guest on Hyper-V, on the Windows host — after item 11 | unixlike provider kind; external host repository final instance and runtime evidence |
+
+## Historical outcomes
+
+These are completed outcomes with their original item identities. The dated
+reports below retain evidence; moving a row does not upgrade host readiness.
+
+| Item | Historical outcome | Scope |
 | --- | --- | --- |
 | 1 | docs layout — done 2026-09-19 | repository |
 | 2 | work model — done 2026-09-19 | repository |
@@ -53,10 +76,6 @@ are revised for the new owner before work resumes.
 | 15 | typed provider API and consumer contract; retain current outputs during comparison — done 2026-09-24 | unixlike |
 | 16 | public host-repository template with an evaluated example — done 2026-09-24 | external template repository |
 | 17 | migrate all seven current outputs to private `configs-hosts`, verify each host, and retire public real-host inventory — done 2026-09-25 | unixlike and external host repository, in separate increments |
-| 9 | x86_64 desktop on an AMD APU — provider evaluation and native build verified historically; private consumer owns the provisional final output; physical evidence pending there | unixlike provider class; external host repository final instance and physical evidence |
-| 11 | installation and deployment (disko, nixos-anywhere, deploy-rs) — provider storage classes and disposable-VM proof verified; private consumer owns final nodes and real-host deployment evidence | unixlike provider class; external host repository final nodes, guarded deployment and physical evidence |
-| 12 | x86_64 guest on QEMU/KVM, on the NixOS desktop — after items 9 and 11 | unixlike provider kind; external host repository final instance and runtime evidence |
-| 13 | x86_64 guest on Hyper-V, on the Windows host — after item 11 | unixlike provider kind; external host repository final instance and runtime evidence |
 
 ## Transition before the remaining host work
 

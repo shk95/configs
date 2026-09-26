@@ -16,6 +16,8 @@
 # no host cannot break a host.
 #
 # usage: tool/checks/import-order [<extra module directory>]
+# CHECKS_IMPORT_MODULES substitutes a fixture module tree, using the same
+# locked inputs, collection, composition and toplevel comparison as production.
 #
 # The optional directory's files are added to the module set, which is how
 # tool/checks/import-order-test proves the check refuses an order-sensitive
@@ -30,6 +32,11 @@ require_command nix
 repo=$(CDPATH= cd -- "$(dirname "$0")/../.." && pwd)
 cd "$repo"
 
+module_root=
+if [ -n "${CHECKS_IMPORT_MODULES:-}" ]; then
+  module_root=$(CDPATH= cd -- "$CHECKS_IMPORT_MODULES" && pwd -P)
+fi
+
 extra=
 if [ -n "${1:-}" ]; then
   extra=$(CDPATH= cd -- "$1" && pwd)
@@ -43,13 +50,16 @@ printf '→ composing every host in walk order and reversed%s\n' "${extra:+ (wit
 # `self` is the real flake, so a module that read `inputs.self.<output>`
 # would see the walk-order composition in both runs; today only `outPath` is
 # read (modules/foundation/packages.nix), which is the same either way.
-result=$(nix eval --impure --json --expr "
+# Pass the path as data, not interpolated Nix source (quotes and backslashes
+# are legal directory names). Always overwrite the internal environment value.
+result=$(IMPORT_ORDER_MODULE_ROOT="$module_root" nix eval --impure --json --expr "
   let
+    moduleRoot = builtins.getEnv \"IMPORT_ORDER_MODULE_ROOT\";
     flake = builtins.getFlake (toString ./.);
     inputs = flake.inputs // { self = flake; };
     lib = inputs.nixpkgs.lib;
     tree = inputs.import-tree.withLib lib;
-    modules = tree.leafs (flake.outPath + \"/modules\") $extra_expr;
+    modules = tree.leafs (if moduleRoot == \"\" then flake.outPath + \"/modules\" else moduleRoot) $extra_expr;
     compose = files: inputs.flake-parts.lib.mkFlake { inherit inputs; } { imports = files; };
     toplevels = outputs: {
       homeConfigurations = lib.mapAttrs (_: c: c.activationPackage.drvPath) outputs.homeConfigurations;

@@ -12,7 +12,7 @@ usage() {
   cat <<'EOF'
 usage: tool/configs <command> [arguments]
 
-Clone and task:  setup  doctor  worktree  commit
+Clone and task:  setup  doctor  worktree  session  commit
 Review:          classify  work  records  invariants  provisional
                 hygiene  domain-reads  design-citations  test
 Integration:     audit  audit-remote  plan-promotion  plan-release
@@ -35,6 +35,7 @@ case "$command" in
   setup) target=setup ;;
   doctor) target=doctor.sh ;;
   worktree) target=worktree.sh ;;
+  session) target=work-session.sh ;;
   commit) target=version-control/commit ;;
   classify) target=version-control/classify ;;
   work) target=version-control/work ;;

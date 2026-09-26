@@ -335,12 +335,14 @@ The governance plane owns this contract and the hooks that consume it. Each
 domain owns the detection of its own prerequisites and reports through the
 contract rather than deciding what a missing tool means.
 
-The local gate selects a check unit only for a change that can alter that
-unit's result — the version-control fixture suite for the hooks, the
-dispatcher, the version-control tools, the governance scripts it scans and
-the workflow it reads; flake evaluation for the modules and the flake —
-while the merge gate runs a domain's whole suite, because a local gate
-optimises for feedback and a merge gate for completeness.
+Ownership and check selection answer different questions. Ownership determines
+which domain may author a path and which policy-scan scope applies. Gates select
+checks by change effect. Local gates select individual units for fast feedback;
+CI excludes documentation from suite selection and runs the complete native
+suite for every affected platform input. Changes to workflows, dispatch,
+classification or the stable gate conservatively exercise all suites. Global
+policy scans remain required. Unknown inputs, failed selection and unsupported
+native stack events fail the stable gate rather than becoming intentional skips.
 
 Documents are owned the way code is. Everything the repository writes about
 itself lives under `docs/`: policy (the model, the definition of done, the
@@ -375,13 +377,20 @@ its spec names, and the audits report what that misses — an issue still open
 beside a terminal report, and a spec past its review date whose report is
 still pending.
 
+GitHub pull requests preserve integration candidates independently of local
+execution spaces. Workers hand off delivery; one authorized integration
+session admits candidates under protected dev. Local checkpoints make an
+interrupted worker recoverable and establish a handoff before role changes;
+they never replace remote integration state. Cleanup needs evidence of data
+preservation, not an age or process heuristic.
+
 The canonical agent workflow follows the Agent Skills open standard under
 `.agents/skills/`. Product-specific discovery locations may contain thin
 adapters, but they do not own or duplicate the workflow.
 
 Branch protection consumes one stable CI contract named `Required checks`.
 The gate validates classification, the repository-wide secret scan, and each
-job selected by the classifier. Individual domain jobs remain conditional and
+job selected by effect. Individual domain jobs remain conditional and
 are not protection contracts, so adding or skipping a domain does not silently
 weaken or deadlock protected branches.
 
