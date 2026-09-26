@@ -91,3 +91,7 @@ nixos.wsl
 
 # flake.lock is NOT ignored. It is the actual pin — reproducibility is the
 # point of this repository, and one that ignores its lock file has none.
+
+# Per-worktree execution handoff; never PR or integration state.
+/.work-session.md
+/.work-session.lock/

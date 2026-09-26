@@ -142,3 +142,12 @@ own list is the file named for it beside this one (`unixlike.md`,
 - [ ] The tag is new and immutable; an existing tag is never moved or reused.
 - [ ] Tag creation and push each have explicit authorization.
 - [ ] Activation or Apply is reported separately and is not implied by the tag.
+
+## Agent delivery and recovery
+
+- [ ] A reviewer confirms the worker hands off a remote feature branch and PR,
+      integration enumerates GitHub candidates, and dev protection still
+      requires PR/check admission without an agent bypass
+      (INV repository/pr-integration-authority).
+- [ ] Interrupted workers have a useful checkpoint; local liveness is not
+      inferred from age, and cleanup considers unpushed and ignored data.

@@ -143,25 +143,38 @@ does not certify a domain release or authorize deployment. Do not merge
 repository maintainer owns promotion decisions. There is no operational
 bypass; change this policy through the governance workflow before deviating.
 
-Work is planned and verified in documents, and issues hold execution state.
-Work with more than one acceptance criterion or more than one pull request
-has a spec and a report under `docs/work/<scope>/<slug>/`, created in the
-same commit; any other change is a single pull request whose body carries
-its evidence. An execution issue names its spec, holds the increments as a
-checklist, carries no acceptance criteria and is never a source of evidence;
-it closes from what the report says, and no commit message or promotion body
-carries a closing keyword (`INV repository/no-closing-keyword`).
-`docs/work/roadmap.md` states lanes and order, not schedule. GitHub
-milestones are not used. A branch is one reviewable increment — one issue,
-or what one judgement covers — cut from `origin/dev` and merged through one
-pull request when it is complete and green. An increment of a spec is what
-one evidence lane verifies, and the report rows, status and report end that
-verification produces travel in the same pull request, so a spec takes as
-many pull requests as it has evidence lanes and scopes, not as many as it
-has steps (`INV repository/pull-request-spans-an-evidence-lane`). Neither a
-finished report nor a closed issue certifies a domain release or authorizes
-activation or Apply. The repository maintainer owns the roadmap and the
-decision that a report is done.
+Work is planned and verified in documents; execution issues name work lanes
+and dependencies without copying evidence or native pull-request state.
+The planner manages docs/work plans and roadmap priorities, not every document.
+A roadmap entry is optional. A standalone plan is valid. Only a small,
+unambiguous, single-scope, single-criterion change may go directly to a worker;
+other work goes through planning. The existing spec/report format and dated
+amendment rule remain in force. The maintainer owns roadmap priorities and
+acceptance of a completed report.
+
+A worker pins the current origin/dev and reviewed plan revision at pickup,
+then immediately works in a dedicated linked worktree. One coherent same-scope
+outcome is one branch and PR; evidence lanes are reported separately but do not
+force separate PRs. Workers deliver remote branches and Ready PRs. They do not
+merge dev, arm auto-merge or orchestrate other workers. GitHub is integration
+authority; local worktrees and ignored checkpoints preserve execution only.
+A PR and its remote branch must suffice to reconstruct integration after the
+worker's local workspace disappears.
+
+Roles are dynamic. An unfinished worker must leave a useful checkpoint before
+suspension, planner return or role change; interruption is not completion.
+Changed acceptance, scope or dependency returns to planning. The planner
+resolves continuation ownership; no process-liveness guess authorizes cleanup.
+A single authorized integration session admits GitHub Ready PRs and performs
+server-side PR integration. Refresh a candidate only for an actual conflict or
+required integration update, not whenever dev moves. Reclamation checks local,
+remote and ignored data before any explicitly authorized deletion.
+
+Use plan-work, execute-work, integrate-work, inspect-work and
+reclaim-workspaces for these operations; run-version-control-workflow routes
+ambiguous requests and retains audits, promotion and releases. Procedural
+steps live in CONTRIBUTING.md. The accepted operating contract is
+`docs/policy/decisions/repository/github-agent-workflow.md`.
 
 ## Working contract
 

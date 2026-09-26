@@ -61,8 +61,9 @@ fetches `origin/dev`, creates the branch and its sibling worktree, and prepares
 its local dependencies. For a requested fixed base commit, create the linked
 worktree at that exact commit and attach a topic branch there before editing;
 verify that the commit is the intended `origin/dev` base before publishing.
-The branch and worktree are kept for review feedback until their pull request
-merges. `tool/configs worktree done <scope>-<topic>` then removes the worktree.
+The remote feature branch and PR preserve delivery. A local worktree may be
+reclaimed after the handoff and data review below, even before merge; recreate
+it from the remote branch when feedback requires changes.
 
 `tool/version-control/require-linked-worktree` is a preflight for scripts that
 write source. The pre-commit hook also refuses commits from the primary
@@ -85,12 +86,11 @@ Examples are `feature/unixlike-shell`, `fix/windows-zellij`, and
 A branch is one reviewable increment: one issue, or what one judgement
 covers. Cut it from `origin/dev`, and merge it through one pull request when
 it is complete and green
-(`docs/policy/decisions/repository/work-planned-and-verified-in-documents.md`). A spec
-takes as many pull requests as it has evidence lanes and scopes, not as many
-as it has steps: an increment is what one evidence lane verifies, and the
-bookkeeping a verification produces travels with it
-(`INV repository/pull-request-spans-an-evidence-lane`). "Plan and verify
-work" below is how they are planned.
+(`docs/policy/decisions/repository/work-planned-and-verified-in-documents.md`). A spec's increments are coherent same-scope outcomes, not individual steps or
+evidence environments. Keep the report rows and status produced by the change
+in that PR (INV repository/pull-request-spans-an-evidence-lane). The original
+invariant identifier remains stable; its statement now covers multiple lanes.
+"Plan and verify work" below explains the plan boundary.
 
 A commit marks a judgement point. It carries the change one decision
 produced, however many files that is, and is not split further merely because
@@ -228,6 +228,98 @@ reports a bump or a merge as an issue. GitHub runs a `schedule` only from the
 default branch, so the watcher does nothing until this file reaches `master`
 through the next promotion; before that its shell body is run by hand with
 `DRY_RUN=1`.
+
+## Agent roles and handoff
+
+Use the project skills under .agents/skills/. An unspecified "work on X"
+request first checks existing work through plan-work; only a small clear
+single-criterion task goes straight to execute-work. Planning owns the roadmap
+and work plans. Implementation owners update other docs affected by their work.
+Do not turn every documentation edit into a planner assignment.
+
+At pickup, inspect the plan and current repository. Fetch origin/dev, enter a
+new linked worktree immediately and record both the execution base and the
+reviewed plan revision. The plan's age alone does not require replanning;
+changed acceptance, dependencies or ownership does. A worker can adjust details
+inside the agreed result without silently weakening the criteria.
+
+Run tool/configs session start <plan-path-or-> <lane> in that worktree. The
+ignored .work-session.md holds lane, base, plan revision/content digest,
+optional session ID and a free-text handoff. No PR state or check result cache
+belongs there. Before interruption or role change, feed a meaningful handoff
+into tool/configs session checkpoint suspended. Include goal, current commit
+and uncommitted work, evidence, remaining work, reason and next action.
+After approved replanning, run session replan <spec-path> while suspended;
+it records the new revision and preserves the preceding checkpoint. A
+recreated workspace uses session recover rather than checkpoint active; the
+original base remains unknown unless separately verified. If a hard crash
+leaves .work-session.lock, confirm ownership with the operator, preserve any
+useful note/body, remove only that stale lock, then retry. PID or age alone
+is insufficient. Use handed-off after Ready delivery; abandoned requires explicit disposition of
+useful work. A resumed worker inspects local and remote changes before marking
+active. An unfinished worker may return to planning after this checkpoint.
+The planner chooses continuation, split, supersession or abandonment and names
+its owner. A checkpoint is not a heartbeat or an atomic remote lane claim.
+
+Workers commit, push, create a Draft PR and finish with Ready after current-head
+required checks. They never use commit --publish or arm auto-merge. The legacy
+commit --publish convenience remains a human-authorized integration operation;
+its confirmation is not a worker handoff. Worker authorization to publish is
+not permission to merge. Existing authorized scope does not need repeated
+confirmation for each commit or push.
+
+Use tool/configs session inspect to find local handoffs; inspect-work combines
+that with fresh GitHub observations. Resume guidance is printed only for a
+recorded session identity. An unknown session remains unknown.
+
+Reclaim-workspaces is read-only by default. Before removal, inspect owner,
+tracked/index/untracked/ignored paths and commits absent from the freshly
+fetched remote. Do not read notes/ content. A clean diff or a merged PR alone
+is insufficient. Recommend retain/resume, uncertain, or eligible. Obtain
+explicit deletion authorization; then use a non-force worktree removal. The
+worktree done helper removes a named worktree but does not establish safety.
+A PR with all work pushed permits pre-merge reclamation after this review.
+
+## GitHub integration
+
+The integration session queries GitHub Draft/Ready PRs, exact heads, checks,
+reviews, conversations, dependencies, mergeability and outstanding auto-merge
+requests. It never reconstructs candidates from local worktree/branch lists.
+GitHub native states are not duplicated as labels or local state files.
+Semantic labels such as blocked and high-risk may inform admission.
+
+One maintainer-managed integration session admits one candidate at a time.
+Merge Queue is not used. Keep dev's PR requirement, Required checks with strict
+base, administrator enforcement, resolved conversations, no force push and no
+deletion. Do not grant agents bypass. Risk-specific human review is an explicit
+admission requirement; add CODEOWNERS only with actual owner identities and
+review rules. Required approval count remains zero for ordinary changes.
+
+Re-query the candidate head/checks before admission. If strict protection needs
+a newer base, ask its worker to merge origin/dev into its feature branch and
+revalidate. Do not eagerly update every worker. Return conflicts and failed
+validation to a worker, recreating its workspace from the remote if necessary.
+With separate merge authorization, request GitHub merge-commit integration
+with the expected head after checks pass. Do not arm unattended auto-merge
+requests that could admit a later worker head. On recovery cancel any existing
+auto-merge request and confirm cancellation before asking for head changes;
+if it merged concurrently, inspect the actual result. Never
+use an administrator bypass. Confirm merged state before admitting the next;
+an accepted request or armed auto-merge is not a completed merge. Strict base
+protection remains the safeguard if dev changes during admission.
+
+Native stacks were demonstrated in a separate lab, not certified for this
+repository. Until trunk-wide CI and all-layer admission are implemented and
+verified, do not create or merge a native stack here. Wait for a dependency to
+land and then branch from dev. Stacks can automatically rebase upper layers
+and multiple PRs can share a merge commit; ordinary branch-update assumptions
+must not be applied to them. No local dependency database is added.
+
+The new role contract takes effect when this governance PR enters dev. Existing
+workers checkpoint their actual state and adopt it at the next handoff; do not
+rewrite their history. Effect-based CI changes and domain efficiency work are
+separate follow-ups. Keep post-merge validation until equivalence with the
+actual integrated result is proved; a prior PR success is insufficient.
 
 ## Promote dev to master
 
@@ -388,8 +480,8 @@ the format; this is the procedure.
    per scope. An increment may classify differently from its spec, and its
    commit and pull request stay single-scope.
 2. Write `spec.md`: the problem, the decisions with what was rejected, the
-   increments — one for each evidence lane and scope the criteria need, not
-   one for each step — and an `## Acceptance` table naming for each criterion the
+   increments — one for each coherent reviewable same-scope outcome, not
+   one for each step or verification lane — and an `## Acceptance` table naming for each criterion the
    evidence lanes that must be verified. A criterion no check can decide
    names `review`. Set `review-by` to the date by which someone could tell
    whether the work is done. Argue a direction first in `study.md` when it
@@ -406,21 +498,14 @@ the format; this is the procedure.
    acceptance criteria. Add `issue: #<n>` to the spec's header. A report
    issue that already exists — a bug, an upstream watch — links the spec and
    becomes the execution issue.
-5. Work in increments, one branch and one pull request each. An increment is
-   what one evidence lane verifies, not a step: the criteria an evaluation
-   decides are one, the ones only a host decides are another. Its pull
-   request carries what the verification produces — the report rows, written
-   in a commit after the one the evidence was taken at, the status sentence,
-   and the report's end when it verifies the last criterion. The spec and its
-   report may be that pull request's first commit; they go ahead alone when
-   the spec needs review first or the work is handed to another host or
-   session. Gather what the spec owes in another scope into one pull request
-   for that scope, and merge it before the spec's last pull request when a
-   criterion rests on it. A pull request that carries only bookkeeping says
-   in its body where its evidence was produced. Link the issue with
-   `Refs #<n>`; a closing keyword is refused
-   (`INV repository/no-closing-keyword`). Evidence is recorded per lane and
-   never upgraded.
+5. Work in coherent same-scope increments, one worker branch and PR each.
+   Multiple verification lanes can support one result. Record the evidence
+   and report changes in that same PR; external host/session evidence may
+   justify a documentation-only result. The plan/report pair can be the first
+   commit of the implementation PR, or a planning handoff reviewed beforehand.
+   Preserve evidence distinctions and link issues with Refs references, never
+   closing keywords (INV repository/no-closing-keyword). Publish a Draft early
+   when useful and make it Ready only after completion and required checks.
 6. To change a criterion after the report exists, add a paragraph to the spec
    that opens `Amended YYYY-MM-DD` and names the criterion. The checker
    refuses a criterion removed or rewritten without one.
@@ -433,8 +518,9 @@ the format; this is the procedure.
    source, never by citing the work item from a document that carries
    authority; `tool/configs design-citations` refuses that citation.
 
-`docs/work/roadmap.md` states lanes and order, not schedule; change it when
-the order of work changes. GitHub milestones are not used. A spec whose
+`docs/work/roadmap.md` states priorities and dependencies, not schedule or PR
+state. Maintain active, deferred and historical outcomes with reasons and
+references; standalone work need not enter it. GitHub milestones are not used. A spec whose
 `review-by` has passed while its report is pending is overdue:
 `tool/configs work --overdue` lists it.
 

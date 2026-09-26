@@ -166,6 +166,22 @@ created in that form yet. The CI reconsideration work item is done
 Unix-like job now boots the generic headless class and exercises its account,
 ssh and firewall contract without adding a runner or workflow.
 
+## Agent workflow transition (2026-09-26)
+
+The GitHub-centered operating contract is prepared in the agent-workflow PR;
+it takes effect when integrated into dev. Planning, execution, integration,
+inspection and reclamation have canonical project skills. The session helper
+records local handoffs; it does not enforce process liveness or credentials.
+See docs/policy/decisions/repository/github-agent-workflow.md.
+
+Observed dev protection already requires PRs, strict Required checks, resolved
+conversations and administrator enforcement; force pushes and deletion are
+forbidden. No remote settings were changed. No blanket required human review
+or CODEOWNERS identities were introduced. Native stacks remain unsupported in
+production pending trunk CI and admission verification; Merge Queue is not used.
+CI effect selection and domain test-efficiency changes are separate delivery
+PRs, and post-merge validation remains until safe equivalence is demonstrated.
+
 ## Common
 
 No `common/` component exists.

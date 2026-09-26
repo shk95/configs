@@ -1,0 +1,80 @@
+#!/bin/sh
+# INV repository/worker-checkpoint
+set -eu
+MSYS_NO_PATHCONV=1
+MSYS2_ARG_CONV_EXCL='*'
+export MSYS_NO_PATHCONV MSYS2_ARG_CONV_EXCL
+root=$(CDPATH= cd -- "$(dirname -- "$0")/../.." && pwd)
+# Hooks export repository context; all writes below belong to fixtures.
+unset GIT_DIR GIT_WORK_TREE GIT_INDEX_FILE GIT_COMMON_DIR GIT_PREFIX \
+  GIT_OBJECT_DIRECTORY GIT_ALTERNATE_OBJECT_DIRECTORIES GIT_NAMESPACE GIT_CEILING_DIRECTORIES
+fixture=$(mktemp -d)
+trap 'rm -rf "$fixture"' EXIT HUP INT TERM
+git init -q "$fixture/repo"
+cd "$fixture/repo"
+git config user.name Fixture
+git config user.email fixture@example.invalid
+plan_root=docs/work
+plan_dir=$plan_root/repository/fixture
+plan=$plan_dir/spec.md
+mkdir -p tool/version-control "$plan_dir"
+cp "$root/tool/work-session.sh" tool/
+cp "$root/tool/version-control/require-linked-worktree" tool/version-control/
+printf '/.work-session.md\n/.work-session.lock/\n' > .gitignore
+printf '# Fixture plan\n' > "$plan"
+git add .
+git -c core.hooksPath=/dev/null commit -qm 'test(repository): fixture'
+if sh tool/work-session.sh start - sample > /dev/null 2>&1; then
+  echo 'primary checkout accepted worker writes' >&2; exit 1
+fi
+git worktree add -qb feature/repository-fixture "$fixture/worker"
+cd "$fixture/worker"
+sh tool/work-session.sh start - sample >/dev/null
+before=$(git hash-object .work-session.md)
+if sh tool/work-session.sh start - duplicate >/dev/null 2>&1; then
+  echo 'start overwrote checkpoint' >&2; exit 1
+fi
+[ "$before" = "$(git hash-object .work-session.md)" ]
+if printf '' | sh tool/work-session.sh checkpoint suspended >/dev/null 2>&1; then
+  echo 'empty handoff accepted' >&2; exit 1
+fi
+[ "$before" = "$(git hash-object .work-session.md)" ]
+if printf 'replan\n' | sh tool/work-session.sh replan "$plan" >/dev/null 2>&1; then
+  echo 'active worker replanned without checkpoint' >&2; exit 1
+fi
+printf 'Goal: fixture\nRemaining: inspect next\n' | sh tool/work-session.sh checkpoint suspended >/dev/null
+grep -q '^state: suspended$' .work-session.md
+grep -q '^Remaining: inspect next$' .work-session.md
+printf 'Approved changed plan\n' | sh tool/work-session.sh replan "$plan" >/dev/null
+grep -q "^plan: $plan$" .work-session.md
+grep -q '^Previous checkpoint before replan:$' .work-session.md
+expected_digest=$(git hash-object "$plan")
+grep -q "^plan-content: $expected_digest$" .work-session.md
+if printf 'invalid\n' | sh tool/work-session.sh checkpoint handed-off >/dev/null 2>&1; then
+  echo 'suspended task handed off without resumption' >&2; exit 1
+fi
+printf 'Reviewed checkpoint\n' | sh tool/work-session.sh checkpoint active >/dev/null
+printf 'Remote delivery verified\n' | sh tool/work-session.sh checkpoint handed-off >/dev/null
+sh tool/work-session.sh inspect > "$fixture/inspection"
+grep -q '^state: handed-off$' "$fixture/inspection"
+[ -z "$(git status --porcelain)" ]
+printf 'Review feedback\n' | sh tool/work-session.sh checkpoint active >/dev/null
+printf 'Disposition agreed\n' | sh tool/work-session.sh checkpoint abandoned >/dev/null
+if printf 'resume\n' | sh tool/work-session.sh checkpoint active >/dev/null 2>&1; then
+  echo 'abandoned lane resumed silently' >&2; exit 1
+fi
+mv .work-session.md "$fixture/abandoned"
+mkdir .work-session.lock
+if sh tool/work-session.sh recover - recovered >/dev/null 2>&1; then
+  echo 'existing write lock ignored' >&2; exit 1
+fi
+rmdir .work-session.lock
+sh tool/work-session.sh recover - recovered >/dev/null
+grep -q '^base: unknown$' .work-session.md
+grep -q "^start-head: $(git rev-parse HEAD)$" .work-session.md
+mv .work-session.md "$fixture/original"
+ln -s "$fixture/original" .work-session.md
+if printf 'overwrite\n' | sh tool/work-session.sh checkpoint active >/dev/null 2>&1; then
+  echo 'symlink checkpoint accepted' >&2; exit 1
+fi
+echo 'worker checkpoint fixtures passed'

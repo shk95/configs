@@ -37,56 +37,20 @@ planning read-only unless the user explicitly authorizes a Git mutation.
   Confirm one owning scope; a document's scope is the directory, or the
   scope-named file, that holds it. `CONTRIBUTING.md`, "Branch and commit
   flow", owns the rule.
-- **Start**: Propose `feature/<scope>-<topic>` or `fix/<scope>-<topic>` from
-  `dev`. Fetch, create a branch, or add a worktree only after the user
-  explicitly requests that mutation. Before editing tracked source, use a
-  linked worktree dedicated to the task and its topic branch; keep the primary
-  checkout for inspection and integration. For a user-pinned base commit,
-  verify the exact commit in the linked worktree while it is still detached;
-  attach the task branch only after branch creation is authorized, and verify
-  its relationship to `origin/dev` before publication. Before a writing
-  helper runs, check that its current directory is this linked worktree.
-  A worktree made for an
-  implementer is kept,
-  with the ability to resume that implementer in it, until the pull request
-  from its branch has merged: review feedback returns to the same worktree,
-  and one removed earlier costs a fresh setup for every fix.
-- **Work**: Follow `CONTRIBUTING.md`, "Plan and verify work". Before editing
-  implementation for work with more than one acceptance criterion or more
-  than one pull request, draft its spec and a report with pending rows under
-  `docs/work/<scope>/<slug>/`. Name the decisions, rejected alternatives,
-  evidence-lane increments and required lanes, then run
-  `tool/configs work --working-tree docs/work/<scope>/<slug>` against
-  that exact item. Resolve failures before proceeding. If a decision changes,
-  update the spec before continuing; once the report exists, follow the dated
-  amendment rule. This read-only worktree check is early feedback, not staged
-  or committed evidence. The spec and report enter the same commit and
-  `tool/configs work --staged` checks that proposed commit when
-  staging is explicitly authorized. Any other change carries its evidence
-  in the pull request body. Open the execution issue only when
-  implementation starts, name the spec on its first line, and keep acceptance
-  criteria and evidence out of it. Create no GitHub milestone. Cut a spec's
-  pull requests at its evidence lanes and scopes, not at its steps, and keep
-  the report rows, the status sentence and the report's end in the pull
-  request whose evidence they record; propose a bookkeeping-only pull
-  request only when its evidence was produced outside the repository, and
-  say so in its body. Restate the
-  exact issue targets before remote writes, report every created URL, link
-  issues with `Refs #<n>`, and never present a finished report or a closed
-  issue as release or deployment evidence.
+- **Plan or start**: Route intent through plan-work. It finds existing work or
+  recognizes a small unambiguous task for execute-work. Use execute-work for
+  a picked-up worker lane, integrate-work for GitHub admission, inspect-work
+  for status, and reclaim-workspaces for cleanup review. Each lives beside
+  this skill under .agents/skills/. A role switch from unfinished execution
+  requires a checkpoint, not forced completion. Existing authorization carries
+  through the agreed scope; do not ask again for each permitted mutation.
 - **Prepare**: Review the complete diff, classification, commit boundaries,
   relevant checks, and evidence. Keep `unixlike/flake.lock` refreshes isolated
   in `chore(unixlike-deps)` commits. Never stage or commit without an explicit
   request.
-- **Integrate**: Merge a topic branch into `dev`. Require relevant checks,
-  preserve merge commits, and refuse squash or rebase of published work. Catch
-  a stale branch up by merging `dev` into it locally and pushing, never with
-  `gh pr update-branch`. Do
-  not merge, push, or change branches without explicit authorization.
-  `tool/configs worktree done` removes an implementer's worktree and runs only at
-  the point Start names, including a user-pinned worktree whose path differs
-  from the helper's default; the publish helper prunes the merged branch,
-  never the worktree.
+- **Integrate**: Use integrate-work. Worker authorization ends at Ready PR
+  delivery. GitHub provides candidates and protected dev accepts only PRs.
+  Do not infer candidates from local worktree or branch inventories.
 - **Promote**: Run `tool/configs plan-promotion`. Permit only a
   same-repository `dev` to `master` pull request, ensure no competing promotion
   is open, and introduce no fix in the promotion itself. Require `Required

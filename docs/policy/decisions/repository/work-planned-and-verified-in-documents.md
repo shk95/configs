@@ -107,3 +107,13 @@ legitimate case above is indistinguishable from the path list. This
 paragraph is revisited when a pull request grows past what one review can
 hold, or when one lane's evidence is again spread over several pull
 requests.
+
+## Amendment 2026-09-26: coherent worker delivery
+
+The later decision docs/policy/decisions/repository/github-agent-workflow.md
+replaces this record's evidence-lane-per-PR interpretation and mandatory
+worktree retention with coherent same-scope worker delivery and remote PR
+recovery. The spec/report pairing, dated acceptance amendments, evidence lanes
+and report-driven issue closure remain accepted. Roadmap participation is
+optional; the planner manages priorities and pickup-ready plans separately.
+The measured history and completed work above remain historical evidence.
