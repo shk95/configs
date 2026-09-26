@@ -190,7 +190,7 @@ in {
         # Darwin gets its native trash command from shell/darwin-home.nix;
         # including trash-cli there would collide at bin/trash. The locked
         # nixpkgs also marks bettercap broken on Darwin, where Homebrew owns it.
-        ++ lib.optionals pkgs.stdenv.hostPlatform.isLinux [pkgs.trash-cli pkgs.bettercap];
+        ++ lib.optionals pkgs.stdenv.hostPlatform.isLinux [pkgs.trash-cli pkgs.bettercap pkgs.python3];
     };
 
     homeManager.linuxGraphical = {pkgs, ...}: {
