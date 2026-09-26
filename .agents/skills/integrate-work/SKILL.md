@@ -27,7 +27,9 @@ high-risk metadata. No global human review requirement is added.
 existing auto-merge requests before admitting another candidate after restart.
 Do not arm several unrelated PRs and claim this serializes integration.
 3. With dev strict protection, refresh only this candidate when required.
-Return conflict resolution or semantic corrections to its worker. A recreated
+Return conflict resolution or semantic corrections to its worker. Withdraw
+admission and have the worker mark the PR Draft before repair, so a green
+intermediate push is not mistaken for completed delivery. A recreated
 worktree from the remote feature branch is sufficient. Never locally combine
 several PRs into dev and push the result.
 4. After every update, wait for current-head required checks and review rules.

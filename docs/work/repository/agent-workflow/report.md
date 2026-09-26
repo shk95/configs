@@ -40,6 +40,11 @@ The independent reviewer identified and then confirmed fixes for:
 - retaining stale plan metadata or losing the replan handoff on resume;
 - a hard-killed checkpoint writer leaving an unexplained local write lock.
 
+A final lifecycle review also made review-feedback pickup return a Ready PR
+to Draft before any repair, after outstanding admission has been withdrawn.
+Otherwise a passing intermediate push could appear complete to the integrator.
+The delivery PR used this transition for the instruction correction itself.
+
 The checkpoint stores execution context only. Replan updates the reviewed plan
 revision/content digest; recover records a recovered start head and does not
 invent an original base. The local write lock is not an integration lock.

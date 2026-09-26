@@ -261,6 +261,11 @@ active. An unfinished worker may return to planning after this checkpoint.
 The planner chooses continuation, split, supersession or abandonment and names
 its owner. A checkpoint is not a heartbeat or an atomic remote lane claim.
 
+A worker resuming a Ready PR first coordinates withdrawal of admission,
+confirms any auto-merge request is cancelled, and converts the PR back to
+Draft before editing or pushing. Recreated workspaces follow the same rule.
+Ready is restored only when the revised result and its checks are complete.
+
 Workers commit, push, create a Draft PR and finish with Ready after current-head
 required checks. They never use commit --publish or arm auto-merge. The legacy
 commit --publish convenience remains a human-authorized integration operation;

@@ -62,7 +62,13 @@ inspect Git status and current remote PR/head before session checkpoint active.
 After an approved replan, while suspended, run session replan <spec-path> with
 a handoff naming the amendment, its new revision and continuation owner; then
 resume. A scope change starts a new scope-owned lane/worktree instead.
-Do not replay a stale command or overwrite a server-updated branch.
+Before editing or pushing review repairs to an existing Ready PR, coordinate
+withdrawal of any outstanding admission with the integrator and confirm any
+auto-merge request is cancelled. Convert the PR back to Draft with gh pr ready
+<number> --undo; only then resume implementation. This also applies when
+recreating a reclaimed workspace. Return to Ready after the changed result and
+current-head checks are complete. Do not replay a stale command or overwrite
+a server-updated branch.
 
 An abandoned task records disposition of every useful/unpushed change. A
 handed-off worker may release its worktree after reclaim review once the remote
