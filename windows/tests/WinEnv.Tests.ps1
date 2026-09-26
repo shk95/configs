@@ -3419,7 +3419,7 @@ Describe 'capture' {
         $output = @(& $pwsh -NoLogo -NoProfile -NonInteractive -File $capturePath 2>&1)
         $LASTEXITCODE | Should -Be 1
         ($output -join [Environment]::NewLine) | Should -Match 'only runs on Windows'
-        ($output -join [Environment]::NewLine) | Should -Match ([regex]::Escape('tool/version-control/commit --publish'))
+        ($output -join [Environment]::NewLine) | Should -Match ([regex]::Escape('tool/configs commit --publish'))
     }
 
     It 'asks the documented question once, and only that question' {
@@ -5532,6 +5532,38 @@ Describe 'check entry points' {
                 $env:REQUIRE_NATIVE = $savedNative
             }
         }
+
+        # INV windows/automation-tools-standalone: execute the implementation
+        # as automation does, with prerequisites deliberately hidden. The
+        # public entry point is not in this path.
+        function Invoke-InternalCheck {
+            param([string] $Script, [string] $RequireNative, [switch] $HidePester)
+            $savedPath = $env:PATH
+            $savedNative = $env:REQUIRE_NATIVE
+            try {
+                $env:PATH = ''
+                $env:REQUIRE_NATIVE = $RequireNative
+                $scriptPath = Join-Path $repositoryRoot "tool/$Script"
+                if ($HidePester) {
+                    # pwsh reconstructs its default module paths on startup,
+                    # so setting an empty parent PSModulePath would recurse.
+                    # Hide Pester after startup, then invoke the tool itself.
+                    $escaped = $scriptPath.Replace("'", "''")
+                    $command = '$env:PSModulePath = ""; & ''' + $escaped + '''; exit $LASTEXITCODE'
+                    $output = @(& $pwshPath -NoProfile -Command $command 2>&1 |
+                        ForEach-Object { "$_" })
+                }
+                else {
+                    $output = @(& $pwshPath -NoProfile -File $scriptPath 2>&1 |
+                        ForEach-Object { "$_" })
+                }
+                return [pscustomobject]@{ ExitCode = $LASTEXITCODE; Output = ($output -join "`n") }
+            }
+            finally {
+                $env:PATH = $savedPath
+                $env:REQUIRE_NATIVE = $savedNative
+            }
+        }
     }
 
     It 'INV windows/check-exit-contract: reports a missing prerequisite under -Check as unverified' {
@@ -5644,6 +5676,16 @@ Describe 'check entry points' {
     It 'INV windows/entry-point-forwards-status: check returns the status bootstrap.ps1 -Check returned' {
         (Invoke-EntryPoint -Arguments @('check') -RequireNative $null).ExitCode | Should -Be 69
         (Invoke-EntryPoint -Arguments @('check') -RequireNative '1').ExitCode | Should -Be 1
+    }
+
+    It 'INV windows/automation-tools-standalone: direct validation reports unavailable and required-native failure' {
+        (Invoke-InternalCheck -Script 'check-desired-state.ps1' -RequireNative $null).ExitCode | Should -Be 69
+        (Invoke-InternalCheck -Script 'check-desired-state.ps1' -RequireNative '1').ExitCode | Should -Be 1
+    }
+
+    It 'INV windows/automation-tools-standalone: direct suite reports unavailable and required-native failure without Pester' {
+        (Invoke-InternalCheck -Script 'test.ps1' -RequireNative $null -HidePester).ExitCode | Should -Be 69
+        (Invoke-InternalCheck -Script 'test.ps1' -RequireNative '1' -HidePester).ExitCode | Should -Be 1
     }
 
     It 'INV windows/entry-point-forwards-status: refuses an unknown verb, and no verb, with 64 and forwards nothing' {

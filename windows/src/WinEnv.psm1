@@ -2976,7 +2976,7 @@ function Get-WinEnvCaptureBranchPlan {
             Status  = 'Refused'
             Branch  = $null
             Message = "'$BranchName' does not follow this repository's branch naming policy."
-            Detail  = "tool/version-control/audit requires: $script:WinEnvCaptureBranchNamePattern"
+            Detail  = "tool/configs audit requires: $script:WinEnvCaptureBranchNamePattern"
         }
     }
 
@@ -3271,7 +3271,7 @@ function ConvertTo-WinEnvCondensedPushEvidence {
 
         .DESCRIPTION
         A capture's push runs .githooks/pre-push, which -- when the Windows
-        checks are selected -- runs windows/win-env.ps1 test, the whole Pester
+        checks are selected -- runs windows/tool/test.ps1, the whole Pester
         suite as one of its steps. Most of that run is scaffolding nobody
         reviewing a pull request needs: discovery banners and a pass mark per
         test or container. What a reviewer does need survives regardless of

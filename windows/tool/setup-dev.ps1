@@ -16,7 +16,7 @@ PS> Get-Content .\windows\toolchain.json
 Read-only. Review the exact tools and versions before installing them.
 
 .EXAMPLE
-PS> .\windows\tool\setup-dev.ps1
+PS> .\windows\win-env.ps1 setup-dev
 
 Changes the host. Installs missing pinned contributor tools from WinGet and
 PowerShell Gallery, then refreshes PATH for the current process.

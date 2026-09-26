@@ -13,13 +13,13 @@ Requires complete parser evidence. Missing native tooling becomes exit 1
 instead of exit 69. Setting REQUIRE_NATIVE=1 has the same effect.
 
 .EXAMPLE
-PS> .\windows\tool\check-desired-state.ps1
+PS> .\windows\win-env.ps1 validate
 
 Read-only. Parses all sources possible on the current host and identifies any
 source that remains unverified.
 
 .EXAMPLE
-PS> .\windows\tool\check-desired-state.ps1 -RequireNativeTooling
+PS> .\windows\win-env.ps1 validate -RequireNativeTooling
 
 Read-only. Fails unless every declared source and Lua example can be parsed.
 
@@ -46,7 +46,11 @@ param(
 )
 
 # Every source this host can parse is parsed, and only the ones it cannot are
-# reported. Requiring zellij.exe and luac up front instead made a Windows
+# reported.
+# INV windows/automation-tools-standalone: automation may run this script
+# directly and must receive the same 0, 69 or 1 evidence status.
+#
+# Requiring zellij.exe and luac up front made a Windows
 # clone without them fail before validating the JSON, INI and PowerShell
 # sources it could have validated perfectly well, and reported "validation
 # failed" for state that was never examined.

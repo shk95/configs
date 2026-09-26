@@ -8,7 +8,7 @@ operator to inspect in the current terminal. It does not install fonts, change
 terminal settings, or decide pass or fail from the rendered pixels.
 
 .EXAMPLE
-PS> .\windows\tool\Test-FontRendering.ps1
+PS> .\windows\win-env.ps1 font
 
 Read-only. Compare alignment and glyph availability in Windows Terminal using
 the expected D2KodingLigature Nerd Font Mono face.
