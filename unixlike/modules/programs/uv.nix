@@ -7,13 +7,9 @@
 # defaults is the exact failure that modules/programs/starship.nix exists to record.
 # It goes in when there is a reason.
 #
-# One thing is worth knowing before the NixOS flavour uses this. uv prefers to
-# download its own CPython, and those are portable builds with a hardcoded
-# interpreter path — fine on Ubuntu, and they do not run on NixOS without nix-ld.
-# uv's default `python-preference` falls back to a system interpreter, so the fix
-# if it bites is either a declared python3 or nix-ld in modules/platforms/wsl.nix, and not a
-# setting here. Untested under NixOS-WSL: no reason to guess at it before the
-# flavour is in use.
+# uv prefers to download its own CPython. Those portable builds use a hardcoded
+# interpreter path; modules/programs/nix-ld.nix supplies the loader on NixOS.
+# This declares compatibility support, not runtime verification of uv's Python.
 _: {
   # The package ships its own `_uv` completion, which programs.zsh picks up from
   # the profile's share/zsh/site-functions — so, as expected, there is no shell

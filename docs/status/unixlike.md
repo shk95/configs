@@ -72,6 +72,11 @@ while the VM guests and desktop retain their required graphical classes
 The seven existing output derivations are unchanged by this selection refactor;
 a matching Linux host has not yet supplied a new native build for it.
 
+`modules.nixos.shared` enables nix-ld for every NixOS system, including WSL,
+using the pinned nixpkgs module's default libraries. Darwin and standalone
+Home Manager do not receive this loader configuration. Consumer activation
+and execution of downloaded binaries require separate host-specific evidence.
+
 SDKMAN is adopted but not owned
 (`docs/policy/decisions/unixlike/sdkman-adopted-not-owned.md`). Its hook is the last
 thing the generated zsh initialisation runs: since 2026-09-04 it sits after
