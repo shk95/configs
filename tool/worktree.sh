@@ -14,13 +14,10 @@
 # They share .git, so `core.hooksPath` carries over — a new worktree has working
 # hooks with no setup.
 #
-# A worktree made for an implementer is due for removal only after the pull
-# request from its branch has merged: review feedback returns to the same
-# worktree, and one removed earlier costs a fresh setup for every fix. That
-# rule is the skill's (.agents/skills/run-version-control-workflow/SKILL.md,
-# Start and Integrate). `done` performs the removal and does not check the
-# merge, because whether a pull request has merged is a remote question this
-# tool does not ask; it says when the removal was due instead.
+# Removal requires reclaim-workspaces review and explicit authorization.
+# A remote branch and PR can preserve delivery before merge; a merged PR alone
+# does not prove that newer local commits or ignored files are disposable.
+# This low-level helper performs non-force removal, not an eligibility check.
 
 set -e
 
@@ -43,7 +40,7 @@ integration=dev
 usage() {
   echo "usage: tool/configs worktree new <name> [feature|fix]"
   echo "       tool/configs worktree list"
-  echo "       tool/configs worktree done <name>    (once its pull request has merged)"
+  echo "       tool/configs worktree done <name>    (after authorized reclaim review)"
   exit 1
 }
 
@@ -84,7 +81,7 @@ case "${1:-}" in
     validate_name "$name"
     # Find the branch, not the directory name. A worktree pinned to a user's
     # base commit can have a different directory name and still be removable
-    # once its pull request has merged.
+    # after authorized reclaim review.
     dir=$(git worktree list --porcelain | awk -v name="$name" '
       /^worktree / { path = substr($0, 10) }
       /^branch / && ($2 == "refs/heads/feature/" name || $2 == "refs/heads/fix/" name) {
@@ -95,8 +92,8 @@ case "${1:-}" in
 
     git worktree remove "$dir"
     echo "Removed $dir"
-    echo "The branch is kept; delete it once its pull request has merged."
-    echo "That merge is also when this removal was due (run-version-control-workflow, Integrate)."
+    echo "The branch is kept; its deletion needs a separate retention review."
+    echo "Removal does not imply PR integration or authorize branch deletion."
     ;;
 
   *) usage ;;

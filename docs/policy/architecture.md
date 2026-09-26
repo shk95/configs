@@ -377,6 +377,13 @@ its spec names, and the audits report what that misses — an issue still open
 beside a terminal report, and a spec past its review date whose report is
 still pending.
 
+GitHub pull requests preserve integration candidates independently of local
+execution spaces. Workers hand off delivery; one authorized integration
+session admits candidates under protected dev. Local checkpoints make an
+interrupted worker recoverable and establish a handoff before role changes;
+they never replace remote integration state. Cleanup needs evidence of data
+preservation, not an age or process heuristic.
+
 The canonical agent workflow follows the Agent Skills open standard under
 `.agents/skills/`. Product-specific discovery locations may contain thin
 adapters, but they do not own or duplicate the workflow.

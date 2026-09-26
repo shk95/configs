@@ -18,7 +18,7 @@ operator_fixture=$(mktemp -d)
 mkdir -p "$operator_fixture/tool/version-control"
 cp "$root/tool/configs" "$operator_fixture/tool/configs"
 for route in \
-  setup:setup doctor:doctor.sh worktree:worktree.sh \
+  setup:setup doctor:doctor.sh worktree:worktree.sh session:work-session.sh \
   commit:version-control/commit classify:version-control/classify \
   work:version-control/work records:version-control/records \
   invariants:version-control/invariants provisional:version-control/provisional \
@@ -96,7 +96,7 @@ msys_scan() {
   msys_root=$1
   if git -C "$msys_root" rev-parse --git-dir >/dev/null 2>&1; then
     msys_list=$(git -C "$msys_root" ls-files -- tool/version-control tool/dispatch \
-      tool/configs tool/doctor.sh tool/setup tool/worktree.sh .githooks)
+      tool/configs tool/doctor.sh tool/setup tool/worktree.sh tool/work-session.sh .githooks)
   else
     msys_list=$(cd "$msys_root" && find . -type f | sed 's|^\./||' | sort)
   fi
@@ -1695,7 +1695,8 @@ if [ -n "$(commit_git status --porcelain --untracked-files=no)" ] \
   exit 1
 fi
 
-if ! run_commit y cask add af >/dev/null; then
+if ! commit_output=$(run_commit y cask add af); then
+  printf '%s\n' "$commit_output" >&2
   echo "the commit helper refused a valid cask addition" >&2
   exit 1
 fi
@@ -5586,5 +5587,8 @@ git -C "$authoring_root" worktree add -q -b fix/repository-pinned "$authoring_pi
   echo "worktree done did not find the topic branch at its pinned path" >&2
   exit 1
 }
+
+# INV repository/worker-checkpoint
+"$root/tool/version-control/session-test"
 
 echo "version-control fixtures passed"
