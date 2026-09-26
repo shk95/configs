@@ -18,26 +18,27 @@ jobs:
       unixlike: ${{ steps.scopes.outputs.unixlike }}
       windows: ${{ steps.scopes.outputs.windows }}
       repository: ${{ steps.scopes.outputs.repository }}
+      unixlike_checks: ${{ steps.scopes.outputs.unixlike_checks }}
+      windows_checks: ${{ steps.scopes.outputs.windows_checks }}
+      repository_checks: ${{ steps.scopes.outputs.repository_checks }}
+      base: ${{ steps.scopes.outputs.base }}
     steps:
       - uses: actions/checkout@v7
         with:
           fetch-depth: 0
       - id: scopes
-        name: Resolve owning scopes
+        name: Resolve owning scopes and CI effects
         shell: bash
         env:
           EVENT_NAME: ${{ github.event_name }}
           PR_BASE: ${{ github.event.pull_request.base.sha }}
+          PR_BASE_REF: ${{ github.event.pull_request.base.ref }}
+          EVENT_BASE_REF: ${{ github.base_ref }}
+          PR_STACK: ${{ toJSON(github.event.pull_request.stack) }}
           PUSH_BASE: ${{ github.event.before }}
         run: |
-          if [[ "$EVENT_NAME" == pull_request ]]; then
-            base=$PR_BASE
-          else
-            base=$PUSH_BASE
-          fi
-          if [[ "$base" =~ ^0+$ ]]; then
-            base=$(git hash-object -t tree /dev/null)
-          fi
+          base=$(tool/dispatch/ci-base)
+          echo "base=$base" >>"$GITHUB_OUTPUT"
           scopes=$(tool/version-control/classify --range "$base" "$GITHUB_SHA")
           printf '%s\n' "$scopes"
           if grep -qx unclassified <<<"$scopes"; then
@@ -51,11 +52,27 @@ jobs:
               echo "$scope=false" >>"$GITHUB_OUTPUT"
             fi
           done
+          git diff --name-status "$base" "$GITHUB_SHA" >"$RUNNER_TEMP/ci-changes"
+          units=$(tool/dispatch/select ci <"$RUNNER_TEMP/ci-changes")
+          printf 'Selected CI units:\n%s\n' "$units"
+          while IFS= read -r unit; do
+            case "$unit" in
+              ''|repository:fixtures|unixlike:suite|windows:suite) ;;
+              *) echo "Unknown CI unit: $unit" >&2; exit 1 ;;
+            esac
+          done <<<"$units"
+          for scope in unixlike windows repository; do
+            if grep -q "^$scope:" <<<"$units"; then
+              echo "${scope}_checks=true" >>"$GITHUB_OUTPUT"
+            else
+              echo "${scope}_checks=false" >>"$GITHUB_OUTPUT"
+            fi
+          done
 
   repository:
     name: Version-control policy
     needs: classify
-    if: needs.classify.outputs.repository == 'true'
+    if: needs.classify.outputs.repository_checks == 'true'
     runs-on: ubuntu-latest
     # The merge gate is the one place where a check that could not run must not
     # pass.
@@ -68,7 +85,7 @@ jobs:
   unix:
     name: Flake and Unix-like hosts
     needs: classify
-    if: needs.classify.outputs.unixlike == 'true'
+    if: needs.classify.outputs.unixlike_checks == 'true'
     runs-on: ubuntu-latest
     # The merge gate is the one place where a check that could not run must not
     # pass. Locally the same checks report unverified and let the push through.
@@ -93,7 +110,7 @@ jobs:
   windows:
     name: Windows desired state
     needs: classify
-    if: needs.classify.outputs.windows == 'true'
+    if: needs.classify.outputs.windows_checks == 'true'
     runs-on: windows-latest
     env:
       REQUIRE_NATIVE: "1"
@@ -165,16 +182,8 @@ jobs:
       - name: Check the work items
         shell: bash
         env:
-          EVENT_NAME: ${{ github.event_name }}
-          PR_BASE: ${{ github.event.pull_request.base.sha }}
-          PUSH_BASE: ${{ github.event.before }}
-        run: |
-          if [[ "$EVENT_NAME" == pull_request ]]; then
-            base=$PR_BASE
-          else
-            base=$PUSH_BASE
-          fi
-          tool/version-control/work --range "$base" HEAD
+          CI_BASE: ${{ needs.classify.outputs.base }}
+        run: tool/version-control/work --range "$CI_BASE" HEAD
       # Hooks are opt-in, so this is the complete check of the rule that
       # .githooks/commit-msg applies early. The range is the pull request's own
       # commits, base tip to head tip, not the synthetic merge. The tool reads
@@ -273,11 +282,11 @@ jobs:
     runs-on: ubuntu-latest
     env:
       CLASSIFY_RESULT: ${{ needs.classify.result }}
-      REPOSITORY_SCOPE: ${{ needs.classify.outputs.repository }}
+      REPOSITORY_SCOPE: ${{ needs.classify.outputs.repository_checks }}
       REPOSITORY_RESULT: ${{ needs.repository.result }}
-      UNIXLIKE_SCOPE: ${{ needs.classify.outputs.unixlike }}
+      UNIXLIKE_SCOPE: ${{ needs.classify.outputs.unixlike_checks }}
       UNIXLIKE_RESULT: ${{ needs.unix.result }}
-      WINDOWS_SCOPE: ${{ needs.classify.outputs.windows }}
+      WINDOWS_SCOPE: ${{ needs.classify.outputs.windows_checks }}
       WINDOWS_RESULT: ${{ needs.windows.result }}
       SECRETS_RESULT: ${{ needs.secrets.result }}
       PROMOTION_SCOPE: ${{ github.event_name == 'pull_request' && github.base_ref == 'master' }}
