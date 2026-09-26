@@ -63,3 +63,16 @@ tips it pushes to `audit --history`, which judges their subjects with
 `dev` is pushed; a commit no push carries is still left to the
 commit-message hook. `docs/policy/invariants/repository/conventional-subject.md` records
 why the pushed tips are named rather than `HEAD`.
+
+2026-09-26: the maintainer extends effect selection to CI. The earlier
+whole-suite-by-ownership contract above is superseded: CI keeps ownership for
+policy scans but excludes document paths from suite selection. Every changed
+platform input still selects that platform's complete suite, including payload
+modifications, additions, deletions and both sides of renames. Workflow,
+dispatch, classifier and gate changes select all suites conservatively. Other
+repository inputs select the repository suite; malformed or unclassified input
+fails selection. Required checks fails unless selection and global scans pass
+and every selected suite succeeds; intentionally unselected suites must skip.
+No cross-run reuse is introduced: a PR merge tree and a later push may differ.
+Native stacks are refused before selection until trunk-wide ranges, history
+policy and stack lifecycle are supported together; no stack support is claimed.

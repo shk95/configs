@@ -1,6 +1,10 @@
 #!/bin/sh
 
 # Enforce the stable branch-protection result from conditional CI jobs.
+# The historical *_SCOPE input names carry effect-selection booleans, not
+# ownership. A documentation owner can therefore have no selected suite.
+# Classification includes event validation and selection; failure there
+# must be rejected before inspecting any possibly empty selection output.
 #
 # INV repository/required-checks-gate
 
