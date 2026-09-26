@@ -36,9 +36,8 @@ are revised for the new owner before work resumes.
 
 ## Current priorities
 
-| Item | Outcome | Plan / disposition |
-| --- | --- | --- |
-| 18 | GitHub-centered agent workflow, then test efficiency | docs/work/repository/agent-workflow/spec.md; approved 2026-09-26, execution tracked by its issue |
+No active roadmap priority is assigned. Deferred outcomes remain deferred until
+the maintainer selects the next work.
 
 Standalone work does not need a roadmap row. The planner maintains priorities,
 dependencies and disposition here; PR state remains on GitHub. Completion needs
@@ -76,6 +75,20 @@ reports below retain evidence; moving a row does not upgrade host readiness.
 | 15 | typed provider API and consumer contract; retain current outputs during comparison — done 2026-09-24 | unixlike |
 | 16 | public host-repository template with an evaluated example — done 2026-09-24 | external template repository |
 | 17 | migrate all seven current outputs to private `configs-hosts`, verify each host, and retire public real-host inventory — done 2026-09-25 | unixlike and external host repository, in separate increments |
+| 18 | GitHub-centered agent workflow and initial test efficiency — accepted complete 2026-09-26; reports and operational verification below | repository, unixlike and windows, in separate increments |
+
+Item 18 is complete with maintainer acceptance after implementation, dev
+integration and operational verification. Evidence is recorded in the
+[agent workflow report](repository/agent-workflow/report.md),
+[CI effect-selection report](repository/ci-effect-selection/report.md),
+[Unix-like efficiency report](unixlike/test-efficiency/report.md) and
+[Windows timing report](windows/test-efficiency/report.md).
+[PR #417](https://github.com/shk95/configs/pull/417) records the operational
+follow-up, including checkpoint suspension/resumption and documentation-only
+CI selection. Windows timing is measurement support, not a demonstrated speedup.
+Production native stacks, cross-run CI result reuse and further Windows
+optimization remain conditional follow-ups, not completed outcomes. Merge
+Queue is not used; the adopted single-integrator procedure remains in effect.
 
 ## Transition before the remaining host work
 
