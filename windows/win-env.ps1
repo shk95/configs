@@ -3,7 +3,7 @@
 Runs one public Windows environment command.
 
 .DESCRIPTION
-This is the single entry point for the Windows domain. The first positional
+This is the operator entry point for the Windows domain. The first positional
 argument selects a target script and every remaining argument is forwarded to
 that script unchanged. Use the help verb to list the targets, then use
 Get-Help on the target script for its parameters and examples.
@@ -45,7 +45,7 @@ https://github.com/shk95/configs/blob/dev/README.md#windows
 .LINK
 https://github.com/shk95/configs/blob/dev/CONTRIBUTING.md#windows-changes
 #>
-# win-env: the Windows domain's one entry point.
+# win-env: the Windows domain's operator entry point.
 #
 # Every verb runs exactly one script under tool\ and returns that script's
 # exit status unchanged, so the check contract -- 0 converged, 2 drifted,

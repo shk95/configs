@@ -53,19 +53,19 @@ plan when combined with -Publish. It then exits without writing a payload,
 creating a branch, committing, pushing, or opening a pull request.
 
 .EXAMPLE
-PS> .\windows\tool\capture.ps1 -Feature powertoys -WhatIf
+PS> .\windows\win-env.ps1 capture -Feature powertoys -WhatIf
 
 Read-only. Shows whether the managed PowerToys files can be captured and the
 exact repository diff that would result.
 
 .EXAMPLE
-PS> .\windows\tool\capture.ps1 -Feature terminal -Id windowsTerminal
+PS> .\windows\win-env.ps1 capture -Feature terminal -Id windowsTerminal
 
 Changes the repository after confirmation. Captures only the intersection of
 the terminal feature and the windowsTerminal managed-file ID, then commits it.
 
 .EXAMPLE
-PS> .\windows\tool\capture.ps1 -Feature powertoys -Publish
+PS> .\windows\win-env.ps1 capture -Feature powertoys -Publish
 
 Changes the repository and GitHub after confirmation. Captures and commits the
 payloads, pushes the branch, opens or reuses a pull request, and arms auto-merge.
@@ -176,11 +176,11 @@ param(
 # else; every write goes to this repository's desired state, and only after
 # the confirmation.
 #
-#   .\windows\tool\capture.ps1                     # every applied feature
-#   .\windows\tool\capture.ps1 -Feature powertoys  # one feature
-#   .\windows\tool\capture.ps1 -Id windowsTerminal # one managed file
-#   .\windows\tool\capture.ps1 -Publish            # commit, push, pull request, auto-merge
-#   .\windows\tool\capture.ps1 -WhatIf             # decide and diff, write nothing
+#   .\windows\win-env.ps1 capture                     # every applied feature
+#   .\windows\win-env.ps1 capture -Feature powertoys  # one feature
+#   .\windows\win-env.ps1 capture -Id windowsTerminal # one managed file
+#   .\windows\win-env.ps1 capture -Publish            # commit, push, pull request, auto-merge
+#   .\windows\win-env.ps1 capture -WhatIf             # decide and diff, write nothing
 
 $ErrorActionPreference = 'Stop'
 # PowerShell 7.4 and newer turn a non-zero native exit status into a
@@ -223,7 +223,7 @@ function Stop-Capture {
 # --publish is that host's own equivalent entry point.
 if (-not (Test-WinEnvWindowsHost)) {
     Stop-Capture -Message 'capture.ps1 only runs on Windows.' `
-        -Detail 'On a Unix-like host, use tool/version-control/commit --publish instead.'
+        -Detail 'On a Unix-like host, use tool/configs commit --publish instead.'
 }
 
 function Invoke-GitCommand {

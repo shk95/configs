@@ -13,13 +13,13 @@ Requires the pinned Pester version to be installed. Missing Pester becomes exit
 1 instead of exit 69. Setting REQUIRE_NATIVE=1 has the same effect.
 
 .EXAMPLE
-PS> .\windows\tool\test.ps1
+PS> .\windows\win-env.ps1 test
 
 Read-only with respect to host desired state. Runs all locally available tests;
 publish end-to-end cases are skipped unless WIN_ENV_E2E is exactly 1.
 
 .EXAMPLE
-PS> $env:WIN_ENV_E2E = '1'; .\windows\tool\test.ps1 -RequireNativeTooling
+PS> $env:WIN_ENV_E2E = '1'; .\windows\win-env.ps1 test -RequireNativeTooling
 
 Runs the full capture publish fixtures used by CI and requires the pinned
 Pester tool. The end-to-end cases operate on isolated test repositories.
@@ -40,6 +40,9 @@ param(
     [switch] $RequireNativeTooling
 )
 
+# INV windows/automation-tools-standalone: direct automation invocation
+# returns 0, 69 or 1 without relying on win-env.ps1 to translate status.
+#
 # A missing Pester is a host that cannot run this suite, not a suite that
 # failed. Throwing here blocked pushes from Windows clones that had never
 # installed it, and named a cause the message did not distinguish from a real

@@ -54,6 +54,13 @@ an unavailable observation without changing that rank. Since 2026-09-05
 `check-powershell.ps1` wrapper is removed. The Windows suite's tree-isolation
 fixture reads current `unixlike/` paths, including its payload and tool files.
 
+The public `win-env.ps1` still forwards one operator verb at a time. Native
+CI and pre-push use the validation and test implementations under
+`windows/tool/` directly; the Windows suite checks their direct unavailable
+and required-native failure statuses, while CI requires their successful
+native run. This keeps the operator and automation execution contracts
+independently visible (`INV windows/automation-tools-standalone`).
+
 Since #241, `capture -Publish` on a run that found no drift resumes an earlier
 capture's unfinished publish from the topic branch that carries it, for
 single-parent commits with the capture subject that change only
