@@ -18,10 +18,8 @@
 # whether your configurations work. Forcing `.drvPath` is what actually
 # evaluates them.
 #
-# A `nix build --dry-run` middle tier was tried and removed: measured against
-# eval it caught nothing extra. A nonexistent package fails both; an
-# unfetchable source passes both. It survives here only to report the size of a
-# build that was skipped, which is information rather than verification.
+# Skipped builds are reported without download-size planning: that is
+# informational work and adds no evaluation or build evidence.
 #
 # Every synthetic configuration is evaluated. Native fixture builds prove the
 # provider can realise an output; foreign configurations remain evaluation-only
@@ -143,18 +141,15 @@ check_flavour() {
 
     if [ -z "${CHECKS_BUILD_ALL:-}" ] && ! activatable_here "$output" "$name"; then
       printf '→ skip  %s.%s — nothing here can activate it\n' "$output" "$name"
-      size=$(nix build --dry-run "$ref.$attr" 2>&1 \
-             | sed -n 's/.*will be fetched (\([^)]*\)).*/\1/p' | head -1)
-      printf '%s.%s|%s|SKIPPED|%s\n' "$output" "$name" "$system" \
-             "${size:-already in the store}" >> "$report"
+      printf '%s.%s|%s|SKIPPED\n' "$output" "$name" "$system" >> "$report"
       continue
     fi
 
     printf '→ build %s.%s\n' "$output" "$name"
     if nix build --no-link "$ref.$attr"; then
-      printf '%s.%s|%s|ok|\n' "$output" "$name" "$system" >> "$report"
+      printf '%s.%s|%s|ok\n' "$output" "$name" "$system" >> "$report"
     else
-      printf '%s.%s|%s|BUILD_FAIL|\n' "$output" "$name" "$system" >> "$report"
+      printf '%s.%s|%s|BUILD_FAIL\n' "$output" "$name" "$system" >> "$report"
     fi
   done
 }
@@ -167,12 +162,12 @@ echo
 echo "── Verification coverage ─────────────────────────────────"
 printf '   host: %s\n\n' "$here"
 
-while IFS='|' read -r target system status detail; do
+while IFS='|' read -r target system status; do
   case "$status" in
     ok)           line="eval ✓ build ✓" ;;
     EVAL_FAIL)    line="eval ✗" ;;
     BUILD_FAIL)   line="eval ✓ build ✗" ;;
-    SKIPPED)      line="eval ✓ build — not activatable here ($detail)" ;;
+    SKIPPED)      line="eval ✓ build — not activatable here" ;;
     FOREIGN)      line="eval ✓ build — targets $system" ;;
     FLAVOUR_FAIL) line="eval ✗ — the flavour itself failed to evaluate" ;;
     EMPTY)        line="eval ✗ — exported, but lists no configuration" ;;
@@ -183,7 +178,7 @@ while IFS='|' read -r target system status detail; do
 done < "$report"
 echo
 
-if grep -q '|SKIPPED|' "$report"; then
+if grep -q '|SKIPPED$' "$report"; then
   cat <<EOF
    · A configuration was evaluated but not built, because this host cannot
      activate it. Evaluation still instantiates its whole graph, so what is

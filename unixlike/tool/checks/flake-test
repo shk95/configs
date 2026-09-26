@@ -163,30 +163,33 @@ exported=$(nix eval --raw "path:$repo#nixosConfigurations" \
   --apply 'configs: builtins.concatStringsSep "\n" (builtins.attrNames configs)')
 [ "$exported" = "$nixos_hosts" ] ||
   fail "nixosConfigurations exports [$(echo $exported)], the inventory declares [$(echo $nixos_hosts)]"
-for host in $nixos_hosts; do
-  host_name=$(nix eval --raw "path:$repo#nixosConfigurations.\"$host\".config.networking.hostName")
-  [ "$host_name" = "$host" ] || fail "nixosConfigurations.$host declares networking.hostName $host_name"
-  declared=$(hosts_eval '{ }' "hosts: hosts.\"$host\".stateVersion")
-  applied=$(nix eval --raw "path:$repo#nixosConfigurations.\"$host\".config.system.stateVersion")
-  [ "$applied" = "$declared" ] || fail "nixosConfigurations.$host has state version $applied, its entry declares $declared"
-  declared=$(hosts_eval '{ }' "hosts: hosts.\"$host\".system")
-  applied=$(nix eval --raw "path:$repo#nixosConfigurations.\"$host\".pkgs.stdenv.hostPlatform.system")
-  [ "$applied" = "$declared" ] || fail "nixosConfigurations.$host targets $applied, its entry declares $declared"
-
-  # The physical desktop and both VM guests are graphical. These markers make
-  # a missing class or a leak into WSL or OrbStack fail at evaluation time.
-  kind=$(hosts_eval '{ }' "hosts: hosts.\"$host\".kind")
-  expected=false
-  case "$kind" in desktop|vm) expected=true ;; esac
-  for option in \
-    programs.niri.enable \
-    services.greetd.enable \
-    services.pipewire.enable
-  do
-    graphical=$(nix eval --json "path:$repo#nixosConfigurations.\"$host\".config.$option")
-    [ "$graphical" = "$expected" ] || fail "nixosConfigurations.$host has $option=$graphical, expected $expected for kind $kind"
-  done
-done
+# Read each positive host contract in one evaluation. Do not batch refusal
+# probes or external-consumer tests: their failure boundaries are distinct.
+if ! mismatches=$(nix eval --raw --impure --expr '
+  let
+    flake = builtins.getFlake (toString ./.);
+    lib = flake.inputs.nixpkgs.lib;
+    hosts = (lib.evalModules {
+      modules = [ ./modules/flake/identity.nix ./modules/flake/fixtures.nix ];
+    }).config.identity.nixosHosts;
+    check = host: let
+      declared = hosts.${host};
+      applied = flake.nixosConfigurations.${host};
+      expected = builtins.elem declared.kind [ "desktop" "vm" ];
+      compare = field: actual: wanted:
+        lib.optional (actual != wanted)
+          "nixosConfigurations.${host}.${field}: got ${builtins.toJSON actual}, expected ${builtins.toJSON wanted}";
+    in
+      compare "networking.hostName" applied.config.networking.hostName host
+      ++ compare "system.stateVersion" applied.config.system.stateVersion declared.stateVersion
+      ++ compare "hostPlatform.system" applied.pkgs.stdenv.hostPlatform.system declared.system
+      ++ lib.concatMap (path:
+        compare (lib.concatStringsSep "." path) (lib.getAttrFromPath path applied.config) expected
+      ) [ [ "programs" "niri" "enable" ] [ "services" "greetd" "enable" ] [ "services" "pipewire" "enable" ] ];
+  in lib.concatStringsSep "\n" (lib.concatMap check (builtins.attrNames hosts))'); then
+  fail "the positive host contracts failed to evaluate"
+fi
+[ -z "$mismatches" ] || fail "$mismatches"
 
 printf '→ accepts each combination a host lane names\n'
 host_accepted x86_64-linux wsl null "$user" || fail "identity.nix refused an x86_64 WSL host"
