@@ -105,6 +105,21 @@ if ($parseErrors.Count) {
 
 $tests = Join-Path (Split-Path -Parent $PSScriptRoot) 'tests'
 $result = Invoke-Pester -Path $tests -PassThru
+# Reuse Pester's measurements: no second execution and no timing thresholds.
+# Container durations include discovery/setup; test durations do not account
+# for all container overhead and must not be summed as the suite's wall time.
+Write-Host 'Pester suite timing (seconds; includes discovery and setup):'
+foreach ($container in $result.Containers) {
+    Write-Host ('  {0:N3}s [{1}] {2}' -f $container.Duration.TotalSeconds,
+        $container.Result, (Split-Path -Leaf $container.Name))
+}
+Write-Host 'Pester slowest executed tests (seconds; user + framework):'
+$result.Tests | Where-Object Executed |
+    Sort-Object Duration -Descending | Select-Object -First 10 |
+    ForEach-Object {
+        Write-Host ('  {0:N3}s [{1}] {2}' -f $_.Duration.TotalSeconds,
+            $_.Result, $_.ExpandedPath)
+    }
 if ($result.Result -ne 'Passed') { exit 1 }
 # Explicit, because win-env.ps1 runs this in-process and returns
 # $LASTEXITCODE, which a script that falls off its end leaves at whatever its
