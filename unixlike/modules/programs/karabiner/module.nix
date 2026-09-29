@@ -47,12 +47,20 @@ _: {
   modules.homeManager.darwin = {
     pkgs,
     lib,
+    config,
     ...
   }: {
-    home.activation.karabinerDesiredState = lib.hm.dag.entryAfter ["writeBoundary"] ''
-      JQ=${pkgs.jq}/bin/jq run sh ${./tool} apply \
-        --payload ${./karabiner.json} \
-        --hotkeys ${./symbolic-hotkeys.json}
-    '';
+    home.activation =
+      lib.mkIf (
+        builtins.elem "karabiner-elements" config.providerDarwin.selectedApps
+        && config.providerDarwin.appSettings.enable
+        && config.providerDarwin.appSettings.karabiner
+      ) {
+        karabinerDesiredState = lib.hm.dag.entryAfter ["writeBoundary"] ''
+          JQ=${pkgs.jq}/bin/jq run sh ${./tool} apply \
+            --payload ${./karabiner.json} \
+            --hotkeys ${./symbolic-hotkeys.json}
+        '';
+      };
   };
 }

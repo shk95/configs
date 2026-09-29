@@ -1,6 +1,5 @@
 #!/bin/sh
-# Two tiers of verification, and a rule about which configurations get the
-# second one.
+# Two tiers of verification, with explicit native build selection.
 #
 #   Tier 1 — eval.  Forces each configuration's toplevel derivation. Writing
 #                   that .drv requires instantiating the whole input graph, so
@@ -21,9 +20,10 @@
 # Skipped builds are reported without download-size planning: that is
 # informational work and adds no evaluation or build evidence.
 #
-# Every synthetic configuration is evaluated. Native fixture builds prove the
-# provider can realise an output; foreign configurations remain evaluation-only
-# until a matching runner builds them. No output here is a host activation target.
+# Every synthetic configuration is evaluated. Selected native fixture builds
+# prove the provider can realise an output; foreign configurations remain
+# evaluation-only until a matching runner builds them. No output here is a host
+# activation target.
 #
 # INV unixlike/eval-covers-every-host — evaluation is evidence only when it
 # reached every configuration. A flavour the flake exports but that lists
@@ -42,6 +42,23 @@ require_command nix
 root=$(CDPATH= cd -- "$(dirname "$0")/../.." && pwd)
 flake=${CHECKS_FLAKE:-path:$root}
 here=$(nix eval --raw --impure --expr 'builtins.currentSystem')
+
+# The provider CI selects one representative for each constructor it can build
+# on this system. A fixture flake has no implicit selection. A caller may name
+# exact output attributes with CHECKS_BUILD_TARGETS, or deliberately build all
+# native configurations with CHECKS_BUILD_ALL=1. Neither choice depends on the
+# running machine's hostname or on activation eligibility.
+if [ -n "${CHECKS_FLAKE:-}" ]; then
+  default_build_targets=
+else
+  case "$here" in
+    x86_64-linux) default_build_targets='homeConfigurations.example nixosConfigurations.fixture-cli' ;;
+    aarch64-linux) default_build_targets='nixosConfigurations.fixture-arm-cli' ;;
+    aarch64-darwin) default_build_targets='darwinConfigurations.fixture-mac' ;;
+    *) default_build_targets= ;;
+  esac
+fi
+build_targets=${CHECKS_BUILD_TARGETS-$default_build_targets}
 
 # The flavours the flake exports, read once; each `builtins.getFlake` is a
 # full evaluation outside the flake cache.
@@ -63,32 +80,11 @@ toplevel_attr() {
   esac
 }
 
-# Tier 2 is expensive, and what it proves is per *repository* rather than per
-# configuration: one configuration built from a clean checkout already shows
-# the commit is complete and nothing local leaked into it. A second one buys
-# very little for a great deal more — a minimal NixOS closure is upwards of
-# 600 MiB, and CI starts from an empty store every run.
-#
-# So build a native fixture when this host has a matching platform, and say
-# plainly what was not built. Synthetic NixOS names are never activation
-# targets; Home Manager fixtures can build on Linux. Set
-# CHECKS_BUILD_ALL=1 to build everything regardless — worth doing deliberately
-# when a flavour changes, and cheap locally once the store is warm.
-#
-# CHECKS_NIXOS_HOST stands in for "this is the NixOS host of that name". It
-# exists for tool/checks/eval-coverage-test, which has no NixOS host to run on.
-nixos_host_here() {
-  if [ -n "${CHECKS_NIXOS_HOST:-}" ]; then
-    printf '%s\n' "$CHECKS_NIXOS_HOST"
-  elif [ -r /etc/os-release ] && grep -q '^ID=nixos' /etc/os-release; then
-    cat /proc/sys/kernel/hostname
-  fi
-}
-
-activatable_here() {
-  case $1 in
-    nixosConfigurations) [ "$(nixos_host_here)" = "$2" ] ;;
-    *)                   return 0 ;;
+selected_for_build() {
+  [ -n "${CHECKS_BUILD_ALL:-}" ] && return 0
+  case " $build_targets " in
+    *" $1 "*) return 0 ;;
+    *) return 1 ;;
   esac
 }
 
@@ -139,8 +135,8 @@ check_flavour() {
       continue
     fi
 
-    if [ -z "${CHECKS_BUILD_ALL:-}" ] && ! activatable_here "$output" "$name"; then
-      printf '→ skip  %s.%s — nothing here can activate it\n' "$output" "$name"
+    if ! selected_for_build "$output.$name"; then
+      printf '→ skip  %s.%s — native build not selected\n' "$output" "$name"
       printf '%s.%s|%s|SKIPPED\n' "$output" "$name" "$system" >> "$report"
       continue
     fi
@@ -167,7 +163,7 @@ while IFS='|' read -r target system status; do
     ok)           line="eval ✓ build ✓" ;;
     EVAL_FAIL)    line="eval ✗" ;;
     BUILD_FAIL)   line="eval ✓ build ✗" ;;
-    SKIPPED)      line="eval ✓ build — not activatable here" ;;
+    SKIPPED)      line="eval ✓ build — not selected" ;;
     FOREIGN)      line="eval ✓ build — targets $system" ;;
     FLAVOUR_FAIL) line="eval ✗ — the flavour itself failed to evaluate" ;;
     EMPTY)        line="eval ✗ — exported, but lists no configuration" ;;
@@ -180,13 +176,19 @@ echo
 
 if grep -q '|SKIPPED$' "$report"; then
   cat <<EOF
-   · A configuration was evaluated but not built, because this host cannot
-     activate it. Evaluation still instantiates its whole graph, so what is
-     unproven is narrow: that its sources fetch and its derivations compile.
-     Build it anyway with CHECKS_BUILD_ALL=1.
+   · Some native configurations were evaluated without a selected build.
+     Select exact targets with CHECKS_BUILD_TARGETS or use CHECKS_BUILD_ALL=1.
 
 EOF
 fi
+
+# A missing, foreign, failed or misspelled selected build cannot quietly pass.
+for selected in $build_targets; do
+  if ! awk -F '|' -v target="$selected" '$1 == target && $3 == "ok" { found = 1 } END { exit !found }' "$report"; then
+    printf '\033[31m✗ Selected native build has no passing result: %s\033[0m\n' "$selected" >&2
+    exit 1
+  fi
+done
 
 if grep -qE 'FAIL|EMPTY|ABSENT' "$report"; then
   printf '\033[31m✗ A configuration failed to evaluate or build.\033[0m\n' >&2

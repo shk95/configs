@@ -1,25 +1,7 @@
-# The only place that decides which feature fragments reach each Unix-like
-# configuration. Feature files contribute modules; they do not name hosts.
-#
-# INV unixlike/desktop-not-wsl — `home.desktop` is composed below into the
-# Darwin, physical-desktop and graphical-guest homes; the WSL homes take
-# `shared` and `wsl` and nothing graphical.
-# tool/checks/flake-test is the enforcement.
-#
-# INV unixlike/composition-in-one-place — this file is that place.
-# tool/checks/composition refuses a feature file that names a host flavour
-# or forces a class's decision.
-#
-# `home.agents` — the coding agents — is offered to WSL NixOS hosts and
-# selected by the synthetic WSL fixture; consumers make their own choices
-# (modules/programs/agents.nix).
-#
-# INV unixlike/nixos-host-inventory — every NixOS output is generated from
-# `identity.nixosHosts`, named after its entry, and told about itself through
-# `host` (modules/foundation/nixos.nix), so the output name, the inventory name and
-# `networking.hostName` cannot drift (#191). `nixosCompositions` is the one
-# table from a host's kind — for a `vm`, its hypervisor — to required classes
-# and offered profiles. A host whose kind has no row does not evaluate.
+# Public Unix-like constructors and synthetic output examples. This is the
+# only place that maps environment selections to deferred module classes.
+# Machine realization is supplied by consumer systemModules and homeModules.
+# INV unixlike/typed-identity: every public identity input is validated here.
 {
   lib,
   config,
@@ -27,12 +9,11 @@
   withSystem,
   ...
 }: let
-  inherit (lib) attrNames attrValues concatMap mapAttrs mkOption types unique;
-  inherit (config.identity) wsl darwin nixosHosts;
-  hostSelections = config.hostSelections.nixos;
+  inherit (lib) attrNames attrValues mkOption types unique;
   home = config.modules.homeManager;
   nixos = config.modules.nixos;
-  contract = import ./_host-contract.nix {inherit lib;};
+  providerConfig = config;
+  apiContract = import ../../api/contract.nix;
 
   gitType = types.submodule {
     options = {
@@ -87,118 +68,59 @@
     };
   };
 
-  darwinIdentity = host: _: {
-    options.providerIdentity = {
-      user = mkOption {
-        type = types.str;
-        readOnly = true;
-      };
-      hostName = mkOption {
-        type = types.str;
-        readOnly = true;
-      };
+  darwinUserIdentity = account: _: {
+    options.providerIdentity.user = mkOption {
+      type = types.str;
+      readOnly = true;
     };
-    config.providerIdentity = {
-      inherit (host) user hostName;
-    };
+    config.providerIdentity.user = account;
   };
 
-  nixosCompositions = {
-    wsl = {
-      required.system = [
-        inputs.nixos-wsl.nixosModules.default
-        nixos.wsl
-      ];
-      required.home = [
-        home.shared
-        home.wsl
-      ];
-      optional.agents = {
-        system = [];
-        home = [home.agents];
-      };
+  nixosUserIdentity = account: _: {
+    options.providerIdentity.user = mkOption {
+      type = types.str;
+      readOnly = true;
     };
-
-    # The aarch64 graphical guest: its UTM machine and serial recovery path,
-    # the headless account/SSH layer, and the shared Niri/Noctalia classes.
-    # The coding agents stay on NixOS-WSL.
-    utm = {
-      required.system = [
-        nixos.utm
-        nixos.installExt4
-        nixos.headless
-        nixos.graphical
-      ];
-      required.home = [
-        home.shared
-        home.desktop
-        home.linuxGraphical
-      ];
-      optional = {};
-    };
-
-    # An OrbStack machine: what OrbStack needs from the guest
-    # (modules/machines/orbstack.nix) — its own account, no sshd and no headless
-    # class, because OrbStack's agent is the way in — and the shared home
-    # alone.
-    orbstack = {
-      required = {
-        system = [nixos.orbstack];
-        home = [home.shared];
-      };
-      optional = {};
-    };
-
-    # The x86_64 graphical guest under VMware Workstation, with the same
-    # headless recovery and shared graphical layers as the UTM guest.
-    vmware = {
-      required.system = [
-        nixos.vmware
-        nixos.installExt4
-        nixos.headless
-        nixos.graphical
-      ];
-      required.home = [
-        home.shared
-        home.desktop
-        home.linuxGraphical
-      ];
-      optional = {};
-    };
-
-    # The physical AMD APU desktop. The headless class remains its account,
-    # SSH and recovery path; the shared graphical classes supply Niri and
-    # Noctalia. Installation and physical runtime evidence remain separate.
-    desktop = {
-      required.system = [
-        nixos.desktop
-        nixos.installLuksBtrfs
-        nixos.headless
-        nixos.graphical
-      ];
-      required.home = [
-        home.shared
-        home.desktop
-        home.linuxGraphical
-      ];
-      optional = {};
-    };
+    config.providerIdentity.user = account;
   };
 
-  # Every inventory host makes a choice, even when it selects no optional
-  # profile. Extra selection entries are rejected rather than silently unused.
-  checkedSelections =
-    if attrNames hostSelections != attrNames nixosHosts
-    then throw "hostSelections.nixos must name exactly the hosts in identity.nixosHosts."
-    else hostSelections;
+  selectedDarwinApps = brew: let
+    nameOf = value:
+      if builtins.isString value
+      then value
+      else value.name;
+    normalize = value: lib.toLower (builtins.baseNameOf (nameOf value));
+  in
+    unique (
+      map normalize (brew.casks ++ brew.brews)
+      ++ map lib.toLower (attrNames brew.masApps)
+    );
 
+  # Public environment selection is independent of the host's hardware,
+  # account creation and access policy. Synthetic fixtures exercise the
+  # public constructors without claiming real host ownership.
   mkNixos = values: let
+    retired = builtins.filter (name: builtins.hasAttr name values) ["name" "host" "profiles"];
     spec =
-      checkedInput "lib.mkNixos" ["name" "host" "profiles" "git"] {
-        name = mkOption {type = types.str;};
-        host = mkOption {type = contract.hostType;};
-        profiles = mkOption {type = types.listOf (types.enum ["agents"]);};
+      checkedInput "lib.mkNixos" ["system" "user" "git"] {
+        system = mkOption {type = types.enum ["x86_64-linux" "aarch64-linux"];};
+        user = mkOption {type = types.str;};
         git = mkOption {type = gitType;};
+        environment = mkOption {
+          default = {};
+          type = types.submodule ({config, ...}: {
+            options = {
+              wsl = mkOption {
+                type = types.bool;
+                default = false;
+              };
+              graphical = mkOption {
+                type = types.bool;
+                default = !config.wsl;
+              };
+            };
+          });
+        };
         systemModules = mkOption {
           type = types.listOf types.deferredModule;
           default = [];
@@ -209,62 +131,107 @@
         };
       }
       values;
-    inherit (spec) name host;
-    checkedHost = contract.checkHost {
-      inherit name host;
-      wslUser = host.user;
-    };
-    key =
-      if host.kind == "vm"
-      then host.hypervisor
-      else host.kind;
-    composition =
-      nixosCompositions.${key}
-      or (throw "identity.nixosHosts.${name}: no composition is written for ${key} in modules/flake/configurations.nix.");
-    profiles =
-      if unique spec.profiles != spec.profiles
-      then throw "hostSelections.nixos.${name}: profiles must not be repeated."
-      else spec.profiles;
-    selected = map (profile:
-      composition.optional.${profile}
-      or (throw "hostSelections.nixos.${name}: profile ${profile} is unavailable for ${key}."))
-    profiles;
-    systemModules = composition.required.system ++ concatMap (profile: profile.system) selected ++ spec.systemModules;
-    homeModules = composition.required.home ++ concatMap (profile: profile.home) selected ++ spec.homeModules;
+    selected = spec.environment;
+    homeModules =
+      [home.shared]
+      ++ lib.optionals selected.wsl [home.wsl]
+      ++ lib.optionals selected.graphical [home.desktop home.linuxGraphical]
+      ++ [home.agents (homeIdentity spec.git spec.user)]
+      ++ spec.homeModules;
   in
-    builtins.deepSeq spec (builtins.seq checkedHost (inputs.nixpkgs.lib.nixosSystem {
-      inherit (host) system;
-      modules =
-        systemModules
-        ++ [
-          inputs.home-manager.nixosModules.home-manager
-          nixos.shared
-          {
-            host = host // {inherit name;};
-            nixpkgs.config = config.nixpkgsConfig;
-            nixpkgs.overlays = attrValues config.nixpkgsOverlays;
-            home-manager = {
-              useGlobalPkgs = true;
-              useUserPackages = true;
-              users.${host.user}.imports = homeModules ++ [(homeIdentity spec.git host.user)];
-            };
+    if retired != []
+    then throw "lib.mkNixos: retired input ${lib.concatStringsSep ", " retired}; pass system, user and environment, and put machine settings in systemModules."
+    else
+      builtins.deepSeq spec (
+        if selected.wsl && selected.graphical
+        then throw "lib.mkNixos: environment.graphical cannot be true when environment.wsl is true."
+        else
+          inputs.nixpkgs.lib.nixosSystem {
+            inherit (spec) system;
+            modules =
+              spec.systemModules
+              ++ [
+                inputs.home-manager.nixosModules.home-manager
+                nixos.environment
+                (nixosUserIdentity spec.user)
+              ]
+              ++ lib.optionals selected.graphical [nixos.graphical]
+              ++ [
+                ({
+                  config,
+                  lib,
+                  options,
+                  ...
+                }: let
+                  account = config.users.users.${spec.user} or null;
+                  accountHome =
+                    if account == null
+                    then "/home/${spec.user}"
+                    else account.home;
+                  wslEnabled =
+                    if options ? wsl.enable
+                    then config.wsl.enable
+                    else false;
+                in {
+                  nixpkgs.config = providerConfig.nixpkgsConfig;
+                  nixpkgs.overlays = attrValues providerConfig.nixpkgsOverlays;
+                  home-manager = {
+                    useGlobalPkgs = true;
+                    useUserPackages = true;
+                    users.${spec.user}.imports =
+                      homeModules
+                      ++ [
+                        {
+                          home.username = lib.mkDefault spec.user;
+                          home.homeDirectory = lib.mkDefault accountHome;
+                        }
+                      ];
+                  };
+                  assertions = [
+                    {
+                      assertion = account != null;
+                      message = "lib.mkNixos: systemModules must create the selected user ${spec.user}.";
+                    }
+                    {
+                      assertion = account != null && config.home-manager.users.${spec.user}.home.homeDirectory == account.home;
+                      message = "lib.mkNixos: the managed home directory must match the selected system account.";
+                    }
+                    {
+                      assertion = selected.wsl == wslEnabled;
+                      message = "lib.mkNixos: environment.wsl must match the host-supplied NixOS-WSL integration.";
+                    }
+                    {
+                      assertion = !selected.wsl || !wslEnabled || (!config.wsl.useWindowsDriver && !config.wsl.startMenuLaunchers);
+                      message = "INV unixlike/desktop-not-wsl: WSL graphics-driver and Start Menu launcher integration must stay disabled.";
+                    }
+                  ];
+                })
+              ];
           }
-        ];
-    }));
+      );
 
   mkDarwin = values: let
+    retired = builtins.filter (name: builtins.hasAttr name values) ["host"];
     spec =
-      checkedInput "lib.mkDarwin" ["host" "git"] {
-        host = mkOption {
+      checkedInput "lib.mkDarwin" ["system" "user" "git"] {
+        system = mkOption {type = types.enum ["aarch64-darwin"];};
+        user = mkOption {type = types.str;};
+        git = mkOption {type = gitType;};
+        environment = mkOption {
+          default = {};
           type = types.submodule {
             options = {
-              user = mkOption {type = types.str;};
-              hostName = mkOption {type = types.str;};
-              system = mkOption {type = types.enum ["aarch64-darwin" "x86_64-darwin"];};
+              wsl = mkOption {
+                type = types.bool;
+                default = false;
+              };
+              graphical = mkOption {
+                type = types.bool;
+                default = true;
+              };
             };
           };
         };
-        git = mkOption {type = gitType;};
         systemModules = mkOption {
           type = types.listOf types.deferredModule;
           default = [];
@@ -275,81 +242,210 @@
         };
       }
       values;
+    homeModules =
+      [home.shared home.darwin]
+      ++ lib.optionals spec.environment.graphical [home.desktop]
+      ++ [home.agents (homeIdentity spec.git spec.user)]
+      ++ spec.homeModules;
   in
-    builtins.deepSeq spec (inputs.nix-darwin.lib.darwinSystem {
-      inherit (spec.host) system;
-      modules =
-        [
-          inputs.home-manager.darwinModules.home-manager
-          config.modules.darwin.system
-          (darwinIdentity spec.host)
-          {
-            nixpkgs.config = config.nixpkgsConfig;
-            nixpkgs.overlays = attrValues config.nixpkgsOverlays;
-            home-manager = {
-              useGlobalPkgs = true;
-              useUserPackages = true;
-              users.${spec.host.user}.imports =
-                [
-                  home.shared
-                  home.desktop
-                  home.darwin
-                  (homeIdentity spec.git spec.host.user)
-                ]
-                ++ spec.homeModules;
-            };
+    if retired != []
+    then throw "lib.mkDarwin: retired host input; pass system and user, and put hostname and account settings in systemModules."
+    else
+      builtins.deepSeq spec (
+        if spec.environment.wsl
+        then throw "lib.mkDarwin: environment.wsl is unavailable on Darwin."
+        else
+          inputs.nix-darwin.lib.darwinSystem {
+            inherit (spec) system;
+            modules =
+              spec.systemModules
+              ++ [
+                inputs.home-manager.darwinModules.home-manager
+                config.modules.darwin.environment
+                (darwinUserIdentity spec.user)
+                ({
+                  config,
+                  lib,
+                  ...
+                }: let
+                  account = config.users.users.${spec.user} or null;
+                in {
+                  nixpkgs.config = providerConfig.nixpkgsConfig;
+                  nixpkgs.overlays = attrValues providerConfig.nixpkgsOverlays;
+                  home-manager = {
+                    useGlobalPkgs = true;
+                    useUserPackages = true;
+                    users.${spec.user}.imports =
+                      homeModules
+                      ++ [
+                        {providerDarwin.selectedApps = selectedDarwinApps config.homebrew;}
+                        {
+                          home.username = lib.mkDefault spec.user;
+                          home.homeDirectory = lib.mkDefault (
+                            if account == null
+                            then "/Users/${spec.user}"
+                            else account.home
+                          );
+                        }
+                      ];
+                  };
+                  assertions = [
+                    {
+                      assertion = account != null;
+                      message = "lib.mkDarwin: systemModules must supply the selected account ${spec.user}.";
+                    }
+                    {
+                      assertion = account != null && config.home-manager.users.${spec.user}.home.homeDirectory == account.home;
+                      message = "lib.mkDarwin: the managed home directory must match the selected system account.";
+                    }
+                  ];
+                })
+              ];
           }
-        ]
-        ++ spec.systemModules;
-    });
+      );
 
   mkHome = values: let
+    required = attrNames (lib.filterAttrs (_: input: input.required) apiContract.entryPoints.mkHome.inputs);
     spec =
-      checkedInput "lib.mkHome" ["system" "user" "git"] {
-        system = mkOption {type = types.enum ["x86_64-linux"];};
+      checkedInput "lib.mkHome" required {
+        system = mkOption {type = types.enum apiContract.constraints.mkHome.systems;};
         user = mkOption {type = types.str;};
+        homeDirectory = mkOption {type = types.strMatching "^/.*";};
         git = mkOption {type = gitType;};
+        environment = mkOption {
+          default = {};
+          type = types.submodule ({config, ...}: {
+            options = {
+              wsl = mkOption {
+                type = types.bool;
+                default = apiContract.entryPoints.mkHome.inputs.environment.defaults.wsl;
+              };
+              graphical = mkOption {
+                type = types.bool;
+                default =
+                  if config.wsl
+                  then apiContract.entryPoints.mkHome.inputs.environment.defaults.graphicalWhenWsl
+                  else apiContract.entryPoints.mkHome.inputs.environment.defaults.graphicalOtherwise;
+              };
+            };
+          });
+        };
         homeModules = mkOption {
           type = types.listOf types.deferredModule;
           default = [];
         };
       }
       values;
+    selected = spec.environment;
+    homeModules =
+      [home.shared]
+      ++ lib.optionals selected.wsl [home.wsl]
+      ++ lib.optionals selected.graphical [home.desktop home.linuxGraphical]
+      ++ [
+        home.agents
+        home.standalone
+        (homeIdentity spec.git spec.user)
+        {
+          home.homeDirectory = lib.mkDefault spec.homeDirectory;
+        }
+      ]
+      ++ spec.homeModules;
   in
-    builtins.deepSeq spec (withSystem spec.system ({pkgs, ...}:
-      inputs.home-manager.lib.homeManagerConfiguration {
-        inherit pkgs;
-        modules =
-          [
-            home.shared
-            home.wsl
-            home.wslStandalone
-            (homeIdentity spec.git spec.user)
-          ]
-          ++ spec.homeModules;
-      }));
+    builtins.deepSeq spec (
+      if selected.wsl && selected.graphical
+      then throw "lib.mkHome: environment.graphical cannot be true when environment.wsl is true."
+      else
+        withSystem spec.system ({pkgs, ...}:
+          inputs.home-manager.lib.homeManagerConfiguration {
+            inherit pkgs;
+            modules = homeModules;
+          })
+    );
 
-  git = {
-    name = config.identity.gitName;
-    email = config.identity.gitEmail;
+  fixtureUser = "example";
+  fixtureGit = {
+    name = "Example";
+    email = "example@example.invalid";
+  };
+  fixtureSystem = name: {
+    networking.hostName = name;
+    boot.loader.grub.enable = false;
+    users.users.example.isNormalUser = true;
+    fileSystems."/" = {
+      device = "/dev/disk/by-label/fixture";
+      fsType = "ext4";
+    };
   };
 in {
   flake = {
     lib = {inherit mkNixos mkDarwin mkHome;};
-    homeConfigurations.${wsl.user} = mkHome {
-      system = "x86_64-linux";
-      inherit (wsl) user;
-      inherit git;
+    nixosConfigurations = {
+      fixture-cli = mkNixos {
+        system = "x86_64-linux";
+        user = "example";
+        git = fixtureGit;
+        environment.graphical = false;
+        systemModules = [(fixtureSystem "fixture-cli")];
+      };
+      fixture-graphical = mkNixos {
+        system = "x86_64-linux";
+        user = "example";
+        git = fixtureGit;
+        systemModules = [(fixtureSystem "fixture-graphical")];
+      };
+      fixture-arm-cli = mkNixos {
+        system = "aarch64-linux";
+        user = "example";
+        git = fixtureGit;
+        environment.graphical = false;
+        systemModules = [(fixtureSystem "fixture-arm-cli")];
+      };
+      fixture-wsl = mkNixos {
+        system = "x86_64-linux";
+        user = "example";
+        git = fixtureGit;
+        environment.wsl = true;
+        systemModules = [
+          inputs.nixos-wsl.nixosModules.default
+          (fixtureSystem "fixture-wsl")
+          {
+            wsl = {
+              enable = true;
+              defaultUser = "example";
+              useWindowsDriver = false;
+              startMenuLaunchers = false;
+            };
+          }
+        ];
+      };
     };
-    nixosConfigurations = mapAttrs (name: host:
-      mkNixos {
-        inherit name host git;
-        profiles = checkedSelections.${name}.profiles;
-      })
-    nixosHosts;
-    darwinConfigurations.${darwin.hostName} = mkDarwin {
-      host = darwin;
-      inherit git;
+    darwinConfigurations.fixture-mac = mkDarwin {
+      system = "aarch64-darwin";
+      user = "example";
+      git = fixtureGit;
+      systemModules = [
+        {
+          networking.hostName = "fixture-mac";
+          system.primaryUser = "example";
+          users.users.example.home = "/Users/${fixtureUser}";
+        }
+      ];
+    };
+    homeConfigurations = {
+      example = mkHome {
+        system = "x86_64-linux";
+        user = "example";
+        homeDirectory = "/home/${fixtureUser}";
+        environment.graphical = false;
+        git = fixtureGit;
+      };
+      example-wsl = mkHome {
+        system = "x86_64-linux";
+        user = "example";
+        homeDirectory = "/home/${fixtureUser}";
+        environment.wsl = true;
+        git = fixtureGit;
+      };
     };
   };
 }

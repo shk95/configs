@@ -316,23 +316,6 @@ nixos-build host="":
     target=$(just _nixos-target {{ quote(host) }})
     nix build --no-link --print-out-paths "path:./unixlike#nixosConfigurations.${target}.config.system.build.toplevel"
 
-# Write a reviewable wrapper flake for one explicit persistent disk. This
-# writes only the named plan directory and never touches the target device.
-[group('nixos')]
-nixos-install-plan host disk plan:
-    @echo 'Use the host flake in configs-hosts for installation planning.' >&2; exit 1
-
-# Run the same disko installation proof that nixos-anywhere --vm-test selects,
-# then boot the installed result on disposable QEMU disks. The portable form
-# lets QEMU fall back to TCG when the builder has no nested KVM; it never
-# connects to or activates a real host.
-[group('nixos')]
-nixos-install-vm-test host="":
-    #!/usr/bin/env bash
-    set -euo pipefail
-    target=$(just _nixos-target {{ quote(host) }})
-    unixlike/tool/install-vm-test "${target}"
-
 # NixOS-WSL's builder refuses to run unless EUID is 0 — it chowns paths inside
 # the rootfs it assembles — so this needs a password and an agent cannot run
 # it. It takes several minutes, because it runs a real `nixos-install` into a

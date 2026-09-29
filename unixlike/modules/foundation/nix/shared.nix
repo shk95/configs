@@ -9,50 +9,20 @@
 # is delicate: home-manager refuses to clobber an unmanaged
 # ~/.config/nix/nix.conf, so hand-writing one to get flakes working turns the
 # first switch into a failure. Export NIX_CONFIG for that shell instead.
-_: {
-  modules.homeManager.wslStandalone = {pkgs, ...}: {
+{lib, ...}: let
+  contract = import ../../../api/contract.nix;
+in {
+  # The public constructor keeps only common flake capability here. The
+  # consumer selects daemon trust, garbage collection and channel policy.
+  modules.nixos.environment = {
+    nix.settings.experimental-features = ["nix-command" "flakes"];
+    system.stateVersion = lib.mkDefault contract.compatibilityDefaults.nixos;
+  };
+
+  modules.homeManager.standalone = {pkgs, ...}: {
     nix = {
       package = pkgs.nix;
       settings.experimental-features = ["nix-command" "flakes"];
     };
-  };
-
-  # NixOS, every host: /etc/nix/nix.conf is generated from `nix.settings`, and
-  # the standalone class above is not composed into a NixOS host, so nothing
-  # else declares it. Found on the imported host, whose whole configuration is a
-  # flake and whose daemon refused `nix-command`
-  # (docs/policy/decisions/unixlike/nixos-wsl-system-layer-ownership.md). The rest mirrors
-  # modules/foundation/nix/darwin.nix: the account that rebuilds the host is trusted — the
-  # host's own, read from what modules/foundation/nixos.nix tells it about itself —
-  # and the store is collected weekly — generations older than two weeks go
-  # with the garbage, so that is the rollback window.
-  #
-  # INV unixlike/nixos-no-channel — the assertion below is the schema half of
-  # the rule; tool/checks/flake-test holds both directions. The host is
-  # rebuilt from this flake and from nothing else, so it has no channel:
-  # turning channels off takes the channel directory out of `nix.nixPath`,
-  # removes the `nix-channel` command, and keeps the tarball builder from
-  # registering one at import. A rebuild that names no flake then stops on the
-  # search path instead of reaching for a configuration nobody maintains.
-  modules.nixos.shared = {config, ...}: {
-    nix = {
-      settings = {
-        experimental-features = ["nix-command" "flakes"];
-        trusted-users = [config.host.user];
-      };
-      gc = {
-        automatic = true;
-        dates = "weekly";
-        options = "--delete-older-than 14d";
-      };
-      channel.enable = false;
-    };
-
-    assertions = [
-      {
-        assertion = !config.nix.channel.enable;
-        message = "INV unixlike/nixos-no-channel: nix.channel.enable is on; this host is rebuilt from the flake alone and carries no channel.";
-      }
-    ];
   };
 }

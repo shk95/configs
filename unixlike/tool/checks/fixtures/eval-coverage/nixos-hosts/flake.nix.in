@@ -2,8 +2,8 @@
   # tool/checks/eval-coverage-test: two NixOS configurations for the platform
   # the test runs on, which the test substitutes for @system@ in a temporary
   # copy, because a pure flake cannot ask for the current system. Both
-  # instantiate and both would build; tool/checks/test must build the one
-  # named after the NixOS host it runs on and only evaluate the other.
+  # instantiate and both would build; tool/checks/test builds the explicitly
+  # selected one and only evaluates the other, independent of host name.
   description = "eval-coverage fixture: two NixOS hosts";
   outputs = _: let
     host = name: {
