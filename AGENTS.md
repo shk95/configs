@@ -27,7 +27,7 @@ which stay at the root because direnv reads the first there and where the
 second belongs is a separate decision, and the domain's documents, which
 live in the Unix-like scope directories under `docs/`. Files below `unixlike/modules/` are
 flake-parts modules collected by import-tree. The first level groups concerns
-as `flake`, `machines`, `platforms`, `foundation`, `desktop`, and `programs`.
+as `flake`, `platforms`, `foundation`, `desktop`, and `programs`.
 Inside a group, a concern with one fragment is one file, and a concern with
 more, or with a payload or a script beside it, is a directory. The class a
 fragment reaches is read in the file that writes it, never from its directory.
@@ -70,7 +70,7 @@ rule stands on this sentence alone.
 | Do not commit, push, tag, rewrite history, or change branches unless the user explicitly requests it. | A tool allowlist reduces prompts; it never authorizes a mutation. | skill (`run-version-control-workflow` refuses); `tool/version-control/commit` refuses on `master` |
 | Author tracked source changes and commits in a linked worktree dedicated to the task. Keep the primary checkout for read-only inspection and integration. | A task's edits must not disturb the integration checkout or another task's index. | tool (`tool/version-control/require-linked-worktree` refuses commits from the primary checkout); fixture |
 | Do not update flake inputs, change login shells, garbage-collect Nix stores, shut down WSL, or change global Git configuration unless the task calls for it. | Each is host-global or irreversible from inside a session. | none |
-| Treat WSL cgroups, binfmt_misc, mounts, and similar kernel-global resources as shared by every distribution, and the kernel under an OrbStack machine as shared by every machine and by OrbStack's container engine. | One distribution's fix is every distribution's change, and an OrbStack machine's UIDs are mapped one to one: its root is UID 0 on that kernel. | none for WSL; schema for an OrbStack machine's binfmt registry (`INV unixlike/orbstack-shared-kernel`) |
+| Treat WSL cgroups, binfmt_misc, mounts, and similar kernel-global resources as shared by every distribution, and the kernel under an OrbStack machine as shared by every machine and by OrbStack's container engine. | One distribution's fix is every distribution's change, and an OrbStack machine's UIDs are mapped one to one: its root is UID 0 on that kernel. | none for WSL; consumer-owned assertion and fixture for an OrbStack machine's binfmt registry |
 | Preserve externally managed PowerShell profile blocks. Do not change Windows OpenSSH DefaultShell or add a `.wslconfig` firewall value without explicit direction. | Both are host state another owner writes. | none |
 | Classify a change before editing and change only the owning domain. | Evidence, release tags, and CI jobs are selected by ownership. | hook (`tool/version-control/classify` refuses an unclassified path) |
 | Report evaluation, build, native runtime, and activation or Apply evidence separately, and never upgrade partial evidence. | A tag or a merge is only as true as the lane it names. | `.githooks/evidence`; skill |
