@@ -47,6 +47,13 @@ Describe 'Windows CI runtime declaration' {
         @{ Name = 'unknown format'; Change = { param($v) $v.formatVersion = 2 }; Reason = 'Unsupported CI runtime formatVersion' },
         @{ Name = 'missing management version'; Change = { param($v) $v.management.PSObject.Properties.Remove('version') }; Reason = "missing 'version'" },
         @{ Name = 'unversioned management'; Change = { param($v) $v.management.version = 'latest' }; Reason = 'exact stable' },
+        @{ Name = 'leading-zero minor'; Change = { param($v) $v.management.version = '7.06.6' }; Reason = 'exact stable' },
+        @{ Name = 'leading-zero patch'; Change = { param($v) $v.management.version = '7.6.06' }; Reason = 'exact stable' },
+        @{ Name = 'array management architecture'; Change = { param($v) $v.management.architecture = @('x64') }; Reason = 'architecture' },
+        @{ Name = 'array bootstrap engine'; Change = { param($v) $v.bootstrap.engine = @('WindowsPowerShell') }; Reason = 'must be a string' },
+        @{ Name = 'array bootstrap version'; Change = { param($v) $v.bootstrap.version = @('5.1') }; Reason = 'must be a string' },
+        @{ Name = 'array bootstrap architecture'; Change = { param($v) $v.bootstrap.architecture = @('x64') }; Reason = 'must be a string' },
+        @{ Name = 'array bootstrap source'; Change = { param($v) $v.bootstrap.source = @('inbox') }; Reason = 'must be a string' },
         @{ Name = 'different architecture'; Change = { param($v) $v.management.architecture = 'arm64' }; Reason = 'architecture' },
         @{ Name = 'untrusted artifact'; Change = { param($v) $v.management.asset.uri = 'https://example.invalid/runtime.zip' }; Reason = 'official versioned' },
         @{ Name = 'mismatched artifact version'; Change = { param($v) $v.management.version = '7.6.5' }; Reason = 'official versioned' },
@@ -63,5 +70,22 @@ Describe 'Windows CI runtime declaration' {
         $result.Exit | Should -Be 1
         $result.Out | Should -BeNullOrEmpty
         $result.Error | Should -Match $Reason
+    }
+
+    It 'refuses <Name> in the original JSON before key collapse' -ForEach @(
+        @{ Name = 'exact duplicate root key'; Original = '"formatVersion": 1'; Replacement = '"formatVersion": 1, "formatVersion": 1' },
+        @{ Name = 'case-ambiguous root key'; Original = '"formatVersion": 1'; Replacement = '"formatVersion": 1, "FormatVersion": 1' },
+        @{ Name = 'exact duplicate nested key'; Original = '"version": "7.6.6"'; Replacement = '"version": "7.6.6", "version": "7.6.6"' },
+        @{ Name = 'case-ambiguous nested key'; Original = '"version": "7.6.6"'; Replacement = '"version": "7.6.6", "Version": "7.6.6"' },
+        @{ Name = 'escaped duplicate key'; Original = '"formatVersion": 1'; Replacement = '"formatVersion": 1, "format\u0056ersion": 1' }
+    ) {
+        $json = Get-Content -LiteralPath $declaration -Raw
+        $json.Contains($Original) | Should -BeTrue
+        $path = Join-Path $TestDrive 'duplicate.json'
+        $json.Replace($Original, $Replacement) | Set-Content -LiteralPath $path -Encoding utf8
+        $result = Invoke-CiRuntimeReader -Path $path
+        $result.Exit | Should -Be 1
+        $result.Out | Should -BeNullOrEmpty
+        $result.Error | Should -Match 'Duplicate or ambiguous CI runtime JSON key'
     }
 }
