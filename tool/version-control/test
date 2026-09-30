@@ -4597,20 +4597,55 @@ domain_reads="$root/tool/version-control/domain-reads"
 grep -q 'evidence_run "domain reads" tool/version-control/domain-reads' "$root/.githooks/pre-commit"
 grep -q 'run: tool/version-control/domain-reads' "$root/.github/workflows/ci.yml"
 for windows_ci_script in setup-dev.ps1 check-desired-state.ps1 test.ps1; do
-  windows_ci_prefix='pwsh -NoProfile -File .\windows\tool\'
-  windows_ci_next=$(grep -F -A1 "${windows_ci_prefix}${windows_ci_script}" "$root/.github/workflows/ci.yml" | sed -n '2p')
-  if [ "$windows_ci_next" != '          if ($LASTEXITCODE -ne 0) { exit $LASTEXITCODE }' ]; then
-    echo "Windows CI does not stop on the $windows_ci_script process status" >&2
+  if ! grep -Fq "windows/tool/$windows_ci_script" "$root/.github/scripts/windows-ci.ps1"; then
+    echo "Windows CI no longer invokes the $windows_ci_script implementation" >&2
     exit 1
   fi
 done
-windows_winget_next=$(grep -F -A1 'winget install --id Zellij.Zellij' "$root/.github/workflows/ci.yml" | sed -n '2p')
-if [ "$windows_winget_next" != '          if ($LASTEXITCODE -ne 0) { exit $LASTEXITCODE }' ]; then
+windows_winget_next=$(grep -F -A1 '& winget.exe install --id Zellij.Zellij' "$root/.github/scripts/windows-ci.ps1" | sed -n '2p')
+if ! printf '%s\n' "$windows_winget_next" | grep -Fq 'if ($LASTEXITCODE -ne 0) { throw'; then
   echo "Windows CI does not stop on Zellij installation failure" >&2
   exit 1
 fi
 if grep -q 'Get-ChildItem -Recurse' "$root/.github/workflows/ci.yml"; then
   echo "the CI workflow walks the checkout for PowerShell files; the Windows test verb owns that parse" >&2
+  exit 1
+fi
+
+# INV repository/windows-ci-runtime-bound
+# Native fixtures run in the Windows job; these assertions hold selection
+# and the explicit controller, not native runtime evidence.
+windows_ci_workflow="$root/.github/workflows/ci.yml"
+windows_ci_module="$root/.github/scripts/WindowsCiRuntime.psm1"
+windows_ci_controller="$root/.github/scripts/windows-ci.ps1"
+# INV repository/local-gate-selects-by-effect
+# Native runtime inputs select Windows even alone. Unknown .github material
+# keeps repository ownership without acquiring a Windows runtime effect.
+for path in .github/scripts/WindowsCiRuntime.psm1 \
+  .github/scripts/assert-windows-ci-runtime.ps1 \
+  .github/scripts/prepare-windows-ci-runtime.ps1 \
+  .github/scripts/windows-ci.ps1 .github/tests/test-windows-ci-runtime.ps1; do
+  for status in M A D; do
+    expect_units 'repository:fixtures
+windows:suite' ci "$(printf '%s\t%s' "$status" "$path")"
+  done
+done
+expect_units 'repository:fixtures
+windows:suite' ci "$(printf 'R100\tdocs/fixture.md\t.github/tests/test-windows-ci-runtime.ps1')"
+expect_units 'repository:fixtures' ci "$(printf 'M\t.github/CODEOWNERS')"
+expect_units 'repository:fixtures' ci "$(printf 'M\t.github/scripts/unrelated.ps1')"
+for stage in commit push; do
+  expect_units 'repository:fixtures' "$stage" "$(printf 'M\t.github/scripts/WindowsCiRuntime.psm1')"
+  expect_units 'repository:fixtures' "$stage" "$(printf 'M\t.github/scripts/windows-ci.ps1')"
+  expect_units '' "$stage" "$(printf 'M\t.github/CODEOWNERS')"
+done
+grep -Fq 'CONFIGS_CI_PWSH: ${{ steps.runtime.outputs.pwsh }}' "$windows_ci_workflow"
+grep -Fq '& $env:CONFIGS_CI_PWSH -NoLogo -NoProfile -NonInteractive -File' "$windows_ci_workflow"
+grep -Fq '.github/tests/test-windows-ci-runtime.ps1' "$windows_ci_controller"
+grep -Fq 'Invoke-CiProcess -Executable $RuntimePath' "$windows_ci_controller"
+grep -Fq 'if ($LASTEXITCODE -ne 0) { throw' "$windows_ci_module"
+if grep -Eq 'pwsh +-NoProfile +-File .*windows' "$windows_ci_workflow"; then
+  echo 'Windows CI management reverted to the hosted-image runtime' >&2
   exit 1
 fi
 

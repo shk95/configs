@@ -76,3 +76,12 @@ and every selected suite succeeds; intentionally unselected suites must skip.
 No cross-run reuse is introduced: a PR merge tree and a later push may differ.
 Native stacks are refused before selection until trunk-wide ranges, history
 policy and stack lifecycle are supported together; no stack support is claimed.
+
+2026-09-30: the adopted [Windows CI runtime binding](windows-ci-consumes-domain-runtime.md)
+also selects the complete Windows suite for the known repository-owned runtime
+helpers and native fixture, even without a workflow edit. Other repository
+inputs keep repository-only selection; shared machinery keeps all-suite
+selection. Local fixtures now read the runtime module/controller wiring, so
+those two source paths select repository fixtures at commit and push. This
+applies existing effect selection to the newly consumed inputs without changing
+configuration ownership, runtime version authority or the public interface.

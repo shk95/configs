@@ -18,20 +18,25 @@ network, storage, boot, installation and Nix daemon policy. Homebrew app
 selection and lifecycle are also consumer-owned
 (`docs/policy/decisions/unixlike/public-environment-host-boundary.md`).
 
-The U1 provider delivery is tracked in PR #421. The earlier published head
-`a69dd589c98b698b5d381cc7d4f904f28be18403` passed its own Required checks
-and native Linux CI. PR #422 repaired the separate Windows fixture
-failure; post-merge CI at `1758fe98aff677b815fd28d14d53228e29bf5371`
-passed the native Windows suite (320 passed, zero failed, one skipped) and
-Required checks. The authorized provider delivery incorporates that required
-base update and needs its own current-head verification before Ready handoff.
-PR #421 records the delivered head and its checks; the earlier green run does
-not certify a changed head. Provider integration remains separately pending.
-The private `configs-hosts` and public `configs-host-template` candidates
-evaluate through explicit input overrides; their checked-in locks still point
-at earlier published refs. No candidate host has been activated. Current candidate
-evaluation and transfer evidence, with remaining build and publication gaps,
-are recorded in `docs/work/unixlike/provider-consumer-contract/report.md`.
+U1 provider PR #421 entered `dev` at
+`3d6d945f1a7c32428ae506586eb5b644129e5614`. Its delivered head and
+post-merge source passed their own Required checks and native Linux provider
+CI under upstream Nix 2.34.8; the delivered head also passed native macOS
+evaluation and the synthetic Darwin build. These are provider observations.
+
+The public template and private host consumer now publish one flake and lock,
+both selecting that same delivered provider SHA. Their merged sources passed
+their own evaluation CI, and source-bound checks of the immutable merged
+refs evaluated the public example and all seven private outputs without an
+input override. The private consumer's transferred safety/refusal fixtures
+passed. Its selected Darwin system built natively on macOS; the other six
+private outputs and public example have evaluation evidence only. No U1 host
+was activated. The connection evidence and durable refs are recorded in
+`docs/work/unixlike/provider-consumer-contract/report.md`.
+
+Provider integration and companion source delivery do not certify API release
+readiness or complete the full contract report. U2 Darwin capture, any future
+release-tag adoption and each host's rollout remain separate work.
 
 ## Historical pre-U1 state and host evidence
 
