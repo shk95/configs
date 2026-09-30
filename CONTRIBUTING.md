@@ -687,117 +687,118 @@ layouts, target selection or installation inputs.
 
 ## Windows changes
 
-Windows declarations, payloads, checks, and Apply logic live inside `windows/`
-and are validated on native Windows.
+Windows defaults, payloads, consumer generation, checks, capture and Apply
+live inside `windows/` and are validated on native Windows. Provider
+contributions and host-original edits have different destinations:
 
-1. Edit `windows/desired/manifest.json` for features, packages, and
-   managed-file policy. Every package, managed file, the font, and the terminal
-   delegation names exactly one declared feature; a new payload without one is
-   rejected when the manifest loads.
-2. Edit owned payloads below `windows/desired/files/`.
-3. Update PowerShell under `windows/src/` when reconciliation semantics change.
-4. Run native Windows tests and read-only host verification.
-5. Create a Windows release tag only after the required native evidence exists.
+1. Edit `windows/desired/manifest.json` for provider features, packages and
+   managed-file policy. Every package, managed file, font and terminal
+   delegation names one declared feature; the loader refuses missing ownership.
+2. Edit provider defaults below `windows/desired/files/`.
+3. Update PowerShell under `windows/src/` when domain semantics change.
+4. Run native Windows tests and read-only verification appropriate to the
+   changed behavior. Source tests, client observations and deployment are
+   separate evidence lanes.
+5. Create a Windows release tag only after required native evidence exists
+   and release is explicitly authorized.
 
-Native read-only verification is:
+Host selection and private settings belong in external environment/settings
+documents, not provider payloads. See [the host example](windows/examples/README.md)
+and [Windows usage](README.md#windows). Provider source, host originals,
+generated configuration and runtime state remain separate.
+
+### Contributor verification
 
 ```powershell
 .\windows\win-env.ps1 setup-dev
 .\windows\win-env.ps1 validate
 .\windows\win-env.ps1 test
-.\windows\win-env.ps1 check
 ```
 
-`win-env.ps1` is the domain's one entry point: each verb runs its target script
-and returns that script's exit status unchanged, so
-the evidence a verb produces is the script's; a command the script refuses
-ends the run at 1. CI and the hooks use the same public verbs.
+`win-env.ps1` forwards arguments and returns the target's status unchanged.
+`setup-dev` installs the toolchain declared in `windows/toolchain.json`,
+including the pinned Pester and Lua tools. A missing parser or Pester is
+reported as unavailable (69), or fails when native tooling is required.
+The suite discovers capture fixtures directly; runtime-specific cases may
+be skipped on a foreign host. The retired provider-publisher E2E opt-in is
+not part of the current capture workflow.
 
-A branch that has not been pushed yet can still reach a native Windows
-clone of this repository through the filesystem: in that clone, fetch the
-branch from the Unix-like session's main checkout — never from a linked
-worktree, whose `gitdir` file names a path Git for Windows cannot resolve —
-check it out, run the commands above under that host's own `pwsh`, and
-switch the clone back to its previous branch afterwards. Once the branch is
-pushed, `origin` is the transport and no path across the boundary is needed.
+An unpublished branch can be inspected in a separate native Windows clone:
+fetch it from the Unix-like session's primary checkout, not a linked worktree
+whose gitdir path Git for Windows cannot resolve, check it out, run that
+host's own commands and restore its prior branch afterwards. Once published,
+use origin as the transport. This does not make that verification clone
+the tracked source authoring workspace.
 
-`setup-dev.ps1` installs the contributor toolchain declared in
-`windows/toolchain.json`, which is also what CI installs from, so local Windows
-and CI use the same Pester discovery, scope, and assertion semantics and the
-same Lua compiler. Without it the checks still run: a source whose parser is
-absent is reported as unverified and the command exits 69, so Windows work
-remains pushable from a clone that has not installed anything.
+### Generate and check host intent
 
-Apply is a deployment, not verification, and requires an explicit request:
+Use the pinned clean provider checkout's own PowerShell 7 tools. Inspect
+returns its full source commit; set the external declaration's
+`provider.commit` to that exact value and review its explicit feature list
+and unit connections before generation:
 
 ```powershell
-.\windows\win-env.ps1 apply
+pwsh -NoProfile -File C:\provider\windows\win-env.ps1 inspect -SourceRoot C:\provider
+pwsh -NoProfile -File C:\provider\windows\win-env.ps1 export-selection -SourceRoot C:\provider -State C:\host\legacy-state.json
+pwsh -NoProfile -File C:\provider\windows\win-env.ps1 generate -SourceRoot C:\provider -Environment C:\host\environment.json -Output C:\generated\current
+pwsh -NoProfile -File C:\generated\current\windows\win-env.ps1 check -Generation C:\generated\current
 ```
 
-A host may deploy part of the manifest with `-Minimal`, `-Feature`, `-Add`, or
-`-All`; `README.md` describes the selection model. Selection is host state and
-is recorded in `state.json`, so a change to the feature model is a Windows
-desired-state change while a host's chosen set is not. Report which selection
-produced any `-Check` or Apply evidence, because a check that passed under a
-minimal selection says nothing about the features it excluded.
+Export is a read-only migration proposal, not a declaration write. With no
+State it proposes required core only. Resolve blockers such as retired WSL
+selection before authoring the environment. `.wslconfig`, personal layouts
+and layout hotkeys now belong to hosts; do not restore provider capture
+instructions for them.
 
-A change made in an application's own UI moves back into desired state with
-`.\windows\win-env.ps1 capture`, run from a linked task worktree on the
-Windows host. Run `bash tool/configs worktree new windows-capture-settings feature`
-from the primary clone to create it from `origin/dev` before writing. The primary clone
-may run `capture -WhatIf` to inspect the proposed diff and may resume a
-publish with no new payload change. A writing run in the primary clone
-refuses before switching branches, staging, or editing a payload. Capture
-reads the managed targets and writes only
-this repository's payloads — a JSON payload pretty-printed to this
-repository's two-space style — and ends at one confirmation before committing.
-Preview it with `-WhatIf` first. It restates the guards of
-`tool/version-control/commit` rather than calling it, including its branch
-rule: it refuses on `master`, on a dirty index, and on a payload that already
-has uncommitted changes, and never bypasses a hook. On `dev` it branches to
-`feature/windows-capture-<feature>` from a freshly fetched `origin/dev` (or a
-name given with `-Branch`) before it commits, reported in the plan before the
-`[y/N]`, so a capture run on `dev` never leaves a commit on that protected
-branch; on any other branch the commit stays there. Read its refusals rather
-than working around them, and read the hook output under its commit: Git for
-Windows runs the POSIX hooks natively, but a clone that has not set
-`core.hooksPath` runs none of them.
+Keep generation output outside the provider and host originals. Connected
+host documents supply a complete owned unit; they do not merge provider
+defaults. Generation validates selected parsers and binds provider source,
+host inputs and tools. Use the generated entry point with `-Generation`,
+whose declaration owns selection; legacy selector flags cannot accompany it.
+Report the actual source, selection and generation identity for Check
+evidence, including drift and unavailable observations. Core-only evidence
+does not certify excluded features.
 
-Add `-Publish` and that same confirmation pushes the branch, opens one pull
-request against `dev`, arms auto-merge and prints the pull-request URL. It is
-the Windows copy of `--publish` above and behaves the same way: it never waits
-on CI and never merges, a rejected push leaves every commit local on the named
-branch, and nothing retries with a bypass. It requires `gh` authenticated for
-github.com and `Allow auto-merge` on in the repository settings, and refuses
-before writing anything if either is missing, if a pull request from the same
-branch is open against another base, or if the remote already has the branch
-the run would create; a pull request already open against `dev` from that
-branch is armed unchanged. It pushes a branch rather than a commit, so it
-lists whatever the branch already carries beyond `dev` before the `[y/N]`.
-`-WhatIf -Publish` prints the branch, the title, the body and every command
-and writes nothing. Promotion to `master` and release remain the flows above.
+Apply changes a host and requires an explicit request. Generation,
+source adoption, Check and capture Save grant no deployment permission.
+When authorized, use the generated entry point's `apply -Generation`
+rather than mixing its declared selection with legacy runner flags.
 
-A capture's commit makes the host read as unchanged, so a rerun after a publish
-that did not finish captures nothing. With `-Publish` that run resumes the
-publish instead of stopping at "Nothing to capture": on a topic branch whose
-every commit beyond `origin/dev` has the subject capture gives its commits and
-changes only `windows/desired/**`, one confirmation (`Publish these commits?
-[y/N]`) pushes the branch unless `origin` already has it at that commit, opens
-or reuses the pull request against `dev`, and arms auto-merge. A branch whose
-push was rejected, one pushed by hand with no pull request, and one whose
-auto-merge was never armed all finish this way; run it on that branch. Any
-other commit on the branch refuses the run, so push it and open the pull
-request yourself. It never resumes on `dev` or `master`, and on `dev` it names
-a local `feature/windows-capture-<feature>` branch that still carries commits.
-The detached-HEAD, staged-change and uncommitted-payload refusals still apply.
-The resumed pull request says its commits came from an earlier run, and when
-nothing was pushed it says no pre-push hook ran rather than showing hook
-output.
+### Capture host originals
 
-The local test verb leaves out the Pester cases that run `capture.ps1` end to
-end in a child PowerShell, and says which ones it skipped. Set
-`WIN_ENV_E2E=1` to run them; the `windows-latest` CI job does, so the merge
-gate covers them and a local push stays quick.
+Run capture using the exact pinned provider and external environment.
+Select the relevant feature and enable the requested unit first; for example,
+select powertoys before capturing advancedPaste:
+
+```powershell
+pwsh -NoProfile -File C:\provider\windows\win-env.ps1 capture -SourceRoot C:\provider -Environment C:\host\environment.json -Unit advancedPaste -Document settings/paste.json
+```
+
+The default is a preview. Review the complete host-source document and first
+connection, then use `-Save` only when writing originals is intended.
+`-Save -WhatIf` retains a preview. First capture needs a relative Document;
+later capture uses its existing connection and cannot rename it. Multiple
+Unit/Document values align by order. Capture does not select or enable units.
+
+Every requested unit prepares before Save, with identities checked before
+writes. The first document precedes its connection. Read per-unit outcomes:
+a failed connection leaves an inert document, and an explicit matching retry
+can attach it; conflicting content refuses overwrite. Some units may already
+be completed when a later save fails. There is no multi-file atomicity or
+automatic rollback. Keep originals and review failures before retrying.
+
+Capture writes host originals only. It does not change app targets, provider
+defaults, generated output, runtime Apply state or Git. The removed
+Feature/Id/Branch/Publish capture parameters do not provide a publication
+path. Host commits and publication follow the host repository's workflow;
+provider contributions require a separately reviewed provider change.
+Do not copy private originals or host observations into public source.
+
+Regenerate after originals, selection, source or tools change. Old generation
+identity is deliberately stale; a failed generation preserves previous output
+but does not validate it against changed inputs. Check the newly generated
+configuration before any separately requested Apply. Documentation checks
+provide no new Windows native execution, Save or Apply evidence.
 
 ## Common changes
 
