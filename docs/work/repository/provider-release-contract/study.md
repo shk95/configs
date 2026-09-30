@@ -4,7 +4,42 @@ date: 2026-09-27
 scope: repository
 status: open
 
-## Current handoff: resume here, 2026-09-30
+## Current R-control pickup handoff, 2026-09-30
+
+Execution issue #451 assigns B as planner/continuation owner for a new dedicated
+repository lane. Fresh origin/dev and reviewed source at pickup are
+86abcea4eadd1e4403ec9025eedb7009daf54886. The linked worktree is
+`../configs-wt/release-controller-pickup`, branch
+`feature/repository-release-controller-pickup`. Completed preview and reclaimed
+workspaces are not resumed; original backups, patches, stashes and ignored
+handoffs are preserved. No competing open PR was found at pickup.
+
+Read the spec's newest concrete pickup before earlier entries. Recommended
+engineering choices are a constant master loader plus provenance-checked retained
+semantic bundle, bounded version-1 TSV/event reducer, job-level serialization with
+independent read/cancel inspection, exact actor/candidate/attempt binding and
+fixed payload remote reconciliation. Root accepted the direction within existing
+criteria and reviewed the concrete diff before planning publication. No new accepted
+governance, framework, private host gate, heartbeat or additional controller is
+proposed. Actual repository/Environment/PAT/receipt choices remain R-manual inputs.
+
+Primary GitHub documentation reviewed on this date documents API-version
+2026-03-10 dispatch response 200 with run identity, cancel acceptance 202,
+non-forced ref updates and head-matched PR merge without expected-base CAS. Full
+protection GET requires Administration read; root selected that demonstrated
+read capability for the one PAT design, with its shared selected-repository scope.
+Initial token assumptions do not prove it. Observe actual permissions/ref/secret
+behavior at authorized rollout; no Administration write or bypass is included.
+No operational credential or live write was used. The seven planned proof families exercise both permitted and
+refused progress using explicit fake transcripts and disposable local transports.
+
+All parent fourteen criteria stay pending. R-preview's separate report is done,
+with offline/synthetic limits; its references do not authenticate release evidence.
+Next: complete narrow document checks and publish this reviewed planning PR with
+fresh exact-head checks, then
+handoff Ready. Controller implementation awaits a separate explicit lane assignment.
+
+## Earlier planning handoff, 2026-09-30
 
 ### Parallel planning continuation and controller pickup
 

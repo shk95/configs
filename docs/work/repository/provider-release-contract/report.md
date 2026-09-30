@@ -3,6 +3,37 @@ kind: report
 spec: docs/work/repository/provider-release-contract/spec.md
 status: pending
 
+## R-control pickup planning, 2026-09-30
+
+The new issue #451 assigns B only this concrete pickup delivery. Reviewed accepted
+master/PAT/one-writer/stop/retry constraints against the delivered additive preview
+interface. Proposed retained approved-control provenance/bundle, strict bounded
+record grammar, endpoint/permission assertions, request/wakeup, exact owning
+run/attempt termination and intent/result reconciliation. Root reviewed the concrete
+pickup and its bounded follow-up corrections before planning publication.
+No controller source, private provisioning, credential,
+real dispatch/cancel/merge/tag or schedule is implemented or operated here.
+
+The independently completed R-preview report at
+`docs/work/repository/release-preview/report.md` verifies its seven synthetic
+offline criteria. It authenticates no live evidence or production bootstrap, and
+it does not complete any parent row: all fourteen remain pending. Parent AC10's
+earlier no-parser sentence describes that earlier planning checkpoint; current
+preview delivery is an additive bounded tool, not full parent release adoption.
+
+Read-only inspection on 2026-09-30 at dev
+86abcea4eadd1e4403ec9025eedb7009daf54886 confirmed master protection still requires
+Required checks, strict=false, administrator/conversation enforcement, zero
+required approvals and no force/deletion. This uses the session's existing
+operator authentication and is not evidence that the future dedicated PAT can
+read protections or mutate anything. Official endpoint review identifies
+Administration-read as a concrete gap for full protection inspection. Root reviewed
+the primary endpoint contract and selected that read permission for the design,
+including its common application across selected repositories. No token was issued;
+actual permission/Environment/protection proof remains R-manual. Document checks prove
+form only; fake-adapter fixtures, affected dispatch, native governance runtime,
+old-batch recovery and live permission/notification receipts remain pending.
+
 ## Planning delivery clarification, 2026-09-30
 
 Reviewed the latest controller/selection/template amendments and preserved the
