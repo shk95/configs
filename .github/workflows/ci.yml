@@ -130,26 +130,20 @@ jobs:
       WIN_ENV_E2E: "1"
     steps:
       - uses: actions/checkout@v7
-      - name: Validate desired state and test PowerShell
+      # INV repository/windows-ci-runtime-bound: hosted pwsh only acquires the
+      # Windows-owned exact artifact; management runs its explicit executable.
+      - name: Acquire declared Windows management runtime
+        id: runtime
         shell: pwsh
         run: |
-          pwsh -NoProfile -File .\windows\tool\setup-dev.ps1
+          & .\.github\scripts\prepare-windows-ci-runtime.ps1
           if ($LASTEXITCODE -ne 0) { exit $LASTEXITCODE }
-          winget install --id Zellij.Zellij --exact --source winget --accept-source-agreements --accept-package-agreements --disable-interactivity
-          if ($LASTEXITCODE -ne 0) { exit $LASTEXITCODE }
-          $machinePath = [Environment]::GetEnvironmentVariable('Path', 'Machine')
-          $userPath = [Environment]::GetEnvironmentVariable('Path', 'User')
-          $env:Path = "$machinePath;$userPath;$env:Path"
-          # No parse loop here: the Windows test implementation parses every script
-          # under windows/ before the suite runs, and a loop from the checkout
-          # root reached the Unix-like PowerShell payload
-          # (INV repository/no-cross-domain-dependency).
-          # Run each internal script in a child process: a terminating error
-          # becomes a nonzero status. Read it before another command can
-          # replace the result. The public entry point has separate fixtures.
-          pwsh -NoProfile -File .\windows\tool\check-desired-state.ps1
-          if ($LASTEXITCODE -ne 0) { exit $LASTEXITCODE }
-          pwsh -NoProfile -File .\windows\tool\test.ps1
+      - name: Verify native runtimes and run Windows management checks
+        shell: pwsh
+        env:
+          CONFIGS_CI_PWSH: ${{ steps.runtime.outputs.pwsh }}
+        run: |
+          & $env:CONFIGS_CI_PWSH -NoLogo -NoProfile -NonInteractive -File .\.github\scripts\windows-ci.ps1 -RuntimePath $env:CONFIGS_CI_PWSH
           if ($LASTEXITCODE -ne 0) { exit $LASTEXITCODE }
 
   # The job key stays `secrets`: the required-checks gate, its SECRETS_RESULT

@@ -81,6 +81,13 @@ fi
 
 has_scope() { printf '%s\n' "$scopes" | grep -qx "$1"; }
 
+# INV repository/windows-ci-runtime-bound: these repository-owned inputs are
+# executed by the native Windows job even when no workflow file changed.
+windows_runtime=0
+if grep -Eq '^\.github/(scripts/(WindowsCiRuntime\.psm1|(assert|prepare)-windows-ci-runtime\.ps1|windows-ci\.ps1)|tests/test-windows-ci-runtime\.ps1)$' "$paths"; then
+  windows_runtime=1
+fi
+
 # CI deliberately keeps platform payloads broad. No transitive dependency
 # model is claimed. Governance changes which can alter selection or gating
 # exercise every suite; unknown ownership is a failure, never an empty plan.
@@ -98,7 +105,7 @@ if [ "$stage" = ci ]; then
   else
     if has_scope repository; then echo repository:fixtures; fi
     if has_scope unixlike; then echo unixlike:suite; fi
-    if has_scope windows; then echo windows:suite; fi
+    if has_scope windows || [ "$windows_runtime" -eq 1 ]; then echo windows:suite; fi
   fi
   exit 0
 fi
@@ -113,6 +120,7 @@ while IFS="$tab" read -r status path || [ -n "${status:-}" ]; do
   [ -n "${path:-}" ] || continue
   case "$path" in
     .githooks/* | .github/workflows/* | tool/dispatch/* | tool/version-control/* \
+      | .github/scripts/WindowsCiRuntime.psm1 | .github/scripts/windows-ci.ps1 \
       | tool/configs | tool/setup | tool/doctor.sh | tool/worktree.sh | tool/work-session.sh)
       fixtures=1
       ;;
