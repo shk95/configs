@@ -1869,20 +1869,51 @@ $stream.Write($bytes, 0, $bytes.Length)
         }
     }
 
-    It 'INV windows/appx-fallback-bounded-and-isolated: executes the checked-in payload under Windows PowerShell 5.1 with the name carried as data' {
+    It 'INV windows/appx-fallback-bounded-and-isolated: executes the checked-in payload with controlled Appx responses and literal names' {
         InModuleScope WinEnv -Parameters @{ TestRoot = $TestDrive } {
             param($TestRoot)
-            if (-not $IsWindows) {
-                Set-ItResult -Skipped -Because 'this host has no Windows PowerShell; the windows-latest CI job runs this case'
-                return
-            }
+            # Exercise the real child transport and checked-in payload without
+            # depending on the runner's Appx service availability. A real query
+            # timing out is an undecidable observation, not a transport failure.
+            $executable = if ($IsWindows) { Resolve-AppxPowerShell51Path } else { (Get-Process -Id $PID).Path }
+            $queryFixture = @'
+function Get-AppxPackage {
+    [CmdletBinding()]
+    param([string] $Name)
+    if ($Name -eq 'WinEnv.Nonexistent.Appx.Control') { return }
+    if ($Name -eq 'WinEnv.Unavailable.Appx.Control') { throw 'fixture Appx query unavailable' }
+    [pscustomobject]@{ Name = $Name; Version = '1.2.3.4' }
+}
+'@
+            $fixturePath = Join-Path $TestRoot 'appx-query-fixture.ps1'
+            $payload = Get-Content -LiteralPath $script:AppxQueryPayloadPath -Raw -Encoding utf8
+            [IO.File]::WriteAllText($fixturePath, $queryFixture + "`r`n" + $payload, [Text.UTF8Encoding]::new($false))
 
-            $absent = @(Invoke-AppxPowerShell51Query -Name 'WinEnv.Nonexistent.Appx.Control')
+            $absent = @(Invoke-AppxPowerShell51Query -Name 'WinEnv.Nonexistent.Appx.Control' `
+                    -ExecutablePath $executable -PayloadPath $fixturePath)
             $absent.Count | Should -Be 0
+
+            $present = @(Invoke-AppxPowerShell51Query -Name 'Vendor.Terminal' `
+                    -ExecutablePath $executable -PayloadPath $fixturePath)
+            $present.Count | Should -Be 1
+            $present[0].Name | Should -BeExactly 'Vendor.Terminal'
+            $present[0].Version | Should -Be ([version]'1.2.3.4')
+
+            $probe = Get-WinEnvAppxPresence -Name 'WinEnv.Unavailable.Appx.Control' -Query {
+                param($Name)
+                Invoke-AppxPowerShell51Query -Name $Name -ExecutablePath $executable -PayloadPath $fixturePath
+            }
+            $probe.Usable | Should -Be $false
+            $probe.Present | Should -BeNullOrEmpty
+            $probe.Reason | Should -Match 'fixture Appx query unavailable'
 
             $sentinel = Join-Path $TestRoot 'name-was-executed.txt'
             $name = 'WinEnv.Nonexistent;[IO.File]::WriteAllText("' + $sentinel + '","unsafe")'
-            try { $null = @(Invoke-AppxPowerShell51Query -Name $name) } catch {}
+            $literal = @(Invoke-AppxPowerShell51Query -Name $name `
+                    -ExecutablePath $executable -PayloadPath $fixturePath)
+            $literal.Count | Should -Be 1
+            $literal[0].Name | Should -BeExactly $name
+            $literal[0].Version | Should -Be ([version]'1.2.3.4')
             Test-Path -LiteralPath $sentinel | Should -Be $false
         }
     }
