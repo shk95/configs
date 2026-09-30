@@ -35,3 +35,9 @@ the identity probe because its comparison included every PATH candidate. The
 probe now selects the first application candidate, matching native invocation
 resolution. This failed run is diagnostic evidence, not completed acceptance;
 the repaired head requires new native and selected-suite evidence.
+
+Run 36659343728 at 2f86e9b1cedcd51a593098a0036886d845984a20 then passed
+actual runtime selection and version/architecture refusal. Its empty-PATH
+negative fixture was invalid: PowerShell still discovers its own executable.
+The fixture now places a conflicting harmless application candidate first,
+testing refusal of a real resolution mismatch. This run also remains diagnostic.

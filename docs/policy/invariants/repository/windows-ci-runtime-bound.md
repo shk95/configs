@@ -9,7 +9,7 @@ enforced-by: fixture tool/version-control/test
 decision: docs/policy/decisions/repository/windows-ci-consumes-domain-runtime.md § Native Windows CI consumes domain-owned runtime identity
 
 Native fixtures cover matching and tampered archives, actual version and
-architecture, missing runtime/nested resolution, successful and failed or
+architecture, missing runtime/conflicting nested resolution, successful and failed or
 unavailable children, reader refusal, and separate inbox entry/bootstrap
 success and refusal. The final head's hosted Windows job supplies native
 execution evidence; local foreign checks never substitute for it.

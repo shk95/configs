@@ -55,8 +55,10 @@ try {
     Assert-Refused { Assert-CiManagementRuntime -RuntimePath (Join-Path $temporary 'missing.exe') -Declaration $record } 'Missing executable was accepted.'
     $savedPath = $env:Path
     try {
-        $env:Path = ''
-        Assert-Refused { Assert-CiManagementRuntime -RuntimePath $RuntimePath -Declaration $record } 'Missing nested runtime resolution was accepted.'
+        # PowerShell may discover its own executable even with empty PATH.
+        # An earlier harmless file candidate proves conflicting resolution.
+        $env:Path = "$temporary;$savedPath"
+        Assert-Refused { Assert-CiManagementRuntime -RuntimePath $RuntimePath -Declaration $record } 'Conflicting nested runtime resolution was accepted.'
     }
     finally { $env:Path = $savedPath }
 
