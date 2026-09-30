@@ -124,7 +124,7 @@ def main():
             scratch = Path(directory)
             extract(paths["bundle_repository"], assertion, scratch)
             # Only verified retained package imports its verified adjacent modules.
-            result = subprocess.run([sys.executable, "-I", "-B", str(scratch / ROOT / "main.py"),
+            result = subprocess.run([sys.executable, "-I", "-S", "-B", str(scratch / ROOT / "main.py"),
                                      str(paths["operating"]), str(paths["transcript"]),
                                      str(paths["request"]), str(paths["approved"])],
                                     timeout=15 * 60, capture_output=True,

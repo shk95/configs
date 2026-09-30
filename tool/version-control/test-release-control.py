@@ -260,6 +260,9 @@ class ControllerProof(unittest.TestCase):
         bad_tuple = base_events()[3]
         bad_tuple["evidence"] = [EVIDENCE[:-1]]
         self.refuse(parse, encode(bad_tuple), "event")
+        initial_release = event("candidate", **CANDIDATE)
+        initial_release["release"] = [["unixlike", "1.0.0", D, "-", H, H, X]]
+        parse(encode(initial_release), "event")
         with tempfile.TemporaryDirectory() as directory:
             root = Path(directory)
             events = sequence(base_events())
@@ -292,6 +295,11 @@ class ControllerProof(unittest.TestCase):
         self.refuse(adapter.authenticate, dict(transcript(), source={}), CONFIG, request("approve"), engine.candidate_digest(CANDIDATE))
         self.refuse(parse, encode({k: v for k, v in request().items() if k != "candidate"}), "request")
         self.refuse(adapter.authenticate, dict(transcript(), source={"status": "canceled"}), CONFIG, request("approve"), engine.candidate_digest(CANDIDATE))
+        major = dict(CANDIDATE, classification="major", **{"approval-required": "0"})
+        events = base_events(False); events[2].update(major)
+        merge = {"repository": "shk95/configs", "number": "7", "dev": D, "master": H, "tree": T}
+        with self.assertRaisesRegex(Refusal, "missing-exact-approval"):
+            engine.reduce(sequence(events + [effect("merge", merge)]), CONFIG, transcript(candidate=major))
 
     # INV repository/release-control-preview-only
     def test_ac4_writer_wait_termination_stop(self):
@@ -373,6 +381,15 @@ class ControllerProof(unittest.TestCase):
         state = engine.reduce(sequence(events), CONFIG, proof)
         self.assertEqual(state["stage"], "approved")
         self.assertEqual(state["operations"][X]["state"], "intent")
+        # Applied operating advancement reloads the parent for the next proposal.
+        events = base_events() + [effect("record", record), effect("record", record, "observed", observed)]
+        proof = transcript(); proof["observations"][X] = [observed]
+        state = engine.reduce(sequence(events), CONFIG, proof)
+        self.assertEqual(state["owner"]["operating-head"], T)
+        self.refuse(engine.reduce, sequence(copy.deepcopy(events) + [effect("record", record, op_id=Y)]), CONFIG, proof)
+        advanced = dict(record, parent=T, commit="e" * 40, event=Y)
+        state = engine.reduce(sequence(copy.deepcopy(events) + [effect("record", advanced, op_id=Y)]), CONFIG, proof)
+        self.assertEqual(state["operations"][Y]["state"], "intent")
 
     # INV repository/release-control-preview-only
     def test_ac6_immutable_publication_and_conflicts(self):
@@ -400,8 +417,11 @@ class ControllerProof(unittest.TestCase):
         release_rows = [["unixlike", "1.0.1", D, H, blob_identity(annotation.encode()), tag["object"], Y],
                         ["windows", "1.0.1", D, H, blob_identity(annotation.encode()), windows["object"], "d" * 64]]
         events = base_events(); events[2]["release"] = release_rows
+        publication_candidate = dict(CANDIDATE, versions="unixlike:1.0.1,windows:1.0.1")
+        events[2]["versions"] = publication_candidate["versions"]
+        events[4]["versions"] = publication_candidate["versions"]
         events.extend([effect("merge", merge), effect("merge", merge, "observed", matching)])
-        proof = transcript(); proof["observations"][X] = [matching]
+        proof = transcript(candidate=publication_candidate); proof["observations"][X] = [matching]
         for payload, object_id, ref_id in [(tag, Y, "c" * 64), (windows, "d" * 64, "e" * 64)]:
             observed = {"status": "present", "complete": True, "target": payload}
             events.extend([effect("tag-object", payload, op_id=object_id), effect("tag-object", payload, "observed", observed, object_id)])
@@ -427,6 +447,17 @@ class ControllerProof(unittest.TestCase):
         events.extend([effect("tag-ref", missing, "observed", observed, "e" * 64), event("complete")])
         completed = engine.reduce(sequence(events), CONFIG, proof)
         self.assertEqual(completed["stage"], "complete")
+        mismatched = base_events(); mismatched[2]["release"] = [["unixlike", "1.0.2", D, H, H, H, X]]
+        self.refuse(engine.reduce, sequence(mismatched), CONFIG, transcript())
+        # Stop/resume after promotion cannot reopen selection or lose partial success.
+        merge_only = base_events() + [effect("merge", merge), effect("merge", merge, "observed", matching), event("stop-observed", revision="1", reason="operator"), event("resume", actor="3", run="4", attempt="1", ref="refs/heads/master")]
+        proof = transcript(); proof["source"] += transcript("resume")["source"]
+        proof["observations"][X] = [matching]
+        resumed = engine.reduce(sequence(merge_only), CONFIG, proof)
+        self.assertEqual(resumed["stage"], "promoted")
+        self.assertTrue(resumed["frozen"])
+        self.refuse(engine.reduce, sequence(copy.deepcopy(merge_only) + [event("candidate", **dict(CANDIDATE, **{"candidate-generation": "2"}))]), CONFIG, proof)
+        self.refuse(engine.reduce, sequence(copy.deepcopy(merge_only) + [effect("merge", merge, op_id=Y)]), CONFIG, proof)
 
     # INV repository/release-control-preview-only
     # INV repository/fixture-git-isolation

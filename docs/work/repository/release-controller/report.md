@@ -40,6 +40,10 @@ repair is claimed. A new published-head successful native/dispatch run is requir
 Final hardening drops ambient credentials/execution overrides from child runtime
 environments and rejects contradictory duplicate/parent/head record histories;
 separate old-package fixtures refuse both missing evidence and missing approval.
+Final state review preserves publication freeze across stop/resume, reloads
+observed operating parents before later record intent and blocks stale parents,
+binds publication versions to the candidate, and suppresses ambient Python site
+packages. Narrow positive/refusal cases passed after those owning-source repairs.
 
 All seven child rows remain pending until published source-bound native Windows,
 affected dispatch and reviewer evidence are complete. Parent

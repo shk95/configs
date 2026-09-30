@@ -21,6 +21,8 @@ stable loader is the fixed verification boundary, not retained decision logic.
 Child processes receive only an explicit runtime environment allowlist; ambient
 credential variables and Python/Git execution overrides are not forwarded. This
 source fixture boundary does not establish actual CI Environment isolation.
+Python isolated/no-site mode admits only standard-library and manifest-verified
+adjacent modules, rather than ambient installed packages.
 
 Operating inputs have config/operating.tsv, control/stop.tsv, a contiguous
 history/NNNNNNNNNNNN.tsv sequence and current/index.tsv. Original bytes are

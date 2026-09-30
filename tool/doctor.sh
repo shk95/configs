@@ -100,7 +100,7 @@ fi
 # INV repository/release-control-preview-only
 if [ "$scope" = all ] || [ "$scope" = repository ]; then
   controller_python=${CONFIGS_CONTROLLER_PYTHON:-python3}
-  if "$controller_python" -I -c 'import sys,json,hashlib,subprocess; assert sys.version_info >= (3,9)' >/dev/null 2>&1; then
+  if "$controller_python" -I -S -c 'import sys,json,hashlib,subprocess; assert sys.version_info >= (3,9)' >/dev/null 2>&1; then
     ok "functional controller Python >=3.9"
   else
     warn "controller Python >=3.9 is unavailable" \

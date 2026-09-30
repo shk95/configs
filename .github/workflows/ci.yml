@@ -91,7 +91,7 @@ jobs:
       - name: Bind functional controller runtime
         shell: bash
         run: |
-          python -I -c 'import sys,json,hashlib,subprocess; assert sys.version_info >= (3,9)'
+          python -I -S -c 'import sys,json,hashlib,subprocess; assert sys.version_info >= (3,9)'
           echo 'CONFIGS_CONTROLLER_PYTHON=python' >>"$GITHUB_ENV"
       - name: Full repository fixtures
         if: runner.os == 'Linux'

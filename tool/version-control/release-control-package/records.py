@@ -156,8 +156,10 @@ def parse(data, kind):
             elif name == "release":
                 require(row[0] in {"unixlike", "windows", "common"}, "invalid-release-domain")
                 require(re.fullmatch(r"[1-9][0-9]*\.(0|[1-9][0-9]*)\.(0|[1-9][0-9]*)", row[1]) is not None, "invalid-version")
-                for value in row[2:6]:
+                for value in (row[2], row[4], row[5]):
                     identity(value, 40)
+                if row[3] != "-":
+                    identity(row[3], 40)
                 identity(row[6])
             else:
                 identity(row[0]); identity(row[2]); decimal(row[3])

@@ -38,7 +38,8 @@ def initial():
     return {"batch": "0" * 64, "generation": "0", "stage": "empty", "owner": None,
             "candidate": None, "evidence": [], "approval": None, "operations": {},
             "releases": [], "stopped": False, "sequence": "0", "control": None,
-            "retry": 0, "publication-payloads": {}, "stop-revision": "0"}
+            "retry": 0, "publication-payloads": {}, "stop-revision": "0",
+            "frozen": False, "publication-stage": None}
 
 
 def candidate_digest(candidate):
@@ -60,7 +61,7 @@ def reduce(events, config, transcript):
             require(state["stage"] == "empty", "duplicate-outstanding-batch")
             state.update(batch=event["batch"], stage="active", control=event["control"])
         elif kind == "claim":
-            require(state["stage"] not in {"empty", "stopped"}, "impossible-claim-stage")
+            require(not state["stopped"] and state["stage"] not in {"empty", "stopped"}, "impossible-claim-stage")
             require(decimal(event["generation"]) == decimal(state["generation"]) + 1, "wrong-owner-generation")
             require(event["repository"] == config["repository"] and event["workflow"] == config["workflow"], "wrong-owner-connection")
             if state["owner"]:
@@ -69,7 +70,7 @@ def reduce(events, config, transcript):
             state["owner"] = {key: event[key] for key in ("repository", "workflow", "run", "attempt", "job", "generation", "operating-head")}
             state["generation"] = event["generation"]
         elif kind == "candidate":
-            require(state["owner"] and state["stage"] in {"active", "candidate", "validated", "approved", "blocked", "waiting"}, "candidate-after-publication-or-unowned")
+            require(not state["frozen"] and not state["stopped"] and state["owner"] and state["stage"] in {"active", "candidate", "validated", "approved", "blocked", "waiting"}, "candidate-after-publication-or-unowned")
             old = state["candidate"]
             require(decimal(event["candidate-generation"]) == (decimal(old["candidate-generation"]) + 1 if old else 1), "wrong-candidate-generation")
             fields = ("candidate-generation", "dev", "master", "tree", "rules", "tool", "baselines", "selected", "classification", "versions", "migrations", "approval-required")
@@ -79,6 +80,8 @@ def reduce(events, config, transcript):
             state.update(evidence=[], approval=None, releases=event.get("release", []), stage="candidate")
             for row in state["releases"]:
                 require(row[2] == event["dev"], "release-source-candidate-mismatch")
+            if state["releases"]:
+                require(event["versions"] == ",".join(r[0] + ":" + r[1] for r in sorted(state["releases"])), "release-version-candidate-mismatch")
         elif kind == "evidence":
             candidate = state["candidate"]
             require(candidate and state["stage"] == "candidate", "impossible-evidence-stage")
@@ -119,8 +122,9 @@ def reduce(events, config, transcript):
                     require(previous["payload"] == payload and previous["kind"] == op_kind, "changed-duplicate-operation")
                     require(previous["state"] != "observed", "repeated-completed-operation")
                 if op_kind == "merge":
+                    require(not state["frozen"], "repeated-promotion")
                     require(state["stage"] in {"validated", "approved"}, "unvalidated-promotion")
-                    require(state["candidate"]["approval-required"] == "0" or state["approval"], "missing-exact-approval")
+                    require((state["candidate"]["approval-required"] == "0" and state["candidate"]["classification"] != "major") or state["approval"], "missing-exact-approval")
                     require(all(payload[k] == state["candidate"][k] for k in ("dev", "master", "tree")), "stale-merge-payload")
                 if op_kind.startswith("tag"):
                     require(state["stage"] in {"promoted", "publishing"}, "tag-before-verified-promotion")
@@ -136,6 +140,8 @@ def reduce(events, config, transcript):
                         state["publication-payloads"][payload["tag"]] = payload
                     else:
                         require(payload["tag"] in state["publication-payloads"], "tag-ref-before-fixed-object")
+                if op_kind == "record":
+                    require(payload["parent"] == state["owner"]["operating-head"], "stale-operating-parent")
                 state["operations"][op_id] = {"kind": op_kind, "payload": payload, "state": "intent", "observation": None, "phase": state["stage"]}
             else:
                 require(previous and previous["payload"] == payload and previous["kind"] == op_kind, "observation-without-matching-intent")
@@ -149,6 +155,12 @@ def reduce(events, config, transcript):
                     require(remote == remote_identity(op_kind, payload, observed), "observed-remote-identity-mismatch")
                 require(status == {"applied": "observed", "absent": "intent", "unknown": "unknown", "conflict": "conflict"}[result], "false-observation-result")
                 previous.update(state=status, observation=observed)
+                if result == "applied" and op_kind == "record":
+                    state["owner"]["operating-head"] = observed["target"]["head"]
+                if result == "applied" and op_kind == "merge":
+                    state.update(frozen=True, **{"publication-stage": "promoted"})
+                if result == "applied" and op_kind.startswith("tag"):
+                    state["publication-stage"] = "publishing"
                 if result in {"unknown", "conflict"}:
                     state["stage"] = "blocked"
                 elif not state["stopped"] and result == "applied" and op_kind == "merge":
@@ -158,7 +170,7 @@ def reduce(events, config, transcript):
                 elif not state["stopped"] and result == "absent":
                     state["stage"] = previous["phase"]
         elif kind == "retry-wait":
-            require(state["stage"] not in {"empty", "stopped"} and event["transient"] == "1", "nontransient-or-invalid-wait")
+            require(not state["stopped"] and state["stage"] not in {"empty", "stopped"} and event["transient"] == "1", "nontransient-or-invalid-wait")
             require(state["retry"] < 3 and decimal(event["minutes"]) == (5, 15, 30)[state["retry"]], "unbounded-retry")
             state["retry"] += 1
             state["stage"] = "waiting"
@@ -174,10 +186,15 @@ def reduce(events, config, transcript):
             request.update(mode="resume", candidate=candidate_digest(state["candidate"]))
             authenticate(transcript, config, request, request["candidate"])
             require(all(reconciled(o) for o in state["operations"].values()), "resume-before-reconciliation")
-            state.update(stopped=False, stage="candidate" if state["candidate"] else "active", evidence=[], approval=None)
+            if state["frozen"]:
+                state.update(stopped=False, stage=state["publication-stage"])
+            else:
+                state.update(stopped=False, stage="candidate" if state["candidate"] else "active", evidence=[], approval=None)
         elif kind == "complete":
             require(state["stage"] in {"active", "publishing", "promoted"}, "impossible-completion")
             require(all(o["state"] == "observed" for o in state["operations"].values()), "incomplete-operations")
+            if state["frozen"] and state["candidate"]["versions"] != "-":
+                require(state["releases"], "missing-publication-plan")
             if state["releases"]:
                 for release in state["releases"]:
                     require(any(o["kind"] == "tag-ref" and o["state"] == "observed" and o["payload"]["object"] == release[5] for o in state["operations"].values()), "incomplete-release")
