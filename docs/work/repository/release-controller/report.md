@@ -23,6 +23,12 @@ The local suite includes supplied fake API transcripts and disposable file-only
 repositories, without live transport. The full suite exercised inherited routing
 isolation and the retained R-preview/classifier. A normal temporary source update
 between independent fixture families does not provide an immutable-head CI claim.
+The first normal source commit hook reported controller fixtures unverified
+because its default Python shim was unavailable; the separate local suite used
+the discovered functional runtime and passed. Subsequent delivery commands bind
+that existing runtime explicitly. No failed/unverified check is recorded as pass.
+Self-review then strengthened observed remote ID grammar, actual merge-commit SHA
+binding and canonical synthetic annotated-tag object bytes, with narrow reruns.
 
 All seven child rows remain pending until published source-bound native Windows,
 affected dispatch and reviewer evidence are complete. Parent

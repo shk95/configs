@@ -93,8 +93,9 @@ def base_events(approved=True):
 
 def effect(kind, payload, status="intent", observation=None, op_id=X, generation="1"):
     obs = digest(canonical(observation)) if observation is not None else "-"
+    remote = adapter.remote_identity(kind, payload, observation) if status == "observed" else "-"
     return event("intent" if status == "intent" and observation is None else "observation",
-                 operation=[[op_id, kind, digest(canonical(payload)), generation, status, "-", obs]],
+                 operation=[[op_id, kind, digest(canonical(payload)), generation, status, remote, obs]],
                  payload=canonical(payload).decode("utf-8"))
 
 
@@ -295,7 +296,7 @@ class ControllerProof(unittest.TestCase):
         self.refuse(engine.reduce, sequence(events), CONFIG, dict(transcript(), owner=observed))
         # An accepted intent can finish after stop; retain observation, forbid next intent.
         merge = {"repository": "shk95/configs", "number": "7", "dev": D, "master": H, "tree": T}
-        applied = {"status": "present", "target": {"merged": True, "parents": [H, D], "tree": T, "source": D}, "complete": True}
+        applied = {"status": "present", "target": {"merged": True, "commit": "d" * 40, "parents": [H, D], "tree": T, "source": D}, "complete": True}
         events = base_events() + [effect("merge", merge), event("stop-observed", revision="1", reason="operator"), effect("merge", merge, "observed", applied)]
         proof = transcript(); proof["observations"][X] = [applied]
         stopped = engine.reduce(sequence(events), CONFIG, proof)
@@ -317,13 +318,18 @@ class ControllerProof(unittest.TestCase):
         conflict = copy.deepcopy(observed); conflict["target"]["history"][0]["index"] = X
         self.assertEqual(adapter.reconcile("record", record, conflict), "conflict")
         pr = {"repository": "shk95/configs", "head": "dev", "base": "master", "dev": D, "master": H, "body-operation": X}
-        self.assertEqual(adapter.reconcile("pr", pr, {"status": "present", "target": {"matches": [pr]}, "complete": True}), "applied")
+        self.assertEqual(adapter.reconcile("pr", pr, {"status": "present", "target": {"matches": [{"number": "7", "payload": pr}]}, "complete": True}), "applied")
         self.assertEqual(adapter.reconcile("pr", pr, {"status": "present", "target": {"matches": [pr, pr]}, "complete": True}), "conflict")
         merge = {"repository": "shk95/configs", "number": "7", "dev": D, "master": H, "tree": T}
-        matching = {"status": "present", "target": {"merged": True, "parents": [H, D], "tree": T, "source": D}, "complete": True}
+        matching = {"status": "present", "target": {"merged": True, "commit": "d" * 40, "parents": [H, D], "tree": T, "source": D}, "complete": True}
         self.assertEqual(adapter.reconcile("merge", merge, matching), "applied")
         wrong = copy.deepcopy(matching); wrong["target"]["parents"] = [T, D]
         self.assertEqual(adapter.reconcile("merge", merge, wrong), "conflict")
+        missing_sha = copy.deepcopy(matching); del missing_sha["target"]["commit"]
+        self.refuse(adapter.reconcile, "merge", merge, missing_sha)
+        wrong_remote = effect("merge", merge, "observed", matching)
+        wrong_remote["operation"][0][5] = "unsafe remote identity"
+        self.refuse(parse, encode(wrong_remote), "event")
         events = base_events(); intent = effect("merge", merge); events.append(intent)
         events.append(effect("merge", merge, "observed", matching))
         proof = transcript(); proof["observations"][X] = [matching]
@@ -349,9 +355,10 @@ class ControllerProof(unittest.TestCase):
 
     # INV repository/release-control-preview-only
     def test_ac6_immutable_publication_and_conflicts(self):
-        annotation = "fixed annotation"
+        annotation = "Fixed-Annotation: fixture\nSecond-Line: immutable\n"
         tag = {"repository": "shk95/configs", "tag": "unixlike-v1.0.1", "source": D,
                "annotation": annotation, "tagger-time": "2026-09-30T00:00:00Z", "tagger-name": "Fixture", "tagger-email": "fixture@example.invalid", "initial-run": "4", "object": H}
+        tag["object"] = adapter.tag_identity(tag)
         for kind, payload in [("tag-object", tag), ("tag-ref", {k: tag[k] for k in ("repository", "tag", "object")})]:
             matching = {"status": "present", "target": payload, "complete": True}
             self.assertEqual(adapter.reconcile(kind, payload, matching), "applied")
@@ -360,16 +367,17 @@ class ControllerProof(unittest.TestCase):
                 self.assertEqual(adapter.reconcile(kind, payload, dict(matching, target=changed)), "conflict")
             self.assertEqual(adapter.reconcile(kind, payload, {"status": "absent", "target": {}, "complete": True}), "absent")
         merge = {"repository": "shk95/configs", "number": "7", "dev": D, "master": H, "tree": T}
-        matching = {"status": "present", "target": {"merged": True, "parents": [H, D], "tree": T, "source": D}, "complete": True}
+        matching = {"status": "present", "target": {"merged": True, "commit": "d" * 40, "parents": [H, D], "tree": T, "source": D}, "complete": True}
         events = base_events(); events[2]["release"] = [["unixlike", "1.0.1", D, H, H, H, Y]]
         events.extend([effect("merge", merge), effect("merge", merge, "observed", matching)])
         proof = transcript(); proof["observations"][X] = [matching]
         events.append(event("candidate", **dict(CANDIDATE, **{"candidate-generation": "2"})))
         self.refuse(engine.reduce, sequence(events), CONFIG, proof)
         # Two domains: Unix-like tag is immutable success, Windows ref is missing.
-        windows = dict(tag, tag="windows-v1.0.1", object=T)
-        release_rows = [["unixlike", "1.0.1", D, H, blob_identity(annotation.encode()), H, Y],
-                        ["windows", "1.0.1", D, H, blob_identity(annotation.encode()), T, "d" * 64]]
+        windows = dict(tag, tag="windows-v1.0.1")
+        windows["object"] = adapter.tag_identity(windows)
+        release_rows = [["unixlike", "1.0.1", D, H, blob_identity(annotation.encode()), tag["object"], Y],
+                        ["windows", "1.0.1", D, H, blob_identity(annotation.encode()), windows["object"], "d" * 64]]
         events = base_events(); events[2]["release"] = release_rows
         events.extend([effect("merge", merge), effect("merge", merge, "observed", matching)])
         proof = transcript(); proof["observations"][X] = [matching]

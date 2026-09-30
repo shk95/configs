@@ -1,8 +1,9 @@
 """Pure API contract: construct requests and interpret supplied observations only."""
 # INV repository/release-control-preview-only
 import json
+import hashlib
 import re
-from datetime import datetime
+from datetime import datetime, timezone
 from records import Refusal, canonical, digest, identity, require
 
 API_VERSION = "2026-03-10"
@@ -35,9 +36,19 @@ PAYLOADS = {
 }
 
 
+def tag_identity(payload):
+    """Canonical synthetic annotation object; actual API byte behavior needs rollout proof."""
+    date = datetime.strptime(payload["tagger-time"], "%Y-%m-%dT%H:%M:%SZ").replace(tzinfo=timezone.utc)
+    require(not any(c in payload["tagger-name"] + payload["tagger-email"] for c in "<>\n\r\t"), "invalid-tagger-identity")
+    raw = ("object " + payload["source"] + "\ntype commit\ntag " + payload["tag"]
+           + "\ntagger " + payload["tagger-name"] + " <" + payload["tagger-email"]
+           + "> " + str(int(date.timestamp())) + " +0000\n\n" + payload["annotation"]).encode("utf-8")
+    return hashlib.sha1(b"tag " + str(len(raw)).encode("ascii") + b"\0" + raw).hexdigest()
+
+
 def operation(kind, payload):
     require(kind in PAYLOADS and isinstance(payload, dict) and set(payload) == PAYLOADS[kind], "invalid-operation-payload")
-    require(all(isinstance(v, str) and v and not any(c in v for c in "\r\n\t\0") for v in payload.values()), "invalid-payload-value")
+    require(all(isinstance(v, str) and v and not any(c in v for c in ("\r\t\0" if k == "annotation" else "\r\n\t\0")) for k, v in payload.items()), "invalid-payload-value")
     require(payload["repository"] == "shk95/configs" or kind == "record", "wrong-target-repository")
     require(re.fullmatch(r"[A-Za-z0-9_.-]+/[A-Za-z0-9_.-]+", payload["repository"]) is not None, "invalid-target-connection")
     for key in {"parent", "commit", "dev", "master", "tree", "source", "object"} & set(payload):
@@ -55,6 +66,7 @@ def operation(kind, payload):
             datetime.strptime(payload["tagger-time"], "%Y-%m-%dT%H:%M:%SZ")
         except ValueError:
             raise Refusal("invalid-tagger-time") from None
+        require(payload["object"] == tag_identity(payload), "tag-object-byte-identity-mismatch")
     prefix = "/repos/" + payload["repository"]
     method, path, body = {
         "record": ("PATCH", prefix + "/git/refs/heads/operations", {"sha": payload.get("commit"), "force": False}),
@@ -92,14 +104,34 @@ def reconcile(kind, payload, observation):
         return "conflict"
     if kind == "pr":
         require(set(target) == {"matches"} and isinstance(target["matches"], list), "invalid-pr-observation")
-        return "applied" if target["matches"] == [payload] else "conflict"
+        if len(target["matches"]) != 1:
+            return "conflict"
+        match = target["matches"][0]
+        require(isinstance(match, dict) and set(match) == {"number", "payload"}
+                and isinstance(match["number"], str) and re.fullmatch(r"[1-9][0-9]*", match["number"]), "missing-pr-identity")
+        return "applied" if match["payload"] == payload else "conflict"
     if kind == "merge":
-        require(set(target) == {"merged", "parents", "tree", "source"}, "invalid-merge-observation")
-        return "applied" if target == {"merged": True, "parents": [payload["master"], payload["dev"]], "tree": payload["tree"], "source": payload["dev"]} else "conflict"
+        require(set(target) == {"merged", "commit", "parents", "tree", "source"}, "invalid-merge-observation")
+        identity(target["commit"], 40)
+        return "applied" if target == {"merged": True, "commit": target["commit"], "parents": [payload["master"], payload["dev"]], "tree": payload["tree"], "source": payload["dev"]} else "conflict"
     if kind == "cancel":
         require(set(target) == {"run", "attempt", "workflow", "jobs", "latest-attempt", "terminal"}, "invalid-cancel-observation")
         return "applied" if target == {"run": payload["run"], "attempt": payload["attempt"], "workflow": payload["workflow"], "jobs": payload["jobs"], "latest-attempt": payload["attempt"], "terminal": True} else "unknown"
     return "applied" if target == payload else "conflict"
+
+
+def remote_identity(kind, payload, observation):
+    require(observation["status"] == "present", "missing-remote-identity")
+    target = observation["target"]
+    if kind == "record":
+        return payload["commit"]
+    if kind == "merge":
+        return target["commit"]
+    if kind == "pr":
+        return target["matches"][0]["number"]
+    if kind == "cancel":
+        return target["run"]
+    return target["object"]
 
 
 def authenticate(transcript, config, request, candidate_digest):

@@ -5,7 +5,7 @@ import os
 import subprocess
 from pathlib import Path
 from records import blob_identity, canonical, decimal, digest, encode, history, identifiers, parse, read, require
-from adapter import authenticate, document, operation, reconcile, takeover
+from adapter import authenticate, document, operation, reconcile, remote_identity, takeover
 
 
 def retained_replay(source_repository, control, master, candidate, baselines, evidence):
@@ -143,6 +143,8 @@ def reduce(events, config, transcript):
                 require(len(matches) == 1, "observation-digest-mismatch")
                 observed = matches[0]
                 result = reconcile(op_kind, payload, observed)
+                if result == "applied":
+                    require(remote == remote_identity(op_kind, payload, observed), "observed-remote-identity-mismatch")
                 require(status == {"applied": "observed", "absent": "intent", "unknown": "unknown", "conflict": "conflict"}[result], "false-observation-result")
                 previous.update(state=status, observation=observed)
                 if result in {"unknown", "conflict"}:

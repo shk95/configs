@@ -163,6 +163,9 @@ def parse(data, kind):
                 identity(row[0]); identity(row[2]); decimal(row[3])
                 require(row[1] in {"record", "pr", "merge", "tag-object", "tag-ref", "cancel"}, "unsupported-operation")
                 require(row[4] in {"intent", "observed", "unknown", "conflict"}, "invalid-operation-state")
+                require(row[5] == "-" or re.fullmatch(r"[0-9a-f]{40}|[1-9][0-9]*", row[5]) is not None, "invalid-remote-identity")
+                if row[6] != "-":
+                    identity(row[6])
     singles.update({name: values for name, values in repeated.items() if values})
     return singles
 
