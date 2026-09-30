@@ -1,7 +1,216 @@
 # Report: Unix-like provider and host customization
 kind: report
 spec: docs/work/unixlike/provider-consumer-contract/spec.md
-status: pending
+status: done
+
+## U2 independent representation review repair, 2026-10-01
+
+After strict dev update, Draft head455fff9 retained the source's native proof
+boundary but independent review reproduced Python/Nix acceptance divergence:
+a known profile name containing decoded NUL and dormant recovery data with an
+integer above signed64 were accepted by Python while Nix refused. The report
+and AC3 were reopened pending repair and fresh evidence. Earlier done/startup
+acceptance below records its original checkpoint; Ready handoff was withheld.
+
+The scoped repair shares one recursive Nix-representation guard between full
+host/configs documents (including dormant data) and managed unit validation.
+Decoded strings/object keys cannot contain NUL and every integer must fit
+signed64, with booleans treated separately. Strict raw-reader decoding retains
+its JSON/UTF-8/duplicate/surrogate/nonfinite rules. Unmanaged reader siblings are
+projected out before representation checking, so excluded runtime data does not
+silently become owned. Payload/module/unit declaration semantics remain
+unchanged; accepted native startup evidence stays bound to that same rendering.
+
+The repaired official wrapper and independent public consumers pass. Exact
+signed64 boundaries, decoded NUL known-name/key/nested/dormant refusals,
+positive/negative overflow, boolean/nested values and explicit fraction/exponent
+floats have matching Python/Nix results. The existing Nix raw scanner additionally
+refuses integer lexemes that its decoder would silently coerce to floats on
+negative overflow; syntax/deep evaluation and duplicate-key checks remain.
+Preview of unsupported managed inputs and dormant destinations, plus tampered
+Save, refuse without replacement. Ignored native-reader runtime siblings may
+contain Nix-unrepresentable values and stay excluded from saved/consumed data.
+
+The fresh package built and passed actual synthetic command-line preview/save
+and owned/dormant refusal checks. Its read-only native hotkey reader succeeds;
+readable Karabiner data retains the qualified obsolete-member refusal. The final
+source's independent selected host/default systems both built on native Darwin,
+and their actual default settings artifact remains byte-identical to the
+native-startup-tested payload. Module, unit declaration, defaults, legacy tool
+and payload registry bytes are unchanged from the native-proof source. The
+installed CLI was not rerun: its accepted startup gate stays bound to those
+unchanged rendered bytes. The representation repair closes AC3's review defect
+and restores report done; new-head CI/Ready remains a separate delivery gate.
+
+## U2 authorized native-host follow-up, 2026-09-30
+
+After the source checkpoint was delivered as Draft #458 at
+`26b6d390fe3869f7e0fe87004b44e11d64647d79`, the maintainer explicitly
+allowed direct native experiments on this Mac. Root reviewed the bounded direct
+runner as a replacement for SBPL execution in this experiment. The three
+historical sandbox loader failures below remain genuine; this follow-up makes
+no sandbox-isolation claim.
+
+The same literal-bound source-built executable ran twice with exactly synthetic
+HOME, XDG_CONFIG_HOME, XDG_DATA_HOME and TMPDIR. Old source and final tracked
+rendering each passed constructor → serializer → actual sync-save → strict
+reread, canonical equality and mode 600. Both outputs were equal and the existing
+task-owned canary was unchanged. The process had a 10-second child-PID timeout;
+all configuration/save/backup writes were inside the reviewed task root. No
+actual original Save, application target, daemon/GUI restart or activation was
+performed. This is complete native core migration evidence, separate from
+installed-tool startup and historical parser-only proof.
+
+Read-only installed bundle metadata remains 16.3.0. The absolute custom-system
+environment file is absent, so it supplies no decoded overrides. An installed
+CLI runner used that absence as a checked prerequisite, the synthetic selected
+profile Main from the exact rendering, and an otherwise empty environment with
+the same four synthetic roots. Root reviewed the exact source call path and
+runner before execution. Actual `karabiner_cli --version` reports 16.3.0;
+`karabiner_cli --select-profile Main` then starts the configuration monitor,
+loads the existing task-owned rendering and performs actual native sync-save.
+Both children exit 0 within the own-PID 10-second limit. The target was canonical,
+current-UID, regular and single-link before selection; afterward its inode was
+replaced, mode remained600, automatic backup existed and no temporary JSON
+remained. Its managed projection equals the final rendered source and the exact
+native strict parser reread equals the whole saved JSON. Source bytes and private
+actual originals' existence/bytes/mode remained unchanged; system environment
+remained absent before and after each child. No private values, paths or digests
+are published. This is actual installed native-tool startup and migration against
+a synthetic rendering; it does not claim daemon/GUI runtime, IPC isolation,
+application activation, or host adoption. On 2026-10-01 root reviewed the actual
+installed-tool startup, source identity, native replacement/strict reread and
+originals-unchanged evidence, and accepted the
+`generated-config-key-in-schema` manual gate finitely for this changed rendered
+artifact. The maintainer's explicit direct-Mac permission on 2026-09-30/10-01
+superseded the earlier installed-startup exclusion for this experiment only.
+No activation, real-original Save, daemon/GUI restart or installation authority
+is inferred.
+
+CI on source head `26b6d39` is successful, including Flake and Unix-like hosts,
+security/classification and Required checks. Any subsequent report/source head
+requires its own CI. The source/acceptance result remains an unintegrated Draft
+until strict-base update and final-head checks are complete.
+
+The latest acceptance table verifies AC3 with these qualified lanes and retains
+AC1/2/4–9's delivered-source boundaries. All parent criteria are verified, so the
+report is done. This accepts the stated provider work; API release, promotion to
+master, tags, companion pin adoption, host deployment and activation remain
+independent outcomes and require their own authorization/evidence. Historical
+pending/unavailable statements below describe their original checkpoints and
+are superseded only by this dated proof, not erased.
+
+## U2 implementation evidence checkpoint, 2026-09-30
+
+C retains pickup/base `7972d7eb4831b86ba55d15c05f520f1df9aebaf7` and
+reviewed plan revision `b292f1d72bdb7295af76742f2c0ae1735abcf623` in the
+same dedicated continuation tree. This section supersedes the pickup-only
+implementation description below; historical U1 results retain their boundaries.
+This is a source/evidence checkpoint, not completed AC3 or Ready acceptance.
+
+The versioned unit declaration supplies the finite Karabiner global/profiles and
+symbolic-hotkeys 60/61 boundaries to strict Nix document consumption and the
+shared Python projection/validation/check/apply/capture engine. Public per-unit
+options preserve selected-app/appSettings gates, defaults, independent enable
+and unread disabled documents. Host source replaces a unit whole; configs source
+retains dormant data and returns to defaults. The additive pinned command has
+explicit unit/document pairs and private consistency-bound preview proposals.
+Save prepares all inputs before writing, refuses stale/tampered/aliased paths,
+uses per-file atomic replacements and reports partial completion truthfully.
+Provider/store/original/application roots and canonical app-bundle ancestors are
+refused. Whole-parent arrays and optional absence have no identity merge or
+factory-reset interpretation.
+
+Root reviewed a permanent native adapter as the compatibility refinement:
+the module calls that adapter, sharing the new unit engine with capture. The
+legacy tool, project arguments, section markers, repository caller and its
+fixture dependencies remain byte-identical. Legacy publication is not claimed
+to consume host documents. The owning decision and invariant describe both
+routes and retain their historical enforcement locators until separate retirement.
+
+Evaluation and fixture evidence: the complete capture suite passes strict JSON
+(escaped-equivalent duplicate keys, nested scopes, strings/arrays, malformed and
+trailing data, UTF-8), Nix/Python fixture parity, ownership/default/source/disabled
+behavior, native-tested supported/refused empties, destination and app-bundle
+guards, stale input/target/tool identities, atomic rename failure and partial-save
+recovery, and synthetic adapter sibling preservation. Independent public
+`mkDarwin` consumers evaluate defaults, host/configs documents, per-unit disabled
+states, unselected apps and malformed/duplicate refusals. Their consumer-only
+locks leave provider inputs unchanged.
+
+Build evidence: `unixlike/tool/checks/darwin-capture-test --build` passed and
+realized the synthetic selected Darwin host system. An additional independent
+consumer run built both host-document and provider-default systems. Its actual
+default activation settings artifact is byte-identical to the corrected tracked
+Karabiner payload. The native `darwin-capture` package built successfully. These
+are working-source builds, not published final-head CI or host activation.
+
+Native parser evidence: Karabiner 16.3 source
+`9312593e1a3bf72b94c63c524ebabe2637442e8a`, with exact driver submodule
+`bdfcb459b2eaca8ccda680a73b0dc898f330f4bb`, was built on arm64 using clang
+21.1.8, actual vendored Duktape/console objects and Apple
+CoreFoundation/SystemConfiguration. A synthetic C++ wrapper invokes the strict
+core-configuration constructor and serializer. Upstream source remains unmodified;
+compiler compatibility flags suppress the vendored template/literal diagnostics.
+Old and corrected synthetic provider renderings yield byte-identical serialized
+output. The final tracked pretty rendering was separately parsed and its output
+is byte-identical to that corrected output. This supports removal of only the
+obsolete `ask_for_confirmation_before_quitting:false` member; unrelated defaults,
+including `check_for_updates:false`, remain. Constructor normalization caused
+explicit refusal of required/known profile empty shapes; supported empty nested
+modifiers, manipulator parameters and rule descriptions roundtrip. This is
+native parser evidence, not a complete migration-tool startup.
+
+Native reader observations are recorded only by sanitized validation category.
+The read-only hotkey reader is available and its supported projection agrees
+with provider defaults. The readable Karabiner source refuses an obsolete global
+member category; required-parent/type/nonempty categories pass. No observation
+was normalized or written to make it supported. Private values, paths, proposal
+contents and digests are excluded from this report.
+
+Migration startup remains unavailable. A task-owned source-built wrapper compiled
+with the actual unmodified Swift process-info dependency (locked Swift 5.10.1),
+Duktape and Apple frameworks. Reviewed literal synthetic HOME/XDG/TMP roots,
+deny-default sandbox, outside-canary probe and child-PID-only timeout precede
+constructor → actual sync-save → strict reread. The initial probe aborts in dyld
+before main (SIGABRT; CacheFinder/ProcessConfig frames), so neither canary probe
+nor migration executes. Two individually reviewed bounded loader hypotheses—an
+exact read-only dyld-cache directory and executable mapping of existing library
+roots/exact harness—produce the same failure. Profiles and attempts are retained;
+no further allowlist expansion or installed CLI/daemon/app execution occurred.
+The `generated-config-key-in-schema` manual startup gate remains pending for the
+changed rendered artifact. Parser equality and builds do not replace it.
+
+Additional read-only startup investigation: installed CLI 16.3.0's matching
+source `src/bin/cli/src/main.cpp` initializes dispatcher/runloop (319), loads
+absolute system custom environment (326), then selects the `--select-profile`
+branch (440). That branch calls the configuration monitor (30–43), which watches
+both the XDG user file and absolute system configuration. The file monitor emits
+initial state only after `FSEventStreamStart` succeeds; selection then calls the
+actual sync-save (48–54). Sync-save prepares XDG configuration/data directories,
+creates/removes automatic backups and writes the user JSON. The branch itself
+does not call daemon clients, GUI commands or defaults, but system environment
+may override supplied roots and FSEvents requires system services. Therefore an
+unsandboxed installed CLI with only synthetic environment variables cannot prove
+the original/system-read and IPC isolation boundary. No such command was run or
+proposed as safe. A separately reviewed native isolated test environment remains
+a prerequisite rather than a broadening of this host's failed sandbox profile.
+
+The working-source package also passed synthetic command-line preview/save with
+mode-600 proposal and native plutil JSON/XML/JSON equality. Its store-copy
+regression fixture proves concern ancestors cannot accidentally protect `/`,
+while concern, source-checkout and store boundaries stay protected. Hotkey
+standard parameters share declared signed-64-bit bounds in both validators,
+including out-of-range negative fixtures. Full repository version-control
+fixtures (including the historical capture route), provider API 71-case/external
+consumer fixtures, format, lint, payloads, composition, hygiene, invariants,
+provisional, work and design-citation checks pass for this checkpoint.
+
+No actual original Save, application-target write, installed app/daemon startup,
+restart, activation, Apply, deployment or integration was performed. A remaining
+startup evidence method requires separate review of a native isolated lab or
+another concretely bounded executable-start method; source preparation and an
+early Draft may proceed while this acceptance blocker remains visible.
 
 ## U2 pickup investigation, 2026-09-30
 
@@ -811,7 +1020,7 @@ host's rollout remain separate, and private activation is no provider gate.
 | AC1 | verified | Source-defined 25.11/25.11/6 defaults, explicit native preservation and retired-input migration guidance pass. Technical review accepts the latest amendment's bounded initial service/ZFS transition investigation; this is neither exhaustive equivalence nor private persistent-state migration. The repair adds explicit Darwin/HM override and unchanged-default coverage. |
 | AC9 | verified | Generated-data agreement, finite actual-constructor metadata coverage, source/lock binding, legacy/current comparison, format/module-data refusal and readiness three-state evidence pass. The repair refuses forbidden Darwin/WSL selections using effective finite metadata and confines omitted-default guidance to the selected constructor/layers; unknown constructors/module effects retain evaluation needs. The observed readiness unknown is not a host-preparation gate. |
 | AC2 | verified | Public typed inputs, defaults, module extensions, invalid/retired-field refusals, WSL wiring and finite metadata agreement pass. The ordinary native Darwin preference defect is repaired with leaf default priority and varied nested override/sibling-preservation checks. These tests cover the stated input/extension boundary, not all arbitrary host-module effects. |
-| AC3 | pending | U2 must implement the host-owned Darwin capture format, projection/ownership selection and preview/save path, then supply its selected evaluation/build/native-reader evidence. No capture result is certified here. |
+| AC3 | verified | Finite ownership/default/source/disabled semantics, repaired strict JSON/Nix representation parity, security/stale/atomic/partial fixtures, fresh packaged command/read observations and independent native consumer builds pass. Actual installed 16.3 startup/migration/strict reread and originals-unchanged proof remains bound to the unchanged rendered payload and root's finite manual gate acceptance. Historical SBPL failures remain separate; GUI/driver/input-event behavior, host adoption and activation are not inferred. |
 | AC4 | verified | Older `e11bd136` external connection and preserved consumer history establish the old pin; new independent locked consumers, native x86 synthetic realization, retired-input refusals and stable migration guidance establish the declared breaking adoption boundary. Older pins remain explicit choices; compatibility across that boundary is not promised. |
 | AC5 | verified | Delivered `c8b6e818` macOS 26.6.2/Nix 2.34.8 all-output evaluation and native aarch64-darwin synthetic public-constructor build establish the selected macOS 26 lane. Separate external Darwin API evaluation is qualified as evaluation. Older/later OS support and private runtime are not inferred. |
 | AC6 | verified | Initial delivered head `c8b6e818`/merge `3d6d945f` and repair head `24006536`/merge `c76752dc` passed their own CI with the explicit upstream Nix 2.34.8 assertion, evaluation and selected native builds; matching source-bound macOS evidence is recorded above. |

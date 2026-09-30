@@ -18,12 +18,26 @@ _: {
         exec ${pkgs.python3}/bin/python3 ${../../tool/standalone-readiness} "$@"
       '';
     };
+    capture = pkgs.writeShellApplication {
+      name = "darwin-capture";
+      runtimeInputs = [pkgs.python3];
+      text = ''
+        export CONFIGS_CAPTURE_CONCERN=${../programs/karabiner}
+        exec ${pkgs.python3}/bin/python3 ${../../tool/darwin-capture/engine.py} "$@"
+      '';
+    };
   in {
     packages = {
       contract-inspect = inspect;
       standalone-readiness = readiness;
+      darwin-capture = capture;
     };
     apps = {
+      darwin-capture = {
+        type = "app";
+        program = "${capture}/bin/darwin-capture";
+        meta.description = "Preview and save explicitly selected host Darwin settings documents";
+      };
       contract-inspect = {
         type = "app";
         program = "${inspect}/bin/contract-inspect";
