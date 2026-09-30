@@ -1,7 +1,7 @@
 # Report: disabled release controller and pure recovery fixtures
 kind: report
 spec: docs/work/repository/release-controller/spec.md
-status: pending
+status: done
 
 ## Pickup and proof boundary
 
@@ -57,9 +57,9 @@ Review also binds the ordinary Python diagnostic's exact newline to the host;
 this does not normalize supplied records or permit additional diagnostic content.
 This failed run does not verify the pending rows; a new source-head run is required.
 
-All seven child rows are reopened pending targeted source review repairs and
-fresh source/native/affected checks. The earlier proof below covers its tested
-cases only and does not establish the newly reviewed transitions. Parent
+All seven child rows are verified by repaired source-bound checks and targeted
+peer review below. Historical proof covers its tested cases only; the newly
+reviewed transitions are verified by the fresh repaired-head run. Parent
 `provider-release-contract/report.md` remains pending with zero
 of fourteen criteria verified; its domain/live obligations and R-manual and
 R-scheduled lanes are not replaced by this child. Delivered R-preview evidence
@@ -76,7 +76,7 @@ the recorded owner, and unknown classifications or migration flags could bypass
 approval. PR #456 returned to Draft before source edits, with no admission or
 auto-merge. These violate existing AC3–AC6; their repair changes no acceptance bar.
 Historical green runs are retained as partial tested evidence, not completion of
-these untested transitions. Fresh published-head proof and peer review are pending.
+these untested transitions. The repaired-head proof and independent peer review below close these child gaps.
 
 Root also clarified that this child reads one supplied synthetic outstanding-batch
 envelope only. A second batch after completion refuses. Actual global history
@@ -88,13 +88,55 @@ that source or live wiring. Parent remains 0/14 pending; scheduler remains separ
 
 | ID | State | Evidence |
 | --- | --- | --- |
-| AC1 | pending | `test_ac1_retained_full_bundle_and_old_gate`: exact checked-in manifest/source bytes, old approved synthetic merge extraction and retained preview/classifier execution pass. A newer weakened package cannot waive old evidence or approval; provenance/protocol/ancestor/tampered/incomplete closure refuse. Full operator path refuses old outstanding gates and permits safe no-op without changing caller HEAD. Review, policy and dispatch proof is recorded below. |
-| AC2 | pending | `test_ac2_original_bytes_and_projection`: literal Unicode/narrative escaping, strict original UTF-8/control/CRLF/NUL, fields/IDs/tuple arity, format/decimals, contiguous filenames/digest chain, unsafe paths, impossible transitions and index disagreement are covered by positive/refusal cases. Parsing never normalizes original record bytes. Shared review/policy/dispatch proof below. |
-| AC3 | pending | `test_ac3_requests_evidence_and_invalidation`: exact synthetic approval/check bindings pass; forged actor/run/attempt/ref/workflow/event, moved candidates, missing requests/checks, canceled pending approval and major classification with a waived approval flag refuse. Sources remain supplied fake observations. Shared review/policy/dispatch proof below. |
-| AC4 | pending | `test_ac4_writer_wait_termination_stop`: exact terminal writer/attempt/jobs permits takeover; acknowledgement alone, incomplete pages, changed attempt or timeout alone does not. Stop prevents claims/intents while allowing observation of an accepted merge. Operating parent reload and stale-parent refusal are also proved in AC5; frozen stop/resume is proved in AC6. Shared review/policy/dispatch proof below. |
-| AC5 | pending | `test_ac5_endpoint_reconciliation_gaps`: intent/payload identity, lost record response with advanced observed head, PR uniqueness, actual merge commit/parents/tree, tag/cancel identities and unknown-to-applied history pass. Contradictory/duplicate/incomplete histories, changed duplicate operations and stale later parents refuse; confirmed absence restores only the same operation and unknown state blocks further intents. Shared review/policy/dispatch proof below. |
-| AC6 | pending | `test_ac6_immutable_publication_and_conflicts`: canonical synthetic tag object/annotation bytes, fixed source/version/time/run and two-domain partial publication retain completed refs and propose only missing operations. Occupied conflicting tags, changed fixed payloads, unexpected parents/tree, missing completion, reopened candidate or duplicate promotion after stop/resume refuse. Shared review/policy/dispatch proof below. |
-| AC7 | pending | `test_ac7_inert_runtime_isolation_and_timing`: disabled quiet/no-op, enabled misconfiguration, bounded retry/opportunity simulation, duplicate signals, private summary/argument suppression, ambient credential/runtime-context removal, missing runtime 69/local versus failure/native, file-only Git isolation and no HTTP/candidate execution pass. Source workflow has inert preview only, master/event guard, independent inspector, fixed writer concurrency/timeouts and no secrets/Environment/schedule. Actual Linux and native Windows proof below. |
+| AC1 | verified | `test_ac1_retained_full_bundle_and_old_gate`: exact checked-in manifest/source bytes, old approved synthetic merge extraction and retained preview/classifier execution pass. A newer weakened package cannot waive old evidence or approval; provenance/protocol/ancestor/tampered/incomplete closure refuse. Full operator path refuses old outstanding gates and permits safe no-op without changing caller HEAD. Review, policy and dispatch proof is recorded below. |
+| AC2 | verified | `test_ac2_original_bytes_and_projection`: literal Unicode/narrative escaping, strict original UTF-8/control/CRLF/NUL, fields/IDs/tuple arity, format/decimals, contiguous filenames/digest chain, unsafe paths, impossible transitions and index disagreement are covered by positive/refusal cases. Parsing never normalizes original record bytes. Repaired source/native/review proof below. |
+| AC3 | verified | `test_ac3_requests_evidence_and_invalidation`: exact synthetic approval/check bindings pass; forged actor/run/attempt/ref/workflow/event, moved candidates, missing requests/checks, canceled pending approval and major classification or migration with a waived approval flag and unknown classification refuse; exact approved migration passes. Sources remain supplied fake observations. Repaired source/native/review proof below. |
+| AC4 | verified | `test_ac4_writer_wait_termination_stop`: exact terminal writer/attempt/jobs permits takeover; acknowledgement alone, incomplete pages, changed attempt or timeout alone does not. Stop prevents claims/intents while allowing observation of an accepted merge. Operating parent reload and stale-parent refusal are also proved in AC5; frozen stop/resume is proved in AC6. Repaired source/native/review proof below. |
+| AC5 | verified | `test_ac5_endpoint_reconciliation_gaps`: intent/payload identity, lost record response with advanced observed head, PR uniqueness, actual merge commit/parents/tree, tag/cancel identities and unknown-to-applied history pass. Exact owner cancellation passes; changed run/attempt/workflow/job refuses. Contradictory/duplicate/incomplete histories, changed duplicate operations and stale later parents refuse; unknown candidate effects fence replacement; confirmed-absent replaced effects become superseded with zero proposed intents. Stale old intent/observation refuses. Applied success is absorbing, and stale/forked complete history cannot lower the current operating head or erase success; exact known-chain advancement passes. Repaired source/native/review proof below. |
+| AC6 | verified | `test_ac6_immutable_publication_and_conflicts`: canonical synthetic tag object/annotation bytes, fixed source/version/time/run and two-domain partial publication retain completed refs and propose only missing operations. Refs require the exact observed object and canonical fixed operation ID; completed same/new-ID replay, including a later owner generation, refuses. Completion is terminal and a second batch refuses. Occupied conflicting tags, changed fixed payloads, unexpected parents/tree, missing completion, reopened candidate or duplicate promotion after stop/resume refuse. Repaired source/native/review proof below. |
+| AC7 | verified | `test_ac7_inert_runtime_isolation_and_timing`: disabled quiet/no-op, enabled misconfiguration, bounded retry/opportunity simulation, duplicate signals, private summary/argument suppression, ambient credential/runtime-context removal, missing runtime 69/local versus failure/native, file-only Git isolation and no HTTP/candidate execution pass. Source workflow has inert preview only, master/event guard, independent inspector, fixed writer concurrency/timeouts and no secrets/Environment/schedule. Actual Linux and native Windows proof below. |
+
+## Repaired source-bound checks and review
+
+[CI 36728254716](https://github.com/shk95/configs/actions/runs/36728254716)
+completed successfully for repaired source head
+1ef074975fb44a883243870562f110597593a753 on 2026-09-30. This head preserves
+repair commit 503605eb63fe98b1277a375ff54b8a41607a12ca and the integrator-required
+normal merge of dev 54b2b794e5a0aa867f264d1bff548eebe5cc4892, without rewriting.
+
+- [Linux full repository fixtures](https://github.com/shk95/configs/actions/runs/36728254716/job/109930735536)
+  pass all seven controller families and the inherited repository fixtures.
+- [Native Git-for-Windows fixtures](https://github.com/shk95/configs/actions/runs/36728254716/job/109930735569)
+  pass the retained preview and seven controller families with Git 2.55.0.windows.5,
+  explicitly acquired CPython 3.13.15 and REQUIRE_NATIVE=1. The native log records
+  seven tests and OK. Local macOS proof remains separate.
+- [Policy scans](https://github.com/shk95/configs/actions/runs/36728254716/job/109930735363),
+  [Unix-like checks](https://github.com/shk95/configs/actions/runs/36728254716/job/109930735476),
+  [Windows desired-state](https://github.com/shk95/configs/actions/runs/36728254716/job/109930735790),
+  classification and [Required checks](https://github.com/shk95/configs/actions/runs/36728254716/job/109934097885)
+  pass. Promotion policy is correctly skipped for this dev-target source PR.
+
+B reviewed the complete repair diff and production-grammar positive/refusal cases
+for the existing AC3–AC6 gaps, stale operating-head advancement and terminal
+single-envelope completion. D independently reviewed the stable engine SHA-256
+b6252602760e7452454c32c050391b8b2883a1d03046a4c4a9b01edb89ea023d:
+AC3–AC6 families passed 4/4 and seven independent parsed repro probes refused
+pending replacement, unobserved-object ref, observed-ref demotion, arbitrary ref
+ID, unrelated cancellation, unknown classification and a second envelope.
+D found no further blocker in the stale-head guard and fixture diff. Root reviewed
+the same source/guard and ran the official shell fixture entry at the merged
+source head with functional locked Python PATH: 7/7 passed. These peer probes are
+local synthetic review, distinct from the fresh native hosted evidence above.
+
+Normal explicit-runtime commit and push hooks passed, including repository
+fixtures, inherited Unix-like fixtures/evaluation/native Darwin build and audit
+with zero warnings/failures. No host activation or foreign build is claimed.
+The repaired package manifest SHA-256 is
+341e7175733f659b09fa21cba6a1d272fff3db6a7c37560d8c1be8a0d71aaa2f
+(Git blob 2e9f3e3eb8b8716fd2dbaf6a8ca00904f5cefcd4). The dated scope clarification
+content is 10eb00d93fa0c9aae2891964e65ed4dc80375dd7, separate from original pickup
+plan pins; AC1–AC7 text is unchanged. This certifies supplied pure preview source
+and fixtures only, not authenticated provenance or global/live wiring.
 
 ## Earlier source-bound checks and review
 
@@ -138,8 +180,8 @@ ordinary diagnostic newline failure do not supply acceptance evidence.
 
 The earlier report-only publication preserved its executing and fixture source
 bytes, and PR #456 recorded publication head 13d75eff51b464edc74fbc045c814c79f053f218
-and successful run 36716968971 separately. Targeted review now reopens that
-completion until repaired source-bound evidence is available. Child completion
+and successful run 36716968971 separately. Targeted review reopened that
+completion; the fresh repaired proof above supplies its child completion. Child completion
 can certify only pure preview
 source/fixtures; parent remains zero of fourteen verified and issue #451 stays
 open. Synthetic trust assertions are not production provenance authentication.
