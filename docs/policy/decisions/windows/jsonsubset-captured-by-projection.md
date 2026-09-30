@@ -6,6 +6,11 @@ status: accepted
 issue: #93
 source: 9f1e8ce:docs/status.md § A JsonSubset payload is captured by projection
 
+2026-09-30: Host-original capture follows the chosen source payload's object
+keys and whole array values under `host-capture-owns-originals.md`. The earlier
+per-element array projection and provider-write descriptions below remain
+historical; they are not the version1 host capture behavior.
+
 `JsonSubset` was refused outright, on the grounds that the payload is a subset
 of the host file by design and cannot be derived from it. Eleven of the eighteen
 PowerToys managed files declare that mode, including the root `settings.json`
