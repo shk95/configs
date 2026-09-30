@@ -5,7 +5,8 @@ try {
     $actualVersion = $PSVersionTable.PSVersion.ToString()
     $actualArchitecture = [Runtime.InteropServices.RuntimeInformation]::ProcessArchitecture.ToString().ToLowerInvariant()
     $actualExecutable = (Get-Process -Id $PID).Path
-    $resolvedExecutable = (Get-Command pwsh.exe -CommandType Application -ErrorAction Stop).Source
+    $resolvedExecutable = (Get-Command pwsh.exe -CommandType Application -ErrorAction Stop |
+        Select-Object -First 1).Source
     if ($actualVersion -cne $Version -or $actualArchitecture -cne $Architecture -or
         -not [string]::Equals($actualExecutable, $Executable, [StringComparison]::OrdinalIgnoreCase) -or
         -not [string]::Equals($resolvedExecutable, $Executable, [StringComparison]::OrdinalIgnoreCase)) {

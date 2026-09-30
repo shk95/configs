@@ -28,3 +28,10 @@ whitespace checks pass. Actual dispatch selects repository, Unix-like and
 Windows suites because shared workflow input changed. No configuration source,
 Windows selector/reader, public operator interface or B preview registration
 was changed. Native evidence is pending and every acceptance row remains pending.
+
+The first native run (36659135714, head bc66c84634ba37fac77c72d0734def074e69bdcb)
+verified the archive and actually executed management 7.6.6/x64, then refused
+the identity probe because its comparison included every PATH candidate. The
+probe now selects the first application candidate, matching native invocation
+resolution. This failed run is diagnostic evidence, not completed acceptance;
+the repaired head requires new native and selected-suite evidence.
