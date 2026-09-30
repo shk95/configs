@@ -1,0 +1,123 @@
+#!/bin/sh
+# The reader uses fetched JSON only: no candidate Nix evaluation or host edit.
+set -eu
+. "$(CDPATH= cd -- "$(dirname -- "$0")" && pwd)/prerequisite"
+require_command nix jq
+cd "$(CDPATH= cd -- "$(dirname -- "$0")/../../.." && pwd)"
+# The reader itself never evaluates the candidate source passed for inspection.
+python_cmd=$(python_for_test)
+PATH=$(dirname "$python_cmd"):$PATH
+export PATH
+reader=$PWD/unixlike/tool/contract-inspect
+scratch=$(mktemp -d)
+trap 'rm -rf "$scratch"' EXIT
+mkdir -p "$scratch/current/api" "$scratch/candidate/api"
+cp unixlike/api/contract.json "$scratch/candidate/api/contract.json"
+jq '.entryPoints.mkHome.inputs.environment.defaults.wsl = true
+    | .compatibilityDefaults.homeManager = "24.05"' \
+  unixlike/api/contract.json > "$scratch/current/api/contract.json"
+
+fixture_user=example
+fixture_home_root=/home
+fixture_home="$fixture_home_root/$fixture_user"
+cat > "$scratch/omitted.json" <<EOF
+{"constructor":"mkHome","inputs":{"system":"x86_64-linux","user":"$fixture_user","homeDirectory":"$fixture_home","git":{"name":"Private Name","email":"private@example.invalid"}},"homeModules":true}
+EOF
+cat > "$scratch/explicit.json" <<EOF
+{"constructor":"mkHome","inputs":{"system":"x86_64-linux","user":"$fixture_user","homeDirectory":"$fixture_home","git":{"name":"Private Name","email":"private@example.invalid"},"environment":{"wsl":false,"graphical":false}}}
+EOF
+cat > "$scratch/legacy.json" <<EOF
+{"constructor":"mkHome","inputs":{"system":"x86_64-linux","user":"$fixture_user","homeDirectory":"$fixture_home","git":{"name":"Private Name","email":"private@example.invalid"},"host":{"kind":"wsl"}}}
+EOF
+
+"$reader" --candidate-tree "$scratch/candidate" --current-tree "$scratch/current" \
+  --host-declaration "$scratch/omitted.json" --candidate-ref example-revision > "$scratch/omitted-result.json"
+jq -e '.comparison == "current-to-candidate"
+  and .candidate.sourceRefProvidedByCaller == "example-revision"
+  and (.defaultChanges | index("entryPoints.mkHome.inputs.environment.defaults.wsl"))
+  and (.host.omittedDefaultChanges | index("entryPoints.mkHome.inputs.environment.defaults.wsl"))
+  and (.host.omittedDefaultChanges | index("compatibilityDefaults.homeManager"))
+  and .host.declaredInputCompatibility == "compatible"
+  and (.host.candidateEvaluationNeeds | length) > 0' "$scratch/omitted-result.json" >/dev/null
+if grep -Fq 'private@example.invalid' "$scratch/omitted-result.json"; then
+  echo 'contract-inspect leaked host input values' >&2
+  exit 1
+fi
+
+"$reader" --candidate-tree "$scratch/candidate" --current-tree "$scratch/current" \
+  --host-declaration "$scratch/explicit.json" > "$scratch/explicit-result.json"
+jq -e '(.host.omittedDefaultChanges | index("entryPoints.mkHome.inputs.environment.defaults.wsl")) == null
+  and (.host.omittedDefaultChanges | index("compatibilityDefaults.homeManager"))' \
+  "$scratch/explicit-result.json" >/dev/null
+
+"$reader" --candidate-tree "$scratch/candidate" --legacy \
+  --host-declaration "$scratch/legacy.json" > "$scratch/legacy-result.json"
+jq -e '.comparison == "readerless-legacy"
+  and .host.declaredInputCompatibility == "requires-edits"
+  and (.host.requiredHostEdits | index("remove or migrate unsupported input host"))
+  and (.host.availableMigrationGuidance | any(.id == "mkHome-explicit-environment"))' \
+  "$scratch/legacy-result.json" >/dev/null
+
+jq '.inputs.environment = {wsl: true, graphical: true}' \
+  "$scratch/explicit.json" > "$scratch/conflict.json"
+"$reader" --candidate-tree "$scratch/candidate" \
+  --host-declaration "$scratch/conflict.json" > "$scratch/conflict-result.json"
+jq -e '.host.declaredInputCompatibility == "requires-edits"
+  and (.host.requiredHostEdits | index("environment.graphical conflicts with environment.wsl"))' \
+  "$scratch/conflict-result.json" >/dev/null
+
+jq '.inputs.homeModules = [{"home.sessionVariables.SECRET": "leak"}]' \
+  "$scratch/explicit.json" > "$scratch/module-data.json"
+if "$reader" --candidate-tree "$scratch/candidate" \
+  --host-declaration "$scratch/module-data.json" > "$scratch/module-data-result.json" 2>&1; then
+  echo 'contract-inspect accepted serialized module contents' >&2
+  exit 1
+fi
+grep -Fq 'module contents cannot appear' "$scratch/module-data-result.json"
+
+mkdir -p "$scratch/source/unixlike/api"
+cp unixlike/api/contract.json "$scratch/source/unixlike/api/contract.json"
+nar_hash=$(nix hash path --type sha256 --sri "$scratch/source")
+jq -n --arg nar "$nar_hash" \
+  '{nodes:{root:{inputs:{configs:"configs"}},configs:{locked:{dir:"unixlike",narHash:$nar,rev:"0123456789abcdef0123456789abcdef01234567"}}}}' \
+  > "$scratch/flake.lock"
+"$reader" --candidate-tree "$scratch/source/unixlike" \
+  --candidate-source-root "$scratch/source" --candidate-lock "$scratch/flake.lock" \
+  > "$scratch/locked-result.json"
+jq -e --arg nar "$nar_hash" '.candidate.lockVerified == true
+  and .candidate.narHash == $nar
+  and .candidate.revisionFromLock == "0123456789abcdef0123456789abcdef01234567"' \
+  "$scratch/locked-result.json" >/dev/null
+jq '.nodes.configs.locked.narHash = "sha256-wrong"' "$scratch/flake.lock" > "$scratch/wrong.lock"
+if "$reader" --candidate-tree "$scratch/source/unixlike" \
+  --candidate-source-root "$scratch/source" --candidate-lock "$scratch/wrong.lock" \
+  > "$scratch/wrong-result.json" 2>&1; then
+  echo 'contract-inspect accepted a source tree outside the lock' >&2
+  exit 1
+fi
+grep -Fq 'source tree NAR hash differs' "$scratch/wrong-result.json"
+
+mkdir -p "$scratch/current-source/unixlike/api"
+cp "$scratch/current/api/contract.json" "$scratch/current-source/unixlike/api/contract.json"
+current_nar=$(nix hash path --type sha256 --sri "$scratch/current-source")
+jq -n --arg nar "$current_nar" \
+  '{nodes:{root:{inputs:{configs:"configs"}},configs:{locked:{dir:"unixlike",narHash:$nar,rev:"abcdef0123456789abcdef0123456789abcdef01"}}}}' \
+  > "$scratch/current.lock"
+"$reader" --candidate-tree "$scratch/source/unixlike" \
+  --candidate-source-root "$scratch/source" --candidate-lock "$scratch/flake.lock" \
+  --current-tree "$scratch/current-source/unixlike" \
+  --current-source-root "$scratch/current-source" --current-lock "$scratch/current.lock" \
+  > "$scratch/both-locked-result.json"
+jq -e --arg nar "$current_nar" '.comparison == "current-to-candidate"
+  and .current.lockVerified == true and .current.narHash == $nar
+  and (.defaultChanges | index("entryPoints.mkHome.inputs.environment.defaults.wsl"))' \
+  "$scratch/both-locked-result.json" >/dev/null
+
+jq '.formatVersion = 77' unixlike/api/contract.json > "$scratch/candidate/api/contract.json"
+if "$reader" --candidate-tree "$scratch/candidate" > "$scratch/invalid-result.json" 2>&1; then
+  echo 'contract-inspect accepted an unknown format' >&2
+  exit 1
+fi
+grep -Fq 'unsupported contract formatVersion' "$scratch/invalid-result.json"
+
+printf '%s\n' '✓ versioned contract inspection, legacy edits, omitted defaults and format refusal'

@@ -2,5 +2,5 @@
 # from the surrounding host, but still need the zone declared here. The Darwin
 # layer declares the same zone in modules/platforms/defaults.nix.
 _: {
-  modules.nixos.shared.time.timeZone = "Asia/Seoul";
+  modules.nixos.environment.time.timeZone = "Asia/Seoul";
 }

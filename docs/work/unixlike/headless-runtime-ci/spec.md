@@ -51,7 +51,7 @@ coverage than a runtime test.
 
 ## Increments
 
-1. Add the flake check, register it on `INV unixlike/headless-key-only`, record
+1. Add the flake check, register it on `unixlike/headless-key-only`, record
    its current state and verify the booted runtime criterion.
 
 ## Acceptance
