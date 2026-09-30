@@ -1,7 +1,7 @@
 # Report: Windows host-owned configuration
 kind: report
 spec: docs/work/windows/host-consumer-contract/spec.md
-status: pending
+status: done
 
 ## W2 source-run native evidence, 2026-09-30
 
@@ -58,9 +58,11 @@ Save occurred.
 | Local generation round trip | Native fixtures and synthetic LTSC Save/regeneration cover matching complete settings and stale original refusal. |
 | Publication coupling removal | Windows helpers/public parameters and invariant are retired; caller/invariant fixtures and separately integrated repository historical-reference correction supply the owned boundary. |
 
-Whole acceptance rows remain pending until all required obligations and evidence
-lanes are assessed. W2 partial delivery does not imply domain API release,
-actual deployment, host activation or publication of private originals.
+The acceptance table records the completed source-bound technical obligations
+using the separately qualified W1/W2 runs. A newer publishing head still requires
+its own Required/native/client delivery gates in the PR before Ready. Technical
+completion does not imply domain API release, actual deployment, host activation
+or publication of private originals.
 
 ## W2 source implementation, 2026-09-30
 
@@ -115,8 +117,8 @@ and separate LTSC observations are recorded above. Any newer publishing head
 requires its own current-head native CI and client assertions in the PR.
 Client Save validation is limited to synthetic task-temporary inputs,
 with no real host-original Save or Apply. Earlier W1 results do not supply W2
-proof. Whole acceptance rows remain pending until their complete obligations and
-evidence lanes have been evaluated.
+proof. The completed source-run obligations are assessed in the acceptance table;
+the final publishing head's own delivery evidence belongs in the PR.
 
 ## W2 pickup, 2026-09-30
 
@@ -131,7 +133,8 @@ W2 source-run native fixtures/client evidence are recorded above;
 final publishing-head proof remains pending.
 Earlier W1 source/native/client observations are not W2 capture proof. No actual
 Apply, installation, activation or real host-original save is authorized. Whole
-AC rows remain pending until their complete required obligations are evaluated.
+AC rows were pending at pickup; their source-bound technical assessment is now
+recorded below, with final publishing-head delivery evidence still required.
 
 ## W1 source implementation, 2026-09-30
 
@@ -365,12 +368,31 @@ rows stay pending and no implementation or live rollout is certified.
 
 ## Acceptance
 
+The earlier W1 publishing-head handoff is also exact source-bound evidence:
+[PR #437](https://github.com/shk95/configs/pull/437) records
+`b92163d621865058b8af061f70fa7697b9c4bcb9`,
+[CI 36668463806](https://github.com/shk95/configs/actions/runs/36668463806)
+with actual management 7.6.6/x64 and separate inbox 5.1, and 399/0/1 native
+Pester results. Its seven LTSC generation/Check cases assert that same SHA,
+source cleanliness, prior-result/stale refusal and unchanged targets; generation
+returned 0 and Check returned drift 2 without unverified/unavailable observations.
+This supplements the separately recorded W1 source-run proof above and does not
+become W2 proof. W2 capture proof is independently bound to `e2c1cc73` above.
+
 | ID | State | Evidence |
 | --- | --- | --- |
-| AC1 | pending | |
-| AC7 | pending | |
-| AC2 | pending | |
-| AC3 | pending | |
-| AC4 | pending | |
-| AC5 | pending | |
-| AC6 | pending | |
+| AC1 | verified | Review and native Generation fixtures verify explicit core/empty selection, each offered dependency closure, invalid/duplicate input and future optional features remaining unselected. W1 source-run proof `d5c1ae7192af1f41458a0b21642a5f37f96aa8a7` and Ready head `b92163d621865058b8af061f70fa7697b9c4bcb9` are separate from W2 `e2c1cc7307780235ca5ebc13b30f5848e31d183c` / CI 36675793019, which retains these native cases. Selection proof supplies no installation or activation permission. |
+| AC7 | verified | Reviewed Windows-owned consumer-format data and source-bound inspect expose exact provider commit, supported formats, actual feature/unit/ownership/client data and the explicit local-clone candidate/example connection route. Native Generation/public CLI fixtures cover unknown formats, older consumers, explicit connections and consistency with generated behavior; W2 native capture CLI consumes the same contract and refuses legacy publication. Evidence is qualified to W1 `b92163d621865058b8af061f70fa7697b9c4bcb9` and W2 `e2c1cc7307780235ca5ebc13b30f5848e31d183c`, not a domain API release, release reader or private template adoption. |
+| AC2 | verified | W1 reviewed/native fixed source/input/format/tool identities, whole-unit payload selection, temporary generation publication, first/repeated failure preservation, stale/refused Check and target-compatible pre-write fixture Apply guards; success and partial-failure records are distinct. W2 native and synthetic LTSC Save/regeneration at `e2c1cc7307780235ca5ebc13b30f5848e31d183c` prove complete-document round trip and stale-original refusal. Historical W1 proof retains its own SHA. Actual host Apply and convergence are not claimed. |
+| AC3 | verified | W2 `e2c1cc7307780235ca5ebc13b30f5848e31d183c` native capture fixtures verify selected/enabled/no-drift first transfer, chosen-source object projection/whole arrays, later host settings independent of provider additions, incompatible/path/identity refusal, prepare-all and recoverable per-file save/retry/conflict outcomes. Six exact-head LTSC real previews preserve provider/app/original targets; only provider-derived synthetic task-temporary content is Saved and regenerated. Excluded runtime, retired units, generated Terminal profiles and foreign PowerShell blocks stay outside ownership. No real private Save or provider publication is claimed. |
+| AC4 | verified | W1 reviewed/native disabled/deselected units retain originals and installed state, validate on reselection and stop hook management; chosen projection preserves unmanaged keys, generated Terminal profiles and external PowerShell blocks. W2 source-bound native/read-only client capture evidence preserves app targets and excluded content. W1 `b92163d621865058b8af061f70fa7697b9c4bcb9` and W2 `e2c1cc7307780235ca5ebc13b30f5848e31d183c` remain distinct proof revisions. Apply is separately authorized, not implicitly performed. |
+| AC5 | verified | Reviewed contract names LTSC 21H2/x64/build19044, excludes terminal delegation visibly and excludes Windows11 support. W1 source-run native client generation/Check covers core, disabled profile, font, zellij, terminal, wezterm and powertoys at actual19044.7725: generation0 / Check drift2, no unavailable or known-limit observation; this is nonconvergence, not Apply or GUI handoff. W2 `e2c1cc7307780235ca5ebc13b30f5848e31d183c` exact LTSC build/runtime/app inventory and six actual capture projections pass with unchanged targets. App versions and capability limits are recorded above; hosted Server fixtures never substitute for client-only proof. |
+| AC6 | verified | Reviewed Windows exact-runtime declaration and separately merged repository wiring are exercised in W2 CI 36675793019 at `e2c1cc7307780235ca5ebc13b30f5848e31d183c`: actual management PowerShell7.6.6/x64/executable identity and separate native inbox5.1 entry/bootstrap fixtures. LTSC separately asserts actual parent/selected child7.6.6/64-bit identity and observes inbox5.1.19041.7725. W1 runtime evidence retains its own revision. Verification baseline does not change the consumer minimum or authorize installation. |
+
+These rows answer the actual AC1–AC7 against reviewed, immutable source-run
+proof; there is no AC8. The report's done status records worker technical
+completion, not GitHub Ready/integration or maintainer acceptance of deployment.
+The final publishing head must still pass its own Required checks, actual native
+runtime and applicable LTSC assertions, recorded in the PR without recursively
+changing this report's head. Domain API release, repository release-controller
+operation, host activation and real host-original Save/Apply remain separate.
