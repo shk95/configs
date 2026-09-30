@@ -18,6 +18,10 @@ modules plus retained release-preview, its AWK engine/rules and classifier are
 included. The manifest itself is bound by the assertion's digest. The current
 stable loader is the fixed verification boundary, not retained decision logic.
 
+Child processes receive only an explicit runtime environment allowlist; ambient
+credential variables and Python/Git execution overrides are not forwarded. This
+source fixture boundary does not establish actual CI Environment isolation.
+
 Operating inputs have config/operating.tsv, control/stop.tsv, a contiguous
 history/NNNNNNNNNNNN.tsv sequence and current/index.tsv. Original bytes are
 strict UTF-8 ending in LF, without blank/comment rows, empty values or controls

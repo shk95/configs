@@ -15,7 +15,9 @@ def retained_replay(source_repository, control, master, candidate, baselines, ev
     real evidence in a later operating lane; this function creates no such authority.
     """
     tools = Path(__file__).resolve().parent.parent
-    env = {k: v for k, v in os.environ.items() if not k.startswith(("GIT_", "PYTHON"))}
+    runtime_keys = {"PATH", "SYSTEMROOT", "SystemRoot", "WINDIR", "COMSPEC", "ComSpec",
+                    "PATHEXT", "TEMP", "TMP", "TMPDIR", "LANG", "LC_ALL", "TZ"}
+    env = {key: os.environ[key] for key in runtime_keys if key in os.environ}
     env.update(GIT_CONFIG_NOSYSTEM="1", GIT_CONFIG_GLOBAL=os.devnull,
                GIT_NO_REPLACE_OBJECTS="1", GIT_TERMINAL_PROMPT="0")
     command = ["sh", (tools / "release-preview").as_posix(), "--master", master,

@@ -17,8 +17,15 @@ FILES |= {"tool/version-control/" + name for name in
 MANIFEST = ROOT + "/manifest.tsv"
 
 
+def runtime_environment(source):
+    # Read only runtime keys: never forward ambient credentials to retained code.
+    names = {"PATH", "SYSTEMROOT", "SystemRoot", "WINDIR", "COMSPEC", "ComSpec",
+             "PATHEXT", "TEMP", "TMP", "TMPDIR", "LANG", "LC_ALL", "TZ"}
+    return {key: source[key] for key in names if key in source}
+
+
 def git(repo, *args, data=None):
-    env = {k: v for k, v in os.environ.items() if not k.startswith("GIT_")}
+    env = runtime_environment(os.environ)
     env.update(GIT_CONFIG_NOSYSTEM="1", GIT_CONFIG_GLOBAL=os.devnull,
                GIT_NO_REPLACE_OBJECTS="1", GIT_NO_LAZY_FETCH="1",
                GIT_ALLOW_PROTOCOL="", GIT_TERMINAL_PROMPT="0")
@@ -121,7 +128,7 @@ def main():
                                      str(paths["operating"]), str(paths["transcript"]),
                                      str(paths["request"]), str(paths["approved"])],
                                     timeout=15 * 60, capture_output=True,
-                                    env={k: v for k, v in os.environ.items() if not k.startswith(("PYTHON", "GIT_"))})
+                                    env=runtime_environment(os.environ))
             # Package output is bounded public summary; never echo subprocess stderr.
             if result.returncode:
                 raise ValueError("retained-package-refusal")

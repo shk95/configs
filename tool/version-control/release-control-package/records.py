@@ -30,7 +30,7 @@ def canonical(value):
 
 
 def identity(value, size=64):
-    require(re.fullmatch(r"[0-9a-f]{%d}" % size, value) is not None, "invalid-identity")
+    require(isinstance(value, str) and re.fullmatch(r"[0-9a-f]{%d}" % size, value) is not None, "invalid-identity")
     return value
 
 

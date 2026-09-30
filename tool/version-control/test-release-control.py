@@ -14,6 +14,7 @@ import tempfile
 import unittest
 
 TOOLS = Path(__file__).resolve().parent
+WRAPPER = (TOOLS / "release-control").as_posix()
 sys.path.insert(0, str(TOOLS / "release-control-package"))
 from records import Refusal, blob_identity, canonical, digest, encode, history, parse, require
 import engine
@@ -198,11 +199,24 @@ class ControllerProof(unittest.TestCase):
             old_result = subprocess.run([sys.executable, "-I", str(retained / loader.ROOT / "main.py"), str(operating), str(transcript_file), str(request_file), str(assertion_file)], capture_output=True)
             self.assertNotEqual(old_result.returncode, 0)
             self.refuse(engine.reduce, invalid_gate, CONFIG, transcript())
+            # Required evidence present does not let newer rules waive old approval.
+            missing_approval = base_events(False)
+            missing_approval[0] = start(old, m, X, blob_identity(config_data))
+            missing_approval.append(effect("merge", merge))
+            missing_approval = sequence(missing_approval)
+            with self.assertRaisesRegex(Refusal, "missing-exact-approval"):
+                retained_engine.reduce(missing_approval, CONFIG, transcript())
+            for path in (operating / "history").iterdir():
+                path.unlink()
+            for n, item in enumerate(missing_approval, 1):
+                (operating / "history" / f"{n:012d}.tsv").write_bytes(encode(item))
+            old_approval_result = subprocess.run([sys.executable, "-I", str(retained / loader.ROOT / "main.py"), str(operating), str(transcript_file), str(request_file), str(assertion_file)], capture_output=True)
+            self.assertNotEqual(old_approval_result.returncode, 0)
             # Identical missing gate inputs accepted by the newer deliberately weak engine.
             new_result = subprocess.run([sys.executable, "-I", str(fresh / loader.ROOT / "main.py"), str(operating), str(transcript_file), str(request_file), str(assertion_file)], capture_output=True)
             self.assertEqual(new_result.returncode, 0)
             # Full operator/loader path preserves old refusal after newer master exists.
-            command = [str(TOOLS / "release-control"), "preview", "--fixture-inputs", "--bundle-repository", str(root), "--approved", str(assertion_file), "--operating", str(operating), "--transcript", str(transcript_file), "--request", str(request_file)]
+            command = [WRAPPER, "preview", "--fixture-inputs", "--bundle-repository", str(root), "--approved", str(assertion_file), "--operating", str(operating), "--transcript", str(transcript_file), "--request", str(request_file)]
             refused = subprocess.run(["sh"] + command, capture_output=True)
             self.assertNotEqual(refused.returncode, 0)
             self.assertEqual(refused.stderr, b"release-control: refused\n")
@@ -310,13 +324,20 @@ class ControllerProof(unittest.TestCase):
     # INV repository/release-control-preview-only
     def test_ac5_endpoint_reconciliation_gaps(self):
         record = {"repository": "fixture/operating", "parent": H, "commit": D, "event": X, "index": Y}
-        observed = {"status": "present", "complete": True, "target": {"history": [{k: v for k, v in record.items() if k != "repository"}], "head": T}}
+        observed = {"status": "present", "complete": True, "target": {"history": [{k: v for k, v in record.items() if k != "repository"}, {"parent": D, "commit": T, "event": "c" * 64, "index": "d" * 64}], "head": T}}
         self.assertEqual(adapter.reconcile("record", record, observed), "applied")
         self.assertEqual(adapter.reconcile("record", record, {"status": "absent", "target": {"parent": H}, "complete": True}), "absent")
         self.refuse(adapter.reconcile, "record", record, {"status": "absent", "target": {"parent": T}, "complete": True})
         self.refuse(adapter.reconcile, "record", record, dict(observed, complete=False))
         conflict = copy.deepcopy(observed); conflict["target"]["history"][0]["index"] = X
         self.assertEqual(adapter.reconcile("record", record, conflict), "conflict")
+        # A matching first row cannot hide contradictory later history or a stale head.
+        duplicate = copy.deepcopy(observed); duplicate["target"]["history"].append(duplicate["target"]["history"][0])
+        self.refuse(adapter.reconcile, "record", record, duplicate)
+        wrong_chain = copy.deepcopy(observed); wrong_chain["target"]["history"][1]["parent"] = H
+        self.refuse(adapter.reconcile, "record", record, wrong_chain)
+        stale_head = copy.deepcopy(observed); stale_head["target"]["head"] = H
+        self.refuse(adapter.reconcile, "record", record, stale_head)
         pr = {"repository": "shk95/configs", "head": "dev", "base": "master", "dev": D, "master": H, "body-operation": X}
         self.assertEqual(adapter.reconcile("pr", pr, {"status": "present", "target": {"matches": [{"number": "7", "payload": pr}]}, "complete": True}), "applied")
         self.assertEqual(adapter.reconcile("pr", pr, {"status": "present", "target": {"matches": [pr, pr]}, "complete": True}), "conflict")
@@ -410,11 +431,12 @@ class ControllerProof(unittest.TestCase):
     # INV repository/release-control-preview-only
     # INV repository/fixture-git-isolation
     def test_ac7_inert_runtime_isolation_and_timing(self):
+        self.assertEqual(loader.runtime_environment({"PATH": "fixture-tools", "GH_TOKEN": "fixture-private-value", "GITHUB_TOKEN": "fixture-private-value", "PYTHONPATH": "candidate-code", "GIT_DIR": "candidate-repo"}), {"PATH": "fixture-tools"})
         for native, expected in [("0", 69), ("1", 1)]:
             env = dict(os.environ, CONFIGS_CONTROLLER_PYTHON="fixture-missing-python-runtime", REQUIRE_NATIVE=native)
-            absent = subprocess.run(["sh", str(TOOLS / "release-control"), "--help"], env=env, capture_output=True)
+            absent = subprocess.run(["sh", WRAPPER, "--help"], env=env, capture_output=True)
             self.assertEqual(absent.returncode, expected)
-        invalid = subprocess.run(["sh", str(TOOLS / "release-control"), "private-unrecognized-value"], capture_output=True)
+        invalid = subprocess.run(["sh", WRAPPER, "private-unrecognized-value"], capture_output=True)
         self.assertEqual(invalid.returncode, 64)
         self.assertNotIn(b"private-unrecognized-value", invalid.stderr)
         self.assertEqual(adapter.opportunity(5, "ready"), "not-due")

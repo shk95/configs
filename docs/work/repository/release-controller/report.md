@@ -29,6 +29,17 @@ the discovered functional runtime and passed. Subsequent delivery commands bind
 that existing runtime explicitly. No failed/unverified check is recorded as pass.
 Self-review then strengthened observed remote ID grammar, actual merge-commit SHA
 binding and canonical synthetic annotated-tag object bytes, with narrow reruns.
+Draft source head 95d4f836dc946944547c72837a537f8867ac11dd's
+[CI 36705255125](https://github.com/shk95/configs/actions/runs/36705255125)
+passed Linux repository, Unix-like and policy scans but failed native Windows
+controller launch: guarded MSYS script paths reached native Python as an incorrect
+drive path. Explicit native script conversion and normalized Python-to-sh paths
+repair that owning-source failure. Windows desired-state also failed independently
+while winget obtained Lua (`0x8a15000f`, source data missing); no Windows source
+repair is claimed. A new published-head successful native/dispatch run is required.
+Final hardening drops ambient credentials/execution overrides from child runtime
+environments and rejects contradictory duplicate/parent/head record histories;
+separate old-package fixtures refuse both missing evidence and missing approval.
 
 All seven child rows remain pending until published source-bound native Windows,
 affected dispatch and reviewer evidence are complete. Parent

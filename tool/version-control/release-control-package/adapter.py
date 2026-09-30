@@ -62,6 +62,7 @@ def operation(kind, payload):
     for key in {"number", "run", "attempt", "workflow", "initial-run"} & set(payload):
         require(re.fullmatch(r"[1-9][0-9]*", payload[key]) is not None, "invalid-endpoint-id")
     if kind == "tag-object":
+        require(re.fullmatch(r"\d{4}-\d\d-\d\dT\d\d:\d\d:\d\dZ", payload["tagger-time"]) is not None, "noncanonical-tagger-time")
         try:
             datetime.strptime(payload["tagger-time"], "%Y-%m-%dT%H:%M:%SZ")
         except ValueError:
@@ -97,11 +98,18 @@ def reconcile(kind, payload, observation):
     if kind == "record":
         require(set(target) == {"history", "head"} and isinstance(target["history"], list), "incomplete-record-history")
         identity(target["head"], 40)
+        commits, events, matches, previous = set(), set(), [], None
         for item in target["history"]:
             require(isinstance(item, dict) and set(item) == {"parent", "commit", "event", "index"}, "invalid-history-observation")
+            identity(item["parent"], 40); identity(item["commit"], 40)
+            identity(item["event"]); identity(item["index"])
+            require(item["commit"] not in commits and item["event"] not in events
+                    and (previous is None or item["parent"] == previous), "contradictory-record-history")
+            commits.add(item["commit"]); events.add(item["event"]); previous = item["commit"]
             if item["event"] == payload["event"]:
-                return "applied" if item == {k: payload[k] for k in item} else "conflict"
-        return "conflict"
+                matches.append(item)
+        require(previous == target["head"], "incomplete-record-head-history")
+        return "applied" if matches == [{k: payload[k] for k in ("parent", "commit", "event", "index")}] else "conflict"
     if kind == "pr":
         require(set(target) == {"matches"} and isinstance(target["matches"], list), "invalid-pr-observation")
         if len(target["matches"]) != 1:
@@ -112,6 +120,7 @@ def reconcile(kind, payload, observation):
         return "applied" if match["payload"] == payload else "conflict"
     if kind == "merge":
         require(set(target) == {"merged", "commit", "parents", "tree", "source"}, "invalid-merge-observation")
+        require(type(target["merged"]) is bool, "invalid-merged-status")
         identity(target["commit"], 40)
         return "applied" if target == {"merged": True, "commit": target["commit"], "parents": [payload["master"], payload["dev"]], "tree": payload["tree"], "source": payload["dev"]} else "conflict"
     if kind == "cancel":
@@ -149,7 +158,8 @@ def authenticate(transcript, config, request, candidate_digest):
     expected_protection = {"required": "Required checks", "app": "15368", "administrators": True,
                            "conversations": True, "force": False, "deletion": False,
                            "dev-strict": True, "master-strict": False}
-    require(protection == expected_protection, "missing-or-mismatched-protection")
+    require(isinstance(protection, dict) and protection == expected_protection
+            and all(type(protection[k]) is type(v) for k, v in expected_protection.items()), "missing-or-mismatched-protection")
 
 
 def takeover(owner, observed):

@@ -13,4 +13,8 @@ if ! "$python" -I -c 'import sys,json,hashlib,subprocess; assert sys.version_inf
   [ "${REQUIRE_NATIVE:-0}" != 1 ] && exit 69
   exit 1
 fi
-exec "$python" -I -B "$tools/test-release-control.py"
+script="$tools/test-release-control.py"
+if command -v cygpath >/dev/null 2>&1; then
+  script=$(cygpath -m "$script")
+fi
+exec "$python" -I -B "$script"
