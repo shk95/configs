@@ -6,6 +6,18 @@ status: approved
 review-by: 2026-10-11
 issue: #451
 
+## Global-history follow-up planning, 2026-09-30
+
+Additive `docs/work/repository/release-control-history/spec.md` and its pending
+report bound global outstanding-batch selection and exact old config/package
+semantic replay. Root reviewed and approved this planning delivery on 2026-09-30; it assigns
+neither source nor live operation. D's actual refresh-candidate package/protocol delivery and root's dated
+compatibility review precede B source pickup. Preserve original event bytes and
+exact old package semantics; unsupported offsets or missing bindings refuse.
+The completed single-envelope child does not complete global history storage or
+the operational loop. All fourteen parent criteria remain pending, with manual
+and scheduled obligations separately open. No parent acceptance text changes.
+
 ## Current reading order after reconciliation
 
 Reconciled 2026-09-28 after the later simplifications: read "Cross-work pickup and
