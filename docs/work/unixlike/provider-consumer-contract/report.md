@@ -492,6 +492,75 @@ synthetic configuration evaluation and the native Darwin `fixture-mac` build.
 Post-merge CI for the prerequisite and current-head provider CI remain separate
 pending evidence. No real host activation or Apply occurred.
 
+## U1 delivery verification resumed, 2026-09-30
+
+The maintainer requested resumption. Live GitHub and local inspection found
+the delivery worktree clean at the published Draft PR #421 head
+`a69dd589c98b698b5d381cc7d4f904f28be18403`. Source commit `50444ef`
+and isolated lock commit `a69dd58` preserve the same final tree as the original
+unpushed candidate; the original worktree, stash and saved patch remain backups.
+
+[Exact-head CI run 36574608460](https://github.com/shk95/configs/actions/runs/36574608460)
+passed Required checks, repository scans and native x86_64 Linux evaluation,
+selected builds and the graphical VM fixture under upstream Nix 2.34.8.
+The published PR records the native macOS pre-push evaluation and Darwin build.
+These are provider fixture and build results, not private host runtime or activation.
+
+The repository prerequisite's post-merge
+[CI run 36572924610](https://github.com/shk95/configs/actions/runs/36572924610)
+failed on attempt 2 in its separate Windows job; the Unix-like and
+repository jobs passed. PR #422 subsequently repaired that fixture. The
+post-merge [CI run 36648870125](https://github.com/shk95/configs/actions/runs/36648870125)
+at `1758fe98aff677b815fd28d14d53228e29bf5371` passed the native Windows
+suite (320 passed, zero failed, one skipped), repository scans and Required
+checks. This is prerequisite evidence, separate from U1's final-head evidence.
+PR #421 remains Draft with no auto-merge request. Companion bootstrap pins,
+publication, provider integration and U2 Darwin capture remain pending.
+
+On resumption, both companion `tool/check-hosts` checks passed with an explicit
+override to the exact delivery worktree's unchanged `unixlike/` source. The
+private consumer evaluated all seven final output derivations and its flake
+checks; the public template evaluated its synthetic example and structure
+check. Their existing bootstrap locks were not rewritten. This repeats
+connection evaluation only; it adds no companion build, runtime or activation
+evidence. Work-document validation and `git diff --check` passed for the
+source-state and evidence-record corrections in this resumption.
+
+## U1 continuation and delivery boundary, 2026-09-30
+
+The assigned U1 continuation owner inspected the existing provider worktree and
+both single-flake companion candidates without replacing their uncommitted
+work. At this continuation's initial inspection, the provider source head was
+`a69dd589c98b698b5d381cc7d4f904f28be18403`, with only the source-state
+and report corrections uncommitted. The
+required integration base is `1758fe98aff677b815fd28d14d53228e29bf5371`,
+which includes the repaired Windows fixture. The maintainer then authorized the
+required base merge, the prepared documentation commit/push and PR body/Ready
+handoff. Checks must run on the revised head; the prior provider green run does
+not certify it. PR #421 records the final published head and its own checks.
+Companion pin changes and publication remain separately unauthorized.
+
+Ready handoff for the provider means its coherent U1 source result is published,
+its current-head required checks pass and outstanding review/blockers are
+accounted for. It is separate from dev integration, the full contract report's
+completion (including U2), companion publication and API release readiness.
+Required template code delivery and durable reference alignment remain visible
+companion obligations before API release; private host activation is not a
+provider delivery or release prerequisite. Both companion bootstrap pins remain
+`e11bd1368d2f5138ad0f9b7017040b2b76e055e6`. Candidate checks can use one
+explicit immutable published provider revision; final pins must be selected
+from the delivered source and rechecked together after authorized alignment.
+
+Both companion `tool/check-hosts` checks also passed against the same immutable
+GitHub provider revision `a69dd589c98b698b5d381cc7d4f904f28be18403`, using
+`CONFIGS_PROVIDER_OVERRIDE` with `?dir=unixlike`. The private candidate evaluated
+all seven declared output derivations and its no-build flake checks; the public
+template evaluated its synthetic example and no-build flake checks. Neither
+lock was written: both still name the bootstrap revision. This verifies the
+published candidate connection, not final pin alignment, publication, native
+companion builds, runtime or activation. The work-document working-tree
+preflight and `git diff --check` passed for these corrections.
+
 ## Acceptance
 
 | ID | State | Evidence |
@@ -502,6 +571,6 @@ pending evidence. No real host activation or Apply occurred.
 | AC3 | pending | Darwin capture is the separate U2 lane. |
 | AC4 | pending | Independent locked consumer evaluated and built on native x86; durable provider and companion pins pending. |
 | AC5 | pending | macOS 26.6.2/Nix 2.34.8 full local check and native Darwin build passed; delivered evidence pending. |
-| AC6 | pending | Local native x86 and macOS checks used Nix 2.34.8; pinned CI candidate has not run on GitHub. |
+| AC6 | pending | Local native x86 and macOS checks used Nix 2.34.8; exact-head GitHub run 36574608460 passed the pinned upstream version assertion and Unix-like job; final delivery remains pending. |
 | AC7 | pending | Host-owned transfer and seven final outputs checked against local provider source; publication/order pending. |
-| AC8 | pending | Mac and x86 selected native builds and provider graphical VM fixture passed; current-head CI and delivery pending. |
+| AC8 | pending | Mac and x86 selected native builds and provider graphical VM fixture passed; published head a69dd58 CI passed; companion and final delivery pending. |

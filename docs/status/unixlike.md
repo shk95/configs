@@ -18,10 +18,18 @@ network, storage, boot, installation and Nix daemon policy. Homebrew app
 selection and lifecycle are also consumer-owned
 (`docs/policy/decisions/unixlike/public-environment-host-boundary.md`).
 
-The U1 candidate is uncommitted. The private `configs-hosts` and public
-`configs-host-template` candidates evaluate against the exact local source
-through input overrides; their checked-in locks still point at earlier
-published refs. No candidate host has been activated. Current candidate
+The U1 provider delivery is tracked in PR #421. The earlier published head
+`a69dd589c98b698b5d381cc7d4f904f28be18403` passed its own Required checks
+and native Linux CI. PR #422 repaired the separate Windows fixture
+failure; post-merge CI at `1758fe98aff677b815fd28d14d53228e29bf5371`
+passed the native Windows suite (320 passed, zero failed, one skipped) and
+Required checks. The authorized provider delivery incorporates that required
+base update and needs its own current-head verification before Ready handoff.
+PR #421 records the delivered head and its checks; the earlier green run does
+not certify a changed head. Provider integration remains separately pending.
+The private `configs-hosts` and public `configs-host-template` candidates
+evaluate through explicit input overrides; their checked-in locks still point
+at earlier published refs. No candidate host has been activated. Current candidate
 evaluation and transfer evidence, with remaining build and publication gaps,
 are recorded in `docs/work/unixlike/provider-consumer-contract/report.md`.
 
