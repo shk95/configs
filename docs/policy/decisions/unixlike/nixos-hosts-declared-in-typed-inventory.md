@@ -2,7 +2,8 @@
 
 date: 2026-09-19
 scope: unixlike
-status: accepted
+status: superseded
+superseded-by: docs/policy/decisions/unixlike/public-environment-host-boundary.md
 issue: #18
 reopen-when: A host lane is added or retired, or a host needs a field the entry cannot carry without storing detected hardware.
 source: docs/work/unixlike/nixos-host-inventory/spec.md § Decisions

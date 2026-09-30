@@ -101,14 +101,10 @@ in {
     homeManager.shared = {
       lib,
       pkgs,
+      config,
       ...
-    }: {
-      # The home half of the ownership rule reaches every home through this
-      # class; the system half reaches each system layer through its own class,
-      # at the end of this file.
-      imports = [homeRule];
-
-      home.packages = with pkgs;
+    }: let
+      basePackages = with pkgs;
         [
           # search / text
           ripgrep
@@ -191,6 +187,25 @@ in {
         # including trash-cli there would collide at bin/trash. The locked
         # nixpkgs also marks bettercap broken on Darwin, where Homebrew owns it.
         ++ lib.optionals pkgs.stdenv.hostPlatform.isLinux [pkgs.trash-cli pkgs.bettercap pkgs.python3];
+      knownNames = map lib.getName basePackages;
+      excluded = config.providerTools.excludedPackages;
+      unknown = builtins.filter (name: !(builtins.elem name knownNames)) excluded;
+    in {
+      # The home half of the ownership rule reaches every home through this
+      # class; the system half reaches each system layer through its own class.
+      imports = [homeRule];
+      options.providerTools.excludedPackages = lib.mkOption {
+        type = lib.types.listOf lib.types.str;
+        default = [];
+        description = "Names of unconfigured provider packages omitted from this home.";
+      };
+      config.home.packages = builtins.filter (package: !(builtins.elem (lib.getName package) excluded)) basePackages;
+      config.assertions = [
+        {
+          assertion = unknown == [];
+          message = "providerTools.excludedPackages names no provider package: ${lib.concatStringsSep ", " unknown}";
+        }
+      ];
     };
 
     homeManager.linuxGraphical = {pkgs, ...}: {
@@ -205,7 +220,7 @@ in {
       ];
     };
 
-    nixos.wsl = {config, ...}: {imports = [(systemRule config.host.user)];};
-    darwin.system = {config, ...}: {imports = [(systemRule config.providerIdentity.user)];};
+    nixos.environment = {config, ...}: {imports = [(systemRule config.providerIdentity.user)];};
+    darwin.environment = {config, ...}: {imports = [(systemRule config.providerIdentity.user)];};
   };
 }

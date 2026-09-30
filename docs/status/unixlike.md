@@ -6,6 +6,40 @@ is recorded under `docs/policy/decisions/`; the model those decisions implement
 is `docs/policy/architecture.md`. The other scopes' state is in the files
 beside this one.
 
+## U1 source state
+
+This source revision exports typed `mkNixos`, `mkDarwin` and `mkHome` with
+independent WSL and graphical selection, native host module extension and
+provider compatibility defaults 25.11/25.11/6. Its NixOS/Darwin/home outputs
+are synthetic examples only. The provider retains shared tools, coding agents,
+graphical behavior, platform defaults, selected-app settings and read-only
+contract/readiness tools. The consumer owns machine identity, account, access,
+network, storage, boot, installation and Nix daemon policy. Homebrew app
+selection and lifecycle are also consumer-owned
+(`docs/policy/decisions/unixlike/public-environment-host-boundary.md`).
+
+The U1 provider delivery is tracked in PR #421. The earlier published head
+`a69dd589c98b698b5d381cc7d4f904f28be18403` passed its own Required checks
+and native Linux CI. PR #422 repaired the separate Windows fixture
+failure; post-merge CI at `1758fe98aff677b815fd28d14d53228e29bf5371`
+passed the native Windows suite (320 passed, zero failed, one skipped) and
+Required checks. The authorized provider delivery incorporates that required
+base update and needs its own current-head verification before Ready handoff.
+PR #421 records the delivered head and its checks; the earlier green run does
+not certify a changed head. Provider integration remains separately pending.
+The private `configs-hosts` and public `configs-host-template` candidates
+evaluate through explicit input overrides; their checked-in locks still point
+at earlier published refs. No candidate host has been activated. Current candidate
+evaluation and transfer evidence, with remaining build and publication gaps,
+are recorded in `docs/work/unixlike/provider-consumer-contract/report.md`.
+
+## Historical pre-U1 state and host evidence
+
+The following observations describe older provider pins and host generations.
+Their machine-kind classes, per-host locks and activation reports do not
+describe the U1 source revision or certify adoption of it. The cited work
+reports preserve the observations at their original revisions.
+
 The physical module tree now groups concerns under `flake`, `machines`,
 `platforms`, `foundation`, `desktop`, and `programs`. These directories aid
 navigation; each module still declares its own class, and
@@ -205,7 +239,7 @@ host was formerly the entry `nixos` of `identity.nixosHosts`. That entry is
 now owned by the private consumer. The provider's synthetic instances prove
 that output name, host name and state version agree, and that only the five
 supported combinations of system, kind and hypervisor evaluate
-(`INV unixlike/nixos-host-inventory`).
+(`unixlike/nixos-host-inventory`).
 `unixlike/tool/checks/flake-test` proves each host answers to its entry's
 name (#191). `aarch64-linux` is an evaluated system and is not built here
 (`docs/work/unixlike/nixos-host-inventory/report.md`, done).
@@ -213,7 +247,7 @@ name (#191). `aarch64-linux` is an evaluated system and is not built here
 (`unixlike/modules/machines/utm.nix`), the labelled UEFI/ext4
 `nixos.installExt4` class, and the `nixos.headless`
 class — the entry's account without a tracked password, key-only sshd on 22
-and a firewall that opens that port alone (`INV unixlike/headless-key-only`)
+and a firewall that opens that port alone (`unixlike/headless-key-only`)
 — and the shared Niri and Noctalia graphical system and home classes. The
 x86_64 flake check also boots the shared headless class and
 reaches it from a separate network namespace: the declared account accepts a
@@ -251,7 +285,7 @@ been reactivated for this change.
 needs from a guest — the account OrbStack enters as, its network and
 resolver, no sshd — imports nothing OrbStack generates, registers no binfmt
 emulation on the kernel the machines share
-(`INV unixlike/orbstack-shared-kernel`), and takes the shared home alone. The
+(`unixlike/orbstack-shared-kernel`), and takes the shared home alone. The
 machine was switched to the flake on 2026-09-20, then deleted and created
 again isolated from OrbStack's image to read the procedure end to end, and
 each lane was observed separately, inside the machine that exists now at
@@ -365,7 +399,7 @@ host output (`docs/work/unixlike/nixos-wsl-in-place-update/report.md`, done).
 That host now takes updates from its reviewed private consumer flake. The
 provider's host-specific Justfile recipes refuse synthetic outputs and
 `unixlike/tool/checks/test` verifies only provider fixtures. Channels are
-off in the provider configuration (`INV unixlike/nixos-no-channel`); the
+off in the provider configuration (`unixlike/nixos-no-channel`); the
 private consumer records its final build and activation separately
 (`docs/policy/decisions/unixlike/nixos-hosts-declared-in-typed-inventory.md`).
 

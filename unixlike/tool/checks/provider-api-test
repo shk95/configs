@@ -1,108 +1,151 @@
 #!/bin/sh
-# The public consumer uses only the exported constructors. Check that host
-# values reach the final evaluators and that invalid input is refused by name.
+# Exercise the exported constructors across a real external flake boundary.
+# INV unixlike/typed-identity: accept typed inputs and refuse invalid fields.
 set -eu
 . "$(CDPATH= cd -- "$(dirname -- "$0")" && pwd)/prerequisite"
 require_command nix
 cd "$(CDPATH= cd -- "$(dirname -- "$0")/../.." && pwd)"
 provider_root=$PWD
+fixture_user=example
 
-# Exercise the public output across an actual flake boundary. Use a physical
-# temporary path: macOS's /var is a symlink, which Nix refuses in path inputs.
 consumer_dir=$(mktemp -d)
 consumer_dir=$(CDPATH= cd -- "$consumer_dir" && pwd -P)
 trap 'rm -rf "$consumer_dir"' EXIT
 cat > "$consumer_dir/flake.nix" <<EOF
 {
   inputs.configs.url = "path:$provider_root";
+  inputs.nixpkgs.follows = "configs/nixpkgs";
   outputs = {configs, ...}: {
     nixosConfigurations.example = configs.lib.mkNixos {
-      name = "example";
-      host = {system = "aarch64-linux"; kind = "orbstack"; user = "example"; stateVersion = "25.11";};
-      profiles = [];
+      system = "x86_64-linux";
+      user = "example";
       git = {name = "Example"; email = "example@example.invalid";};
+      environment.graphical = false;
+      systemModules = [{
+        networking.hostName = "example";
+        users.users.example.isNormalUser = true;
+        fileSystems."/" = {device = "/dev/disk/by-label/nixos"; fsType = "ext4";};
+      }];
     };
     darwinConfigurations.example-mac = configs.lib.mkDarwin {
-      host = {system = "aarch64-darwin"; hostName = "fixture-mac"; user = "example";};
+      system = "aarch64-darwin";
+      user = "example";
       git = {name = "Example"; email = "example@example.invalid";};
+      systemModules = [{
+        networking.hostName = "fixture-mac";
+        system.primaryUser = "example";
+        users.users.example.home = "/Users/$fixture_user";
+      }];
+    };
+    darwinConfigurations.selected-mac = configs.lib.mkDarwin {
+      system = "aarch64-darwin";
+      user = "example";
+      git = {name = "Example"; email = "example@example.invalid";};
+      systemModules = [{
+        networking.hostName = "fixture-mac";
+        system.primaryUser = "example";
+        users.users.example.home = "/Users/$fixture_user";
+        homebrew.casks = ["ghostty" "karabiner-elements" "unknown-app"];
+      }];
+    };
+    darwinConfigurations.opted-out = configs.lib.mkDarwin {
+      system = "aarch64-darwin";
+      user = "example";
+      git = {name = "Example"; email = "example@example.invalid";};
+      systemModules = [{
+        networking.hostName = "fixture-mac";
+        system.primaryUser = "example";
+        users.users.example.home = "/Users/$fixture_user";
+        homebrew.casks = ["ghostty" "karabiner-elements"];
+      }];
+      homeModules = [{providerDarwin.appSettings.enable = false;}];
     };
     homeConfigurations.example = configs.lib.mkHome {
       system = "x86_64-linux";
       user = "example";
+      homeDirectory = "/home/$fixture_user";
+      environment = {graphical = false; wsl = false;};
       git = {name = "Example"; email = "example@example.invalid";};
     };
   };
 }
 EOF
 
-if ! lock_result=$(nix flake lock "path:$consumer_dir" 2>&1); then
-  printf '%s\n' "$lock_result" >&2
+if ! nix flake lock --quiet "path:$consumer_dir" >"$consumer_dir/lock.log" 2>&1; then
+  cat "$consumer_dir/lock.log" >&2
   exit 1
 fi
 [ "$(nix eval --raw "path:$consumer_dir#nixosConfigurations.example.config.networking.hostName")" = example ]
 [ "$(nix eval --raw "path:$consumer_dir#darwinConfigurations.example-mac.config.networking.hostName")" = fixture-mac ]
 [ "$(nix eval --raw "path:$consumer_dir#homeConfigurations.example.config.home.username")" = example ]
+[ "$(nix eval --raw "path:$consumer_dir#nixosConfigurations.example.config.system.stateVersion")" = 25.11 ]
+[ "$(nix eval --raw "path:$consumer_dir#homeConfigurations.example.config.home.stateVersion")" = 25.11 ]
+[ "$(nix eval --json "path:$consumer_dir#darwinConfigurations.example-mac.config.system.stateVersion")" = 6 ]
+[ "$(nix eval --json "path:$consumer_dir#darwinConfigurations.example-mac.config.home-manager.users.example.programs.ghostty.enable")" = false ]
+[ "$(nix eval --json "path:$consumer_dir#darwinConfigurations.selected-mac.config.home-manager.users.example.programs.ghostty.enable")" = true ]
+[ "$(nix eval --json "path:$consumer_dir#darwinConfigurations.opted-out.config.home-manager.users.example.programs.ghostty.enable")" = false ]
+nix eval --json "path:$consumer_dir#darwinConfigurations.selected-mac.config.home-manager.users.example.providerDarwin.selectedApps" | grep -Fq 'unknown-app'
+[ "$(nix eval --json "path:$consumer_dir#darwinConfigurations.example-mac.config.home-manager.users.example.home.activation" --apply 'entries: builtins.hasAttr "karabinerDesiredState" entries')" = false ]
+[ "$(nix eval --json "path:$consumer_dir#darwinConfigurations.selected-mac.config.home-manager.users.example.home.activation" --apply 'entries: builtins.hasAttr "karabinerDesiredState" entries')" = true ]
+[ "$(nix eval --json "path:$consumer_dir#darwinConfigurations.opted-out.config.home-manager.users.example.home.activation" --apply 'entries: builtins.hasAttr "karabinerDesiredState" entries')" = false ]
 
 eval_api() {
   nix eval --raw --impure --expr "
     let
       provider = builtins.getFlake (toString ./.);
       git = { name = \"Example\"; email = \"example@example.invalid\"; };
-      nixosHost = { system = \"aarch64-linux\"; kind = \"orbstack\"; user = \"example\"; stateVersion = \"25.11\"; };
+      systemModules = [{
+        networking.hostName = \"example\";
+        users.users.example.isNormalUser = true;
+        fileSystems.\"/\" = {device = \"/dev/disk/by-label/nixos\"; fsType = \"ext4\";};
+      }];
+      homeInput = {
+        system = \"x86_64-linux\";
+        user = \"example\";
+        homeDirectory = \"/home/$fixture_user\";
+        inherit git;
+        environment.graphical = false;
+      };
+      names = home: map provider.inputs.nixpkgs.lib.getName home.config.home.packages;
     in $1"
 }
-
 accept() {
-  label=$1 expected=$2 expression=$3
-  actual=$(eval_api "$expression")
-  [ "$actual" = "$expected" ] || {
-    printf 'provider API: %s returned %s, expected %s\n' "$label" "$actual" "$expected" >&2
-    exit 1
-  }
+  actual=$(eval_api "$3")
+  [ "$actual" = "$2" ] || { printf 'provider API: %s returned %s, expected %s\n' "$1" "$actual" "$2" >&2; exit 1; }
 }
-
 refuse() {
-  label=$1 message=$2 expression=$3
-  if output=$(eval_api "$expression" 2>&1); then
-    printf 'provider API: accepted %s\n' "$label" >&2
-    exit 1
-  fi
-  printf '%s' "$output" | grep -Fq "$message" || {
-    printf 'provider API: %s failed without %s\n%s\n' "$label" "$message" "$output" >&2
+  if output=$(eval_api "$3" 2>&1); then printf 'provider API: accepted %s\n' "$1" >&2; exit 1; fi
+  printf '%s' "$output" | grep -Fq "$2" || {
+    printf 'provider API: %s failed without %s\n%s\n' "$1" "$2" "$output" >&2
     exit 1
   }
 }
 
-accept 'NixOS host name' example \
-  '(provider.lib.mkNixos { name = "example"; host = nixosHost; profiles = []; inherit git; }).config.networking.hostName'
-accept 'NixOS consumer Git identity' example@example.invalid \
-  '(provider.lib.mkNixos { name = "example"; host = nixosHost; profiles = []; inherit git; }).config.home-manager.users.example.programs.git.settings.user.email'
-accept 'NixOS system extension' yes \
-  '(provider.lib.mkNixos { name = "example"; host = nixosHost; profiles = []; inherit git; systemModules = [{ environment.variables.CONSUMER = "yes"; }]; }).config.environment.variables.CONSUMER'
-accept 'NixOS home extension' yes \
-  '(provider.lib.mkNixos { name = "example"; host = nixosHost; profiles = []; inherit git; homeModules = [{ home.sessionVariables.CONSUMER = "yes"; }]; }).config.home-manager.users.example.home.sessionVariables.CONSUMER'
-accept 'Darwin host name' fixture-mac \
-  '(provider.lib.mkDarwin { host = { system = "aarch64-darwin"; hostName = "fixture-mac"; user = "example"; }; inherit git; }).config.networking.hostName'
-accept 'Darwin consumer Git identity' example@example.invalid \
-  '(provider.lib.mkDarwin { host = { system = "aarch64-darwin"; hostName = "fixture-mac"; user = "example"; }; inherit git; }).config.home-manager.users.example.programs.git.settings.user.email'
-accept 'standalone home user' example \
-  '(provider.lib.mkHome { system = "x86_64-linux"; user = "example"; inherit git; }).config.home.username'
-accept 'standalone home Git identity' example@example.invalid \
-  '(provider.lib.mkHome { system = "x86_64-linux"; user = "example"; inherit git; }).config.programs.git.settings.user.email'
+accept 'NixOS identity' example@example.invalid '(provider.lib.mkNixos {system = "x86_64-linux"; user = "example"; inherit git systemModules; environment.graphical = false;}).config.home-manager.users.example.programs.git.settings.user.email'
+accept 'NixOS compatibility override' 26.05 '(provider.lib.mkNixos {system = "x86_64-linux"; user = "example"; inherit git; environment.graphical = false; systemModules = systemModules ++ [{system.stateVersion = "26.05";}];}).config.system.stateVersion'
+accept 'NixOS home override' 26.05 '(provider.lib.mkNixos {system = "x86_64-linux"; user = "example"; inherit git systemModules; environment.graphical = false; homeModules = [{home.stateVersion = "26.05";}];}).config.home-manager.users.example.home.stateVersion'
+accept 'NixOS system extension' yes '(provider.lib.mkNixos {system = "x86_64-linux"; user = "example"; inherit git; environment.graphical = false; systemModules = systemModules ++ [{environment.variables.CONSUMER = "yes";}];}).config.environment.variables.CONSUMER'
+accept 'NixOS home extension' yes '(provider.lib.mkNixos {system = "x86_64-linux"; user = "example"; inherit git systemModules; environment.graphical = false; homeModules = [{home.sessionVariables.CONSUMER = "yes";}];}).config.home-manager.users.example.home.sessionVariables.CONSUMER'
+accept 'default coding agents' yes 'if builtins.elem "codex" (names (provider.lib.mkHome homeInput)) && builtins.elem "claude-code" (names (provider.lib.mkHome homeInput)) then "yes" else "no"'
+accept 'coding agents opt-out' yes 'if !(builtins.elem "codex" (names (provider.lib.mkHome (homeInput // {homeModules = [{providerTools.agents.enable = false;}];})))) then "yes" else "no"'
+accept 'bounded package exclusion' yes 'if !(builtins.elem "ripgrep" (names (provider.lib.mkHome (homeInput // {homeModules = [{providerTools.excludedPackages = ["ripgrep"];}];})))) then "yes" else "no"'
 
-refuse 'missing identity' 'lib.mkHome: missing required field git' \
-  '(provider.lib.mkHome { system = "x86_64-linux"; user = "example"; }).config.home.username'
-refuse 'missing Git address' 'lib.mkHome.git: missing required field email' \
-  '(provider.lib.mkHome { system = "x86_64-linux"; user = "example"; git = {name = "Example";}; }).config.home.username'
-refuse 'missing NixOS state version' 'host.stateVersion' \
-  '(provider.lib.mkNixos { name = "example"; host = builtins.removeAttrs nixosHost ["stateVersion"]; profiles = []; inherit git; }).config.networking.hostName'
-refuse 'illegal machine combination' 'identity.nixosHosts.example: aarch64-linux vm on vmware is not a host' \
-  '(provider.lib.mkNixos { name = "example"; host = nixosHost // {kind = "vm"; hypervisor = "vmware";}; profiles = []; inherit git; }).config.networking.hostName'
-refuse 'duplicate profile' 'hostSelections.nixos.example: profiles must not be repeated' \
-  '(provider.lib.mkNixos { name = "example"; host = nixosHost // {system = "x86_64-linux"; kind = "wsl";}; profiles = ["agents" "agents"]; inherit git; }).config.networking.hostName'
-refuse 'unavailable profile' 'hostSelections.nixos.example: profile agents is unavailable for orbstack' \
-  '(provider.lib.mkNixos { name = "example"; host = nixosHost; profiles = ["agents"]; inherit git; }).config.networking.hostName'
-refuse 'unknown profile' 'profiles' \
-  '(provider.lib.mkNixos { name = "example"; host = nixosHost; profiles = ["unknown"]; inherit git; }).config.networking.hostName'
+refuse 'retired NixOS host' 'retired input host' '(provider.lib.mkNixos {system = "x86_64-linux"; user = "example"; inherit git systemModules; host.kind = "wsl";}).config.networking.hostName'
+refuse 'retired Darwin host' 'retired host input' '(provider.lib.mkDarwin {inherit git; host = {system = "aarch64-darwin"; user = "example";};}).config.system.stateVersion'
+refuse 'NixOS graphics with WSL' 'environment.graphical cannot be true' '(provider.lib.mkNixos {system = "x86_64-linux"; user = "example"; inherit git systemModules; environment = {wsl = true; graphical = true;};}).config.system.stateVersion'
+refuse 'WSL selection without integration' 'environment.wsl must match the host-supplied NixOS-WSL integration' '(provider.lib.mkNixos {system = "x86_64-linux"; user = "example"; inherit git systemModules; environment.wsl = true;}).config.system.build.toplevel.drvPath'
+refuse 'WSL graphics driver' 'INV unixlike/desktop-not-wsl' '(provider.lib.mkNixos {system = "x86_64-linux"; user = "example"; inherit git; environment.wsl = true; systemModules = [provider.inputs.nixos-wsl.nixosModules.default {wsl.enable = true; wsl.defaultUser = "example"; wsl.useWindowsDriver = true; wsl.startMenuLaunchers = false;}];}).config.system.build.toplevel.drvPath'
+refuse 'Darwin with WSL' 'environment.wsl is unavailable' '(provider.lib.mkDarwin {system = "aarch64-darwin"; user = "example"; inherit git; environment.wsl = true;}).config.system.stateVersion'
+refuse 'standalone system modules' 'systemModules' '(provider.lib.mkHome {system = "x86_64-linux"; user = "example"; homeDirectory = ("/home/" + "example"); inherit git; systemModules = [];}).config.home.username'
+refuse 'unknown NixOS field' 'unknownField' '(provider.lib.mkNixos {system = "x86_64-linux"; user = "example"; inherit git systemModules; unknownField = 1;}).config.system.stateVersion'
+refuse 'unknown common package exclusion' 'not-a-provider-package' '(provider.lib.mkHome (homeInput // {homeModules = [{providerTools.excludedPackages = ["not-a-provider-package"];}];})).activationPackage.drvPath'
 
-printf '✓ exported provider constructors accept and refuse consumer inputs\n'
+# INV unixlike/version-manager-last and INV unixlike/package-ownership:
+# extend public constructors with one violating native module at a time.
+refuse 'late PATH entry' 'INV unixlike/version-manager-last' '(provider.lib.mkHome (homeInput // {homeModules = [({lib, ...}: {programs.zsh.initContent = lib.mkOrder 2000 "path+=(\"/opt/late/bin\")";})];})).activationPackage.drvPath'
+refuse 'declarative JDK beside SDKMAN' 'INV unixlike/version-manager-last' '(provider.lib.mkHome (homeInput // {homeModules = [({pkgs, ...}: {home.packages = [pkgs.openjdk];})];})).activationPackage.drvPath'
+refuse 'duplicate home package' 'INV unixlike/package-ownership' '(provider.lib.mkHome (homeInput // {homeModules = [({pkgs, ...}: {home.packages = [pkgs.ripgrep];})];})).activationPackage.drvPath'
+refuse 'duplicate NixOS system package' 'INV unixlike/package-ownership' '(provider.lib.mkNixos {system = "x86_64-linux"; user = "example"; inherit git; environment.graphical = false; systemModules = systemModules ++ [({pkgs, ...}: {environment.systemPackages = [pkgs.ripgrep];})];}).config.system.build.toplevel.drvPath'
+refuse 'duplicate Darwin system package' 'INV unixlike/package-ownership' '(provider.lib.mkDarwin {system = "aarch64-darwin"; user = "example"; inherit git; systemModules = [{system.primaryUser = "example"; users.users.example.home = ("/Users/" + "example");} ({pkgs, ...}: {environment.systemPackages = [pkgs.ripgrep];})];}).config.system.build.toplevel.drvPath'
+
+printf '✓ exported constructors, defaults, overrides and refusals\n'

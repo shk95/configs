@@ -2,7 +2,8 @@
 
 date: 2026-09-23
 scope: unixlike
-status: accepted
+status: superseded
+superseded-by: docs/policy/decisions/unixlike/public-environment-host-boundary.md
 issue: #335
 reopen-when: The physical host cannot boot or recover reliably from the labelled layout, or its reviewed hardware facts require a different storage or graphics contract.
 source: docs/work/unixlike/amd-apu-desktop/spec.md § Decisions

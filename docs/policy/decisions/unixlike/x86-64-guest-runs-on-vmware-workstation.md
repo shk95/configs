@@ -2,7 +2,8 @@
 
 date: 2026-09-20
 scope: unixlike
-status: accepted
+status: superseded
+superseded-by: docs/policy/decisions/unixlike/public-environment-host-boundary.md
 issue: #23
 issue: #317
 reopen-when: VMware Workstation stops running beside WSL2 on the Windows host or stops being installable on either host, or the guest needs something only a host-native hypervisor gives.
