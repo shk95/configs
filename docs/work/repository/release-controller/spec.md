@@ -88,6 +88,17 @@ An accepted stop may race an effect: observe it and propose no further mutation.
 No promotion, annotation/ref publication, workflow dispatch/cancel, credential
 provisioning, enablement or host activation follows from this delivery.
 
+## Scope clarification, 2026-09-30
+
+Root's source review limits this child to one supplied synthetic outstanding-batch
+envelope. Completion is terminal within that envelope: a second batch-start or
+other later event refuses. Slicing a long-lived operating history across batches
+and selecting each batch's retained config/package are future parent source/live
+obligations, not delivered controller operation. The original AC1–AC7 remain
+unchanged. Targeted review repairs prove candidate-bound effect fencing, immutable
+observed success, fixed tag-ref identity and observed-object prerequisite, exact
+recorded-owner cancellation and finite synthetic promotion classification/approval.
+
 ## Acceptance
 
 | ID | Criterion | Required lanes |

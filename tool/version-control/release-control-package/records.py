@@ -122,6 +122,8 @@ def parse(data, kind):
             identity(value)
         if key in {"enabled", "stop", "approval-required", "transient"}:
             require(value in ("0", "1"), "invalid-boolean")
+        if key == "classification":
+            require(value in {"patch", "minor", "major"}, "unsupported-classification")
         if key == "protocol":
             require(value == "1", "unsupported-protocol")
         if key == "time":

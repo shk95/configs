@@ -1,7 +1,7 @@
 # Report: disabled release controller and pure recovery fixtures
 kind: report
 spec: docs/work/repository/release-controller/spec.md
-status: done
+status: pending
 
 ## Pickup and proof boundary
 
@@ -57,27 +57,46 @@ Review also binds the ordinary Python diagnostic's exact newline to the host;
 this does not normalize supplied records or permit additional diagnostic content.
 This failed run does not verify the pending rows; a new source-head run is required.
 
-All seven child rows are verified against the published source and actual
-native/affected checks below. Parent
+All seven child rows are reopened pending targeted source review repairs and
+fresh source/native/affected checks. The earlier proof below covers its tested
+cases only and does not establish the newly reviewed transitions. Parent
 `provider-release-contract/report.md` remains pending with zero
 of fourteen criteria verified; its domain/live obligations and R-manual and
 R-scheduled lanes are not replaced by this child. Delivered R-preview evidence
 is independent. No live transport, credentials, Environment, schedule, dispatch,
 cancel, promotion, tag/release or host operation occurred.
 
+## Targeted source review, 2026-09-30
+
+Root and D reviewed exact head 13d75eff51b464edc74fbc045c814c79f053f218 and
+reproduced parsed-record gaps: unknown old merge effects allowed candidate
+replacement, completed effects could downgrade to absence or replay with new IDs,
+tag refs lacked an observed-object gate, cancellation targets were not bound to
+the recorded owner, and unknown classifications or migration flags could bypass
+approval. PR #456 returned to Draft before source edits, with no admission or
+auto-merge. These violate existing AC3–AC6; their repair changes no acceptance bar.
+Historical green runs are retained as partial tested evidence, not completion of
+these untested transitions. Fresh published-head proof and peer review are pending.
+
+Root also clarified that this child reads one supplied synthetic outstanding-batch
+envelope only. A second batch after completion refuses. Actual global history
+slicing, retained-config/package transitions, authenticated interfaces and repeated
+live controller operation remain parent obligations. No synthetic fixture completes
+that source or live wiring. Parent remains 0/14 pending; scheduler remains separate.
+
 ## Acceptance
 
 | ID | State | Evidence |
 | --- | --- | --- |
-| AC1 | verified | `test_ac1_retained_full_bundle_and_old_gate`: exact checked-in manifest/source bytes, old approved synthetic merge extraction and retained preview/classifier execution pass. A newer weakened package cannot waive old evidence or approval; provenance/protocol/ancestor/tampered/incomplete closure refuse. Full operator path refuses old outstanding gates and permits safe no-op without changing caller HEAD. Review, policy and dispatch proof is recorded below. |
-| AC2 | verified | `test_ac2_original_bytes_and_projection`: literal Unicode/narrative escaping, strict original UTF-8/control/CRLF/NUL, fields/IDs/tuple arity, format/decimals, contiguous filenames/digest chain, unsafe paths, impossible transitions and index disagreement are covered by positive/refusal cases. Parsing never normalizes original record bytes. Shared review/policy/dispatch proof below. |
-| AC3 | verified | `test_ac3_requests_evidence_and_invalidation`: exact synthetic approval/check bindings pass; forged actor/run/attempt/ref/workflow/event, moved candidates, missing requests/checks, canceled pending approval and major classification with a waived approval flag refuse. Sources remain supplied fake observations. Shared review/policy/dispatch proof below. |
-| AC4 | verified | `test_ac4_writer_wait_termination_stop`: exact terminal writer/attempt/jobs permits takeover; acknowledgement alone, incomplete pages, changed attempt or timeout alone does not. Stop prevents claims/intents while allowing observation of an accepted merge. Operating parent reload and stale-parent refusal are also proved in AC5; frozen stop/resume is proved in AC6. Shared review/policy/dispatch proof below. |
-| AC5 | verified | `test_ac5_endpoint_reconciliation_gaps`: intent/payload identity, lost record response with advanced observed head, PR uniqueness, actual merge commit/parents/tree, tag/cancel identities and unknown-to-applied history pass. Contradictory/duplicate/incomplete histories, changed duplicate operations and stale later parents refuse; confirmed absence restores only the same operation and unknown state blocks further intents. Shared review/policy/dispatch proof below. |
-| AC6 | verified | `test_ac6_immutable_publication_and_conflicts`: canonical synthetic tag object/annotation bytes, fixed source/version/time/run and two-domain partial publication retain completed refs and propose only missing operations. Occupied conflicting tags, changed fixed payloads, unexpected parents/tree, missing completion, reopened candidate or duplicate promotion after stop/resume refuse. Shared review/policy/dispatch proof below. |
-| AC7 | verified | `test_ac7_inert_runtime_isolation_and_timing`: disabled quiet/no-op, enabled misconfiguration, bounded retry/opportunity simulation, duplicate signals, private summary/argument suppression, ambient credential/runtime-context removal, missing runtime 69/local versus failure/native, file-only Git isolation and no HTTP/candidate execution pass. Source workflow has inert preview only, master/event guard, independent inspector, fixed writer concurrency/timeouts and no secrets/Environment/schedule. Actual Linux and native Windows proof below. |
+| AC1 | pending | `test_ac1_retained_full_bundle_and_old_gate`: exact checked-in manifest/source bytes, old approved synthetic merge extraction and retained preview/classifier execution pass. A newer weakened package cannot waive old evidence or approval; provenance/protocol/ancestor/tampered/incomplete closure refuse. Full operator path refuses old outstanding gates and permits safe no-op without changing caller HEAD. Review, policy and dispatch proof is recorded below. |
+| AC2 | pending | `test_ac2_original_bytes_and_projection`: literal Unicode/narrative escaping, strict original UTF-8/control/CRLF/NUL, fields/IDs/tuple arity, format/decimals, contiguous filenames/digest chain, unsafe paths, impossible transitions and index disagreement are covered by positive/refusal cases. Parsing never normalizes original record bytes. Shared review/policy/dispatch proof below. |
+| AC3 | pending | `test_ac3_requests_evidence_and_invalidation`: exact synthetic approval/check bindings pass; forged actor/run/attempt/ref/workflow/event, moved candidates, missing requests/checks, canceled pending approval and major classification with a waived approval flag refuse. Sources remain supplied fake observations. Shared review/policy/dispatch proof below. |
+| AC4 | pending | `test_ac4_writer_wait_termination_stop`: exact terminal writer/attempt/jobs permits takeover; acknowledgement alone, incomplete pages, changed attempt or timeout alone does not. Stop prevents claims/intents while allowing observation of an accepted merge. Operating parent reload and stale-parent refusal are also proved in AC5; frozen stop/resume is proved in AC6. Shared review/policy/dispatch proof below. |
+| AC5 | pending | `test_ac5_endpoint_reconciliation_gaps`: intent/payload identity, lost record response with advanced observed head, PR uniqueness, actual merge commit/parents/tree, tag/cancel identities and unknown-to-applied history pass. Contradictory/duplicate/incomplete histories, changed duplicate operations and stale later parents refuse; confirmed absence restores only the same operation and unknown state blocks further intents. Shared review/policy/dispatch proof below. |
+| AC6 | pending | `test_ac6_immutable_publication_and_conflicts`: canonical synthetic tag object/annotation bytes, fixed source/version/time/run and two-domain partial publication retain completed refs and propose only missing operations. Occupied conflicting tags, changed fixed payloads, unexpected parents/tree, missing completion, reopened candidate or duplicate promotion after stop/resume refuse. Shared review/policy/dispatch proof below. |
+| AC7 | pending | `test_ac7_inert_runtime_isolation_and_timing`: disabled quiet/no-op, enabled misconfiguration, bounded retry/opportunity simulation, duplicate signals, private summary/argument suppression, ambient credential/runtime-context removal, missing runtime 69/local versus failure/native, file-only Git isolation and no HTTP/candidate execution pass. Source workflow has inert preview only, master/event guard, independent inspector, fixed writer concurrency/timeouts and no secrets/Environment/schedule. Actual Linux and native Windows proof below. |
 
-## Source-bound checks and review
+## Earlier source-bound checks and review
 
 [CI 36715576059](https://github.com/shk95/configs/actions/runs/36715576059)
 completed successfully for source head
@@ -117,9 +136,11 @@ bytes, not production approval. Historical failed runs remain failed: 95d4f83's
 and 7746291's [36714443920](https://github.com/shk95/configs/actions/runs/36714443920)
 ordinary diagnostic newline failure do not supply acceptance evidence.
 
-This report-only publication preserves all verified executing and fixture source
-bytes and receives fresh current-head CI before Ready. The PR records that exact
-publication head/run separately. Child completion certifies only pure preview
+The earlier report-only publication preserved its executing and fixture source
+bytes, and PR #456 recorded publication head 13d75eff51b464edc74fbc045c814c79f053f218
+and successful run 36716968971 separately. Targeted review now reopens that
+completion until repaired source-bound evidence is available. Child completion
+can certify only pure preview
 source/fixtures; parent remains zero of fourteen verified and issue #451 stays
 open. Synthetic trust assertions are not production provenance authentication.
 Actual credentials, operating repository bootstrap, Environment/protection/actor

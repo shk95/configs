@@ -46,8 +46,17 @@ def candidate_digest(candidate):
     return digest(canonical(candidate)) if candidate else "0" * 64
 
 
+CANDIDATE_EFFECTS = {"pr", "merge", "tag-object", "tag-ref"}
+
+
+def publication_ref_id(release):
+    return digest(canonical({"kind": "tag-ref", "object-operation": release[6],
+                             "tag": release[0] + "-v" + release[1],
+                             "source": release[2], "object": release[5]}))
+
+
 def reconciled(op):
-    return op["state"] == "observed" or (op["state"] == "intent" and op["observation"]
+    return op["state"] == "observed" or (op["state"] in {"intent", "superseded"} and op["observation"]
             and op["observation"]["status"] == "absent" and op["observation"]["complete"] is True)
 
 
@@ -71,6 +80,12 @@ def reduce(events, config, transcript):
             state["generation"] = event["generation"]
         elif kind == "candidate":
             require(not state["frozen"] and not state["stopped"] and state["owner"] and state["stage"] in {"active", "candidate", "validated", "approved", "blocked", "waiting"}, "candidate-after-publication-or-unowned")
+            require(all(reconciled(o) for o in state["operations"].values()), "candidate-before-effect-reconciliation")
+            # Confirmed-absent old candidate effects remain in history but cannot
+            # be proposed or acquire success on behalf of the replacement.
+            for op in state["operations"].values():
+                if op["kind"] in CANDIDATE_EFFECTS and op["state"] == "intent":
+                    op["state"] = "superseded"
             old = state["candidate"]
             require(decimal(event["candidate-generation"]) == (decimal(old["candidate-generation"]) + 1 if old else 1), "wrong-candidate-generation")
             fields = ("candidate-generation", "dev", "master", "tree", "rules", "tool", "baselines", "selected", "classification", "versions", "migrations", "approval-required")
@@ -118,13 +133,19 @@ def reduce(events, config, transcript):
             if kind == "intent":
                 require(all(o["state"] not in {"unknown", "conflict"} for o in state["operations"].values()), "unreconciled-operation")
                 require(status == "intent" and remote == "-" and observation == "-", "invalid-intent")
+                bound_candidate = candidate_digest(state["candidate"]) if op_kind in CANDIDATE_EFFECTS else None
+                if op_kind in CANDIDATE_EFFECTS:
+                    require(state["candidate"] is not None, "candidate-effect-without-candidate")
                 if previous:
                     require(previous["payload"] == payload and previous["kind"] == op_kind, "changed-duplicate-operation")
-                    require(previous["state"] != "observed", "repeated-completed-operation")
+                    require(previous["state"] not in {"observed", "superseded"}, "repeated-completed-or-superseded-operation")
+                    require(previous["candidate"] == bound_candidate, "changed-operation-candidate")
+                if op_kind == "pr":
+                    require(all(payload[k] == state["candidate"][k] for k in ("dev", "master")), "stale-pr-payload")
                 if op_kind == "merge":
                     require(not state["frozen"], "repeated-promotion")
                     require(state["stage"] in {"validated", "approved"}, "unvalidated-promotion")
-                    require((state["candidate"]["approval-required"] == "0" and state["candidate"]["classification"] != "major") or state["approval"], "missing-exact-approval")
+                    require((state["candidate"]["approval-required"] == "0" and state["candidate"]["classification"] != "major" and state["candidate"]["migrations"] == "-") or state["approval"], "missing-exact-approval")
                     require(all(payload[k] == state["candidate"][k] for k in ("dev", "master", "tree")), "stale-merge-payload")
                 if op_kind.startswith("tag"):
                     require(state["stage"] in {"promoted", "publishing"}, "tag-before-verified-promotion")
@@ -139,12 +160,23 @@ def reduce(events, config, transcript):
                         require(frozen is None or frozen == payload, "changed-frozen-publication-payload")
                         state["publication-payloads"][payload["tag"]] = payload
                     else:
-                        require(payload["tag"] in state["publication-payloads"], "tag-ref-before-fixed-object")
+                        require(op_id == publication_ref_id(release), "changed-fixed-ref-operation")
+                        object_op = state["operations"].get(release[6])
+                        require(object_op and object_op["kind"] == "tag-object"
+                                and object_op["state"] == "observed"
+                                and object_op["remote"] == release[5]
+                                and object_op["payload"]["tag"] == payload["tag"], "tag-ref-before-observed-object")
                 if op_kind == "record":
                     require(payload["parent"] == state["owner"]["operating-head"], "stale-operating-parent")
-                state["operations"][op_id] = {"kind": op_kind, "payload": payload, "state": "intent", "observation": None, "phase": state["stage"]}
+                if op_kind == "cancel":
+                    require(all(payload[k] == state["owner"][k] for k in ("run", "attempt", "workflow"))
+                            and payload["jobs"] == state["owner"]["job"], "cancel-target-not-recorded-owner")
+                state["operations"][op_id] = {"kind": op_kind, "payload": payload, "state": "intent", "observation": None, "phase": state["stage"], "candidate": bound_candidate, "remote": "-"}
             else:
                 require(previous and previous["payload"] == payload and previous["kind"] == op_kind, "observation-without-matching-intent")
+                if op_kind in CANDIDATE_EFFECTS:
+                    require(previous["candidate"] == candidate_digest(state["candidate"])
+                            and previous["state"] != "superseded", "stale-candidate-effect-observation")
                 supplied = transcript["observations"].get(op_id)
                 require(isinstance(supplied, list), "missing-operation-observations")
                 matches = [o for o in supplied if digest(canonical(o)) == observation]
@@ -154,9 +186,22 @@ def reduce(events, config, transcript):
                 if result == "applied":
                     require(remote == remote_identity(op_kind, payload, observed), "observed-remote-identity-mismatch")
                 require(status == {"applied": "observed", "absent": "intent", "unknown": "unknown", "conflict": "conflict"}[result], "false-observation-result")
-                previous.update(state=status, observation=observed)
+                already_observed = previous["state"] == "observed"
+                if already_observed:
+                    require(result == "applied" and remote == previous["remote"], "contradictory-completed-effect-observation")
+                if result == "applied" and op_kind == "record":
+                    current_head = state["owner"]["operating-head"]
+                    target = observed["target"]
+                    require(current_head == target["head"]
+                            or current_head in {item["commit"] for item in target["history"]}
+                            or (not already_observed and current_head == payload["parent"]),
+                            "stale-operating-head-observation")
+                previous.update(state=status, observation=observed, remote=remote)
                 if result == "applied" and op_kind == "record":
                     state["owner"]["operating-head"] = observed["target"]["head"]
+                if already_observed:
+                    state["sequence"] = event["sequence"]
+                    continue
                 if result == "applied" and op_kind == "merge":
                     state.update(frozen=True, **{"publication-stage": "promoted"})
                 if result == "applied" and op_kind.startswith("tag"):
@@ -192,7 +237,7 @@ def reduce(events, config, transcript):
                 state.update(stopped=False, stage="candidate" if state["candidate"] else "active", evidence=[], approval=None)
         elif kind == "complete":
             require(state["stage"] in {"active", "publishing", "promoted"}, "impossible-completion")
-            require(all(o["state"] == "observed" for o in state["operations"].values()), "incomplete-operations")
+            require(all(o["state"] in {"observed", "superseded"} for o in state["operations"].values()), "incomplete-operations")
             if state["frozen"] and state["candidate"]["versions"] != "-":
                 require(state["releases"], "missing-publication-plan")
             if state["releases"]:

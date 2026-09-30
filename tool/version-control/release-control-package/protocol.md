@@ -36,6 +36,11 @@ the only padded counter. Exhaustion refuses. Pinned config blob identity is boun
 in batch-start; the caller supplies those pinned bytes, while stop is read anew.
 There is no private storage transport in this lane.
 
+This reader handles one supplied synthetic outstanding-batch envelope. Completion
+is terminal; a second batch-start or any later event refuses. Global repeated
+history slicing and cross-batch retained configuration/package selection are not
+implemented, and remain parent source/live obligations.
+
 Each event has sequence, kind, prior-event digest and batch identity plus exactly
 the kind-specific fields declared in records.py. Evidence, release and operation
 tuples retain the parent's exact arities. JSON operation payload is a literal TSV
@@ -54,6 +59,34 @@ next intent is allowed. Clearing a stop input does not resume recorded stop;
 authenticated synthetic resume and reconciled effects are required. Takeover
 requires exact terminal owner/attempt/writer-job observations, not cancel acceptance
 or timeout. Neither generations nor these prechecks are atomic API fencing.
+
+Synthetic promotion candidates support exactly patch, minor or major
+classification. No-op/source-only completion is outside candidate promotion.
+Migrations is one nonempty literal TSV narrative summary, with the original-byte
+control rules above, or the exact `-` sentinel for none; no execution or inferred
+schema follows from its text. Major or any migration requires exact approval,
+even when the supplied approval-required flag is 0.
+
+Candidate replacement requires every earlier effect to be reconciled. Confirmed
+absent candidate-bound intents become derived `superseded` state: they remain
+in the projection/history but are neither pending proposals nor eligible for
+later intent/observation under the replacement. PR/merge/tag intents record the
+exact candidate digest; their observations must retain that binding. Observed
+success is absorbing: absent/unknown/conflicting later reads or a different
+applied remote identity refuse rather than erasing success or restoring retries.
+Idempotent same-identity success does not rewind publication phase.
+Record observation reloads the operating head only along its complete known commit
+chain: the current head must equal the target or appear among its commits. The
+first applied observation may start at its exact intent parent. A stale later
+history cannot lower the current head or erase either recorded success.
+
+A tag-ref requires the exact selected tag-object operation's observed success.
+Its fixed operation ID is SHA-256 of canonical JSON with kind=`tag-ref`,
+object-operation=the release tuple operation ID, tag=domain plus `-v` plus version,
+source=the release source and object=the release object. Owner generation/time
+does not change that identity. The release tuple arity remains unchanged. Cancel
+intents match the recorded owner's exact run, attempt, workflow and sole writer
+job, and use the fixed public repository; supplied unrelated targets refuse.
 
 Transcript JSON has exactly source, checks, owner, observations and protection.
 Source is a list of exact repository/workflow/actor/run/attempt/ref/event/mode/candidate

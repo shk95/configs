@@ -276,6 +276,8 @@ class ControllerProof(unittest.TestCase):
             (root / "000000000002.tsv").rename(root / "000000000009.tsv")
             self.refuse(history, root)
         self.refuse(engine.reduce, sequence([event("complete")]), CONFIG, transcript())
+        second = start(); second["batch"] = Y
+        self.refuse(engine.reduce, sequence([start(), event("complete"), second]), CONFIG, transcript())
 
     # INV repository/release-control-preview-only
     def test_ac3_requests_evidence_and_invalidation(self):
@@ -300,6 +302,15 @@ class ControllerProof(unittest.TestCase):
         merge = {"repository": "shk95/configs", "number": "7", "dev": D, "master": H, "tree": T}
         with self.assertRaisesRegex(Refusal, "missing-exact-approval"):
             engine.reduce(sequence(events + [effect("merge", merge)]), CONFIG, transcript(candidate=major))
+        for classification in ("major-unknown", "", "no-op"):
+            unsupported = base_events(False); unsupported[2]["classification"] = classification
+            self.refuse(sequence, unsupported)
+        migration = dict(CANDIDATE, migrations="data", **{"approval-required": "0"})
+        migrating = base_events(False); migrating[2].update(migration)
+        self.refuse(engine.reduce, sequence(migrating + [effect("merge", merge)]), CONFIG, transcript(candidate=migration))
+        approved_migration = base_events(); approved_migration[2].update(migration)
+        approved_migration[4]["migrations"] = "data"
+        self.assertEqual(engine.reduce(sequence(approved_migration + [effect("merge", merge)]), CONFIG, transcript(candidate=migration))["stage"], "approved")
 
     # INV repository/release-control-preview-only
     def test_ac4_writer_wait_termination_stop(self):
@@ -328,6 +339,13 @@ class ControllerProof(unittest.TestCase):
         # Current preview and historical approval observations coexist without guessing inputs.
         proof["source"] += transcript("preview")["source"]
         adapter.authenticate(proof, CONFIG, request(), engine.candidate_digest(CANDIDATE))
+        cancel = {"repository": "shk95/configs", "run": OWNER["run"], "attempt": OWNER["attempt"], "workflow": OWNER["workflow"], "jobs": OWNER["job"]}
+        self.assertEqual(engine.reduce(sequence(base_events() + [effect("cancel", cancel, op_id=Y)]), CONFIG, transcript())["operations"][Y]["state"], "intent")
+        for field in ("run", "attempt", "workflow", "jobs"):
+            self.refuse(engine.reduce, sequence(base_events() + [effect("cancel", dict(cancel, **{field: "999"}), op_id=Y)]), CONFIG, transcript())
+        terminal_cancel = {"status": "present", "complete": True, "target": {**{k: v for k, v in cancel.items() if k != "repository"}, "latest-attempt": cancel["attempt"], "terminal": True}}
+        cancel_proof = transcript(); cancel_proof["observations"][Y] = [terminal_cancel]
+        self.assertEqual(engine.reduce(sequence(base_events() + [effect("cancel", cancel, op_id=Y), effect("cancel", cancel, "observed", terminal_cancel, Y)]), CONFIG, cancel_proof)["operations"][Y]["state"], "observed")
 
     # INV repository/release-control-preview-only
     def test_ac5_endpoint_reconciliation_gaps(self):
@@ -374,6 +392,33 @@ class ControllerProof(unittest.TestCase):
         self.refuse(engine.reduce, sequence(copy.deepcopy(events) + [effect("merge", merge, op_id=Y)]), CONFIG, proof)
         events.append(effect("merge", merge, "observed", matching))
         self.assertEqual(engine.reduce(sequence(events), CONFIG, proof)["stage"], "promoted")
+        other_commit = copy.deepcopy(matching); other_commit["target"]["commit"] = "e" * 40
+        changed_identity = copy.deepcopy(proof); changed_identity["observations"][X].append(other_commit)
+        self.refuse(engine.reduce, sequence(copy.deepcopy(events) + [effect("merge", merge, "observed", other_commit)]), CONFIG, changed_identity)
+        replacement = dict(CANDIDATE, dev=T, versions="unixlike:1.0.2", **{"candidate-generation": "2"})
+        unresolved = base_events() + [effect("merge", merge), effect("merge", merge, "unknown", unknown)]
+        self.refuse(engine.reduce, sequence(copy.deepcopy(unresolved) + [event("candidate", **replacement)]), CONFIG, proof)
+        no_merge = {"status": "absent", "target": {}, "complete": True}
+        changed_candidate = copy.deepcopy(unresolved) + [effect("merge", merge, "intent", no_merge), event("candidate", **replacement)]
+        replacement_proof = transcript(); replacement_proof["observations"][X] = [unknown, no_merge, matching]
+        changed_state = engine.reduce(sequence(copy.deepcopy(changed_candidate)), CONFIG, replacement_proof)
+        self.assertEqual(changed_state["operations"][X]["state"], "superseded")
+        self.assertFalse([o for o in changed_state["operations"].values() if o["state"] == "intent"])
+        self.refuse(engine.reduce, sequence(copy.deepcopy(changed_candidate) + [effect("merge", merge, "observed", matching)]), CONFIG, replacement_proof)
+        self.refuse(engine.reduce, sequence(copy.deepcopy(changed_candidate) + [effect("merge", merge)]), CONFIG, replacement_proof)
+        with tempfile.TemporaryDirectory() as directory:
+            root = Path(directory)
+            for folder in ("config", "control", "history", "current"):
+                (root / folder).mkdir()
+            data = encode(CONFIG); changed_candidate[0]["config"] = blob_identity(data)
+            packet = sequence(copy.deepcopy(changed_candidate)); state = engine.reduce(packet, CONFIG, replacement_proof)
+            (root / "config/operating.tsv").write_bytes(data)
+            (root / "control/stop.tsv").write_bytes(encode(STOP))
+            for n, item in enumerate(packet, 1):
+                (root / "history" / f"{n:012d}.tsv").write_bytes(encode(item))
+            (root / "current/index.tsv").write_bytes(engine.index(state, digest(encode(packet[-1]))))
+            replacement_proof["source"] += transcript("preview", replacement)["source"]
+            self.assertEqual(engine.preview(root, replacement_proof, request(candidate=replacement), {"control": H, "manifest": X, "approval": X})["proposed"], 0)
         # Lost operating update confirmed absent at the exact old parent can reload/retry.
         absent = {"status": "absent", "target": {"parent": H}, "complete": True}
         events = base_events() + [effect("record", record), effect("record", record, "unknown", unknown), effect("record", record, "intent", absent)]
@@ -390,6 +435,26 @@ class ControllerProof(unittest.TestCase):
         advanced = dict(record, parent=T, commit="e" * 40, event=Y)
         state = engine.reduce(sequence(copy.deepcopy(events) + [effect("record", advanced, op_id=Y)]), CONFIG, proof)
         self.assertEqual(state["operations"][Y]["state"], "intent")
+        advanced_observation = {"status": "present", "complete": True, "target": {"history": observed["target"]["history"] + [{k: v for k, v in advanced.items() if k != "repository"}], "head": advanced["commit"]}}
+        proof["observations"][Y] = [advanced_observation]
+        advanced_events = copy.deepcopy(events) + [effect("record", advanced, op_id=Y), effect("record", advanced, "observed", advanced_observation, Y)]
+        preserved = engine.reduce(sequence(copy.deepcopy(advanced_events)), CONFIG, proof)
+        self.assertEqual(preserved["owner"]["operating-head"], advanced["commit"])
+        snapshot = copy.deepcopy(preserved)
+        self.refuse(engine.reduce, sequence(copy.deepcopy(advanced_events) + [effect("record", record, "observed", observed)]), CONFIG, proof)
+        self.assertEqual(preserved, snapshot)
+        self.assertEqual(preserved["operations"][X]["state"], "observed")
+        self.assertEqual(preserved["operations"][Y]["state"], "observed")
+        # A same-identity later read may advance along the complete known chain.
+        later = copy.deepcopy(advanced_observation)
+        later["target"]["history"].append({"parent": advanced["commit"], "commit": "f" * 40, "event": "f" * 64, "index": "e" * 64})
+        later["target"]["head"] = "f" * 40
+        forked = copy.deepcopy(observed)
+        forked["target"]["history"].append({"parent": T, "commit": "f" * 40, "event": "f" * 64, "index": "e" * 64})
+        forked["target"]["head"] = "f" * 40
+        proof["observations"][X] += [later, forked]
+        self.refuse(engine.reduce, sequence(copy.deepcopy(advanced_events) + [effect("record", record, "observed", forked)]), CONFIG, proof)
+        self.assertEqual(engine.reduce(sequence(copy.deepcopy(advanced_events) + [effect("record", record, "observed", later)]), CONFIG, proof)["owner"]["operating-head"], "f" * 40)
 
     # INV repository/release-control-preview-only
     def test_ac6_immutable_publication_and_conflicts(self):
@@ -416,13 +481,14 @@ class ControllerProof(unittest.TestCase):
         windows["object"] = adapter.tag_identity(windows)
         release_rows = [["unixlike", "1.0.1", D, H, blob_identity(annotation.encode()), tag["object"], Y],
                         ["windows", "1.0.1", D, H, blob_identity(annotation.encode()), windows["object"], "d" * 64]]
+        unix_ref_id, windows_ref_id = map(engine.publication_ref_id, release_rows)
         events = base_events(); events[2]["release"] = release_rows
         publication_candidate = dict(CANDIDATE, versions="unixlike:1.0.1,windows:1.0.1")
         events[2]["versions"] = publication_candidate["versions"]
         events[4]["versions"] = publication_candidate["versions"]
         events.extend([effect("merge", merge), effect("merge", merge, "observed", matching)])
         proof = transcript(candidate=publication_candidate); proof["observations"][X] = [matching]
-        for payload, object_id, ref_id in [(tag, Y, "c" * 64), (windows, "d" * 64, "e" * 64)]:
+        for payload, object_id, ref_id in [(tag, Y, unix_ref_id), (windows, "d" * 64, windows_ref_id)]:
             observed = {"status": "present", "complete": True, "target": payload}
             events.extend([effect("tag-object", payload, op_id=object_id), effect("tag-object", payload, "observed", observed, object_id)])
             proof["observations"][object_id] = [observed]
@@ -433,20 +499,42 @@ class ControllerProof(unittest.TestCase):
                 events.append(effect("tag-ref", ref, "observed", present, ref_id))
                 proof["observations"][ref_id] = [present]
         state = engine.reduce(sequence(events), CONFIG, proof)
-        self.assertEqual(state["operations"]["c" * 64]["state"], "observed")
-        self.assertEqual([k for k, op in state["operations"].items() if op["state"] == "intent"], ["e" * 64])
+        self.assertEqual(state["operations"][unix_ref_id]["state"], "observed")
+        self.assertEqual([k for k, op in state["operations"].items() if op["state"] == "intent"], [windows_ref_id])
         # Repeating success or changing any fixed publication bytes refuses.
-        self.refuse(engine.reduce, sequence(copy.deepcopy(events) + [effect("tag-ref", {k: tag[k] for k in ("repository", "tag", "object")}, op_id="c" * 64)]), CONFIG, proof)
+        fixed_ref = {k: tag[k] for k in ("repository", "tag", "object")}
+        self.refuse(engine.reduce, sequence(copy.deepcopy(events) + [effect("tag-ref", fixed_ref, op_id=unix_ref_id)]), CONFIG, proof)
+        self.refuse(engine.reduce, sequence(copy.deepcopy(events) + [effect("tag-ref", fixed_ref, op_id="f" * 64)]), CONFIG, proof)
+        absent_ref = {"status": "absent", "target": {}, "complete": True}
+        unknown_ref = {"status": "unknown", "target": {}, "complete": True}
+        conflict_ref = {"status": "present", "target": dict(fixed_ref, object=H), "complete": True}
+        immutable_proof = copy.deepcopy(proof)
+        immutable_proof["observations"][unix_ref_id] += [absent_ref, unknown_ref, conflict_ref]
+        for status, observation in [("intent", absent_ref), ("unknown", unknown_ref), ("conflict", conflict_ref)]:
+            self.refuse(engine.reduce, sequence(copy.deepcopy(events) + [effect("tag-ref", fixed_ref, status, observation, unix_ref_id)]), CONFIG, immutable_proof)
+        repeated = engine.reduce(sequence(copy.deepcopy(events) + [effect("tag-ref", fixed_ref, "observed", proof["observations"][unix_ref_id][0], unix_ref_id)]), CONFIG, proof)
+        self.assertEqual(repeated["operations"][unix_ref_id]["state"], "observed")
+        self.assertEqual(repeated["stage"], "publishing")
+        early = base_events(); early[2]["release"] = [release_rows[0]]
+        early += [effect("merge", merge), effect("merge", merge, "observed", matching), effect("tag-object", tag, op_id=Y)]
+        early_proof = transcript(); early_proof["observations"][X] = [matching]
+        self.refuse(engine.reduce, sequence(early + [effect("tag-ref", fixed_ref, op_id=unix_ref_id)]), CONFIG, early_proof)
         for key, value in [("source", T), ("annotation", "changed"), ("tagger-time", "2026-10-01T00:00:00Z"), ("initial-run", "10"), ("tag", "unixlike-v1.0.2")]:
             changed = dict(tag, **{key: value})
             self.refuse(engine.reduce, sequence(copy.deepcopy(events) + [effect("tag-object", changed, op_id=Y)]), CONFIG, proof)
         self.refuse(engine.reduce, sequence(copy.deepcopy(events) + [event("complete")]), CONFIG, proof)
         missing = {k: windows[k] for k in ("repository", "tag", "object")}
         observed = {"status": "present", "complete": True, "target": missing}
-        proof["observations"]["e" * 64] = [observed]
-        events.extend([effect("tag-ref", missing, "observed", observed, "e" * 64), event("complete")])
+        proof["observations"][windows_ref_id] = [observed]
+        events.extend([effect("tag-ref", missing, "observed", observed, windows_ref_id), event("complete")])
         completed = engine.reduce(sequence(events), CONFIG, proof)
         self.assertEqual(completed["stage"], "complete")
+        handover = copy.deepcopy(events[:-1]) + [event("claim", **dict(OWNER, generation="2", run="10"))]
+        handover_proof = copy.deepcopy(proof)
+        handover_proof["owner"] = {"owner": OWNER, "latest-attempt": "1", "jobs": {OWNER["job"]: "terminal"}, "complete": True, "status": "terminal"}
+        self.assertEqual(engine.reduce(sequence(copy.deepcopy(handover)), CONFIG, handover_proof)["owner"]["run"], "10")
+        for replay_id in (unix_ref_id, "f" * 64):
+            self.refuse(engine.reduce, sequence(copy.deepcopy(handover) + [effect("tag-ref", fixed_ref, op_id=replay_id, generation="2")]), CONFIG, handover_proof)
         mismatched = base_events(); mismatched[2]["release"] = [["unixlike", "1.0.2", D, H, H, H, X]]
         self.refuse(engine.reduce, sequence(mismatched), CONFIG, transcript())
         # Stop/resume after promotion cannot reopen selection or lose partial success.
