@@ -3,6 +3,34 @@ kind: report
 spec: docs/work/windows/host-consumer-contract/spec.md
 status: pending
 
+## W1 implementation pickup, 2026-09-30
+
+The main orchestrator assigned W1 declaration/connections/local generation to
+one Windows worker after the planning PR entered dev. The reviewed spec revision
+was 83b05dcdf9d387587280e32c7c676389020a399f; the execution pickup base was
+a966f9770fd9f024aa2dc6e5796dfabba8e39458. Before source implementation, the
+worker resumed issue #427 at origin/dev
+6629e8a002e615054708bb27c6540727e04bc832 after the Windows runtime declaration
+prerequisite #430 entered dev. The original reviewed spec pin is retained
+separately from this required base update. The dated pickup amendment concretizes
+versioned JSON inputs, explicit unit connections, source selection and integrity,
+legacy-selection preview, unit ownership, unmanaged target-state preservation,
+LTSC capability exclusion and required native proof. No implementation evidence
+is supplied by this amendment.
+
+W1 records proof below by obligation and evidence lane. Keep every whole AC row
+pending until all its required obligations and lanes have been verified. In
+particular, W1 source selection is not W2 capture/save proof (AC3 and capture
+parts of AC7), hosted native fixtures are not LTSC client acceptance (AC5), and
+Windows-owned runtime data is not exact-version CI wiring proof (AC6). Exact
+PowerShell 7.6.6 CI wiring has the separately owned repository execution issue
+#431. An authorized read-only LTSC client route is available: preparatory
+inventory observed Windows 10 IoT Enterprise LTSC x64 build 19044.7725,
+PowerShell 7.6.6 and inbox 5.1.19041.7725. This is environment availability,
+not final-head generation/Check acceptance. Actual
+Apply is tested only in isolated fixtures, not on a real host. No release,
+activation, integration or cleanup is implied by partial delivery.
+
 ## W1 pickup preparation, 2026-09-30
 
 The planner reconciled the pickup boundary with the latest whole-unit and
