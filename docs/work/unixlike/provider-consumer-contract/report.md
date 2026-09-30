@@ -561,16 +561,82 @@ published candidate connection, not final pin alignment, publication, native
 companion builds, runtime or activation. The work-document working-tree
 preflight and `git diff --check` passed for these corrections.
 
+## Provider integration and delivered companion pair, 2026-09-30
+
+The maintainer authorized source publication and separately integrated
+[provider PR #421](https://github.com/shk95/configs/pull/421) at
+`3d6d945f1a7c32428ae506586eb5b644129e5614`. Delivered head
+`c8b6e818e2dc13043ad37010616684d09f4b24e3` passed its own
+[CI run 36651282314](https://github.com/shk95/configs/actions/runs/36651282314)
+and Required checks. That head's macOS 26.6.2/Nix 2.34.8 check evaluated all
+seven synthetic provider outputs and built `fixture-mac` natively. The merge
+passed its separate [post-merge CI run 36653252448](https://github.com/shk95/configs/actions/runs/36653252448)
+and Work closure run 36653252520. The native x86_64 CI checks cover public
+constructor/default/override/refusal behavior, all-output evaluation, selected
+native Home/NixOS builds, the graphical VM fixture and import-order independence.
+Earlier Draft, bootstrap-pin and authorization-pending notes above describe
+their original checkpoints; they are superseded by this delivered evidence.
+
+Both companions explicitly adopted the same immutable delivered provider
+`3d6d945f1a7c32428ae506586eb5b644129e5614?dir=unixlike`, with source
+adaptation and lock changes in separate commits. Neither follows `dev`
+implicitly or claims a provider release tag.
+
+| Source | Published candidate | Integrated source | Exact merged-source CI |
+| --- | --- | --- | --- |
+| Public template [PR #1](https://github.com/shk95/configs-host-template/pull/1) | `64cc43e80607d9e14780849af0e3b2357e2b57a6` | `bd72568b4fd7fd740dc21d0a8fe8927cc9934e4b` | [36655493199](https://github.com/shk95/configs-host-template/actions/runs/36655493199), evaluate passed |
+| Private consumer [PR #21](https://github.com/shk95/configs-hosts/pull/21) | `18e7a1e0e4301a376f75da524cc16ec35e959f59` | `9b04a7635b8eb3e1c6e179827b87efcea9aa5672` | [36655638053](https://github.com/shk95/configs-hosts/actions/runs/36655638053), evaluate passed |
+
+Source-bound metadata fetched from both immutable integrated consumer refs
+confirmed that their original/locked provider selection names the delivered
+SHA, `dir=unixlike` and the same
+`sha256-Kz6FVMMnLTslQInuc3x1Kw7TTSpJ2Prc0eflALzouVo=` source narHash.
+Read-only flake checks and toplevel evaluation against those refs, without
+overrides, passed for the public synthetic example and all seven private
+outputs. This is a locked delivered-pair result, replacing the earlier local
+override-only connection evidence. No private source or host values are copied
+into this public report.
+
+The private consumer's `lib.transferEvidence` passed its actual host-module
+assertions and negative overrides, including access, WSL, hypervisor, storage
+and AMD safeguards. Its standalone synthetic access/WSL check and explicit
+install-plan acceptance/refusal fixture also passed. The safety checker now
+reads the WSL evaluator from the consumer-owned input rather than the removed
+provider input. The checks touched no host disk or application.
+
+The private candidate built its Darwin system natively on macOS 26.6.2 with
+Nix 2.34.8. Candidate `18e7a1e0` is an ancestor of integrated `9b04a763`;
+their complete Git trees are equal. Re-evaluating the Darwin derivation from
+the immutable merged source produced the same derivation as that built
+candidate, and its output is present in the local store. This binds the build
+to unchanged integrated source; it does not claim another build invocation or
+host activation at the merge commit. The other six private outputs were
+evaluated only in this continuation.
+
+Build selection follows the changed behavior. The available native Mac build
+checks the changed private connector/realization's final Darwin result. The
+template changes the connector, pin and synthetic declaration without a new
+template-owned executable or package source; its source-bound example
+evaluation is the selected connection check, with no native template Linux
+build claimed. Provider-native fixture builds remain provider evidence.
+
+Provider integration, required template source delivery and the one-time
+host-connectable ownership transfer are now evidenced. This does not close
+the full parent acceptance table, implement U2 capture, certify API release
+readiness or authorize host rollout. Future release-tag alignment is separate;
+private host activation is neither a provider completion condition nor a
+recurring public CI gate. The report remains pending.
+
 ## Acceptance
 
 | ID | State | Evidence |
 | --- | --- | --- |
-| AC1 | pending | Baselines, override tests and transition guidance checked locally; delivered revision pending. |
-| AC9 | pending | Source-bound reader, independent consumer and live read-only WSL readiness passed; template pin and delivery pending. |
-| AC2 | pending | Public constructor/refusal and selected fixture checks passed; delivery pending. |
+| AC1 | pending | Baselines, override tests and transition guidance delivered in provider `3d6d945f`; full criterion disposition is not advanced by this companion-evidence handoff. |
+| AC9 | pending | Source-bound reader, independent consumer and live read-only WSL readiness passed; template pin and code are delivered above; full criterion disposition remains open. |
+| AC2 | pending | Public constructor/refusal and selected fixture checks passed on delivered head `c8b6e818` and provider merge `3d6d945f`; full criterion disposition remains open. |
 | AC3 | pending | Darwin capture is the separate U2 lane. |
-| AC4 | pending | Independent locked consumer evaluated and built on native x86; durable provider and companion pins pending. |
-| AC5 | pending | macOS 26.6.2/Nix 2.34.8 full local check and native Darwin build passed; delivered evidence pending. |
-| AC6 | pending | Local native x86 and macOS checks used Nix 2.34.8; exact-head GitHub run 36574608460 passed the pinned upstream version assertion and Unix-like job; final delivery remains pending. |
-| AC7 | pending | Host-owned transfer and seven final outputs checked against local provider source; publication/order pending. |
-| AC8 | pending | Mac and x86 selected native builds and provider graphical VM fixture passed; published head a69dd58 CI passed; companion and final delivery pending. |
+| AC4 | pending | Independent locked consumer evaluated and built on native x86; durable provider and companion pins now delivered and checked above; full compatibility-boundary disposition remains open. |
+| AC5 | pending | Delivered provider head `c8b6e818` passed macOS 26.6.2/Nix 2.34.8 evaluation and native Darwin build; full Apple Silicon support-criterion disposition remains open. |
+| AC6 | verified | Delivered provider head `c8b6e818` and merge `3d6d945f` passed their own CI with the explicit upstream Nix 2.34.8 assertion, evaluation and selected native builds; matching macOS evidence is recorded above. |
+| AC7 | pending | Host-owned safeguards and seven final outputs passed on the delivered locked pair; private consumer publication and integration are evidenced above; full ownership-map disposition remains open. |
+| AC8 | pending | Delivered Mac/x86 selected native builds and provider graphical VM fixture passed; companion merged-source checks passed; full reviewed evidence-coverage disposition remains open. |
