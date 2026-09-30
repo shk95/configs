@@ -3,6 +3,60 @@ kind: report
 spec: docs/work/repository/provider-release-contract/spec.md
 status: pending
 
+## Global-history follow-up planning, 2026-09-30
+
+Additive `docs/work/repository/release-control-history/spec.md` and its pending
+report bound global outstanding-batch selection and exact old config/package
+semantic replay. Root reviewed and approved this planning delivery on 2026-09-30; it assigns
+neither source nor live operation. D's actual refresh-candidate package/protocol delivery and root's dated
+compatibility review precede B source pickup. Preserve original event bytes and
+exact old package semantics; unsupported offsets or missing bindings refuse.
+The completed single-envelope child does not complete global history storage or
+the operational loop. All fourteen parent criteria remain pending, with manual
+and scheduled obligations separately open. No parent acceptance text changes.
+
+## Disabled controller child delivery, 2026-09-30
+
+R-control pure source verification is tracked separately in
+`docs/work/repository/release-controller/spec.md` and its adjacent report.
+Root assigned that coherent repository lane after reviewing the concrete pickup
+and child acceptance. Its inert workflow/transcript fixtures have no live transport,
+secret, Environment, schedule or enabled write path. Child proof cannot satisfy
+the parent's affected-domain, actual approved-bootstrap, permission/protection,
+notification receipt or manual/scheduled obligations. All fourteen parent
+acceptance rows remain pending; issue #451 retains those unfinished lanes.
+
+## R-control pickup planning, 2026-09-30
+
+The new issue #451 assigns B only this concrete pickup delivery. Reviewed accepted
+master/PAT/one-writer/stop/retry constraints against the delivered additive preview
+interface. Proposed retained approved-control provenance/bundle, strict bounded
+record grammar, endpoint/permission assertions, request/wakeup, exact owning
+run/attempt termination and intent/result reconciliation. Root reviewed the concrete
+pickup and its bounded follow-up corrections before planning publication.
+No controller source, private provisioning, credential,
+real dispatch/cancel/merge/tag or schedule is implemented or operated here.
+
+The independently completed R-preview report at
+`docs/work/repository/release-preview/report.md` verifies its seven synthetic
+offline criteria. It authenticates no live evidence or production bootstrap, and
+it does not complete any parent row: all fourteen remain pending. Parent AC10's
+earlier no-parser sentence describes that earlier planning checkpoint; current
+preview delivery is an additive bounded tool, not full parent release adoption.
+
+Read-only inspection on 2026-09-30 at dev
+86abcea4eadd1e4403ec9025eedb7009daf54886 confirmed master protection still requires
+Required checks, strict=false, administrator/conversation enforcement, zero
+required approvals and no force/deletion. This uses the session's existing
+operator authentication and is not evidence that the future dedicated PAT can
+read protections or mutate anything. Official endpoint review identifies
+Administration-read as a concrete gap for full protection inspection. Root reviewed
+the primary endpoint contract and selected that read permission for the design,
+including its common application across selected repositories. No token was issued;
+actual permission/Environment/protection proof remains R-manual. Document checks prove
+form only; fake-adapter fixtures, affected dispatch, native governance runtime,
+old-batch recovery and live permission/notification receipts remain pending.
+
 ## Planning delivery clarification, 2026-09-30
 
 Reviewed the latest controller/selection/template amendments and preserved the

@@ -1,0 +1,11 @@
+#!/bin/sh
+# Actual local Nix flakes; no provider or host lock update.
+# INV unixlike/provider-input-refresh-bounded
+set -eu
+. "$(CDPATH= cd -- "$(dirname -- "$0")" && pwd)/prerequisite"
+require_command nix git
+cd "$(CDPATH= cd -- "$(dirname -- "$0")/../../.." && pwd)"
+python_cmd=$(python_for_test)
+PATH=$(dirname "$python_cmd"):$PATH
+export PATH
+exec "$python_cmd" unixlike/tool/checks/refresh_inputs_test.py

@@ -1,0 +1,9 @@
+#!/bin/sh
+# Provider-only operator entry point; no installation or caller-flake override.
+# INV unixlike/provider-input-refresh-bounded
+set -eu
+if ! command -v nix >/dev/null 2>&1 || ! python3 -c 'import sys; assert sys.version_info >= (3, 9)' >/dev/null 2>&1; then
+  echo 'refresh-inputs requires Nix with flakes and a functional Python >= 3.9 on PATH; no software was installed' >&2
+  exit 69
+fi
+exec python3 "$(CDPATH= cd -- "$(dirname -- "$0")" && pwd)/refresh_inputs.py" "$@"

@@ -5,6 +5,82 @@ scope: repository
 status: approved
 review-by: 2026-10-10
 
+## Bounded source pickup, 2026-09-30
+
+Amended 2026-09-30: AC1-AC5 and their required lanes remain unchanged. This
+pickup makes the next pure source outcome concrete, without treating synthetic
+requests as scheduler integration or operating proof. It supersedes the older
+unassigned root/B planning-continuation wording. D owns this planning delivery;
+root assigns source continuation only after reviewing the plan and the repaired
+shared-controller delivery has merged. Parent acceptance remains zero of five.
+
+Planning inspection base is origin/dev
+`54b2b794e5a0aa867f264d1bff548eebe5cc4892`, containing refresh-tool PR #455.
+Source pickup pins fresh dev and the reviewed plan separately; this planning
+base is not a future execution pin. The refresh entry derives its provider root,
+requires functional Python >=3.9 and Nix with the verified update/reference/output
+lock options, and has only `--check` as a read-only inventory option. Its output
+is selection JSON followed by a textual status; it supplies neither a publication
+transport nor an authenticated refresh receipt. A publisher must independently
+validate exact source/head/lock identities rather than trust that status text.
+
+PR #456's reviewed controller baseline is preview-only: supplied synthetic trust
+and endpoint observations, eight fixed executing manifest paths, PR operation
+meaning dev-to-master promotion, and one supplied outstanding-batch envelope.
+It does not deliver feature-to-dev refresh publication, arbitrary provider-source
+provenance, long-lived multi-batch history/config/package transitions, real HTTP,
+credentials or a schedule. Its pending review repairs and later merged revision
+must be inspected before source pickup; this plan grants no use of its old head
+as completed implementation evidence.
+
+### Next coherent source outcome
+
+Use the additive child `docs/work/repository/refresh-candidate/spec.md` and its
+pending report for one repository-owned fixture delivery: actual trusted refresh
+CLI -> disposable lock candidate -> isolated local dependency commit/branch/head
+-> shared-control refresh request or refusal. The child does not complete any
+parent row. It reuses the existing controller and bounded single-envelope model;
+it does not create a second controller, recorder, database or generic framework.
+
+Extend schemas/functions within the existing main/records/engine/adapter files
+and their exact manifest closure where possible. Review semantic protocol
+compatibility explicitly; eight fixed paths do not prevent new functions or
+request schemas. Keep the existing promotion PR operation unchanged and add
+separate bounded refresh-branch/refresh-PR meanings. Execute old outstanding
+packages with their exact retained source/protocol, never current rules; unsupported
+protocols or required automatic history/config migration refuse. No long-lived
+operating storage transport or multi-batch selection is supplied by the child.
+
+The actual CLI runs only in a credential-free disposable workspace with local
+fixture upstreams. Trusted source identities and literal lock bytes pass as data
+to the preview side. A privileged retained-control/publisher path must not execute
+arbitrary provider/candidate code. Fixture Git may create isolated dependency
+commits and branches only locally; all external branch/PR operations are fake
+requests/observations. No actual provider lock update, remote push, private
+connection, protected-branch commit, activation or schedule is permitted.
+
+Source dependencies are the merged refresh tool and **repaired, merged** shared
+controller plus root-reviewed child plan and recorded source owner. Required
+proof joins actual disposable CLI/Git integration with fake request lifecycle:
+no-op/failure/timeout without publication; exact source/base/lock/commit/head;
+open/merged/stale PR and unrelated human changes; non-forced reconciliation;
+stop/resume, bounded transient outcomes and 05/06/07 late/missed opportunities.
+The cutoff never cancels refresh. Before-promotion integration changes the next
+validated candidate; after-promotion integration belongs to the next opportunity.
+Simulated outcomes are not real Required checks, actor authentication, unattended
+admission, endpoint receipt, notification delivery or workflow dispatch proof.
+
+Long-lived history/retained-config/package selection and authenticated operating
+transport remain shared-controller prerequisites for later real scheduler wiring.
+R-manual supplies actual source provenance, connection/PAT/Environment/protection,
+request/notification receipts and manual-cycle proof. Separately authorized
+R-scheduled enablement follows those prerequisites. No live schedule or credential
+provisioning is authorized here, and pure-child success cannot close AC1-AC5.
+
+Source ownership, runtime/native evidence and stop/replan boundaries are in the
+child. Root reviews the concrete planning diff before any planning publication;
+source pickup additionally waits for the repaired controller merge and assignment.
+
 ## Current controller alignment
 
 Amended 2026-09-28 (cross-work reconciliation): AC1/AC4/AC5 use the latest

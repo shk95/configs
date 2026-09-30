@@ -84,6 +84,15 @@ jobs:
       REQUIRE_NATIVE: "1"
     steps:
       - uses: actions/checkout@v7
+      - name: Explicit controller fixture runtime
+        uses: actions/setup-python@v6
+        with:
+          python-version: '3.13'
+      - name: Bind functional controller runtime
+        shell: bash
+        run: |
+          python -I -S -c 'import sys,json,hashlib,subprocess; assert sys.version_info >= (3,9)'
+          echo 'CONFIGS_CONTROLLER_PYTHON=python' >>"$GITHUB_ENV"
       - name: Full repository fixtures
         if: runner.os == 'Linux'
         shell: bash
@@ -97,6 +106,7 @@ jobs:
             *) echo 'Expected native Git for Windows bash' >&2; exit 1 ;;
           esac
           tool/version-control/test-release-preview
+          tool/version-control/test-release-control
 
   unix:
     name: Flake and Unix-like hosts

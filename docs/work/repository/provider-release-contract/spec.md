@@ -4,6 +4,19 @@ date: 2026-09-27
 scope: repository
 status: approved
 review-by: 2026-10-11
+issue: #451
+
+## Global-history follow-up planning, 2026-09-30
+
+Additive `docs/work/repository/release-control-history/spec.md` and its pending
+report bound global outstanding-batch selection and exact old config/package
+semantic replay. Root reviewed and approved this planning delivery on 2026-09-30; it assigns
+neither source nor live operation. D's actual refresh-candidate package/protocol delivery and root's dated
+compatibility review precede B source pickup. Preserve original event bytes and
+exact old package semantics; unsupported offsets or missing bindings refuse.
+The completed single-envelope child does not complete global history storage or
+the operational loop. All fourteen parent criteria remain pending, with manual
+and scheduled obligations separately open. No parent acceptance text changes.
 
 ## Current reading order after reconciliation
 
@@ -13,6 +26,312 @@ before earlier stage proposals. Historical full-build matrices, gitlinks, per-ho
 flakes, App credentials, whole-domain unknown-impact fallback and stronger atomic
 merge claims are superseded. Latest same-date amendments take precedence. This
 is accepted planning, not implementation or permission to execute remote actions.
+
+## R-control concrete pickup, 2026-09-30
+
+Amended 2026-09-30: AC1/AC5/AC6/AC10/AC11/AC12/AC13/AC14 retain their
+acceptance text and required lanes. This engineering pickup clarifies their
+controller portions; it does not adopt unattended policy, production semantic
+releases or a permission bypass. The integrator reviewed this concrete pickup
+for planning delivery. Execution issue #451 names B as continuation owner for this
+planning delivery. Controller implementation receives a later explicit assignment.
+
+The additive offline R-preview was delivered in #429; its completed report is
+`docs/work/repository/release-preview/report.md`. It validates pinned structured
+replay and refuses incomplete mappings; it authenticates no live evidence. Parent
+acceptance remains zero of fourteen verified. Read this pickup before the earlier
+2026-09-30 clarification and historical proposals below. Pure fake-adapter fixtures
+can proceed independently of Darwin capture, the provider refresh tool, private
+hosts or PAT provisioning. Actual affected-domain eligibility and required template
+pair evidence remain prerequisites of an affected live release.
+
+### One outcome and implementation boundary
+
+R-control delivers one disabled-by-default repository controller with bounded
+request/record handling, retained approved control and explicit fake adapters.
+Its prospective owning files are repository controller tools, narrow fixtures,
+the master entry workflow and its policy/dispatch wiring; each file's author must
+be assigned before implementation. Current assignment changes only this work
+item, and compatible scheduler dependency clarification if needed. It does not
+edit README/CONTRIBUTING/architecture, domain code or sibling plans. The operator
+entry will be `tool/configs release-control`; automation calls its implementation.
+The mode is explicit `preview` until separately authorized R-manual operation.
+No fixture invokes a real write endpoint, credential, dispatch, cancel, merge or
+ref mutation. Existing accepted calendar tag tools remain authoritative.
+
+| Choice | Concrete initial design | Refusal/proof obligation |
+| --- | --- | --- |
+| Trusted entry | One master-only controller workflow with schedule, manual request and completed-validation wakeup; Environment only on trusted entry jobs | Wrong repository/ref/event/workflow refuses before loading private data; no dev checkout or candidate artifact/cache execution |
+| Old-batch control | Stable loader executes the exact previously approved public control package, rather than current-master decision rules | Verify approved-master provenance, full package manifest/digests and old approval/transition semantics; unknown compatibility refuses |
+| Records | Version-1 strict TSV, operating config, append-only events and reconstructed current index in one private Git branch | Fixed grammar and exact parent commit; non-forced update conflict reloads; never execute record text |
+| Serialization | A constant job-level writer concurrency group, cancel-in-progress=false, plus exact remote owner/run/attempt/generation checks | Actions pending work is not a durable FIFO; generations cannot fence external APIs; no duplicate writer |
+| Wakeup/approval | Completed trusted check identities wake reconciliation; one manual approval mode sends an exact request to the same entry | API-verified actor/run/ref/attempt and exact candidate tuple; request or dispatch acknowledgement is not approval or ownership |
+| Recovery | Intent precedes each external write; actual remote observation follows; ambiguous results stop | Compare remote commit/PR/tag identity/content before retry, retaining fixed completed releases |
+
+### Trusted loader and retained bundle
+
+The future master workflow has a small loader with literal public repository,
+package-root and supported protocol constants. An operating record supplies only
+a validated full commit identity and its expected manifest; it cannot choose a
+repository, URL, executable path, shell fragment or arbitrary checkout target.
+Digest equality proves identity, not approval. At batch creation, authenticate the
+current approved master control commit, its promotion/review provenance and any
+required control-change approval. Store that approved master SHA, package-manifest
+blob identity, package file digests and supported loader/adapter/record protocol.
+The first control installation's approved source is an R-manual bootstrap input.
+No arbitrary ancestor becomes trusted merely because it is reachable from master.
+
+An outstanding batch always selects that recorded approved commit, configuration
+and exact package. Verify its recorded approved-master provenance and continued
+reachability without replacement objects; read package files only from that public
+commit and constant package root. The manifest enumerates all executing engine,
+classification/approval, transition, remote-adapter and serializer dependencies.
+Do not combine an old script with new rules, new approval checks or new adapters.
+Use an isolated scratch directory and explicit tools, never candidate artifacts or
+caches. A new master loader may resume an old compatible package; an unsupported
+retained protocol or altered package stops for manual recovery rather than silently
+migrating records or weakening old obligations. No generic plugin loader is needed.
+
+Old control governs candidate selection/approval and operation meaning, including
+required old-batch evidence and publication recovery. The small current entry
+only supplies the fixed invocation/secret boundary and compatible scheduling
+interface. A changed current entry incapable of preserving that interface refuses
+old-batch execution. Fixture review must cover two different approved master
+revisions where the newer rules would waive a gate: recovery still applies the
+older gate/approval semantics. Initial approval provenance, old-master ancestry,
+manifest tampering and incomplete dependency pinning require negative cases.
+Master ref restriction alone does not prove secret isolation; actual workflow,
+Environment and credential access are a separate R-manual observation.
+
+### Record grammar, identities and compatibility
+
+Use one operating branch, initially called `operations` in the connection contract;
+its actual repository and authorized branch are R-manual inputs. Its fixed layout
+is `config/operating.tsv`, `control/stop.tsv`, `history/NNNNNNNNNNNN.tsv` and
+`current/index.tsv`. There is no database, external lock or second notification
+store. Operator config/stop updates also advance this branch without force; a
+controller reloads them rather than overwriting the changed head. Only the
+controller appends batch events and changes its index.
+
+Every file starts with the two-field row `format<TAB>1`. Original bytes must be
+valid UTF-8, end in LF and contain no NUL/CR or other controls except separators.
+No blank/comment rows, unknown keys/kinds, duplicate singleton keys, duplicate
+IDs or incorrect field counts are accepted. Values are printable one-line data;
+tab/newline has no escaping alternative and is refused. Backslash/quote/Unicode
+are literal narrative characters, JSON-escaped only on output, never shell/AWK
+source. Git IDs are full 40-hex object identities for this GitHub SHA-1 lane;
+digests/batch/request/operation IDs are 64 lower-hex. Decimal IDs/counters have
+no leading zero; booleans are exactly 0/1; timestamps are fixed UTC seconds.
+The 12-digit zero-padded event filename is the sole counter-format exception;
+its event-sequence value is the equivalent canonical unpadded decimal.
+Missing required records, unsafe paths, unsupported object/format versions or an
+unexplained history/index mismatch refuse. This is a bounded record reader, not
+a new general format framework.
+
+Singletons use `key<TAB>value`. Fixed repeated tuples below have the shown arity;
+all other fields are singleton keys. Lists are sorted unique identifier lists
+with `-` for empty, never expressions. Canonical field ordering and byte encoding
+make duplicate operation payloads comparable. Event sequence is a 12-digit decimal
+filename with no gaps; exhaustion refuses rather than wrapping. An event includes
+its prior-event digest. Index is the deterministic projection of those events,
+including the owning generation and outstanding batch; mismatches require
+explicit reconstruction/inspection before any external mutation.
+
+| Record | Required content |
+| --- | --- |
+| Operating config | schema, enabled flag, literal connection IDs/ref, public controller/validation workflow IDs, authorized numeric actor IDs, reviewed coverage/check definitions and permitted operation scopes; no credentials or code locator |
+| Live stop | schema, stop flag, monotonically increasing stop revision, reason and operator identity; reread from current remote head rather than pinned config |
+| Batch start | batch ID, initial trigger/day/run identity and time, config commit/blob digest, approved controller/master/manifest/provenance identities, rules/selector and loader protocol; preserve these across recovery |
+| Owner | public repository ID, workflow ID/path, run ID, attempt, writer job identity, increasing generation, stage and exact observed operating head; no generation-only claim of API fencing |
+| Candidate | increasing candidate generation, dev SHA, master base SHA, expected merge tree, preview engine/rules/baseline digests, selected check IDs and complete evidence identities; replaces pre-promotion candidate only |
+| Evidence tuple | `evidence<TAB>check<TAB>dev<TAB>master<TAB>tree<TAB>rules<TAB>tool<TAB>state<TAB>run<TAB>attempt<TAB>job<TAB>reference`; real check provenance is authenticated by the adapter, not by offline preview |
+| Approval | actor ID, authenticated manual source run/attempt/ref, exact candidate generation/dev/master/tree, classification/versions/migrations and evidence digest; no PR prose authority |
+| Publication tuple | `release<TAB>domain<TAB>version<TAB>source<TAB>previous-tag-object<TAB>annotation-blob<TAB>tag-object<TAB>intent-id`; fixed annotation/tagger time and initial run identity, not a retry's current time |
+| Operation tuple | `operation<TAB>id<TAB>kind<TAB>payload-digest<TAB>owner-generation<TAB>request-state<TAB>remote-object<TAB>observation`; absent identity uses `-`, state is intent/observed/unknown/conflict |
+| Event/index | event sequence/kind/request/batch/prior digest, owner and state transition; append-only full operation/observation payload and deterministic outstanding index |
+
+The initial reducer supports batch-start, claim, candidate, evidence, approval,
+intent, observation, retry-wait, blocker, stop-observed, resume and complete events.
+Every kind has one fixed legal transition and field set; reject impossible stage,
+wrong owner or repeated operation ID with different bytes. Approval/evidence are
+invalidated when the candidate or bound classification changes. After promotion,
+freeze source, versions, tag names, annotation bytes/tagger time, previous releases
+and publication operation IDs. A partial publication retries only the unchanged
+missing operation, even if dev, config or master subsequently advance.
+
+Configuration edits govern later batches; retained records/config are never
+rewritten by an implicit version upgrade. Live stop/revocation remain exceptions.
+Malformed history, unavailable storage, missing old package or unverified approval
+blocks new writes. A manual recovery can inspect and reconstruct the index from
+history; it cannot infer missing approval/evidence from tags or rewrite completed
+release objects. Changing a protocol or approval meaning returns to planning.
+
+### Requests, wakeup and bounded execution
+
+Manual mode is one of preview, start, approve, resume or stop; ordinary patch/minor
+eligibility does not require approval mode. The one manual approval workflow is
+this shared entry's approve path, not an independent private-record writer. Bind
+an approval request to the exact displayed candidate digest, then validate actual
+Actions actor/triggering actor IDs and source event metadata against the pinned
+allowlist. Caller-supplied actor strings are never identity. A rerun is a new
+attempt and must revalidate request and actor; approvals do not merge.
+
+Schedule and `workflow_run: completed` are signals to read actual outstanding
+state. Match source repository ID, literal workflow ID/path, expected event,
+ref/head SHA, run ID and attempt through fresh API reads. Completion or a supplied
+success flag alone is not evidence. A candidate check artifact is never executed
+or trusted as the authority of a result. Select authenticated check-run/job/tool
+provenance for the exact candidate/master/tree/rules tuple before producing the
+existing R-preview evidence TSV. Unsupported coverage/bootstrap refuses; synthetic
+fixtures cannot manufacture production coverage or real tool provenance.
+
+Read/cancel inspection runs outside the job-level writer concurrency group, so
+an owner stuck inside that group cannot block inspection of its own termination.
+Only the trusted record-writer job uses the same constant group across every
+entry/mode. It rereads remote state after acquiring the group and processes
+requests in that critical section. Repeated signals join outstanding work rather
+than create another batch. Actions can replace pending jobs and does not promise
+FIFO; a canceled pending manual approval is not approved and has no private
+consumption receipt. Do not assume the run API reconstructs dispatch inputs.
+The operator must resend the same complete exact request; missing request data
+refuses rather than reconstructing approval from run prose or a guessed input. Scheduled
+or validation signals merely cause state reconciliation on the next surviving
+entry; delayed/missed opportunities follow the existing 05/06/07 agreement.
+
+| Bound | Initial value and meaning |
+| --- | --- |
+| Privileged controller job | 15 minutes; small record/remote operations only, never builds or sleeps with the PAT |
+| Individual API call | 30-second response deadline; a timed-out write has unknown outcome, not permission to retry |
+| Cancel observation | Poll exact run/attempt/jobs every 30 seconds for at most 5 minutes; expiry is unknown termination and refuses takeover |
+| Credential-free waits | Accepted 5/15/30-minute delays, wait-job deadlines 6/16/31 minutes in the same workflow |
+| Candidate checks | Run without the PAT/private configuration; retain each domain's existing declared timeout and evidence boundary |
+
+A known validation/retry wait is a legitimate stage, not an expired writer. A
+writer timeout begins inspection/cancel only; it cannot grant ownership. Before
+cancel match the recorded repository/workflow/run/attempt and reread latest attempt.
+The cancel endpoint accepts run ID, not an atomic expected-attempt condition;
+attempt races cannot be atomically prevented by that API. Reread immediately
+before and after the call; a detected change or unknown result refuses takeover.
+Serializing operator rerun mutations with controller cancellation is a separate
+R-manual operating prerequisite, not a proven atomic API fence. A 202
+response is only acceptance. Confirm exact attempt and all its writer jobs are
+terminal, re-read current records and reconcile outstanding operations before
+claiming the increasing generation. Unknown status/attempt or missing job pages
+blocks takeover. Never cancel input refresh at the cutoff or unrelated CI.
+
+Before every external mutation reread owner/generation, remote operating head,
+live stop and actual target. Persist its exact intent first. Stop may race an
+already accepted request; observe the actual effect, record it and perform no
+further mutation. A stop/config commit author field alone does not authenticate
+an operator or grant write authority. Clearing stop does not resume; an explicit
+authenticated resume
+reconciles remote effects and renews any changed-candidate evidence/approval.
+A generation change is checked locally and in operating history but is not an
+atomic fence on GitHub's merge/tag API. Do not claim zero race windows.
+
+### Concrete endpoint adapter and permission contract
+
+The adapter initially pins API version `2026-03-10`, explicit method/path/body
+schemas and supported response forms. Verify the account's actual responses
+before R-manual operation. Unknown fields needed for identity or incompatible
+statuses refuse; do not silently treat legacy acknowledgements as current proof.
+No write endpoint or live controller operation is called by this planning
+delivery. Actual read-only protection inspection is recorded in the report;
+fake-adapter fixtures call no live endpoint.
+
+| Operation | Endpoint and documented fine-grained permission | Identity/reconciliation rule |
+| --- | --- | --- |
+| Load operating/source objects | GET Git refs/commits/trees/blobs; Contents read | Fixed repository/ref, full object and exact parent/tree/file identities, no redirects to an unconfigured host |
+| Save operating event/index | POST Git blobs/trees/commits; PATCH Git refs with force=false; Contents write | Commit has exactly the observed head parent; read ref/history after a lost response; matching operation+bytes is applied, conflicting advancement reloads |
+| Inspect/create promotion PR | GET/POST pulls and GET reviews; Pull requests read/write | Same-repository dev to master, one promotion PR, exact head/base, resolved conversations/required protection; no topic PR source |
+| Admit promotion | PUT pulls/{number}/merge with merge_method=merge and sha=expected-dev; Contents write | Read actual merged SHA/parents/tree after response or loss; unexpected result blocks tags, never auto-undo |
+| Validate required evidence | GET commits/{ref}/check-runs and statuses plus Actions runs/attempts/jobs; Checks read, Commit statuses read, Actions read | Exact run/workflow/attempt/job/source/tools and trusted definitions; missing/failed/unverified required checks refuse |
+| Wake one manual entry | POST actions/workflows/{id}/dispatches, ref=master; Actions write | Current documented version returns 200 with run ID/URLs; acknowledgement does not prove execution, ownership or approval |
+| Cancel owner | POST actions/runs/{id}/cancel then GET exact attempt/jobs; Actions write/read | 202 is not termination; mismatched run/attempt and unknown outcome refuse takeover |
+| Inspect full protections | GET branches/{branch}/protection; Administration read | Exact required contexts/app and protections; denied/missing/mismatched state stops, never updates settings |
+| Publish domain annotation | POST Git tags, then POST Git refs for its tag; Contents write | Fixed annotated object/name/source/bytes; successful immutable tags retained, existing conflict refuses |
+
+Permission claims are scoped to those endpoint contracts, not proof that a token
+was issued or a real protected operation succeeds. The template repository is
+selected only if its separate authorized update is included; configs-hosts is
+never selected. No Issues write, Administration write, workflow editing, App,
+renewal service or speculative capability is introduced. Source/ref writes that
+would need an additional permission must stop and demonstrate the specific need,
+not expand the token or bypass protection automatically.
+
+Root endpoint review selects Administration read for authenticated full protection
+GET: the documented endpoint demonstrates the missing read permission rather than
+a speculative capability. Check exact Required context/app, administrator and
+conversation enforcement, no force/deletion, dev strict=true and master strict=false
+before protected operations. This permission applies across all repositories
+selected by the one PAT, including private operating/template scope when included;
+it is not per-repository isolation. Actual PAT issuance, selected-repository scope,
+permission-denial tests and Environment/protection observations are still unapproved
+R-manual inputs. No Administration write, protection-update endpoint or bypass is
+included, and this document issues no credential.
+
+Primary references, reviewed 2026-09-30: [Git references](https://docs.github.com/en/rest/git/refs),
+[Git commits](https://docs.github.com/en/rest/git/commits),
+[annotated tags](https://docs.github.com/en/rest/git/tags),
+[pull requests](https://docs.github.com/en/rest/pulls/pulls),
+[check runs](https://docs.github.com/en/rest/checks/runs),
+[commit statuses](https://docs.github.com/en/rest/commits/statuses),
+[workflow dispatch](https://docs.github.com/en/rest/actions/workflows),
+[run/attempt/cancel](https://docs.github.com/en/rest/actions/workflow-runs),
+[concurrency](https://docs.github.com/en/actions/how-tos/write-workflows/choose-when-workflows-run/control-workflow-concurrency),
+[workflow events](https://docs.github.com/en/actions/reference/workflows-and-actions/events-that-trigger-workflows),
+[Environment ref restrictions](https://docs.github.com/en/actions/reference/workflows-and-actions/deployments-and-environments),
+[protection reads](https://docs.github.com/en/rest/branches/branch-protection).
+The retained-loader protocol, job-group selection, reducer and timeout values are
+engineering choices inferred from these APIs and accepted constraints; the docs
+do not prove this repository's secret isolation, fencing or rollout.
+
+### Unknown response reconciliation and proof families
+
+An operating write first prepares immutable objects with fixed parent/bytes.
+Only reachability through the accepted operating branch makes state saved. On a
+lost PATCH response, read actual branch history: the same operation ID and expected
+commit/event content means applied even if newer valid events now follow it;
+absence with unchanged original parent means not applied; conflicting content or
+unreadable/incomplete history means conflict/unknown. Reload/reduce remote advancement
+before any new action; never force or blindly resubmit an old-parent snapshot.
+
+For a lost PR creation response, find the sole matching source/target PR and
+validate its head/base/body-operation identity; duplicates/conflicts stop. For a
+lost merge response, inspect that PR and actual commit parents/tree. For a lost
+annotation/ref response, inspect the exact immutable tag object and ref; retain
+matching success, create only a confirmed absent operation, refuse conflicting
+annotation/target/version. Never substitute current timestamp/run, new version or
+new source to make a retry succeed. All later effects follow the accepted
+intent -> external operation -> observation gap; there is no multi-repository CAS.
+
+| Proof family | Positive and refusal cases required before live rollout |
+| --- | --- |
+| Trust/retention | Approved old bundle after newer master, changed rules cannot waive old gate, correct package/approval; wrong master provenance/ref/package/dependency/schema/candidate executable refuses |
+| Grammar/records | Canonical UTF-8/Unicode/literal escaping, event+index commit projection; original-byte NUL/CR/invalid UTF-8, unknown/duplicate fields, gaps/old format/index mismatch refuse |
+| Requests/evidence | Duplicate schedules join, verified completion wakes, exact authorized approve/resume; forged actor/event/ref/attempt/tool, moved candidate, canceled pending approval and missing/unverified checks refuse |
+| Ownership/stop | One writer and conflicting head reload, normal wait and termination-confirmed takeover; cancel 202 only, missing pages/changed attempt, timeout-only takeover and post-stop continuation refuse |
+| Intent/reconciliation | Lost response before/after record commit, PR creation/merge, tag object/ref and index; matching applied histories resume, unreadable or contradictory remote states refuse |
+| Immutable partial release | Preserve successful domain tag and retry only missing fixed payload; changed source/version/tagger time/run/annotation or occupied tag refuses without overwrite |
+| Timing/outcomes/isolation | Quiet disabled/no-op, enabled misconfiguration, delayed/missed signals and recorded transient waits; non-transient retry, duplicated intentional action alert and unsafe public/private output refuse |
+
+Fixtures use explicit fake API transcripts plus disposable file-only Git fixtures
+under the delivered test environment isolation. Assert no external transport/ref
+mutation, no candidate code execution and no secrets/private payload in summaries.
+They prove the reducer/adapter contract, not live PAT permissions, notification
+receipt, Windows client behavior or production coverage. Required implementation
+checks are narrow fixtures, registry/work-policy and affected dispatch, with native
+Git-for-Windows evidence for new governance shell behavior. Domain criteria remain
+with their owners, selected honestly by changed effect.
+
+R-manual names the actual private operating repository/resource owner/ref,
+approved initial controller installation, Environment/PAT/actor allowlist, full
+protection assertion choice and real endpoint/notification receipts. R-scheduled
+requires that successful manual proof, refresh tool and shared-controller delivery,
+and separate enablement. These unresolved operating inputs do not block pure
+controller fixture preparation. Stop/replan for changed acceptance/authority,
+unapproved retained semantics, missing coverage, unsafe credential exposure,
+protection bypass or a request for real remote mutation in fixture mode.
 
 ## Implementation pickup clarification, 2026-09-30
 
