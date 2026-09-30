@@ -3,6 +3,17 @@ kind: report
 spec: docs/work/repository/provider-release-contract/spec.md
 status: pending
 
+## Disabled controller child delivery, 2026-09-30
+
+R-control pure source verification is tracked separately in
+`docs/work/repository/release-controller/spec.md` and its adjacent report.
+Root assigned that coherent repository lane after reviewing the concrete pickup
+and child acceptance. Its inert workflow/transcript fixtures have no live transport,
+secret, Environment, schedule or enabled write path. Child proof cannot satisfy
+the parent's affected-domain, actual approved-bootstrap, permission/protection,
+notification receipt or manual/scheduled obligations. All fourteen parent
+acceptance rows remain pending; issue #451 retains those unfinished lanes.
+
 ## R-control pickup planning, 2026-09-30
 
 The new issue #451 assigns B only this concrete pickup delivery. Reviewed accepted

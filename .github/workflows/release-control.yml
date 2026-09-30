@@ -1,0 +1,32 @@
+name: Inert release control preview
+
+on:
+  workflow_dispatch:
+    inputs:
+      mode:
+        description: Inert interface only; no operating data or live effects
+        required: true
+        default: preview
+        type: choice
+        options: [preview]
+
+permissions: {}
+
+jobs:
+  inspect:
+    if: github.repository == 'shk95/configs' && github.ref == 'refs/heads/master' && github.event_name == 'workflow_dispatch' && inputs.mode == 'preview'
+    runs-on: ubuntu-latest
+    timeout-minutes: 5
+    steps:
+      - name: Inert independent inspection boundary
+        run: echo 'Preview scaffold; no operating connection or cancellation.'
+  preview:
+    if: github.repository == 'shk95/configs' && github.ref == 'refs/heads/master' && github.event_name == 'workflow_dispatch' && inputs.mode == 'preview'
+    runs-on: ubuntu-latest
+    timeout-minutes: 15
+    concurrency:
+      group: release-control-writer
+      cancel-in-progress: false
+    steps:
+      - name: Inert preview boundary
+        run: echo 'Disabled preview scaffold; controller fixtures run in CI.'
