@@ -108,20 +108,30 @@ installation tools belong to consumers
 The repository adopts one root consumer flake and lock with explicit host
 declarations and shared selected inputs
 (`docs/policy/decisions/repository/single-flake-host-consumers.md`). This
-replaces the per-host-lock direction; it does not report a completed transfer.
-At this review, the published private main at
-`f7f3010ca4675f705e8a8895dede19786530b6ca` and public template main at
-`dcb8c6d81ebd72ca4b19e8364269494ffcbdc5c2` still contain the earlier `hosts/`
-layout. Prepared single-flake candidates use the bootstrap provider pin
-`e11bd1368d2f5138ad0f9b7017040b2b76e055e6`; candidate override evaluation
-does not establish delivered pins or consumer adoption.
+replaces the per-host-lock direction. The required template adaptation and
+separately owned private source migration have now entered their main branches.
+Live source/lock review on 2026-09-30 confirms both root flakes and both original
+and locked `configs` inputs select
+`github:shk95/configs/3d6d945f1a7c32428ae506586eb5b644129e5614?dir=unixlike`.
+Both use `flake-modules/hosts/` declarations and a shared root input set.
 
-Next, align both candidates to the same delivered provider source, verify
-the exact pairs, and deliver the required template adaptation and separately
-owned private source migration. Provider integration, complete U1 delivery
-and API release readiness are distinct. Private activation is separate and
-is not a provider completion condition. Required companion code, final
-reference alignment and applicable release evidence remain pending.
+| Consumer source delivery | Actual main merge | Exact merge-head evaluation |
+| --- | --- | --- |
+| [Public template PR #1](https://github.com/shk95/configs-host-template/pull/1) | `bd72568b4fd7fd740dc21d0a8fe8927cc9934e4b` | [Post-merge CI 36655493199](https://github.com/shk95/configs-host-template/actions/runs/36655493199): passed |
+| [Private source PR #21](https://github.com/shk95/configs-hosts/pull/21) | `9b04a7635b8eb3e1c6e179827b87efcea9aa5672` | [Post-merge CI 36655638053](https://github.com/shk95/configs-hosts/actions/runs/36655638053): passed |
+
+The earlier `e11bd136` bootstrap candidates and local override evaluations are
+historical preparation checkpoints. Current delivery evidence is the explicit
+source/lock pin and each merged consumer's own main-branch evaluation above.
+It does not establish native host build, runtime or activation at those refs.
+
+Provider integration and this companion source delivery are recorded outcomes.
+U1 parent acceptance and API release readiness remain pending. Additional
+Darwin override and finite contract-reader corrections are owned by
+[Unix-like repair #434](https://github.com/shk95/configs/issues/434); neither
+consumer has adopted those future repairs or advanced the delivered pin here.
+Applicable release evidence remains separately required. Private activation
+is individually selected and is not a provider completion condition.
 
 ## Earlier repository evolution
 

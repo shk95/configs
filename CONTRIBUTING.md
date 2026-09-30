@@ -589,13 +589,18 @@ consumer's current procedure and reviewed host facts.
 ### Validate a private Unix-like host
 
 Use the reviewed output from the actually delivered flake and lock in
-`configs-hosts` for a real host. The agreed single-root-flake transition is a
-candidate until the consumer delivers it; see `docs/status/repository.md`.
-Earlier per-host flakes remain the source for hosts that have not adopted it.
+`configs-hosts` for a real host. Its delivered source now uses one root
+`flake.nix` and `flake.lock`, explicit `flake-modules/hosts/` declarations and
+shared selected inputs; see `docs/status/repository.md` for exact delivery refs
+and remaining provider work. Earlier per-host deployment records describe
+their original source and locks.
 That repository owns the final output, identity, pinned provider revision,
 installation procedure and deployment target. Run its `tool/check-hosts`
 for final evaluation, then build on the target architecture and record native
-runtime separately. Review the selected source, disk and host before any
+runtime separately. A shared pin update requires evaluating every affected
+declared output; builds and deployment remain individually selected per host
+(`docs/policy/decisions/repository/single-flake-host-consumers.md`).
+Review the selected source, disk and host before any
 installation, test activation, switch, reboot or rollback; those actions need
 an explicit request. Neither a `configs` provider check nor its release tag
 supplies private host evidence.
