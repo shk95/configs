@@ -219,7 +219,7 @@ class ControllerProof(unittest.TestCase):
             command = [WRAPPER, "preview", "--fixture-inputs", "--bundle-repository", str(root), "--approved", str(assertion_file), "--operating", str(operating), "--transcript", str(transcript_file), "--request", str(request_file)]
             refused = subprocess.run(["sh"] + command, capture_output=True)
             self.assertNotEqual(refused.returncode, 0)
-            self.assertEqual(refused.stderr, b"release-control: refused\n")
+            self.assertEqual(refused.stderr, b"release-control: refused" + os.linesep.encode("ascii"))
             # Remove invalid events to demonstrate the complete quiet safe preview path.
             for path in (operating / "history").iterdir():
                 path.unlink()

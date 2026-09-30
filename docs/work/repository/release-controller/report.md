@@ -51,6 +51,8 @@ passed Linux repository, policy scans and Windows desired-state. Native Windows
 ran all seven controller families, but AC1's synthetic weakened-package marker
 used platform text output and differed only by CRLF. Its marker now writes exact
 LF bytes; this repairs the fixture contract without weakening TSV byte refusal.
+Review also binds the ordinary Python diagnostic's exact newline to the host;
+this does not normalize supplied records or permit additional diagnostic content.
 This failed run does not verify the pending rows; a new source-head run is required.
 
 All seven child rows remain pending until published source-bound native Windows,
