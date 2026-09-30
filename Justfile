@@ -176,10 +176,10 @@ alias generations := home-generations
 #
 ############################################################################
 
-# Update all the flake inputs
+# Refresh provider inputs except explicitly documented exclusions
 [group('nix')]
 up:
-    nix flake update
+    "{{justfile_directory()}}/unixlike/tool/refresh-inputs"
 
 # Update a single input, e.g. `just upp nixpkgs`
 [group('nix')]

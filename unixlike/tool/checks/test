@@ -39,6 +39,9 @@ set -e
 . "$(CDPATH= cd -- "$(dirname -- "$0")" && pwd)/prerequisite"
 require_command nix
 
+# INV unixlike/provider-input-refresh-bounded: actual local Nix refresh fixtures.
+"$(CDPATH= cd -- "$(dirname -- "$0")" && pwd)/refresh-inputs-test"
+
 root=$(CDPATH= cd -- "$(dirname "$0")/../.." && pwd)
 flake=${CHECKS_FLAKE:-path:$root}
 here=$(nix eval --raw --impure --expr 'builtins.currentSystem')
