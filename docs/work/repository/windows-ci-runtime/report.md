@@ -1,7 +1,7 @@
 # Report: native Windows CI runtime binding
 kind: report
 spec: docs/work/repository/windows-ci-runtime/spec.md
-status: pending
+status: done
 
 ## Acceptance
 
@@ -10,7 +10,7 @@ status: pending
 | AC1 | verified | Run 36659933239 at implementation 6b39f625: native verified archive acquisition and fresh 7.6.6/x64 identity, matching/tampered archive and missing/incorrect identity fixtures pass; registry and repository fixtures pass. |
 | AC2 | verified | Same native job proves explicit runtime controller and management children, identical nested resolution after PATH refresh, conflicting resolution refusal and child 0/23/69/terminating-error behavior. Existing stable gate and immediate status checks are preserved. |
 | AC3 | verified | Same native job records management 7.6.6/x64 separately from actual Desktop/5.1/x64 inbox entry/bootstrap execution: help 0, unknown 64, missing prerequisite 1, successful check 0 and forwarded child failure 37. |
-| AC4 | pending | Complete run 36659933239 passes all selected suites plus Required checks at implementation 6b39f625. Final review found helper-only changes lacked Windows dispatch; targeted effect mapping and positive/negative fixtures are now prepared and require new exact-head CI before final verification. |
+| AC4 | verified | Complete repaired-delivery run 36662249484 passes native Windows, Unix-like, repository fixtures/scans and Required checks at 67ebc7d64e049388f1c5bf1b174c739ae41c4111. Positive/negative dispatch fixtures prove runtime-only Windows selection and consumed-source local selection. Windows source and stable gate semantics remain unchanged; final report publication receives its own checks before Ready. |
 
 ## Local preparation
 
@@ -108,5 +108,15 @@ suite; additions, modifications, deletions and a rename into the fixture are
 positive dispatch cases. CODEOWNERS and an unrelated script remain negative
 Windows-effect cases. Local gates select the runtime module/controller that
 their wiring assertions actually read. Shared workflow machinery retains
-conservative all-suite selection. Native proof for this repaired delivery is
-pending; prior implementation green is not new-head proof.
+conservative all-suite selection.
+
+[Repaired-delivery CI 36662249484](https://github.com/shk95/configs/actions/runs/36662249484)
+passes every selected suite and Required checks at
+67ebc7d64e049388f1c5bf1b174c739ae41c4111. Repository job 109719374890 runs the new
+positive/negative dispatch and local selection fixtures successfully. Native
+Windows job 109719374838 independently records actual management 7.6.6/x64,
+identical nested resolution after PATH refresh, all seven separate inbox 5.1
+entry/bootstrap cases, and the full Windows suite 343/0/1. This repaired head's
+own execution supplies evidence; earlier implementation green is not reused.
+Only this report changes after that source proof, and its publishing revision
+must still receive complete current-head checks in PR #433 before Ready.
