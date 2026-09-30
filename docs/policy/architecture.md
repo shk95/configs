@@ -299,6 +299,14 @@ common change   ──> common checks   ──> common release
 
 ## Repository governance plane
 
+Native Windows CI consumes the Windows-owned verification runtime declaration,
+checks its artifact and actual fresh process identity, and keeps inbox
+bootstrap execution evidence separate. Management checks use the selected
+executable explicitly and retain its precedence for nested execution after
+PATH refresh. This is hosted CI orchestration, not another platform runtime
+selector or a consumer installation contract
+(`docs/policy/decisions/repository/windows-ci-consumes-domain-runtime.md`).
+
 Version-control policy, check dispatch, hooks, CI wiring, and reusable agent
 workflows are repository governance rather than configuration desired state.
 They use the `repository` change scope because assigning them to one platform

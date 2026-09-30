@@ -39,9 +39,11 @@ common
 
 The Unix-like flake exports typed constructors through `lib.mkNixos`,
 `lib.mkDarwin` and `lib.mkHome`. Real host identities and final outputs live in
-the private `configs-hosts` repository. Its agreed next structure selects one
-provider pin in a root flake and lock; the single-flake private and public
-template candidates still await delivery (`docs/status/repository.md`). The
+the private `configs-hosts` repository. It and the public template now use one
+root flake and lock, explicit declarations under `flake-modules/hosts/`, and
+shared selected inputs. Their delivered sources select the same reviewed
+provider revision; exact refs, evaluation evidence and remaining U1/API release
+work are recorded in `docs/status/repository.md`. The
 outputs here use synthetic `fixture-*` and `example` identities to exercise
 NixOS CLI, Linux graphics, WSL, Darwin and standalone
 Home Manager. They are test instances, not deployment targets. The public
@@ -186,8 +188,9 @@ just karabiner-test
 ```
 
 Host-specific Justfile recipes refuse to use the provider's synthetic
-outputs. Evaluate, build and activate a real host from its reviewed private
-consumer flake under `configs-hosts/hosts/<host>/`.
+outputs. Evaluate or build a real host from its explicitly selected final
+output in the private `configs-hosts/` root flake. Activation follows that
+consumer's reviewed procedure and requires an explicit request.
 
 ### Git commands that get no alias
 
