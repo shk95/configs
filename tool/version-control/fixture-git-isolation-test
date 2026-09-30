@@ -1,0 +1,139 @@
+#!/bin/sh
+set -eu
+MSYS_NO_PATHCONV=1
+MSYS2_ARG_CONV_EXCL='*'
+export MSYS_NO_PATHCONV MSYS2_ARG_CONV_EXCL
+root=$(CDPATH= cd -- "$(dirname -- "$0")/../.." && pwd)
+helper="$root/tool/version-control/fixture-git-environment.sh"
+fixture_caller_home=${HOME-}
+. "$helper"
+fixture=$(mktemp -d)
+trap 'rm -rf "$fixture"' EXIT HUP INT TERM
+
+# ----------
+# Fixture repository configuration and transports stay local
+# ----------
+#
+# INV repository/fixture-git-isolation
+parent_refs=$(git -C "$root" for-each-ref)
+parent_config=$(git -C "$root" config --local --list)
+parent_source=$(git -C "$root" status --porcelain)
+git init -q --bare "$fixture/receiver.git"
+git init -q -b dev "$fixture/seed"
+git -C "$fixture/seed" config user.name Fixture
+git -C "$fixture/seed" config user.email fixture@example.invalid
+printf 'seed\n' >"$fixture/seed/file"
+git -C "$fixture/seed" add file
+git -C "$fixture/seed" commit -q -m 'feat(repository): seed isolated fixture'
+receiver_refs=$(git -C "$fixture/receiver.git" for-each-ref)
+receiver_config=$(git -C "$fixture/receiver.git" config --local --list)
+mkdir -p "$fixture/template/hooks" "$fixture/stubs"
+printf '#!/bin/sh\ntouch "%s"\n' "$fixture/escaped" >"$fixture/template/hooks/pre-commit"
+chmod +x "$fixture/template/hooks/pre-commit"
+printf '#!/bin/sh\ntouch "%s"\nexit 93\n' "$fixture/escaped" >"$fixture/stubs/git-remote-fixture-network"
+chmod +x "$fixture/stubs/git-remote-fixture-network"
+git config --file "$fixture/hostile-config" remote.origin.pushurl "$fixture/receiver.git"
+git config --file "$fixture/hostile-config" "url.$fixture/receiver.git.insteadOf" "$fixture/"
+git config --file "$fixture/hostile-config" core.hooksPath "$fixture/template/hooks"
+git config --file "$fixture/include-config" include.path "$fixture/hostile-config"
+hostile_config=$(cat "$fixture/hostile-config")
+FIXTURE_EXPECTED_HOME=$fixture_caller_home
+export FIXTURE_EXPECTED_HOME
+
+cat >"$fixture/child" <<'CHILD'
+#!/bin/sh
+set -eu
+. "$1"
+case_root=$2
+fixture_root=$3
+test "${HOME-}" = "$FIXTURE_EXPECTED_HOME"
+# Orphan numbered keys must not survive even when COUNT is zero or absent.
+if env | grep -Eq '^GIT_CONFIG_(PARAMETERS|COUNT|KEY_[0-9]+|VALUE_[0-9]+)='; then
+  echo 'fixture child retained caller command configuration' >&2
+  exit 1
+fi
+# Initialization must not install caller template hooks, independently of
+# clone's own initialization path.
+git init -q -b dev "$case_root/initialized"
+git -C "$case_root/initialized" config user.name Fixture
+git -C "$case_root/initialized" config user.email fixture@example.invalid
+git -C "$case_root/initialized" commit -q --allow-empty -m 'feat(repository): initialize local fixture'
+test ! -e "$fixture_root/escaped"
+git clone -q "$fixture_root/seed" "$case_root/source"
+git -C "$case_root/source" config user.name Fixture
+git -C "$case_root/source" config user.email fixture@example.invalid
+git -C "$case_root/source" remote set-url origin "$case_root/intended.git"
+git -C "$case_root/source" push -q origin dev
+git clone -q "$case_root/intended.git" "$case_root/publisher"
+git -C "$case_root/publisher" config user.name Fixture
+git -C "$case_root/publisher" config user.email fixture@example.invalid
+printf 'advance\n' >>"$case_root/publisher/file"
+git -C "$case_root/publisher" commit -q -am 'feat(repository): advance local fixture'
+git -C "$case_root/publisher" push -q origin dev
+git -C "$case_root/source" fetch -q origin
+test "$(git -C "$case_root/source" rev-parse origin/dev)" = "$(git -C "$case_root/publisher" rev-parse HEAD)"
+test "$(git -C "$case_root/source" rev-parse HEAD)" != "$(git -C "$case_root/source" rev-parse origin/dev)"
+# A fake network helper records execution, so refusal is proved without a
+# real network endpoint, DNS, authentication or remote mutation attempt.
+if PATH="$fixture_root/stubs:$PATH" git -C "$case_root/source" \
+  push fixture-network://receiver dev >"$case_root/refusal" 2>&1; then
+  echo 'fixture allowed a non-file transport' >&2
+  exit 1
+fi
+grep -q "transport 'fixture-network' not allowed" "$case_root/refusal"
+test ! -e "$fixture_root/escaped"
+CHILD
+
+for case_name in clean parameters counted orphan ambient include template context; do
+  case_root="$fixture/$case_name"
+  mkdir -p "$case_root"
+  git init -q --bare --initial-branch=dev "$case_root/intended.git"
+  case "$case_name" in
+    clean) sh "$fixture/child" "$helper" "$case_root" "$fixture" ;;
+    parameters)
+      # Git itself encodes these -c settings for the hook-like alias child.
+      FIXTURE_GIT_CHILD="$fixture/child" FIXTURE_GIT_HELPER="$helper" \
+        FIXTURE_GIT_CASE_ROOT="$case_root" FIXTURE_GIT_ROOT="$fixture" \
+        git -C "$fixture/seed" \
+        -c remote.origin.pushurl="$fixture/receiver.git" \
+        -c "url.$fixture/receiver.git.insteadOf=$fixture/" \
+        -c 'alias.fixture-isolation=!sh "$FIXTURE_GIT_CHILD" "$FIXTURE_GIT_HELPER" "$FIXTURE_GIT_CASE_ROOT" "$FIXTURE_GIT_ROOT"' \
+        fixture-isolation ;;
+    counted)
+      GIT_CONFIG_COUNT=2 GIT_CONFIG_KEY_0=remote.origin.pushurl \
+        GIT_CONFIG_VALUE_0="$fixture/receiver.git" \
+        GIT_CONFIG_KEY_1="url.$fixture/receiver.git.insteadOf" GIT_CONFIG_VALUE_1="$fixture/" \
+        sh "$fixture/child" "$helper" "$case_root" "$fixture" ;;
+    orphan)
+      GIT_CONFIG_COUNT=0 GIT_CONFIG_KEY_99=remote.origin.pushurl \
+        GIT_CONFIG_VALUE_99="$fixture/receiver.git" \
+        sh "$fixture/child" "$helper" "$case_root" "$fixture" ;;
+    ambient)
+      GIT_CONFIG_NOSYSTEM=0 \
+        GIT_CONFIG_GLOBAL="$fixture/hostile-config" GIT_CONFIG_SYSTEM="$fixture/hostile-config" \
+        GIT_CONFIG="$fixture/hostile-config" \
+        sh "$fixture/child" "$helper" "$case_root" "$fixture" ;;
+    include)
+      GIT_CONFIG_GLOBAL="$fixture/include-config" \
+        sh "$fixture/child" "$helper" "$case_root" "$fixture" ;;
+    template)
+      GIT_TEMPLATE_DIR="$fixture/template" GIT_ALLOW_PROTOCOL=fixture-network:file \
+        GIT_PROTOCOL_FROM_USER=1 \
+        sh "$fixture/child" "$helper" "$case_root" "$fixture" ;;
+    context)
+      GIT_DIR="$fixture/receiver.git" GIT_COMMON_DIR="$fixture/receiver.git" \
+        GIT_WORK_TREE="$fixture/seed" GIT_INDEX_FILE="$fixture/foreign-index" \
+        GIT_OBJECT_DIRECTORY="$fixture/receiver.git/objects" GIT_NAMESPACE=foreign \
+        sh "$fixture/child" "$helper" "$case_root" "$fixture" ;;
+  esac
+  test "$(git -C "$fixture/receiver.git" for-each-ref)" = "$receiver_refs"
+  test "$(git -C "$fixture/receiver.git" config --local --list)" = "$receiver_config"
+  test "$(cat "$fixture/hostile-config")" = "$hostile_config"
+  test ! -e "$fixture/foreign-index"
+  test ! -e "$fixture/escaped"
+  printf 'fixture Git isolation: %s passed (local clone/push/fetch; external transport refused)\n' "$case_name"
+done
+test "${HOME-}" = "$fixture_caller_home"
+test "$(git -C "$root" for-each-ref)" = "$parent_refs"
+test "$(git -C "$root" config --local --list)" = "$parent_config"
+test "$(git -C "$root" status --porcelain)" = "$parent_source"
