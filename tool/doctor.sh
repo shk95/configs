@@ -106,6 +106,16 @@ if [ "$scope" = all ] || [ "$scope" = repository ]; then
     warn "controller Python >=3.9 is unavailable" \
       "Set CONFIGS_CONTROLLER_PYTHON to an existing functional runtime; controller previews/fixtures remain unverified."
   fi
+  case $(uname -s) in
+    Linux|Darwin)
+      if command -v nix >/dev/null 2>&1; then
+        ok "optional disposable refresh-candidate Nix runtime available"
+      else
+        warn "actual refresh-candidate Nix fixture is unavailable" \
+          "Fake governance remains Nix-independent; the selected native Nix CI lane must supply actual preparation proof. Nothing is installed."
+      fi ;;
+    *) ok "fake controller fixtures require no Windows Nix runtime" ;;
+  esac
 fi
 
 # The directory Git will run hooks from, canonical. Relative values are

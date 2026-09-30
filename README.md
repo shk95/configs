@@ -154,6 +154,14 @@ local input options shown by `--help`. It requires functional Python >=3.9;
 credentials, HTTP transport or release authority. Its workflow is inert; no
 schedule is installed. See `CONTRIBUTING.md`, "Inert controller preview".
 
+Current protocol 2 adds separate fake refresh branch/PR requests targeting dev;
+promotion still means dev to master. Exact retained protocol 1 packages keep
+their original semantics. `tool/configs test-refresh-candidate-nix` runs the
+trusted delivered refresh CLI and lock-only Git preparation exclusively in
+credential-free disposable fixtures on native Linux/Darwin with Nix. Preview
+does not invoke preparation. These proofs do not authenticate real source or
+checks, publish a branch, update this provider lock or enable a schedule.
+
 The preview reports a candidate, no-op or refusal without contacting a remote or
 changing source, tags or hosts. Its supplied evidence references are assertions;
 they do not authenticate production evidence or authorize a release. See
