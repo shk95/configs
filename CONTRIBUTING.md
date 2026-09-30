@@ -182,6 +182,80 @@ and push a tag only when the user explicitly requests those mutations. Create
 no GitHub Release: the annotation is the whole record. Activation and Windows
 Apply happen after release and are not implied by a tag.
 
+### Offline release preview
+
+`tool/configs release-preview` is an optional read-only qualification tool,
+separate from calendar `plan-release`, source promotion and release mutation.
+It does not adopt production semantic versions or implement a release controller.
+Run `tool/configs doctor repository`; the preview additionally needs Git 2.38 or
+newer, a POSIX shell and awk. On Windows use native Git for Windows bash.
+
+Choose trusted full master/candidate/rules commit identities, then prepare UTF-8
+TSV baseline and evidence files with LF endings. Each starts with `format<TAB>1`;
+empty, duplicate, unknown, malformed or control-bearing records refuse.
+The pinned rules commit supplies `tool/version-control/release-preview.rules` as
+data: seven-field `check` rows name ID/domain/lane/requiredness/dependencies/exact
+tool identity; four-field `map` rows name exact-or-prefix/path/check IDs.
+Unknown ownership, common-domain inputs and unmapped contract paths refuse.
+The current table is bounded; add reviewed mappings rather than claiming blanket
+production coverage.
+
+Use one five-field baseline row per affected configuration domain:
+
+```text
+semantic<TAB>DOMAIN<TAB>VERSION<TAB>TAG<TAB>ANNOTATION_SHA
+bootstrap<TAB>DOMAIN<TAB>SOURCE_SHA<TAB>RECORD_COMMIT<TAB>RECORD_PATH
+```
+
+A semantic row pins an annotated `DOMAIN-vMAJOR.MINOR.PATCH` object whose intrinsic
+domain/version/source matches; moving a tag ref does not alter that replay input.
+A bootstrap row requires `SOURCE_SHA` to equal candidate, plus a separately
+reviewed source-bound record containing two-field `format`, `domain`, `source`,
+`version` and `contracts` TSV rows (format 1, version 1.0.0 and matching identities).
+The record can live in separate reviewed history to avoid a self-referential SHA.
+No production bootstrap record is supplied by
+the tool; choosing one requires the maintainer's decision. Legacy calendar tags
+stay immutable and do not become semantic baselines by omission.
+
+Nine-field evidence rows bind each check to the exact proposed comparison:
+
+```text
+evidence<TAB>CHECK_ID<TAB>CANDIDATE<TAB>MASTER<TAB>MERGE_TREE<TAB>RULES<TAB>TOOL_IDENTITY<TAB>STATE<TAB>REFERENCE
+defect<TAB>CHECK_ID<TAB>REFERENCE
+```
+
+The tree is the isolated Git merge-tree result; tool identity must equal its
+pinned rule. Required selected checks need `verified` evidence. A declared defect
+refuses; advisory failures remain visible. The preview checks binding and grammar,
+not the authenticity or real-world truth of supplied references. Gather genuine
+evidence independently; never relabel a synthetic fixture as production proof.
+With valid baseline and declaration inputs, an evidence file containing only its
+format header yields missing-evidence refusal and JSON comparison/check identities;
+use that diagnostic to bind subsequently gathered evidence, then rerun qualification.
+
+```sh
+tool/configs release-preview --master "$master_sha" --candidate "$candidate_sha" \
+  --rules "$rules_sha" --baselines baselines.tsv --evidence evidence.tsv --json
+```
+
+Domain-changing source commits require strict `Release-Format`, `Release-Domain`,
+`Release-Impact`, `Release-Contracts`, `Release-Compatibility`, `Release-Rationale`
+and `Release-Migration` trailers. Unknown or incomplete declarations refuse;
+breaking changes require major impact and a public migration blob. Exact inverse
+unreleased `Release-Reverts` pairs cancel; a released target is a new declared
+change. Repository-only changes need no domain impact declaration. These are this
+optional preview's input requirements, not new repository-wide commit gates.
+
+Candidate/no-op exits 0; invalid or ineligible input exits 1. Missing capabilities
+report unverified and exit 69 locally, or fail under `REQUIRE_NATIVE=1`. Preserve
+the JSON identities/digests and input files to replay a result. Resolve the named
+refusal by correcting reviewed declarations/mappings/inputs or obtaining missing
+evidence, then run again; do not weaken a check to turn refusal into success.
+Run `tool/configs test` for the full repository fixtures. CI also runs the narrow
+preview fixture natively on Git for Windows; local POSIX proof does not establish
+that native result. Promotion, tag/release approval and host activation remain
+separate operations with their existing authorization boundaries.
+
 For agent-assisted work, invoke `run-version-control-workflow`. Its canonical
 Agent Skills implementation is under `.agents/skills/`; model-specific
 discovery files are adapters only. Audit and release planning are read-only by

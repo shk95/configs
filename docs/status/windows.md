@@ -1,5 +1,12 @@
 # Current state: Windows
 
+This file separates the current Windows source contract from historical source
+descriptions and dated host observations. Source declarations do not establish
+a host's currently applied version, selection or runtime state. Every decision
+is recorded under `docs/policy/decisions/`; the model those decisions implement
+is `docs/policy/architecture.md`. The other scopes' state is in the files
+beside this one.
+
 ## Host capture
 
 Capture consumes selected/enabled units and explicit version1 host originals.
@@ -15,7 +22,11 @@ Native W2 evidence remains in its work report/PR, separate from W1 observations.
 ## Host-generation delivery
 
 The 0.7.0 provider catalog has six features: core, font, zellij, terminal,
-wezterm and powertoys. Version 1 host declarations select optional features
+wezterm and powertoys. Its source manifest is schema 4; the environment,
+settings-document and generation formats are version 1. Generated Apply outcomes
+use runtime state schema 3, while older state schemas 1/2 remain readable.
+These source capabilities are not a fresh observation of any host's state.
+Version 1 host declarations select optional features
 explicitly and connect unit documents by relative path. The generated result
 binds the provider commit, originals and selected payload/native tools before
 Check/Apply. See `../policy/decisions/windows/host-generation-owns-selection.md`.
@@ -35,17 +46,17 @@ Workspaces/settings.json remain provider units; runtime workspaces.json and
 applied-layouts.json remain excluded. The WSL prerequisite records below are
 historical helper evidence, not currently offered provider management.
 
-This file states what is observably true of the Windows domain today: hosts and
-classes in use, schema and version facts, and open conditions. Every decision
-is recorded under `docs/policy/decisions/`; the model those decisions implement
-is `docs/policy/architecture.md`. The other scopes' state is in the files
-beside this one.
+## Historical source description and host observations
 
-`windows/desired/manifest.json` is at schema 4; `windows/state.json` is at
-schema 2; `ProjectVersion` is 0.6.0. Schema 4 declares seven features —
+The pre-W1 source/runtime description recorded
+`windows/desired/manifest.json` at schema 4, `windows/state.json` at
+schema 2 and `ProjectVersion` 0.6.0. That source catalog declared seven features —
 `core`, `font`, `zellij`, `terminal`, `wezterm`, `powertoys`, `wsl` — and
 `terminal` depends on `zellij`, `wezterm` depends on `font`
 (`docs/policy/decisions/windows/feature-selection-closed.md`).
+This retained description is historical, not the current six-feature catalog
+above or a new read of any host's applied state. The observations below keep
+their original dates, selections and evidence limits.
 
 Since 2026-09-05 the three terminal payloads — Windows Terminal's
 `settings.json`, WezTerm's `appearance.lua` and zellij's `config.kdl` — select

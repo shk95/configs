@@ -4,10 +4,14 @@ MSYS_NO_PATHCONV=1
 MSYS2_ARG_CONV_EXCL='*'
 export MSYS_NO_PATHCONV MSYS2_ARG_CONV_EXCL
 root=$(CDPATH= cd -- "$(dirname -- "$0")/../.." && pwd)
+# Native Git does not accept MSYS /drive paths while argument conversion is
+# disabled. Mixed absolute paths work for Git and the shell's file operations.
+if command -v cygpath >/dev/null 2>&1; then root=$(cygpath -m "$root"); fi
 helper="$root/tool/version-control/fixture-git-environment.sh"
 fixture_caller_home=${HOME-}
 . "$helper"
 fixture=$(mktemp -d)
+if command -v cygpath >/dev/null 2>&1; then fixture=$(cygpath -m "$fixture"); fi
 trap 'rm -rf "$fixture"' EXIT HUP INT TERM
 
 # ----------
@@ -75,7 +79,10 @@ test "$(git -C "$case_root/source" rev-parse origin/dev)" = "$(git -C "$case_roo
 test "$(git -C "$case_root/source" rev-parse HEAD)" != "$(git -C "$case_root/source" rev-parse origin/dev)"
 # A fake network helper records execution, so refusal is proved without a
 # real network endpoint, DNS, authentication or remote mutation attempt.
-if PATH="$fixture_root/stubs:$PATH" git -C "$case_root/source" \
+stub_path="$fixture_root/stubs"
+# PATH remains a POSIX list; a native drive colon would split its component.
+if command -v cygpath >/dev/null 2>&1; then stub_path=$(cygpath -u "$stub_path"); fi
+if PATH="$stub_path:$PATH" git -C "$case_root/source" \
   push fixture-network://receiver dev >"$case_root/refusal" 2>&1; then
   echo 'fixture allowed a non-file transport' >&2
   exit 1

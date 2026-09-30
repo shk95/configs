@@ -1,0 +1,558 @@
+#!/bin/sh
+# Offline synthetic repository proof. Never touches the caller's refs or remote.
+# INV repository/release-preview-read-only
+# INV repository/msys-argument-guard
+set -eu
+MSYS_NO_PATHCONV=1
+MSYS2_ARG_CONV_EXCL='*'
+export MSYS_NO_PATHCONV MSYS2_ARG_CONV_EXCL
+tools=$(CDPATH= cd -- "$(dirname -- "$0")" && pwd)
+# This independent entry also runs directly in the native Git-for-Windows
+# preview lane; establish the delivered test-only boundary before any Git.
+# INV repository/fixture-git-isolation
+. "$tools/fixture-git-environment.sh"
+"$tools/fixture-git-isolation-test"
+LC_ALL=C
+export LC_ALL
+preview="$tools/release-preview"
+scratch=$(mktemp -d)
+trap 'rm -rf "$scratch"' EXIT HUP INT TERM
+mkdir "$scratch/repo"
+cd "$scratch/repo"
+git init -q -b dev
+git config user.name Fixture
+git config user.email fixture@example.invalid
+git config core.hooksPath "$scratch/no-hooks"
+mkdir -p tool/version-control docs/reference unixlike/api windows/desired
+cp "$tools/release-preview.rules" tool/version-control/release-preview.rules
+cat >>tool/version-control/release-preview.rules <<'EOF'
+check	windows-generation	windows	fixtures	required	-	pwsh-7.6.6
+check	advisory-check	repository	review	advisory	-	advisory-v1
+map	prefix	windows/desired/	windows-generation
+map	exact	unixlike/tool/candidate-script	unixlike-inspection
+map	prefix	tool/version-control/	repository-policy
+map	prefix	.agents/	repository-policy
+EOF
+printf 'unixlike/api/* merge=fixture filter=fixture diff=fixture\n' >.gitattributes
+printf 'old\n' >unixlike/api/contract.json
+printf 'old\n' >windows/desired/example.json
+printf 'Synthetic migration.\n' >docs/reference/migration.md
+git add .
+git commit -qm 'feat(repository): initialize synthetic fixture'
+base=$(git rev-parse HEAD)
+rules=$base
+tag() {
+  domain=$1; version=$2; source=$3
+  printf 'Release-Format: 1\nDomain: %s\nVersion: %s\nSource: %s\n' "$domain" "$version" "$source" >"$scratch/tag-message"
+  git tag -a "$domain-v$version" "$source" -F - <"$scratch/tag-message"
+}
+tag unixlike 1.0.0 "$base"
+tag windows 1.0.0 "$base"
+tag unixlike 2026.08.31 "$base"
+baselines="$scratch/baselines"
+evidence="$scratch/evidence"
+output="$scratch/output"
+printf 'format\t1\nsemantic\tunixlike\t1.0.0\tunixlike-v1.0.0\t%s\nsemantic\twindows\t1.0.0\twindows-v1.0.0\t%s\n' "$(git rev-parse refs/tags/unixlike-v1.0.0)" "$(git rev-parse refs/tags/windows-v1.0.0)" >"$baselines"
+default_baselines() {
+  printf 'format\t1\nsemantic\tunixlike\t1.0.0\tunixlike-v1.0.0\t%s\nsemantic\twindows\t1.0.0\twindows-v1.0.0\t%s\n' "$(git rev-parse refs/tags/unixlike-v1.0.0)" "$(git rev-parse refs/tags/windows-v1.0.0)" >"$baselines"
+}
+declaration() {
+  domain=$1; impact=$2; contracts=$3; compatibility=${4:-compatible}; migration=${5:-none}; revert=${6:-}
+  printf 'feat(%s): synthetic %s change\n\nRelease-Format: 1\nRelease-Domain: %s\nRelease-Impact: %s\nRelease-Contracts: %s\nRelease-Compatibility: %s\nRelease-Rationale: Synthetic compatibility intent.\nRelease-Migration: %s\n' "$domain" "$impact" "$domain" "$impact" "$contracts" "$compatibility" "$migration" >"$scratch/message"
+  if [ -n "$revert" ]; then printf 'Release-Reverts: %s\n' "$revert" >>"$scratch/message"; fi
+  git add .
+  git commit -q -F - <"$scratch/message"
+}
+prepare_evidence() {
+  candidate=$(git rev-parse HEAD)
+  master=${master_override:-$base}
+  tree=$(git merge-tree --write-tree "$master" "$candidate")
+  printf 'format\t1\n' >"$evidence"
+  awk -F'\t' -v candidate="$candidate" -v master="$master" -v tree="$tree" -v rules="$rules" '$1=="check" { print "evidence\t" $2 "\t" candidate "\t" master "\t" tree "\t" rules "\t" $7 "\tverified\tfixture://" $2 }' tool/version-control/release-preview.rules >>"$evidence"
+}
+run() {
+  "$preview" --master "${master_override:-$base}" --candidate HEAD --rules "$rules" --baselines "$baselines" --evidence "$evidence" --json >"$output"
+}
+assert_text() {
+  grep -Fq "$1" "$output" || { echo "missing expected output: $1" >&2; cat "$output" >&2; exit 1; }
+}
+pass() { run || { cat "$output" >&2; exit 1; }; assert_text '"decision":"candidate"'; }
+refusal() {
+  if run; then echo "unexpectedly accepted $1" >&2; cat "$output" >&2; exit 1; fi
+  assert_text '"decision":"refusal"'; assert_text "\"$1\""
+}
+pin_rules() {
+  git add tool/version-control/release-preview.rules
+  git commit -qm 'docs(repository): synthetic rule adjustment'
+  rules=$(git rev-parse HEAD)
+}
+reset_case() { git reset --hard -q "$base"; git clean -fdq; default_baselines; rules=$base; unset master_override; }
+
+# ----------
+# Metadata grammar and ownership
+# ----------
+#
+# INV repository/release-preview-read-only
+printf 'patched\n' >unixlike/api/contract.json
+declaration unixlike patch unixlike-api
+prepare_evidence; pass; assert_text '"next_version":"1.0.1"'
+git commit --amend -q -m 'fix(unixlike): missing declaration'
+prepare_evidence; refusal missing-release-trailer
+git commit --amend -q -F - <"$scratch/message"
+printf 'Release-Future: unsupported\n' >>"$scratch/message"
+git commit --amend -q -F - <"$scratch/message"
+prepare_evidence; refusal unknown-release-trailer
+sed '/Release-Future:/d' "$scratch/message" >"$scratch/changed-message"
+printf 'Release-Impact: minor\n' >>"$scratch/changed-message"
+git commit --amend -q -F - <"$scratch/changed-message"
+prepare_evidence; refusal invalid-release-trailer
+sed 's/Release-Impact: patch/Release-Impact: patch/;s/Release-Compatibility: compatible/Release-Compatibility: breaking/' "$scratch/message" | sed '/Release-Future:/d' >"$scratch/changed-message"
+git commit --amend -q -F - <"$scratch/changed-message"
+prepare_evidence; refusal incompatible-impact
+git commit --amend -q -F - <"$scratch/message"
+prepare_evidence
+printf 'future\t1\n' >"$evidence"; refusal invalid-replay-format
+prepare_evidence
+printf 'evidence\tunknown\tbad\tbad\tbad\tbad\ttest\tverified\tfixture\n' >>"$evidence"
+refusal invalid-evidence-record
+prepare_evidence
+printf 'bad\001value\n' >>"$evidence"; refusal invalid-replay-format
+prepare_evidence
+printf 'defect\tunixlike-api\tnul-\000-ref\n' >>"$evidence"; refusal invalid-replay-format
+
+reset_case
+printf 'wrong contract\n' >unixlike/api/contract.json; declaration unixlike patch unixlike-readiness
+prepare_evidence; refusal release-contract-path-mismatch
+reset_case
+printf 'wrong domain\n' >unixlike/api/contract.json; declaration windows patch windows-generation
+prepare_evidence; refusal release-domain-mismatch
+reset_case
+printf 'migration colon mismatch\n' >unixlike/api/contract.json; declaration unixlike major unixlike-api breaking docs/reference/migration.md:missing
+prepare_evidence; refusal invalid-migration
+reset_case
+printf 'unknown compatibility\n' >unixlike/api/contract.json; declaration unixlike patch unixlike-api unknown
+prepare_evidence; refusal unknown-compatibility
+reset_case
+printf 'raw declaration source\n' >unixlike/api/contract.json; declaration unixlike patch unixlike-api
+raw_source=$(git rev-parse HEAD)
+git cat-file commit "$raw_source" >"$scratch/raw-source"
+for source_bytes in valid nul invalid-utf8; do
+  cp "$scratch/raw-source" "$scratch/raw-source-case"
+  case "$source_bytes" in
+    nul) printf '\000Release-Future: hidden after formatter truncation\n' >>"$scratch/raw-source-case" ;;
+    invalid-utf8) printf '\377\n' >>"$scratch/raw-source-case" ;;
+  esac
+  raw_candidate=$(git hash-object --literally -t commit -w --stdin <"$scratch/raw-source-case")
+  git update-ref refs/heads/dev "$raw_candidate"
+  prepare_evidence
+  if [ "$source_bytes" = valid ]; then pass; else refusal unsupported-release-text; fi
+done
+reset_case
+printf 'empty baseline\n' >unixlike/api/contract.json; declaration unixlike patch unixlike-api
+printf 'format\t1\n' >"$baselines"
+prepare_evidence; refusal missing-domain-baseline
+
+# ----------
+# Independent bootstrap and immutable legacy history
+# ----------
+#
+# INV repository/release-preview-read-only
+# INV repository/release-tag-contract
+reset_case
+candidate=$(git rev-parse HEAD)
+printf 'format\t1\ndomain\tunixlike\nsource\t%s\nversion\t1.0.0\ncontracts\tunixlike-api\n' "$candidate" >"$scratch/bootstrap-record"
+blob=$(git hash-object -w --no-filters --stdin <"$scratch/bootstrap-record")
+record_tree=$(printf '100644 blob %s\tbootstrap.tsv\n' "$blob" | git mktree)
+record_commit=$(printf 'docs(repository): synthetic reviewed bootstrap\n' | git commit-tree "$record_tree" -p "$candidate")
+printf 'format\t1\nbootstrap\tunixlike\t%s\t%s\tbootstrap.tsv\n' "$candidate" "$record_commit" >"$baselines"
+prepare_evidence
+tags_before=$(git show-ref --tags)
+pass; assert_text '"next_version":"1.0.0"'
+[ "$tags_before" = "$(git show-ref --tags)" ] || { echo 'preview altered legacy tags' >&2; exit 1; }
+for malformed_record in no-lf nul invalid-utf8 control; do
+  case "$malformed_record" in
+    no-lf) printf 'format\t1\ndomain\tunixlike\nsource\t%s\nversion\t1.0.0\ncontracts\tunixlike-api' "$candidate" ;;
+    nul) printf 'format\t1\000\ndomain\tunixlike\nsource\t%s\nversion\t1.0.0\ncontracts\tunixlike-api\n' "$candidate" ;;
+    invalid-utf8) printf 'format\t1\ndomain\tunixlike\nsource\t%s\nversion\t1.0.0\ncontracts\tunixlike-api\377\n' "$candidate" ;;
+    control) printf 'format\t1\ndomain\tunixlike\nsource\t%s\nversion\t1.0.0\ncontracts\tunixlike-api\001\n' "$candidate" ;;
+  esac >"$scratch/malformed-bootstrap-record"
+  malformed_blob=$(git hash-object -w --no-filters --stdin <"$scratch/malformed-bootstrap-record")
+  malformed_tree=$(printf '100644 blob %s\tbootstrap.tsv\n' "$malformed_blob" | git mktree)
+  malformed_commit=$(printf 'docs(repository): malformed bootstrap byte fixture\n' | git commit-tree "$malformed_tree" -p "$candidate")
+  printf 'format\t1\nbootstrap\tunixlike\t%s\t%s\tbootstrap.tsv\n' "$candidate" "$malformed_commit" >"$baselines"
+  refusal invalid-bootstrap-record-format
+done
+printf 'format\t1\nbootstrap\tunixlike\t%s\t%s\tbootstrap.tsv\n' "$candidate" "$record_commit" >"$baselines"
+pass
+printf 'format\t1\nbootstrap\tunixlike\t%s\t%s\tmissing.tsv\n' "$candidate" "$record_commit" >"$baselines"
+refusal missing-bootstrap-record
+printf 'format\t1\nsemantic\tunixlike\t2026.08.31\tunixlike-v2026.08.31\t%s\n' "$(git rev-parse refs/tags/unixlike-v2026.08.31)" >"$baselines"
+refusal invalid-semantic-baseline
+printf 'format\t1\nsemantic\tunixlike\t1.0.0\tunixlike-v1.0.0\t%s\nsemantic\tunixlike\t1.0.0\tunixlike-v1.0.0\t%s\n' "$(git rev-parse refs/tags/unixlike-v1.0.0)" "$(git rev-parse refs/tags/unixlike-v1.0.0)" >"$baselines"
+refusal invalid-baseline-domain
+
+reset_case
+# Calendar-looking numerals without preview-format annotation remain legacy data.
+printf 'Domain: unixlike\nVersion: 2026.10.30\nSource: %s\n' "$base" >"$scratch/tag-message"
+git tag -a unixlike-v2026.10.30 "$base" -F - <"$scratch/tag-message"
+printf 'format\t1\nsemantic\tunixlike\t2026.10.30\tunixlike-v2026.10.30\t%s\n' "$(git rev-parse refs/tags/unixlike-v2026.10.30)" >"$baselines"
+prepare_evidence; refusal baseline-annotation-mismatch
+reset_case
+printf 'Release-Format: 1\nDomain: unixlike:unexpected\nVersion: 1.0.4\nSource: %s\n' "$base" >"$scratch/tag-message"
+git tag -a unixlike-v1.0.4 "$base" -F - <"$scratch/tag-message"
+printf 'format\t1\nsemantic\tunixlike\t1.0.4\tunixlike-v1.0.4\t%s\n' "$(git rev-parse refs/tags/unixlike-v1.0.4)" >"$baselines"
+prepare_evidence; refusal baseline-annotation-mismatch
+reset_case
+printf 'Release-Format: 1\nDomain: unixlike\nVersion: 1.0.5\nSource: %s\n' "$base" >"$scratch/tag-message"
+git tag -a unixlike-v1.0.5 "$(git rev-parse refs/tags/unixlike-v1.0.0)" -F - <"$scratch/tag-message" 2>"$scratch/nested-tag-advice"
+printf 'format\t1\nsemantic\tunixlike\t1.0.5\tunixlike-v1.0.5\t%s\n' "$(git rev-parse refs/tags/unixlike-v1.0.5)" >"$baselines"
+prepare_evidence; refusal baseline-annotation-mismatch
+reset_case
+for tag_bytes in valid nul invalid-utf8; do
+  {
+    printf 'object %s\ntype commit\ntag unixlike-v1.0.6\ntagger Fixture <fixture@example.invalid> 1 +0000\n\nRelease-Format: 1\nDomain: unixlike\n' "$base"
+    case "$tag_bytes" in
+      valid) printf 'Version: 1.0.6\n' ;;
+      nul) printf 'Version: 1.0.6\000\n' ;;
+      invalid-utf8) printf 'Version: 1.0.6\377\n' ;;
+    esac
+    printf 'Source: %s\n' "$base"
+  } >"$scratch/raw-tag"
+  raw_annotation=$(git hash-object --literally -t tag -w --stdin <"$scratch/raw-tag")
+  printf 'format\t1\nsemantic\tunixlike\t1.0.6\tunixlike-v1.0.6\t%s\n' "$raw_annotation" >"$baselines"
+  prepare_evidence
+  if [ "$tag_bytes" = valid ]; then run; assert_text '"decision":"no-op"'; else refusal invalid-baseline-annotation-format; fi
+done
+reset_case
+git tag unixlike-v1.0.2 "$base"
+printf 'format\t1\nsemantic\tunixlike\t1.0.2\tunixlike-v1.0.2\t%s\n' "$(git rev-parse refs/tags/unixlike-v1.0.2)" >"$baselines"
+prepare_evidence; refusal unannotated-baseline
+
+# ----------
+# Cumulative versions and exact versus ambiguous reverts
+# ----------
+#
+# INV repository/release-preview-read-only
+reset_case
+printf 'patch\n' >unixlike/api/contract.json; declaration unixlike patch unixlike-api
+first=$(git rev-parse HEAD)
+printf 'minor\n' >unixlike/api/contract.json; declaration unixlike minor unixlike-api
+prepare_evidence; pass; assert_text '"next_version":"1.1.0"'
+printf 'major\n' >unixlike/api/contract.json; declaration unixlike major unixlike-api breaking docs/reference/migration.md
+prepare_evidence; pass; assert_text '"next_version":"2.0.0"'; assert_text '"approval_reasons":["major","migration"]'
+reset_case
+large_version=1.9007199254740993.999999999999999999999999999999
+tag unixlike "$large_version" "$base"
+printf 'format\t1\nsemantic\tunixlike\t%s\tunixlike-v%s\t%s\n' "$large_version" "$large_version" "$(git rev-parse "refs/tags/unixlike-v$large_version")" >"$baselines"
+printf 'large precision patch\n' >unixlike/api/contract.json; declaration unixlike patch unixlike-api
+prepare_evidence; pass; assert_text '"next_version":"1.9007199254740993.1000000000000000000000000000000"'
+large_version=9007199254740993.2.3
+tag unixlike "$large_version" "$base"
+printf 'format\t1\nsemantic\tunixlike\t%s\tunixlike-v%s\t%s\n' "$large_version" "$large_version" "$(git rev-parse "refs/tags/unixlike-v$large_version")" >"$baselines"
+printf 'large precision major\n' >unixlike/api/contract.json; declaration unixlike major unixlike-api
+prepare_evidence; pass; assert_text '"next_version":"9007199254740994.0.0"'
+for invalid_version in 1.01.0 1.2e3.0; do
+  tag unixlike "$invalid_version" "$base"
+  printf 'format\t1\nsemantic\tunixlike\t%s\tunixlike-v%s\t%s\n' "$invalid_version" "$invalid_version" "$(git rev-parse "refs/tags/unixlike-v$invalid_version")" >"$baselines"
+  prepare_evidence; refusal invalid-semantic-baseline
+done
+reset_case
+printf 'new\n' >unixlike/api/contract.json; declaration unixlike minor unixlike-api
+target=$(git rev-parse HEAD)
+printf 'old\n' >unixlike/api/contract.json; declaration unixlike patch unixlike-api compatible none "$target"
+prepare_evidence; pass; assert_text '"next_version":null'; assert_text '"canceled":true'
+printf 'format\t1\n' >"$evidence"; pass; assert_text '"checks":[]'
+reset_case
+printf 'breaking to cancel\n' >unixlike/api/contract.json; declaration unixlike major unixlike-api breaking docs/reference/migration.md
+target=$(git rev-parse HEAD)
+printf 'old\n' >unixlike/api/contract.json; declaration unixlike patch unixlike-api compatible none "$target"
+master_override=$(git rev-parse HEAD)
+prepare_evidence; printf 'format\t1\n' >"$evidence"; run
+assert_text '"decision":"no-op"'; assert_text '"next_version":null'
+assert_text '"compatibility":null,"migrations":[]'; assert_text '"approval_reasons":[]'
+assert_text '"compatibility":"breaking","migration":"docs/reference/migration.md","canceled":true'
+reset_case
+printf 'new\n' >unixlike/api/contract.json; declaration unixlike minor unixlike-api
+target=$(git rev-parse HEAD)
+printf 'partial\n' >unixlike/api/contract.json; declaration unixlike patch unixlike-api compatible none "$target"
+prepare_evidence; refusal noninverse-revert
+reset_case
+printf 'published\n' >unixlike/api/contract.json; declaration unixlike minor unixlike-api
+released=$(git rev-parse HEAD)
+tag unixlike 1.1.0 "$released"
+printf 'format\t1\nsemantic\tunixlike\t1.1.0\tunixlike-v1.1.0\t%s\n' "$(git rev-parse refs/tags/unixlike-v1.1.0)" >"$baselines"
+printf 'old\n' >unixlike/api/contract.json; declaration unixlike patch unixlike-api compatible none "$released"
+prepare_evidence; pass; assert_text '"next_version":"1.1.1"'; assert_text '"released_revert":true'
+
+reset_case
+printf 'same payload\n' >unixlike/api/contract.json; declaration unixlike minor unixlike-api
+parallel_target=$(git rev-parse HEAD)
+git reset --hard -q "$base"
+printf 'same payload\n' >unixlike/api/contract.json; declaration unixlike patch unixlike-api
+printf 'old\n' >unixlike/api/contract.json; declaration unixlike patch unixlike-api compatible none "$parallel_target"
+revert_commit=$(git rev-parse HEAD)
+merged=$(printf 'chore(repository): synthetic branch incorporation\n' | git commit-tree "$(git rev-parse HEAD^{tree})" -p "$revert_commit" -p "$parallel_target")
+git reset --hard -q "$merged"
+prepare_evidence; refusal ambiguous-revert
+reset_case
+printf 'windows target\n' >windows/desired/example.json; declaration windows patch windows-generation
+wrong_target=$(git rev-parse HEAD)
+printf 'unixlike revert\n' >unixlike/api/contract.json; declaration unixlike patch unixlike-api compatible none "$wrong_target"
+prepare_evidence; refusal cross-domain-revert
+reset_case
+printf 'revert target missing\n' >unixlike/api/contract.json; declaration unixlike patch unixlike-api compatible none deadbeef
+prepare_evidence; refusal invalid-revert-target
+reset_case
+printf 'first change\n' >unixlike/api/contract.json; declaration unixlike minor unixlike-api
+target=$(git rev-parse HEAD)
+printf 'old\n' >unixlike/api/contract.json; declaration unixlike patch unixlike-api compatible none "$target"
+printf 'repeated claim\n' >unixlike/api/contract.json; declaration unixlike patch unixlike-api compatible none "$target"
+prepare_evidence; refusal ambiguous-revert
+
+# ----------
+# Full promotion delta and mapped/excluded/unknown cases
+# ----------
+#
+# INV repository/release-preview-read-only
+# INV repository/local-gate-selects-by-effect
+reset_case
+printf 'A\n' >unixlike/api/contract.json; declaration unixlike patch unixlike-api
+prepare_evidence; cp "$evidence" "$scratch/evidence-A"
+printf 'B\n' >windows/desired/example.json; declaration windows minor windows-generation
+prepare_evidence; pass; assert_text '"id":"unixlike-api"'; assert_text '"id":"windows-generation"'
+cp "$scratch/evidence-A" "$evidence"; refusal evidence-identity-mismatch
+prepare_evidence
+git mv unixlike/api/contract.json unixlike/api/renamed.json; declaration unixlike patch unixlike-api
+prepare_evidence; pass
+mkdir -p unixlike/unmapped; printf 'unknown\n' >unixlike/unmapped/input.nix; declaration unixlike patch unixlike-api
+prepare_evidence; refusal mapping-review-needed
+reset_case
+mkdir common; printf 'unknown\n' >common/component; git add .; git commit -qm 'feat(common): synthetic unsupported component'
+prepare_evidence; refusal unsupported-common
+reset_case
+printf 'documentation\n' >docs/reference/new.md; git add .; git commit -qm 'docs(repository): synthetic source-only update'
+printf 'format\t1\n' >"$baselines"
+prepare_evidence; pass; assert_text '"domains":[]'; assert_text '"id":"repository-policy"'; assert_text '"unixlike-api"'
+
+reset_case
+rm unixlike/api/contract.json; declaration unixlike patch unixlike-api
+prepare_evidence; pass; assert_text '"status":"D"'
+reset_case
+printf 'newly added\n' >unixlike/api/added.json; declaration unixlike patch unixlike-api
+prepare_evidence; pass; assert_text '"status":"A"'; assert_text '"paths":["unixlike/api/added.json"]'
+reset_case
+printf 'UTF-8 documentation\n' >docs/reference/한글-문서.md
+git add .; git commit -qm 'docs(repository): synthetic Unicode source path'
+prepare_evidence; pass; assert_text '"path":"docs/reference/한글-문서.md"'
+reset_case
+invalid_blob=$(printf 'invalid path payload\n' | git hash-object -w --stdin)
+invalid_tree=$(printf '100644 blob %s\tdocs-invalid-\377.md\n' "$invalid_blob" | git mktree)
+# Place the invalid byte in docs/, a known mapped repository path, without asking
+# the host filesystem to create a name it cannot represent (notably Windows).
+root_tree=$(git ls-tree "$base" | awk -F'\t' '$2!="docs"'; printf '040000 tree %s\tdocs\n' "$invalid_tree")
+invalid_root=$(printf '%s\n' "$root_tree" | git mktree)
+invalid_source=$(printf 'docs(repository): invalid UTF-8 object path\n' | git commit-tree "$invalid_root" -p "$base")
+# Change the synthetic ref only; never checkout the invalid filesystem name.
+git update-ref refs/heads/dev "$invalid_source"
+prepare_evidence; refusal unsupported-path
+git update-ref refs/heads/dev "$base"
+reset_case
+printf 'format\t1\n' >"$baselines"; prepare_evidence; run; assert_text '"decision":"no-op"'
+printf 'governance\n' >tool/version-control/governance-only
+ git add .; git commit -qm 'chore(repository): synthetic governance-only update'
+prepare_evidence; pass; assert_text '"domains":[]'
+reset_case
+printf 'check\tcycle-a\trepository\treview\trequired\tcycle-b\tfixture-v1\ncheck\tcycle-b\trepository\treview\trequired\tcycle-a\tfixture-v1\n' >>tool/version-control/release-preview.rules
+printf 'map\tprefix\ttool/version-control/\tcycle-a\n' >>tool/version-control/release-preview.rules
+pin_rules; prepare_evidence; refusal dependency-cycle
+reset_case
+printf 'map\tprefix\tdocs/\trepository-policy\n' >>tool/version-control/release-preview.rules
+pin_rules; prepare_evidence; refusal duplicate-map-definition
+reset_case
+printf 'map\tprefix\tdocs/\tundefined-check\n' >>tool/version-control/release-preview.rules
+pin_rules; prepare_evidence; refusal unknown-check
+reset_case
+printf 'map\tprefix\ttool/version-control/\tadvisory-check\n' >>tool/version-control/release-preview.rules
+pin_rules; prepare_evidence
+sed 's/advisory-v1\tverified/advisory-v1\tfailed/' "$evidence" >"$scratch/changed-evidence"; cp "$scratch/changed-evidence" "$evidence"
+pass; assert_text '"state":"failed"'
+
+reset_case
+printf 'already promoted source\n' >unixlike/api/contract.json; declaration unixlike patch unixlike-api
+master_override=$(git rev-parse HEAD)
+prepare_evidence; printf 'format\t1\n' >"$evidence"; refusal missing-required-evidence
+prepare_evidence; pass; assert_text '"pending_source_commits":0'; assert_text '"promotion_delta":[]'
+assert_text '"next_version":"1.0.1"'; assert_text '"kind":"domain-release"'
+
+# Independent uncanceled changes can restore the baseline tree without proposing
+# a new release. History remains major, but there is no previous-major retirement.
+reset_case
+printf 'major change\n' >unixlike/api/contract.json; declaration unixlike major unixlike-api
+printf 'old\n' >unixlike/api/contract.json; declaration unixlike patch unixlike-api
+master_override=$(git rev-parse HEAD)
+prepare_evidence; run; assert_text '"decision":"no-op"'
+assert_text '"impact":"major","next_version":null'
+assert_text '"retired_previous_major":false'
+
+# ----------
+# Exact tool/evidence identities and stable complete replay
+# ----------
+#
+# INV repository/release-preview-read-only
+# INV repository/evidence-three-states
+reset_case
+printf 'new\n' >unixlike/api/contract.json; declaration unixlike patch unixlike-api
+prepare_evidence; pass; cp "$output" "$scratch/replay-first"
+git branch unrelated-fixture-ref "$base"
+# Baseline input pins the annotation object; ambient tag movement is not replay data.
+original_annotation=$(git rev-parse refs/tags/unixlike-v1.0.0)
+git tag -f unixlike-v1.0.0 HEAD >/dev/null
+TZ=UTC0 run
+cmp "$scratch/replay-first" "$output" || { echo 'identical replay changed' >&2; exit 1; }
+git update-ref refs/tags/unixlike-v1.0.0 "$original_annotation"
+replacement=$(printf 'docs(repository): replacement metadata must be ignored\n' | git commit-tree "$(git rev-parse HEAD^{tree})" -p "$base")
+git replace HEAD "$replacement"
+replacement_subject=$(unset GIT_NO_REPLACE_OBJECTS; git show -s --format=%s HEAD)
+[ "$replacement_subject" = 'docs(repository): replacement metadata must be ignored' ] || { echo 'replacement fixture failed to alter ambient source reads' >&2; exit 1; }
+run
+cmp "$scratch/replay-first" "$output" || { echo 'ambient replacement changed pinned replay' >&2; exit 1; }
+git replace -d HEAD >/dev/null
+mkdir -p .git/info
+printf '%s\n' "$(git rev-parse HEAD)" >.git/info/grafts
+run
+cmp "$scratch/replay-first" "$output" || { echo 'ambient graft changed pinned replay' >&2; exit 1; }
+# The fixture file is intentionally retired inside this synthetic repository.
+mv .git/info/grafts "$scratch/retired-graft-fixture"
+sed 's/nix-2.34.8/nix-unknown/' "$evidence" >"$scratch/bad-evidence"; cp "$scratch/bad-evidence" "$evidence"; refusal evidence-tool-mismatch
+prepare_evidence
+sed 's/\tverified\t/\tunverified\t/g' "$evidence" >"$scratch/bad-evidence"; cp "$scratch/bad-evidence" "$evidence"; refusal required-evidence-not-verified
+prepare_evidence
+sed '/unixlike-evaluation/d' "$evidence" >"$scratch/bad-evidence"; cp "$scratch/bad-evidence" "$evidence"; refusal missing-required-evidence
+prepare_evidence
+printf 'defect\tunixlike-api\tfixture://known-defect\n' >>"$evidence"; refusal contract-defect
+
+prepare_evidence
+# Every asserted identity is bound independently, including otherwise unaffected rows.
+for identity in 3 4 5 6; do
+  awk -F'\t' -v field="$identity" -v wrong=0000000000000000000000000000000000000000 'BEGIN { OFS="\t" } $1=="evidence" { $field=wrong } { print }' "$evidence" >"$scratch/changed-evidence"
+  cp "$scratch/changed-evidence" "$evidence"; refusal evidence-identity-mismatch; prepare_evidence
+done
+message_digest=$(git show -s --format=%B HEAD | git hash-object --stdin)
+pass; assert_text "\"message_digest\":\"$message_digest\""
+engine_digest=$(cat "$preview" "$tools/release-preview.awk" | git hash-object --stdin)
+assert_text "\"engine_digest\":\"$engine_digest\""
+
+# ----------
+# Data-only source and remote isolation/public command
+# ----------
+#
+# INV repository/release-preview-read-only
+# INV repository/operator-entry-boundary
+reset_case
+mkdir -p unixlike/tool
+printf '#!/bin/sh\ntouch "%s/executed"\n' "$scratch" >unixlike/tool/candidate-script
+chmod +x unixlike/tool/candidate-script
+declaration unixlike patch unixlike-inspection
+prepare_evidence
+git remote add sentinel "file://$scratch/never-contact-remote"
+git config merge.fixture.driver "touch $scratch/driver-executed"
+git config filter.fixture.smudge "touch $scratch/filter-executed"
+git config diff.fixture.textconv "touch $scratch/textconv-executed"
+git config --local --list >"$scratch/config-before"
+git show-ref >"$scratch/refs-before"
+git status --porcelain >"$scratch/status-before"
+index_before=$(git hash-object --no-filters .git/index)
+mkdir "$scratch/guarded-tools"
+RELEASE_FIXTURE_REAL_GIT=$(command -v git)
+RELEASE_FIXTURE_FORBIDDEN_LOG="$scratch/forbidden-git"
+export RELEASE_FIXTURE_REAL_GIT RELEASE_FIXTURE_FORBIDDEN_LOG
+cat >"$scratch/guarded-tools/git" <<'EOF'
+#!/bin/sh
+[ "${GIT_ALLOW_PROTOCOL+x}" = x ] && [ -z "$GIT_ALLOW_PROTOCOL" ] &&
+  [ "$GIT_NO_REPLACE_OBJECTS" = 1 ] && [ "$GIT_NO_LAZY_FETCH" = 1 ] &&
+  [ -n "$GIT_GRAFT_FILE" ] && [ ! -e "$GIT_GRAFT_FILE" ] || { echo 'offline Git guards missing' >"$RELEASE_FIXTURE_FORBIDDEN_LOG"; exit 97; }
+case "$1" in -c) operation=$3 ;; --git-dir=*) operation=$2 ;; *) operation=$1 ;; esac
+  case "$operation" in
+    fetch|pull|push|ls-remote|remote|update-ref|checkout|switch|reset|add|commit|tag)
+      printf '%s\n' "$*" >"$RELEASE_FIXTURE_FORBIDDEN_LOG"
+      echo 'preview attempted source/remote mutation' >&2
+      exit 97 ;;
+  esac
+exec "$RELEASE_FIXTURE_REAL_GIT" "$@"
+EOF
+chmod +x "$scratch/guarded-tools/git"
+fixture_path=$PATH
+PATH="$scratch/guarded-tools:$PATH" pass
+PATH=$fixture_path; export PATH
+[ ! -e "$RELEASE_FIXTURE_FORBIDDEN_LOG" ] || { cat "$RELEASE_FIXTURE_FORBIDDEN_LOG" >&2; exit 1; }
+[ ! -e "$scratch/driver-executed" ] && [ ! -e "$scratch/filter-executed" ] && [ ! -e "$scratch/textconv-executed" ] || { echo 'ambient executable driver ran' >&2; exit 1; }
+git config --local --list >"$scratch/config-after"; cmp "$scratch/config-before" "$scratch/config-after"
+[ ! -e "$scratch/executed" ] || { echo 'candidate code executed' >&2; exit 1; }
+git show-ref >"$scratch/refs-after"; cmp "$scratch/refs-before" "$scratch/refs-after"
+git status --porcelain >"$scratch/status-after"; cmp "$scratch/status-before" "$scratch/status-after"
+[ "$index_before" = "$(git hash-object --no-filters .git/index)" ] || { echo 'index changed' >&2; exit 1; }
+"$tools/../configs" release-preview --master "$base" --candidate HEAD --rules "$rules" --baselines "$baselines" --evidence "$evidence" --json >"$output"
+assert_text '"decision":"candidate"'
+git branch master "$base"
+"$tools/plan-release" unixlike "$base" 2026.09.30 >"$scratch/calendar"
+grep -q 'tag: unixlike-v2026.09.30' "$scratch/calendar"
+
+# An ambient init template must never install executable drivers in merge scratch.
+reset_case
+printf 'master side\n' >unixlike/api/contract.json; declaration unixlike patch unixlike-api
+template_master=$(git rev-parse HEAD)
+reset_case
+printf 'candidate side\n' >unixlike/api/contract.json; declaration unixlike patch unixlike-api
+master_override=$template_master
+printf 'format\t1\n' >"$evidence"
+mkdir "$scratch/hostile-template"
+printf '[merge "fixture"]\n\tdriver = touch "%s/template-executed"\n' "$scratch" >"$scratch/hostile-template/config"
+GIT_TEMPLATE_DIR="$scratch/hostile-template" refusal merge-conflict
+[ ! -e "$scratch/template-executed" ] || { echo 'ambient template driver executed' >&2; exit 1; }
+reset_case
+printf 'new\n' >unixlike/api/contract.json; declaration unixlike patch unixlike-api
+
+# Evidence references and rule identities are literal hostile data, escaped as JSON.
+prepare_evidence
+awk -F'\t' 'BEGIN { OFS="\t" } $1=="evidence" {$9="literal \"quote\" \\ slash $(touch hostile-sentinel) `touch hostile-sentinel`"} {print}' "$evidence" >"$scratch/changed-evidence"
+cp "$scratch/changed-evidence" "$evidence"; pass
+assert_text 'literal \"quote\" \\ slash $(touch hostile-sentinel) `touch hostile-sentinel`'
+[ ! -e hostile-sentinel ] || { echo 'hostile evidence executed' >&2; exit 1; }
+prepare_evidence
+awk -F'\t' 'BEGIN { OFS="\t" } $1=="evidence" {$9="fixture://한글/verified"} {print}' "$evidence" >"$scratch/changed-evidence"
+cp "$scratch/changed-evidence" "$evidence"; pass; assert_text 'fixture://한글/verified'
+prepare_evidence
+printf 'defect\tunixlike-api\tinvalid-utf8-\377\n'  >>"$evidence"; refusal invalid-replay-format
+
+# ----------
+# Native entry/prerequisite and MSYS argument coverage
+# ----------
+#
+# INV repository/release-preview-read-only
+# INV repository/msys-argument-guard
+# INV repository/evidence-three-states
+case "$(uname -s)" in MINGW*|MSYS*) echo "Git for Windows native preview fixtures: $(git --version)" ;; *) echo "POSIX preview fixtures: $(git --version)" ;; esac
+grep -q '^MSYS_NO_PATHCONV=1' "$preview"
+grep -q "MSYS2_ARG_CONV_EXCL='\*'" "$preview"
+prepare_evidence
+for promisor in true yes on 1; do
+  git config remote.unavailable.promisor "$promisor"
+  refusal incomplete-history
+done
+git config remote.unavailable.promisor invalid-bool
+refusal invalid-promisor-configuration
+git config remote.unavailable.promisor false
+pass
+git config --unset remote.unavailable.promisor
+printf 'format\t1' >"$evidence"; refusal invalid-replay-format
+mkdir "$scratch/incomplete-tools"
+set +e
+PATH="$scratch/incomplete-tools" REQUIRE_NATIVE=0 "$preview" --master "$base" --candidate HEAD --rules "$rules" --baselines "$baselines" --evidence "$evidence" --json >"$output" 2>"$scratch/unavailable"
+unavailable_status=$?
+PATH="$scratch/incomplete-tools" REQUIRE_NATIVE=1 "$preview" --master "$base" --candidate HEAD --rules "$rules" --baselines "$baselines" --evidence "$evidence" --json >"$output" 2>"$scratch/unavailable-native"
+native_status=$?
+set -e
+[ "$unavailable_status" -eq 69 ] && [ "$native_status" -eq 1 ] || { echo "missing capability was upgraded or native job skipped: local=$unavailable_status native=$native_status" >&2; exit 1; }
+grep -q 'unverified: missing git' "$scratch/unavailable"
+printf 'format\t9\n'  >"$evidence"; refusal invalid-replay-format
+echo 'release-preview fixtures passed'

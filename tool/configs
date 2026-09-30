@@ -15,7 +15,7 @@ usage: tool/configs <command> [arguments]
 Clone and task:  setup  doctor  worktree  session  commit
 Review:          classify  work  records  invariants  provisional
                 hygiene  domain-reads  design-citations  test
-Integration:     audit  audit-remote  plan-promotion  plan-release
+Integration:     audit  audit-remote  plan-promotion  plan-release  release-preview
 Evidence:        hook-evidence
 
 Use 'tool/configs <command> --help' where the target supports it.
@@ -50,6 +50,7 @@ case "$command" in
   audit-remote) target=version-control/audit-remote ;;
   plan-promotion) target=version-control/plan-promotion ;;
   plan-release) target=version-control/plan-release ;;
+  release-preview) target=version-control/release-preview ;;
   hook-evidence) target=version-control/hook-evidence ;;
   *)
     echo "unknown repository command: $command" >&2
