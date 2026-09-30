@@ -1,5 +1,17 @@
 # Current state: Windows
 
+## Host capture
+
+Capture consumes selected/enabled units and explicit version1 host originals.
+Default capture previews only; explicit Save writes documents and first
+connections with recoverable per-file outcomes. It never writes provider source,
+generated output, real app settings or Git history. See
+`../policy/decisions/windows/host-capture-owns-originals.md`.
+Legacy Feature/Id/Branch/Publish capture arguments are refused; first adoption
+uses explicit export-selection and an operator-owned declaration. Existing
+host-owned projections remain independent of later provider default keys.
+Native W2 evidence remains in its work report/PR, separate from W1 observations.
+
 ## Host-generation delivery
 
 The 0.7.0 provider catalog has six features: core, font, zellij, terminal,
@@ -84,13 +96,13 @@ and required-native failure statuses, while CI requires their successful
 native run. This keeps the operator and automation execution contracts
 independently visible (`INV windows/automation-tools-standalone`).
 
-Since #241, `capture -Publish` on a run that found no drift resumes an earlier
+Historically, since #241, `capture -Publish` on a run that found no drift resumed an earlier
 capture's unfinished publish from the topic branch that carries it, for
 single-parent commits with the capture subject that change only
 `windows/desired/**`, and refuses anything else
-(`INV windows/capture-publishes-through-dev`). Module-level fixtures cover the
-branch and commit rules and the resumed pull-request body; the `WIN_ENV_E2E`
-cases cover a resumed run. The suite's module-level fixtures now capture what
+under the former provider-publication contract. That operator flow and its
+publication helpers are retired by host-original capture; no resumed publish
+is a current required observation. Its historical fixtures captured what
 the functions they drive print, and run their `-WhatIf` cases in a runspace
 with no host, so the `Windows tests` step of a pre-push no longer shows fixture
 pushes, `What if:` lines or fixture glyph lines, and the pull-request body no
@@ -208,8 +220,6 @@ path inside one directory; generalising it is separate work.
   on stays the reviewer's manual evidence. The lower side is observed
   (build 19044.7663); no host at or above 19045.3031 has been, so the
   item's evidence above the boundary is still owed.
-- One resumed `capture -Publish` for a branch in the stuck state on the
-  maintainer's host is still owed as evidence
-  (`docs/policy/decisions/windows/capture-moves-host-changes.md`),
-  with the pull request it opens or arms and one pre-push log whose
-  `Windows tests` step shows no fixture output (#241).
+- W2 host-original capture is independent of the historical provider-publication
+  evidence in `docs/policy/decisions/windows/capture-moves-host-changes.md`.
+  Earlier W1 observations do not certify W2 preview/save or first connections.
