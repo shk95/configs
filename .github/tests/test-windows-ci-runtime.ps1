@@ -53,14 +53,21 @@ try {
     $wrongArchitecture.management.architecture = 'arm64'
     Assert-Refused { Assert-CiManagementRuntime -RuntimePath $RuntimePath -Declaration $wrongArchitecture } 'Wrong native architecture was accepted.'
     Assert-Refused { Assert-CiManagementRuntime -RuntimePath (Join-Path $temporary 'missing.exe') -Declaration $record } 'Missing executable was accepted.'
-    $savedPath = $env:Path
-    try {
-        # PowerShell may discover its own executable even with empty PATH.
-        # An earlier harmless file candidate proves conflicting resolution.
-        $env:Path = "$temporary;$savedPath"
-        Assert-Refused { Assert-CiManagementRuntime -RuntimePath $RuntimePath -Declaration $record } 'Conflicting nested runtime resolution was accepted.'
-    }
-    finally { $env:Path = $savedPath }
+    # Fresh PowerShell startup restores its own runtime directory. Introduce
+    # the conflict inside that fresh native child, then run the real probe.
+    $conflictingProbe = Join-Path $temporary 'conflicting-probe.ps1'
+    @'
+param([string] $Probe, [string] $ConflictDirectory, [string] $Version, [string] $Architecture, [string] $Executable)
+$env:Path = "$ConflictDirectory;$env:Path"
+& $Probe -Version $Version -Architecture $Architecture -Executable $Executable
+exit $LASTEXITCODE
+'@ | Set-Content -LiteralPath $conflictingProbe
+    Assert-Refused {
+        Invoke-CiProcess -Executable $RuntimePath -Arguments @('-NoProfile', '-File', $conflictingProbe,
+            '-Probe', (Join-Path $root '.github/scripts/assert-windows-ci-runtime.ps1'),
+            '-ConflictDirectory', $temporary, '-Version', $record.management.version,
+            '-Architecture', $record.management.architecture, '-Executable', $RuntimePath)
+    } 'Conflicting nested runtime resolution was accepted.'
 
     # Native child statuses cannot be overwritten by a later command, and 69
     # is unavailable evidence rather than a passing management check.
@@ -127,14 +134,16 @@ exit $LASTEXITCODE
     # setup dependency so success and a child failure can be exercised without
     # touching real host desired state or installing PowerShell.
     $fixtureRoot = Join-Path $temporary 'bootstrap-fixture'
-    New-Item -ItemType Directory -Path (Join-Path $fixtureRoot 'tool') -Force | Out-Null
-    $copiedEntry = Join-Path $fixtureRoot 'win-env.ps1'
-    $copiedBootstrap = Join-Path $fixtureRoot 'tool/bootstrap.ps1'
+    New-Item -ItemType Directory -Path (Join-Path $fixtureRoot 'windows/tool') -Force | Out-Null
+    # Provider clone shape, including the linked-worktree-compatible marker.
+    Set-Content -LiteralPath (Join-Path $fixtureRoot '.git') -Value 'synthetic fixture marker; never used by Git'
+    $copiedEntry = Join-Path $fixtureRoot 'windows/win-env.ps1'
+    $copiedBootstrap = Join-Path $fixtureRoot 'windows/tool/bootstrap.ps1'
     Copy-Item -LiteralPath $entry -Destination $copiedEntry
     Copy-Item -LiteralPath $bootstrap -Destination $copiedBootstrap
     Assert-Result ((Get-FileHash $entry).Hash -eq (Get-FileHash $copiedEntry).Hash) 'Entry source copy changed.'
     Assert-Result ((Get-FileHash $bootstrap).Hash -eq (Get-FileHash $copiedBootstrap).Hash) 'Bootstrap source copy changed.'
-    $setup = Join-Path $fixtureRoot 'tool/setup.ps1'
+    $setup = Join-Path $fixtureRoot 'windows/tool/setup.ps1'
     @'
 param([switch] $Check, [switch] $Minimal)
 if (-not $Check -or -not $Minimal) { throw 'Bootstrap fixture did not forward read-only selection.' }

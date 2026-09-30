@@ -41,3 +41,11 @@ actual runtime selection and version/architecture refusal. Its empty-PATH
 negative fixture was invalid: PowerShell still discovers its own executable.
 The fixture now places a conflicting harmless application candidate first,
 testing refusal of a real resolution mismatch. This run also remains diagnostic.
+
+Run 36659665308 at 5c833ccb6a8e2b8ffea5a34aa55d318686feff4a showed
+that fresh selected PowerShell restores its own runtime directory ahead of
+the parent's conflicting PATH. The refusal fixture therefore introduces the
+conflict inside a fresh native child before executing the real identity probe.
+The bootstrap copy also retains the provider's windows/tool layout and a
+synthetic clone marker, with only downstream setup replaced. No source guard
+or Windows selection semantics are changed; new-head evidence remains required.
