@@ -30,20 +30,12 @@
 #   homeManager.desktop        graphical Unix-like homes, not WSL
 #   homeManager.linuxGraphical Linux-only graphical session and applications
 #   homeManager.wsl            both WSL flavours
-#   homeManager.wslStandalone  standalone only — no system layer underneath
+#   homeManager.standalone     standalone only — no system layer underneath
 #   homeManager.darwin         Darwin-only user behavior
-#   homeManager.agents         the coding agents — the NixOS-WSL home only
-#   nixos.shared               every NixOS host
-#   nixos.wsl                  NixOS hosts of kind wsl only
-#   nixos.headless             NixOS hosts that boot themselves and have no display
-#   nixos.graphical            reusable Niri graphical services, composed after order 8
-#   nixos.installExt4          UEFI and labelled ext4 layout for booting guests
-#   nixos.installLuksBtrfs     UEFI and encrypted Btrfs layout for the desktop
-#   nixos.utm                  NixOS guests under UTM only
-#   nixos.orbstack             NixOS machines under OrbStack only
-#   nixos.vmware               NixOS guests under VMware Workstation only
-#   nixos.desktop              physical AMD APU, storage and networking
-#   darwin.system              the nix-darwin system layer only
+#   homeManager.agents         common coding agents, enabled by default
+#   nixos.environment         common NixOS environment settings
+#   nixos.graphical           reusable Linux graphical services
+#   darwin.environment        common nix-darwin environment defaults
 #
 # INV unixlike/composition-in-one-place — a feature file writes into a class
 # and never names a host; `flake/configurations.nix` alone maps classes to
@@ -55,7 +47,7 @@
 # feature files contribute to — `home.packages` from the shared list and the
 # PowerShell module, for one — is concatenated in walk order, and the host's
 # toplevel derivation changes when the walk changes. tool/checks/import-order
-# composes every host in walk order and reversed and requires the same
+# composes every exported example in walk order and reversed and requires the same
 # toplevels; keying the imports is what makes that hold by construction. The
 # key is applied in `apply` below, on the merged value, because the module
 # system's `deferredModule` merge names each fragment after its file and that
@@ -63,43 +55,10 @@
 {lib, ...}: let
   inherit (lib) mapAttrs mkOption sort types;
 
-  # Keep the definition order that the flat concern tree had. The physical
-  # navigation groups must not reorder list-valued options in existing hosts.
-  # This key changes only sorting; each fragment still declares its own class.
-  stableFileKey = file:
-    lib.replaceStrings
-    [
-      "/modules/machines/desktop.nix"
-      "/modules/machines/orbstack.nix"
-      "/modules/machines/utm.nix"
-      "/modules/machines/vmware.nix"
-      "/modules/machines/amd-apu.nix"
-      "/modules/platforms/darwin.nix"
-      "/modules/foundation/nixos.nix"
-      "/modules/platforms/"
-      "/modules/foundation/"
-      "/modules/desktop/"
-      "/modules/programs/"
-    ]
-    [
-      "/modules/host/desktop.nix"
-      "/modules/host/orbstack.nix"
-      "/modules/host/utm.nix"
-      "/modules/host/vmware.nix"
-      "/modules/amd-apu.nix"
-      "/modules/host/darwin.nix"
-      "/modules/host/nixos.nix"
-      "/modules/"
-      "/modules/"
-      "/modules/"
-      "/modules/"
-    ]
-    file;
-
   keyedByFile = module:
     module
     // {
-      imports = sort (a: b: stableFileKey (a._file or "") < stableFileKey (b._file or "")) (module.imports or []);
+      imports = sort (a: b: (a._file or "") < (b._file or "")) (module.imports or []);
     };
 
   # Mirrors what flake-parts does for its own `flake.nixosModules`. `_class` makes

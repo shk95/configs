@@ -1,0 +1,207 @@
+#!/usr/bin/env python3
+"""Read versioned Unix-like provider data without evaluating a candidate flake.
+
+Pass fetched source trees, not flake URLs. For a dir=unixlike input, the tree is
+configs.outPath and the contract is api/contract.json below it. A host declaration
+is optional and must be produced by the currently trusted consumer, if used.
+"""
+
+import argparse
+import hashlib
+import json
+import subprocess
+import sys
+from pathlib import Path
+
+
+def read_contract(tree):
+    path = tree / "api" / "contract.json"
+    data = path.read_bytes()
+    contract = json.loads(data)
+    if not isinstance(contract, dict) or contract.get("formatVersion") != 1:
+        raise ValueError(f"{path}: unsupported contract formatVersion")
+    if contract.get("domain") != "unixlike":
+        raise ValueError(f"{path}: expected unixlike domain")
+    for key in ("entryPoints", "constraints", "compatibilityDefaults", "changes"):
+        if key not in contract:
+            raise ValueError(f"{path}: missing {key}")
+    if not all(isinstance(contract[key], dict) for key in ("entryPoints", "constraints", "compatibilityDefaults")):
+        raise ValueError(f"{path}: contract sections must be objects")
+    if not isinstance(contract["changes"], list) or any(
+        not isinstance(change, dict)
+        or not isinstance(change.get("id"), str)
+        or not isinstance(change.get("entryPoint"), str)
+        or not isinstance(change.get("guidance"), str)
+        for change in contract["changes"]
+    ):
+        raise ValueError(f"{path}: changes require id, entryPoint and guidance strings")
+    ids = [change["id"] for change in contract["changes"]]
+    if len(ids) != len(set(ids)):
+        raise ValueError(f"{path}: duplicate migration id")
+    return contract, hashlib.sha256(data).hexdigest()
+
+
+def flatten(prefix, obj):
+    if isinstance(obj, dict):
+        for name, value in obj.items():
+            yield from flatten(f"{prefix}.{name}" if prefix else name, value)
+    else:
+        yield prefix, obj
+
+
+def compare_contracts(old, new):
+    if old is None:
+        return {"changedPaths": [], "defaultChanges": [], "availableMigrationIds": [
+            change["id"] for change in new["changes"]
+        ]}
+    before = dict(flatten("", {k: old[k] for k in ("entryPoints", "constraints", "compatibilityDefaults")}))
+    after = dict(flatten("", {k: new[k] for k in ("entryPoints", "constraints", "compatibilityDefaults")}))
+    changed = sorted(key for key in before.keys() | after.keys() if before.get(key) != after.get(key))
+    return {
+        "changedPaths": changed,
+        "defaultChanges": [key for key in changed if ".defaults." in key or key.startswith("compatibilityDefaults.")],
+        "availableMigrationIds": [change["id"] for change in new["changes"]],
+    }
+
+
+def verify_lock(lock_path, source_root, flake_tree, label):
+    if flake_tree.resolve() != (source_root / "unixlike").resolve():
+        raise ValueError(f"{label} tree must be the unixlike directory of the locked source root")
+    lock = json.loads(lock_path.read_text())
+    node_name = lock["nodes"]["root"]["inputs"]["configs"]
+    if not isinstance(node_name, str):
+        raise ValueError("configs input must name one lock node")
+    locked = lock["nodes"][node_name]["locked"]
+    if locked.get("dir") != "unixlike":
+        raise ValueError("configs lock input must select dir=unixlike")
+    expected = locked.get("narHash")
+    if not isinstance(expected, str) or not expected.startswith("sha256-"):
+        raise ValueError("configs lock input needs a SHA-256 NAR hash")
+    result = subprocess.run(
+        ["nix", "hash", "path", "--type", "sha256", "--sri", str(source_root)],
+        capture_output=True, text=True, check=True, timeout=60,
+    )
+    actual = result.stdout.strip()
+    if actual != expected:
+        raise ValueError(f"{label} source tree NAR hash differs from configs lock: {actual} != {expected}")
+    return {"narHash": actual, "revisionFromLock": locked.get("rev"), "lockVerified": True}
+
+
+def inspect_host(declaration, candidate, compared):
+    if not isinstance(declaration, dict) or set(declaration) - {"constructor", "inputs", "systemModules", "homeModules"}:
+        raise ValueError("host declaration must contain only constructor, inputs and module-presence flags")
+    constructor = declaration.get("constructor")
+    inputs = declaration.get("inputs")
+    if not isinstance(constructor, str) or not isinstance(inputs, dict):
+        raise ValueError("host declaration requires constructor and object inputs")
+    if "systemModules" in inputs or "homeModules" in inputs:
+        raise ValueError("module contents cannot appear in declared inputs; use presence flags")
+    if any(type(declaration.get(name, False)) is not bool for name in ("systemModules", "homeModules")):
+        raise ValueError("module-presence flags must be booleans; never serialize module contents")
+    entry = candidate["entryPoints"].get(constructor)
+    edits = []
+    needs = []
+    if entry is None:
+        needs.append(f"{constructor}: no candidate contract; evaluate only after its public entry is published")
+        return {"constructor": constructor, "declaredInputCompatibility": "unknown", "requiredHostEdits": edits,
+                "candidateEvaluationNeeds": needs, "omittedDefaultChanges": [], "availableMigrationGuidance": []}
+    fields = entry["inputs"]
+    for name in sorted(set(inputs) - set(fields)):
+        edits.append(f"remove or migrate unsupported input {name}")
+    for name, field in fields.items():
+        if field.get("required") and name not in inputs:
+            edits.append(f"supply required input {name}")
+        if name in inputs and field["type"] == "string" and not isinstance(inputs[name], str):
+            edits.append(f"{name} must be a string")
+        if name in inputs and field["type"] == "absolutePathString" and (
+            not isinstance(inputs[name], str) or not inputs[name].startswith("/")
+        ):
+            edits.append(f"{name} must be an absolute path string")
+    if "git" in inputs:
+        git = inputs["git"]
+        if not isinstance(git, dict) or set(git) - {"name", "email"} or any(not isinstance(git.get(k), str) for k in ("name", "email")):
+            edits.append("supply git.name and git.email as strings")
+    env = inputs.get("environment", {})
+    if not isinstance(env, dict):
+        edits.append("environment must be an object")
+        env = {}
+    for key, value in env.items():
+        if key not in ("wsl", "graphical") or type(value) is not bool:
+            edits.append(f"environment.{key} is unsupported or not boolean")
+    system = inputs.get("system")
+    allowed = candidate["constraints"].get(constructor, {}).get("systems", [])
+    if system is not None and system not in allowed:
+        edits.append("system is outside the declared candidate systems")
+    if env.get("wsl") is True and env.get("graphical") is True:
+        edits.append("environment.graphical conflicts with environment.wsl")
+    if declaration.get("systemModules") and "systemModules" not in fields:
+        edits.append("systemModules is unsupported by this constructor")
+    if declaration.get("homeModules") and "homeModules" not in fields:
+        edits.append("homeModules is unsupported by this constructor")
+    if declaration.get("systemModules") or declaration.get("homeModules"):
+        needs.append("evaluate host module effects against the candidate")
+    if not needs:
+        needs.append("evaluate the candidate's final configuration before adoption")
+    omitted_defaults = []
+    if "environment" not in inputs or "wsl" not in env:
+        omitted_defaults += [key for key in compared["defaultChanges"] if key.endswith(".environment.defaults.wsl")]
+    if "environment" not in inputs or "graphical" not in env:
+        omitted_defaults += [key for key in compared["defaultChanges"] if ".environment.defaults.graphical" in key]
+    omitted_defaults += [key for key in compared["defaultChanges"] if key.startswith("compatibilityDefaults.")]
+    return {
+        "constructor": constructor,
+        "declaredInputCompatibility": "requires-edits" if edits else "compatible",
+        "requiredHostEdits": edits,
+        "candidateEvaluationNeeds": needs,
+        "omittedDefaultChanges": sorted(set(omitted_defaults)),
+        "availableMigrationGuidance": [
+            {"id": change["id"], "guidance": change["guidance"]}
+            for change in candidate["changes"] if change["entryPoint"] == constructor
+        ],
+    }
+
+
+def main():
+    parser = argparse.ArgumentParser(description=__doc__)
+    parser.add_argument("--candidate-tree", type=Path, required=True, help="fetched unixlike flake source directory")
+    parser.add_argument("--candidate-lock", type=Path, help="consumer flake.lock naming the configs input")
+    parser.add_argument("--candidate-source-root", type=Path, help="fetched repository source root for lock NAR verification")
+    parser.add_argument("--current-tree", type=Path, help="current trusted unixlike flake source directory")
+    parser.add_argument("--current-lock", type=Path, help="current consumer flake.lock naming the configs input")
+    parser.add_argument("--current-source-root", type=Path, help="current fetched repository source root")
+    parser.add_argument("--legacy", action="store_true", help="current pinned provider has no contract reader/data")
+    parser.add_argument("--host-declaration", type=Path, help="JSON exported by the current trusted host")
+    parser.add_argument("--candidate-ref", help="caller-supplied immutable revision or release ref")
+    args = parser.parse_args()
+    if args.legacy and args.current_tree:
+        parser.error("choose --legacy or --current-tree")
+    if bool(args.candidate_lock) != bool(args.candidate_source_root):
+        parser.error("--candidate-lock and --candidate-source-root must be used together")
+    if bool(args.current_lock) != bool(args.current_source_root):
+        parser.error("--current-lock and --current-source-root must be used together")
+    if args.current_lock and not args.current_tree:
+        parser.error("--current-lock requires --current-tree")
+    candidate, digest = read_contract(args.candidate_tree)
+    current = read_contract(args.current_tree)[0] if args.current_tree else None
+    compared = compare_contracts(current, candidate)
+    output = {
+        "candidate": {"contractSha256": digest, "sourceRefProvidedByCaller": args.candidate_ref},
+        "comparison": "readerless-legacy" if args.legacy else "current-to-candidate" if current else "candidate-only",
+        **compared,
+    }
+    if args.candidate_lock:
+        output["candidate"].update(verify_lock(args.candidate_lock, args.candidate_source_root, args.candidate_tree, "candidate"))
+    if args.current_lock:
+        output["current"] = verify_lock(args.current_lock, args.current_source_root, args.current_tree, "current")
+    if args.host_declaration:
+        output["host"] = inspect_host(json.loads(args.host_declaration.read_text()), candidate, compared)
+    print(json.dumps(output, indent=2, sort_keys=True))
+
+
+if __name__ == "__main__":
+    try:
+        main()
+    except (OSError, ValueError, KeyError, TypeError, json.JSONDecodeError,
+            subprocess.CalledProcessError, subprocess.TimeoutExpired) as exc:
+        print(f"contract-inspect: {exc}", file=sys.stderr)
+        sys.exit(2)
