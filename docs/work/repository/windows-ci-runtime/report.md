@@ -1,7 +1,7 @@
 # Report: native Windows CI runtime binding
 kind: report
 spec: docs/work/repository/windows-ci-runtime/spec.md
-status: done
+status: pending
 
 ## Acceptance
 
@@ -10,7 +10,7 @@ status: done
 | AC1 | verified | Run 36659933239 at implementation 6b39f625: native verified archive acquisition and fresh 7.6.6/x64 identity, matching/tampered archive and missing/incorrect identity fixtures pass; registry and repository fixtures pass. |
 | AC2 | verified | Same native job proves explicit runtime controller and management children, identical nested resolution after PATH refresh, conflicting resolution refusal and child 0/23/69/terminating-error behavior. Existing stable gate and immediate status checks are preserved. |
 | AC3 | verified | Same native job records management 7.6.6/x64 separately from actual Desktop/5.1/x64 inbox entry/bootstrap execution: help 0, unknown 64, missing prerequisite 1, successful check 0 and forwarded child failure 37. |
-| AC4 | verified | Complete run 36659933239 passes all selected repository, Unix-like and native Windows suites plus Required checks at implementation 6b39f625. Scope/diff review preserves Windows source ownership and stable fail-closed selection. The report publishing revision receives separate current-head checks in PR #433 before Ready. |
+| AC4 | pending | Complete run 36659933239 passes all selected suites plus Required checks at implementation 6b39f625. Final review found helper-only changes lacked Windows dispatch; targeted effect mapping and positive/negative fixtures are now prepared and require new exact-head CI before final verification. |
 
 ## Local preparation
 
@@ -100,3 +100,13 @@ requires that revision's own completed native and selected checks. This report
 does not claim client support baseline, maintainer-host installation, private
 host behavior, desired-state Apply, activation, promotion or release. Root owns
 any separately approved integration; the worker does not arm auto-merge.
+
+Final dispatch review found that shared workflow edits selected all suites,
+but a later runtime helper/fixture-only edit would select only repository
+fixtures. Known runtime inputs now explicitly select the complete Windows
+suite; additions, modifications, deletions and a rename into the fixture are
+positive dispatch cases. CODEOWNERS and an unrelated script remain negative
+Windows-effect cases. Local gates select the runtime module/controller that
+their wiring assertions actually read. Shared workflow machinery retains
+conservative all-suite selection. Native proof for this repaired delivery is
+pending; prior implementation green is not new-head proof.

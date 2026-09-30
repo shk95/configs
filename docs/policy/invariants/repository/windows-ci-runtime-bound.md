@@ -1,6 +1,7 @@
 id: repository/windows-ci-runtime-bound
 statement: Native Windows CI verifies the domain-declared management artifact and fresh process identity, binds direct and nested management execution to that runtime, records inbox bootstrap coverage separately, and refuses failed or unavailable selected checks.
 rationale: docs/policy/architecture.md § Repository governance plane
+enforced-by: tool tool/dispatch/select
 enforced-by: schema .github/scripts/WindowsCiRuntime.psm1
 enforced-by: schema .github/scripts/assert-windows-ci-runtime.ps1
 enforced-by: schema .github/scripts/windows-ci.ps1
@@ -17,3 +18,5 @@ execution evidence; local foreign checks never substitute for it.
 The PowerShell runtime loader and process probe refuse the mismatch; they
 are interpreted source, not POSIX executables. Workflow/controller selection
 is held by repository wiring fixtures and exercised in the native job.
+Known runtime helper or native fixture changes select the Windows suite even
+without a workflow edit; unrelated repository inputs do not acquire that effect.

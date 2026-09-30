@@ -27,6 +27,10 @@ evidence. A hosted server runner does not certify the separately named client
 support baseline, private host behavior or activation.
 
 Internal workflow scripts are CI implementation, not a new operator command.
+Changes to the known runtime helpers or native fixture select the Windows suite
+even when no workflow file changes. Ownership remains repository; unrelated
+repository inputs do not gain a Windows effect and shared workflow/selection
+machinery still exercises every suite conservatively.
 They read only the selected Windows interface and exercise its own scripts;
 Windows tests still own parsing their tree and do not read Unix-like source.
 No maintainer-host runtime installation, private runner enrollment, new release

@@ -4618,6 +4618,27 @@ fi
 windows_ci_workflow="$root/.github/workflows/ci.yml"
 windows_ci_module="$root/.github/scripts/WindowsCiRuntime.psm1"
 windows_ci_controller="$root/.github/scripts/windows-ci.ps1"
+# INV repository/local-gate-selects-by-effect
+# Native runtime inputs select Windows even alone. Unknown .github material
+# keeps repository ownership without acquiring a Windows runtime effect.
+for path in .github/scripts/WindowsCiRuntime.psm1 \
+  .github/scripts/assert-windows-ci-runtime.ps1 \
+  .github/scripts/prepare-windows-ci-runtime.ps1 \
+  .github/scripts/windows-ci.ps1 .github/tests/test-windows-ci-runtime.ps1; do
+  for status in M A D; do
+    expect_units 'repository:fixtures
+windows:suite' ci "$(printf '%s\t%s' "$status" "$path")"
+  done
+done
+expect_units 'repository:fixtures
+windows:suite' ci "$(printf 'R100\tdocs/fixture.md\t.github/tests/test-windows-ci-runtime.ps1')"
+expect_units 'repository:fixtures' ci "$(printf 'M\t.github/CODEOWNERS')"
+expect_units 'repository:fixtures' ci "$(printf 'M\t.github/scripts/unrelated.ps1')"
+for stage in commit push; do
+  expect_units 'repository:fixtures' "$stage" "$(printf 'M\t.github/scripts/WindowsCiRuntime.psm1')"
+  expect_units 'repository:fixtures' "$stage" "$(printf 'M\t.github/scripts/windows-ci.ps1')"
+  expect_units '' "$stage" "$(printf 'M\t.github/CODEOWNERS')"
+done
 grep -Fq 'CONFIGS_CI_PWSH: ${{ steps.runtime.outputs.pwsh }}' "$windows_ci_workflow"
 grep -Fq '& $env:CONFIGS_CI_PWSH -NoLogo -NoProfile -NonInteractive -File' "$windows_ci_workflow"
 grep -Fq '.github/tests/test-windows-ci-runtime.ps1' "$windows_ci_controller"
