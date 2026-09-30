@@ -20,7 +20,7 @@ unknown/duplicate/follows-alias/invalid configuration, an excluded new source
 without a baseline, all-excluded no-update selection, byte-preserving no-op
 and a real missing-local-upstream refusal. Controlled wrappers separately
 inject candidate corruption, excluded-source corruption, update/validation
-failure and stale lock/config/source edits; these prove failure handling and
+failure and stale lock/config/source/permission-mode edits; these prove failure handling and
 are not successful-upstream claims. Successful/no-op/failure snapshots permit
 only the disposable lock to change; stale external edits are retained.
 
@@ -29,8 +29,11 @@ changes. The tool now refuses provider source symlinks, including a symlinked
 lock or exclusion file. Actual fixtures prove lock/config/file/directory-link
 refusal and target preservation; the current provider tree has no symlinks.
 The initial lock/config reads are bound to their source snapshot, and a final
-snapshot is checked immediately before publication. A cooperating directory
-claim serializes refreshes; the fixture proves claim refusal. Candidate
+snapshot is checked immediately before publication. Source snapshots include
+bytes and permission modes; the mode fixture proves
+that an executable-bit edit is retained and stale publication is refused.
+A cooperating directory claim serializes refreshes; the fixture proves claim
+refusal. Candidate
 validation precedes same-directory atomic replacement, and unchanged locks
 preserve original bytes. This is complete-file publication on a filesystem
 supporting atomic rename, not arbitrary-writer compare-and-swap or a power-loss

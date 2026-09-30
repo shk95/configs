@@ -25,8 +25,10 @@ while its followed nixpkgs owner may still refresh. Newly added independent
 inputs participate automatically; transitive nodes are not selection names.
 
 The tool uses a temporary candidate and verifies exclusions, graph validity
-and unchanged original sources before atomic lock publication. Unchanged
-upstreams preserve the original bytes; an empty selection runs no update
+and unchanged original sources before atomic lock publication. Source checks
+include file bytes and permission modes, since executable bits affect Nix
+source identity. Unchanged upstreams preserve the original bytes; an empty
+selection runs no update
 command. Failed pre-publication operations leave the original lock intact.
 Runtime temporary directories and the cooperating refresh claim are removed
 on normal exit. If abruptly interrupted, inspect `.refresh-inputs-running`

@@ -59,7 +59,8 @@ def source_snapshot(root, ignored):
         if path.is_symlink():
             raise ValueError(f"provider source symlink is unsupported: {relative}")
         elif path.is_file():
-            result[str(relative)] = hashlib.sha256(path.read_bytes()).hexdigest()
+            result[str(relative)] = (hashlib.sha256(path.read_bytes()).hexdigest(),
+                                     path.stat().st_mode & 0o777)
     return result
 
 
@@ -82,8 +83,8 @@ def refresh(root, check=False):
             configuration = config_path.read_bytes()
             excluded = exclusions(configuration)
             snapshot = source_snapshot(root, ignored)
-            if (snapshot.get("flake.lock") != hashlib.sha256(original).hexdigest()
-                    or snapshot.get("flake-refresh-exclusions.json") != hashlib.sha256(configuration).hexdigest()):
+            if (snapshot["flake.lock"][0] != hashlib.sha256(original).hexdigest()
+                    or snapshot["flake-refresh-exclusions.json"][0] != hashlib.sha256(configuration).hexdigest()):
                 raise ValueError("provider lock/config changed during initial snapshot")
             reference = temporary / "reference.lock"
             candidate_path = temporary / "candidate.lock"

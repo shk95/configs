@@ -53,7 +53,8 @@ def own(root, name):
 
 
 def snapshot(root):
-    return {str(path.relative_to(root)): hashlib.sha256(path.read_bytes()).hexdigest()
+    return {str(path.relative_to(root)): (hashlib.sha256(path.read_bytes()).hexdigest(),
+                                        path.stat().st_mode & 0o777)
             for path in root.rglob("*") if path.is_file()}
 
 
@@ -170,7 +171,9 @@ with tempfile.TemporaryDirectory(prefix="refresh-fixtures-") as temporary:
     bkey = altered["nodes"][altered["root"]]["inputs"]["b"]
     altered["nodes"][bkey]["locked"]["rev"] = "0" * 40
     tampered.write_text(json.dumps(altered))
-    for mutation in ("candidate", "excluded", "config", "source", "lock", "update-failure", "validation-failure"):
+    for mutation in ("candidate", "excluded", "config", "source", "mode", "lock", "update-failure", "validation-failure"):
+        before = snapshot(root)
+        original_mode = source.stat().st_mode & 0o777
         saved = {name: (root / name).read_bytes() for name in (
             "flake.nix", "flake.lock", "flake-refresh-exclusions.json")}
         # Wrap only the tested boundary. Real update executes first; simulated
@@ -189,6 +192,7 @@ if [ "$1 $2" = "flake update" ]; then
     excluded) cp "{tampered}" "$candidate" ;;
     config) printf ' ' >> "{root}/flake-refresh-exclusions.json" ;;
     source) printf '\\n' >> "{root}/flake.nix" ;;
+    mode) chmod u+x "{root}/flake.nix" ;;
     lock) printf ' ' >> "{root}/flake.lock" ;;
   esac
   exit 0
@@ -206,8 +210,12 @@ exec "{NIX}" "$@"
                                b"\n" if mutation == "source" and name == "flake.nix" else b"")
             assert (root / name).read_bytes() == expected, (mutation, name, result.stderr)
             (root / name).write_bytes(data)
+        if mutation == "mode":
+            assert source.stat().st_mode & 0o777 == original_mode | 0o100
+            source.chmod(original_mode)
+        assert snapshot(root) == before
         assert not any(path.name.startswith(".refresh-inputs-") for path in root.iterdir())
-    print("PASS candidate/excluded-source validation update-failure validation-failure and stale lock/config/source guards")
+    print("PASS candidate/excluded-source validation update-failure validation-failure and stale lock/config/source/mode guards")
 
     fake_python = wrappers / "python3"
     fake_python.write_text('#!/bin/sh\nexit 42\n')
