@@ -39,8 +39,8 @@ the flake are its composition authority.
 It owns one tree, `unixlike/`, which holds:
 
 - the flake and its lock;
-- feature and host modules under `modules/`, grouped for navigation as
-  `flake`, `machines`, `platforms`, `foundation`, `desktop`, and `programs`;
+- provider feature modules under `modules/`, grouped for navigation as
+  `flake`, `platforms`, `foundation`, `desktop`, and `programs`;
   a concern lives inside one group and the class a fragment reaches is read
   in the file that writes it;
 - the Unix-like source payloads those modules consume, each beside the module
@@ -74,15 +74,20 @@ members decides drift, what is written and what may be captured, leaving
 whatever the application keeps beside them as runtime
 (`docs/policy/decisions/unixlike/karabiner-desired-state-by-projection.md`).
 
-Composition, identity, and ownership in this domain rest on ten rules, each
-registered under `docs/policy/invariants/unixlike/`. One file maps module classes to
-hosts, and a feature file writes into a class without naming a host or
-forcing another class's decision, so where a program reaches is read in one
-place. For NixOS, a machine kind names its required classes and the optional
-profiles it offers; each host makes a typed profile choice separate from its
-identity. That one composition file validates the choice and decides the
-imports, so a host does not import a feature class directly
-(`docs/policy/decisions/unixlike/hosts-select-offered-machine-profiles.md`).
+Provider composition, identity and ownership are registered under
+`docs/policy/invariants/unixlike/`. One file maps public environment choices
+to internal module classes. A feature file contributes to a class without
+naming a host or forcing another class's decision. Consumers select WSL and
+graphical behavior through typed constructor inputs and extend the result with
+native system and home modules. Personal machine kind and hypervisor no longer
+select provider composition
+(`docs/policy/decisions/unixlike/public-environment-host-boundary.md`).
+The private consumer and public starting template use one root flake and lock
+with explicit per-host declarations in the agreed next structure
+(`docs/policy/decisions/repository/single-flake-host-consumers.md`). The
+connection module belongs to its consumer, and publication of a provider does
+not change a consumer pin or deploy its hosts. Current transfer state is
+recorded in `docs/status/repository.md`.
 A graphical class is composed only into a home that has a display. Both WSL
 homes are command-line configurations: they receive no Linux GUI programs,
 graphical session, or WSLg integration. Their terminal is declared in the
@@ -91,11 +96,10 @@ necessary, first revise this rule and `INV unixlike/desktop-not-wsl` through
 the Unix-like governance workflow, then plan implementation and host evidence.
 
 Host identity reaches the provider through typed constructor arguments owned
-by a consumer. The provider's in-repository declarations are synthetic
-fixtures covering each machine kind; real host identities and final outputs
-live in the private consumer. An evaluator refuses a wrong shape before any
-host is composed, and no untyped argument carries identity around the module system. Module
-files are collected by a directory walk, so nothing order-sensitive may depend
+by a consumer. The provider's in-repository outputs are synthetic examples;
+real host identities and final outputs live in the consumer. An evaluator
+refuses a wrong shape before composition. Module files are collected by a
+directory walk, so nothing order-sensitive may depend
 on that order. A package has one declaring module: a feature module when it
 generates the package's configuration, otherwise the shared list, and a system
 module only when a service, activation script, or system account needs it,
@@ -114,37 +118,20 @@ and overlay set every flavour evaluates under are each declared once, in
 home's `pkgs` and by the NixOS and darwin flavours' own `nixpkgs.*` options,
 rather than repeated per class.
 
-A NixOS host that boots itself and has no display is reached over the network
-or not at all, so what it admits is the whole of its exposure. The class that
-makes such a host reachable opens its ssh port and no other, accepts a key and
-nothing else and never a root login, and tracks neither a password nor an
-authorized key, because both are host state the installing step writes. It
-asserts that shape itself, so a service added later that opens a port of its
-own is refused until the rule is changed on purpose. The NixOS-WSL host is not
-of that class: its port and its account's UID are facts about WSL's shared
-network and cgroups.
-
-A NixOS machine under OrbStack is a third kind. OrbStack writes the
-configuration such a machine needs into the machine itself, outside the
-flake, mixed with facts about the Mac that created it and marked as
-overwritten, so the domain declares by hand what OrbStack needs from a guest
-and imports none of it: an output that read a path inside one machine would
-evaluate nowhere else, and evaluation is evidence only when it reaches every
-configuration. The machine is a container whose UIDs are mapped one to one, so
-its root is UID 0 on the one kernel OrbStack runs for every machine and for
-its container engine, and emulation on that kernel is OrbStack's to provide:
-it masks the service that would register one inside a machine. The class
-registers nothing there and asserts it, without resting on how far a
-registration made in a machine would reach: each machine has a user namespace
-of its own, so probably no further than the machine, which was not tried.
-Whether a machine is isolated from the Mac is the OrbStack
-application's state, which the domain records in its procedure and does not
-declare.
+A consumer owns each machine's account, access, network, storage, boot and
+hypervisor realization, plus the related safety assertions and installation
+tools. This includes the shared-kernel precautions for WSL and OrbStack.
+The provider does not promise that synthetic fixture evaluation proves those
+private host properties.
 
 An installed Unix-like host consumes its independently pinned private flake
 and activates only after evaluation and native build evidence for that host.
 A `configs` Unix-like release tag certifies the provider API and fixtures,
 not a final consumer output or deployment.
+Provider verification evaluates every exported synthetic configuration and
+builds explicitly selected native outputs for the affected public contracts.
+A selected build must pass at the current source revision; selection does not
+mean that the running host may activate the fixture.
 
 ## Windows domain
 

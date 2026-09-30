@@ -39,26 +39,31 @@ common
 
 The Unix-like flake exports typed constructors through `lib.mkNixos`,
 `lib.mkDarwin` and `lib.mkHome`. Real host identities and final outputs live in
-the private `configs-hosts` repository, where each host pins this provider in
-its own flake and lock. The outputs in this repository use synthetic
-`fixture-*` names and the `example` account to exercise all five NixOS machine
-kinds, Darwin and standalone Home Manager. They are test instances, not
-deployment targets (`docs/status/unixlike.md`).
+the private `configs-hosts` repository. Its agreed next structure selects one
+provider pin in a root flake and lock; the single-flake private and public
+template candidates still await delivery (`docs/status/repository.md`). The
+outputs here use synthetic `fixture-*` and `example` identities to exercise
+NixOS CLI, Linux graphics, WSL, Darwin and standalone
+Home Manager. They are test instances, not deployment targets. The public
+input schema and migration guidance are in `unixlike/api/contract.json`;
+`unixlike/tool/contract-inspect` compares pinned source contracts and
+`unixlike/tool/standalone-readiness` checks selected standalone prerequisites
+without applying them (`docs/status/unixlike.md`).
 
 Graphical Unix-like applications are a separate Home Manager composition
 class. Both WSL outputs are command-line configurations and deliberately
 exclude Linux GUI applications and WSLg integration. They use a Windows-owned
 terminal. Adding WSL GUI support requires a Unix-like policy revision before
 any implementation is planned.
-Ghostty is installed by Homebrew on Darwin while Home Manager owns its shared
-Unix-like configuration.
+The Darwin consumer selects whether Homebrew installs Ghostty; Home Manager
+supplies its settings only when that app is selected.
 
 Portable interactive programs are declared once in `homeManager.shared` and
 reach the consumer outputs through the provider constructors. Platform Home
 Manager classes add only
-platform-specific behavior. Darwin Homebrew declarations are reserved for
-macOS applications, Mac App Store items, and explicit exceptions that the
-locked nixpkgs cannot provide on Darwin.
+platform-specific behavior. Darwin Homebrew app selection and lifecycle
+belong to the consumer; the provider retains shell integration and settings
+for selected apps.
 
 Windows desired state is declared directly in
 `windows/desired/manifest.json`. Its payloads, including the Windows-owned
@@ -79,6 +84,40 @@ tool/configs doctor
 
 Pass a scope such as `tool/configs doctor repository` when a foreign-platform
 capability is irrelevant to the current change.
+
+The Unix-like provider exposes read-only contract and standalone prerequisite
+tools. Run the reader from a provider revision you already trust, against a
+separately fetched candidate source. The consumer lock must name its provider
+input `configs` and select `dir=unixlike`:
+
+```sh
+# Set trusted_ref, candidate_root and consumer_lock to reviewed values first.
+# trusted_ref selects dir=unixlike; consumer_lock must bind candidate_root.
+nix run "${trusted_ref}#contract-inspect" -- \
+  --candidate-tree "$candidate_root/unixlike" \
+  --candidate-source-root "$candidate_root" \
+  --candidate-lock "$consumer_lock"
+```
+
+Use `--current-tree "$current_root/unixlike"` for a current-to-candidate
+comparison; add `--current-source-root "$current_root"` and
+`--current-lock "$current_lock"` to bind that source to the current consumer
+lock as well.
+Use `--legacy` if the current pin has no contract. An optional
+`--host-declaration` JSON file contains the constructor, explicit `inputs`,
+and Boolean `systemModules`/`homeModules` presence flags; it must come from the
+current trusted host, and it must not contain module bodies. For a standalone
+home, run:
+
+```sh
+nix run "${trusted_ref}#standalone-readiness" -- \
+  --declaration "$trusted_host_declaration"
+```
+
+This checks the selected system conditions without preparing or activating
+the host. Missing and unknown conditions require separate resolution;
+a satisfied prerequisite result is
+not a runtime or activation result.
 
 Allow the repository's committed direnv environment once per clone:
 

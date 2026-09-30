@@ -2,7 +2,8 @@
 
 date: 2026-09-24
 scope: repository
-status: accepted
+status: superseded
+superseded-by: docs/policy/decisions/repository/single-flake-host-consumers.md
 reopen-when: Two host groups require different repository access, review ownership or release schedules that per-host flakes and locks cannot express clearly.
 source: docs/work/unixlike/host-provider-api/spec.md § Decisions
 
@@ -38,3 +39,8 @@ that would make template changes an implicit host adoption.
 Cost: a single private repository can later hold unrelated host changes in
 one history. Per-host flakes and locks keep their outputs independent; the
 reopen condition names when repository ownership itself should be split.
+
+Superseded 2026-09-30: the successor retains one private repository and the
+public template's one-time-copy relationship, but replaces per-host flakes
+and locks with the agreed single-flake, shared-input direction. This record
+preserves the original choice and its historical adoption evidence.

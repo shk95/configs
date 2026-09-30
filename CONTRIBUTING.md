@@ -568,13 +568,14 @@ does not follow one as a rule.
 1. Put feature-oriented declarations under the appropriate navigation group
    in `unixlike/modules/`; the file declares its class.
 2. Put Unix-like source payloads in their owning Unix-like asset location.
-3. Keep host composition in `unixlike/modules/flake/configurations.nix`.
+3. Keep public constructor composition in
+   `unixlike/modules/flake/configurations.nix`; consumers own final host outputs.
 4. Run narrow formatting, lint, evaluation, and native build checks.
 5. Treat this flake's exported `fixture-*` and `example` outputs as synthetic
    test coverage. A Unix-like provider release certifies these checks and the
    constructor API, not any private host's final output.
-6. Build and activate a real host only from its reviewed flake under the
-   private `configs-hosts/hosts/<host>/` repository and only on explicit
+6. Build and activate a real host only from its reviewed output in the
+   private `configs-hosts` repository and only on explicit
    request. That consumer owns its independent evaluation, build and runtime
    evidence.
 
@@ -587,18 +588,21 @@ consumer's current procedure and reviewed host facts.
 
 ### Validate a private Unix-like host
 
-Use the reviewed flake under `configs-hosts/hosts/<host>/` for a real host.
+Use the reviewed output from the actually delivered flake and lock in
+`configs-hosts` for a real host. The agreed single-root-flake transition is a
+candidate until the consumer delivers it; see `docs/status/repository.md`.
+Earlier per-host flakes remain the source for hosts that have not adopted it.
 That repository owns the final output, identity, pinned provider revision,
 installation procedure and deployment target. Run its `tool/check-hosts`
 for final evaluation, then build on the target architecture and record native
 runtime separately. Review the selected source, disk and host before any
 installation, test activation, switch, reboot or rollback; those actions need
-an explicit request. A `configs` provider check, synthetic install plan or
-release tag does not supply private host evidence.
+an explicit request. Neither a `configs` provider check nor its release tag
+supplies private host evidence.
 
-For reusable storage-class development, `unixlike/tool/install-plan` and
-`install-vm-test` use synthetic provider fixtures. Their disposable VM proof
-validates the provider layout and installer wiring, not a private disk.
+Installation planning and disposable VM proofs use consumer-owned tools and
+the selected private host declaration. The provider no longer owns disk
+layouts, target selection or installation inputs.
 
 ## Windows changes
 
@@ -762,7 +766,11 @@ design (`INV unixlike/import-order-independence`).
 cover them: Nix copies a payload into the store without reading it.
 
 `unixlike/tool/checks/test` evaluates every declared Unix-like configuration
-and builds configurations native to the current host when appropriate. Foreign
+and builds its selected native synthetic outputs. The default selection covers
+one representative per constructor supported by the runner. Set
+`CHECKS_BUILD_TARGETS` to space-separated `flavour.name` attributes for a
+specific affected contract, or `CHECKS_BUILD_ALL=1` for all native fixtures.
+A missing, foreign or failed selected build refuses the check. Foreign
 evaluation is not native build or activation evidence.
 
 For Windows changes, run the native Windows commands above. Unix-like Nix
