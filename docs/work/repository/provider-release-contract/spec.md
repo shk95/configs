@@ -14,6 +14,60 @@ flakes, App credentials, whole-domain unknown-impact fallback and stronger atomi
 merge claims are superseded. Latest same-date amendments take precedence. This
 is accepted planning, not implementation or permission to execute remote actions.
 
+## Implementation pickup clarification, 2026-09-30
+
+This section concretizes the latest amendments without changing AC1-AC14 or
+adopting new policy. The earlier R1/R2 lanes and general stage-design deferrals
+are historical where superseded. Planning delivery, offline implementation,
+authorized manual operation and scheduled enablement are separate outcomes.
+No controller implementation owner or execution issue is assigned by this text.
+
+At pickup, inspect the execution issue and open PRs for competing ownership;
+record current origin/dev and the reviewed plan revision separately. An unpublished
+planning diff is provisional and must be published before another worker relies
+on it. Each lane uses its own repository-scope linked worktree and coherent PR.
+
+| Lane | Outcome and PR boundary | Inputs and dependencies | Required proof and acceptance connection |
+| --- | --- | --- | --- |
+| R-preview | Adapter-free read-only release decision CLI, structured input/output contract and refusal fixtures; one repository PR | Reviewed release plan, exact master/candidate and previous domain-release identities, explicit impact/evidence inputs, trusted selector revision. Decide legacy-history cutover and metadata encoding at pickup; synthetic domain inputs permit independent fixture work, while final domain wiring uses delivered contracts. No PAT/private setup prerequisite. | AC2/AC7/AC8/AC9/AC10 applicable portions: deterministic version or refusal; cumulative changes/reverts; source-only/no-op; malformed/missing/contradictory declarations; unknown selection; required versus advisory evidence; no external writes. Policy and affected-dispatch checks plus positive/negative fixtures. |
+| R-control | Disabled-by-default shared controller, request/record handling and previewed remote-operation adapters; one repository PR | R-preview interfaces, agreed master-entry/old-batch recovery mechanism, request wakeup/serialization, approved concrete record schema and endpoint/permission design. Required template delivery gates use exact consumer-facing refs; unrelated Windows/U1 implementation does not block pure controller fixtures. | AC1/AC5/AC6/AC11/AC12/AC13/AC14 applicable portions: candidate/approval invalidation, trusted secret isolation, single-writer conflicts, termination-confirmed takeover, stop races, remote intent/result gaps, immutable partial-tag recovery, retries, delayed/missed runs and safe summaries. Fixtures are required before live operation. |
+| R-manual | Authorized manual end-to-end rollout and its evidence; repair source in its owning PR when needed | Delivered controller and affected domain contracts/evidence; durable required template adaptation with delivered-pair proof; selected private operating repository, actual PAT/Environment/ref boundary, operator authorization for each live scope | Observe actual permission/protection behavior, retained old-batch semantics, validation wakeup, exact merge parents/tree, remote record reconciliation and Actions notification receipt. Fixtures and document checks cannot satisfy this live proof. |
+| R-scheduled | Separately authorized enablement of the existing shared cycle | Successful R-manual evidence, explicit enable/stop/resume configuration and scheduled rollout authorization; refresh scheduler also depends on the delivered Unix-like refresh tool | AC11/AC12/AC13 and scheduled-flake-refresh criteria: observe 05/06/07 KST opportunity handling, quiet disabled/no-op use, enabled misconfiguration refusal and recovery. No new controller, private-host gate or automatic host adoption. |
+
+These are coherent delivery boundaries, not a branch per test environment. An
+implementation report records actual lane evidence in its delivery PR; partial
+proof does not verify a criterion that still requires other lanes. All current
+acceptance rows remain pending. The planner assigns an owner and records the
+lane in an execution issue only after the applicable pickup decisions and Git
+authorization are concrete; this planning clarification grants neither.
+
+Before assigning R-preview, settle the committed impact encoding and initial
+legacy-history boundary, input/output schema, initial changed-function mapping,
+and operator entry point. The complete replay input must include source and
+previous-release identities, versioned rules/selector, declarations, tool versions
+and exact evidence binding. Keep current-master-to-candidate promotion selection
+distinct from previous-domain-tag-to-candidate version aggregation. Unmapped
+changes require bounded mapping review or refusal, never an empty successful
+selection. Final actual contract paths/ref formats must follow their domain owner;
+fixtures must not silently become a second domain schema or evaluator.
+
+Before assigning remote-write implementation, name the concrete trusted master
+entry and how recovery retains old approved control/approval semantics, the wakeup
+after candidate checks, request serialization and timeout values. Prove stop/cancel
+races, exact owning run/attempt matching, termination confirmation and unknown
+remote-response reconciliation. Confirm the actual endpoints and protections;
+plan-level PAT permissions or Environment names are not proof of isolation. The
+head guard cannot guarantee an atomic expected-base merge: unexpected actual
+parents/tree stop publication without automatic undo. Actual notification receipt
+and duplication limits remain manual-rollout observations.
+
+Stop and return to planning for changed acceptance/dependencies, competing owner,
+private-host validation becoming a provider gate, a new release product, candidate
+code in privileged control, broader unattended authority or a protection bypass.
+Unresolved encoding/selection/trust interfaces block the affected pickup; they do
+not authorize a worker to silently invent new accepted governance. No credentials,
+live schedules, merges, tags, activation or Apply follow from plan publication.
+
 ## Outcome and standing
 
 Record the agreed stage-1 design for frequent, host-consumable provider

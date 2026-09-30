@@ -3,6 +3,14 @@ kind: report
 spec: docs/work/repository/scheduled-flake-refresh/spec.md
 status: pending
 
+## Planning delivery clarification, 2026-09-30
+
+The pickup clarification distinguishes independent fake-interface fixture preparation
+from final scheduler wiring after the actual refresh tool and shared controller are
+delivered. B owns planning continuation only; no scheduler/controller implementation
+owner, issue, PR, credential or live schedule is created by this review. Acceptance
+and all pending rows are unchanged. Document preflight is form validation only.
+
 ## Current controller alignment, 2026-09-28
 
 Cross-work reconciliation supersedes the earlier App proposal and design deferral:

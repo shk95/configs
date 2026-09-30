@@ -4,7 +4,141 @@ date: 2026-09-27
 scope: repository
 status: open
 
-## Current handoff: resume here, 2026-09-28
+## Current handoff: resume here, 2026-09-30
+
+### Parallel planning continuation and controller pickup
+
+Live read on 2026-09-30 found origin/dev
+1758fe98aff677b815fd28d14d53228e29bf5371 and both local/remote repository-plan
+head a886934736f701e85ab5c79fba58b155218d99d1. The repository planning worktree
+was on feature/repository-provider-release-plan with the 91-line study clarification
+below uncommitted and no .work-session.md. Missing metadata is unknown liveness,
+not abandonment. The main orchestrator assigned this session as the sole B
+continuation owner for these two repository work items. No competing claim was
+found in the inspected GitHub work; no controller implementation owner is assigned.
+
+The branch had no PR in an all-state head-branch query; open configs PRs contained
+only Draft #421. Neither repository spec names an execution issue. These are dated
+observations, not local copies of continuing PR state. Re-query before publication
+or implementation assignment. Initial inspection established no prior Git
+publication authorization. The maintainer subsequently approved publication of
+the prepared five-file B planning diff on the existing branch, including a required
+origin/dev base merge and dev-targeted Draft/Ready PR delivery. Execution-issue
+creation and controller implementation remain outside this authorization.
+
+Preserve the earlier U1 checkpoint discussion as a 2026-09-28 baseline observation.
+It does not describe the current provider candidate, authorize restarting U1 or
+assign its Unix-like contract/report to B. A owns provider/companion delivery; C
+owns Windows planning. README, CONTRIBUTING and architecture candidates have a
+separate repository owner. Do not merge sibling planning branches or restore
+historical studies/reports into the provider delivery branch.
+
+The spec's "Implementation pickup clarification, 2026-09-30" makes R-preview,
+R-control, R-manual and R-scheduled inputs, dependencies, acceptance connections
+and stop conditions explicit. It preserves the accepted latest direction:
+05/06/07 KST, changed-function selection, one PAT including Actions write, trusted
+master-only shared control, one operating-record writer and post-merge identity
+verification. R-preview is a read-only implementation boundary, not controller
+completion or live enablement. Legacy cutover/metadata encoding and the concrete
+trust/recovery/wakeup/permission mechanisms require resolution before their pickup.
+
+Planning preflight and whitespace validation passed before these clarifications.
+Run both work-item preflights again on the final diff. All report rows remain
+pending; document form is not fixture, dispatch, build, native or live proof.
+The authorized publication is this existing B branch's repository-only planning
+diff to a dev-targeted PR. It does not include controller source, execution-issue
+creation, another branch, dev integration, release or credential provisioning.
+
+### Execution summary after independent planning review
+
+2026-09-28: applied the maintainer-supplied
+`configs-planning-review-handoff.md` as a review and sequencing aid, not new
+policy or implementation evidence. This summary is the current starting point;
+older "Next" instructions below are historical where superseded. Preserve the
+accepted contract and all pending report rows. No acceptance criterion changes
+in this clarification.
+
+#### Pinned inputs and first result
+
+Remote refs were re-read on 2026-09-28 and match this input set:
+
+| Input | Exact revision |
+| --- | --- |
+| Observed dev / static implementation base | e11bd1368d2f5138ad0f9b7017040b2b76e055e6 |
+| Repository plan | a886934736f701e85ab5c79fba58b155218d99d1 |
+| Unix-like plan | 2b074152fc2278c13fda50367854e921011e49b9 |
+| Windows plan | 71f98fa1b959e1e91e121b29be25409fef6dd1dc |
+
+These are three sibling planning branches, not a stack. The current summary is
+a subsequent local planning clarification. At implementation pickup, record fresh
+dev and reviewed plan revisions separately; do not silently merge the siblings.
+
+First implementation target: **one working external standalone consumer inside
+U1**, explicitly selecting graphical=false and wsl=false. This fixture choice
+does not change product defaults. Keep the existing typed-constructor mechanism;
+do not first invent another composition framework. This is a checkpoint within
+U1's coherent Unix-like PR, not a schema-only delivery, reduced release, or U1
+completion claim. Planner retains continuation; no implementation worker or
+execution issue has been assigned by this review.
+
+Read the Unix-like spec at its pinned revision, especially "Public inputs and
+bounded verification consolidation", "Contract reader, host extensions and
+implementation check map", "Single-flake dendritic consumers and delivery
+boundary", and the current reading-order summary. Applicable portions are AC2,
+AC4 and AC9, plus AC1 defaults and AC8 evidence selection; AC6 governs the Nix
+verification baseline. Full U1 still includes its other required connections,
+ownership transfer (AC7), reader/readiness and template companion.
+
+#### Concrete checkpoint and evidence
+
+- One synthetic consumer pins the actual subdirectory flake with dir=unixlike,
+  follows configs/nixpkgs, calls lib.mkHome and finds api/contract.json relative
+  to that flake source. Candidate proof records the exact candidate identity;
+  the old dev revision is a baseline, not a claim that the new API exists.
+- Required system/user/git/homeDirectory inputs and explicit environment
+  selections reach final Home Manager config and activation derivation.
+  Compare omitted versus explicit selections in related cases, check a native
+  homeModules override and preserved explicit home.stateVersion, and refuse
+  unknown/retired fields, systemModules and graphical+WSL conflicts.
+- Check generated contract data against actual constructor behavior, including
+  source-relative lookup. Preserve omitted versus explicit input distinction.
+  Do not turn this into a second evaluator or advertise unfinished constructors.
+- Record evaluation separately from a selected standalone generation build.
+  Evaluating a drvPath is not a build. If the required target build is unavailable,
+  leave that evidence pending. No native runtime or activation success is inferred.
+
+Completion of this checkpoint means declaration -> generated configuration ->
+derivation is exercised, with the applicable selected build recorded and positive
+and refusal cases checked. It does not complete an entire AC or certify NixOS,
+Darwin, WSL integration, private adoption or a release. Current mkHome still
+unconditionally imports WSL classes and lacks the new environment/homeDirectory
+inputs; the contract file is not present at the inspected baseline. Fix the real
+connection rather than adding an unused schema.
+
+#### Later work and stop conditions
+
+Do not make PAT, private operations storage, scheduling, capture, private-host
+activation or Windows completion prerequisites for this checkpoint. Implement
+other U1 connections as required before the coherent U1 delivery. Before removing
+machine code, identify its destination/ref and preserve its safety/recovery owner.
+Before source/CI integration, prove additive selector support -> domain transition
+-> obsolete-rule cleanup without disabling an existing gate.
+
+The review's Windows legacy-import and per-unit payload choices remain proposals
+to settle at W1/W2 pickup. Capture completion must include saved host data being
+consumed by the next generated apply/activation input. R-preview is the first
+recommended repository implementation boundary; its initial historical cutover
+encoding remains to be decided there. Controller recovery/permissions/wakeup and
+real notification proof belong to R-manual/scheduled rollout, not this U1 checkpoint.
+A smaller independent PR/release or omission of reader/readiness requires a dated
+scope/AC amendment, not an interpretation of this review.
+
+Stop/replan for lost safety ownership, required silent host mutation, new public
+support guarantees, a need to bypass existing gates, or source/candidate drift
+invalidating reviewed evidence. Internal filenames/helper names are implementation
+choices within the contract. The next owner picks up U1 under execute-work after
+fresh issue/PR ownership inspection; this review itself creates no execution issue,
+source change, new Git publication or host mutation.
 
 ### Latest five-work reconciliation checkpoint
 

@@ -85,7 +85,34 @@ resume, pin configuration per batch, and reconcile the daily refresh with the
 single-writer cycle. Exact repository connection and permission provisioning
 remain pending; no private repository creation is authorized here.
 
-## Pickup lane
+## Pickup clarification, 2026-09-30
+
+This clarification preserves AC1-AC5 and the latest 05/06/07 KST/shared-controller
+amendments. The implementation owner is unassigned; the B continuation owns plan
+delivery only. Read the provider-release-contract implementation pickup table for
+the shared preview/control/manual/scheduled dependencies before implementation.
+The older root-agent wording below is historical, not an implementation claim.
+
+Pure scheduler/PR-lifecycle fixtures may be prepared from explicit fake refresh and
+controller interfaces. Final scheduler implementation/integration waits for the
+merged Unix-like refresh tool, its actual post-U1 input ownership and the delivered
+shared trusted-control interfaces; no mocked proof certifies that final wiring.
+Record fresh origin/dev and reviewed plan revisions, inspect competing issue/PR
+ownership, and create a dedicated repository worktree after Git authorization.
+Generated lock-only PRs remain Unix-like-owned; no second controller is introduced.
+
+Required evidence covers no-op/failure without publication, open/merged/stale PR
+handling, refusal of unrelated human changes, no force updates, exact-head checks,
+candidate movement before/after promotion, cutoff without refresh cancellation and
+late/missed opportunities. Verify credential-free refresh versus trusted lock-data
+publication, shared stop/resume/record recovery and affected workflow dispatch.
+Local fixtures and policy checks precede authorized manual observation; scheduled
+enablement is separately authorized after actual connection/permission/notification
+proof. Do not complete a report row from planning preflight or mock-only live claims.
+Stop/replan for changed tool/controller interfaces or acceptance, broader remote
+authority, provider/host lock scope expansion, ownership conflict or gate bypass.
+
+## Earlier pickup lane (read with the clarification above)
 
 Outcome: scheduled workflow, PR lifecycle handling, fixtures and operator
 documentation. Scope: repository. Inputs: current origin/dev, reviewed spec,

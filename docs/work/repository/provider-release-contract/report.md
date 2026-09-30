@@ -3,6 +3,19 @@ kind: report
 spec: docs/work/repository/provider-release-contract/spec.md
 status: pending
 
+## Planning delivery clarification, 2026-09-30
+
+Reviewed the latest controller/selection/template amendments and preserved the
+uncommitted independent-review study summary. Added concrete R-preview/control/
+manual/scheduled pickup boundaries, dependencies and proof obligations without
+changing acceptance or assigning controller implementation. Initial inspection
+established no prior Git publication authorization; the maintainer subsequently
+approved publication of this five-file planning diff on the existing B branch.
+That approval covers dev-targeted PR delivery, not implementation or integration.
+Work-item preflight verifies
+document form only; all implementation and live acceptance rows remain pending.
+The dated live Git/ownership observations are in the study's current handoff.
+
 ## Cross-work reconciliation, 2026-09-28
 
 Parent-only review compared all five current specs/reports with the later accepted
