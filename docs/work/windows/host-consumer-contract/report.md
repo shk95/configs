@@ -3,6 +3,20 @@ kind: report
 spec: docs/work/windows/host-consumer-contract/spec.md
 status: pending
 
+## W2 pickup, 2026-09-30
+
+Issue #427 assigned the separate W2 host capture/save lane to C after W1 entered
+dev. Pickup base `f040f0b2010bedb654836a7d1f7267ddcc57802f` and independently
+reviewed W1 contract `b92163d621865058b8af061f70fa7697b9c4bcb9` are recorded
+separately. The dated spec amendment fixes preview/explicit Save, relative first
+connections, chosen-source projection, recoverable per-file operations and removal
+of provider publication coupling without adding formats or support promises.
+
+W2 implementation, native fixtures and final-head client evidence remain pending.
+Earlier W1 source/native/client observations are not W2 capture proof. No actual
+Apply, installation, activation or real host-original save is authorized. Whole
+AC rows remain pending until their complete required obligations are evaluated.
+
 ## W1 source implementation, 2026-09-30
 
 Issue #427's W1 lane now implements `inspect`, `generate` and read-only

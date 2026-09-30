@@ -601,6 +601,70 @@ Check and capability inventory. Lack of that route is an external-evidence requi
 not permission to substitute hosted Server fixtures or actual Apply. No minimum host
 runtime or support-guarantee change is inferred from release artifact availability.
 
+## W2 implementation pickup, 2026-09-30
+
+Amended 2026-09-30: AC3 and capture portions of AC2/AC4/AC7 consume the
+delivered version 1 contract without changing its schemas or supported clients.
+Issue #427 assigns C as W2's sole continuation owner, in the separate Windows
+branch `feature/windows-host-capture`. Pickup base is
+`f040f0b2010bedb654836a7d1f7267ddcc57802f`; independently reviewed W1 contract
+revision is `b92163d621865058b8af061f70fa7697b9c4bcb9`. W1 evidence remains
+historical W1 proof rather than W2 acceptance.
+
+The public capture command accepts `-SourceRoot`, `-Environment`, explicit
+`-Unit` IDs, optional `-Document` relative connections and explicit `-Save`.
+Default invocation previews JSON only; `-Save -WhatIf` previews identical writes.
+For a first connection, `-Document` is required. For multiple units, supplied
+document paths align positionally with unit IDs; existing connections can be
+omitted or supplied unchanged, never renamed by capture. A selected/enabled
+unit may become host-owned even when its target matches defaults. Capture never
+changes selection, enables a unit, updates a provider pin or consumes runtime
+Apply state as a capture baseline. Legacy `-Publish`/branch/publication arguments
+are refused before any mutation; capture no longer modifies provider source or
+creates commits, pushes, PRs or auto-merge requests.
+
+The chosen unit payload defines the supported observed projection: current
+configs payload for a first provider-owned capture, connected host payload for
+later host-owned captures. JsonSubset object keys stay bounded by that source,
+arrays are whole owned values, and missing keys or incompatible shapes refuse.
+Exact JSON and text retain their supported content; Terminal generated profiles,
+runtime/session/cache files and external PowerShell blocks are excluded. Retired
+WSL/personal layouts are not additional capture units. Captured documents use
+the existing strict UTF-8 formatVersion 1, source=host and correctly typed settings;
+capture does not add deletion syntax, automatic default merging or new schemas.
+
+Prepare and validate every requested unit before writes. Identity guards bind
+provider/tools, declaration, connected documents, observed app targets and
+prospective destinations. Prospective paths have the same containment/duplicate/
+reparse safeguards as existing W1 connections and cannot overlap provider or
+generated trees. Recheck pending identities before each bounded save. Existing
+documents get one atomic replacement. First capture saves the document before
+adding its declaration connection; preparation/payload failure leaves declaration
+unchanged. Connection failure reports an inert unconnected document. Retry must
+explicitly name and validate the matching document rather than overwrite changed
+or conflicting content. Report completed/failed/pending units truthfully; no
+multi-file atomicity, transaction service or rollback is promised. Capture never
+changes app configuration or generated bundles, and changed originals require
+regeneration.
+
+Native positive/negative fixtures cover projection, selected/enabled/no-drift
+capture, unsafe/stale inputs, first/subsequent save and injected per-file failure,
+retry/conflict, publication refusal and saved-document generation roundtrip.
+Final-head hosted evidence names actual management PowerShell 7.6.6/x64 and
+separate inbox 5.1 entry/bootstrap. Separate LTSC client evidence names actual
+build/revision/apps/selection and read-only preview results, with unchanged real
+app/source/generated/original targets. Explicit saves/regeneration in synthetic
+task-temporary fixtures are permitted; real host-original save, Apply, installation,
+restart, activation and release are outside this assignment. Whole AC rows only
+become verified after all their required obligations and evidence lanes are met.
+
+Routine CLI/serialization/helper choices stay inside this pickup. Stop/replan for
+new schema or compatibility behavior, missing-key deletion, captured-coverage or
+support expansion, migration/reset of retired/private data, conflicting-original
+overwrite, retaining legacy provider publication contrary to its removal, or an
+unowned cross-scope dependency. Repository-owned legacy usage alignment is a
+separate lane; this worker changes only Windows-owned material.
+
 ## Acceptance
 
 | ID | Criterion | Required lanes |
