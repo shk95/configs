@@ -50,6 +50,13 @@ legacy-selection preview, unit ownership, unmanaged target-state preservation,
 LTSC capability exclusion and required native proof. No implementation evidence
 is supplied by this amendment.
 
+Before W1 publication, the worker merged actual dev
+60683763b8d201621e3bc92152d64ba66dd81dbf without rewriting the unpublished W1
+history. This required update contains repository runtime wiring #433, integrated
+at 9f72acec541fd987695e5bdbad5fd53c8129e799, and its verified native gate.
+Those prerequisite results do not certify W1; W1 requires its own exact published
+head checks and LTSC generation/Check evidence.
+
 W1 records proof below by obligation and evidence lane. Keep every whole AC row
 pending until all its required obligations and lanes have been verified. In
 particular, W1 source selection is not W2 capture/save proof (AC3 and capture
