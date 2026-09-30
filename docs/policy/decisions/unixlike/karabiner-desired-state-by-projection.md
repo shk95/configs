@@ -114,3 +114,40 @@ rewritten. The `INV unixlike/generated-config-key-in-schema` item is observed
 in that form: Karabiner runs a file whose declared members are the payload's
 own bytes. A load provoked by an activation that does rewrite the file has
 not been observed, because no activation has yet had a reason to write.
+
+## Host-document ownership transfer, 2026-09-30
+
+The version-1 managed units declare ownership in
+`unixlike/modules/programs/karabiner/units.json`: Karabiner global/profiles are
+required whole parents, and symbolic hotkey entries60/61 are required whole
+entries. Missing required data, null deletion, empty profiles and unsupported
+app-normalized shapes refuse. Optional nested absence removes that member by
+whole-parent replacement; arrays never merge by identity. Runtime siblings stay
+outside the finite unit. Hosts own arbitrary extension compatibility.
+
+Home Manager exposes enable/settingsDocument per unit under providerDarwin.capture.
+Existing final selected-app/appSettings gates remain. Disabled units do not read
+documents or apply. Null documents use defaults; explicit host source replaces
+the unit, while configs source restores provider defaults and preserves dormant
+object-valued recovery data. Factory reset and entry deletion are unsupported;
+hotkey enabled=false is the supported disable operation.
+
+The pinned darwin-capture app previews and saves explicitly selected host-owned
+documents. Proposal schema/tool binding and current reader/target re-observation
+provide consistency, not author authentication. Inputs and targets are prepared
+before writing; per-document private atomic replacement reports truthful partial
+completion without rollback or a multi-file transaction. Consumer connection,
+Git publication and application remain separate actions. The permanent native
+check/apply adapter and module consumption use the same finite declaration and
+validation/projection engine as capture.
+
+The prior capture-in-commit-helper rationale describes the still-existing legacy
+provider-payload protocol. Its exact project options/markers, executable and
+root caller fixtures remain compatibility enforcement until separate repository
+retirement. They are not redirected to Save or claimed as new contract consumers.
+Adding a mandatory new dependency to the legacy executable was rejected because
+the actual root fixture copies only the historical executable/payloads. A new
+permanent module adapter avoids breaking that boundary without a temporary
+fallback, parallel ignore list, discovery registry or cross-domain dependency.
+Earlier #177/#178/#183 observations retain their original source and runtime
+limits. Provider delivery never implies private host adoption or activation.

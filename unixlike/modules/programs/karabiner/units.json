@@ -1,0 +1,28 @@
+{
+  "formatVersion": 1,
+  "units": {
+    "karabiner": {
+      "parents": ["global", "profiles"],
+      "globalBooleanKeys": ["check_for_updates", "show_in_menu_bar", "show_profile_name_in_menu_bar", "enable_notification_window"],
+      "obsoleteGlobalKeys": ["ask_for_confirmation_before_quitting"],
+      "profilesMinimum": 1,
+      "requiredNonemptyObjects": ["global"],
+      "profileStringKeys": ["name"],
+      "profileBooleanKeys": ["selected"],
+      "profileArrayKeys": ["devices", "simple_modifications", "fn_function_keys"],
+      "profileObjectKeys": ["parameters", "virtual_hid_keyboard", "complex_modifications"],
+      "unstableEmptyProfileKeys": ["devices", "simple_modifications", "fn_function_keys", "parameters", "virtual_hid_keyboard", "complex_modifications"],
+      "complexRulesMinimum": 1
+    },
+    "symbolic-hotkeys": {
+      "parent": "AppleSymbolicHotKeys",
+      "entries": ["60", "61"],
+      "entryKeys": ["enabled", "value"],
+      "valueKeys": ["parameters", "type"],
+      "parameterCount": 3,
+      "parameterMinimum": -9223372036854775808,
+      "parameterMaximum": 9223372036854775807,
+      "valueType": "standard"
+    }
+  }
+}

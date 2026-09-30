@@ -43,6 +43,8 @@ require_command nix
 "$(CDPATH= cd -- "$(dirname -- "$0")" && pwd)/refresh-inputs-test"
 
 root=$(CDPATH= cd -- "$(dirname "$0")/../.." && pwd)
+# INV unixlike/host-written-payload-projected: capture owns its independent block.
+"$root/tool/checks/darwin-capture-test"
 flake=${CHECKS_FLAKE:-path:$root}
 here=$(nix eval --raw --impure --expr 'builtins.currentSystem')
 
