@@ -3,6 +3,7 @@ kind: spec
 date: 2026-09-27
 scope: windows
 status: approved
+issue: #427
 review-by: 2026-10-11
 
 ## Current reading order after reconciliation
@@ -352,6 +353,253 @@ dependency, or if native evidence cannot meet the accepted delivery boundary.
 Preserve unfinished work and checkpoint before owner or role changes. Separate
 release readiness still owes all remaining criteria and the repository evidence
 contract; W1 Ready alone does not complete this report.
+
+## W1 implementation pickup, 2026-09-30
+
+Amended 2026-09-30: AC1/AC2/AC4/AC5/AC6/AC7 use the following minimum
+Windows implementation design. AC3 remains the separate W2 capture outcome.
+This dated pickup resolves serialization, connection and ownership preparation
+inside the accepted whole-unit direction; it does not weaken the acceptance
+table or accept unverified native behavior. Exact runtime CI wiring belongs
+to a separately assigned repository prerequisite. Native LTSC client evidence
+remains a separate outstanding observation, never replaced with Server results.
+Issue #427 assigns one Windows continuation owner to W1; W2 remains unassigned.
+Windows runtime declaration #430 is delivered separately; repository execution
+issue #431 owns consuming CI wiring and actual-version evidence.
+The execution base and reviewed plan revision are pinned at pickup rather than
+frozen by this spec. Actual Apply is permitted only inside isolated fixtures
+for this implementation assignment; no real-host Apply is authorized.
+
+### Outcome and ownership
+
+One Windows implementation PR supplies the versioned host declarations, explicit
+settings connections, deterministic local generation and its Check/Apply guards.
+Use a new then-current-dev Windows worktree; do not implement in the #423 planning
+branch. W1 does not depend on U1/Nix, consumer activation or the release controller.
+W2 capture/save waits for this format to enter dev. The main orchestrator remains
+planner; implementation continuation owner is assigned at actual pickup.
+
+### Initial data formats
+
+`environment.json` is UTF-8 JSON, formatVersion 1, with exactly these root fields:
+
+```json
+{
+  "formatVersion": 1,
+  "provider": { "commit": "<full 40-character configs commit>" },
+  "features": ["terminal"],
+  "units": {
+    "windowsTerminal": {
+      "enabled": true,
+      "document": "settings/windows-terminal.json"
+    }
+  }
+}
+```
+
+For an existing unit, omitted entry means enabled with provider defaults when its
+feature is selected. `enabled` is a JSON boolean; `document` is optional. Core and
+feature dependency closure are added, not inferred from runtime state. Empty
+features selects core only. New optional features remain unselected.
+
+Unit identity is the existing case-sensitive `ManagedFiles.Id`; no unit-ID field is
+duplicated in the document. Each connected path is explicit, relative to the
+host declaration directory and normalized before use. No directory scan, absolute
+connection, traversal outside that directory or symlink escape. Reject duplicate
+connections to the same resolved document: one settings document owns one unit.
+Public examples use synthetic relative paths; real host documents stay external.
+
+A settings document has exactly `formatVersion`, `source` and `settings`:
+
+```json
+{ "formatVersion": 1, "source": "configs", "settings": null }
+```
+
+or a host source, with a JSON object for Json units and an exact string for
+PowerShell/Lua/Kdl/Ini/Text units:
+
+```json
+{
+  "formatVersion": 1,
+  "source": "host",
+  "settings": { "theme": "light", "profiles": { "list": [] } }
+}
+```
+
+The host example is only a format sketch, not valid Windows Terminal content.
+A real example must satisfy that unit's complete supported projection, including
+profile structure. Source=configs requires settings=null so host content is never
+silently ignored. Source=host requires a present correctly typed payload and has
+no automatic default merge. Arrays are whole owned values; no deletion language.
+
+Reject unknown format versions, duplicate JSON keys, unknown root/entry fields,
+wrong scalar types, non-full provider commits, duplicate selected feature names,
+unknown active features/units, missing connected files and unsupported active
+payloads. Inactive documents still undergo structural validation; current unit/app
+compatibility is checked on reselection. Unknown retired unit identities are allowed
+only explicitly disabled, so they cannot accidentally become active. Host extensions
+outside this supported catalog stay host responsibility.
+
+### CLI and acquisition
+
+Add Windows-owned `inspect`, `generate` and `export-selection` verbs. Existing
+`check`/`apply` accept an explicit generated configuration. Initial transport is an
+explicit local configs clone: `-SourceRoot` must resolve the requested full commit,
+and its tracked Windows source/tools must agree with that commit. No implicit
+clone, fetch, branch update, source bump or credential use. Packaged transport is
+later work; do not claim support for arbitrary extracted trees without provenance.
+
+- `inspect -SourceRoot <clone>` emits source-bound formatVersion 1 contract JSON:
+  exact provider commit, supported host/document/generation formats, feature
+  closure data, unit identities/parsers/comparison/source ownership, supported
+  client baseline and excluded capabilities. No host input is required.
+- `generate -Environment <file> -SourceRoot <clone> -Output <directory>` validates
+  source and originals, prepares selected payloads plus matching native tools in
+  a sibling temporary directory, parses the complete result, then publishes it.
+- `check -Generation <directory>` performs generation/input integrity validation
+  before read-only target observation. Reject selector flags in generated mode:
+  environment.json is selection authority.
+- `apply -Generation <directory>` uses the same guards before the first host write.
+  A worker assignment is not permission to invoke it on an actual host.
+
+The generated directory contains generation.json, a compatible desired manifest,
+only active unit payloads and exact matching Windows native scripts/module. Retain
+feature catalog metadata as needed by the existing manifest loader, while selection
+is explicit in generation.json; copying catalog metadata adopts no extra feature.
+No Nix, compiler, generation-history service or rollback engine. Existing source
+validation helpers and native reconciliation functions are reused with explicit
+generated-root context instead of having Git metadata inferred from a generated tree.
+Capture in a generated tree is refused: capture targets host originals, not output.
+
+Generation metadata identifies provider commit, format/tool identity, exact original
+input file identities/hashes, selected closure, active units/source choice and the
+complete generated payload/tool hash. Preserve original paths solely as local input
+bindings. Recompute integrity and input hashes before Check/Apply; changed documents,
+declaration, tools or payload require regeneration. Source revision is reported from
+metadata, never guessed from a generated tree's parent checkout.
+
+Failed first generation yields no applicable result. Failure during regeneration
+leaves the previous directory intact but refuses it as current for changed inputs.
+Prepare/validate before publish; use an individual atomic current-manifest replacement
+or equivalent small recoverable directory operation, with exact failure fixtures.
+There is no automatic selection write, app change or Apply during generation.
+
+### Desired source versus unmanaged application state
+
+Current `Set-WinEnvManagedFile` copies the complete payload even for JsonSubset;
+that implementation cannot be reused unchanged to promise unmanaged-key preservation.
+W1's writer updates only the chosen unit's owned projection on the app target,
+retaining unowned object keys. Arrays owned by that projection replace as whole lists.
+This is target-state preservation, not merging configs defaults into host settings.
+Fixtures distinguish these two operations explicitly. Whole-file modes retain their
+whole-unit semantics, while supported generated/runtime profile entries are preserved
+where the unit's comparison contract already excludes them. Refuse malformed input
+that prevents safe projection rather than overwriting it by guesswork.
+
+If powershellProfile.enabled=false, skip its related hook check/write as well as the
+payload; core still installs/selects the required management package. Do not delete
+an existing hook or profile. Enabled hooks preserve foreign blocks and refuse unpaired
+markers. Deselection/disabled units leave installed apps and host documents untouched.
+
+Apply outcome records identify the generated result and successful/partial-failed
+attempt independently of capture. Extend the runtime state contract deliberately,
+with unknown-version refusal and supported old-state readers; do not reinterpret an
+old success record as success for the current generation. A partial operation reports
+what completed and keeps no false current-success record. Mocked failure fixtures
+exercise this without authorizing real Apply. W2 whole-unit capture does not depend
+on reconstructing UI deltas from an applied snapshot.
+
+### Legacy selection preview/export
+
+`export-selection -State <file> -SourceRoot <clone>` writes a proposal to stdout only:
+exact observed old selection, its provenance, proposed declaration and unresolved
+migration actions. It does not overwrite source, runtime state or host originals.
+
+Schema 2 uses the exact recorded features; do not substitute all current features.
+Schema 1 requires the manifest at recorded state.gitCommit to reconstruct its former
+full selection. If that exact source is unavailable, refuse the inference and report
+that input requirement. With no state, propose []/core only. Malformed state is a
+failure rather than a first-use default. Removed/unknown selections are explicit
+blockers: export may describe them, but a blocked proposal cannot be generated or
+silently lose the host's previous intent. No mandatory account/hostname fields.
+
+### Specific unit ownership and LTSC handling
+
+- Retire wslConfig and its only owning feature wsl from provider-managed offerings.
+  The .wslconfig file, networking/resource policy, application/check obligations and
+  old host tuning stay untouched and become host responsibilities. Migration reports
+  old wsl selection as requiring explicit declaration correction and a host-owned
+  management arrangement; no automatic uninstall, WSL restart or firewall write.
+- Remove provider management/default payloads for fancyZonesCustomLayouts and
+  fancyZonesLayoutHotkeys: both currently ship empty lists that can reset personal
+  data. Retain the machine-independent generic fancyZonesDefaultLayouts provider
+  default; a connected whole-unit host document can replace it. General FancyZones
+  settings and Workspaces/settings.json hotkey/sort preferences remain provider units.
+- workspaces.json and applied-layouts.json remain excluded runtime/session data.
+  They are not the general Workspaces/settings.json unit and are not capture inputs.
+- Keep Windows Terminal feature/packages/fonts/profiles. In the new generated
+  contract, default terminal delegation is explicitly excluded from the LTSC build
+  19044 guarantee. Do not query/write its registry as an included managed setting,
+  count it as verified or turn unrelated drift/unavailability into success. Show an
+  `excluded` capability record distinct from supported, drifted and unavailable.
+  Existing legacy observations remain historical; reconcile affected Windows decision,
+  invariant, status and fixture declarations in the implementation's own scope.
+- Source-only legacy capture remains distinct until W2; refuse legacy provider capture
+  against a new host-generation runtime context instead of silently publishing personal
+  settings. This guard does not certify W2 capture, save or publication removal.
+
+### Exact runtime and repository dependency
+
+Windows-owned verification data declares the initial management verification version
+7.6.6 and separate 5.1 entry/bootstrap coverage, without imposing a minimum consumer
+management version or installing software on a maintainer host. A narrow repository
+CI increment consumes that declaration and runs the Windows job under an exact
+verified 7.6.6 runtime; default hosted pwsh is not enough. Keep the version selector's
+semantics in Windows and workflow dispatch/setup in repository. Assign/land this
+prerequisite or establish an equivalent native CI run at the final W1 candidate.
+The existing #422 320/0/1 result and any foreign-host run are not W1 native proof.
+
+### Acceptance/evidence and stop boundary
+
+| Existing criterion | W1 proof and pending boundary |
+| --- | --- |
+| AC1 | Native tests: core-only, terminal closure(core/font/zellij), wezterm/font closure, each offered feature, new optional feature not adopted, unknown/duplicate selection refusal. |
+| AC2 | Native generation/CLI tests: exact source/tool/format, explicit connection, configs versus host payload, stale originals/output/tools, parser failures, first/repeated generation failure, target-dependent recheck and pre-write Apply refusal. Runtime success/partial-failure records have mocked engine tests. |
+| AC4 | Native tests: unit disable/feature deselection retains documents/apps, inactive structure/reselection compatibility, no uninstall/reset, no disabled profile-hook write, foreign-block preservation and unmanaged target-state projection. |
+| AC5 | Reviewed contract exposes LTSC x64 build19044 and excluded delegation. Read-only native client checks record actual build/revision/application versions/selection and applicable unchanged versus changed capabilities. Hosted Server fixture success never substitutes for client-only behavior. |
+| AC6 | Exact final-head native CI records actual PowerShell7.6.6 and separate inbox5.1 parser/entry/bootstrap tests. Requires the separately owned runtime selector/wiring evidence. |
+| AC7 | Native source-bound inspect/template tests match actual features/units/versions; unknown formats/refused active documents and older consumer fixture cases remain visible. No Nix, host mutation or directory discovery. |
+| AC3 | Remains pending for W2. W1 source-selection tests do not prove observed capture projection, first-connection save or recoverable multi-file capture. |
+
+Final W1 Ready requires its exact head's Required checks and native Windows job after
+all repairs/base updates. Record partial criterion evidence without prematurely
+verifying an entire report row. Separate native client gaps and remaining W2/release
+controller obligations. No actual Apply, activation, release, merge or cleanup.
+
+Stop/replan only for a real new support/compatibility promise, destructive migration,
+unsafely unpreservable host values, cross-scope dependency lacking an assigned owner,
+or required evidence that cannot be supplied. Routine serialization/CLI/internal
+implementation choices above stay within accepted direction. No new maintainer
+tradeoff is presently unresolved; inspect actual legacy values during authorized
+migration preview before claiming that an existing host has a safe proposal.
+
+### Read-only upstream/runtime availability check, 2026-09-30
+
+Official release and tag APIs plus the release page confirm PowerShell v7.6.6 is
+published, non-draft and non-prerelease, published_at 2026-09-08T20:28:01Z:
+https://github.com/PowerShell/PowerShell/releases/tag/v7.6.6
+Windows x64 ZIP and MSI are available. Official ZIP SHA256:
+02FE458BE20493FBDF43F61EA20610B811EE6C738AB1676C61B9CFCD1A33C860.
+The repository CI lane can use the hash-verified portable ZIP and assert the actual
+version in a fresh child process, without installation on a maintainer host.
+
+No live LTSC client connection was checked during this source-read/design task.
+The study's prior SSH inventory(build19044.7725/PowerShell7.6.6) remains historical
+input. Before candidate-specific AC5 claims, the orchestrator must identify the
+available client observation route and authorize its read-only final-head generation,
+Check and capability inventory. Lack of that route is an external-evidence requirement,
+not permission to substitute hosted Server fixtures or actual Apply. No minimum host
+runtime or support-guarantee change is inferred from release artifact availability.
 
 ## Acceptance
 

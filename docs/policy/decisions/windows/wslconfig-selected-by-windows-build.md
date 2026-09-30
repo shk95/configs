@@ -168,3 +168,10 @@ independently of file drift, so drift retains status 2 and REQUIRE_NATIVE
 still turns unverified evidence into failure. Runtime effect remains outside
 this check's evidence. The repository maintainer owns the network policy;
 adding another policy for the same Windows build remains separate work.
+
+2026-09-30: `host-generation-owns-selection.md` retires provider .wslconfig
+management and payloads. Existing files, networking policy and runtime state
+are untouched; those are host responsibilities. The historical source-policy
+helpers and their synthetic fixtures remain readable without offering this
+host-global unit in the current provider. Legacy export makes the retired wsl
+selection an explicit blocker instead of silently dropping it.

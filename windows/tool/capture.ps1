@@ -328,12 +328,14 @@ $hostPath = Get-WinEnvHostPath
 $hostBuild = Get-WinEnvWindowsBuild
 # A host with no LOCALAPPDATA has no recorded selection to read, and asking
 # for one would fail on the path join rather than on the question.
+if (Test-Path -LiteralPath (Join-Path $repositoryRoot 'generation.json')) { throw 'Generated configuration is not a capture destination; W2 must write host originals.' }
 $state = if ([string]::IsNullOrWhiteSpace([string]$hostPath.LocalAppData)) {
     $null
 }
 else {
     Get-WinEnvState -Path (Join-Path ([string]$hostPath.LocalAppData) 'win-env\state.json')
 }
+if ($state -and $state.schemaVersion -eq 3) { throw 'Host-generation state requires W2 host-original capture; legacy provider capture is refused.' }
 $appliedFeature = Get-WinEnvAppliedFeature -Manifest $manifest -State $state
 
 $declaredFeature = Get-WinEnvFeatureId -Manifest $manifest
