@@ -6,15 +6,17 @@ set -eu
 MSYS_NO_PATHCONV=1
 MSYS2_ARG_CONV_EXCL='*'
 export MSYS_NO_PATHCONV MSYS2_ARG_CONV_EXCL
+tools=$(CDPATH= cd -- "$(dirname -- "$0")" && pwd)
+# This independent entry also runs directly in the native Git-for-Windows
+# preview lane; establish the delivered test-only boundary before any Git.
+# INV repository/fixture-git-isolation
+. "$tools/fixture-git-environment.sh"
+"$tools/fixture-git-isolation-test"
 LC_ALL=C
 export LC_ALL
-unset GIT_DIR GIT_WORK_TREE GIT_COMMON_DIR GIT_OBJECT_DIRECTORY \
-  GIT_ALTERNATE_OBJECT_DIRECTORIES GIT_NAMESPACE GIT_CEILING_DIRECTORIES GIT_INDEX_FILE
-tools=$(CDPATH= cd -- "$(dirname -- "$0")" && pwd)
 preview="$tools/release-preview"
 scratch=$(mktemp -d)
 trap 'rm -rf "$scratch"' EXIT HUP INT TERM
-export GIT_CONFIG_NOSYSTEM=1 GIT_CONFIG_GLOBAL="$scratch/no-global-config"
 mkdir "$scratch/repo"
 cd "$scratch/repo"
 git init -q -b dev
@@ -415,6 +417,7 @@ replacement_subject=$(unset GIT_NO_REPLACE_OBJECTS; git show -s --format=%s HEAD
 run
 cmp "$scratch/replay-first" "$output" || { echo 'ambient replacement changed pinned replay' >&2; exit 1; }
 git replace -d HEAD >/dev/null
+mkdir -p .git/info
 printf '%s\n' "$(git rev-parse HEAD)" >.git/info/grafts
 run
 cmp "$scratch/replay-first" "$output" || { echo 'ambient graft changed pinned replay' >&2; exit 1; }
