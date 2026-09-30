@@ -30,10 +30,64 @@ identical generation-module revision. The full foreign-host suite passed
 proof obligations. Staged Windows classification, 73 invariant registrations,
 document preflight, design-citation, record and hygiene checks passed.
 This is fixture evidence on a foreign host,
-not native Windows acceptance. Hosted exact-runtime checks and candidate-specific
-LTSC generation/Check evidence remain pending. Apply occurs only under isolated
+not native Windows acceptance. Source-run native proof is recorded below;
+any newer publishing head still needs its own current-head CI and client proof
+in the PR before Ready. Apply occurs only under isolated
 fixture mocks. Whole AC rows below remain pending; W2 capture, domain API release,
 deployment and host activation are not supplied by this W1 lane.
+
+## W1 source-run native evidence, 2026-09-30
+
+Source head `d5c1ae7192af1f41458a0b21642a5f37f96aa8a7` passed
+[CI 36667112247](https://github.com/shk95/configs/actions/runs/36667112247),
+including Required checks and Windows desired-state validation. Windows Server
+2025 build 26100 ran the actual declared PowerShell 7.6.6/x64, with separately
+executed inbox Windows PowerShell 5.1/x64 entry/bootstrap fixtures. Pester passed
+399, failed 0 and skipped 1, including the repaired actual-PATH/child-status and
+bounded cleanup fixture. The single native skip and foreign-host skips are not
+upgraded into proof. Repository/Unix-like suites were intentionally skipped for
+this Windows-only change; global scans and classification passed.
+
+The same exact source head was cloned into an isolated client task directory and
+checked read-only on Windows 10 IoT Enterprise LTSC x64, build 19044.7725,
+management PowerShell 7.6.6/64-bit and inbox 5.1.19041.7725. Synthetic declarations
+generated successfully for core, disabled core profile, font, zellij, terminal,
+wezterm and powertoys. Every corresponding Check returned drift 2; the disabled
+profile inbox entry forwarded the same 2. No case was converged, and no unavailable
+observation or known-support-limit line appeared. The named drift was feature
+selection, desired-state identity and the enabled PowerShell profile payload;
+the disabled profile omitted payload/hook drift. This validates the requested
+renderer/read-only behavior and records the remaining host differences. It does
+not certify a successful Apply or a converged installed configuration.
+
+The terminal case visibly excluded `defaultTerminalDelegation`. A malformed
+original refused regeneration, retained the previous metadata unchanged and made
+the stale generated Check refuse with 1. Completed assertions verified the exact
+current provider SHA, clean tracked Windows source and unchanged before/after
+existing host target hashes, including state/profile, active managed files and
+retired .wslconfig/custom-layouts/layout-hotkeys. Only existence/hash summaries
+are reported; private paths, host connection details and file contents are absent.
+
+Read-only application inventory observed Windows Terminal 1.24.11911.0 through
+inbox 5.1 Appx, Zellij 0.45.1, WezTerm 20240203-110809-5046fc22 and PowerToys
+0.101.2362.0. The first auxiliary direct PS7 Appx inventory attempt could not
+load that module; it supplied no completed proof. The completed run used the
+accepted isolated inbox route and separately retained all generation/Check and
+host-preservation assertions. No tooling was installed or host state applied.
+
+| Whole criterion | Verified W1 part and remaining boundary |
+| --- | --- |
+| AC1 | Native fixtures cover core-only selection, actual dependency closures, unknown names and future optional features remaining unselected. |
+| AC2 | Native fixtures and client generation cover exact source/input/tool formats and identities, explicit unit connections, complete chosen source, stale refusal and recoverable publication. Fixture Apply guards are not a real host Apply. |
+| AC4 | Native fixtures cover unmanaged JsonSubset keys, generated Terminal profiles and foreign profile blocks; disabled profile client Check preserves originals and avoids hook/payload management. |
+| AC5 | Actual LTSC build/runtime/application inventory and applicable read-only generation/Check are recorded separately from hosted Server fixtures; drift 2 and delegation exclusion retain their stated meanings. |
+| AC6 | Actual management 7.6.6/x64, separate inbox 5.1 fixture execution and actual client inbox Check forwarding are verified at this source head. |
+| AC7 | Source-bound inspection, example/connection formats and supported/unknown format refusal are verified; capture/adoption/release obligations are not supplied. |
+
+All whole acceptance rows remain pending. W2 owns capture/save, including AC3
+and capture parts of AC7. The final PR publication head may additionally contain
+this report; it must obtain its own exact-head native CI and LTSC assertions,
+recorded in the PR body rather than recursively changing the report's head.
 
 ## W1 implementation pickup, 2026-09-30
 
@@ -56,6 +110,11 @@ history. This required update contains repository runtime wiring #433, integrate
 at 9f72acec541fd987695e5bdbad5fd53c8129e799, and its verified native gate.
 Those prerequisite results do not certify W1; W1 requires its own exact published
 head checks and LTSC generation/Check evidence.
+Before final report publication, the integrator required a further strict-base
+update to actual dev `c76752dc1ec285dce721ae02a2f139c9f32dcb76` after #435.
+It was merged without rewriting published history; the dev-relative W1 change
+remains Windows-only. The source-run proof below retains its original SHA rather
+than being attributed to this newer base or the final publishing head.
 
 W1 records proof below by obligation and evidence lane. Keep every whole AC row
 pending until all its required obligations and lanes have been verified. In
