@@ -85,7 +85,7 @@ remains the unit inside each group; group names do not choose module classes.
 On the same day the Unix-like provider API reached `dev`. The public
 `shk95/configs-host-template` evaluates a synthetic pinned consumer in CI and
 is marked as a GitHub template. One private repository,
-`shk95/configs-hosts`, was generated from it and holds the seven current host
+`shk95/configs-hosts`, was generated from it and then held the seven host
 flakes with separate locks. The template is a one-time copy, not a continuing
 composition authority. The original provider outputs remained while the private
 consumers collected host-specific native and runtime evidence
@@ -95,6 +95,35 @@ The repository-wide hygiene scanner now reads its admitted names from
 consumers were verified, the provider replaced its real inventory and final
 outputs with synthetic fixtures. The name declaration admits the synthetic
 fixtures and the remaining independently owned desired state.
+
+## Provider boundary and consumer transfer (2026-09-30)
+
+PR #421 delivered the Unix-like public environment/host boundary to dev at
+`3d6d945f1a7c32428ae506586eb5b644129e5614`. The provider now owns typed public
+constructors, synthetic examples, API metadata and read-only contract and
+standalone prerequisite tools. Host realization, safety assertions and
+installation tools belong to consumers
+(`docs/policy/decisions/unixlike/public-environment-host-boundary.md`).
+
+The repository adopts one root consumer flake and lock with explicit host
+declarations and shared selected inputs
+(`docs/policy/decisions/repository/single-flake-host-consumers.md`). This
+replaces the per-host-lock direction; it does not report a completed transfer.
+At this review, the published private main at
+`f7f3010ca4675f705e8a8895dede19786530b6ca` and public template main at
+`dcb8c6d81ebd72ca4b19e8364269494ffcbdc5c2` still contain the earlier `hosts/`
+layout. Prepared single-flake candidates use the bootstrap provider pin
+`e11bd1368d2f5138ad0f9b7017040b2b76e055e6`; candidate override evaluation
+does not establish delivered pins or consumer adoption.
+
+Next, align both candidates to the same delivered provider source, verify
+the exact pairs, and deliver the required template adaptation and separately
+owned private source migration. Provider integration, complete U1 delivery
+and API release readiness are distinct. Private activation is separate and
+is not a provider completion condition. Required companion code, final
+reference alignment and applicable release evidence remain pending.
+
+## Earlier repository evolution
 
 Two things changed with it. The payload declaration moved to
 `unixlike/payloads.json` and the scanned tree became the module tree, so the
