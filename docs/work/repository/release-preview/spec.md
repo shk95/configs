@@ -77,7 +77,7 @@ Narrative values are one line, escaped when printed as JSON and never evaluated.
 Rules records after the header:
 
 ```
-check<TAB>ID<TAB>DOMAIN<TAB>LANE<TAB>REQUIREDNESS<TAB>DEPENDENCIES
+check<TAB>ID<TAB>DOMAIN<TAB>LANE<TAB>REQUIREDNESS<TAB>DEPENDENCIES<TAB>TOOL_IDENTITY
 map<TAB>MATCH<TAB>PATH<TAB>CHECKS
 ```
 
@@ -88,6 +88,10 @@ all applicable rows and union their checks/dependency closure; reject dependency
 cycles and missing definitions. Source paths must be relative, nonempty and contain
 no traversal/control characters. Ownership comes from the existing classifier,
 independently of check-effect selection; unknown ownership refuses.
+TOOL_IDENTITY is an exact expected version or digest in the pinned check definition;
+evidence must match it, not merely contain an arbitrary nonempty version. Output
+also records the executing preview engine's content digest. This verifies replay
+binding, not authenticity of an externally asserted execution transcript.
 
 Baseline records:
 
@@ -99,7 +103,9 @@ bootstrap<TAB>DOMAIN<TAB>SOURCE_SHA<TAB>RECORD_COMMIT<TAB>RECORD_PATH
 Exactly one record is required for each affected configuration domain. Semantic
 version is three nonnegative decimal numbers with no leading zeros; tag must be
 the matching immutable annotated DOMAIN-vVERSION, its commit ancestor of candidate.
-Calendar tags are preserved but cannot masquerade as semantic baselines.
+Its annotation contains unique Release-Format: 1, Domain, Version and Source
+fields matching the resolved baseline. Calendar tags are preserved but cannot
+masquerade as semantic baselines by a coincidental three-number tag name.
 Bootstrap reads a committed version-1 record with exact domain/source, version
 1.0.0 and contract IDs from RECORD_COMMIT:RECORD_PATH. That initial source must equal
 candidate; the record may be preserved in a separate reviewed history, avoiding a
