@@ -59,6 +59,11 @@ passed and evaluated all seven synthetic Home Manager/NixOS/Darwin outputs;
 foreign outputs remain evaluation-only and the native Darwin build was not
 selected in this local evaluation run. Staged classification is Unix-like;
 work, invariant registration, design-citation and record checks passed.
+The subsequent normal pre-push harness on implementation source
+`44977647308f09d61ea1d640dfe0f39653de4979` independently passed the actual
+refresh fixtures, all seven evaluations and the selected native
+`darwinConfigurations.fixture-mac` build. Foreign outputs remained
+evaluation-only; the push audit reported zero warnings and failures.
 Build: this lane adds an
 operator source tool, no package or host module; its actual native CLI fixture
 is the runtime proof. Activation, Windows Apply, host locks, schedule,
