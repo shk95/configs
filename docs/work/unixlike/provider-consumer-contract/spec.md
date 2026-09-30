@@ -4,6 +4,7 @@ date: 2026-09-27
 scope: unixlike
 status: approved
 review-by: 2026-10-11
+issue: #449
 
 ## Current reading order after reconciliation
 
@@ -817,6 +818,165 @@ references as their original evidence; companion repinning is a separately
 coordinated adoption. AC3/U2, whole-parent completion, API release and activation
 remain separate. Existing AC1/AC4/AC5/AC7 evidence may be recorded as qualified
 verified only to the extent its required lanes are actually met.
+
+## U2 implementation pickup
+
+Amended 2026-09-30: AC3's two ownership-transfer units are made concrete below.
+The criterion and its review/evaluation/build/native-runtime lanes are unchanged.
+This is the U2 pickup plan, not an implemented command or native capture result.
+The implementation worker pins its then-current origin/dev independently of the
+reviewed revision of this amendment. Issue #449 assigns continuation to C; the
+repository entry retirement and private consumer adoption are separate lanes.
+
+### Public inputs and one ownership declaration
+
+Add Home Manager options under `providerDarwin.capture`:
+
+| Unit | Options | Owned settings |
+| --- | --- | --- |
+| `karabiner` | `karabiner.enable`, `karabiner.settingsDocument` | Required `global` object and required nonempty `profiles` array of objects, each taken whole |
+| `symbolic-hotkeys` | `symbolicHotkeys.enable`, `symbolicHotkeys.settingsDocument` | Required `AppleSymbolicHotKeys` object containing exactly entries `60` and `61`, each taken whole |
+
+Both enable options are booleans, default true. Effective management retains the
+existing final `karabiner-elements` selection and `providerDarwin.appSettings.enable`
+and `.karabiner` gates, then applies the individual unit's enable switch. Turning
+either unit off stops its provider apply operation without changing app selection
+or the other unit. Disabled units do not load settings documents. The optional
+document is a nullable Nix path connected explicitly by a consumer `homeModules`
+definition; null uses provider defaults. These are public options, not imports of
+provider-internal classes, a new constructor, or discovery of private files.
+
+One versioned unit contract supplies the finite supported scope, required shape
+and validators to check, apply, capture and module consumption. Do not add a
+parallel ignored-key list or extension registry. Karabiner's unmanaged top-level
+siblings and symbolic hotkey entries other than 60/61 remain outside this scope.
+App-added top-level members never widen it. A missing required parent/entry is
+invalid, not default inheritance. Optional nested members disappear through whole
+parent replacement; arrays have no identity merge. Arbitrary extensions remain
+host responsibility as in the preceding amendment.
+
+Documents use exactly `formatVersion`, `source`, and `settings`; version 1 has
+integer `formatVersion: 1` and `source: "host"` or `"configs"`. Require a JSON
+object for settings; validate its unit shape when source is host. Configs source
+uses the provider unit and retains dormant settings without applying or merging
+them. Unsupported envelope fields/versions, duplicate keys, malformed UTF-8/JSON,
+invalid source and invalid active host settings refuse. Never infer ownership from
+existence, an empty value or a previous applied snapshot.
+
+The initial supported Karabiner projection refuses absent/empty profiles:
+upstream v16.3.0 replaces an empty array with a default profile, so emptiness is
+not a stable all-profiles deletion instruction. Empty global/nested collections
+are accepted only for shapes the tested app supports, with positive and refusal
+fixtures; this plan does not certify them. Null is not a deletion marker. For
+symbolic hotkeys require boolean enabled and the supported value object/standard
+parameter shape; enabled=false disables an entry. Missing entries, null deletion,
+OS-default reset and a factory-reset command refuse. Source=configs returns to
+provider defaults rather than application factory defaults.
+
+### Versioned command and explicit destination
+
+Export the pinned Unix-like app/package `darwin-capture`, implemented in
+`unixlike/tool/` and using the same unit contract. Proposed operator spelling:
+
+```text
+nix run 'github:shk95/configs/<full-commit>?dir=unixlike#darwin-capture' -- preview --unit karabiner --document <host-document> --output <preview-file>
+nix run 'github:shk95/configs/<same-full-commit>?dir=unixlike#darwin-capture' -- save --preview <preview-file>
+```
+
+Repeat the paired unit/document options to request both units; duplicates,
+unknown units, mismatched pairs and ambiguous targets refuse. Read overrides
+`--host` and `--hotkeys-host` provide synthetic JSON inputs for fixtures. Native
+reads otherwise use the current Karabiner file and read-only defaults export /
+plutil conversion. No source-root mutation, Nix-code edit, app write, Git operation
+or Apply occurs in either capture command. Save neither selects/enables units nor
+creates a consumer connection: the host explicitly supplies that module/path.
+First save may create an explicitly chosen absent document with source=host;
+connection/evaluation remains the consumer's separate action. Root helpers are
+not called. Commands/options here become available only after implementation.
+
+Preview prepares every requested unit before presenting complete projected data
+and ownership changes. Its explicitly requested output is a private, versioned
+proposal, not last-applied state; use mode 600 and keep it outside provider source,
+app files and host originals. Bind tool/unit-contract identity, selected readers,
+observed input content and target existence/content/identity. Save validates the
+proposal schema and tool binding, rereads current inputs/targets and recomputes
+the projection; stale identity or inconsistent proposed data refuses rather than
+recapturing silently. This is consistency checking of caller-reviewed input, not
+authentication of its author or protection against rewriting an entire coherent
+proposal. Self-described hashes provide no signature or external trust. Review
+the selected units/destinations when invoking Save; no signing infrastructure is
+required. A changed runtime sibling can invalidate input identity even though it
+never enters the saved projection.
+
+Reject app targets, provider/store/generated paths, symlink/hardlink destinations,
+aliased unit targets and incompatible prospective parents. Recheck path/parent
+identity and all prepared inputs before the first write, and the relevant target
+again before each replacement. Use a private temporary file beside each document
+and atomic same-directory replacement; no cross-file atomicity is claimed. A
+later failure reports completed, unchanged, refused and incomplete units honestly;
+preserve completed documents and leave remaining originals unchanged. Retrying
+requires another explicit preview of the actual current state, not rollback or
+an overwrite bypass. Missing readers yield unavailable evidence, not empty data.
+
+### Delivery, proof and stop conditions
+
+One Unix-like implementation PR carries the unit contract, typed module inputs,
+packaged command, focused fixtures, affected Unix-like docs and report evidence.
+It includes a dated reconciliation of the projection decision/invariant: preserve
+their single ownership declaration and historical #177/#178 proof, add proved
+host-document-tool enforcement and test finite scope independently of current
+settings presence. Retain legacy project enforcement tags/fixture locators until
+their actual caller retirement is coordinated; never declare them already moved
+or orphan them. Do not silently adopt this plan as durable policy.
+
+The additive command can coexist with separately invoked legacy capture because
+it neither calls nor redirects to the commit helper. Preserve the existing tool's
+`project` flags and exact `=== karabiner ===` / `=== symbolic-hotkeys ===` section
+protocol until the repository caller is retired. Test actual caller compatibility,
+not just the new CLI: `tool/version-control/commit` capture and its fixtures still
+consume that protocol. Keep enforcement live throughout the transition.
+
+The repository owner separately retires `tool/version-control/commit` capture,
+its `tool/version-control/test` cases and root README/CONTRIBUTING instructions
+after the versioned CLI is delivered. `Justfile` is Unix-like-owned: the U2
+implementation owner owns its legacy karabiner-capture recipe and domain recipes,
+not the repository lane. It may retain the compatible legacy recipe until the
+caller retirement or refuse the legacy publication route with actual new CLI
+guidance; it must not silently redirect a publish command to original Save.
+Any newly added transitional adapter owes the provisional registry contract.
+If project/caller compatibility cannot be retained, first prepare a separately
+reviewed fail-closed repository retirement and integrate that prerequisite before
+changing the protocol; new root usage waits for actual CLI delivery. Do not leave
+an unverified interval or bypass the root fixtures. Private consumer document
+connections/adoption are not made implicitly by either provider PR.
+
+| Evidence | Required U2 result |
+| --- | --- |
+| review | Inspect final finite scope, deletion/reset refusals, default/disabled behavior, field compatibility and caller separation; preserve prior evidence's original SHA |
+| evaluation | An independent synthetic mkDarwin consumer uses homeModules/document paths; check defaults, per-unit disable, both sources, invalid host documents, whole replacements and sibling preservation without a template checkout |
+| build | Build the changed packaged command and affected synthetic Darwin configuration natively on aarch64-darwin/macOS 26 with upstream Nix 2.34.8; record actual source and selected outputs |
+| native runtime | Final-source native macOS reader/adapter observations and parser/version identity, plus synthetic preview/save/stale/failure/roundtrip fixtures; mock readers and foreign fixtures remain supplementary |
+
+Fixtures cover both units separately/together, valid/default-equivalent capture,
+source toggling/dormant recovery, disabled read/write exclusion, finite scope and
+runtime preservation, valid/refused empties, whole arrays, invalid format/data,
+absent first destination, stale input/target/tool, prepare-all-before-write, atomic
+single-file failures and truthful partial saves. Regeneration must consume the
+saved host document rather than hard-coded defaults. Actual original writes,
+activation, app restarts or installations require separate explicit authorization;
+temporary synthetic saves do not supply that permission or deployment evidence.
+
+Installed app version alone is not a support verdict. Source review of v16.3.0
+found that the current provider's ask_for_confirmation_before_quitting=false
+member is removed by that app; check_for_updates=false already has the current
+spelling. The study records exact references. At source pickup, compare shapes and
+tested native parser behavior. A behavior-equivalent compatibility correction may
+be proposed inside U2, but a changed preference/support guarantee, uncertain
+deletion meaning, destructive migration, runtime discovered inside an owned
+parent, incompatible app shape or unsafe legacy coexistence returns to planning.
+Do not pin Homebrew apps, automatically migrate host documents, normalize away
+unsupported originals or claim compatibility merely from JSON parsing. API
+release, parent completion and private deployment remain independent outcomes.
 
 ## Acceptance
 
