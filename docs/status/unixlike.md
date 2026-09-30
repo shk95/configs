@@ -18,14 +18,14 @@ network, storage, boot, installation and Nix daemon policy. Homebrew app
 selection and lifecycle are also consumer-owned
 (`docs/policy/decisions/unixlike/public-environment-host-boundary.md`).
 
-U1 provider PR #421 entered `dev` at
+The initial U1 provider PR #421 entered `dev` at
 `3d6d945f1a7c32428ae506586eb5b644129e5614`. Its delivered head and
 post-merge source passed their own Required checks and native Linux provider
 CI under upstream Nix 2.34.8; the delivered head also passed native macOS
 evaluation and the synthetic Darwin build. These are provider observations.
 
-The public template and private host consumer now publish one flake and lock,
-both selecting that same delivered provider SHA. Their merged sources passed
+The original public template and private host consumer delivery published one
+flake and lock, both selecting that provider SHA. Their merged sources passed
 their own evaluation CI, and source-bound checks of the immutable merged
 refs evaluated the public example and all seven private outputs without an
 input override. The private consumer's transferred safety/refusal fixtures
@@ -37,9 +37,22 @@ was activated. The connection evidence and durable refs are recorded in
 The U1 continuation in PR #435 repairs ordinary native Darwin preference
 overrides and finite contract inspection of forbidden Darwin/WSL declarations,
 with constructor/composition regression coverage. It preserves default values,
-support and API data. The companion pins above still identify the original
-delivery; adopting this repair is separate coordinated follow-up. Evaluation,
-selected builds and remaining runtime limits are recorded in the contract report.
+support and API data. It entered `dev` at
+`c76752dc1ec285dce721ae02a2f139c9f32dcb76`; its exact head and merged
+source passed their own Required checks and native Linux CI. Final-head native
+Mac evaluation and the selected synthetic Darwin build retain their source
+binding to that identical merged tree.
+
+Public template PR #2 at `2cbf41be904448354f413e6156e8e83c0e4c445a`
+and private consumer PR #22 at `f5c205d942ddc6f4b51dffc0b218d72d040d7a49`
+now both pin this same delivered repair revision. Their own post-merge CI,
+immutable-source evaluation and source/lock checks passed without a provider
+override. The private candidate's selected native Darwin build invocation
+realized the existing store result; matching candidate/merge trees and freshly
+evaluated derivation/output paths bind that result to the delivered consumer.
+Other private outputs and the public example have evaluation evidence only.
+Earlier references retain their original evidence. The contract report records
+the current pair, build provenance and remaining runtime limits.
 
 Provider integration and companion source delivery do not certify API release
 readiness or complete the full contract report. U2 Darwin capture, any future
