@@ -70,6 +70,18 @@ not final-head generation/Check acceptance. Actual
 Apply is tested only in isolated fixtures, not on a real host. No release,
 activation, integration or cleanup is implied by partial delivery.
 
+The first W1 native run, CI 36665807518 at
+6573b36b19005cc89c41215b804e8313b17225ea, verified exact management 7.6.6/x64
+and separate inbox 5.1 fixtures but failed W1 acceptance: 398 tests passed,
+1 failed and 1 skipped, with a fixture-container cleanup error. The PATH fixture
+incorrectly assumed a fresh child's PATH retained the parent's precedence;
+Windows PowerShell startup prepended PSHOME. The repair arranges competing
+applications after child startup and keeps production command resolution intact.
+Cleanup clears readonly Git objects only in owned synthetic repositories, skips
+reparse points and removes fixture junction links while checking the original
+runtime remains present, byte-identical and executable. New-head native proof is
+required; this failed run supplies no Ready evidence.
+
 ## W1 pickup preparation, 2026-09-30
 
 The planner reconciled the pickup boundary with the latest whole-unit and

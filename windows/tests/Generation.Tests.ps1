@@ -21,7 +21,29 @@ BeforeAll {
     function New-FixtureEnvironment([object[]] $Features = @(), [hashtable] $Units = @{}) {
         Write-FixtureJson $environment ([ordered]@{ formatVersion = 1; provider = @{ commit = $commit }; features = @($Features); units = $Units })
     }
+    function Clear-FixtureGitObjectReadOnly {
+        # Pester owns TestDrive. Never traverse junctions into real runtime or
+        # host directories; only synthetic repositories directly below it.
+        foreach ($directory in (Get-ChildItem -LiteralPath $TestDrive -Directory -Force)) {
+            if ($directory.Attributes -band [IO.FileAttributes]::ReparsePoint) { continue }
+            $gitDirectory = Join-Path $directory.FullName '.git'
+            $objects = Join-Path $gitDirectory 'objects'
+            if (-not (Test-Path -LiteralPath $objects -PathType Container)) { continue }
+            if ((Get-Item -LiteralPath $gitDirectory -Force).Attributes -band [IO.FileAttributes]::ReparsePoint) { continue }
+            if ((Get-Item -LiteralPath $objects -Force).Attributes -band [IO.FileAttributes]::ReparsePoint) { continue }
+            foreach ($objectDirectory in (Get-ChildItem -LiteralPath $objects -Directory -Force)) {
+                if ($objectDirectory.Attributes -band [IO.FileAttributes]::ReparsePoint) { continue }
+                foreach ($file in (Get-ChildItem -LiteralPath $objectDirectory.FullName -File -Force)) {
+                    if ($file.Attributes -band [IO.FileAttributes]::ReparsePoint) { continue }
+                    if ($file.Attributes -band [IO.FileAttributes]::ReadOnly) {
+                        $file.Attributes = $file.Attributes -band (-bnot [IO.FileAttributes]::ReadOnly)
+                    }
+                }
+            }
+        }
+    }
 }
+AfterAll { Clear-FixtureGitObjectReadOnly }
 
 Describe 'Host declaration and generation contract' {
     # INV windows/host-generation-bound
@@ -327,6 +349,7 @@ Describe 'Generation edge and compatibility fixtures' {
     # INV windows/host-generation-bound
     # INV windows/support-boundary-named
     BeforeEach { New-FixtureEnvironment }
+    AfterEach { Clear-FixtureGitObjectReadOnly }
     It 'future optional features remain unselected and schema 1 export uses its historical manifest' {
         $future = Join-Path $TestDrive 'future-provider'
         Copy-Item -LiteralPath $provider -Destination $future -Recurse
@@ -446,6 +469,7 @@ Describe 'Generation publication and public command fixtures' {
     BeforeEach { New-FixtureEnvironment }
     It 'bootstrap selects the first actual PATH application and forwards its child status' {
         $executable = (Get-Process -Id $PID).Path
+        $runtimeDigest = Get-WinEnvFileDigest $executable
         $first = Join-Path $TestDrive 'first-management'
         $second = Join-Path $TestDrive 'second-management'
         foreach ($candidate in @($first, $second)) {
@@ -470,19 +494,40 @@ exit 37
 '@)
         $previousPath = $env:PATH
         try {
-            $env:PATH = $first + [IO.Path]::PathSeparator + $second + [IO.Path]::PathSeparator + $previousPath
-            $candidates = @(Get-Command pwsh.exe -CommandType Application -All)
-            $candidates.Count | Should -BeGreaterOrEqual 2
-            $candidates[0].Source | Should -BeExactly (Join-Path $first 'pwsh.exe')
+            $wrapper = Join-Path $fixtureRoot 'path-probe.ps1'
+            [IO.File]::WriteAllText($wrapper, @'
+param([string]$First, [string]$Second, [string]$Bootstrap)
+$ErrorActionPreference = 'Stop'
+# A fresh PowerShell can prepend PSHOME. Arrange the competing PATH after
+# startup so the actual command lookup under test sees these two candidates.
+$env:PATH = $First + [IO.Path]::PathSeparator + $Second + [IO.Path]::PathSeparator + $env:PATH
+$candidates = @(Get-Command pwsh.exe -CommandType Application -All)
+if ($candidates.Count -lt 2 -or $candidates[0].Source -cne (Join-Path $First 'pwsh.exe')) { throw 'Fixture did not arrange two ordered actual applications.' }
+& $Bootstrap -Generation synthetic-generation -Check -Verbose
+exit $LASTEXITCODE
+'@)
             $stdout = Join-Path $TestDrive 'bootstrap-path.stdout'
-            & $executable -NoLogo -NoProfile -File (Join-Path $fixtureTools 'bootstrap.ps1') -Generation synthetic-generation -Check -Verbose > $stdout 2> (Join-Path $TestDrive 'bootstrap-path.stderr')
+            & $executable -NoLogo -NoProfile -File $wrapper -First $first -Second $second -Bootstrap (Join-Path $fixtureTools 'bootstrap.ps1') > $stdout 2> (Join-Path $TestDrive 'bootstrap-path.stderr')
             $LASTEXITCODE | Should -Be 37
-            ([IO.File]::ReadAllText($stdout)) | Should -Match ([regex]::Escape($candidates[0].Source))
+            ([IO.File]::ReadAllText($stdout)) | Should -Match ([regex]::Escape((Join-Path $first 'pwsh.exe')))
             $forwarded = Read-WinEnvContractJson $marker
             $forwarded.check | Should -BeTrue
             $forwarded.generation | Should -BeExactly synthetic-generation
         }
-        finally { $env:PATH = $previousPath }
+        finally {
+            $env:PATH = $previousPath
+            if ($IsWindows) {
+                foreach ($candidate in @($first,$second)) {
+                    if ((Test-Path -LiteralPath $candidate) -and ((Get-Item -LiteralPath $candidate -Force).Attributes -band [IO.FileAttributes]::ReparsePoint)) {
+                        [IO.Directory]::Delete($candidate)
+                    }
+                }
+            }
+            (Test-Path -LiteralPath $executable -PathType Leaf) | Should -BeTrue
+            (Get-WinEnvFileDigest $executable) | Should -BeExactly $runtimeDigest
+            & $executable -NoLogo -NoProfile -Command 'exit 0' *> (Join-Path $TestDrive 'runtime-after-cleanup.log')
+            $LASTEXITCODE | Should -Be 0
+        }
     }
     It 'restores the prior directory when publication fails after moving it aside' {
         $current = Join-Path $TestDrive 'publish-current'
