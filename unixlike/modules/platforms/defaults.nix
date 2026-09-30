@@ -15,7 +15,7 @@
     #
     ###################################################################################
     system = {
-      stateVersion = lib.mkDefault contract.compatibilityDefaults.nixDarwin;
+      stateVersion = contract.compatibilityDefaults.nixDarwin;
 
       defaults = {
         # ".GlobalPreferences" = {
@@ -256,5 +256,7 @@
     };
   };
 in {
-  modules.darwin.environment = environment;
+  # Lower the native definitions, not the deferred class's merge priority:
+  # other provider fragments still compose, and ordinary host options win.
+  modules.darwin.environment = lib.mapAttrsRecursive (_: value: lib.mkDefault value) environment;
 }
