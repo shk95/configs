@@ -44,8 +44,11 @@ a complete host document. Runtime/session files stay outside desired inputs.
 The initial client baseline is Windows 10 IoT Enterprise LTSC 21H2 x64,
 build 19044; default terminal delegation is explicitly excluded. Check is
 read-only and reports remaining drift or unavailable evidence normally.
-Generation and Check do not authorize Apply. W2 host-original capture is
-pending; legacy provider capture refuses generated configuration/runtime state.
+Generation and Check do not authorize Apply. Host-original capture previews
+supported settings and writes originals only with explicit Save; legacy provider
+publication parameters are removed. Capture refuses generated configuration and
+excluded runtime state. The parent contract and API release remain separately
+assessed.
 # Host capture
 
 After selecting a feature in an external host declaration, preview one enabled

@@ -3,6 +3,65 @@ kind: report
 spec: docs/work/windows/host-consumer-contract/spec.md
 status: pending
 
+## W2 source-run native evidence, 2026-09-30
+
+Source head `e2c1cc7307780235ca5ebc13b30f5848e31d183c` has the separately
+recorded hosted native run and LTSC client observations below. Any newer report
+publication head must obtain its own current-head Required checks and client
+assertions in the PR; source-run proof is not attributed to a different head.
+
+At this exact source head, [CI 36675793019](https://github.com/shk95/configs/actions/runs/36675793019)
+completed successfully, including Required checks and Windows desired-state
+validation. Windows Server 2025 build 26100 ran actual verified management
+PowerShell 7.6.6/x64 and separately executed inbox Windows PowerShell 5.1
+entry/bootstrap fixtures. Pester passed 347, failed 0 and skipped 1: the
+foreign-host refusal case does not apply to a native host. The actual capture
+CLI preview/Save/status-forwarding fixture passed using synthetic targets only.
+Repository/Unix-like suites were intentionally skipped for this Windows-only
+change; global scans passed. This hosted Server evidence remains separate from
+the LTSC client observations.
+
+The exact source head was acquired in an isolated client task directory on
+Windows 10 IoT Enterprise LTSC x64 build 19044.7725. Actual parent management
+PowerShell 7.6.6/64-bit matched the first selected application executable;
+the separately queried child also reported 7.6.6. Inbox Windows PowerShell was
+5.1.19041.7725. Six real app capture previews returned 0 and prepared supported
+settings without unavailable observations: managed PowerShell profile,
+Advanced Paste JsonSubset, FancyZones default layouts ExactJson, Terminal
+settings with generated profiles excluded, WezTerm Lua appearance and Zellij
+KDL. Each synthetic declaration stayed unchanged and each prospective document
+remained absent. No real observed payload was passed to Save.
+
+A separate fixture in the client's task directory used only provider-derived
+synthetic Advanced Paste content and an isolated module target substitution.
+Explicit first and subsequent Save succeeded; original connections regenerated
+into matching complete settings. Changed saved originals made the older generation
+refuse, and regeneration passed integrity and payload round trip. The synthetic
+app itself remained unchanged. This is native fixture Save evidence, not a
+real host-original Save or an applied host configuration.
+
+Completed before/after observations verified exact provider SHA, clean tracked
+Windows source and unchanged existing host targets, including state/profile,
+active managed files and retired .wslconfig/custom-layouts/layout-hotkeys.
+Read-only inventory observed Terminal 1.24.11911.0 through inbox Appx,
+PowerToys 0.101.2362.0, WezTerm 20240203-110809-5046fc22 and Zellij 0.45.1.
+No host connection identity, private path, file content or hash value is
+published. No Apply, installation, restart, activation or real host-original
+Save occurred.
+
+| W2 obligation | Evidence and limit |
+| --- | --- |
+| Chosen source and no-drift first ownership | Native fixtures and real previews retain selected/enabled units and complete chosen-source projection; arrays are whole owned values. |
+| Read-only preview and explicit host Save | Real app previews leave originals and observed targets unchanged; native Save is synthetic task-temporary validation only. |
+| Recoverable first connections and partial outcomes | Native fixtures inject payload/connection/replacement failures, verify inert orphan matching retry/conflict refusal and report saved/failed/pending without transaction claims. |
+| Identity/path/format refusal | Native fixtures cover changed source/tools/inputs/targets/destinations, incompatible content, strict encodings and unsafe prospective paths. |
+| Local generation round trip | Native fixtures and synthetic LTSC Save/regeneration cover matching complete settings and stale original refusal. |
+| Publication coupling removal | Windows helpers/public parameters and invariant are retired; caller/invariant fixtures and separately integrated repository historical-reference correction supply the owned boundary. |
+
+Whole acceptance rows remain pending until all required obligations and evidence
+lanes are assessed. W2 partial delivery does not imply domain API release,
+actual deployment, host activation or publication of private originals.
+
 ## W2 source implementation, 2026-09-30
 
 Issue #427's W2 lane replaces provider writeback/publication with selected,
@@ -33,6 +92,12 @@ owned issue #442/PR #443. Before source publication, this lane normally merged
 its actual integrated dev `6d65181e5ff46857e04207ae370365402890eb50`.
 The dependency was not bypassed or included as a Windows-owned repository change.
 
+Before final report publication, the integrator required the actual dev
+`4575be94fa39e031526b02f78b57da5287706b2c` after repository handoff #440.
+It was merged normally without rewriting published history. The dev-relative
+W2 change remains Windows-only; the source-run proof above retains its original
+SHA and does not stand in for the final publishing head's CI or client proof.
+
 The fixed-source full suite on a foreign host using PowerShell 7.6.6 passed
 345, failed 0 and skipped 3. New capture fixtures passed 26 and skipped their
 native-only CLI case; generation fixtures passed 56/56. The two other skips
@@ -45,10 +110,10 @@ stale-generation refusal. Classification, hygiene, domain reads, design citation
 and document records passed. The earlier invariant scan identified only the two
 repository references above; their required integrated base is now present.
 
-This is supplementary foreign-host fixture evidence. Current-head hosted native
-PowerShell 7.6.6/x64 and separate inbox 5.1 execution, and exact-head LTSC client
-read-only app previews with unchanged original/host/source observations, remain
-pending. Client Save validation is limited to synthetic task-temporary inputs,
+This is supplementary foreign-host fixture evidence. The source-run hosted native
+and separate LTSC observations are recorded above. Any newer publishing head
+requires its own current-head native CI and client assertions in the PR.
+Client Save validation is limited to synthetic task-temporary inputs,
 with no real host-original Save or Apply. Earlier W1 results do not supply W2
 proof. Whole acceptance rows remain pending until their complete obligations and
 evidence lanes have been evaluated.
@@ -62,7 +127,8 @@ separately. The dated spec amendment fixes preview/explicit Save, relative first
 connections, chosen-source projection, recoverable per-file operations and removal
 of provider publication coupling without adding formats or support promises.
 
-W2 native fixtures and final-head client evidence remain pending.
+W2 source-run native fixtures/client evidence are recorded above;
+final publishing-head proof remains pending.
 Earlier W1 source/native/client observations are not W2 capture proof. No actual
 Apply, installation, activation or real host-original save is authorized. Whole
 AC rows remain pending until their complete required obligations are evaluated.

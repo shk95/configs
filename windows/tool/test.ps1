@@ -21,8 +21,9 @@ capture fixtures use synthetic host originals; capture performs no Git publicati
 .EXAMPLE
 PS> .\windows\win-env.ps1 test -RequireNativeTooling
 
-Runs the full capture publish fixtures used by CI and requires the pinned
-Pester tool. The end-to-end cases operate on isolated test repositories.
+Runs the Windows fixture suite used by CI and requires the pinned Pester tool.
+Capture cases use synthetic host originals and test recoverable Save operations;
+no provider publication or actual host Apply occurs.
 
 .NOTES
 Requires Pester 5.7.1. Exit 0 means the suite passed, exit 69
