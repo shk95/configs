@@ -591,9 +591,11 @@ consumer's current procedure and reviewed host facts.
 Use the reviewed output from the actually delivered flake and lock in
 `configs-hosts` for a real host. Its delivered source now uses one root
 `flake.nix` and `flake.lock`, explicit `flake-modules/hosts/` declarations and
-shared selected inputs; see `docs/status/repository.md` for exact delivery refs
-and remaining provider work. Earlier per-host deployment records describe
-their original source and locks.
+shared selected inputs. Its current pin and the public template's pin both
+select the delivered provider repair; see `docs/status/repository.md` for exact
+current pair refs, qualified evaluation/build evidence and remaining U1/API
+release work. Earlier per-host and initial U1 records describe their original
+source and locks. Shared source adoption does not imply simultaneous deployment.
 That repository owns the final output, identity, pinned provider revision,
 installation procedure and deployment target. Run its `tool/check-hosts`
 for final evaluation, then build on the target architecture and record native
