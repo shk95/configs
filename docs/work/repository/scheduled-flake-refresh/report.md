@@ -3,6 +3,25 @@ kind: report
 spec: docs/work/repository/scheduled-flake-refresh/spec.md
 status: pending
 
+## Bounded pickup planning, 2026-09-30
+
+D inspected dev `54b2b794e5a0aa867f264d1bff548eebe5cc4892`, the delivered
+refresh entry/source and the reviewed controller proposal. The next pure child
+joins actual disposable CLI/lock/Git preparation to shared-controller fake
+refresh requests; its report is separately pending. The parent retains AC1-AC5
+verbatim and zero of five verified. No implementation or live proof is supplied
+by this planning diff or document preflight.
+
+The delivered tool has no publication transport or authenticated receipt, and
+controller preview does not implement feature-to-dev requests, long-lived history,
+retained config/package selection or live operations. Those gaps remain explicit.
+Root reviewed the actual four-document diff and approved this bounded planning
+delivery on 2026-09-30. Normal planning commit/push/PR delivery is authorized;
+source continuation remains unassigned until the repaired shared-controller
+prerequisite has merged and root records an owner and execution issue. No real
+provider refresh, candidate publication, credentials, workflow dispatch,
+schedule, admission, promotion, release or deployment occurred for this pickup.
+
 ## Planning delivery clarification, 2026-09-30
 
 The pickup clarification distinguishes independent fake-interface fixture preparation
