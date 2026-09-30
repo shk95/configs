@@ -66,6 +66,44 @@ jq -e '.host.declaredInputCompatibility == "requires-edits"
   and (.host.requiredHostEdits | index("environment.graphical conflicts with environment.wsl"))' \
   "$scratch/conflict-result.json" >/dev/null
 
+# The finite constructor constraint applies even with graphical omitted/false.
+jq '.constructor = "mkDarwin" | .inputs.system = "aarch64-darwin"
+    | del(.inputs.homeDirectory) | .inputs.environment = {wsl: true}' \
+  "$scratch/explicit.json" > "$scratch/darwin-wsl.json"
+for graphical in omitted false; do
+  if [ "$graphical" = false ]; then
+    jq '.inputs.environment.graphical = false' "$scratch/darwin-wsl.json" > "$scratch/darwin-wsl-false.json"
+    declaration="$scratch/darwin-wsl-false.json"
+  else
+    declaration="$scratch/darwin-wsl.json"
+  fi
+  "$reader" --candidate-tree "$scratch/candidate" --host-declaration "$declaration" \
+    | jq -e '.host.declaredInputCompatibility == "requires-edits"
+        and (.host.requiredHostEdits | index("environment.wsl is unsupported by this constructor"))
+        and (.host.candidateEvaluationNeeds | length) > 0' >/dev/null
+done
+jq '.inputs.environment.wsl = false' "$scratch/darwin-wsl.json" > "$scratch/darwin-valid.json"
+"$reader" --candidate-tree "$scratch/candidate" --host-declaration "$scratch/darwin-valid.json" \
+  | jq -e '.host.declaredInputCompatibility == "compatible" and .host.requiredHostEdits == []' >/dev/null
+"$reader" --candidate-tree "$scratch/candidate" --current-tree "$scratch/current" \
+  --host-declaration "$scratch/darwin-valid.json" \
+  | jq -e '(.host.omittedDefaultChanges | index("entryPoints.mkHome.inputs.environment.defaults.wsl")) == null
+      and (.host.omittedDefaultChanges | index("compatibilityDefaults.homeManager"))' >/dev/null
+jq '.constructor = "futureConstructor"' "$scratch/explicit.json" > "$scratch/unknown-constructor.json"
+"$reader" --candidate-tree "$scratch/candidate" --host-declaration "$scratch/unknown-constructor.json" \
+  | jq -e '.host.declaredInputCompatibility == "unknown"
+      and (.host.candidateEvaluationNeeds | length) > 0' >/dev/null
+
+# Effective defaults also come from the inspected data, not reader hardcoding.
+mkdir -p "$scratch/defaults/api"
+jq '.entryPoints.mkHome.inputs.environment.defaults.wsl = true
+    | .entryPoints.mkHome.inputs.environment.defaults.graphicalWhenWsl = true' \
+  "$scratch/candidate/api/contract.json" > "$scratch/defaults/api/contract.json"
+"$reader" --candidate-tree "$scratch/defaults" --host-declaration "$scratch/omitted.json" \
+  | jq -e '.host.declaredInputCompatibility == "requires-edits"
+      and (.host.requiredHostEdits | index("environment.graphical conflicts with environment.wsl"))
+      and (.host.candidateEvaluationNeeds | index("evaluate host module effects against the candidate"))' >/dev/null
+
 jq '.inputs.homeModules = [{"home.sessionVariables.SECRET": "leak"}]' \
   "$scratch/explicit.json" > "$scratch/module-data.json"
 if "$reader" --candidate-tree "$scratch/candidate" \
