@@ -637,16 +637,86 @@ report acceptance belongs at full parent completion. AC3 still requires U2
 implementation and its applicable checks. No missing private activation or
 blanket host-runtime suite is implied by these rows.
 
+## U1 technical review and bounded repair, 2026-09-30
+
+Issue #434 continues from `origin/dev` at
+`cfd6d2718dc048cc1803e95267113d66f54e603d`, reviewing spec revision
+`50444ef94897402979a2ed4b402997f78675c833`. The narrowly approved pickup
+amendment was published in `6082cf9a61c3b01f03eff7cef602b84f62bcd5c7`
+before source implementation, in [PR #435](https://github.com/shk95/configs/pull/435).
+
+Technical review found two actual delivered-source defects: ordinary native
+Darwin `KeyRepeat = 4` conflicted with the provider's value 3, and inspection
+reported a forbidden Darwin/WSL declaration as compatible when graphical was
+omitted. The repair lowers each active native default leaf's priority, retaining
+deferred class composition priority. A root-level priority wrapper was rejected
+by the nested regression because a partial CustomUserPreferences override lost
+unrelated provider domains. The leaf implementation preserves those siblings.
+All 106 active leaves supplied by the delivered Darwin default unit compare
+equal in the unchanged synthetic realization. Varied ordinary numeric, boolean,
+custom-domain and time-zone overrides plus explicit Darwin/HM state versions
+pass; these checks do not claim every arbitrary host-module override is valid.
+
+Inspection now computes effective WSL/graphics choices from the existing finite
+metadata and honors constructor-specific constraints. Tests cover forbidden
+Darwin WSL with graphical omitted and false, allowed Darwin selections, effective
+candidate defaults, and constructor-specific omitted-default reporting. Unknown
+constructors and arbitrary module effects retain their unknown/evaluation-needed
+boundaries; module contents remain excluded. Public API data, default values and
+supported combinations are unchanged.
+
+The finite public-contract fixture checks 71 cases against actual constructors:
+published export/output identities, required omissions, declared/wrong types,
+supported/unsupported systems, environment defaults and WSL constraints, unknown
+inputs and neutral empty home extensions. Existing tests continue to compare
+generated JSON with contract.nix, bind fetched source to its consumer lock, and
+exercise module extensions, retired-input migration and read-only readiness.
+The graphical opt-out fixture preserves a host-added package/setting and a host
+reference to the still-shared jq dependency while removing the provider's
+graphical contribution. Its negative Niri case exercises the existing native
+merge refusal between an active Niri definition and a contradictory ordinary
+false value; it introduces no new fixed-component policy.
+
+Focused provider API, contract inspection, lint and format checks passed. On
+macOS 26.6.2/aarch64-darwin with Nix 2.34.8, flake-test and test passed,
+evaluating all seven outputs and building the native synthetic fixture-mac.
+The final-source native Mac and current-head CI evidence is supplied with the PR;
+selected builds and runtime applicability remain separate from activation.
+No companion pin or host state was changed in this repair. Earlier provider,
+template and private refs retain their original delivered-source evidence;
+adopting the repair in consumers remains coordinated follow-up.
+
+Technical review accepts AC1's bounded initial transition investigation: the
+latest amendment explicitly limits it to the inspected service/ZFS branches,
+default selection, preserved explicit host values and retired-input guidance.
+It proves neither exhaustive output equivalence nor safe persistent-state
+migration. AC4's older `e11bd136` external connection and preserved consumer
+history, together with new retired-input refusal and migration guidance, establish
+the declared breaking boundary, not cross-major compatibility. AC5's native Mac
+proof belongs to the synthetic public-constructor fixture; the separately locked
+Darwin API example has evaluation evidence, not another native build invocation.
+
+The AC7 inventory accounts for host-owned machine/account/access/storage/WSL,
+installation and Nix daemon/app-lifecycle material at the durable consumer refs
+above. Disko/nixos-anywhere and installation tools moved to the host; unused
+deploy-rs was retired. Provider nixos-wsl remains solely a reproducible synthetic
+integration dependency; hosts own their selected integration pin. Safety/refusal
+and install-plan proof do not imply disk installation, headless boot/recovery or
+the unselected Linux install-VM branch passed. Provider Linux Home/NixOS builds,
+graphical VM, native Darwin fixture, all-output evaluation and companion
+evaluations keep their original source and lane limits. AC3/U2 and full parent
+report acceptance remain pending; release and host rollout are separate.
+
 ## Acceptance
 
 | ID | State | Evidence |
 | --- | --- | --- |
-| AC1 | pending | Baselines, override tests and transition guidance delivered in provider `3d6d945f`. Next: reviewer checks the baseline/default/override coverage and bounded initial transition analysis, then records pass or a specific missing impact check; private persistent-state migration is not a provider gate. |
-| AC9 | pending | Reader, independent consumer, native read-only readiness and delivered template pair evidence are present. Next: reviewer checks API/data drift, source binding, comparison and satisfied/missing/unknown coverage; the observed readiness unknown is an honest reader result, not a demand to prepare that host. |
-| AC2 | pending | Public constructor/default/override/refusal and native extension checks passed on the delivered source. Next: reviewer maps those checks to the typed public-input/extension contract and records coverage; no additional implementation gap was found in this companion continuation. |
+| AC1 | verified | Source-defined 25.11/25.11/6 defaults, explicit native preservation and retired-input migration guidance pass. Technical review accepts the latest amendment's bounded initial service/ZFS transition investigation; this is neither exhaustive equivalence nor private persistent-state migration. The repair adds explicit Darwin/HM override and unchanged-default coverage. |
+| AC9 | verified | Generated-data agreement, finite actual-constructor metadata coverage, source/lock binding, legacy/current comparison, format/module-data refusal and readiness three-state evidence pass. The repair refuses forbidden Darwin/WSL selections using effective finite metadata and confines omitted-default guidance to the selected constructor/layers; unknown constructors/module effects retain evaluation needs. The observed readiness unknown is not a host-preparation gate. |
+| AC2 | verified | Public typed inputs, defaults, module extensions, invalid/retired-field refusals, WSL wiring and finite metadata agreement pass. The ordinary native Darwin preference defect is repaired with leaf default priority and varied nested override/sibling-preservation checks. These tests cover the stated input/extension boundary, not all arbitrary host-module effects. |
 | AC3 | pending | U2 must implement the host-owned Darwin capture format, projection/ownership selection and preview/save path, then supply its selected evaluation/build/native-reader evidence. No capture result is certified here. |
-| AC4 | pending | Independent locked consumer/native x86 proof and durable delivered pair are present. Next: reviewer contrasts preserved older-pin examples with retired-input refusal and declared breaking migration guidance, then records whether the stated older-consumer boundary is evidenced; cross-major compatibility is not promised. |
-| AC5 | pending | Delivered provider head `c8b6e818` passed macOS 26.6.2/Nix 2.34.8 evaluation and native Darwin build. Next: reviewer binds these results to the declared aarch64-darwin/macOS 26 provider/public-consumer lane and records coverage; older/later OS and private runtime are not inferred. |
+| AC4 | verified | Older `e11bd136` external connection and preserved consumer history establish the old pin; new independent locked consumers, native x86 synthetic realization, retired-input refusals and stable migration guidance establish the declared breaking adoption boundary. Older pins remain explicit choices; compatibility across that boundary is not promised. |
+| AC5 | verified | Delivered `c8b6e818` macOS 26.6.2/Nix 2.34.8 all-output evaluation and native aarch64-darwin synthetic public-constructor build establish the selected macOS 26 lane. Separate external Darwin API evaluation is qualified as evaluation. Older/later OS support and private runtime are not inferred. |
 | AC6 | verified | Delivered provider head `c8b6e818` and merge `3d6d945f` passed their own CI with the explicit upstream Nix 2.34.8 assertion, evaluation and selected native builds; matching macOS evidence is recorded above. |
-| AC7 | pending | Delivered host safeguards, seven-output pair, publication and integration are evidenced above. Next: reviewer audits the setting/tool/dependency/rule migration map against provider removals and consumer safety/tool inventory, recording each retained/transferred/retired owner and any gap; host rollout is separate. |
-| AC8 | pending | Delivered Mac/x86 selected native builds, provider graphical VM and companion checks passed. Next: reviewer checks the changed-function-to-check map, selected/omitted lane reasons and coverage against promised public behavior; an identified gap receives a bounded check rather than a blanket host suite. |
+| AC7 | verified | Technical review maps provider removals to durable host-owned machine/account/access/storage/WSL, installation, daemon/app lifecycle and actual safeguard fixtures. Disko/nixos-anywhere moved; unused deploy-rs retired; provider WSL input remains synthetic test infrastructure. Delivered pair evaluation and qualified Darwin build are recorded; installation, headless boot/recovery and host rollout are not claimed. |
+| AC8 | verified | Changed native Darwin defaults/reader/composition coverage includes finite API probes, varied ordinary overrides with unchanged defaults/siblings, graphics opt-out host/shared-dependency preservation and existing Niri merge refusal. Native Mac evaluation/build and prior qualified Linux/graphical/companion evidence retain source boundaries; current repair-head selected Linux CI is supplied with the PR before Ready. ARM/WSL/other graphical builds, private runtime and activation are not inferred. |

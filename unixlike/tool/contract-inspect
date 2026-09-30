@@ -129,10 +129,17 @@ def inspect_host(declaration, candidate, compared):
         if key not in ("wsl", "graphical") or type(value) is not bool:
             edits.append(f"environment.{key} is unsupported or not boolean")
     system = inputs.get("system")
-    allowed = candidate["constraints"].get(constructor, {}).get("systems", [])
+    constraints = candidate["constraints"].get(constructor, {})
+    allowed = constraints.get("systems", [])
     if system is not None and system not in allowed:
         edits.append("system is outside the declared candidate systems")
-    if env.get("wsl") is True and env.get("graphical") is True:
+    defaults = fields.get("environment", {}).get("defaults", {})
+    wsl = env.get("wsl", defaults.get("wsl", False))
+    graphical = env.get("graphical", defaults.get("graphical",
+                        defaults.get("graphicalWhenWsl" if wsl else "graphicalOtherwise", False)))
+    if wsl is True and constraints.get("wsl") is False:
+        edits.append("environment.wsl is unsupported by this constructor")
+    if wsl is True and graphical is True and constraints.get("graphicalWithWsl") is False:
         edits.append("environment.graphical conflicts with environment.wsl")
     if declaration.get("systemModules") and "systemModules" not in fields:
         edits.append("systemModules is unsupported by this constructor")
@@ -143,11 +150,16 @@ def inspect_host(declaration, candidate, compared):
     if not needs:
         needs.append("evaluate the candidate's final configuration before adoption")
     omitted_defaults = []
+    environment_prefix = f"entryPoints.{constructor}.inputs.environment.defaults."
     if "environment" not in inputs or "wsl" not in env:
-        omitted_defaults += [key for key in compared["defaultChanges"] if key.endswith(".environment.defaults.wsl")]
+        omitted_defaults += [key for key in compared["defaultChanges"] if key == environment_prefix + "wsl"]
     if "environment" not in inputs or "graphical" not in env:
-        omitted_defaults += [key for key in compared["defaultChanges"] if ".environment.defaults.graphical" in key]
-    omitted_defaults += [key for key in compared["defaultChanges"] if key.startswith("compatibilityDefaults.")]
+        omitted_defaults += [key for key in compared["defaultChanges"] if key.startswith(environment_prefix + "graphical")]
+    compatibility_layers = {"mkNixos": ("nixos", "homeManager"),
+                            "mkDarwin": ("nixDarwin", "homeManager"), "mkHome": ("homeManager",)}
+    omitted_defaults += [key for key in compared["defaultChanges"]
+                         if key in {"compatibilityDefaults." + layer
+                                    for layer in compatibility_layers.get(constructor, ())}]
     return {
         "constructor": constructor,
         "declaredInputCompatibility": "requires-edits" if edits else "compatible",

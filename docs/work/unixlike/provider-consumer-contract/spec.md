@@ -795,6 +795,29 @@ the provider tool. Packaging/export name and exact CLI/options remain ordinary
 implementation choices to check against this bounded contract, not reasons to add
 another extension framework.
 
+## U1 native override and finite inspection repair pickup
+
+Amended 2026-09-30 after technical review of the delivered U1 source: the
+continuation in issue #434 repairs AC2/AC8/AC9 and adds AC1 Darwin explicit
+stateVersion coverage. Preserve existing default values, supported combinations
+and the public API schema. Ordinary native Darwin preference overrides must
+replace provider defaults without routine mkForce. Contract inspection must not
+report a forbidden Darwin/WSL declaration as compatible; use the existing finite
+constraint/default metadata and preserve module-content privacy and the separate
+candidate-evaluation-needed result.
+
+Add bounded fixtures for current constructor metadata versus actual typed inputs,
+requirements, defaults and constraints; default preservation and native overrides;
+and graphics opt-out preserving host additions/shared dependencies while refusing
+active-feature contradictions. No new public module-list default metadata, generic
+schema/expression engine, broad constructor refactor or new builder is required.
+Run focused regression first, then final-source native Mac evaluation/build and
+the selected native Linux CI lanes. Keep prior delivered provider and companion
+references as their original evidence; companion repinning is a separately
+coordinated adoption. AC3/U2, whole-parent completion, API release and activation
+remain separate. Existing AC1/AC4/AC5/AC7 evidence may be recorded as qualified
+verified only to the extent its required lanes are actually met.
+
 ## Acceptance
 
 | ID | Criterion | Required lanes |

@@ -34,6 +34,13 @@ private outputs and public example have evaluation evidence only. No U1 host
 was activated. The connection evidence and durable refs are recorded in
 `docs/work/unixlike/provider-consumer-contract/report.md`.
 
+The U1 continuation in PR #435 repairs ordinary native Darwin preference
+overrides and finite contract inspection of forbidden Darwin/WSL declarations,
+with constructor/composition regression coverage. It preserves default values,
+support and API data. The companion pins above still identify the original
+delivery; adopting this repair is separate coordinated follow-up. Evaluation,
+selected builds and remaining runtime limits are recorded in the contract report.
+
 Provider integration and companion source delivery do not certify API release
 readiness or complete the full contract report. U2 Darwin capture, any future
 release-tag adoption and each host's rollout remain separate work.

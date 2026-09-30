@@ -3,10 +3,20 @@
 # INV unixlike/typed-identity: accept typed inputs and refuse invalid fields.
 set -eu
 . "$(CDPATH= cd -- "$(dirname -- "$0")" && pwd)/prerequisite"
-require_command nix
+require_command nix jq
 cd "$(CDPATH= cd -- "$(dirname -- "$0")/../.." && pwd)"
 provider_root=$PWD
 fixture_user=example
+
+coverage=$(nix eval --json --impure --expr '
+  import ./tool/checks/fixtures/provider-api/contract-coverage.nix {
+    provider = builtins.getFlake (toString ./.);
+  }')
+printf '%s' "$coverage" | jq -e '.count > 0 and .failures == []' >/dev/null || {
+  printf 'provider contract coverage failed: %s\n' "$coverage" >&2
+  exit 1
+}
+printf '✓ finite published constructor contract: %s cases\n' "$(printf '%s' "$coverage" | jq -r .count)"
 
 consumer_dir=$(mktemp -d)
 consumer_dir=$(CDPATH= cd -- "$consumer_dir" && pwd -P)
@@ -129,6 +139,11 @@ accept 'NixOS home extension' yes '(provider.lib.mkNixos {system = "x86_64-linux
 accept 'default coding agents' yes 'if builtins.elem "codex" (names (provider.lib.mkHome homeInput)) && builtins.elem "claude-code" (names (provider.lib.mkHome homeInput)) then "yes" else "no"'
 accept 'coding agents opt-out' yes 'if !(builtins.elem "codex" (names (provider.lib.mkHome (homeInput // {homeModules = [{providerTools.agents.enable = false;}];})))) then "yes" else "no"'
 accept 'bounded package exclusion' yes 'if !(builtins.elem "ripgrep" (names (provider.lib.mkHome (homeInput // {homeModules = [{providerTools.excludedPackages = ["ripgrep"];}];})))) then "yes" else "no"'
+
+accept 'Darwin default preferences preserved' yes 'let mac = provider.lib.mkDarwin {system = "aarch64-darwin"; user = "example"; inherit git; systemModules = [{system.primaryUser = "example"; users.users.example.home = ("/Users/" + "example");}];}; in if mac.config.system.defaults.NSGlobalDomain.KeyRepeat == 3 && mac.config.system.defaults.NSGlobalDomain.InitialKeyRepeat == 15 then "yes" else "no"'
+accept 'Darwin ordinary preference and state overrides' yes 'let mac = provider.lib.mkDarwin {system = "aarch64-darwin"; user = "example"; inherit git; systemModules = [{system.primaryUser = "example"; users.users.example.home = ("/Users/" + "example"); time.timeZone = "Etc/UTC"; system.defaults.NSGlobalDomain = {KeyRepeat = 4; ApplePressAndHoldEnabled = true;}; system.defaults.CustomUserPreferences."com.apple.ActivityMonitor".UpdatePeriod = 2; system.stateVersion = 5;}]; homeModules = [{home.stateVersion = "24.11";}];}; in if mac.config.system.defaults.NSGlobalDomain.KeyRepeat == 4 && mac.config.system.defaults.NSGlobalDomain.ApplePressAndHoldEnabled && mac.config.system.defaults.NSGlobalDomain.InitialKeyRepeat == 15 && mac.config.system.defaults.CustomUserPreferences."com.apple.ActivityMonitor".UpdatePeriod == 2 && mac.config.system.defaults.CustomUserPreferences."com.apple.desktopservices".DSDontWriteNetworkStores && mac.config.time.timeZone == "Etc/UTC" && mac.config.system.stateVersion == 5 && mac.config.home-manager.users.example.home.stateVersion == "24.11" then "yes" else "no"'
+accept 'graphics opt-out preserves host and shared contributions' yes 'let home = provider.lib.mkHome (homeInput // {homeModules = [({pkgs, ...}: {home.packages = [pkgs.hello]; home.sessionVariables.HOST_KEPT = "yes"; home.file."dependency-probe".text = "${pkgs.jq}/bin/jq";})];}); in if builtins.elem "hello" (names home) && builtins.elem "jq" (names home) && !(builtins.elem "wezterm" (names home)) && home.config.home.sessionVariables.HOST_KEPT == "yes" && home.config.home.file."dependency-probe".text == "${home.pkgs.jq}/bin/jq" then "yes" else "no"'
+refuse 'active coordinated graphical component disabled' 'conflicting definition values' '(provider.lib.mkNixos {system = "x86_64-linux"; user = "example"; inherit git; systemModules = systemModules ++ [{programs.niri.enable = false;}];}).config.programs.niri.enable'
 
 refuse 'retired NixOS host' 'retired input host' '(provider.lib.mkNixos {system = "x86_64-linux"; user = "example"; inherit git systemModules; host.kind = "wsl";}).config.networking.hostName'
 refuse 'retired Darwin host' 'retired host input' '(provider.lib.mkDarwin {inherit git; host = {system = "aarch64-darwin"; user = "example";};}).config.system.stateVersion'
