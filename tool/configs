@@ -16,6 +16,7 @@ Clone and task:  setup  doctor  worktree  session  commit
 Review:          classify  work  records  invariants  provisional
                 hygiene  domain-reads  design-citations  test
 Integration:     audit  audit-remote  plan-promotion  plan-release  release-preview
+                release-control
 Evidence:        hook-evidence
 
 Use 'tool/configs <command> --help' where the target supports it.
@@ -51,6 +52,7 @@ case "$command" in
   plan-promotion) target=version-control/plan-promotion ;;
   plan-release) target=version-control/plan-release ;;
   release-preview) target=version-control/release-preview ;;
+  release-control) target=version-control/release-control ;;
   hook-evidence) target=version-control/hook-evidence ;;
   *)
     echo "unknown repository command: $command" >&2
