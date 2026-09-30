@@ -133,6 +133,19 @@ present and is intentionally ignored by Git.
 
 Run checks for the domain you changed. `CONTRIBUTING.md` lists the workflows.
 
+For an offline source/release qualification preview, supply reviewed revision
+identities and structured baseline/evidence files:
+
+```sh
+tool/configs release-preview --master "$master_sha" --candidate "$candidate_sha" \
+  --rules "$rules_sha" --baselines baselines.tsv --evidence evidence.tsv --json
+```
+
+The preview reports a candidate, no-op or refusal without contacting a remote or
+changing source, tags or hosts. Its supplied evidence references are assertions;
+they do not authenticate production evidence or authorize a release. See
+`CONTRIBUTING.md` "Offline release preview" for inputs and recovery.
+
 A routine desired-state edit whose commit message is a template — a Homebrew
 formula or cask, a `unixlike/flake.lock` refresh — reaches `dev` in one
 command:

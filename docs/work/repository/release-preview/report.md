@@ -13,10 +13,17 @@ from native Windows or live release proof. No production bootstrap has been
 selected, and final-head CI/native evidence is still pending.
 The parent provider-release/controller reports remain pending.
 
-CI wiring and the shared repository-suite registration wait for D's separate
-repository wiring execution #431 / PR #433 to enter dev and the integrator to transfer
-ownership. The preview command/narrow fixture are independently authored. The
-registration patch is preserved locally and will be aligned after that prerequisite.
+CI wiring and shared repository-suite registration now consume D's delivered
+execution #431 / PR #433 at dev9f72acec541fd987695e5bdbad5fd53c8129e799. The
+required companion-document base #436 entered at
+60683763b8d201621e3bc92152d64ba66dd81dbf; both were merged without rewriting
+published history after explicit file ownership transfer. Ubuntu runs the full
+repository suite; Git for Windows runs the narrow preview fixture, with
+REQUIRE_NATIVE=1, fail-fast=false and no tolerated failure. The existing Required
+gate consumes the matrix aggregate. Positive/negative matrix weakening, aggregate
+failure/skip/cancel and preview-file dispatch fixtures pass locally; final-head
+native evidence remains pending. Operator usage follows the delivered companion
+documentation without changing its adoption or activation meaning.
 Document preflight validates form, not acceptance evidence.
 
 ## Acceptance
@@ -28,7 +35,7 @@ Document preflight validates form, not acceptance evidence.
 | AC3 | verified | Cumulative patch/minor/major, exact unreleased cancellation including removed effective breaking/migration/approval data, partial/cross-domain/parallel-ancestry/ambiguous refusals and released-target new change fixtures. |
 | AC4 | verified | Complete promotion union, add/delete/rename, governance/docs-only and explicit no-op, dependencies/unknown/duplicate rules; partial production mappings refuse. |
 | AC5 | verified | Stable replay despite moved tags/replacement refs/legacy grafts; pinned annotation objects and exact source/master/tree/rules/tool/message/runtime binding, required versus advisory and explicit defects; references remain asserted offline data. |
-| AC6 | pending | Candidate code/hostile data not executed; source refs/index/status/config unchanged, remote-command guard, CLI/calendar compatibility fixtures. |
+| AC6 | verified | Candidate code/hostile data not executed; source refs/index/status/config unchanged, remote-command guard, CLI/calendar compatibility, operator forwarding and preview-file effect fixtures pass in the full local repository suite. README/CONTRIBUTING document bounded inputs, refusal/recovery and separate authorization. Native Windows proof is separately pending in AC7. |
 | AC7 | pending | Native Git for Windows/Ubuntu current-head runs and minimum Required gate remain pending; missing capability 69 versus REQUIRE_NATIVE failure proved locally. |
 
 ## Evidence limits
@@ -69,7 +76,7 @@ fixtures plus malformed decimal refusals. File data passed to native Git uses st
 to preserve MSYS argument guards without depending on POSIX absolute-path conversion.
 
 The current Draft's older published-head CI did not register this narrow suite and
-is not the final native preview proof. AC6 remains pending operator documentation and
-affected-dispatch alignment; AC7 remains pending current-head Ubuntu/Git-for-Windows
+is not the final native preview proof. AC6 operator documentation and
+affected-dispatch alignment now have local proof; AC7 remains pending current-head Ubuntu/Git-for-Windows
 fixture jobs and Required-gate proof after prerequisite ownership transfer. The
 report stays pending and the parent release/controller report states are unchanged.
