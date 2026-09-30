@@ -3,6 +3,56 @@ kind: report
 spec: docs/work/windows/host-consumer-contract/spec.md
 status: pending
 
+## W2 source implementation, 2026-09-30
+
+Issue #427's W2 lane replaces provider writeback/publication with selected,
+enabled host-unit capture. Default capture returns a preview; only explicit Save
+writes the host settings document and, for first ownership, its declaration
+connection. The chosen complete source defines JsonSubset object keys and whole
+array values. Unrepresented app keys, generated Terminal profiles, foreign
+PowerShell profile blocks, retired host settings and runtime-only files remain
+outside capture ownership. Observed text accepts strict UTF-8 with an optional
+UTF-8 BOM; malformed bytes, UTF-16 input and incompatible payloads refuse capture.
+
+Preparation validates all requested units before durable writes. Source/tool,
+original, observed target and destination identities are rechecked; provider,
+generated-output, traversal, alias and reparse paths refuse. Save writes the
+settings document before a first connection. A connection failure leaves an inert
+document; explicit matching retry can connect it, while conflicting content
+refuses overwrite. Multi-unit failure reports completed, unconnected/failed and
+pending units separately. Existing connected documents use atomic replacement.
+Generation round trips saved originals and refuses older output after originals
+change. There is no multi-file transaction or automatic rollback claim.
+
+Caller inspection removed the Windows provider Save/branch/prune/publish/PR and
+auto-merge helpers and their obsolete publication fixtures. Windows capture now
+owns the host-original invariant; historical projection/prerequisite fixtures
+remain where they still prove registered invariants. The repository's two active
+references to the retired publication invariant were corrected by separately
+owned issue #442/PR #443. Before source publication, this lane normally merged
+its actual integrated dev `6d65181e5ff46857e04207ae370365402890eb50`.
+The dependency was not bypassed or included as a Windows-owned repository change.
+
+The fixed-source full suite on a foreign host using PowerShell 7.6.6 passed
+345, failed 0 and skipped 3. New capture fixtures passed 26 and skipped their
+native-only CLI case; generation fixtures passed 56/56. The two other skips
+require inbox Windows PowerShell 5.1. Fixtures cover no-drift first ownership,
+chosen-source projection and whole arrays, strict observed encodings, Terminal
+profile validation, managed profile boundaries, unsafe connections and changed
+inputs, all-unit preparation refusal, injected payload/connection/replacement
+failure, compatible retry/conflict, truthful partial results, round trip and
+stale-generation refusal. Classification, hygiene, domain reads, design citations
+and document records passed. The earlier invariant scan identified only the two
+repository references above; their required integrated base is now present.
+
+This is supplementary foreign-host fixture evidence. Current-head hosted native
+PowerShell 7.6.6/x64 and separate inbox 5.1 execution, and exact-head LTSC client
+read-only app previews with unchanged original/host/source observations, remain
+pending. Client Save validation is limited to synthetic task-temporary inputs,
+with no real host-original Save or Apply. Earlier W1 results do not supply W2
+proof. Whole acceptance rows remain pending until their complete obligations and
+evidence lanes have been evaluated.
+
 ## W2 pickup, 2026-09-30
 
 Issue #427 assigned the separate W2 host capture/save lane to C after W1 entered
@@ -12,7 +62,7 @@ separately. The dated spec amendment fixes preview/explicit Save, relative first
 connections, chosen-source projection, recoverable per-file operations and removal
 of provider publication coupling without adding formats or support promises.
 
-W2 implementation, native fixtures and final-head client evidence remain pending.
+W2 native fixtures and final-head client evidence remain pending.
 Earlier W1 source/native/client observations are not W2 capture proof. No actual
 Apply, installation, activation or real host-original save is authorized. Whole
 AC rows remain pending until their complete required obligations are evaluated.

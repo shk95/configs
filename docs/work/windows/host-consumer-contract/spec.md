@@ -632,6 +632,8 @@ runtime/session/cache files and external PowerShell blocks are excluded. Retired
 WSL/personal layouts are not additional capture units. Captured documents use
 the existing strict UTF-8 formatVersion 1, source=host and correctly typed settings;
 capture does not add deletion syntax, automatic default merging or new schemas.
+Observed text also requires strict UTF-8 (optional BOM); malformed bytes, UTF-16
+and NUL-containing text refuse rather than silently repair or replace content.
 
 Prepare and validate every requested unit before writes. Identity guards bind
 provider/tools, declaration, connected documents, observed app targets and

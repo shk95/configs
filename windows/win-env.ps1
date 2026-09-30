@@ -11,7 +11,7 @@ Get-Help on the target script for its parameters and examples.
 The inspect, export-selection, check, validate, test, font, and help verbs do
 not apply desired state. Generate materializes a local result without Apply.
 The apply verb can install packages and write managed host files. The capture
-verb can write repository payloads and create commits after confirmation. The
+verb previews host originals and writes them only with explicit Save. The
 setup-dev verb installs contributor tooling.
 
 .PARAMETER Command
@@ -88,7 +88,7 @@ $verbs = [ordered]@{
     'export-selection' = @{ Script = 'consumer.ps1'; Arguments = @{ Operation = 'export-selection' }; Summary = 'read-only: legacy selection proposal JSON' }
     'check'     = @{ Script = 'bootstrap.ps1'; Arguments = @{ Check = $true }; Summary = 'read-only: is an Apply needed; exits 0 converged, 2 drift, 69 unverified' }
     'apply'     = @{ Script = 'bootstrap.ps1'; Arguments = @{}; Summary = 'deploy the selection; explicit request only' }
-    'capture'   = @{ Script = 'capture.ps1'; Arguments = @{}; Summary = 'move a change made in an application into desired state' }
+    'capture'   = @{ Script = 'capture.ps1'; Arguments = @{}; Summary = 'preview host originals; explicit Save writes documents, never Git or Apply' }
     'validate'  = @{ Script = 'check-desired-state.ps1'; Arguments = @{}; Summary = 'parse every declared payload' }
     'test'      = @{ Script = 'test.ps1'; Arguments = @{}; Summary = 'run the Pester suite' }
     'setup-dev' = @{ Script = 'setup-dev.ps1'; Arguments = @{}; Summary = 'install the contributor toolchain' }
@@ -111,7 +111,7 @@ function Get-Usage {
     $lines += ''
     $lines += 'Arguments after the verb reach the script unchanged, for example:'
     $lines += '  win-env.ps1 check -Feature terminal'
-    $lines += '  win-env.ps1 capture -Feature powertoys -Publish'
+    $lines += '  win-env.ps1 capture -SourceRoot C:\provider -Environment C:\host\environment.json -Unit advancedPaste -Document settings/paste.json'
     $lines += ''
     $lines += 'Detailed help (these commands do not run the target script):'
     $lines += '  Get-Help .\windows\win-env.ps1 -Detailed'

@@ -46,3 +46,23 @@ build 19044; default terminal delegation is explicitly excluded. Check is
 read-only and reports remaining drift or unavailable evidence normally.
 Generation and Check do not authorize Apply. W2 host-original capture is
 pending; legacy provider capture refuses generated configuration/runtime state.
+# Host capture
+
+After selecting a feature in an external host declaration, preview one enabled
+unit with the exact provider checkout. First capture requires an explicit relative
+document path; capture never selects features or enables units automatically.
+
+```powershell
+pwsh -NoProfile -File C:\provider\windows\win-env.ps1 capture -SourceRoot C:\provider -Environment C:\host\environment.json -Unit advancedPaste -Document settings/paste.json
+```
+
+Review the complete source=host payload and first connection. Add `-Save` only
+when writing those originals is intended, or `-Save -WhatIf` to keep it a preview.
+Later capture uses the existing connection, so omit Document. For multiple Unit
+IDs, supplied Document paths align in the same order. Existing connections cannot
+be renamed by capture. An unconnected document left by connection failure is
+inert; retry must explicitly name a matching document. Conflicting content refuses.
+
+Save does not Apply, update provider defaults or publish Git. Host documents
+remain private/external. Regenerate after saving before any explicit Check/Apply
+against a generated configuration; old generation identity is intentionally stale.

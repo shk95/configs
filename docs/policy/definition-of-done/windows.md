@@ -25,6 +25,10 @@ file, which every change owes.
       reaches its caller as exit status 69 rather than as a failure.
 - [ ] Apply is run only when explicitly requested, followed by another
       read-only check.
+- [ ] Capture previews selected/enabled host originals; explicit synthetic Save
+      evidence names per-file failure/retry outcomes and verifies app, provider
+      and generated targets remain unchanged. Real host-original Save requires
+      separate authorization (INV windows/capture-owns-host-originals).
 - [ ] A `windows-v...` tag is assigned only after required native evidence is
       available.
 - [ ] The source change lives in `windows/desired/`, `windows/src/`, Windows
