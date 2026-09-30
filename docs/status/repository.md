@@ -98,7 +98,7 @@ fixtures and the remaining independently owned desired state.
 
 ## Provider boundary and consumer transfer (2026-09-30)
 
-PR #421 delivered the Unix-like public environment/host boundary to dev at
+Initial PR #421 delivered the Unix-like public environment/host boundary to dev at
 `3d6d945f1a7c32428ae506586eb5b644129e5614`. The provider now owns typed public
 constructors, synthetic examples, API metadata and read-only contract and
 standalone prerequisite tools. Host realization, safety assertions and
@@ -109,28 +109,64 @@ The repository adopts one root consumer flake and lock with explicit host
 declarations and shared selected inputs
 (`docs/policy/decisions/repository/single-flake-host-consumers.md`). This
 replaces the per-host-lock direction. The required template adaptation and
-separately owned private source migration have now entered their main branches.
-Live source/lock review on 2026-09-30 confirms both root flakes and both original
-and locked `configs` inputs select
+separately owned private source migration entered their main branches in the
+initial pair below. At that checkpoint both root flakes and both original
+and locked `configs` inputs selected
 `github:shk95/configs/3d6d945f1a7c32428ae506586eb5b644129e5614?dir=unixlike`.
 Both use `flake-modules/hosts/` declarations and a shared root input set.
 
-| Consumer source delivery | Actual main merge | Exact merge-head evaluation |
+| Initial consumer source delivery | Actual main merge | Exact merge-head evaluation |
 | --- | --- | --- |
 | [Public template PR #1](https://github.com/shk95/configs-host-template/pull/1) | `bd72568b4fd7fd740dc21d0a8fe8927cc9934e4b` | [Post-merge CI 36655493199](https://github.com/shk95/configs-host-template/actions/runs/36655493199): passed |
 | [Private source PR #21](https://github.com/shk95/configs-hosts/pull/21) | `9b04a7635b8eb3e1c6e179827b87efcea9aa5672` | [Post-merge CI 36655638053](https://github.com/shk95/configs-hosts/actions/runs/36655638053): passed |
 
 The earlier `e11bd136` bootstrap candidates and local override evaluations are
-historical preparation checkpoints. Current delivery evidence is the explicit
-source/lock pin and each merged consumer's own main-branch evaluation above.
-It does not establish native host build, runtime or activation at those refs.
+historical preparation checkpoints. The `3d6d945f` provider and initial pair
+above retain evidence for those original source/lock selections; their CI does
+not certify a later pin or establish native host runtime/activation.
+
+Provider [repair PR #435](https://github.com/shk95/configs/pull/435), continuing
+[issue #434](https://github.com/shk95/configs/issues/434), entered dev at
+`c76752dc1ec285dce721ae02a2f139c9f32dcb76`. It preserves existing defaults,
+support and API data while repairing ordinary native Darwin preference overrides
+and finite contract inspection of forbidden Darwin/WSL declarations. Its exact
+head and [post-merge CI 36667972274](https://github.com/shk95/configs/actions/runs/36667972274)
+passed their own Required checks and selected native provider lanes.
+
+Current source/lock review confirms both companion root flakes and original/
+locked `configs` inputs select
+`github:shk95/configs/c76752dc1ec285dce721ae02a2f139c9f32dcb76?dir=unixlike`
+with the same `sha256-nOEpwuFlBKCUlZtLZA7MNYip9viU9ihARWuIravKMvc=` NAR
+hash. Only the configs lock node changed in each adoption, separately committed
+from the source pin and handoff documentation; host declarations/modules are
+unchanged.
+
+| Current companion source delivery | Actual main merge | Exact merge-head evaluation |
+| --- | --- | --- |
+| [Public template PR #2](https://github.com/shk95/configs-host-template/pull/2) | `2cbf41be904448354f413e6156e8e83c0e4c445a` | [Post-merge CI 36669451868](https://github.com/shk95/configs-host-template/actions/runs/36669451868): passed |
+| [Private source PR #22](https://github.com/shk95/configs-hosts/pull/22) | `f5c205d942ddc6f4b51dffc0b218d72d040d7a49` | [Post-merge CI 36669541101](https://github.com/shk95/configs-hosts/actions/runs/36669541101): passed |
+
+Immutable merged-source checks, without an override, evaluated the public example
+and all seven private outputs. The packaged reader verified actual merged
+consumer locks/declarations against both old and newly adopted provider source
+roots; input compatibility has no required edits or metadata/default drift.
+Arbitrary module effects remain a separate evaluation obligation, covered by the
+final-output evaluations. No private input values or module contents are copied
+into this repository.
+
+The private candidate's selected native Darwin build invocation succeeded on
+macOS 26.6.2/Nix 2.34.8 by realizing an existing store result. Equal candidate/
+merge trees, candidate ancestry and freshly matching Darwin derivation/output
+paths bind that result to the delivered consumer. This is neither a new derivation
+rebuild nor a second build invocation at the merge. The public example and other
+six private outputs have evaluation-only evidence; transferred safety/refusal
+and bounded installation-plan fixtures passed without installation or activation.
 
 Provider integration and this companion source delivery are recorded outcomes.
-U1 parent acceptance and API release readiness remain pending. Additional
-Darwin override and finite contract-reader corrections are owned by
-[Unix-like repair #434](https://github.com/shk95/configs/issues/434); neither
-consumer has adopted those future repairs or advanced the delivered pin here.
-Applicable release evidence remains separately required. Private activation
+U1 parent acceptance and API release readiness remain pending; U2 Darwin capture
+is separate unfinished work. Applicable release evidence remains separately
+required. Neither provider/companion delivery nor cached build provenance implies
+host runtime or activation. Private activation
 is individually selected and is not a provider completion condition.
 
 ## Earlier repository evolution

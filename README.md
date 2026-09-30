@@ -41,9 +41,11 @@ The Unix-like flake exports typed constructors through `lib.mkNixos`,
 `lib.mkDarwin` and `lib.mkHome`. Real host identities and final outputs live in
 the private `configs-hosts` repository. It and the public template now use one
 root flake and lock, explicit declarations under `flake-modules/hosts/`, and
-shared selected inputs. Their delivered sources select the same reviewed
-provider revision; exact refs, evaluation evidence and remaining U1/API release
-work are recorded in `docs/status/repository.md`. The
+shared selected inputs. Their current delivered sources both select the repaired
+provider revision `c76752dc`; exact provider and companion refs, qualified
+evaluation/build evidence and remaining U1/API release work are recorded in
+`docs/status/repository.md`. Initial delivery references retain their original
+evidence. Source adoption does not activate any host. The
 outputs here use synthetic `fixture-*` and `example` identities to exercise
 NixOS CLI, Linux graphics, WSL, Darwin and standalone
 Home Manager. They are test instances, not deployment targets. The public

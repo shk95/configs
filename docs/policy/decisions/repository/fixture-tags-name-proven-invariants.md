@@ -16,7 +16,7 @@ architecture sentences and five entries now hold the
 rules: `INV windows/external-profile-blocks-preserved`,
 `INV windows/subset-owns-declared-keys`,
 `INV windows/selection-closed-and-explicit`, `INV windows/font-state-total`
-and `INV windows/capture-publishes-through-dev`, each tagged on the case
+and `windows/capture-publishes-through-dev`, each tagged on the case
 that exercises its statement; a ninth unit's payload-declared-once case
 names `INV windows/feature-owns-every-item`, which it already proved. Two
 units were deleted rather than tagged — `version gate`, a semantic-version
@@ -30,6 +30,10 @@ source paths rather than ids; `parser-declared` on the parser-missing
 cases, which are about a parser the host lacks rather than an undeclared
 name; and `schema-version-refused` on a semantic-version cast with no
 schema and no message.
+
+Clarified 2026-09-30: the Windows provider-capture publisher identifier above
+records this original pruning event. Its lifecycle belongs to the Windows
+domain; this historical mention is not a live enforcement tag.
 
 The repository half of the fixture pruning landed on 2026-09-04 and made
 C10 the default. The three remaining untagged units were sections of the
