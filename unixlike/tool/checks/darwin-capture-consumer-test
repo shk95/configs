@@ -17,6 +17,11 @@ JSON
 printf '%s\n' '{"formatVersion":1,"source":"configs","settings":{"dormant":{"invalidActiveShape":null}}}' > "$work/configs.json"
 printf '%s\n' '{"formatVersion":1,"source":"host","settings":{"global":{},"profiles":[]}}' > "$work/invalid.json"
 printf '%s\n' '{"formatVersion":1,"source":"configs","settings":{"a":1,"\u0061":2}}' > "$work/duplicate.json"
+printf '%s\n' '{"formatVersion":1,"source":"configs","settings":{"recovery":{"min":-9223372036854775808,"max":9223372036854775807,"nested":[true,false,null,"\u0001","\n"]}}}' > "$work/boundary.json"
+printf '%s\n' '{"formatVersion":1,"source":"host","settings":{"global":{"check_for_updates":false},"profiles":[{"name":"Main\u0000","selected":true}]}}' > "$work/nul-name.json"
+printf '%s\n' '{"formatVersion":1,"source":"host","settings":{"global":{"check_for_updates":false,"nested":{"\u0000key":true}},"profiles":[{"name":"Main","selected":true}]}}' > "$work/nul-key.json"
+printf '%s\n' '{"formatVersion":1,"source":"configs","settings":{"recovery":[9223372036854775808]}}' > "$work/positive-overflow.json"
+printf '%s\n' '{"formatVersion":1,"source":"configs","settings":{"recovery":[-9223372036854775809]}}' > "$work/negative-overflow.json"
 cat > "$work/flake.nix" <<EOF
 {
   inputs.configs.url = "path:$domain";
@@ -43,6 +48,7 @@ cat > "$work/flake.nix" <<EOF
         symbolicHotkeys.settingsDocument = ./hotkeys.json;
       } true;
       configs = make {karabiner.settingsDocument = ./configs.json;} true;
+      boundary = make {karabiner.settingsDocument = ./boundary.json;} true;
       disabled = make {
         karabiner = {enable = false; settingsDocument = absent;};
         symbolicHotkeys = {enable = false; settingsDocument = absent;};
@@ -52,6 +58,10 @@ cat > "$work/flake.nix" <<EOF
       unselected = make {karabiner.settingsDocument = absent; symbolicHotkeys.settingsDocument = absent;} false;
       invalid = make {karabiner.settingsDocument = ./invalid.json;} true;
       duplicate = make {karabiner.settingsDocument = ./duplicate.json;} true;
+      nulName = make {karabiner.settingsDocument = ./nul-name.json;} true;
+      nulKey = make {karabiner.settingsDocument = ./nul-key.json;} true;
+      positiveOverflow = make {karabiner.settingsDocument = ./positive-overflow.json;} true;
+      negativeOverflow = make {karabiner.settingsDocument = ./negative-overflow.json;} true;
     };
   };
 }
@@ -61,7 +71,7 @@ nix flake lock --quiet "path:$work"
 activation() {
   nix eval --raw "path:$work#darwinConfigurations.$1.config.home-manager.users.example.home.activation.karabinerDesiredState.data"
 }
-for case in defaults host configs onlyKarabiner onlyHotkeys; do
+for case in defaults host configs boundary onlyKarabiner onlyHotkeys; do
   activation "$case" > "$work/$case.activation"
   grep -Fq 'adapter.py apply' "$work/$case.activation"
   nix eval --raw "path:$work#darwinConfigurations.$case.config.system.build.toplevel.drvPath" >/dev/null
@@ -87,6 +97,13 @@ for case in invalid duplicate; do
     exit 1
   fi
   grep -Fq 'Darwin capture:' "$work/refusal"
+done
+for case in nulName nulKey positiveOverflow negativeOverflow; do
+  if activation "$case" > "$work/refusal" 2>&1; then
+    echo "Nix-unrepresentable $case document evaluated" >&2
+    exit 1
+  fi
+  grep -Eq 'Darwin capture:|outside of Nix integer range|null byte|NUL' "$work/refusal"
 done
 if [ "${1:-}" = --build ]; then
   [ "$(uname -s)" = Darwin ] || { echo '· unavailable: synthetic Darwin build requires macOS' >&2; exit 69; }

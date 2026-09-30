@@ -71,7 +71,16 @@
               then [(head // {names = head.names ++ [decoded];})] ++ rest
               else stack
             )
-        else scan (atomEnd (i + 1)) stack;
+        else let
+          end = atomEnd (i + 1);
+          token = builtins.substring i (end - i) text;
+          integer = builtins.match "-?[0-9]+" token != null;
+        in
+          # fromJSON otherwise silently converts negative integer overflow to
+          # float. Fractions/exponents keep their explicit floating semantics.
+          if integer && !builtins.isInt (builtins.fromJSON token)
+          then fail "JSON integer outside Nix signed 64-bit range"
+          else scan end stack;
     parsed = builtins.fromJSON text;
   in
     builtins.deepSeq parsed (builtins.seq (scan 0 []) parsed);

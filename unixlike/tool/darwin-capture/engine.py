@@ -61,7 +61,26 @@ def exact(value, keys):
     return isinstance(value, dict) and set(value) == set(keys)
 
 
+def nix_representable(value):
+    # Nix consumes documents and managed projections, not raw runtime siblings.
+    # Boolean is separate from Python's integer subtype relationship.
+    if type(value) is int:
+        if not -(1 << 63) <= value < (1 << 63):
+            raise Refusal("JSON integer outside Nix signed 64-bit range")
+    elif isinstance(value, str):
+        if "\x00" in value:
+            raise Refusal("JSON string contains Nix-unrepresentable NUL")
+    elif isinstance(value, dict):
+        for key, child in value.items():
+            nix_representable(key)
+            nix_representable(child)
+    elif isinstance(value, list):
+        for child in value:
+            nix_representable(child)
+
+
 def validate_settings(unit, settings):
+    nix_representable(settings)
     u = CONTRACT["units"][unit]
     valid = False
     if unit == "karabiner":
@@ -101,6 +120,7 @@ def validate_settings(unit, settings):
 
 def document(unit, raw):
     d = decode(raw)
+    nix_representable(d)
     if (not exact(d, ["formatVersion", "source", "settings"])
             or type(d["formatVersion"]) is not int or d["formatVersion"] != CONTRACT["formatVersion"]
             or d["source"] not in ["host", "configs"] or not isinstance(d["settings"], dict)):

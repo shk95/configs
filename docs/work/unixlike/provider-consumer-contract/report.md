@@ -3,6 +3,45 @@ kind: report
 spec: docs/work/unixlike/provider-consumer-contract/spec.md
 status: done
 
+## U2 independent representation review repair, 2026-10-01
+
+After strict dev update, Draft head455fff9 retained the source's native proof
+boundary but independent review reproduced Python/Nix acceptance divergence:
+a known profile name containing decoded NUL and dormant recovery data with an
+integer above signed64 were accepted by Python while Nix refused. The report
+and AC3 were reopened pending repair and fresh evidence. Earlier done/startup
+acceptance below records its original checkpoint; Ready handoff was withheld.
+
+The scoped repair shares one recursive Nix-representation guard between full
+host/configs documents (including dormant data) and managed unit validation.
+Decoded strings/object keys cannot contain NUL and every integer must fit
+signed64, with booleans treated separately. Strict raw-reader decoding retains
+its JSON/UTF-8/duplicate/surrogate/nonfinite rules. Unmanaged reader siblings are
+projected out before representation checking, so excluded runtime data does not
+silently become owned. Payload/module/unit declaration semantics remain
+unchanged; accepted native startup evidence stays bound to that same rendering.
+
+The repaired official wrapper and independent public consumers pass. Exact
+signed64 boundaries, decoded NUL known-name/key/nested/dormant refusals,
+positive/negative overflow, boolean/nested values and explicit fraction/exponent
+floats have matching Python/Nix results. The existing Nix raw scanner additionally
+refuses integer lexemes that its decoder would silently coerce to floats on
+negative overflow; syntax/deep evaluation and duplicate-key checks remain.
+Preview of unsupported managed inputs and dormant destinations, plus tampered
+Save, refuse without replacement. Ignored native-reader runtime siblings may
+contain Nix-unrepresentable values and stay excluded from saved/consumed data.
+
+The fresh package built and passed actual synthetic command-line preview/save
+and owned/dormant refusal checks. Its read-only native hotkey reader succeeds;
+readable Karabiner data retains the qualified obsolete-member refusal. The final
+source's independent selected host/default systems both built on native Darwin,
+and their actual default settings artifact remains byte-identical to the
+native-startup-tested payload. Module, unit declaration, defaults, legacy tool
+and payload registry bytes are unchanged from the native-proof source. The
+installed CLI was not rerun: its accepted startup gate stays bound to those
+unchanged rendered bytes. The representation repair closes AC3's review defect
+and restores report done; new-head CI/Ready remains a separate delivery gate.
+
 ## U2 authorized native-host follow-up, 2026-09-30
 
 After the source checkpoint was delivered as Draft #458 at
@@ -981,7 +1020,7 @@ host's rollout remain separate, and private activation is no provider gate.
 | AC1 | verified | Source-defined 25.11/25.11/6 defaults, explicit native preservation and retired-input migration guidance pass. Technical review accepts the latest amendment's bounded initial service/ZFS transition investigation; this is neither exhaustive equivalence nor private persistent-state migration. The repair adds explicit Darwin/HM override and unchanged-default coverage. |
 | AC9 | verified | Generated-data agreement, finite actual-constructor metadata coverage, source/lock binding, legacy/current comparison, format/module-data refusal and readiness three-state evidence pass. The repair refuses forbidden Darwin/WSL selections using effective finite metadata and confines omitted-default guidance to the selected constructor/layers; unknown constructors/module effects retain evaluation needs. The observed readiness unknown is not a host-preparation gate. |
 | AC2 | verified | Public typed inputs, defaults, module extensions, invalid/retired-field refusals, WSL wiring and finite metadata agreement pass. The ordinary native Darwin preference defect is repaired with leaf default priority and varied nested override/sibling-preservation checks. These tests cover the stated input/extension boundary, not all arbitrary host-module effects. |
-| AC3 | verified | U2 finite host-document source and ownership/default/disabled semantics, strict Nix/Python JSON/shape parity, security/stale/atomic/partial fixtures, independent selected mkDarwin evaluation/native builds, native reader and synthetic adapter observations pass. Actual installed 16.3 native tool starts against the final synthetic rendering, saves and passes strict reread/managed equality with real originals unchanged; root accepts the changed-artifact manual startup gate finitely. Earlier SBPL failures remain separate; no GUI/driver/input-event behavior, private-host activation or deployment is inferred. |
+| AC3 | verified | Finite ownership/default/source/disabled semantics, repaired strict JSON/Nix representation parity, security/stale/atomic/partial fixtures, fresh packaged command/read observations and independent native consumer builds pass. Actual installed 16.3 startup/migration/strict reread and originals-unchanged proof remains bound to the unchanged rendered payload and root's finite manual gate acceptance. Historical SBPL failures remain separate; GUI/driver/input-event behavior, host adoption and activation are not inferred. |
 | AC4 | verified | Older `e11bd136` external connection and preserved consumer history establish the old pin; new independent locked consumers, native x86 synthetic realization, retired-input refusals and stable migration guidance establish the declared breaking adoption boundary. Older pins remain explicit choices; compatibility across that boundary is not promised. |
 | AC5 | verified | Delivered `c8b6e818` macOS 26.6.2/Nix 2.34.8 all-output evaluation and native aarch64-darwin synthetic public-constructor build establish the selected macOS 26 lane. Separate external Darwin API evaluation is qualified as evaluation. Older/later OS support and private runtime are not inferred. |
 | AC6 | verified | Initial delivered head `c8b6e818`/merge `3d6d945f` and repair head `24006536`/merge `c76752dc` passed their own CI with the explicit upstream Nix 2.34.8 assertion, evaluation and selected native builds; matching source-bound macOS evidence is recorded above. |

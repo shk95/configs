@@ -40,10 +40,10 @@ def test(work):
     hotkeys = work / "observed-hotkeys.json"
     desired = c.defaults("karabiner")
     wanted_hotkeys = c.defaults("symbolic-hotkeys")
-    host.write_bytes(c.encoded({**desired, "unmanaged": {"runtime": True}}))
+    host.write_bytes(c.encoded({**desired, "unmanaged": {"runtime": True, "nul": "x\x00", "integer": 1 << 63}, "runtime\x00key": "excluded"}))
     observed_hotkeys = copy.deepcopy(wanted_hotkeys)
-    observed_hotkeys["AppleSymbolicHotKeys"]["7"] = {"enabled": True, "value": None}
-    observed_hotkeys["runtime"] = "outside"
+    observed_hotkeys["AppleSymbolicHotKeys"]["7"] = {"enabled": True, "value": None, "runtime": [-((1 << 63) + 1), "\x00"]}
+    observed_hotkeys["runtime"] = {"outside\x00key": "\x00", "integer": 1 << 63}
     hotkeys.write_bytes(c.encoded(observed_hotkeys))
     first = work / "karabiner-document.json"
     second = work / "hotkey-document.json"
@@ -149,6 +149,63 @@ def test(work):
         path.write_bytes(raw)
         expr = f'(import {validation} {{lib={{}};contract=builtins.fromJSON (builtins.readFile {contract});}}).document "{unit}" {path}'
         return subprocess.run(["nix", "eval", "--impure", "--json", "--expr", expr], capture_output=True)
+
+    # Nix representability covers every managed value/key and dormant recovery
+    # data; raw-reader runtime siblings above remain outside that boundary.
+    boundary = {"min": -(1 << 63), "max": (1 << 63) - 1,
+                "nested": [True, False, None, "", "한글", "\x01", {"newline": "\n"}],
+                "floating": [0.25, 1.0, -1.8446744073709552e19, 1e20]}
+    boundary_settings = copy.deepcopy(desired)
+    boundary_settings["global"]["representation"] = boundary
+    for doc in [{"formatVersion": 1, "source": "host", "settings": boundary_settings},
+                {"formatVersion": 1, "source": "configs", "settings": {"recovery": boundary}},
+                {"formatVersion": 1, "source": "host", "settings": c.project("karabiner", c.decode(host.read_bytes()))},
+                {"formatVersion": 1, "source": "host", "settings": c.document("karabiner", first.read_bytes())["settings"]}]:
+        raw = c.encoded(doc)
+        result = nix("karabiner", raw)
+        assert result.returncode == 0, result.stderr.decode()
+        assert json.loads(result.stdout) == c.document("karabiner", raw)
+    assert json.loads(nix("symbolic-hotkeys", second.read_bytes()).stdout) == c.document("symbolic-hotkeys", second.read_bytes())
+    representation_bad = []
+    known_name = copy.deepcopy(desired)
+    known_name["profiles"][0]["name"] = "Main\x00"
+    representation_bad.append({"formatVersion": 1, "source": "host", "settings": known_name})
+    for bad in ["\x00", -(1 << 63) - 1, 1 << 63, {"escaped\x00key": True}, {"nested": [False, {"deep": "nul\x00"}]}]:
+        managed = copy.deepcopy(desired)
+        managed["global"]["unknownNested"] = bad
+        representation_bad.append({"formatVersion": 1, "source": "host", "settings": managed})
+        representation_bad.append({"formatVersion": 1, "source": "configs", "settings": {"recovery": [bad]}})
+    for doc in representation_bad:
+        raw = c.encoded(doc)
+        assert c.decode(raw) == doc  # Valid raw JSON; refusal is at Nix consumption.
+        refuses(lambda r=raw: c.document("karabiner", r))
+        assert nix("karabiner", raw).returncode != 0
+        if doc["source"] == "host":
+            refuses(lambda value=doc["settings"]: c.validate_settings("karabiner", value))
+    host_before = host.read_bytes()
+    targets_before = [p.read_bytes() for p in [first, second]]
+    for index, doc in enumerate(d for d in representation_bad if d["source"] == "host"):
+        host.write_bytes(c.encoded({**doc["settings"], "unmanaged": "excluded"}))
+        name = f"representation-refused-{index}"
+        refuses(lambda n=name: preview(name=n))
+        assert not (work / (name + ".json")).exists()
+        assert [p.read_bytes() for p in [first, second]] == targets_before
+    host.write_bytes(host_before)
+    first_before = first.read_bytes()
+    for index, doc in enumerate(d for d in representation_bad if d["source"] == "configs"):
+        first.write_bytes(c.encoded(doc))
+        refused_target = first.read_bytes()
+        name = f"dormant-representation-refused-{index}"
+        refuses(lambda n=name: preview(name=n))
+        assert not (work / (name + ".json")).exists()
+        assert first.read_bytes() == refused_target and second.read_bytes() == targets_before[1]
+    first.write_bytes(first_before)
+    proposal = preview(name="representation-tamper")
+    tampered = json.loads(proposal.read_bytes())
+    tampered["entries"][0]["document"]["settings"]["profiles"][0]["name"] = "Main\x00"
+    proposal.write_bytes(c.encoded(tampered))
+    refuses(lambda: save(proposal))
+    assert [p.read_bytes() for p in [first, second]] == targets_before
 
     for unit, settings in [("karabiner", desired), ("karabiner", valid_empty), ("symbolic-hotkeys", valid_disable)]:
         doc = {"formatVersion": 1, "source": "host", "settings": settings}

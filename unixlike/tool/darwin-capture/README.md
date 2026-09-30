@@ -46,7 +46,11 @@ replacement; arrays have no identity merge.
 
 Configs source returns to provider defaults while retaining object-valued settings
 as dormant recovery data. It never merges that data into defaults or performs an
-app factory reset. Active unsupported shapes, absent required parents, obsolete
+app factory reset. Documents and managed settings must be representable by Nix:
+decoded strings and object keys exclude NUL, and integers fit signed 64-bit
+bounds throughout nested data, including dormant recovery. Fractional/exponent
+numbers retain floating semantics. Unmanaged reader siblings are projected out
+before this check. Active unsupported shapes, absent required parents, obsolete
 app-format members, app-normalized required/known profile empties, duplicate keys
 and malformed UTF-8/JSON refuse. The initial finite shape contract does not certify
 arbitrary host extensions or every application version. Native-tested empty nested
