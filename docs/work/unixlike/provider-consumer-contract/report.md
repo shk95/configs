@@ -1,7 +1,65 @@
 # Report: Unix-like provider and host customization
 kind: report
 spec: docs/work/unixlike/provider-consumer-contract/spec.md
-status: pending
+status: done
+
+## U2 authorized native-host follow-up, 2026-09-30
+
+After the source checkpoint was delivered as Draft #458 at
+`26b6d390fe3869f7e0fe87004b44e11d64647d79`, the maintainer explicitly
+allowed direct native experiments on this Mac. Root reviewed the bounded direct
+runner as a replacement for SBPL execution in this experiment. The three
+historical sandbox loader failures below remain genuine; this follow-up makes
+no sandbox-isolation claim.
+
+The same literal-bound source-built executable ran twice with exactly synthetic
+HOME, XDG_CONFIG_HOME, XDG_DATA_HOME and TMPDIR. Old source and final tracked
+rendering each passed constructor → serializer → actual sync-save → strict
+reread, canonical equality and mode 600. Both outputs were equal and the existing
+task-owned canary was unchanged. The process had a 10-second child-PID timeout;
+all configuration/save/backup writes were inside the reviewed task root. No
+actual original Save, application target, daemon/GUI restart or activation was
+performed. This is complete native core migration evidence, separate from
+installed-tool startup and historical parser-only proof.
+
+Read-only installed bundle metadata remains 16.3.0. The absolute custom-system
+environment file is absent, so it supplies no decoded overrides. An installed
+CLI runner used that absence as a checked prerequisite, the synthetic selected
+profile Main from the exact rendering, and an otherwise empty environment with
+the same four synthetic roots. Root reviewed the exact source call path and
+runner before execution. Actual `karabiner_cli --version` reports 16.3.0;
+`karabiner_cli --select-profile Main` then starts the configuration monitor,
+loads the existing task-owned rendering and performs actual native sync-save.
+Both children exit 0 within the own-PID 10-second limit. The target was canonical,
+current-UID, regular and single-link before selection; afterward its inode was
+replaced, mode remained600, automatic backup existed and no temporary JSON
+remained. Its managed projection equals the final rendered source and the exact
+native strict parser reread equals the whole saved JSON. Source bytes and private
+actual originals' existence/bytes/mode remained unchanged; system environment
+remained absent before and after each child. No private values, paths or digests
+are published. This is actual installed native-tool startup and migration against
+a synthetic rendering; it does not claim daemon/GUI runtime, IPC isolation,
+application activation, or host adoption. On 2026-10-01 root reviewed the actual
+installed-tool startup, source identity, native replacement/strict reread and
+originals-unchanged evidence, and accepted the
+`generated-config-key-in-schema` manual gate finitely for this changed rendered
+artifact. The maintainer's explicit direct-Mac permission on 2026-09-30/10-01
+superseded the earlier installed-startup exclusion for this experiment only.
+No activation, real-original Save, daemon/GUI restart or installation authority
+is inferred.
+
+CI on source head `26b6d39` is successful, including Flake and Unix-like hosts,
+security/classification and Required checks. Any subsequent report/source head
+requires its own CI. The source/acceptance result remains an unintegrated Draft
+until strict-base update and final-head checks are complete.
+
+The latest acceptance table verifies AC3 with these qualified lanes and retains
+AC1/2/4–9's delivered-source boundaries. All parent criteria are verified, so the
+report is done. This accepts the stated provider work; API release, promotion to
+master, tags, companion pin adoption, host deployment and activation remain
+independent outcomes and require their own authorization/evidence. Historical
+pending/unavailable statements below describe their original checkpoints and
+are superseded only by this dated proof, not erased.
 
 ## U2 implementation evidence checkpoint, 2026-09-30
 
@@ -923,7 +981,7 @@ host's rollout remain separate, and private activation is no provider gate.
 | AC1 | verified | Source-defined 25.11/25.11/6 defaults, explicit native preservation and retired-input migration guidance pass. Technical review accepts the latest amendment's bounded initial service/ZFS transition investigation; this is neither exhaustive equivalence nor private persistent-state migration. The repair adds explicit Darwin/HM override and unchanged-default coverage. |
 | AC9 | verified | Generated-data agreement, finite actual-constructor metadata coverage, source/lock binding, legacy/current comparison, format/module-data refusal and readiness three-state evidence pass. The repair refuses forbidden Darwin/WSL selections using effective finite metadata and confines omitted-default guidance to the selected constructor/layers; unknown constructors/module effects retain evaluation needs. The observed readiness unknown is not a host-preparation gate. |
 | AC2 | verified | Public typed inputs, defaults, module extensions, invalid/retired-field refusals, WSL wiring and finite metadata agreement pass. The ordinary native Darwin preference defect is repaired with leaf default priority and varied nested override/sibling-preservation checks. These tests cover the stated input/extension boundary, not all arbitrary host-module effects. |
-| AC3 | pending | U2 source, synthetic projection/save/security fixtures, independent evaluation/build and qualified native reader/parser evidence are implemented above. Native complete migration-tool startup at the changed rendered artifact remains unavailable; final-head CI/Ready and parent acceptance are not certified. |
+| AC3 | verified | U2 finite host-document source and ownership/default/disabled semantics, strict Nix/Python JSON/shape parity, security/stale/atomic/partial fixtures, independent selected mkDarwin evaluation/native builds, native reader and synthetic adapter observations pass. Actual installed 16.3 native tool starts against the final synthetic rendering, saves and passes strict reread/managed equality with real originals unchanged; root accepts the changed-artifact manual startup gate finitely. Earlier SBPL failures remain separate; no GUI/driver/input-event behavior, private-host activation or deployment is inferred. |
 | AC4 | verified | Older `e11bd136` external connection and preserved consumer history establish the old pin; new independent locked consumers, native x86 synthetic realization, retired-input refusals and stable migration guidance establish the declared breaking adoption boundary. Older pins remain explicit choices; compatibility across that boundary is not promised. |
 | AC5 | verified | Delivered `c8b6e818` macOS 26.6.2/Nix 2.34.8 all-output evaluation and native aarch64-darwin synthetic public-constructor build establish the selected macOS 26 lane. Separate external Darwin API evaluation is qualified as evaluation. Older/later OS support and private runtime are not inferred. |
 | AC6 | verified | Initial delivered head `c8b6e818`/merge `3d6d945f` and repair head `24006536`/merge `c76752dc` passed their own CI with the explicit upstream Nix 2.34.8 assertion, evaluation and selected native builds; matching source-bound macOS evidence is recorded above. |
