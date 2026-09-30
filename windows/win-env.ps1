@@ -8,13 +8,15 @@ argument selects a target script and every remaining argument is forwarded to
 that script unchanged. Use the help verb to list the targets, then use
 Get-Help on the target script for its parameters and examples.
 
-The check, validate, test, font, and help verbs do not apply desired state.
+The inspect, export-selection, check, validate, test, font, and help verbs do
+not apply desired state. Generate materializes a local result without Apply.
 The apply verb can install packages and write managed host files. The capture
 verb can write repository payloads and create commits after confirmation. The
 setup-dev verb installs contributor tooling.
 
 .PARAMETER Command
-One of check, apply, capture, validate, test, setup-dev, font, or help. A
+One of inspect, generate, export-selection, check, apply, capture, validate,
+test, setup-dev, font, or help. A
 missing or unknown command exits 64.
 
 .EXAMPLE
@@ -81,6 +83,9 @@ $ErrorActionPreference = 'Stop'
 $toolRoot = Join-Path $PSScriptRoot 'tool'
 
 $verbs = [ordered]@{
+    'inspect'   = @{ Script = 'consumer.ps1'; Arguments = @{ Operation = 'inspect' }; Summary = 'read-only: source-bound consumer contract JSON' }
+    'generate'  = @{ Script = 'consumer.ps1'; Arguments = @{ Operation = 'generate' }; Summary = 'materialize a checked local configuration; no Apply' }
+    'export-selection' = @{ Script = 'consumer.ps1'; Arguments = @{ Operation = 'export-selection' }; Summary = 'read-only: legacy selection proposal JSON' }
     'check'     = @{ Script = 'bootstrap.ps1'; Arguments = @{ Check = $true }; Summary = 'read-only: is an Apply needed; exits 0 converged, 2 drift, 69 unverified' }
     'apply'     = @{ Script = 'bootstrap.ps1'; Arguments = @{}; Summary = 'deploy the selection; explicit request only' }
     'capture'   = @{ Script = 'capture.ps1'; Arguments = @{}; Summary = 'move a change made in an application into desired state' }
@@ -94,7 +99,10 @@ function Get-Usage {
     $lines = @('usage: win-env.ps1 <verb> [arguments for the script]', '')
     foreach ($name in $verbs.Keys) {
         $verb = $verbs[$name]
-        $fixed = @($verb.Arguments.Keys | ForEach-Object { '-' + $_ })
+        $fixed = @($verb.Arguments.Keys | ForEach-Object {
+            if ($verb.Arguments[$_] -is [bool]) { '-' + $_ }
+            else { '-' + $_ + ' ' + $verb.Arguments[$_] }
+        })
         $target = 'tool\' + $verb.Script
         if ($fixed.Count) { $target += ' ' + ($fixed -join ' ') }
         $lines += ('  {0,-10} {1,-36} {2}' -f $name, $target, $verb.Summary)

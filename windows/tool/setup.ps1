@@ -38,6 +38,11 @@ Selects only required features, currently core.
 .PARAMETER All
 Selects every feature declared by the manifest.
 
+.PARAMETER Generation
+Explicit generated directory with unchanged original inputs, payloads and tools.
+Its declaration owns selection; use the generated entry point. Default terminal
+delegation is excluded in the initial LTSC contract, independently from drift.
+
 .EXAMPLE
 PS> .\windows\win-env.ps1 check -Minimal
 
@@ -96,7 +101,8 @@ param(
     [string[]] $Feature,
     [string[]] $Add,
     [switch] $Minimal,
-    [switch] $All
+    [switch] $All,
+    [string] $Generation
 )
 
 $ErrorActionPreference = 'Stop'
@@ -131,6 +137,10 @@ $knownSupportLimit = [System.Collections.Generic.List[string]]::new()
 # CI sets this so the merge gate never accepts an undecided item; hooks and
 # hosts leave it unset so a host that cannot decide one is not blocked.
 $requireNative = ($env:REQUIRE_NATIVE -eq '1')
+$generationRecord = $null
+$applyingGeneration = $false
+$profileEnabled = $true
+$delegationIncluded = $true
 $selection = $null
 $selected = @()
 $unmanaged = @()
@@ -205,16 +215,41 @@ function Write-Summary {
 
 try {
     if ($PSVersionTable.PSVersion.Major -lt 7) { throw 'setup.ps1 requires PowerShell 7 or newer.' }
+    if (-not $Generation) {
+        if (Test-Path -LiteralPath (Join-Path $repositoryRoot 'generation.json')) { throw 'Generated configurations require explicit Generation mode.' }
+        $legacyCommit = Get-WinEnvGitCommit -RepositoryRoot $repositoryRoot
+        if ($legacyCommit -cnotmatch '\A[0-9a-f]{40}\z') { throw 'Source-only reconciliation requires an exact provider clone.' }
+    }
+    if ($Generation) {
+        foreach ($selector in @('Feature', 'Add', 'Minimal', 'All')) {
+            if ($PSBoundParameters.ContainsKey($selector)) { throw 'Generation owns selection; selector flags are refused.' }
+        }
+        Import-Module (Join-Path $windowsRoot 'src/WinEnvGeneration.psm1') -Force
+        $generationRecord = Assert-WinEnvGeneratedIntegrity -Generation $Generation
+        $generationRoot = (Resolve-Path -LiteralPath $Generation).ProviderPath
+        $setupIdentity = @($generationRecord.files | Where-Object { $_.path -ceq 'windows/tool/setup.ps1' })
+        if ($setupIdentity.Count -ne 1 -or (Get-WinEnvFileDigest $PSCommandPath) -cne $setupIdentity[0].sha256) {
+            throw 'Runner tools do not match this generation; use its generated Windows entry point.'
+        }
+        $repositoryRoot = $generationRoot
+        $windowsRoot = Join-Path $generationRoot 'windows'
+        $desiredStateRoot = Join-Path $windowsRoot 'desired'
+        Import-Module (Join-Path $windowsRoot 'src/WinEnv.psm1') -Force
+        $delegationIncluded = $false
+    }
     if (-not (Get-Command winget.exe -ErrorAction SilentlyContinue)) { throw 'WinGet is required.' }
 
     $manifest = Get-WinEnvManifest -Path (Join-Path $desiredStateRoot 'manifest.json')
 
     $mutex = Enter-WinEnvLock
     $state = Get-WinEnvState -Path $statePath
+    if ($state -and $state.schemaVersion -eq 3 -and -not $Generation) { throw 'Host-generation runtime state requires explicit Generation mode.' }
     $appliedFeatures = Get-WinEnvAppliedFeature -Manifest $manifest -State $state
 
-    $requested = Get-WinEnvRequestedFeature -Manifest $manifest -Applied $appliedFeatures -HasState ([bool]$state) `
-        -Feature $Feature -Add $Add -Minimal:$Minimal -All:$All
+    $requested = if ($generationRecord) { @($generationRecord.selected) } else {
+        Get-WinEnvRequestedFeature -Manifest $manifest -Applied $appliedFeatures -HasState ([bool]$state) `
+            -Feature $Feature -Add $Add -Minimal:$Minimal -All:$All
+    }
 
     $selection = Get-WinEnvFeatureSelection -Manifest $manifest -Requested $requested
     $selected = $selection.Selected
@@ -235,6 +270,7 @@ try {
             Where-Object { $selected -contains [string]$_.Feature } |
             ForEach-Object { Resolve-WinEnvManagedFile -Definition $_ -Build $hostBuild })
     $conditionalFiles = @($managedFiles | Where-Object { $conditionalIds -contains [string]$_.Id })
+    $profileEnabled = @($managedFiles | ForEach-Object { $_.Id }) -ccontains 'powershellProfile'
     $fontSelected = $selected -contains [string]$manifest.Font.Feature
     $terminalSelected = $selected -contains [string]$manifest.Terminal.Feature
     # PowerToys rewrites its own settings when it exits, so its files can only
@@ -251,7 +287,7 @@ try {
     $fontRegisteredAtUtc = if ($state -and $state.PSObject.Properties['fontRegisteredAtUtc']) {
         ([DateTimeOffset]$state.fontRegisteredAtUtc).ToString('o')
     }
-    elseif ($state) {
+    elseif ($state -and ($state.schemaVersion -ne 3 -or $state.outcome -ceq 'success')) {
         ([DateTimeOffset]$state.appliedAtUtc).ToString('o')
     }
     else {
@@ -265,7 +301,8 @@ try {
         ''
     }
     $comparison = Compare-WinEnvVersion -RepositoryVersion $manifest.ProjectVersion -AppliedVersion $appliedVersion
-    $desiredStateChanged = $appliedDesiredStateHash -ne $desiredStateHash
+    $generationChanged = $generationRecord -and (-not $state -or $state.schemaVersion -ne 3 -or $state.outcome -cne 'success' -or $state.generationIdentity -cne $generationRecord.identity)
+    $desiredStateChanged = ($appliedDesiredStateHash -ne $desiredStateHash) -or $generationChanged
     $featureSetChanged = (($appliedFeatures | Sort-Object) -join ',') -ne (($selected | Sort-Object) -join ',')
     $shouldApply = -not $Check -and ($Force -or -not $state -or $comparison -gt 0 -or $desiredStateChanged -or $featureSetChanged)
 
@@ -350,9 +387,9 @@ try {
             }
         }
     }
-    $hostProfile = Get-WinEnvPowerShellProfilePath
-    if (-not (Test-WinEnvProfileHook -ProfilePath $hostProfile)) { $drift.Add('PowerShell profile hook') }
-    if ($terminalSelected) {
+    $hostProfile = if ($profileEnabled) { Get-WinEnvPowerShellProfilePath } else { $null }
+    if ($profileEnabled -and -not (Test-WinEnvProfileHook -ProfilePath $hostProfile)) { $drift.Add('PowerShell profile hook') }
+    if ($terminalSelected -and $delegationIncluded) {
         # INV windows/support-boundary-named — decided against the documented
         # condition, not the write: a read-back the host accepts below the
         # boundary is unverified, never verified. A mismatch is drift on either
@@ -364,6 +401,8 @@ try {
             Add-UnverifiedEvidence -Category $delegation.EvidenceCategory -Item $item
         }
     }
+
+    if ($terminalSelected -and -not $delegationIncluded) { Write-Host '  excluded capability: defaultTerminalDelegation (LTSC client contract; no registry observation or write)' }
 
     # One place decides what this run's status is, so Apply and the check rank
     # drift, unverified items, and REQUIRE_NATIVE the same way. Every Appx and
@@ -389,6 +428,7 @@ try {
     if ($fontSelected -and $fontStatus.Conflict) { throw 'The D2Koding font is partially installed; automatic overwrite is disabled.' }
     if ($preconditionFailures.Count) { throw "Selected features are not ready to apply: $($preconditionFailures -join '; ')." }
 
+    if ($generationRecord) { [void](Assert-WinEnvGeneratedIntegrity $Generation); $applyingGeneration = $true }
     foreach ($package in $packages) {
         $status = $packageStatuses | Where-Object Id -eq $package.Id
         if ($status.Missing) {
@@ -427,9 +467,11 @@ try {
         $changed.Add($definition.Id)
     }
 
-    Backup-WinEnvFile -Id 'HostPowerShellProfile' -Target $hostProfile -BackupRoot $backupRoot
-    Set-WinEnvProfileHook -ProfilePath $hostProfile
-    if ($terminalSelected) { Set-WinEnvTerminalDelegation -Terminal $manifest.Terminal }
+    if ($profileEnabled) {
+        Backup-WinEnvFile -Id 'HostPowerShellProfile' -Target $hostProfile -BackupRoot $backupRoot
+        Set-WinEnvProfileHook -ProfilePath $hostProfile
+    }
+    if ($terminalSelected -and $delegationIncluded) { Set-WinEnvTerminalDelegation -Terminal $manifest.Terminal }
     if ($powerToysWasRunning) {
         Start-WinEnvPowerToys
         $powerToysRestarted = $true
@@ -448,14 +490,19 @@ try {
     foreach ($definition in $managedFiles) {
         if (-not (Test-WinEnvManagedFile -Definition $definition -RepositoryRoot $desiredStateRoot)) { $drift.Add($definition.Id) }
     }
-    if (-not (Test-WinEnvProfileHook -ProfilePath $hostProfile)) { $drift.Add('PowerShell profile hook') }
-    if ($terminalSelected -and -not (Test-WinEnvTerminalDelegation -Terminal $manifest.Terminal -Build $hostBuild).Matches) {
+    if ($profileEnabled -and -not (Test-WinEnvProfileHook -ProfilePath $hostProfile)) { $drift.Add('PowerShell profile hook') }
+    if ($terminalSelected -and $delegationIncluded -and -not (Test-WinEnvTerminalDelegation -Terminal $manifest.Terminal -Build $hostBuild).Matches) {
         $drift.Add('default terminal delegation')
     }
     if ($drift.Count) { throw "Post-apply validation failed: $($drift -join ', ')" }
 
-    $commit = Get-WinEnvGitCommit -RepositoryRoot $repositoryRoot
-    Write-WinEnvState -Path $statePath -ProjectVersion $manifest.ProjectVersion -GitCommit $commit -DesiredStateHash $desiredStateHash -Feature $selected -FontRegisteredAtUtc $fontRegisteredAtUtc
+    if ($generationRecord) {
+        Write-WinEnvGenerationAttempt -Path $statePath -Generation $generationRecord -ProjectVersion $manifest.ProjectVersion -BundleHash $desiredStateHash -Feature $selected -Outcome success -Completed $changed.ToArray() -FontRegisteredAtUtc $fontRegisteredAtUtc
+    }
+    else {
+        $commit = Get-WinEnvGitCommit -RepositoryRoot $repositoryRoot
+        Write-WinEnvState -Path $statePath -ProjectVersion $manifest.ProjectVersion -GitCommit $commit -DesiredStateHash $desiredStateHash -Feature $selected -FontRegisteredAtUtc $fontRegisteredAtUtc
+    }
     if ($fontSelected -and -not (Test-WinEnvWindowsTerminalFontCache -FontRegisteredAtUtc $fontRegisteredAtUtc)) {
         Write-Warning 'Close every Windows Terminal window and start it again so its per-process font cache can load D2Koding.'
     }
@@ -463,7 +510,14 @@ try {
     exit 0
 }
 catch {
-    Write-Error $_
+    $failure = $_
+    if ($applyingGeneration) {
+        try {
+            Write-WinEnvGenerationAttempt -Path $statePath -Generation $generationRecord -ProjectVersion $manifest.ProjectVersion -BundleHash $desiredStateHash -Feature $selected -Outcome failed -Completed $changed.ToArray() -FontRegisteredAtUtc $fontRegisteredAtUtc
+        }
+        catch { Write-Warning "Partial Apply outcome could not be recorded: $($_.Exception.Message)" }
+    }
+    [Console]::Error.WriteLine($failure.Exception.Message)
     exit 1
 }
 finally {

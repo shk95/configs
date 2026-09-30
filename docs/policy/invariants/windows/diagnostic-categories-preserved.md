@@ -10,3 +10,7 @@ no unverified reason. Formatting never classifies localized reason text. Appx
 query failures, unreadable terminal-support inputs and below-boundary terminal
 results remain unverified evidence, but only failed observations are described
 as undecided. Other Windows prerequisite presentation is outside this rule.
+
+This categorization applies to observations that are included. An explicitly
+excluded generated capability has no observation or status count and stays
+visibly excluded; it is not a successful or unavailable observation.

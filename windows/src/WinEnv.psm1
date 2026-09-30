@@ -1314,15 +1314,24 @@ function Get-WinEnvState {
     if (-not (Test-Path -LiteralPath $Path -PathType Leaf)) { return $null }
     try {
         $state = Get-Content -LiteralPath $Path -Raw -Encoding utf8 | ConvertFrom-Json -ErrorAction Stop
-        if ($state.schemaVersion -ne 1 -and $state.schemaVersion -ne 2) { throw 'INV windows/schema-version-refused: Unsupported state schema.' }
+        if ($state.schemaVersion -ne 1 -and $state.schemaVersion -ne 2 -and $state.schemaVersion -ne 3) { throw 'INV windows/schema-version-refused: Unsupported state schema.' }
         # Schema 1 recorded no selection because none existed; it is read as a
         # full deployment rather than rejected.
-        if ($state.schemaVersion -eq 2) {
+        if ($state.schemaVersion -eq 2 -or $state.schemaVersion -eq 3) {
             if (-not $state.PSObject.Properties['features']) { throw 'Missing features.' }
             if (-not @($state.features).Count) { throw 'Empty features.' }
         }
         [void][System.Management.Automation.SemanticVersion]$state.projectVersion
-        if ([string]::IsNullOrWhiteSpace($state.appliedAtUtc)) { throw 'Missing appliedAtUtc.' }
+        if ($state.schemaVersion -eq 3) {
+            if ($state.outcome -isnot [string] -or @('success', 'failed') -cnotcontains $state.outcome) { throw 'Unknown generation outcome.' }
+            if ($state.generationIdentity -isnot [string] -or $state.generationIdentity -cnotmatch '\A[0-9a-f]{64}\z') { throw 'Invalid generationIdentity.' }
+            if ($state.gitCommit -isnot [string] -or $state.gitCommit -cnotmatch '\A[0-9a-f]{40}\z') { throw 'Invalid generation provider commit.' }
+            if ($state.features -isnot [array] -or @($state.features | Where-Object { $_ -isnot [string] }).Count) { throw 'Invalid generation features.' }
+            if ($state.completed -isnot [array]) { throw 'Invalid generation completed operations.' }
+            [void][DateTimeOffset]::Parse($state.attemptedAtUtc)
+            if ($state.outcome -ceq 'failed' -and $null -ne $state.appliedAtUtc) { throw 'Failed generation attempt cannot claim appliedAtUtc.' }
+        }
+        if (($state.schemaVersion -ne 3 -or $state.outcome -ceq 'success') -and [string]::IsNullOrWhiteSpace($state.appliedAtUtc)) { throw 'Missing appliedAtUtc.' }
         if ([string]::IsNullOrWhiteSpace($state.gitCommit)) { throw 'Missing gitCommit.' }
         if ($state.PSObject.Properties['fontRegisteredAtUtc'] -and -not [string]::IsNullOrWhiteSpace($state.fontRegisteredAtUtc)) {
             [void][DateTimeOffset]::Parse($state.fontRegisteredAtUtc)
@@ -2341,6 +2350,21 @@ function Backup-WinEnvFile {
     if (-not (Test-Path -LiteralPath $backup)) { Copy-Item -LiteralPath $Target -Destination $backup }
 }
 
+function Merge-WinEnvOwnedJson {
+    param($Desired, $Actual)
+    if ($Desired -is [System.Collections.IDictionary]) {
+        if ($Actual -isnot [System.Collections.IDictionary]) { throw 'Cannot preserve unmanaged JSON keys in a non-object target.' }
+        foreach ($key in $Desired.Keys) {
+            if ($Desired[$key] -is [System.Collections.IDictionary] -and $Actual.Contains($key)) {
+                $Actual[$key] = Merge-WinEnvOwnedJson $Desired[$key] $Actual[$key]
+            }
+            else { $Actual[$key] = $Desired[$key] }
+        }
+        return $Actual
+    }
+    return ,$Desired
+}
+
 function Set-WinEnvManagedFile {
     param(
         [Parameter(Mandatory)][hashtable] $Definition,
@@ -2350,6 +2374,28 @@ function Set-WinEnvManagedFile {
     $sourcePath = Join-Path $RepositoryRoot $Definition.Source
     $targetPath = Resolve-WinEnvPath $Definition.Target
     $content = Expand-WinEnvTemplate (Get-Content -LiteralPath $sourcePath -Raw -Encoding utf8)
+    if (Test-Path -LiteralPath $targetPath -PathType Leaf) {
+        $actual = Get-Content -LiteralPath $targetPath -Raw -Encoding utf8
+        if ($Definition.Compare -ceq 'JsonSubset') {
+            # INV windows/host-generation-bound: preserve unowned app object keys;
+            # arrays remain whole owned values. This never merges desired sources.
+            $desired = $content | ConvertFrom-Json -AsHashtable -Depth 100
+            $target = $actual | ConvertFrom-Json -AsHashtable -Depth 100
+            $content = Merge-WinEnvOwnedJson -Desired $desired -Actual $target | ConvertTo-Json -Depth 100
+        }
+        elseif ($Definition.Compare -ceq 'ExactJsonWithGeneratedProfiles') {
+            $desired = $content | ConvertFrom-Json -AsHashtable -Depth 100
+            $target = $actual | ConvertFrom-Json -AsHashtable -Depth 100
+            $owned = @($desired.profiles.list | ForEach-Object { $_.guid })
+            $generated = @($target.profiles.list | Where-Object {
+                $_.Contains('guid') -and $_.guid -is [string] -and -not [string]::IsNullOrWhiteSpace($_.guid) -and
+                $_.Contains('source') -and $_.source -is [string] -and -not [string]::IsNullOrWhiteSpace($_.source) -and
+                $owned -cnotcontains $_.guid
+            })
+            $desired.profiles.list = @($desired.profiles.list) + $generated
+            $content = $desired | ConvertTo-Json -Depth 100
+        }
+    }
     Write-WinEnvAtomicText -Path $targetPath -Content $content
 }
 

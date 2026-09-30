@@ -1,5 +1,28 @@
 # Current state: Windows
 
+## Host-generation delivery
+
+The 0.7.0 provider catalog has six features: core, font, zellij, terminal,
+wezterm and powertoys. Version 1 host declarations select optional features
+explicitly and connect unit documents by relative path. The generated result
+binds the provider commit, originals and selected payload/native tools before
+Check/Apply. See `../policy/decisions/windows/host-generation-owns-selection.md`.
+W1 implementation evidence is tracked separately from W2 host-original capture,
+exact-runtime CI wiring and LTSC client observations in its work report; source
+publication is not complete client acceptance or deployment.
+
+The initial generated client contract names Windows 10 IoT Enterprise LTSC
+21H2 x64 build 19044. Terminal settings/fonts/profiles remain included; default
+terminal delegation is labelled excluded without registry query/write.
+Legacy delegation observations below remain historical and retain their stated
+limits. Hosted native fixtures never replace client-only observations.
+
+Provider .wslconfig, FancyZones custom layouts and layout hotkeys are retired.
+Existing host files are untouched. Generic FancyZones default layouts and
+Workspaces/settings.json remain provider units; runtime workspaces.json and
+applied-layouts.json remain excluded. The WSL prerequisite records below are
+historical helper evidence, not currently offered provider management.
+
 This file states what is observably true of the Windows domain today: hosts and
 classes in use, schema and version facts, and open conditions. Every decision
 is recorded under `docs/policy/decisions/`; the model those decisions implement
