@@ -627,23 +627,26 @@ readiness or authorize host rollout. Future release-tag alignment is separate;
 private host activation is neither a provider completion condition nor a
 recurring public CI gate. The report remains pending.
 
-The remaining U1 rows distinguish delivered implementation evidence from
-criterion acceptance. The maintainer's next review below can accept a row or
-name a specific additional gap; it does not require another implementation
-lane merely because the row is pending. AC3 still requires U2 implementation
-and its applicable checks. No missing private activation or blanket host-runtime
-suite is implied by any of these rows.
+The remaining U1 rows distinguish delivered implementation evidence from the
+technical coverage review still to be recorded by the orchestrator or its
+assigned follow-up inspector. That reviewer can verify a row or name a specific
+gap; pending status creates neither a new implementation lane nor a routine
+user-approval gate. Ask the maintainer only if that review discovers an actual
+new baseline, support or compatibility-policy decision. The maintainer's final
+report acceptance belongs at full parent completion. AC3 still requires U2
+implementation and its applicable checks. No missing private activation or
+blanket host-runtime suite is implied by these rows.
 
 ## Acceptance
 
 | ID | State | Evidence |
 | --- | --- | --- |
-| AC1 | pending | Baselines, override tests and transition guidance delivered in provider `3d6d945f`. Next: maintainer accepts the baseline/default/override contract and bounded initial transition analysis, or names the specific missing impact review; private persistent-state migration is not a provider gate. |
-| AC9 | pending | Reader, independent consumer, native read-only readiness and delivered template pair evidence are present. Next: maintainer accepts API/data drift, source binding, comparison and satisfied/missing/unknown coverage; the observed readiness unknown is an honest reader result, not a demand to prepare that host. |
-| AC2 | pending | Public constructor/default/override/refusal and native extension checks passed on the delivered source. Next: maintainer accepts that coverage against the typed public-input/extension contract; no additional implementation gap was found in this companion continuation. |
+| AC1 | pending | Baselines, override tests and transition guidance delivered in provider `3d6d945f`. Next: reviewer checks the baseline/default/override coverage and bounded initial transition analysis, then records pass or a specific missing impact check; private persistent-state migration is not a provider gate. |
+| AC9 | pending | Reader, independent consumer, native read-only readiness and delivered template pair evidence are present. Next: reviewer checks API/data drift, source binding, comparison and satisfied/missing/unknown coverage; the observed readiness unknown is an honest reader result, not a demand to prepare that host. |
+| AC2 | pending | Public constructor/default/override/refusal and native extension checks passed on the delivered source. Next: reviewer maps those checks to the typed public-input/extension contract and records coverage; no additional implementation gap was found in this companion continuation. |
 | AC3 | pending | U2 must implement the host-owned Darwin capture format, projection/ownership selection and preview/save path, then supply its selected evaluation/build/native-reader evidence. No capture result is certified here. |
-| AC4 | pending | Independent locked consumer/native x86 proof and durable delivered pair are present. Next: maintainer contrasts the preserved older-pin examples with retired-input refusal and the declared breaking migration guidance, and records the accepted older-consumer boundary; cross-major compatibility is not promised. |
-| AC5 | pending | Delivered provider head `c8b6e818` passed macOS 26.6.2/Nix 2.34.8 evaluation and native Darwin build. Next: maintainer accepts these results for the declared aarch64-darwin/macOS 26 provider/public-consumer lane; older/later OS and private runtime are not inferred. |
+| AC4 | pending | Independent locked consumer/native x86 proof and durable delivered pair are present. Next: reviewer contrasts preserved older-pin examples with retired-input refusal and declared breaking migration guidance, then records whether the stated older-consumer boundary is evidenced; cross-major compatibility is not promised. |
+| AC5 | pending | Delivered provider head `c8b6e818` passed macOS 26.6.2/Nix 2.34.8 evaluation and native Darwin build. Next: reviewer binds these results to the declared aarch64-darwin/macOS 26 provider/public-consumer lane and records coverage; older/later OS and private runtime are not inferred. |
 | AC6 | verified | Delivered provider head `c8b6e818` and merge `3d6d945f` passed their own CI with the explicit upstream Nix 2.34.8 assertion, evaluation and selected native builds; matching macOS evidence is recorded above. |
-| AC7 | pending | Delivered host safeguards, seven-output pair, publication and integration are evidenced above. Next: maintainer audits the setting/tool/dependency/rule migration map against provider removals and consumer safety/tool inventory, and accepts each retained/transferred/retired owner; host rollout is separate. |
-| AC8 | pending | Delivered Mac/x86 selected native builds, provider graphical VM and companion checks passed. Next: maintainer accepts the changed-function-to-check map, selected/omitted lane reasons and coverage against the promised public behavior; an identified gap receives a bounded check rather than a blanket host suite. |
+| AC7 | pending | Delivered host safeguards, seven-output pair, publication and integration are evidenced above. Next: reviewer audits the setting/tool/dependency/rule migration map against provider removals and consumer safety/tool inventory, recording each retained/transferred/retired owner and any gap; host rollout is separate. |
+| AC8 | pending | Delivered Mac/x86 selected native builds, provider graphical VM and companion checks passed. Next: reviewer checks the changed-function-to-check map, selected/omitted lane reasons and coverage against promised public behavior; an identified gap receives a bounded check rather than a blanket host suite. |
