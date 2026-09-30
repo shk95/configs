@@ -18,6 +18,8 @@ a commit on `dev`" has no assertion of its own: it follows from the helper
 branching before it commits whenever it stands on `dev`, and the case run
 from `dev` after a publish would meet the helper's own "dev is not at
 origin/dev" refusal if that were ever false. The
-Windows capture flow follows the same rule under
-`INV windows/capture-publishes-through-dev`; the two are copies by the
+historical Windows provider-capture publisher used the analogous
+`windows/capture-publishes-through-dev` invariant. That copy's lifecycle
+belongs to the Windows domain and does not change this repository commit-helper
+rule. The independently owned implementations are copies by the
 copy-over-sharing rule and may diverge.
