@@ -336,6 +336,16 @@ prepare_evidence; printf 'format\t1\n' >"$evidence"; refusal missing-required-ev
 prepare_evidence; pass; assert_text '"pending_source_commits":0'; assert_text '"promotion_delta":[]'
 assert_text '"next_version":"1.0.1"'; assert_text '"kind":"domain-release"'
 
+# Independent uncanceled changes can restore the baseline tree without proposing
+# a new release. History remains major, but there is no previous-major retirement.
+reset_case
+printf 'major change\n' >unixlike/api/contract.json; declaration unixlike major unixlike-api
+printf 'old\n' >unixlike/api/contract.json; declaration unixlike patch unixlike-api
+master_override=$(git rev-parse HEAD)
+prepare_evidence; run; assert_text '"decision":"no-op"'
+assert_text '"impact":"major","next_version":null'
+assert_text '"retired_previous_major":false'
+
 # ----------
 # Exact tool/evidence identities and stable complete replay
 # ----------
@@ -437,6 +447,21 @@ assert_text '"decision":"candidate"'
 git branch master "$base"
 "$tools/plan-release" unixlike "$base" 2026.09.30 >"$scratch/calendar"
 grep -q 'tag: unixlike-v2026.09.30' "$scratch/calendar"
+
+# An ambient init template must never install executable drivers in merge scratch.
+reset_case
+printf 'master side\n' >unixlike/api/contract.json; declaration unixlike patch unixlike-api
+template_master=$(git rev-parse HEAD)
+reset_case
+printf 'candidate side\n' >unixlike/api/contract.json; declaration unixlike patch unixlike-api
+master_override=$template_master
+printf 'format\t1\n' >"$evidence"
+mkdir "$scratch/hostile-template"
+printf '[merge "fixture"]\n\tdriver = touch "%s/template-executed"\n' "$scratch" >"$scratch/hostile-template/config"
+GIT_TEMPLATE_DIR="$scratch/hostile-template" refusal merge-conflict
+[ ! -e "$scratch/template-executed" ] || { echo 'ambient template driver executed' >&2; exit 1; }
+reset_case
+printf 'new\n' >unixlike/api/contract.json; declaration unixlike patch unixlike-api
 
 # Evidence references and rule identities are literal hostile data, escaped as JSON.
 prepare_evidence

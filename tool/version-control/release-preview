@@ -132,7 +132,7 @@ merge_git() (
   GIT_CONFIG_NOSYSTEM=1 GIT_CONFIG_GLOBAL=/dev/null git "$@"
 )
 object_format=$(git rev-parse --show-object-format)
-merge_git init -q --bare --object-format="$object_format" "$native_scratch/merge.git"
+merge_git init -q --bare --template= --object-format="$object_format" "$native_scratch/merge.git"
 printf '%s/objects\n' "$common" >"$scratch/merge.git/objects/info/alternates"
 merge_tree=$(merge_git --git-dir="$native_scratch/merge.git" merge-tree --write-tree "$master" "$candidate" 2>/dev/null) || refuse merge-conflict
 case "$merge_tree" in *'

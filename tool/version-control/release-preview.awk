@@ -227,7 +227,7 @@ END {
     for(k in domain_migration) { split(k,parts,SUBSEP); if(parts[1]==d)migration_keys[parts[2]]=1 }
     n=keys(migration_keys,migration_paths)
     for(j=1;j<=n;j++) { if(j>1)out=out ","; out=out quote(migration_paths[j]) }
-    out=out "],\"retired_previous_major\":" (domain_impact[d]==3 && baseline_kind[d]=="semantic" ? "true" : "false") "}"
+    out=out "],\"retired_previous_major\":" (next_version[d]!="" && domain_impact[d]==3 && baseline_kind[d]=="semantic" ? "true" : "false") "}"
   }
   out=out "],\"history\":["; comma=""
   for(i=1;i<=history_count;i++) { h=history_order[i]; out=out comma "{\"commit\":" quote(history_sha[h]) ",\"domain\":" quote(history_domain[h]) ",\"parent\":" quote(history_parent[h]) ",\"message_digest\":" quote(history_digest[h]) ",\"impact\":" quote(trailer[h,"release-impact"]) ",\"compatibility\":" quote(trailer[h,"release-compatibility"]) ",\"migration\":" quote(trailer[h,"release-migration"]) ",\"canceled\":" (canceled[h]?"true":"false") ",\"released_revert\":" (released_revert[h]?"true":"false") "}"; comma="," }

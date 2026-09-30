@@ -60,6 +60,10 @@ selection. Already-promoted source with an older semantic baseline requires its 
 exact evidence; missing evidence refuses, sufficient evidence passes. Net-zero/none
 adds no release-only qualification. Exact canceled major/breaking/migration histories
 remain visible as provenance but do not retain effective metadata or approval reasons.
+Uncanceled major history with a net-zero domain tree proposes no new version and
+does not retire its previous major. An ambient Git init template cannot install a
+merge driver into the isolated scratch repository; a hostile-template conflict
+fixture verifies refusal without executing that driver.
 Decimal component arithmetic uses string carry, with 2^53-exceeding and long-carry
 fixtures plus malformed decimal refusals. File data passed to native Git uses stdin
 to preserve MSYS argument guards without depending on POSIX absolute-path conversion.
