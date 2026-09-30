@@ -256,6 +256,48 @@ preview fixture natively on Git for Windows; local POSIX proof does not establis
 that native result. Promotion, tag/release approval and host activation remain
 separate operations with their existing authorization boundaries.
 
+### Inert controller preview
+
+The additive controller implements the disabled preview boundary in
+`docs/policy/decisions/repository/release-controller-preview-boundary.md`.
+Use only explicit synthetic approved-package assertions, operating records and
+API transcripts. They do not authenticate production evidence or permissions.
+The package protocol at `tool/version-control/release-control-package/protocol.md`
+describes the bounded schemas and supplied-input limits.
+
+1. Run `tool/configs doctor repository`. Set `CONFIGS_CONTROLLER_PYTHON` to an
+   existing functional Python >=3.9 if the default Python command is unavailable;
+   this command does not install or change a host runtime.
+2. Preserve the reviewed exact public control/master commits, complete manifest
+   and synthetic approval assertion. Supply pinned configuration bytes and
+   append-only event history with its reconstructed index; supply live-stop
+   fixture bytes separately. Never execute a candidate's script or artifact.
+3. Run the inert preview:
+
+   ```sh
+   tool/configs release-control preview --fixture-inputs \
+     --bundle-repository ./synthetic-public --approved ./approved.tsv \
+     --operating ./synthetic-operating --transcript ./api-transcript.json \
+     --request ./preview-request.tsv
+   ```
+
+4. Read its bounded outcome/stage/count. Disabled config emits nothing; unknown
+   identity/schema/protocol, missing records, index disagreement or inconsistent
+   observations refuse. Inspect the supplied records to repair the cause; do not
+   fabricate approvals or rewrite successful release objects. Missing functional
+   Python is unverified (69 locally, failed under REQUIRE_NATIVE=1).
+5. Run `tool/configs test` for repository fixtures. CI declares Python and runs
+   the narrow controller fixture on native Git for Windows in addition to Linux.
+   Foreign proof does not establish Windows behavior.
+
+The master-only workflow is an inert interface with independent inspection and
+constant writer-job serialization shape; it reads no private connection, secret
+or Environment and has no schedule or enabled write mode. This source contract
+does not authorize dispatching it. Actual operating repository, approval bootstrap,
+credentials/protection/notification receipt and manual/scheduled rollout require
+their separate authorized operating proof. Existing calendar releases and host
+activation boundaries remain in force.
+
 For agent-assisted work, invoke `run-version-control-workflow`. Its canonical
 Agent Skills implementation is under `.agents/skills/`; model-specific
 discovery files are adapters only. Audit and release planning are read-only by

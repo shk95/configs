@@ -147,6 +147,13 @@ tool/configs release-preview --master "$master_sha" --candidate "$candidate_sha"
   --rules "$rules_sha" --baselines baselines.tsv --evidence evidence.tsv --json
 ```
 
+The separate disabled controller can preview explicit synthetic records/API
+transcripts with `tool/configs release-control preview --fixture-inputs` and the
+local input options shown by `--help`. It requires functional Python >=3.9;
+`CONFIGS_CONTROLLER_PYTHON` may name an existing runtime. This interface has no
+credentials, HTTP transport or release authority. Its workflow is inert; no
+schedule is installed. See `CONTRIBUTING.md`, "Inert controller preview".
+
 The preview reports a candidate, no-op or refusal without contacting a remote or
 changing source, tags or hosts. Its supplied evidence references are assertions;
 they do not authenticate production evidence or authorize a release. See
