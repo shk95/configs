@@ -1,0 +1,12 @@
+format	1
+check	repository-policy	repository	policy-checks	required	-	repository-scans-v1
+check	unixlike-api	unixlike	fixtures	required	unixlike-evaluation,unixlike-build	provider-api-v1
+check	unixlike-evaluation	unixlike	evaluation	required	-	nix-2.34.8
+check	unixlike-build	unixlike	build	required	-	nix-2.34.8
+check	unixlike-inspection	unixlike	fixtures	required	-	contract-inspect-v1
+check	unixlike-readiness	unixlike	fixtures	required	-	standalone-readiness-v1
+map	prefix	docs/	repository-policy
+map	prefix	unixlike/api/	unixlike-api
+map	exact	unixlike/modules/flake/configurations.nix	unixlike-api
+map	exact	unixlike/tool/contract-inspect	unixlike-inspection
+map	exact	unixlike/tool/standalone-readiness	unixlike-readiness

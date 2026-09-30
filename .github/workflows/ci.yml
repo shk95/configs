@@ -70,17 +70,33 @@ jobs:
           done
 
   repository:
-    name: Version-control policy
+    name: Version-control policy (${{ matrix.os }})
     needs: classify
     if: needs.classify.outputs.repository_checks == 'true'
-    runs-on: ubuntu-latest
+    strategy:
+      fail-fast: false
+      matrix:
+        os: [ubuntu-latest, windows-latest]
+    runs-on: ${{ matrix.os }}
     # The merge gate is the one place where a check that could not run must not
     # pass.
     env:
       REQUIRE_NATIVE: "1"
     steps:
       - uses: actions/checkout@v7
-      - run: tool/version-control/test
+      - name: Full repository fixtures
+        if: runner.os == 'Linux'
+        shell: bash
+        run: tool/version-control/test
+      - name: Native Git for Windows release preview
+        if: runner.os == 'Windows'
+        shell: bash
+        run: |
+          case "$(uname -s)" in
+            MINGW*|MSYS*) ;;
+            *) echo 'Expected native Git for Windows bash' >&2; exit 1 ;;
+          esac
+          tool/version-control/test-release-preview
 
   unix:
     name: Flake and Unix-like hosts

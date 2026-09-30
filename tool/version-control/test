@@ -32,6 +32,7 @@ for route in \
   audit:version-control/audit audit-remote:version-control/audit-remote \
   plan-promotion:version-control/plan-promotion \
   plan-release:version-control/plan-release \
+  release-preview:version-control/release-preview \
   hook-evidence:version-control/hook-evidence; do
   command=${route%%:*}
   target=${route#*:}
@@ -208,6 +209,43 @@ done
 grep -q 'base=$(tool/dispatch/ci-base)' "$root/.github/workflows/ci.yml"
 grep -q 'run: tool/version-control/work --range "\$CI_BASE" HEAD' "$root/.github/workflows/ci.yml"
 
+# INV repository/release-preview-read-only
+# INV repository/merge-gate-requires-native
+# Both native branches must qualify the same repository result; synthetic
+# weakening proves a missing Windows run cannot silently retain this proof.
+preview_matrix_scan() {
+  awk '
+    /^  [a-z][a-z0-9_-]*:$/ { repo=($0=="  repository:"); step="" }
+    repo && /^      fail-fast: false$/ { independent=1 }
+    repo && /^        os: \[ubuntu-latest, windows-latest\]$/ { both=1 }
+    repo && /^    runs-on: \$\{\{ matrix.os \}\}$/ { runner=1 }
+    repo && /continue-on-error:/ { weakened=1 }
+    repo && /^      - name:/ { step=$0 }
+    repo && /if: runner.os ==/ { conditional[step]=$0 }
+    repo && /^        shell: bash$/ { shell[step]=1 }
+    repo && /^        run: tool\/version-control\/test$/ { full=conditional[step]~/Linux/ && shell[step] }
+    repo && /^          tool\/version-control\/test-release-preview$/ { native=conditional[step]~/Windows/ && shell[step] }
+    /REPOSITORY_RESULT: \$\{\{ needs.repository.result \}\}/ { aggregate=1 }
+    END { exit !(independent && both && runner && full && native && aggregate && !weakened) }
+  ' "$1"
+}
+preview_matrix_scan "$root/.github/workflows/ci.yml" || { echo 'preview native matrix/gate wiring missing' >&2; exit 1; }
+preview_ci_fixture=$(mktemp -d)
+for weakening in windows failfast tolerated aggregate; do
+  case "$weakening" in
+    windows) sed 's/os: \[ubuntu-latest, windows-latest\]/os: [ubuntu-latest]/' "$root/.github/workflows/ci.yml" ;;
+    failfast) sed 's/fail-fast: false/fail-fast: true/' "$root/.github/workflows/ci.yml" ;;
+    tolerated) sed '/name: Native Git for Windows release preview/a\
+        continue-on-error: true' "$root/.github/workflows/ci.yml" ;;
+    aggregate) sed 's/needs.repository.result/needs.repository.outputs.result/' "$root/.github/workflows/ci.yml" ;;
+  esac >"$preview_ci_fixture/weakened.yml"
+  if preview_matrix_scan "$preview_ci_fixture/weakened.yml"; then
+    echo "preview matrix proof accepted weakening $weakening" >&2; exit 1
+  fi
+done
+rm -f "$preview_ci_fixture/weakened.yml"
+rmdir "$preview_ci_fixture"
+
 # INV repository/merge-gate-requires-native
 # Every job that runs a check converts unverified into failure; the two jobs
 # that produce no check evidence (classify, required — the gate only reads
@@ -326,6 +364,9 @@ fi
 # INV repository/required-checks-gate: intended skips are accepted; missing,
 # cancelled, malformed or contradictory results cannot become a green gate.
 for result in skipped cancelled failure; do
+  if (REPOSITORY_SCOPE=true REPOSITORY_RESULT=$result run_gate) >/dev/null 2>&1; then
+    echo "gate accepted selected repository matrix result $result" >&2; exit 1
+  fi
   if (UNIXLIKE_SCOPE=true UNIXLIKE_RESULT=$result run_gate) >/dev/null 2>&1; then
     echo "gate accepted selected job result $result" >&2; exit 1
   fi
@@ -565,6 +606,12 @@ expect_units 'repository:fixtures' push "$hook_modified"
 expect_units 'repository:fixtures' commit "$workflow_modified"
 expect_units 'repository:fixtures' commit "$dispatch_modified"
 expect_units 'repository:fixtures' push "$vc_modified"
+# INV repository/release-preview-read-only
+for preview_path in release-preview release-preview.awk release-preview.rules test-release-preview; do
+  for preview_stage in commit push ci; do
+    expect_units 'repository:fixtures' "$preview_stage" "$(printf 'M\ttool/version-control/%s' "$preview_path")"
+  done
+done
 expect_units '' commit "$entry_modified"
 # A document is owned by the scope its directory names, but no domain suite
 # reads one, so a Unix-like provisional entry, invariant, decision or status
@@ -5630,5 +5677,8 @@ git -C "$authoring_root" worktree add -q -b fix/repository-pinned "$authoring_pi
 
 # INV repository/worker-checkpoint
 "$root/tool/version-control/session-test"
+
+# INV repository/release-preview-read-only
+"$root/tool/version-control/test-release-preview"
 
 echo "version-control fixtures passed"
