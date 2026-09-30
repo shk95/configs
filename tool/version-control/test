@@ -3,6 +3,11 @@
 set -eu
 
 root=$(CDPATH= cd -- "$(dirname "$0")/../.." && pwd)
+# All fixture Git commands and their child hooks inherit this test-only
+# boundary, not caller routing/configuration or network transport authority.
+# INV repository/fixture-git-isolation
+. "$root/tool/version-control/fixture-git-environment.sh"
+"$root/tool/version-control/fixture-git-isolation-test"
 classify="$root/tool/version-control/classify"
 audit="$root/tool/version-control/audit"
 plan_release="$root/tool/version-control/plan-release"
