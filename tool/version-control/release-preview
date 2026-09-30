@@ -9,6 +9,12 @@ MSYS2_ARG_CONV_EXCL='*'
 export MSYS_NO_PATHCONV MSYS2_ARG_CONV_EXCL
 LC_ALL=C
 export LC_ALL
+# Pinned object identity must ignore ambient replacement refs and implicit fetch.
+GIT_NO_REPLACE_OBJECTS=1
+GIT_NO_LAZY_FETCH=1
+# Older supported Git predates NO_LAZY_FETCH; deny every transport independently.
+GIT_ALLOW_PROTOCOL=
+export GIT_NO_REPLACE_OBJECTS GIT_NO_LAZY_FETCH GIT_ALLOW_PROTOCOL
 
 usage() {
   echo 'usage: tool/configs release-preview --master <commit> --candidate <commit> --rules <commit> --baselines <file> --evidence <file> [--json]' >&2
@@ -46,7 +52,14 @@ for capability in git awk sort sed mktemp cp cat cut grep wc tr dirname mkdir rm
     exit 1
   fi
 done
-git --version | awk '{ split($3,v,"."); exit !(v[1]>2 || (v[1]==2 && v[2]>=38)) }' || {
+scratch=$(mktemp -d)
+trap 'rm -rf "$scratch"' EXIT HUP INT TERM
+GIT_GRAFT_FILE="$scratch/disabled-grafts"
+export GIT_GRAFT_FILE
+git_version=$(git --version)
+git_command=$(command -v git)
+awk_command=$(command -v awk)
+printf '%s\n' "$git_version" | awk '{ split($3,v,"."); exit !(v[1]>2 || (v[1]==2 && v[2]>=38)) }' || {
   echo 'unverified: Git >= 2.38 is required for isolated merge-tree' >&2
   [ "${REQUIRE_NATIVE:-0}" != 1 ] && exit 69
   exit 1
@@ -57,25 +70,25 @@ root=$(git rev-parse --show-toplevel 2>/dev/null) || refuse not-a-repository
 case "$baselines_arg" in /*|[A-Za-z]:/*) ;; *) baselines_arg="$PWD/$baselines_arg" ;; esac
 case "$evidence_arg" in /*|[A-Za-z]:/*) ;; *) evidence_arg="$PWD/$evidence_arg" ;; esac
 cd "$root"
-if git config --get extensions.partialClone >/dev/null 2>&1 ||
-   git config --get-regexp '^remote[.].*[.]promisor$' 2>/dev/null | grep -Eq ' true$'; then
-  refuse incomplete-history
-fi
+git config --get extensions.partialClone >/dev/null 2>&1 && refuse incomplete-history
+promisor_status=0
+promisor_values=$(git config --bool --get-regexp '^remote[.].*[.]promisor$' 2>/dev/null) || promisor_status=$?
+case "$promisor_status" in
+  0) printf '%s\n' "$promisor_values" | grep -Eq ' true$' && refuse incomplete-history ;;
+  1) ;; # No promisor declaration.
+  *) refuse invalid-promisor-configuration ;;
+esac
 [ "$(git rev-parse --is-shallow-repository)" = false ] || refuse incomplete-history
 master=$(git rev-parse --verify --end-of-options "$master_arg^{commit}" 2>/dev/null) || refuse invalid-master
 candidate=$(git rev-parse --verify --end-of-options "$candidate_arg^{commit}" 2>/dev/null) || refuse invalid-candidate
 rules=$(git rev-parse --verify --end-of-options "$rules_arg^{commit}" 2>/dev/null) || refuse invalid-rules
-scratch=$(mktemp -d)
-trap 'rm -rf "$scratch"' EXIT HUP INT TERM
 git show "$rules:tool/version-control/release-preview.rules" >"$scratch/rules" 2>/dev/null || refuse missing-pinned-rules
 cp "$baselines_arg" "$scratch/baselines"
 cp "$evidence_arg" "$scratch/evidence"
-for replay in rules baselines evidence; do
-  [ "$(tail -c 1 "$scratch/$replay" | od -An -tu1 | tr -d ' \n')" = 10 ] || refuse invalid-replay-format
-  awk -F'\t' '
+utf8_awk='
     function utf8(s, i,b,n,j,c,first,min,max) {
       for(i=1;i<=length(s);i++) {
-        b=ord[substr(s,i,1)]; if(b<128)continue
+        b=ord[substr(s,i,1)]; if(b==0)return 0; if(b<128)continue
         min=128; max=191
         if(b>=194 && b<=223)n=1
         else if(b>=224 && b<=239) { n=2; if(b==224)min=160; if(b==237)max=159 }
@@ -89,6 +102,15 @@ for replay in rules baselines evidence; do
       return 1
     }
     BEGIN { for(i=1;i<=255;i++)ord[sprintf("%c",i)]=i }
+'
+valid_utf8_file() {
+  [ "$(wc -c <"$1")" -eq "$(tr -d '\000' <"$1" | wc -c)" ] || return 1
+  awk "$utf8_awk"'!utf8($0) { exit 1 }' "$1"
+}
+for replay in rules baselines evidence; do
+  valid_utf8_file "$scratch/$replay" || refuse invalid-replay-format
+  [ "$(tail -c 1 "$scratch/$replay" | od -An -tu1 | tr -d ' \n')" = 10 ] || refuse invalid-replay-format
+  awk -F'\t' "$utf8_awk"'
     { text=$0; gsub(/\t/, "", text); if(!utf8($0) || text~/[[:cntrl:]]/)exit 1 }
     NR == 1 { if (NF != 2 || $1 != "format" || $2 != "1") exit 1; next }
     NF == 0 || /[\001-\010\013-\037\177]/ { exit 1 }
@@ -116,16 +138,18 @@ merge_tree=$(merge_git --git-dir="$native_scratch/merge.git" merge-tree --write-
 case "$merge_tree" in *'
 '*) refuse unexpected-merge-result ;; esac
 engine_digest=$(cat "$tools/release-preview" "$tools/release-preview.awk" | git hash-object --stdin)
-classifier_digest=$(git hash-object --no-filters "$tools/classify")
-rules_digest=$(git hash-object --no-filters "$scratch/rules")
-baselines_digest=$(git hash-object --no-filters "$scratch/baselines")
-evidence_digest=$(git hash-object --no-filters "$scratch/evidence")
+git_command_digest=$(git hash-object --no-filters --stdin <"$git_command")
+awk_command_digest=$(git hash-object --no-filters --stdin <"$awk_command")
+classifier_digest=$(git hash-object --no-filters --stdin <"$tools/classify")
+rules_digest=$(git hash-object --no-filters --stdin <"$scratch/rules")
+baselines_digest=$(git hash-object --no-filters --stdin <"$scratch/baselines")
+evidence_digest=$(git hash-object --no-filters --stdin <"$scratch/evidence")
 manifest="$scratch/manifest"
 : >"$manifest"
 printf 'pending-source\t%s\n' "$(git rev-list --count "$candidate" "^$master")" >>"$manifest"
 
 safe_paths() {
-  awk -F'\t' 'NF != 2 || $1 !~ /^[AMDT]$/ || $2 == "" || $2 ~ /[\001-\037\177]/ || $2 ~ /^"/ || $2 ~ /^\// || $2 ~ /(^|\/)\.\.(\/|$)/ { exit 1 }' "$1" || refuse unsupported-path
+  awk -F'\t' "$utf8_awk"'!utf8($0) || NF != 2 || $1 !~ /^[AMDT]$/ || $2 == "" || $2 ~ /[\001-\037\177]/ || $2 ~ /^"/ || $2 ~ /^\// || $2 ~ /(^|\/)\.\.(\/|$)/ { exit 1 }' "$1" || refuse unsupported-path
   if awk -F'\t' '$2 ~ /^common\// { found=1 } END { exit found ? 0 : 1 }' "$1"; then
     refuse unsupported-common
   fi
@@ -147,18 +171,23 @@ while IFS="$tab" read -r kind domain value target record_path extra; do
   case "$domain" in unixlike|windows) ;; common) refuse unsupported-common ;; *) refuse invalid-baseline-domain ;; esac
   case "$kind" in
     semantic)
-      [ -z "${record_path:-}${extra:-}" ] || refuse invalid-baseline-fields
+      [ -n "${record_path:-}" ] && [ -z "${extra:-}" ] || refuse invalid-baseline-fields
       case "$target" in "$domain-v$value") ;; *) refuse invalid-semantic-tag ;; esac
-      annotation=$(git rev-parse --verify "refs/tags/$target" 2>/dev/null) || refuse missing-semantic-baseline
+      annotation=$record_path
+      case "$annotation" in *[!a-f0-9]*|'') refuse invalid-baseline-annotation ;; esac
+      [ "${#annotation}" -eq 40 ] || [ "${#annotation}" -eq 64 ] || refuse invalid-baseline-annotation
       [ "$(git cat-file -t "$annotation" 2>/dev/null || true)" = tag ] || refuse unannotated-baseline
       base=$(git rev-parse "$annotation^{commit}") || refuse invalid-baseline
       git cat-file tag "$annotation" >"$scratch/tag"
       awk -F': *' -v domain="$domain" -v version="$value" -v source="$base" '
-        /^Release-Format:/ { if(++f!=1 || $2!="1")bad=1 }
-        /^Domain:/ { if(++d!=1 || $2!=domain)bad=1 }
-        /^Version:/ { if(++v!=1 || $2!=version)bad=1 }
-        /^Source:/ { if(++s!=1 || $2!=source)bad=1 }
-        END { exit bad || f!=1 || d!=1 || v!=1 || s!=1 }' "$scratch/tag" || refuse baseline-annotation-mismatch
+        /^object / { if(++o!=1 || $0!="object " source)bad=1 }
+        /^type / { if(++y!=1 || $0!="type commit")bad=1 }
+        /^tag / { if(++t!=1 || $0!="tag " domain "-v" version)bad=1 }
+        /^Release-Format:/ { if(NF!=2)bad=1; if(++f!=1 || $2!="1")bad=1 }
+        /^Domain:/ { if(NF!=2)bad=1; if(++d!=1 || $2!=domain)bad=1 }
+        /^Version:/ { if(NF!=2)bad=1; if(++v!=1 || $2!=version)bad=1 }
+        /^Source:/ { if(NF!=2)bad=1; if(++s!=1 || $2!=source)bad=1 }
+        END { exit bad || o!=1 || y!=1 || t!=1 || f!=1 || d!=1 || v!=1 || s!=1 }' "$scratch/tag" || refuse baseline-annotation-mismatch
       printf 'baseline\t%s\t%s\t%s\t%s\t%s\n' "$domain" "$value" "$base" "$target" "$annotation" >>"$manifest"
       ;;
     bootstrap)
@@ -193,27 +222,31 @@ while IFS="$tab" read -r kind domain value target record_path extra; do
     [ "$(wc -l <"$scratch/commit-scopes" | tr -d ' ')" -eq 1 ] || refuse mixed-source-scope
     parent=$(git rev-parse "$source^" 2>/dev/null) || parent=-
     git show -s --format=%B "$source" >"$scratch/message"
-    message_digest=$(git hash-object --no-filters "$scratch/message")
+    valid_utf8_file "$scratch/message" || refuse unsupported-release-text
+    message_digest=$(git hash-object --no-filters --stdin <"$scratch/message")
     printf 'history\t%s\t%s\t%s\t%s\n' "$domain" "$source" "$parent" "$message_digest" >>"$manifest"
-    git interpret-trailers --parse <"$scratch/message" >"$scratch/trailers"
+    git -c trailer.separators=: interpret-trailers --parse <"$scratch/message" >"$scratch/trailers"
     awk -v domain="$domain" -v source="$source" '
       { split_at=index($0, ":"); key=tolower(substr($0,1,split_at-1)); value=substr($0,split_at+1); sub(/^ */, "", value)
         if (key ~ /^release-/) print "trailer\t" domain "\t" source "\t" key "\t" value
       }' "$scratch/trailers" >>"$manifest"
-    migration=$(awk -F': *' 'tolower($1)=="release-migration" { print $2 }' "$scratch/trailers")
+    migration=$(awk 'tolower(substr($0,1,index($0,":")-1))=="release-migration" { value=substr($0,index($0,":")+1); sub(/^ */, "", value); print value }' "$scratch/trailers")
     if [ -n "$migration" ] && [ "$migration" != none ]; then
       migration_type=$(git cat-file -t "$candidate:$migration" 2>/dev/null || true)
       printf 'migration\t%s\t%s\t%s\n' "$domain" "$source" "$migration_type" >>"$manifest"
     fi
     git -c core.quotePath=false diff-tree --no-ext-diff --no-textconv --root --no-commit-id --raw --no-abbrev -r --no-renames "$source" |
       awk -F'\t' -v domain="$domain" -v source="$source" '{ n=split($1,v," "); sub(/^:/,"",v[1]); if (n!=5 || NF!=2) exit 1; print "diff\t" domain "\t" source "\t" v[1] "\t" v[2] "\t" v[3] "\t" v[4] "\t" v[5] "\t" $2 }' >>"$manifest"
-    revert=$(awk -F': *' 'tolower($1)=="release-reverts" { print $2 }' "$scratch/trailers")
+    revert=$(awk 'tolower(substr($0,1,index($0,":")-1))=="release-reverts" { value=substr($0,index($0,":")+1); sub(/^ */, "", value); print value }' "$scratch/trailers")
     if [ -n "$revert" ]; then
       [ "$(git rev-parse --verify --end-of-options "$revert^{commit}" 2>/dev/null || true)" = "$revert" ] || refuse invalid-revert-target
       git -c core.quotePath=false diff-tree --no-ext-diff --no-textconv --root --no-commit-id --name-only -r "$revert" | "$tools/classify" --stdin >"$scratch/revert-scopes"
       [ "$(cat "$scratch/revert-scopes")" = "$domain" ] || refuse cross-domain-revert
       category=unreleased
       git merge-base --is-ancestor "$revert" "$base" && category=released
+      if [ "$category" = unreleased ]; then
+        git merge-base --is-ancestor "$revert" "$source" || refuse ambiguous-revert
+      fi
       printf 'revert\t%s\t%s\t%s\t%s\n' "$domain" "$source" "$revert" "$category" >>"$manifest"
     fi
   done <"$scratch/commits"
@@ -221,5 +254,7 @@ done <"$scratch/baselines"
 
 awk -F'\t' -v master="$master" -v candidate="$candidate" -v rules="$rules" -v merge_tree="$merge_tree" \
   -v engine_digest="$engine_digest" -v classifier_digest="$classifier_digest" -v rules_digest="$rules_digest" \
+  -v git_version="$git_version" -v object_format="$object_format" \
+  -v git_command_digest="$git_command_digest" -v awk_command_digest="$awk_command_digest" \
   -v baselines_digest="$baselines_digest" -v evidence_digest="$evidence_digest" -v human="$((1-json))" \
   -f "$tools/release-preview.awk" "$scratch/rules" "$scratch/baselines" "$scratch/evidence" "$manifest"

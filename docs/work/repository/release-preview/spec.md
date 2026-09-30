@@ -63,7 +63,8 @@ No caller-supplied rule file overrides pinned rules. Human output and canonical 
 describe the same decision. A valid candidate/no-op exits 0, missing tool capability
 exits 69 (or fails under REQUIRE_NATIVE=1), and malformed/ineligible input exits 1.
 JSON has format=1, decision=candidate/no-op/refusal, master/candidate/merge_tree/
-rules identities, per-domain baselines/impact/next_version/compatibility/migration,
+rules identities, executing Git version/object format and invoked Git/awk command
+digests, per-domain baselines/impact/next_version/compatibility/migration,
 selected check IDs/reasons/results, unaffected exclusions, approval reasons and
 stable refusal codes. Sort domain/check/reason collections; omit ambient timestamps.
 
@@ -85,24 +86,30 @@ DOMAIN is unixlike/windows/repository. LANE is evaluation/build/native-runtime o
 fixtures/policy-checks/review. REQUIREDNESS is required/advisory. DEPENDENCIES and
 CHECKS are ID lists. MATCH is exact/prefix, never regex or executable text. Match
 all applicable rows and union their checks/dependency closure; reject dependency
-cycles and missing definitions. Source paths must be relative, nonempty and contain
-no traversal/control characters. Ownership comes from the existing classifier,
+cycles and missing definitions. Source paths must be relative, nonempty, valid UTF-8 and contain
+no traversal/control characters. Preserve valid Unicode names and refuse invalid
+raw Git filename bytes before generating machine output. Ownership comes from the existing classifier,
 independently of check-effect selection; unknown ownership refuses.
 TOOL_IDENTITY is an exact expected version or digest in the pinned check definition;
 evidence must match it, not merely contain an arbitrary nonempty version. Output
 also records the executing preview engine's content digest. This verifies replay
-binding, not authenticity of an externally asserted execution transcript.
+binding (including invoked Git/awk command bytes), not authenticity of an externally
+asserted execution transcript.
 
 Baseline records:
 
 ```
-semantic<TAB>DOMAIN<TAB>VERSION<TAB>TAG
+semantic<TAB>DOMAIN<TAB>VERSION<TAB>TAG<TAB>ANNOTATION_SHA
 bootstrap<TAB>DOMAIN<TAB>SOURCE_SHA<TAB>RECORD_COMMIT<TAB>RECORD_PATH
 ```
 
 Exactly one record is required for each affected configuration domain. Semantic
 version is three nonnegative decimal numbers with no leading zeros; tag must be
 the matching immutable annotated DOMAIN-vVERSION, its commit ancestor of candidate.
+ANNOTATION_SHA pins the full tag object; read it directly rather than a mutable ref.
+Its internal tag name must match TAG. Replay does not authenticate current remote
+tag authority. Input masters/candidates/rules and baseline annotations must be
+preserved by their resolved identities when replaying.
 Its annotation contains unique Release-Format: 1, Domain, Version and Source
 fields matching the resolved baseline. Calendar tags are preserved but cannot
 masquerade as semantic baselines by a coincidental three-number tag name.
@@ -127,6 +134,10 @@ An explicit actual-contract defect refuses. References are data, not downloaded
 or treated as authenticated live proof. Derive the expected merge tree with Git
 in an isolated scratch object store using source objects read-only; conflicts refuse.
 No claim of atomic remote merge protection follows from that tree calculation.
+Ignore ambient replacement objects and legacy graft files in every Git/classifier
+call, disable lazy fetch and independently prohibit every transport, and refuse
+partial/promisor histories using normalized Git boolean data;
+invalid promisor data fails closed. Missing objects never authorize a network read.
 
 ## Commit declarations and cumulative decisions
 
@@ -162,6 +173,8 @@ This output alone never adopts that maintenance policy or creates a tag.
 
 Release-Reverts contains a full target commit SHA. Cancel only exact inverse
 touched-path/blob changes inside the same unreleased cumulative domain range.
+An unreleased target must precede the reverting source in commit ancestry; a
+parallel branch incorporated later is an ambiguous cancellation.
 Reject wrong/cross-domain/missing targets, partial/intervening changes or ambiguous
 pairing. A revert of already released source is a new declared change. Parse all
 necessary declarations before declaring net-zero; unresolved metadata refuses.
@@ -170,7 +183,13 @@ necessary declarations before declaring net-zero; unresolved metadata refuses.
 
 Always select from the complete current-master-to-candidate promotion delta,
 including additions/deletions and both sides of renames. Version aggregation uses
-the separate previous-domain-tag-to-candidate range. Record why each check runs;
+the separate previous-domain-tag-to-candidate range. When that aggregation proposes
+a new domain version, union the effective uncanceled Release-Contracts and their
+trusted dependencies as domain-release eligibility. This also qualifies a proposed
+release whose source is already on master and whose promotion delta is empty. No
+new version/net-zero adds no release-only qualification. Bootstrap qualifies its
+explicit record contracts. Keep promotion-delta and domain-release selection reasons
+and provenance distinct. Record why each check runs;
 unaffected exclusions are not newly verified evidence. Candidate movement requires
 new exact-bound evidence; no cross-candidate pass reuse.
 

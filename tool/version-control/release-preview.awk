@@ -27,18 +27,19 @@ function require_check(check, visiting, d,n,i) {
   for(i=1;i<=n;i++) require_check(d[i],visiting)
   delete visiting[check]; selected[check]=1
 }
-function add_reason(check, reason, d,n,i,seen) {
+function add_reason(check, reason, kind, seen,d,n,i) {
   if(seen[check]) return
-  seen[check]=1; reasons[check,reason]=1
+  seen[check]=1; selection_reasons[check,kind,reason]=1
+  if(kind=="promotion-delta")reasons[check,reason]=1
   n=list(check_dependencies[check],d)
-  for(i=1;i<=n;i++) add_reason(d[i],reason,seen)
+  for(i=1;i<=n;i++) add_reason(d[i],reason,kind,seen)
 }
 function select_path(p, reason, m,n,cs,i,hit,visiting,seen) {
   hit=0
   for(m=1;m<=map_count;m++) {
     if((map_match[m]=="exact" && p==map_path[m]) || (map_match[m]=="prefix" && index(p,map_path[m])==1)) {
       hit=1; n=list(map_checks[m],cs)
-      for(i=1;i<=n;i++) { require_check(cs[i],visiting); add_reason(cs[i],reason,seen) }
+      for(i=1;i<=n;i++) { require_check(cs[i],visiting); add_reason(cs[i],reason,"promotion-delta",seen) }
     }
   }
   if(!hit) refuse("mapping-review-needed")
@@ -72,7 +73,7 @@ FILENAME==ARGV[2] {
   if($2=="common") refuse("unsupported-common")
   if($2!~/^(unixlike|windows)$/ || baseline_kind[$2]) { refuse("invalid-baseline-domain"); next }
   if($1=="semantic") {
-    if(NF!=4 || !version($3) || $4!=$2 "-v" $3) refuse("invalid-semantic-baseline")
+    if(NF!=5 || !sha($5) || !version($3) || $4!=$2 "-v" $3) refuse("invalid-semantic-baseline")
   } else if($1=="bootstrap") {
     if(NF!=5 || !sha($3) || !sha($4) || !path($5)) refuse("invalid-bootstrap-baseline")
   } else refuse("unknown-baseline-record")
@@ -140,7 +141,7 @@ END {
       if(count!=5) refuse("invalid-bootstrap-record")
       n=list(bootstrap_value[d,"contracts"],values)
       if(n<1) refuse("invalid-bootstrap-contracts")
-      for(i=1;i<=n;i++) { if(check_domain[values[i]]!=d) refuse("invalid-bootstrap-contracts"); require_check(values[i],visit) }
+      for(i=1;i<=n;i++) { if(check_domain[values[i]]!=d) refuse("invalid-bootstrap-contracts"); require_check(values[i],visit); delete reason_visit; add_reason(values[i],"bootstrap:" d ":" domain_record[d],"domain-release",reason_visit) }
       next_version[d]="1.0.0"; domain_impact[d]=3
     }
   }
@@ -154,8 +155,7 @@ END {
     if(!(impact in impacts)) refuse("invalid-release-impact")
     if(compatibility!~/^(compatible|breaking|unknown)$/ || compatibility=="unknown") refuse("unknown-compatibility")
     if(compatibility=="breaking" && (impact!="major" || migration=="none")) refuse("incompatible-impact")
-    if(migration!="none") { if(!path(migration) || migration!~/^docs\// || migration_exists[h]!="blob") refuse("invalid-migration"); approval["migration"]=1 }
-    if(impact=="major") approval["major"]=1
+    if(migration!="none") { if(!path(migration) || migration!~/^docs\// || migration_exists[h]!="blob") refuse("invalid-migration") }
     n=list(trailer[h,"release-contracts"],values)
     if(n<1) refuse("invalid-release-contracts")
     for(i=1;i<=n;i++) { if(check_domain[values[i]]!=d) refuse("invalid-release-contracts"); declared[h,values[i]]=1 }
@@ -167,8 +167,6 @@ END {
         for(i=1;i<=n;i++) if(check_domain[values[i]]==d && !declared[h,values[i]]) refuse("release-contract-path-mismatch")
       }
     }
-    domain_compatibility[d]=(compatibility=="breaking" || domain_compatibility[d]=="breaking") ? "breaking" : compatibility
-    if(migration!="none") domain_migration[d,migration]=1
     if(trailer_count[h,"release-reverts"] && (!sha(trailer[h,"release-reverts"]) || revert_target[h]!=trailer[h,"release-reverts"])) refuse("invalid-revert-target")
   }
   # Pair cancellation is exact: both modes/blob directions and all paths match.
@@ -185,10 +183,23 @@ END {
   for(h in history_domain) if(!canceled[h]) {
     d=history_domain[h]; value=impacts[trailer[h,"release-impact"]]
     if(value>domain_impact[d]) domain_impact[d]=value
+    compatibility=trailer[h,"release-compatibility"]; migration=trailer[h,"release-migration"]
+    domain_compatibility[d]=(compatibility=="breaking" || domain_compatibility[d]=="breaking") ? "breaking" : compatibility
+    if(migration!="none") { domain_migration[d,migration]=1; approval["migration"]=1 }
+    if(trailer[h,"release-impact"]=="major")approval["major"]=1
   }
   for(d in baseline_kind) if(baseline_kind[d]=="semantic") {
     if(domain_delta[d] && domain_impact[d]>0) next_version[d]=increment(domain_version[d],domain_impact[d])
     else next_version[d]=""
+  }
+  # Promotion selection remains its own path comparison. A proposed domain
+  # release also qualifies its effective declared contracts, even if source is
+  # already on master; exact net-zero/none adds no release-only qualification.
+  for(d in next_version) if(next_version[d]!="" && baseline_kind[d]=="semantic") {
+    for(h in history_domain) if(history_domain[h]==d && !canceled[h]) {
+      n=list(trailer[h,"release-contracts"],values)
+      for(i=1;i<=n;i++) { require_check(values[i],visit); delete reason_visit; add_reason(values[i],d ":" history_sha[h],"domain-release",reason_visit) }
+    }
   }
   for(c in evidence_seen) {
     if(!check_domain[c]) refuse("unknown-evidence-check")
@@ -204,6 +215,7 @@ END {
   changed=pending_source>0; for(d in next_version) if(next_version[d]!="") changed=1
   decision=error_count ? "refusal" : changed ? "candidate" : "no-op"
   out="{\"format\":1,\"decision\":" quote(decision) ",\"master\":" quote(master) ",\"candidate\":" quote(candidate) ",\"merge_tree\":" quote(merge_tree) ",\"rules\":" quote(rules) ",\"pending_source_commits\":" pending_source
+  out=out ",\"git_version\":" quote(git_version) ",\"object_format\":" quote(object_format) ",\"git_command_digest\":" quote(git_command_digest) ",\"awk_command_digest\":" quote(awk_command_digest)
   out=out ",\"engine_digest\":" quote(engine_digest) ",\"classifier_digest\":" quote(classifier_digest) ",\"rules_digest\":" quote(rules_digest) ",\"baselines_digest\":" quote(baselines_digest) ",\"evidence_digest\":" quote(evidence_digest)
   out=out ",\"promotion_delta\":["; n=keys(promotion_path,promotion_paths)
   for(i=1;i<=n;i++) { p=promotion_paths[i]; if(i>1)out=out ","; out=out "{\"path\":" quote(p) ",\"status\":" quote(promotion_path[p]) ",\"owner\":" quote(promotion_owner[p]) "}" }
@@ -227,6 +239,10 @@ END {
     for(k in reasons) { split(k,parts,SUBSEP); if(parts[1]==c)path_keys[parts[2]]=1 }
     n=keys(path_keys,reason_paths)
     for(j=1;j<=n;j++) { if(j>1)out=out ","; out=out quote(reason_paths[j]) }
+    out=out "],\"selection_reasons\":["; delete selection_keys
+    for(k in selection_reasons) { split(k,parts,SUBSEP); if(parts[1]==c)selection_keys[parts[2] SUBSEP parts[3]]=1 }
+    n=keys(selection_keys,selection_values)
+    for(j=1;j<=n;j++) { split(selection_values[j],parts,SUBSEP); if(j>1)out=out ","; out=out "{\"kind\":" quote(parts[1]) ",\"reference\":" quote(parts[2]) "}" }
     out=out "]}"
   }
   out=out "],\"unaffected_checks\":["; n=keys(check_domain,all_checks); comma=""
