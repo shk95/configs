@@ -131,6 +131,21 @@ reset_case
 printf 'unknown compatibility\n' >unixlike/api/contract.json; declaration unixlike patch unixlike-api unknown
 prepare_evidence; refusal unknown-compatibility
 reset_case
+printf 'raw declaration source\n' >unixlike/api/contract.json; declaration unixlike patch unixlike-api
+raw_source=$(git rev-parse HEAD)
+git cat-file commit "$raw_source" >"$scratch/raw-source"
+for source_bytes in valid nul invalid-utf8; do
+  cp "$scratch/raw-source" "$scratch/raw-source-case"
+  case "$source_bytes" in
+    nul) printf '\000Release-Future: hidden after formatter truncation\n' >>"$scratch/raw-source-case" ;;
+    invalid-utf8) printf '\377\n' >>"$scratch/raw-source-case" ;;
+  esac
+  raw_candidate=$(git hash-object --literally -t commit -w --stdin <"$scratch/raw-source-case")
+  git update-ref refs/heads/dev "$raw_candidate"
+  prepare_evidence
+  if [ "$source_bytes" = valid ]; then pass; else refusal unsupported-release-text; fi
+done
+reset_case
 printf 'empty baseline\n' >unixlike/api/contract.json; declaration unixlike patch unixlike-api
 printf 'format\t1\n' >"$baselines"
 prepare_evidence; refusal missing-domain-baseline
@@ -152,6 +167,21 @@ prepare_evidence
 tags_before=$(git show-ref --tags)
 pass; assert_text '"next_version":"1.0.0"'
 [ "$tags_before" = "$(git show-ref --tags)" ] || { echo 'preview altered legacy tags' >&2; exit 1; }
+for malformed_record in no-lf nul invalid-utf8 control; do
+  case "$malformed_record" in
+    no-lf) printf 'format\t1\ndomain\tunixlike\nsource\t%s\nversion\t1.0.0\ncontracts\tunixlike-api' "$candidate" ;;
+    nul) printf 'format\t1\000\ndomain\tunixlike\nsource\t%s\nversion\t1.0.0\ncontracts\tunixlike-api\n' "$candidate" ;;
+    invalid-utf8) printf 'format\t1\ndomain\tunixlike\nsource\t%s\nversion\t1.0.0\ncontracts\tunixlike-api\377\n' "$candidate" ;;
+    control) printf 'format\t1\ndomain\tunixlike\nsource\t%s\nversion\t1.0.0\ncontracts\tunixlike-api\001\n' "$candidate" ;;
+  esac >"$scratch/malformed-bootstrap-record"
+  malformed_blob=$(git hash-object -w --no-filters --stdin <"$scratch/malformed-bootstrap-record")
+  malformed_tree=$(printf '100644 blob %s\tbootstrap.tsv\n' "$malformed_blob" | git mktree)
+  malformed_commit=$(printf 'docs(repository): malformed bootstrap byte fixture\n' | git commit-tree "$malformed_tree" -p "$candidate")
+  printf 'format\t1\nbootstrap\tunixlike\t%s\t%s\tbootstrap.tsv\n' "$candidate" "$malformed_commit" >"$baselines"
+  refusal invalid-bootstrap-record-format
+done
+printf 'format\t1\nbootstrap\tunixlike\t%s\t%s\tbootstrap.tsv\n' "$candidate" "$record_commit" >"$baselines"
+pass
 printf 'format\t1\nbootstrap\tunixlike\t%s\t%s\tmissing.tsv\n' "$candidate" "$record_commit" >"$baselines"
 refusal missing-bootstrap-record
 printf 'format\t1\nsemantic\tunixlike\t2026.08.31\tunixlike-v2026.08.31\t%s\n' "$(git rev-parse refs/tags/unixlike-v2026.08.31)" >"$baselines"
@@ -175,6 +205,22 @@ printf 'Release-Format: 1\nDomain: unixlike\nVersion: 1.0.5\nSource: %s\n' "$bas
 git tag -a unixlike-v1.0.5 "$(git rev-parse refs/tags/unixlike-v1.0.0)" -F - <"$scratch/tag-message" 2>"$scratch/nested-tag-advice"
 printf 'format\t1\nsemantic\tunixlike\t1.0.5\tunixlike-v1.0.5\t%s\n' "$(git rev-parse refs/tags/unixlike-v1.0.5)" >"$baselines"
 prepare_evidence; refusal baseline-annotation-mismatch
+reset_case
+for tag_bytes in valid nul invalid-utf8; do
+  {
+    printf 'object %s\ntype commit\ntag unixlike-v1.0.6\ntagger Fixture <fixture@example.invalid> 1 +0000\n\nRelease-Format: 1\nDomain: unixlike\n' "$base"
+    case "$tag_bytes" in
+      valid) printf 'Version: 1.0.6\n' ;;
+      nul) printf 'Version: 1.0.6\000\n' ;;
+      invalid-utf8) printf 'Version: 1.0.6\377\n' ;;
+    esac
+    printf 'Source: %s\n' "$base"
+  } >"$scratch/raw-tag"
+  raw_annotation=$(git hash-object --literally -t tag -w --stdin <"$scratch/raw-tag")
+  printf 'format\t1\nsemantic\tunixlike\t1.0.6\tunixlike-v1.0.6\t%s\n' "$raw_annotation" >"$baselines"
+  prepare_evidence
+  if [ "$tag_bytes" = valid ]; then run; assert_text '"decision":"no-op"'; else refusal invalid-baseline-annotation-format; fi
+done
 reset_case
 git tag unixlike-v1.0.2 "$base"
 printf 'format\t1\nsemantic\tunixlike\t1.0.2\tunixlike-v1.0.2\t%s\n' "$(git rev-parse refs/tags/unixlike-v1.0.2)" >"$baselines"
@@ -498,12 +544,12 @@ git config --unset remote.unavailable.promisor
 printf 'format\t1' >"$evidence"; refusal invalid-replay-format
 mkdir "$scratch/incomplete-tools"
 set +e
-PATH="$scratch/incomplete-tools" "$preview" --master "$base" --candidate HEAD --rules "$rules" --baselines "$baselines" --evidence "$evidence" --json >"$output" 2>"$scratch/unavailable"
+PATH="$scratch/incomplete-tools" REQUIRE_NATIVE=0 "$preview" --master "$base" --candidate HEAD --rules "$rules" --baselines "$baselines" --evidence "$evidence" --json >"$output" 2>"$scratch/unavailable"
 unavailable_status=$?
 PATH="$scratch/incomplete-tools" REQUIRE_NATIVE=1 "$preview" --master "$base" --candidate HEAD --rules "$rules" --baselines "$baselines" --evidence "$evidence" --json >"$output" 2>"$scratch/unavailable-native"
 native_status=$?
 set -e
-[ "$unavailable_status" -eq 69 ] && [ "$native_status" -eq 1 ] || { echo 'missing capability was upgraded or native job skipped' >&2; exit 1; }
+[ "$unavailable_status" -eq 69 ] && [ "$native_status" -eq 1 ] || { echo "missing capability was upgraded or native job skipped: local=$unavailable_status native=$native_status" >&2; exit 1; }
 grep -q 'unverified: missing git' "$scratch/unavailable"
 printf 'format\t9\n'  >"$evidence"; refusal invalid-replay-format
 echo 'release-preview fixtures passed'

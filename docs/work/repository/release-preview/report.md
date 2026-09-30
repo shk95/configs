@@ -80,3 +80,27 @@ is not the final native preview proof. AC6 operator documentation and
 affected-dispatch alignment now have local proof; AC7 remains pending current-head Ubuntu/Git-for-Windows
 fixture jobs and Required-gate proof after prerequisite ownership transfer. The
 report stays pending and the parent release/controller report states are unchanged.
+
+## First native matrix diagnostic and original-byte repair
+
+[Run 36666916787](https://github.com/shk95/configs/actions/runs/36666916787)
+checks published source 6a94bbf23ca2a76428ebc5c15ecdfcbf70fc6ec0. Ubuntu's full
+repository suite, native Windows desired-state, Unix-like and scans pass. The
+[Git-for-Windows preview job](https://github.com/shk95/configs/actions/runs/36666916787/job/109733469392)
+executes on Git 2.55.0.windows.5, reaches its native fixture banner, then fails the
+last missing-capability fixture: the local-mode invocation inherited the job's
+REQUIRE_NATIVE=1 instead of testing the local exit-69 mode. Required checks fails
+correctly. This diagnostic is not completed native acceptance.
+
+The local-mode fixture now explicitly sets REQUIRE_NATIVE=0 only for that one
+invocation; its separate native missing-capability invocation and the CI job retain
+1. Local GNU/BSD awk suites pass with the enclosing REQUIRE_NATIVE=1 environment.
+Committed bootstrap records validate original UTF-8/NUL/LF/control bytes before
+AWK normalization. Raw semantic tag objects validate original UTF-8/NUL bytes
+before peeling or field parsing; BSD awk's removal of NUL in a Version field was
+reproduced directly. Raw source commit objects validate original UTF-8/NUL bytes
+before pretty formatting, which otherwise truncates a message at NUL. Focused
+valid and malformed pinned commit/tag/record objects prove these refusals without
+choosing a production bootstrap. AC7 remains pending the repaired exact-head native
+run. Final publication waits for the integrator's actual required admission base;
+earlier CI cannot certify that changed head.

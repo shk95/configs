@@ -177,8 +177,9 @@ while IFS="$tab" read -r kind domain value target record_path extra; do
       case "$annotation" in *[!a-f0-9]*|'') refuse invalid-baseline-annotation ;; esac
       [ "${#annotation}" -eq 40 ] || [ "${#annotation}" -eq 64 ] || refuse invalid-baseline-annotation
       [ "$(git cat-file -t "$annotation" 2>/dev/null || true)" = tag ] || refuse unannotated-baseline
-      base=$(git rev-parse "$annotation^{commit}") || refuse invalid-baseline
       git cat-file tag "$annotation" >"$scratch/tag"
+      valid_utf8_file "$scratch/tag" || refuse invalid-baseline-annotation-format
+      base=$(git rev-parse "$annotation^{commit}") || refuse invalid-baseline
       awk -F': *' -v domain="$domain" -v version="$value" -v source="$base" '
         /^object / { if(++o!=1 || $0!="object " source)bad=1 }
         /^type / { if(++y!=1 || $0!="type commit")bad=1 }
@@ -196,6 +197,10 @@ while IFS="$tab" read -r kind domain value target record_path extra; do
       [ "$value" = "$candidate" ] || refuse bootstrap-source-mismatch
       [ "$(git cat-file -t "$target" 2>/dev/null || true)" = commit ] || refuse invalid-bootstrap-record-commit
       git show "$target:$record_path" >"$scratch/bootstrap-$domain" 2>/dev/null || refuse missing-bootstrap-record
+      # Validate the original committed bytes before awk can normalize them.
+      valid_utf8_file "$scratch/bootstrap-$domain" || refuse invalid-bootstrap-record-format
+      [ "$(tail -c 1 "$scratch/bootstrap-$domain" | od -An -tu1 | tr -d ' \n')" = 10 ] || refuse invalid-bootstrap-record-format
+      awk -F'\t' '{ text=$0; gsub(/\t/, "", text); if(NF!=2 || $1=="" || $2=="" || text~/[[:cntrl:]]/)exit 1 } END { if(NR==0)exit 1 }' "$scratch/bootstrap-$domain" || refuse invalid-bootstrap-record-format
       awk -F'\t' -v domain="$domain" -v source="$value" -v record="$target" -v path="$record_path" '{ print "bootstrap\t" domain "\t" $0 }' "$scratch/bootstrap-$domain" >>"$manifest"
       record_blob=$(git rev-parse "$target:$record_path")
       [ "$(git cat-file -t "$record_blob")" = blob ] || refuse invalid-bootstrap-record-type
@@ -221,6 +226,9 @@ while IFS="$tab" read -r kind domain value target record_path extra; do
     grep -qx "$domain" "$scratch/commit-scopes" || continue
     [ "$(wc -l <"$scratch/commit-scopes" | tr -d ' ')" -eq 1 ] || refuse mixed-source-scope
     parent=$(git rev-parse "$source^" 2>/dev/null) || parent=-
+    # Pretty formatting can discard message bytes after NUL; check raw object first.
+    git cat-file commit "$source" >"$scratch/raw-commit"
+    valid_utf8_file "$scratch/raw-commit" || refuse unsupported-release-text
     git show -s --format=%B "$source" >"$scratch/message"
     valid_utf8_file "$scratch/message" || refuse unsupported-release-text
     message_digest=$(git hash-object --no-filters --stdin <"$scratch/message")
