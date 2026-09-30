@@ -93,7 +93,17 @@ jobs:
       REQUIRE_NATIVE: "1"
     steps:
       - uses: actions/checkout@v7
-      - uses: DeterminateSystems/nix-installer-action@v22
+      - uses: cachix/install-nix-action@v31.10.6
+        with:
+          install_url: https://releases.nixos.org/nix/nix-2.34.8/install
+          extra_nix_config: |
+            experimental-features = nix-command flakes
+      - name: Verify upstream Nix baseline
+        shell: bash
+        run: |
+          actual=$(nix --version)
+          printf 'Unix-like CI Nix implementation/version: %s\n' "$actual"
+          test "$actual" = 'nix (Nix) 2.34.8'
       - run: unixlike/tool/checks/format
       - run: unixlike/tool/checks/lint
       - run: unixlike/tool/checks/payloads-test
