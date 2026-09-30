@@ -707,6 +707,73 @@ graphical VM, native Darwin fixture, all-output evaluation and companion
 evaluations keep their original source and lane limits. AC3/U2 and full parent
 report acceptance remain pending; release and host rollout are separate.
 
+## Repair integration and realigned delivered pair, 2026-09-30
+
+Provider [PR #435](https://github.com/shk95/configs/pull/435) entered `dev` at
+`c76752dc1ec285dce721ae02a2f139c9f32dcb76`, from final head
+`240065361bc781d714b5cd754dbd4bdb8c3d933a`. The final head and merge
+have the same complete Git tree, `bce7d764c976c90f730579d6b1c8b546fa25d606`.
+[Head CI 36666344628](https://github.com/shk95/configs/actions/runs/36666344628)
+and [post-merge CI 36667972274](https://github.com/shk95/configs/actions/runs/36667972274)
+passed Required checks and their native Linux lane under upstream Nix 2.34.8.
+Those checks include the 71 finite constructor cases, reader/source-binding and
+readiness regressions, all seven output evaluations, selected Home Manager and
+NixOS CLI builds, the graphical VM check and import-order fixtures. ARM, WSL and
+other unselected graphical builds are not inferred. On the exact final head,
+macOS 26.6.2/aarch64-darwin/Nix 2.34.8 evaluated all seven provider outputs,
+built the synthetic fixture-mac and contract-inspect package, and executed the
+packaged reader. Tree equality binds this proof to the merge; it does not claim
+another native Mac build invocation at the merge commit.
+
+Both companions then adopted this same immutable delivered provider
+`c76752dc1ec285dce721ae02a2f139c9f32dcb76?dir=unixlike`. Each separates
+the source pin/README commit from its configs-only lock commit. Normalized lock
+comparison found no other node changed, and the host declarations/modules are
+unchanged. The previous provider `3d6d945f` and companion refs above retain
+their original delivery evidence rather than certifying these later sources.
+
+| Source | Final candidate | Integrated source | Exact merged-source CI |
+| --- | --- | --- | --- |
+| Public template [PR #2](https://github.com/shk95/configs-host-template/pull/2) | `ab6df4685b0ad4d365347abb30182671010f47c5` | `2cbf41be904448354f413e6156e8e83c0e4c445a` | [36669451868](https://github.com/shk95/configs-host-template/actions/runs/36669451868), evaluate passed |
+| Private consumer [PR #22](https://github.com/shk95/configs-hosts/pull/22) | `7e5d4a7bd3073b949d4f98d8fe361e817f00bb5b` | `f5c205d942ddc6f4b51dffc0b218d72d040d7a49` | [36669541101](https://github.com/shk95/configs-hosts/actions/runs/36669541101), evaluate passed |
+
+Each candidate and its merged consumer source have equal complete Git trees.
+Their final-head evaluation CI also passed in
+[public run 36668886207](https://github.com/shk95/configs-host-template/actions/runs/36668886207)
+and [private run 36669015181](https://github.com/shk95/configs-hosts/actions/runs/36669015181).
+Checks against the immutable merged refs, without a provider override, evaluated
+the public example and all seven private outputs. Both effective provider inputs
+resolve to the same fetched delivered source and
+`sha256-nOEpwuFlBKCUlZtLZA7MNYip9viU9ihARWuIravKMvc=` NAR hash.
+The packaged reader bound both the candidate provider and previous trusted
+provider source roots to their respective locks using actual merged consumer
+locks and declarations. Declared inputs are compatible with no required host
+edits or contract/default-data drift. Arbitrary module effects/final configuration
+remain separate evaluation obligations; the final-output checks supply that
+evaluation evidence rather than upgrading the metadata result. No private input
+values or module contents are copied into this report.
+
+The private candidate's native Darwin build command passed on macOS 26.6.2 with
+Nix 2.34.8, realizing an already present store candidate rather than rebuilding
+a new derivation. Its derivation equals the previous U1 consumer's Darwin
+derivation. The new candidate is an ancestor of its merge, their complete trees
+are equal, and fresh immutable-merge evaluation produced the same derivation and
+output, which remains present in the local store. This binds the successful
+candidate build invocation to unchanged delivered source; no second build at
+the merge is claimed. The six transferred safety groups and refusal checks,
+plus the bounded install-plan acceptance/refusal fixture, passed on the candidate.
+The non-Darwin disposable installation VM lane was not selected.
+
+The selected Darwin check covers adoption of the repaired native preferences.
+The other six private outputs have evaluation-only evidence. The public template
+changes the pin and handoff documentation, with an unchanged synthetic NixOS
+declaration and no new template-owned executable/package behavior; connection
+evaluation is selected, with no native template Linux build claimed. There is
+no new host runtime, installation, activation or fleet completion evidence.
+The repaired provider and required template source are delivered and aligned;
+AC3/U2 and full parent acceptance remain pending. API release readiness and each
+host's rollout remain separate, and private activation is no provider gate.
+
 ## Acceptance
 
 | ID | State | Evidence |
@@ -717,6 +784,6 @@ report acceptance remain pending; release and host rollout are separate.
 | AC3 | pending | U2 must implement the host-owned Darwin capture format, projection/ownership selection and preview/save path, then supply its selected evaluation/build/native-reader evidence. No capture result is certified here. |
 | AC4 | verified | Older `e11bd136` external connection and preserved consumer history establish the old pin; new independent locked consumers, native x86 synthetic realization, retired-input refusals and stable migration guidance establish the declared breaking adoption boundary. Older pins remain explicit choices; compatibility across that boundary is not promised. |
 | AC5 | verified | Delivered `c8b6e818` macOS 26.6.2/Nix 2.34.8 all-output evaluation and native aarch64-darwin synthetic public-constructor build establish the selected macOS 26 lane. Separate external Darwin API evaluation is qualified as evaluation. Older/later OS support and private runtime are not inferred. |
-| AC6 | verified | Delivered provider head `c8b6e818` and merge `3d6d945f` passed their own CI with the explicit upstream Nix 2.34.8 assertion, evaluation and selected native builds; matching macOS evidence is recorded above. |
+| AC6 | verified | Initial delivered head `c8b6e818`/merge `3d6d945f` and repair head `24006536`/merge `c76752dc` passed their own CI with the explicit upstream Nix 2.34.8 assertion, evaluation and selected native builds; matching source-bound macOS evidence is recorded above. |
 | AC7 | verified | Technical review maps provider removals to durable host-owned machine/account/access/storage/WSL, installation, daemon/app lifecycle and actual safeguard fixtures. Disko/nixos-anywhere moved; unused deploy-rs retired; provider WSL input remains synthetic test infrastructure. Delivered pair evaluation and qualified Darwin build are recorded; installation, headless boot/recovery and host rollout are not claimed. |
-| AC8 | verified | Changed native Darwin defaults/reader/composition coverage includes finite API probes, varied ordinary overrides with unchanged defaults/siblings, graphics opt-out host/shared-dependency preservation and existing Niri merge refusal. Native Mac evaluation/build and prior qualified Linux/graphical/companion evidence retain source boundaries; current repair-head selected Linux CI is supplied with the PR before Ready. ARM/WSL/other graphical builds, private runtime and activation are not inferred. |
+| AC8 | verified | Changed native Darwin defaults/reader/composition coverage includes finite API probes, varied ordinary overrides with unchanged defaults/siblings, graphics opt-out host/shared-dependency preservation and existing Niri merge refusal. Repair-head and post-merge selected native Linux CI, exact-head Mac evaluation/build, and realigned delivered companion evaluation/Darwin cached-realization provenance are recorded above with source boundaries. ARM/WSL/other unselected graphical builds, private runtime and activation are not inferred. |
