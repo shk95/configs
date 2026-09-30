@@ -104,3 +104,35 @@ valid and malformed pinned commit/tag/record objects prove these refusals withou
 choosing a production bootstrap. AC7 remains pending the repaired exact-head native
 run. Final publication waits for the integrator's actual required admission base;
 earlier CI cannot certify that changed head.
+
+## Independent fixture isolation and second native diagnostic
+
+The publication retry initially passed a command-scoped origin push URL into
+fixture child Git through inherited configuration. A synthetic fixture tag was
+created in the real repository, while dev/master updates were rejected. The
+integrator removed that synthetic tag after explicit maintainer authorization;
+subsequent read-only checks confirmed its absence and expected refs unchanged.
+Its annotation and source were synthetic fixtures, not domain release evidence.
+D's issue #439 / PR #441 separately delivered a test-only Git environment boundary
+and eight local positive/negative routing/transport cases. This independent
+preview fixture adopts that helper before any Git command and runs the eight-case
+proof in its native job; production engines/hooks do not source it.
+
+A subsequent normal SSH push passed its selected local gates but exited 141 when
+the transport closed, leaving the feature head unchanged. A normal retry with an
+explicit HTTPS destination and no origin push-URL override or hook bypass published
+source a1a07e808dcf6b6daf4555e60e179739a01579bf. These transport attempts are separate
+from semantic fixture acceptance.
+
+[Run 36677599086](https://github.com/shk95/configs/actions/runs/36677599086) checks
+that exact source. Its
+[native preview job](https://github.com/shk95/configs/actions/runs/36677599086/job/109765892658)
+fails before the eight cases: native Git refuses `/d/a/configs/configs` under the
+required MSYS argument guard. This is a diagnostic failure, not completed AC7.
+The focused fixture now normalizes repository and scratch absolute paths with
+`cygpath -m` when available, while keeping the stub's PATH component in POSIX form.
+All eight hostile/local-operation cases, caller HOME/ref/config/source assertions
+and MSYS guards remain. The delivered environment helper, main suite, production
+preview and CI gates are unchanged. Native proof remains pending on the repaired
+publication head; the next publication also awaits the actual required admission
+base selected by the integrator.
