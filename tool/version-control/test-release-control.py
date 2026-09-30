@@ -164,7 +164,7 @@ class ControllerProof(unittest.TestCase):
             sys.path.pop(0)
             # New approved package weakens both the engine entry and its preview rules.
             run_git(root, "checkout", "-q", "dev")
-            (root / loader.ROOT / "main.py").write_text("print('new gate waived')\n")
+            (root / loader.ROOT / "main.py").write_bytes(b"import sys\nsys.stdout.buffer.write(b'new gate waived\\n')\n")
             (root / "tool/version-control/release-preview.rules").write_text("format\t1\n")
             newer_manifest = manifest()
             run_git(root, "add", ".")

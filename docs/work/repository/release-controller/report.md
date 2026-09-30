@@ -45,6 +45,14 @@ observed operating parents before later record intent and blocks stale parents,
 binds publication versions to the candidate, and suppresses ambient Python site
 packages. Narrow positive/refusal cases passed after those owning-source repairs.
 
+Source head df79ecec508467f71e49b8f2ee50628f64a756cb's
+[CI 36712555106](https://github.com/shk95/configs/actions/runs/36712555106)
+passed Linux repository, policy scans and Windows desired-state. Native Windows
+ran all seven controller families, but AC1's synthetic weakened-package marker
+used platform text output and differed only by CRLF. Its marker now writes exact
+LF bytes; this repairs the fixture contract without weakening TSV byte refusal.
+This failed run does not verify the pending rows; a new source-head run is required.
+
 All seven child rows remain pending until published source-bound native Windows,
 affected dispatch and reviewer evidence are complete. Parent
 `provider-release-contract/report.md` remains pending with zero
