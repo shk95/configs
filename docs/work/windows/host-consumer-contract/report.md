@@ -3,6 +3,30 @@ kind: report
 spec: docs/work/windows/host-consumer-contract/spec.md
 status: pending
 
+## W1 pickup preparation, 2026-09-30
+
+The planner reconciled the pickup boundary with the latest whole-unit and
+save/generation-failure amendments. W1 owns Windows declaration, explicit
+connections, source selection and local generation/Check/Apply guards; W2 owns
+capture/save and waits for W1's format to enter dev. U1/Nix and private host
+activation are not W1 prerequisites. Repository release-controller implementation
+and any needed hosted CI wiring remain separately assigned scope work.
+
+Read-only source inspection at dev 1758fe98aff677b815fd28d14d53228e29bf5371
+confirmed the existing manifest features/ManagedFiles, runtime-recorded selection,
+provider-targeted capture and absence of a host generation verb. The Windows
+job currently invokes the Windows validation/test implementations with
+REQUIRE_NATIVE and WIN_ENV_E2E; it does not explicitly select PowerShell 7.6.6.
+That is a preparation dependency to resolve, not evidence that AC6 is met.
+
+The added pickup matrix identifies unresolved concrete format, migration,
+unit-ownership and LTSC capability/gate choices before implementation assignment.
+It maps the existing criteria to W1 proof obligations without certifying a new
+schema or a host migration. A new dedicated latest-dev implementation worktree,
+reviewed plan revision, one continuation owner and explicit publication scope
+remain pickup requirements. No W1 implementation, generation, native suite,
+client Check, capture or Apply ran. All acceptance rows remain pending.
+
 ## Cross-work reading reconciliation, 2026-09-28
 
 Latest-reading guidance marks delta/baseline capture as superseded, preserves Apply

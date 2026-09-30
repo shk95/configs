@@ -172,8 +172,10 @@ capture prove host ownership and source immutability; Apply remains separately
 authorized. Governance/publication changes outside Windows have their own
 repository increment. Private host/template adoption is separately owned.
 
-Stop/replan for arbitrary host overrides, unrequested uninstall/restore,
-cross-platform generation, implicit publication or remote credential changes.
+Stop/replan for a provider compatibility promise for arbitrary host extensions,
+unrequested uninstall/restore, cross-platform generation, implicit publication
+or remote credential changes. Arbitrary host extensions themselves remain
+host-owned under the later whole-unit amendment.
 Stage 2 names Windows release evidence; native fixtures alone are not actual
 host runtime or Apply proof. The next planner refines lanes before pickup.
 
@@ -273,6 +275,83 @@ First-generation failure leaves no applicable generated result. Add no generatio
 history/recovery service merely for this. Actual Apply spans multiple settings/apps,
 is not atomic, records success/failure separately and does not automatically roll
 back. Capture itself never changes actual app configuration.
+
+## W1 pickup preparation and W2 dependency
+
+Amended 2026-09-30: AC1/AC2/AC4/AC5/AC6/AC7 are clarified for W1 pickup;
+AC3 remains the dependent W2 capture outcome. This section allocates existing
+obligations without changing the acceptance table or accepting a new schema,
+support policy or CLI. Read it with the whole-unit and failure amendments above.
+Planning delivery, W1 implementation, W2 implementation and Windows release
+readiness remain separate results.
+
+W1 produces one Windows-owned host-input/generation contract and its native
+implementation. It can be planned and implemented independently of U1, Unix-like
+provider delivery, Nix, personal host activation and the repository release
+controller. It consumes Windows source at a fixed commit. A later promotion or
+release reader may consume its contract; that reader is not a prerequisite for
+local generation. Repository CI wiring, release-controller behavior and shared
+repository procedures remain separately owned dependencies when actually needed.
+
+Before assigning implementation, the planner resolves or records the following
+design boundaries against the latest Windows source. Routine implementation
+details inside these accepted boundaries remain the assigned worker's choice.
+
+| Preparation | Required reviewable result before pickup |
+| --- | --- |
+| Versioned inputs and connections | A concrete declaration/settings-document shape, supported format versions, unit identities and explicit path/connection rules; unknown formats and malformed connections have named refusal behavior. Illustrative filenames above are not an existing public interface. |
+| Existing-host migration | An explicit preview/export route for current state-schema selections and host settings, with no automatic declaration write, source update or Apply. First-use opt-in and recorded legacy selections must be distinguished. |
+| Settings ownership | A unit inventory identifies provider settings, host-only WSL VM policy and personal layout/workspace data; names what leaves provider management and how preserved host data is connected. Empty provider payloads cannot reset personal data. Ownership transfer is not implicit capture or host adoption. |
+| Target support | Identify where the accepted LTSC terminal-delegation exclusion is expressed without waiving unrelated drift or unavailable observations. Any needed change to currently accepted decisions/invariants follows their owning scope; the existing gate is not bypassed. |
+| Verification runtime | Identify the Windows-owned version check/fixture for PowerShell 7.6.6 and separate 5.1 entry/bootstrap coverage. If changing hosted CI wiring is necessary, assign that repository change separately and name its dependency. |
+
+The W1 worker receives an explicit lane assignment and approved Git publication
+scope, one new dedicated Windows worktree/feature branch from the then-current
+origin/dev, and the reviewed plan commit pinned separately. The planning branch
+is not the implementation branch. Re-query open issues/PRs and record one
+continuation owner in the execution issue before implementation; no issue or
+branch is implicitly created by this plan. A plan revision not yet published
+must be published before handoff to another worker. Use one Windows PR for the
+coherent implementation and its report evidence, with the following boundaries.
+
+| Existing criterion | W1 delivery and required evidence |
+| --- | --- |
+| AC1 | Native fixtures cover core-only/empty selection, selected dependency closure, unknown names and new optional features staying unselected. Current features and actual interaction cases define bounded coverage. |
+| AC2 | Native fixtures and CLI observations cover fixed provider/input/format identity, explicit connections, provider-versus-host whole-unit selection, regeneration, complete temporary output publication, failed first/repeated generation and refusal of changed/stale inputs. Check is read-only; Apply entry refuses incompatible input before any write. |
+| AC4 | Native fixtures cover feature deselection and enabled=false without uninstall/reset, document retention and reselection validation, plus external profile blocks. An Apply invocation is not authorized by this work assignment. |
+| AC5 | Review and applicable read-only native client checks name the actual LTSC build/revision, application versions, selection and capability states. Hosted Windows Server fixtures do not certify client-only behavior; excluded delegation remains visibly excluded. |
+| AC6 | Native management evidence names and checks actual PowerShell 7.6.6, with separate native Windows PowerShell 5.1 entry/bootstrap coverage. A hosted-image default is not the promised version check. |
+| AC7 | Review and native fixtures cover source-bound inspection, supported/unknown format versions, explicit template/example connections and consistency between published contract data and generation behavior, without Nix or host mutation. |
+
+W1 leaves capture implementation and AC3 pending. W1 coverage of source
+selection does not prove capture projection or first-save behavior. For each
+criterion, record the actual verified part and the pending dependent work;
+verify a whole report row only when every required lane and obligation is met.
+
+Ready requires Required checks and the selected native Windows job at the
+final W1 head, after any required base update or repair. Cite the exact head/run,
+actual runtime version, counts and unavailable client evidence separately.
+The earlier #422 fixture result proves that repair at its own head, not W1.
+Foreign-host parsing or fixtures remain supplementary; document preflight is
+neither Windows native acceptance nor release evidence. Existing client inventory
+is historical planning input and must be refreshed for candidate-specific claims.
+
+W2 waits for W1's implementation/format to enter dev because native stacks are
+not supported. Its pickup pins then-current origin/dev and the W1 contract
+revision, with a separate owner/worktree/Windows PR. W2 consumes the supported
+unit identity, explicit connection, source and validation contract; it owns
+observed projection, host-original preview/save, first-document connection,
+recoverable per-file failures and removal of implicit provider publication.
+It must neither write generated bundles nor silently enable/select a target.
+Schema changes needed by W2 return to planning and W1 ownership rather than
+being invented as a second incompatible document format.
+
+Stop/replan if preparation leaves substantive schema, support, compatibility
+or migration decisions unresolved, if the implementation needs a new cross-scope
+dependency, or if native evidence cannot meet the accepted delivery boundary.
+Preserve unfinished work and checkpoint before owner or role changes. Separate
+release readiness still owes all remaining criteria and the repository evidence
+contract; W1 Ready alone does not complete this report.
 
 ## Acceptance
 
