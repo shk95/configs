@@ -77,3 +77,10 @@ empty stderr, and printed
 `known support limit: default terminal delegation: Windows build 19044 is
 below the documented boundary ...`. `REQUIRE_NATIVE=1` returned 1 and used the
 same category and reason in its failure. Apply remains untested.
+
+2026-09-30: `host-generation-owns-selection.md` excludes terminal delegation
+from the initial LTSC generated contract. Generated Check/Apply labels it
+`excluded` and neither queries nor writes its registry. This is separate from
+legacy source-only checks, whose known-limit/unavailable-observation categories
+and evidence ranks above remain unchanged. Exclusion certifies no handoff and
+waives no other selected drift or unavailable observation.

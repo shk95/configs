@@ -118,7 +118,7 @@ Describe 'win-env manifest' {
     It 'INV windows/schema-version-refused: loads schema 4 and the desired-state compatibility version' {
         $manifest = Get-WinEnvManifest -Path (Join-Path $desiredStateRoot 'manifest.json')
         $manifest.SchemaVersion | Should -Be 4
-        $manifest.ProjectVersion | Should -Be '0.6.0'
+        $manifest.ProjectVersion | Should -Be '0.7.0'
     }
 
     It 'INV windows/schema-version-refused: refuses a manifest schema this module does not read' {
@@ -177,48 +177,14 @@ Describe 'win-env manifest' {
         ($terminal.profiles.list | Where-Object name -eq 'Zellij Workspace').guid | Should -Be $manifest.Terminal.ZellijProfileGuid
     }
 
-    It 'splits the Windows-side WSL configuration by the build each key needs' {
-        # Reworked from the single-payload assertion this replaces. The four
-        # keys did not all move together, so asserting them against one source
-        # would now pin the wrong thing: three carry Microsoft's "require
-        # Windows 11 version 22H2 or higher" footnote and one carries no
-        # footnote at all. Every assertion below traces to a row of the per-key
-        # gate table in
-        # docs/policy/decisions/windows/wslconfig-selected-by-windows-build.md.
+    It 'leaves host-global WSL and personal layout units outside the provider catalog' {
+        # INV windows/host-generation-bound
         $manifest = Get-WinEnvManifest -Path (Join-Path $desiredStateRoot 'manifest.json')
-        $wsl = $manifest.ManagedFiles | Where-Object Id -eq 'wslConfig'
-        $wsl.Target | Should -Be '{USERPROFILE}\.wslconfig'
-        $wsl.Feature | Should -Be 'wsl'
-        $wsl.Parser | Should -Be 'Ini'
-        # One entry with alternative sources, not two entries competing for one
-        # Target, so drift, backup and deselection still see one logical file.
-        $wsl.ContainsKey('Source') | Should -Be $false
-        $wsl.Sources.Count | Should -Be 2
-
-        $mirrored = Get-Content (Join-Path $desiredStateRoot 'files/wsl/mirrored-networking.wslconfig') -Raw
-        $nat = Get-Content (Join-Path $desiredStateRoot 'files/wsl/nat-networking.wslconfig') -Raw
-
-        # At or above the bound: every key, and this is the content this
-        # repository already deployed.
-        $mirrored | Should -Match '(?m)^networkingMode=Mirrored$'
-        $mirrored | Should -Match '(?m)^hostAddressLoopback=true$'
-        $mirrored | Should -Match '(?m)^bestEffortDnsParsing=true$'
-        $mirrored | Should -Match '(?m)^autoMemoryReclaim=Gradual$'
-
-        # Below the bound: no key gated on Windows 11 22H2 survives, including
-        # networkingMode in any spelling, because the host would ignore it in
-        # silence rather than report it.
-        $nat | Should -Not -Match '(?m)^networkingMode='
-        $nat | Should -Not -Match '(?m)^hostAddressLoopback='
-        $nat | Should -Not -Match '(?m)^bestEffortDnsParsing='
-        # autoMemoryReclaim carries no Windows footnote: it is gated by the
-        # installed WSL application, so it stays. Dropping it here would remove
-        # a setting the host honours, a regression dressed as a version fix.
-        $nat | Should -Match '(?m)^autoMemoryReclaim=Gradual$'
-
-        # AGENTS.md: no .wslconfig firewall value without explicit direction.
-        $mirrored | Should -Not -Match '(?m)^firewall\s*='
-        $nat | Should -Not -Match '(?m)^firewall\s*='
+        $manifest.Features.Id | Should -Not -Contain 'wsl'
+        $manifest.ManagedFiles.Id | Should -Not -Contain 'wslConfig'
+        $manifest.ManagedFiles.Id | Should -Not -Contain 'fancyZonesCustomLayouts'
+        $manifest.ManagedFiles.Id | Should -Not -Contain 'fancyZonesLayoutHotkeys'
+        $manifest.ManagedFiles.Id | Should -Contain 'fancyZonesDefaultLayouts'
     }
 }
 
@@ -915,7 +881,7 @@ Describe 'state safety' {
 
     It 'INV windows/schema-version-refused: refuses a state schema this module does not read' {
         $path = Join-Path $TestDrive 'schema3.json'
-        [IO.File]::WriteAllText($path, '{"schemaVersion":3,"projectVersion":"0.1.0","appliedAtUtc":"2026-01-01T00:00:00+00:00","gitCommit":"0123456789abcdef","features":["core"]}')
+        [IO.File]::WriteAllText($path, '{"schemaVersion":4,"projectVersion":"0.1.0","appliedAtUtc":"2026-01-01T00:00:00+00:00","gitCommit":"0123456789abcdef","features":["core"]}')
         $message = $null
         try { Get-WinEnvState -Path $path | Out-Null } catch { $message = $_.Exception.Message }
         $message | Should -Match 'INV windows/schema-version-refused'
@@ -1102,11 +1068,8 @@ Describe 'managed sources' {
         } | Sort-Object)
         ($declared -join "`n") | Should -Be ($actual -join "`n")
 
-        # Both .wslconfig variants belong to one entry, so they share one
-        # Feature by construction rather than by agreement between two entries
-        # that could drift apart.
-        $declaredFeature['files/wsl/mirrored-networking.wslconfig'] | Should -Be 'wsl'
-        $declaredFeature['files/wsl/nat-networking.wslconfig'] | Should -Be 'wsl'
+        $declaredFeature.ContainsKey('files/wsl/mirrored-networking.wslconfig') | Should -BeFalse
+        $declaredFeature.ContainsKey('files/wsl/nat-networking.wslconfig') | Should -BeFalse
     }
 }
 
@@ -1240,7 +1203,7 @@ Describe 'feature model' {
         $owner = @($manifest.Features | Where-Object { $_.ContainsKey('Lifecycle') })
         $owner.Count | Should -Be 1
         $owner[0].Id | Should -Be 'powertoys'
-        @($manifest.ManagedFiles | Where-Object Feature -eq 'powertoys').Count | Should -Be 18
+        @($manifest.ManagedFiles | Where-Object Feature -eq 'powertoys').Count | Should -Be 16
     }
 }
 
@@ -2279,32 +2242,26 @@ Describe 'Windows build condition' {
         (Get-WinEnvDesiredStateHash -Root $root -Manifest $manifest -Feature @('core')) | Should -Not -Be $after
     }
 
-    It 'accepts the repository manifest and keeps the 22H2 payload byte-identical' {
-        $manifest = Get-WinEnvManifest -Path (Join-Path $desiredStateRoot 'manifest.json')
-        $wsl = $manifest.ManagedFiles | Where-Object Id -eq 'wslConfig'
+    It 'resolves a historical WSL definition without offering host-global defaults' {
+        $wsl = New-ConditionalFile -Sources @(@{ MinimumBuild = 22621; Source = $Upper }, @{ Source = $Lower })
         (Resolve-WinEnvManagedFile -Definition $wsl -Build $Windows11_23H2).Source | Should -Be $Upper
         (Resolve-WinEnvManagedFile -Definition $wsl -Build $Windows11_22H2).Source | Should -Be $Upper
         (Resolve-WinEnvManagedFile -Definition $wsl -Build $Windows11_21H2).Source | Should -Be $Lower
         (Resolve-WinEnvManagedFile -Definition $wsl -Build $Windows10_22H2).Source | Should -Be $Lower
         (Resolve-WinEnvManagedFile -Definition $wsl -Build $null).Source | Should -Be $Lower
 
-        # A host at or above the bound receives what it already had. Pinned as
-        # a literal rather than against the old file, which no longer exists.
-        $expected = "[wsl2]`nnetworkingMode=Mirrored`n`n[experimental]`nhostAddressLoopback=true`nautoMemoryReclaim=Gradual`nbestEffortDnsParsing=true`n"
-        $actual = (Get-Content (Join-Path $desiredStateRoot $Upper) -Raw).Replace("`r`n", "`n")
-        $actual | Should -Be $expected
     }
 
-    It 'parses both payloads with the parser the entry declares' {
-        # The merge gate must not accept a payload nobody parsed, and one of
-        # these is never the local answer on any single host.
-        $manifest = Get-WinEnvManifest -Path (Join-Path $desiredStateRoot 'manifest.json')
-        $wsl = $manifest.ManagedFiles | Where-Object Id -eq 'wslConfig'
-        foreach ($variant in (Get-WinEnvManagedFileVariant -Definition $wsl)) {
-            (Test-WinEnvSourceFile -Definition $variant -RepositoryRoot $desiredStateRoot) | Should -BeNullOrEmpty
+    It 'parses synthetic historical variants with their declared parser' {
+        $historical = Join-Path $TestDrive 'historical-desired'
+        [void](New-Item -ItemType Directory $historical -Force)
+        [IO.File]::WriteAllText((Join-Path $historical 'upper.ini'), "[wsl2]`nnetworkingMode=Mirrored`n")
+        [IO.File]::WriteAllText((Join-Path $historical 'lower.ini'), "[wsl2]`nmemory=4GB`n")
+        $wsl = New-ConditionalFile -Sources @(@{MinimumBuild=22621;Source='upper.ini'},@{Source='lower.ini'})
+        foreach ($variant in Get-WinEnvManagedFileVariant $wsl) {
+            (Test-WinEnvSourceFile -Definition $variant -RepositoryRoot $historical) | Should -BeNullOrEmpty
         }
     }
-
     It 'INV windows/sources-total-function: refuses a variant list whose last entry is conditional' {
         # Negative fixture for the invariant the two-entry shape would have
         # needed and could not have enforced: on a host below every bound this
@@ -5750,7 +5707,7 @@ Describe 'check entry points' {
             ForEach-Object { $_.KeyValuePairs } |
             Where-Object { $_.Item1.Extent.Text -eq 'Script' } |
             ForEach-Object { $_.Item2.Extent.Text.Trim("'") })
-        $scripts.Count | Should -Be 7 -Because 'the table names check, apply, capture, validate, test, setup-dev and font; a new verb updates this count'
+        $scripts.Count | Should -Be 10 -Because 'three declaration/generation verbs join the seven legacy verbs'
         foreach ($script in $scripts) {
             $path = Join-Path (Join-Path $repositoryRoot 'tool') $script
             $path | Should -Exist

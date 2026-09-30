@@ -32,3 +32,10 @@ have two sources.
 The desired-state hash is scoped to the selected features plus
 `manifest.json`. A whole-tree hash reported drift for payloads a host never
 deploys and forced an Apply that could not change anything on it.
+
+2026-09-30: host declarations add explicit versioned selection and generation
+(`host-generation-owns-selection.md`). The provider catalog at 0.7.0 retires
+`wsl`; the six remaining features keep their dependency closure. Generated mode
+uses only the environment selection, never legacy first-use all or newly added
+optional defaults. Legacy selection export preserves the recorded old selection
+and names retired entries as migration blockers; it never deletes host state.

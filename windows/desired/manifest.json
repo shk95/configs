@@ -39,10 +39,6 @@
           "Type": "Appx"
         }
       ]
-    },
-    {
-      "Id": "wsl",
-      "Name": "WSL 2 host configuration"
     }
   ],
   "Font": {
@@ -114,26 +110,10 @@
     {
       "Compare": "ExactJson",
       "Feature": "powertoys",
-      "Id": "fancyZonesCustomLayouts",
-      "Parser": "Json",
-      "Source": "files/powertoys/FancyZones/custom-layouts.json",
-      "Target": "{LOCALAPPDATA}\\Microsoft\\PowerToys\\FancyZones\\custom-layouts.json"
-    },
-    {
-      "Compare": "ExactJson",
-      "Feature": "powertoys",
       "Id": "fancyZonesDefaultLayouts",
       "Parser": "Json",
       "Source": "files/powertoys/FancyZones/default-layouts.json",
       "Target": "{LOCALAPPDATA}\\Microsoft\\PowerToys\\FancyZones\\default-layouts.json"
-    },
-    {
-      "Compare": "ExactJson",
-      "Feature": "powertoys",
-      "Id": "fancyZonesLayoutHotkeys",
-      "Parser": "Json",
-      "Source": "files/powertoys/FancyZones/layout-hotkeys.json",
-      "Target": "{LOCALAPPDATA}\\Microsoft\\PowerToys\\FancyZones\\layout-hotkeys.json"
     },
     {
       "Compare": "JsonSubset",
@@ -313,22 +293,6 @@
     },
     {
       "Compare": "Text",
-      "Feature": "wsl",
-      "Id": "wslConfig",
-      "Parser": "Ini",
-      "Sources": [
-        {
-          "MinimumBuild": 22621,
-          "Source": "files/wsl/mirrored-networking.wslconfig"
-        },
-        {
-          "Source": "files/wsl/nat-networking.wslconfig"
-        }
-      ],
-      "Target": "{USERPROFILE}\\.wslconfig"
-    },
-    {
-      "Compare": "Text",
       "Feature": "zellij",
       "Id": "zellij",
       "Parser": "Kdl",
@@ -377,7 +341,7 @@
       "Name": "Zellij"
     }
   ],
-  "ProjectVersion": "0.6.0",
+  "ProjectVersion": "0.7.0",
   "SchemaVersion": 4,
   "Terminal": {
     "DefaultProfileGuid": "{574e775e-4f2a-5b96-ac1e-a2962a402336}",

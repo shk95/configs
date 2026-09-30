@@ -3,6 +3,38 @@ kind: report
 spec: docs/work/windows/host-consumer-contract/spec.md
 status: pending
 
+## W1 source implementation, 2026-09-30
+
+Issue #427's W1 lane now implements `inspect`, `generate` and read-only
+`export-selection` with version 1 environment/settings/generation formats.
+Generation binds exact provider source and execution tools, explicit original
+documents and selected payloads. It refuses unsupported formats, ambiguous keys,
+invalid UTF-8/UTF-16 input, unsafe connections, hidden Git index flags and stale
+input/tool/file identities. Atomic publication preserves an earlier result on
+failure. Generated Check/Apply require the generation's own tools and selection.
+
+The selected complete document supplies the owned JsonSubset projection; app keys
+outside it, externally generated Terminal profiles and foreign profile blocks are
+preserved. Disabled profile units stop hook management. The catalog retires provider
+WSL configuration and personal FancyZones layouts/hotkeys without deleting host
+files. Generic default layouts remain provider defaults or complete host content.
+Generated terminal delegation is explicitly excluded, with no registry observation
+or mutation. Schema 3 records generation success and partial fixture Apply failure
+separately; source-only capture refuses generated runtime state pending W2.
+
+Foreign-host PowerShell 7.6.6 generation fixtures passed 56/56, including two actual
+PATH Application candidates with selected child execution and exit forwarding,
+strict encoding, hidden-index edits and a different imported module at an otherwise
+identical generation-module revision. The full foreign-host suite passed
+384 tests, failed 0 and skipped 16; native-only/e2e skips retain their separate
+proof obligations. Staged Windows classification, 73 invariant registrations,
+document preflight, design-citation, record and hygiene checks passed.
+This is fixture evidence on a foreign host,
+not native Windows acceptance. Hosted exact-runtime checks and candidate-specific
+LTSC generation/Check evidence remain pending. Apply occurs only under isolated
+fixture mocks. Whole AC rows below remain pending; W2 capture, domain API release,
+deployment and host activation are not supplied by this W1 lane.
+
 ## W1 implementation pickup, 2026-09-30
 
 The main orchestrator assigned W1 declaration/connections/local generation to

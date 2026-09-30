@@ -1,0 +1,8 @@
+{
+  "formatVersion": 1,
+  "provider": { "commit": "0000000000000000000000000000000000000000" },
+  "features": [],
+  "units": {
+    "powershellProfile": { "enabled": true, "document": "settings/profile.json" }
+  }
+}

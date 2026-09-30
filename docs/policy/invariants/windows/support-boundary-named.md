@@ -1,8 +1,9 @@
 id: windows/support-boundary-named
-statement: A host observation names the Windows build it came from and is evidence only for the builds the documented support boundary covers; an item the host accepts but does not honour below that boundary is reported unverified, never verified.
+statement: A host observation names the Windows build it came from and is evidence only for the builds the documented support boundary covers; an item the host accepts but does not honour below that boundary is reported unverified when included, or visibly excluded when outside the contract, never verified.
 rationale: docs/policy/architecture.md § Windows domain
 enforced-by: manual the reviewer names the Windows build under a -Check or Apply observation and reports each item of the Windows 10 support boundary table in its boundary state
 enforced-by: fixture windows/tests/WinEnv.Tests.ps1
+enforced-by: fixture windows/tests/Generation.Tests.ps1
 owner: repository maintainer
 decision: docs/policy/decisions/windows/terminal-delegation-unverified-below-boundary.md § Terminal delegation is unverified below the documented boundary
 decision: docs/policy/decisions/windows/appx-detection-unverified-not-absent.md § Undecidable Appx detection is unverified, not absent
@@ -17,3 +18,9 @@ the write, which the fixtures hold on every side of it. What no check
 decides is the build an observation ran on: that stays the reviewer's,
 named beside the observation, with the state of each item in the
 `docs/status/windows.md` table, required by `docs/policy/definition-of-done/windows.md`.
+
+An explicitly excluded generated capability is labelled excluded and is neither
+queried nor written; it is never reported verified. The initial LTSC generation
+contract excludes terminal delegation; legacy source checks retain the known-limit
+and unavailable-observation behavior. See the dated amendment to the delegation
+decision and `host-generation-owns-selection.md` for the accepted boundary.
