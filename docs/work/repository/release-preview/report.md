@@ -1,16 +1,17 @@
 # Report: additive offline release preview
 kind: report
 spec: docs/work/repository/release-preview/spec.md
-status: pending
+status: done
 
 Implementation is assigned to B in execution issue #428; pickup pins
 9b12302a047f9afe1aae10289074b2378b388ce9 after preparation at
 a966f9770fd9f024aa2dc6e5796dfabba8e39458. The additive CLI/parser/rules and seven
-narrow synthetic fixture families are
-implemented as a Draft. Local POSIX fixtures passed on Git 2.55.0; repository
+narrow synthetic fixture families are implemented and verified in this bounded
+offline preview lane. Local POSIX fixtures passed on Git 2.55.0; repository
 registry, work-form, hygiene, domain-read and citation checks are kept separate
 from native Windows or live release proof. No production bootstrap has been
-selected, and final-head CI/native evidence is still pending.
+selected. Exact source-head CI and native proof are recorded below; report
+publication receives fresh selected checks before Ready.
 The parent provider-release/controller reports remain pending.
 
 CI wiring and shared repository-suite registration now consume D's delivered
@@ -21,8 +22,8 @@ published history after explicit file ownership transfer. Ubuntu runs the full
 repository suite; Git for Windows runs the narrow preview fixture, with
 REQUIRE_NATIVE=1, fail-fast=false and no tolerated failure. The existing Required
 gate consumes the matrix aggregate. Positive/negative matrix weakening, aggregate
-failure/skip/cancel and preview-file dispatch fixtures pass locally; final-head
-native evidence remains pending. Operator usage follows the delivered companion
+failure/skip/cancel and preview-file dispatch fixtures pass locally and in the
+source-head CI below. Operator usage follows the delivered companion
 documentation without changing its adoption or activation meaning.
 Document preflight validates form, not acceptance evidence.
 
@@ -30,13 +31,13 @@ Document preflight validates form, not acceptance evidence.
 
 | ID | State | Evidence |
 | --- | --- | --- |
-| AC1 | verified | Fixtures: local Git 2.55.0 with GNU awk and BSD awk permits complete metadata/Unicode paths and refuses missing/unknown/duplicate/control/NUL/domain/contract/path/invalid-UTF-8 mismatches. Policy checks: registry/work-form/hygiene/domain-read/citation scans pass. Native Windows replay is separately pending in AC7. |
+| AC1 | verified | Fixtures: local Git 2.55.0 with GNU awk and BSD awk permits complete metadata/Unicode paths and refuses missing/unknown/duplicate/control/NUL/domain/contract/path/invalid-UTF-8 mismatches. Policy checks: registry/work-form/hygiene/domain-read/citation scans pass. Exact Ubuntu and native Windows proof is recorded in AC7. |
 | AC2 | verified | Synthetic separate-history 1.0.0 bootstrap and missing/contradictory baseline, legacy/calendar/lightweight tag refusals; no production record adopted. |
 | AC3 | verified | Cumulative patch/minor/major, exact unreleased cancellation including removed effective breaking/migration/approval data, partial/cross-domain/parallel-ancestry/ambiguous refusals and released-target new change fixtures. |
 | AC4 | verified | Complete promotion union, add/delete/rename, governance/docs-only and explicit no-op, dependencies/unknown/duplicate rules; partial production mappings refuse. |
 | AC5 | verified | Stable replay despite moved tags/replacement refs/legacy grafts; pinned annotation objects and exact source/master/tree/rules/tool/message/runtime binding, required versus advisory and explicit defects; references remain asserted offline data. |
-| AC6 | verified | Candidate code/hostile data not executed; source refs/index/status/config unchanged, remote-command guard, CLI/calendar compatibility, operator forwarding and preview-file effect fixtures pass in the full local repository suite. README/CONTRIBUTING document bounded inputs, refusal/recovery and separate authorization. Native Windows proof is separately pending in AC7. |
-| AC7 | pending | Native Git for Windows/Ubuntu current-head runs and minimum Required gate remain pending; missing capability 69 versus REQUIRE_NATIVE failure proved locally. |
+| AC6 | verified | Candidate code/hostile data not executed; source refs/index/status/config unchanged, remote-command guard, CLI/calendar compatibility, operator forwarding and preview-file effect fixtures pass in the full local repository suite and Ubuntu CI. README/CONTRIBUTING document bounded inputs, refusal/recovery and separate authorization. Native preview and test-only environment isolation pass as recorded below; supplied evidence remains asserted offline data. |
+| AC7 | verified | [Run 36681617644](https://github.com/shk95/configs/actions/runs/36681617644) checks exact source 7a1012910dce222ba4e48fcc7fdd3b3f45518e05: Ubuntu/full repository, native Git for Windows/eight isolation cases plus full narrow preview, all other selected suites and Required checks succeed. Local missing-capability exit 69 and native-required failure remain separate fixture invocations; job REQUIRE_NATIVE=1 remains strict. Report publication receives its own fresh current-head CI before Ready. |
 
 ## Evidence limits
 
@@ -48,7 +49,7 @@ the pinned rules. Offline evidence references are not authenticated transcripts.
 These fixtures construct synthetic commits/tags/rules and never designate current
 production source as an initial API release. Existing calendar planning, domain
 release audits and promotion remain unchanged. The parent controller and provider
-release criteria remain pending; this Draft does not implement scheduling, remote
+release criteria remain pending; this preview lane does not implement scheduling, remote
 reconciliation, release mutation, host activation or Windows Apply.
 
 ## 2026-09-30 offline replay refinement
@@ -75,11 +76,11 @@ Decimal component arithmetic uses string carry, with 2^53-exceeding and long-car
 fixtures plus malformed decimal refusals. File data passed to native Git uses stdin
 to preserve MSYS argument guards without depending on POSIX absolute-path conversion.
 
-The current Draft's older published-head CI did not register this narrow suite and
-is not the final native preview proof. AC6 operator documentation and
-affected-dispatch alignment now have local proof; AC7 remains pending current-head Ubuntu/Git-for-Windows
-fixture jobs and Required-gate proof after prerequisite ownership transfer. The
-report stays pending and the parent release/controller report states are unchanged.
+At the earlier Draft checkpoint, published-head CI did not register this narrow
+suite and could not establish native preview proof. AC6 operator documentation
+and affected-dispatch alignment had local proof; AC7 and the report stayed pending
+current-head Ubuntu/Git-for-Windows and Required-gate proof after prerequisite
+ownership transfer. The parent release/controller report states remain unchanged.
 
 ## First native matrix diagnostic and original-byte repair
 
@@ -101,9 +102,9 @@ before peeling or field parsing; BSD awk's removal of NUL in a Version field was
 reproduced directly. Raw source commit objects validate original UTF-8/NUL bytes
 before pretty formatting, which otherwise truncates a message at NUL. Focused
 valid and malformed pinned commit/tag/record objects prove these refusals without
-choosing a production bootstrap. AC7 remains pending the repaired exact-head native
-run. Final publication waits for the integrator's actual required admission base;
-earlier CI cannot certify that changed head.
+choosing a production bootstrap. At that checkpoint, AC7 remained pending the
+repaired exact-head native run and publication awaited the actual required
+admission base. Earlier CI cannot certify a changed head.
 
 ## Independent fixture isolation and second native diagnostic
 
@@ -133,6 +134,48 @@ The focused fixture now normalizes repository and scratch absolute paths with
 `cygpath -m` when available, while keeping the stub's PATH component in POSIX form.
 All eight hostile/local-operation cases, caller HOME/ref/config/source assertions
 and MSYS guards remain. The delivered environment helper, main suite, production
-preview and CI gates are unchanged. Native proof remains pending on the repaired
-publication head; the next publication also awaits the actual required admission
+preview and CI gates are unchanged. At that diagnostic checkpoint, native proof
+remained pending the repaired publication head and its actual required admission
 base selected by the integrator.
+
+## Completed source proof and report publication
+
+The integrator's actual required base
+09331768863a43d21e15d5e28d10045b7f8f87b2 entered through a normal merge after
+#444. Earlier required bases, delivered companion documentation, original-byte
+repairs and fixture isolation were preserved without rewriting published history.
+Source head 7a1012910dce222ba4e48fcc7fdd3b3f45518e05 was published through a normal
+HTTPS push; the selected local gates passed, including the foreign-host Windows
+suite with 345 passed, zero failed and three skipped. That foreign-host result is
+separate from native Windows evidence.
+
+[CI 36681617644](https://github.com/shk95/configs/actions/runs/36681617644)
+completed successfully on that exact source head:
+
+- [Ubuntu/full repository](https://github.com/shk95/configs/actions/runs/36681617644/job/109778138128)
+  passed the complete suite, worker checkpoints, isolation and preview fixtures on
+  Git 2.55.0.
+- [Native Git-for-Windows preview](https://github.com/shk95/configs/actions/runs/36681617644/job/109778138073)
+  passed all eight isolation cases, printed Git 2.55.0.windows.5 and completed the
+  full narrow preview. Clean, command parameters, counted/orphan configuration,
+  ambient/includes/templates and repository-context cases preserve intended local
+  operations and refuse external transport. Caller refs/config/source/HOME checks
+  pass in these synthetic fixtures.
+- Unix-like, native Windows desired-state, scans and classification succeeded;
+  [Required checks](https://github.com/shk95/configs/actions/runs/36681617644/job/109780563721)
+  succeeded. Promotion policy was intentionally skipped because this PR targets dev.
+
+An optional supplementary native probe observed Git 2.55.0.windows.3 with Git-owned
+Bash/cygpath and PowerShell 7.6.6. Its task-TEMP public-source clone failed with
+CRYPT_E_REVOCATION_OFFLINE before checkout, fixture-byte overlay or the eight
+cases. This probe is unverified; it establishes no overlay or caller-preservation
+result. No TLS setting, host configuration or installation changed. Hosted
+source-head proof above supplies this lane's authoritative native evidence.
+
+This report-only completion update preserves the verified source and receives
+fresh selected CI, including the native preview matrix and Required checks, before
+Ready. The PR records that exact publication head and run separately from the
+source proof above. The result completes only this offline preview lane: supplied
+evidence references remain unauthenticated assertions, no production bootstrap
+record or SemVer release policy is adopted, and the controller and scheduler
+remain unfinished. No source promotion, release, host activation or Apply is implied.
