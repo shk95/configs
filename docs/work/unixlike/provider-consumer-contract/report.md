@@ -3,6 +3,36 @@ kind: report
 spec: docs/work/unixlike/provider-consumer-contract/spec.md
 status: pending
 
+## U2 pickup investigation, 2026-09-30
+
+Planning base is `86abcea4eadd1e4403ec9025eedb7009daf54886`; the reviewed
+pre-amendment spec revision is independently
+`6082cf9a61c3b01f03eff7cef602b84f62bcd5c7`. Issue #449 assigns C the
+contract's sole continuation lane. The new dated AC3 amendment defines concrete
+unit options, an explicit pinned command/proposal surface, finite projection,
+deletion/reset refusal, atomic per-document save and partial failure reporting.
+The companion provider pins remain their delivered U1 source; no connection or
+pin was changed. Earlier U1 proof retains its original source and evidence limits.
+
+Review only: the current module still hard-codes provider payloads, and the root
+commit helper still owns legacy capture-to-provider publication. Implementation
+must reconcile the Unix-like projection decision/invariant; a separate repository
+lane retires that caller after the additive CLI is delivered. The new study is
+this pickup's investigation, not restoration of the removed earlier study.
+Proposal checks are schema/binding/current-input consistency, not signature or
+author authentication. Legacy projection tags/fixtures remain until coordinated
+retirement; this plan does not relocate their enforcement prematurely.
+Static bundle metadata records installed Karabiner 16.3.0, universal arm64/x86_64
+executables on an arm64 host. No app was started, real configuration read or
+captured, original saved, native app schema tested, generated artifact built or
+host activated. Official v16.3.0 source review found profile normalization and
+old default-key compatibility risks; tested native behavior remains required.
+
+AC3 and the full report remain pending. Existing qualified U1 rows and historical
+native observations are unchanged; planning checks and eventual documentation CI
+are not new U2 evaluation/build/native-runtime evidence. API release and separate
+parent work/deployment outcomes are not completed by this pickup.
+
 ## U1 external standalone connection checkpoint, 2026-09-28
 
 The implementation branch started from origin/dev
