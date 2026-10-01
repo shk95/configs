@@ -429,6 +429,11 @@ this source consumes complete durably projected intents. Cancellation is restric
 to the authenticated entry's own sole job/run; a separate inspector observes terminal
 state before a later writer can recover. Never use an arbitrary owner DTO to cancel.
 
+An outstanding batch keeps its original immutable configuration even when current
+configuration disables new work. Independently observe each owner's actual master
+run source within approved public history; a later loader does not replace an old
+semantic package. Fresh stop and credential revocation remain live exceptions.
+
 Before every effect, confirm durable intent and fresh stop. Unknown write response
 requires observation/reconciliation, not retry; reload full authenticated history
 on changed operating head. Conflicting ref/tag/PR identities fence further effects.

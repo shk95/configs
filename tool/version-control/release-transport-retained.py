@@ -76,14 +76,6 @@ class Snapshot:
         entries = self.api.tree(op['tree'], self.api.operating)
         T.need('current/transcript.json' in entries and entries['current/transcript.json'][:2] == ('100644','blob'), 'missing-retained-transcript')
         transcript = self.api.blob(entries['current/transcript.json'][2],self.api.operating)
-        T.need('config/operating.tsv' in entries and entries['config/operating.tsv'][:2] == ('100644','blob'),'missing-current-authority')
-        config=L.singletons(self.api.blob(entries['config/operating.tsv'][2],self.api.operating),
-               {'enabled','public-repository','repository','operating-repository','operating-ref','workflow','actors','checks','protocol'})
-        T.need(config['enabled']=='1' and config['public-repository']==T.PUBLIC
-               and config['operating-repository']==self.api.operating and config['operating-ref']=='operations'
-               and config['repository']==str(self.entry.trusted['repository-id'])
-               and config['workflow']==str(self.entry.trusted['workflow'])
-               and str(self.entry.runtime['actor']) in config['actors'].split(','),'revoked-current-authority')
         # Local object history is checked against the independently observed remote
         # full commit identity. Git hashes and graph checks bind all retained bytes.
         T.need(L.git(self.operating,'rev-parse',self.head).decode().strip()==self.head,'missing-operating-objects')
@@ -108,6 +100,16 @@ class Snapshot:
         events=sorted((self.batch/'history').iterdir())
         framing=L.singletons(events[0].read_bytes(),set()) if not events else dict((r[0],r[1]) for r in L.table(events[0].read_bytes()) if len(r)==2)
         self.boundary=framing['prior']
+        # Existing batches retain their original authority/configuration. Current
+        # config may disable later work; only fresh stop/credential revocation is live.
+        self.pinned_config=L.singletons((self.batch/'config/operating.tsv').read_bytes(),
+               {'enabled','public-repository','repository','operating-repository','operating-ref','workflow','actors','checks','protocol'})
+        config=self.pinned_config
+        T.need(config['enabled']=='1' and config['public-repository']==T.PUBLIC
+               and config['operating-repository']==self.api.operating and config['operating-ref']=='operations'
+               and config['repository']==str(self.entry.trusted['repository-id'])
+               and config['workflow']==str(self.entry.trusted['workflow'])
+               and str(self.entry.runtime['actor']) in config['actors'].split(','),'unbound-pinned-authority')
         self.original_transcript=transcript
         self.state=self.project()['state']
         self.pending_changes=None
@@ -126,6 +128,24 @@ class Snapshot:
         T.need(op['state'] in {'intent','unknown'},'completed-or-conflicting-operation')
         return {'id':operation,'digest':T.digest(T.canonical(op['payload'])),'head':self.head}
 
+    def owner_target(self, owner):
+        target={k:int(owner[k]) for k in ('run','attempt','job','workflow')}
+        run=self.api.run(target['run'],target['attempt'])
+        T.need(run.get('repository',{}).get('id')==self.entry.trusted['repository-id']
+               and run.get('workflow_id')==target['workflow']==self.entry.trusted['workflow']
+               and run.get('head_branch')=='master' and run.get('event')=='workflow_dispatch'
+               and str(run.get('actor',{}).get('id')) in self.pinned_config['actors'].split(',')
+               and run.get('triggering_actor',{}).get('id')==run.get('actor',{}).get('id'),'untrusted-owner-source')
+        source=T.sha(run.get('head_sha'))
+        # A later master loader may own an old semantic package. Observe its actual
+        # immutable run source separately, bounded by approved public master history.
+        try:
+            L.git(self.bundle,'merge-base','--is-ancestor',self.owner_source,source)
+            L.git(self.bundle,'merge-base','--is-ancestor',source,self.entry.trusted['source'])
+        except (ValueError,subprocess.SubprocessError):
+            raise T.Refusal('unapproved-owner-source') from None
+        return dict(target,source=source)
+
     def authorize(self, plan, entry):
         T.need(set(plan)=={'id','digest','head'} and entry is self.entry and plan['head']==self.head,'stale-plan')
         current=self.project()['state']; op=current['operations'].get(plan['id'])
@@ -135,10 +155,10 @@ class Snapshot:
                and int(current['owner']['attempt'])==entry.runtime['attempt']
                and int(current['owner']['job'])==entry.runtime['job'],'foreign-record-owner')
         T.need(entry.runtime['candidate']==T.digest(T.canonical(current['candidate'] or current.get('refresh'))) if current['candidate'] or current.get('refresh') else entry.runtime['candidate']=='0'*64,'stale-entry-candidate')
+        self.owner_target(current['owner'])
         payload=copy.deepcopy(op['payload']);kind=op['kind']
         if kind=='cancel':
-            payload={'run':int(payload['run']),'attempt':int(payload['attempt']),'job':int(payload['jobs']),
-                     'workflow':int(payload['workflow']),'source':self.owner_source}
+            payload=self.owner_target({'run':payload['run'],'attempt':payload['attempt'],'job':payload['jobs'],'workflow':payload['workflow']})
         if kind=='merge':payload['number']=int(payload['number'])
         if kind=='tag-object':
             payload['tagger']={'name':payload['tagger-name'],'email':payload['tagger-email'],'date':payload['tagger-time']}
@@ -151,13 +171,12 @@ class Snapshot:
         current=self.project()['state'];op=current['operations'].get(plan['id'])
         owner=current['owner']
         if owner and (int(owner['run']),int(owner['attempt']),int(owner['job'])) != (entry.runtime['run'],entry.runtime['attempt'],entry.runtime['job']):
-            T.need(entry.owner_terminal({'run':int(owner['run']),'attempt':int(owner['attempt']),'job':int(owner['job']),
-                 'workflow':int(owner['workflow']),'source':self.owner_source}),'old-owner-not-terminal')
+            T.need(entry.owner_terminal(self.owner_target(owner)),'old-owner-not-terminal')
         T.need(op and op['state'] in {'intent','unknown'} and plan['digest']==T.digest(T.canonical(op['payload'])),'wrong-recovery-operation')
         kind,payload=op['kind'],copy.deepcopy(op['payload'])
         if kind=='merge':payload['number']=int(payload['number'])
         if kind=='tag-object':payload['tagger']={'name':payload['tagger-name'],'email':payload['tagger-email'],'date':payload['tagger-time']}
-        if kind=='cancel':payload={'run':int(payload['run']),'attempt':int(payload['attempt']),'job':int(payload['jobs']),'workflow':int(payload['workflow']),'source':self.owner_source}
+        if kind=='cancel':payload=self.owner_target({'run':payload['run'],'attempt':payload['attempt'],'job':payload['jobs'],'workflow':payload['workflow']})
         return kind,payload,{}
 
     def validate_stop(self,raw,head):

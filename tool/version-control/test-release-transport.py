@@ -367,13 +367,36 @@ class TransportProof(unittest.TestCase):
         p.update(parent=head,head=bad,tree=F.run_git(f.public,'rev-parse',bad+'^{tree}'),**{'before-lock':T.digest(b'after')})
         with self.assertRaisesRegex(T.Refusal,'contaminated-refresh'):executor.request('refresh-branch',p)
 
-    def test_current_config_revocation_refuses_live_projection(self):
+    def test_current_config_change_preserves_pinned_outstanding_context(self):
         f=self.fixture
         config=f.operating/'config/operating.tsv'
-        config.write_bytes(config.read_bytes().replace(b'enabled\t1',b'enabled\t0'))
+        config.write_bytes(config.read_bytes().replace(b'enabled\t1',b'enabled\t0').replace(b'actors\t3',b'actors\t99'))
         self.fake.head=f.commit(f.operating)
-        with self.assertRaises(T.Refusal):self.snapshot()
+        restored=self.snapshot()
+        self.assertEqual(restored.state['candidate'],F.CANDIDATE)
+        self.assertEqual(restored.pinned_config['actors'],'3')
+        self.assertEqual(restored.pinned_config['enabled'],'1')
         self.assertFalse(any(method!='GET' for method,_,_ in self.fake.calls))
+
+    def test_later_master_owner_does_not_replace_old_semantic_context(self):
+        f=self.fixture;old=f.packages['3']['master']
+        (f.public/'later-master.txt').write_text('new loader; same retained semantics')
+        later=f.commit(f.public);f.packages['3']=dict(f.packages['3'],master=later)
+        self.fake.source=later;self.trusted['source']=later;self.runtime['source']=later
+        self.entry=T.Entry(self.api,self.trusted,self.runtime)
+        restored=self.snapshot()
+        self.assertEqual(restored.owner_source,old)
+        self.assertEqual(restored.owner_target(restored.state['owner'])['source'],later)
+        plan=restored.plan(F.X)
+        self.assertEqual(restored.authorize(plan,self.entry)[0],'pr')
+
+    def test_owner_source_outside_approved_master_history_refuses(self):
+        restored=self.snapshot()
+        path='/repos/shk95/configs/actions/runs/4/attempts/1'
+        code,headers,raw=self.fake.request('GET',path,None)
+        value=T.document(raw);value['head_sha']=F.H
+        self.fake.responses[('GET',path)]=self.fake.response(value)
+        with self.assertRaisesRegex(T.Refusal,'unapproved-owner-source'):restored.owner_target(restored.state['owner'])
 
     def test_operator_preflight_is_source_bound_and_always_disabled(self):
         import shutil
