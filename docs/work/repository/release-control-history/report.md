@@ -13,6 +13,14 @@ compatibility amendment precede any B source pickup. No protocol number is final
 Document preflight proves form only, not any criterion. Parent remains 0/14 pending;
 old single-envelope source proof remains distinct from global or live operation.
 
+## Continuation planning review, 2026-10-01
+
+Root reviewed actual merged #464 protocol 2 and fixed the dated finite matrix,
+protocol-3 range interface, immutable context/transcript records and global index
+encoding in the spec. This is planning evidence only; every source criterion below
+remains pending. The sequential user instruction supplies continuation priority,
+not operating repository, approval bootstrap or deployment evidence.
+
 ## Acceptance
 
 | ID | State | Evidence |

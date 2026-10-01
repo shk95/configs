@@ -3,6 +3,18 @@ kind: report
 spec: docs/work/repository/scheduled-flake-refresh/spec.md
 status: pending
 
+## Sequential continuation planning, 2026-10-01
+
+The maintainer selected sequential non-deferred continuation. See the dated
+release-control-history compatibility amendment, followed by
+legacy-capture-caller-retirement, production-release-qualification and
+release-operating-transport child specs/reports. These children close planning
+gaps; they do not certify actual production bootstrap, authenticated source or
+manual/scheduled operation. Root records explicit source pickup assignments only
+after predecessor integration and reviewed plan publication. Operating repository,
+approved source, credentials/Environment/protection and actual receipts remain
+separate inputs and authorization gates. Deferred host work is not selected.
+
 ## Bounded pickup planning, 2026-09-30
 
 D inspected dev `54b2b794e5a0aa867f264d1bff548eebe5cc4892`, the delivered
