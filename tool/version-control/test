@@ -1595,16 +1595,6 @@ mkdir -p "$commit_root/unixlike/tool/checks" "$commit_root/unixlike/modules" \
 cp -R "$root/.githooks" "$commit_root/.githooks"
 cp -R "$root/tool/version-control" "$commit_root/tool/version-control"
 cp -R "$root/tool/dispatch" "$commit_root/tool/dispatch"
-# `capture karabiner` runs the real projection tool over the real payloads: the
-# command under test is the one that decides a capture is a commit, and a
-# stand-in for either side would leave that decision proving nothing. The host
-# it reads is faked through --host and --hotkeys-host, which is the whole
-# reason those flags exist.
-karabiner_assets=$root/unixlike/modules/programs/karabiner
-mkdir -p "$commit_root/unixlike/modules/programs/karabiner"
-cp "$karabiner_assets/tool" "$karabiner_assets/karabiner.json" \
-  "$karabiner_assets/symbolic-hotkeys.json" \
-  "$commit_root/unixlike/modules/programs/karabiner/"
 # The pre-commit hook this fixture enables also runs
 # tool/version-control/invariants, whose own cases are below; here it is a
 # stand-in so only the behaviour under test decides the outcome.
@@ -2266,8 +2256,7 @@ fi
 # A uname stub proves a platform guard without depending on which platform
 # runs this suite, which is the only way a guard's own case can hold on both
 # sides of it. It answers `-s` and nothing else, because that is all the helper
-# ever asks. Two guards use it: capture karabiner's Darwin guard below, and
-# --publish's refusal on native Windows further down.
+# ever asks. It proves --publish's refusal on native Windows further down.
 uname_stub() {
   # $1: directory to create the stub in. $2: what `uname -s` reports there.
   mkdir -p "$1"
@@ -2282,147 +2271,8 @@ STUB
   chmod +x "$1/uname"
 }
 
-# ---------------------------------------------------------------------------
-# tool/version-control/commit capture karabiner
-# ---------------------------------------------------------------------------
-#
-# INV unixlike/host-written-payload-projected
-#
-# The capture direction of the same projection
-# unixlike/modules/programs/karabiner/module.nix applies: what the payloads declare
-# decides what is read back, and what else the host keeps in that file is
-# runtime that is neither reported as drift nor captured. The real
-# unixlike/modules/programs/karabiner/tool and the real payloads are in the
-# throwaway repository above; only the host is faked, through the flags
-# that exist for it, so the two directions of the rule are the fixture's
-# subject rather than a stand-in's.
-capture_host="$test_root/karabiner-host.json"
-capture_hotkeys_host="$test_root/karabiner-hotkeys-host.json"
-
-run_capture() {
-  capture_answer=$1
-  shift
-  printf '%s\n' "$capture_answer" | (
-    unset GIT_DIR GIT_WORK_TREE GIT_INDEX_FILE
-    cd "$commit_root" || exit 1
-    KARABINER_PLATFORM=darwin
-    export KARABINER_PLATFORM
-    PATH="$commit_stub_path:$PATH" tool/version-control/commit "$@" 2>&1
-  )
-}
-
-capture_payloads_untouched() {
-  for capture_payload in karabiner.json symbolic-hotkeys.json; do
-    if ! cmp -s "$commit_root/unixlike/modules/programs/karabiner/$capture_payload" \
-      "$karabiner_assets/$capture_payload"; then
-      echo "capture karabiner rewrote unixlike/modules/programs/karabiner/$capture_payload while $1" >&2
-      exit 1
-    fi
-  done
-  if [ -n "$(commit_git status --porcelain --untracked-files=no)" ] \
-    || [ "$(commit_count)" != "$capture_before" ]; then
-    echo "capture karabiner wrote something while $1" >&2
-    exit 1
-  fi
-}
-
-# A host that matches both payloads and holds one top-level key beside them.
-# `machine_specific` is the host's own runtime state: a capture that read it
-# back would put a per-machine identifier into desired state.
-{
-  printf '{\n'
-  printf '  "machine_specific": {},\n'
-  tail -n +2 "$karabiner_assets/karabiner.json"
-} >"$capture_host"
-cp "$karabiner_assets/symbolic-hotkeys.json" "$capture_hotkeys_host"
-
-capture_before=$(commit_count)
-capture_status=0
-capture_output=$(run_capture n --dry-run --host "$capture_host" \
-  --hotkeys-host "$capture_hotkeys_host" capture karabiner) || capture_status=$?
-if [ "$capture_status" -eq 0 ]; then
-  echo "capture karabiner planned a commit against a host that matches the payloads" >&2
-  exit 1
-fi
-if ! printf '%s\n' "$capture_output" | grep -q 'nothing to capture'; then
-  printf '%s\n' "$capture_output" >&2
-  echo "capture karabiner did not refuse with nothing to capture" >&2
-  exit 1
-fi
-capture_payloads_untouched "the host matched the payloads"
-
-# The same command on a host that is not a Mac refuses before it reads
-# anything: the projection of a host that holds no Karabiner state would
-# capture the payloads away. The platform comes from a uname stub rather than
-# from whatever runs this suite, so the case holds on the Mac this feature
-# targets as well; on that host the real uname would pass the guard, the run
-# would reach the still-matching host above, and this would be asserting the
-# refusal of the case before it.
-uname_stub "$commit_root/stub-uname" Linux
-capture_status=0
-capture_output=$(
-  printf 'n\n' | (
-    unset GIT_DIR GIT_WORK_TREE GIT_INDEX_FILE KARABINER_PLATFORM
-    cd "$commit_root" || exit 1
-    PATH="$commit_root/stub-uname:$commit_stub_path:$PATH" \
-      tool/version-control/commit --dry-run \
-      --host "$capture_host" --hotkeys-host "$capture_hotkeys_host" \
-      capture karabiner 2>&1
-  )
-) || capture_status=$?
-if [ "$capture_status" -eq 0 ]; then
-  printf '%s\n' "$capture_output" >&2
-  echo "capture karabiner ran on a host that is not a Mac" >&2
-  exit 1
-fi
-if ! printf '%s\n' "$capture_output" | grep -q 'runs on a Mac only'; then
-  printf '%s\n' "$capture_output" >&2
-  echo "capture karabiner refused a host that is not a Mac for another reason" >&2
-  exit 1
-fi
-capture_payloads_untouched "the host was not a Mac"
-
-# A host that differs in one declared member of each payload, and still holds
-# the undeclared one. The dry run answers the same four questions the other
-# commands answer and writes nothing.
-{
-  printf '{\n'
-  printf '  "machine_specific": {},\n'
-  tail -n +2 "$karabiner_assets/karabiner.json"
-} | sed 's/"check_for_updates": false/"check_for_updates": true/' >"$capture_host"
-sed 's/"enabled": false/"enabled": true/' \
-  "$karabiner_assets/symbolic-hotkeys.json" >"$capture_hotkeys_host"
-
-capture_before=$(commit_count)
-if ! capture_output=$(run_capture n --dry-run --host "$capture_host" \
-  --hotkeys-host "$capture_hotkeys_host" capture karabiner); then
-  printf '%s\n' "$capture_output" >&2
-  echo "capture karabiner refused a host that drifted from the payloads" >&2
-  exit 1
-fi
-for capture_line in \
-  '^edit: unixlike/modules/programs/karabiner/karabiner.json$' \
-  '^edit: unixlike/modules/programs/karabiner/symbolic-hotkeys.json$' \
-  '^-    "check_for_updates": false$' \
-  '^+    "check_for_updates": true$' \
-  '^-      "enabled": false,$' \
-  '^+      "enabled": true,$' \
-  '^classification: unixlike$' \
-  '^  unixlike:payloads$' \
-  '^message: feat(unixlike): capture karabiner desired state$'; do
-  if ! printf '%s\n' "$capture_output" | grep -q "$capture_line"; then
-    printf '%s\n' "$capture_output" >&2
-    echo "the capture dry run did not report a line matching $capture_line" >&2
-    exit 1
-  fi
-done
-# The runtime key is in the host this run read and in neither diff.
-if printf '%s\n' "$capture_output" | grep -q 'machine_specific'; then
-  printf '%s\n' "$capture_output" >&2
-  echo "capture karabiner offered to read an undeclared top-level key back" >&2
-  exit 1
-fi
-capture_payloads_untouched "a dry run described a drifted host"
+# INV repository/retired-capture-publication
+"$root/tool/version-control/test-retired-capture"
 
 # ---------------------------------------------------------------------------
 # tool/version-control/commit --publish
@@ -2775,7 +2625,7 @@ publish_git switch -q dev
 
 # #90: --publish is a Unix-like flow with a PowerShell counterpart in
 # the Windows capture verb, and uname_stub above proves that guard the same
-# way the capture cases prove theirs.
+# way on every host.
 
 # Positive: a Unix-like uname still reaches the ordinary preflight, gh
 # included.

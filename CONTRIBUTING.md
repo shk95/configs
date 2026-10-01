@@ -760,6 +760,37 @@ Installation planning and disposable VM proofs use consumer-owned tools and
 the selected private host declaration. The provider no longer owns disk
 layouts, target selection or installation inputs.
 
+### Capture Darwin host documents
+
+Pin one reviewed full provider commit for preview and Save. On the target Mac,
+use the delivered app with explicit host-owned documents and existing destination
+parents. Paths must be absolute and canonical, outside provider source/store,
+application directories and observed originals; the proposal must be a new file.
+
+```sh
+nix run 'github:shk95/configs/<full-commit>?dir=unixlike#darwin-capture' -- \
+  preview --unit karabiner --document /host-repository/settings/karabiner.json \
+  --unit symbolic-hotkeys --document /host-repository/settings/hotkeys.json \
+  --output /private-preview-directory/proposal.json
+nix run 'github:shk95/configs/<same-full-commit>?dir=unixlike#darwin-capture' -- \
+  save --preview /private-preview-directory/proposal.json
+```
+
+Review the mode-600 private proposal's readers, destinations, complete settings
+and source transitions before explicitly requesting Save. Save validates the
+bound tool/schema, rereads inputs and targets, and recomputes the proposal; stale
+or inconsistent state refuses. Each replacement is atomic, but multiple documents
+are not one transaction. After refusal or partial Save, preserve completed
+results and preview the actual current state again before another review/Save.
+See `unixlike/tool/darwin-capture/README.md` for the delivered document contract.
+
+Saving documents does not connect them to a consumer, publish provider changes,
+apply application settings or activate a host. Consumer connection is separately
+reviewed, and activation requires an explicit request. The retired repository
+`capture karabiner` publication invocation refuses without observing the host or
+changing Git; it never redirects to Save. The historical domain projection tool,
+`just karabiner-check` and `just karabiner-test` remain independently available.
+
 ## Windows changes
 
 Windows defaults, payloads, consumer generation, checks, capture and Apply
