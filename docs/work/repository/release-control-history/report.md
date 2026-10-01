@@ -1,7 +1,7 @@
 # Report: global outstanding-batch and retained-context selection
 kind: report
 spec: docs/work/repository/release-control-history/spec.md
-status: pending
+status: done
 
 ## Planning preparation, 2026-09-30
 
@@ -58,14 +58,50 @@ checks both repositories and restored ordinary-history selection.
 No original app/host document, provider lock, private operating connection,
 workflow dispatch, schedule, promotion, tag/release or host activation/Apply changed.
 
+## Source acceptance verification, 2026-10-01
+
+Source PR #468 delivered the reviewed protocol3 interface and exact retained
+protocol1/2 compatibility at d3cd93373fac7bac6a184b6d8446402c35dcb932.
+[CI36817687789](https://github.com/shk95/configs/actions/runs/36817687789)
+completed successfully at that exact source head: Linux full repository fixtures,
+native Git-for-Windows fixtures, all policy scans, the selected Unix-like job and
+Required checks passed. Both repository platforms passed all24 controller test
+families. Native Windows used CPython3.13.15 and Git2.55.0.windows.5.
+Nix2.34.8 actual preparation proof passed all four groups, with the selected
+Unix-like evaluation/build/fixture checks also successful. Windows desired-state
+checks were not selected; Git-for-Windows proof does not certify Windows Apply.
+
+The first source CI failed only because the new refusal fixture expected LF
+stderr on native Windows; subsequent source CI verified the os.linesep repair.
+Further review then reproduced a legacy graft reducing a two-commit ancestry to
+one; explicitly disabling it restored two. Nonempty/symlink graft metadata now
+refuses in both repositories, independently of replacement-object disabling.
+The final24-family source proof above includes that repair, object corruption,
+coherent truncation, archival immutability and valid completion transition cases.
+
+Manual review confirmed the repository scope, dedicated linked worktree,
+unchanged eight executing semantic paths, actual historical package bytes,
+original-byte/config/archive bindings, isolated environment, bounded public
+output and no unrelated source edits. Prose contains no undeclared account,
+private host identity or secret. Registry checks passed78 registered invariants,
+zero pending entries and zero untagged fixture units. No provisional measure was
+introduced. Normal commit/push checks and the remote history audit passed.
+
+This report completes this inert source child only. Authentication, operating
+repository selection, bootstrap approval, real permission/protection, live
+transport, manual/scheduled receipts, release/promotion and deployment remain
+independent parent gates. The report-only final commit changes no executing
+source; current-head Required checks and protected integration are still verified
+separately before Ready handoff and merge.
+
 ## Acceptance
 
 | ID | State | Evidence |
 | --- | --- | --- |
-| AC1 | pending | |
-| AC2 | pending | |
-| AC3 | pending | |
-| AC4 | pending | |
-| AC5 | pending | |
-| AC6 | pending | |
-| AC7 | pending | |
+| AC1 | verified | Original-byte/global-chain, malformed records and coherent-truncation fixtures pass; full-ancestry immutability prevents a recomputed index/context from hiding tail loss. |
+| AC2 | verified | Actual retained protocol1/2 reducers and protocol3 range projection replay completed prefixes; semantic-completion and whole-ledger/index mismatch refusals pass. |
+| AC3 | verified | First/later envelope, protocol2 quiet completion, empty snapshot, overlap/boundary and valid outstanding-to-completed archival transition fixtures pass; completed effects are not reproposed. |
+| AC4 | verified | Reachable immutable config/archive objects, original batch-start bindings, current-disabled/old-outstanding and fresh-stop fixtures pass; archive repointing refuses even for equal JSON bytes. |
+| AC5 | verified | Exact eight-path extraction, isolated retained imports, object-identity and graph integrity, unsafe/missing/shallow/replacement/graft/context refusals pass; assertions remain synthetic provenance. |
+| AC6 | verified | Real protocol1 blobs at24cf09b5 and protocol2 at7f43ec3b preserve their own gates/serializers. Later protocol3 ranges pass; old offset, unknown or mismatched protocol inputs refuse without migration. |
+| AC7 | verified | Official inert wrapper passes all24 families on Linux and native Git-for-Windows plus normal policy/affected dispatch proof above. Original Git state is unchanged; no HTTP, credentials, candidate execution or live/host operation is added. |
