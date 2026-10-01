@@ -1,7 +1,7 @@
 # Report: disposable refresh candidate and shared-control requests
 kind: report
 spec: docs/work/repository/refresh-candidate/spec.md
-status: pending
+status: done
 
 ## Planning boundary, 2026-09-30
 
@@ -25,11 +25,11 @@ workflow dispatch/cancel, enablement or host operation occurred in this plan.
 
 | ID | State | Evidence |
 | --- | --- | --- |
-| AC1 | pending | |
-| AC2 | pending | |
-| AC3 | pending | |
-| AC4 | pending | |
-| AC5 | pending | |
+| AC1 | verified | Review: root approved fixture-only trusted preparation and peer checked the source. Fixtures: actual Linux Nix/Git preparation on source `6a73da1` passed no-op, failure, source fault, confirmed timeout and changed lock groups; independent bytes/modes and source/base/lock binding checked. Policy checks and affected dispatch: source CI linked below passed the selected actual-Nix job, repository scans and Required checks. |
+| AC2 | verified | Review and fixtures: actual local Git preparation proves isolated dependency commits, exact parents/stable branch/head, preserved normal-merge history and refusal of source contamination, occupied human heads and wrong base. Linux actual-Nix CI and Linux/native-Windows fake-control jobs passed on `6a73da1`; policy scans and affected dispatch passed in the same run. |
+| AC3 | verified | Review: root approved protocol 2 and the unchanged eight-file closure. Fixtures: all 12 controller families passed on Linux and native Git-for-Windows, including real loader execution of nonempty exact protocol-1 historical packages and protocol-2 packages, unknown/mislabeled protocol and incomplete-closure refusal, separate refresh requests and unchanged dev-to-master promotion. Policy checks and affected dispatch passed in source CI. |
+| AC4 | verified | Review: targeted peer review and root review accepted the three current-proof/recovery repairs. Fixtures: Linux/native-Windows controller families prove duplicate joins, exact open/merged/stale/unknown observations, completed-operation retention, confirmed-absent supersession, stop/owner/current-check fences and refusal of unsupported recovery. These remain supplied single-envelope observations. Policy checks and affected dispatch passed in source CI. |
+| AC5 | verified | Review: pure preview and fixture-only preparation boundaries inspected. Fixtures: Linux actual Nix plus Linux/native Git-for-Windows control proof passed disabled/no-op, bounded failure/transient/timeout and 05/06/fixed-07 delayed/missed opportunity cases. Public summaries retain bounded counts/states; no live transport executes. Policy checks, selected affected dispatch and Required checks passed on `6a73da1`. |
 
 ## Source pickup and local proof, 2026-10-01
 
@@ -77,11 +77,31 @@ cover old completed observations after a new prepared revision, late nonconsumab
 refusals, duplicate joins, current DTO shape/head/base/tree/lock/app/check failures,
 stop/recovery and 05/06/fixed07 delayed/missed opportunities.
 
-Rows remain pending until source policy/full dispatch/final-head CI are complete.
-The CI change explicitly supplies full public history for old-package blobs on
-Linux/native Windows and runs the actual fixture in the existing Nix-enabled Linux
-job. Native Windows fake proof and selected Linux actual Nix proof have not yet run
-on this source head. Local evidence does not replace them.
+## Verified source evidence, 2026-10-01
+
+[Source CI 36743953450](https://github.com/shk95/configs/actions/runs/36743953450)
+completed successfully at exact source `6a73da1c3b737e070793eae6e7fdb713246eca63`.
+The [Linux actual-Nix job](https://github.com/shk95/configs/actions/runs/36743953450/job/109985725524)
+passed all four preparation groups with Nix 2.34.8, Git 2.55.0 and Python 3.13.15.
+The [Linux policy job](https://github.com/shk95/configs/actions/runs/36743953450/job/109985725407)
+passed all 12 controller families (2.879 seconds), and the
+[native Windows policy job](https://github.com/shk95/configs/actions/runs/36743953450/job/109985725554)
+passed all 12 (8.771 seconds) with Git 2.55.0.windows.5. Full public history
+supplied the exact retained package blobs. Selected policy scans, inherited domain
+suites and Required checks passed. Linux evaluated all seven configurations and
+built its selected native fixtures; earlier local Darwin build evidence remains
+separate. Neither lane establishes host activation or Apply.
+
+On resumption, root freshly matched local/remote source head, base, Draft state,
+disabled auto-merge and source CI, reviewed the child evidence, and reran all 12
+controller families locally with explicit functional Python 3.13.15: pass.
+All five child criteria are verified within their bounded fixture scope. This
+report commit still requires fresh final-head CI before Ready delivery; the source
+run above is source evidence, not a check on that later report commit.
+
+A new revision's `proposed: 1` pending-PR count is inert intent data. Fresh stable-
+branch PR lookup, join, complete-absence reconciliation and unknown-result refusal
+before actual transport require the later separately authorized live implementation.
 
 Parent scheduled-flake-refresh remains 0/5 verified and provider-release remains
 0/14. No global history/config-package routing, live transport, authentication,
