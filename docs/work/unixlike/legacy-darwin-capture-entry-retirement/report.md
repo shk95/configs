@@ -1,7 +1,7 @@
 # Report: Unix-like legacy Darwin capture entry retirement
 kind: report
 spec: docs/work/unixlike/legacy-darwin-capture-entry-retirement/spec.md
-status: pending
+status: done
 
 ## Planning pickup, 2026-10-01
 
@@ -22,11 +22,11 @@ No host activation, release, consumer adoption or operational permission follows
 
 | ID | State | Evidence |
 | --- | --- | --- |
-| AC1 | pending | |
-| AC2 | pending | |
-| AC3 | pending | |
-| AC4 | pending | |
-| AC5 | pending | |
+| AC1 | verified | Review: root inspected actual merged repaired U2 #458 at `4726a134` and plan #462 at `23254df5`, their source-bound reviewed report and separate original pickup/review pins. Issue #463 assigns this prerequisite; later repository caller source remains unassigned and waits for both prerequisite deliveries. Policy checks passed normal hooks and source CI below. |
+| AC2 | verified | Review: root read the exact Justfile and isolated fixture. Fixtures: pinned Just1.58.0/Python3.14.7 actual copied-entry refusal covers obsolete arguments, affirmative input and shell/template attacks with zero reader/commit/CLI/Save calls, unchanged bytes/modes/index/HEAD/branches/refs; global preview is separately inert. Policy checks and affected Unix-like dispatch passed normal hooks, pre-push and source CI below. |
+| AC3 | verified | Review: only the root fixture locator is detached; its actual tag/block/caller survive unchanged. Fixtures: actual U2 finite capture/consumer, retained legacy projection and independent entry cases pass; registry reports 78 registered, zero pending/untagged. Policy and affected-dispatch hooks/source CI below pass without missing enforcement. |
+| AC4 | verified | Review: root read the dated decision/status diff and matched unchanged historical source/native/activation observations to delivered U2 evidence. Finite host-document ownership and explicit consumer/activation permissions are qualified; no new app runtime or repository caller retirement is claimed. Normal policy hooks and source CI below pass. |
+| AC5 | verified | Review: diff against pickup changes only eight Unix-like files; domain legacy tool/project/check/apply/payloads and remaining Just recipes are unchanged, with no repository source edit or lock change. Fixtures: narrow synthetic regression, frozen coverage positive/refusal rerun and official entry/capture/consumer suites pass. Normal hook/policy/registry/pre-push checks and exact source CI below pass; seven evaluations and selected native builds remain separately qualified. |
 
 ## Assigned source and verification, 2026-10-01
 
@@ -77,8 +77,8 @@ Narrow legacy projection and official finite capture/Python-Nix parity/security/
 atomic/partial/adapter plus independent mkDarwin consumer documents fixtures pass.
 On this Mac the historical projection fixture explicitly skips fallback-to-real-
 macOS-defaults and non-Mac platform-guard cases; its synthetic projection/apply
-cases pass. The changed evaluation harness's positive/refusal regression and
-normal final-head hook/CI delivery remain to be recorded below.
+cases pass. The frozen evaluation coverage positive/refusal rerun completed successfully at
+the safe point; source delivery evidence is recorded below.
 
 Decision and current-state reconciliation are dated, preserve #177/#178/#183 and
 generation34 native/activation observations, and distinguish finite host-document
@@ -89,9 +89,8 @@ root repository files and flake lock compare unchanged against pickup. Earlier
 U2 native parser/migration/startup proof and its three distinct sandbox failures
 retain their original source binding; no application was started in this work.
 
-Evaluation: narrow independent consumer documents pass; full affected normal
-checks remain a delivery gate. Build: rendered modules/packages are unchanged;
-selected native synthetic build is recorded by normal push evidence. Native
+Evaluation: narrow independent consumer documents pass; all seven provider outputs evaluate in the normal affected checks. Build: rendered modules/packages are unchanged;
+the native aarch64-darwin fixture-mac build passed in normal push verification. Native
 runtime: actual pinned Just recipe execution with synthetic spies passes;
 no new Karabiner runtime proof. Activation/Apply/adoption: not performed.
 
@@ -100,3 +99,35 @@ edit and ended with a shell EOF after the inline case passed. That run is invali
 because source changed while executing; it is neither product-failure nor pass
 evidence. The final executable bytes pass `sh -n` and the narrow isolated fixture;
 the full coverage regression is rerun with executable sources frozen.
+
+
+## Source delivery evidence, 2026-10-01
+
+Root resumed the preserved sole-owner lane after fresh local/GitHub/dependency
+inspection. Source commit is `e71ed4a48ea834f140638458b7710d022d8e544b` in
+[PR #465](https://github.com/shk95/configs/pull/465). All eight files classify
+Unix-like. Normal commit hooks passed format/lint/17 payload parsers, hygiene,
+domain reads, design citations, records, work, registry/provisional and secret
+scanning. Normal pre-push passed actual refresh, finite capture, independent
+consumer and actual pinned entry fixtures, seven provider evaluations, selected
+native aarch64-darwin fixture-mac build and audit (zero warnings/failures).
+Foreign Linux outputs have evaluation-only local evidence.
+
+The preserved frozen coverage rerun returned zero with "evaluation coverage
+fixtures behave" after positive, empty/missing/failed/foreign and selected-build
+refusals. Its earlier overlapping-source run remains invalid evidence, as stated
+above. Root reran the actual pinned entry fixture and official domain check on
+resumption; both passed with sources frozen.
+
+[Exact source CI 36800428722](https://github.com/shk95/configs/actions/runs/36800428722)
+passed the selected Unix-like job, repository policy scans and Required checks.
+The new entry fixture executes in the official domain test path. Linux CI
+supplies its own all-output evaluation and selected native Linux builds; the
+local Darwin build is separate evidence. No new native Karabiner execution,
+originals Save, consumer adoption, activation or Apply was performed.
+
+All five criteria are verified within this prerequisite's scope. This later
+report commit requires its own final-head CI before Ready delivery; the source
+run above is not a check on the later commit. Root alone integrates. Repository
+caller retirement remains a subsequent separately assigned outcome, and no
+permission for protected integration, host operation or cleanup follows.
