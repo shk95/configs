@@ -36,8 +36,27 @@ are revised for the new owner before work resumes.
 
 ## Current priorities
 
-No active roadmap priority is assigned. Deferred outcomes remain deferred until
-the maintainer selects the next work.
+On 2026-10-01 the maintainer selected sequential handling of non-deferred work.
+Root owns continuation, with one implementation lane and one protected integration
+at a time. Deferred host outcomes below remain deferred. GitHub holds actual PR
+states; this table records order and prerequisites rather than copying them.
+
+| Order | Outcome | Pickup condition |
+| --- | --- | --- |
+| 1 | Bounded refresh candidate and Unix-like legacy entry prerequisite | Integrate existing Ready deliveries individually with fresh exact-head/base proof. |
+| 2 | Global history and exact retained context | Reviewed compatibility amendment against delivered refresh package; explicit root source assignment. |
+| 3 | Repository legacy capture caller retirement | Actual U2, Unix-like entry and refresh integration; global-history owner releases shared files. |
+| 4 | Production release qualification | Reviewed child plan, actual public contract coverage, exact tool identities and bootstrap proposal; no tag mutation. |
+| 5 | Authenticated operating transport source | Reviewed child plan, exact immutable inputs and deterministic fake transport; live connection remains a separate gate. |
+| 6 | Manual operating cycle | Maintainer-selected operating repository/ref, approved source, actual permissions/protection and separate operating authorization. |
+| 7 | Scheduled operation | Successful manual proof and separately authorized enablement/stop/resume. |
+
+The active work links are release-control-history, legacy-capture-caller-retirement,
+production-release-qualification and release-operating-transport under
+`docs/work/repository/`. Parent provider-release-contract and scheduled-flake-refresh
+reports retain unmet acceptance. Record-maintenance issues are reviewed after source
+continuations; an already complete report or removed feature is not implementation
+permission to restore old behavior.
 
 Standalone work does not need a roadmap row. The planner maintains priorities,
 dependencies and disposition here; PR state remains on GitHub. Completion needs

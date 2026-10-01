@@ -111,6 +111,85 @@ are excluded. Fixture assertions never authenticate production source. Actual
 private repository/ref, approved bootstrap source, permissions and authorized
 manual/scheduled receipts remain missing parent inputs.
 
+## Compatibility amendment after actual refresh delivery
+
+Amended 2026-10-01 AC1, AC2, AC3, AC4, AC5, AC6 and AC7: root reviewed
+actual protocol-2 delivery PR #464, integrated as
+7f43ec3b49243d10b0ea3d75272d8cd4c6ff3d7f, and its source-bound eight-file
+manifest. This amendment fixes the previously deferred interface. It does not
+weaken original-byte, semantic replay, immutable-context or inertness criteria.
+The user selected sequential non-deferred continuation. Root is the sole
+continuation owner; a source assignment is recorded in the execution issue only
+after this reviewed amendment and predecessor integration are accepted.
+
+### Finite supported interfaces
+
+| Semantic protocol | Retained input and callable contract | Global position |
+| --- | --- | --- |
+| 1 | Exact historical records.history/parse and engine.reduce/index, in an isolated verified package; existing main preview remains unchanged. | Only original seq1/prior-zero first envelope. Missing explicit retained bindings refuses. |
+| 2 | Exact #464 records.history/parse and engine.reduce/index with bounded refresh obligations; existing main preview remains unchanged. | Only original seq1/prior-zero first envelope. Offset input refuses rather than being renumbered. |
+| 3 | Additive original-byte range parser with explicit preceding sequence/digest; retained replay entry supplies semantic projection through its own reduce/index. | First or later global range, with explicit verified boundary and immutable context. |
+
+Protocol 3 is the new semantic package version. TSV format 1 and the exact eight
+executing paths remain unchanged. The stable loader verifies package closure and
+selects this finite contract; it never imports current reducers for old batches.
+Old versions retain their actual bytes, checks, approvals and serializers. Unknown
+versions, protocol/package mismatch and a missing callable refuse. The fixture
+matrix uses real retained protocol-1 and protocol-2 blobs, not relabeled current
+modules. A newer package with weaker obligations must not waive old gates.
+
+### Global snapshot and retained-context encoding
+
+Add an explicit inert --global-history option with a required full --operating-head
+SHA to the existing preview --fixture-inputs entry. Read a complete supplied local
+operating Git repository at that head, without checkout, fetch or writes to it.
+Refuse shallow or replaced history, symlink/gitlink objects and non-regular record
+modes. Fixed data paths remain config/operating.tsv, control/stop.tsv, history/ and
+current/index.tsv; the additive fixed current/batches.tsv is the retained-context
+table. Unlisted history entries and missing or surplus batch contexts refuse.
+
+current/batches.tsv starts with format<TAB>1. Each context row has exactly twelve
+fields: literal context, start sequence, batch identity, approved public master,
+control commit, manifest digest, approval-provenance digest, semantic protocol,
+config commit, config blob, transcript commit and transcript blob. Rows are ordered
+by strictly increasing start sequence and unique batch identity. Configuration and
+transcript commits must be ancestors of the accepted operating head. Read exact
+config/operating.tsv and current/transcript.json blobs from those commits and bind
+their identities; do not substitute working files or the latest config/transcript.
+The archived transcript is an explicit synthetic replay input, never production
+provenance. Context fields must agree with the original batch-start identities;
+protocol 3 additionally records approved-master, config-commit, transcript-commit
+and transcript-blob in batch-start. Its existing config field names the config blob.
+Old records without sufficient explicit context refuse for manual recovery; this
+lane does not migrate or fabricate bindings for old operating records.
+
+The loader validates all original history filename, sequence and prior-digest bytes,
+then selects contiguous complete envelopes and at most one outstanding final suffix.
+It supplies the original range and preceding boundary to the selected verified
+interface, never edits or reserializes event files. Each completed envelope must
+semantically project to complete with zero pending effects using its immutable
+config, transcript and exact package. Current supplied transcript/request applies
+only to the outstanding suffix; immutable archival inputs replay completed history.
+Current config governs only a no-outstanding context. Fresh stop is always read from
+the accepted operating head independently of old config, including when current
+config disables new work. Unsupported or inconsistent old history refuses.
+
+Global index uses format 1 with literal index-kind=global-1 and sequence, prior,
+batch, generation, stage, state-digest and ledger-digest singletons. The first six
+projection values come from the final retained semantic projection (or the selected
+current package's empty projection for empty history). ledger-digest is SHA-256 of
+canonical ordered context/projection pairs, including every completed envelope and
+its exact retained index bytes' SHA-256. Compare deterministic whole-index bytes;
+structural completion or a matching final projection alone cannot waive a damaged
+prefix. No-outstanding emits only bounded quiet preview/complete or preview/empty
+with proposed=0; it never proposes recovery of a completed effect or creates a batch.
+
+The source PR includes loader/package/manifest, finite positive/refusal fixtures,
+Linux/native Git-for-Windows dispatch, operator usage and qualified report evidence.
+No executing-closure expansion, HTTP/authentication/write transport, credentials,
+workflow enablement, promotion/release or host operation is assigned. Necessary
+execution-interface discoveries that contradict this matrix return to planning.
+
 ## Acceptance
 
 | ID | Criterion | Required lanes |
