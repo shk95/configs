@@ -272,10 +272,10 @@ darwin-generations:
 karabiner-check:
     unixlike/modules/programs/karabiner/tool check
 
-# Read this Mac's Karabiner drift back into the payloads and commit it.
+# Retired publication entry; use explicit pinned host-document preview/review/save.
 [group('darwin')]
 karabiner-capture *args:
-    tool/version-control/commit {{args}} capture karabiner
+    @echo 'karabiner-capture is retired. Use the pinned preview/review/save workflow in unixlike/tool/darwin-capture/README.md with explicit host-owned document destinations; connect and publish them separately.' >&2; exit 1
 
 # Prove the Karabiner projection tolerates runtime members and refuses drift.
 [group('darwin')]

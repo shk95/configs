@@ -3,7 +3,7 @@ statement: Managed settings that a host application rewrites in place have one f
 rationale: docs/policy/architecture.md § Unix-like domain
 enforced-by: tool unixlike/modules/programs/karabiner/tool
 enforced-by: fixture unixlike/tool/checks/karabiner-test
-enforced-by: fixture tool/version-control/test
+enforced-by: fixture unixlike/tool/checks/karabiner-entry-test
 enforced-by: schema unixlike/tool/darwin-capture/engine.py
 enforced-by: schema unixlike/modules/programs/karabiner/module.nix
 enforced-by: fixture unixlike/tool/checks/darwin-capture-test.py
@@ -50,3 +50,15 @@ enforcement for the existing provider-payload Git caller; they are not claimed a
 host-document contract consumers. Their payload-bound protocol and locator/tags
 remain until the separately owned caller retirement. Historical observations
 retain their original source binding.
+
+Reconciled 2026-10-01. Active host-document schema and capture/consumer fixtures
+above enforce the single finite unit declaration independently of the historical
+Git caller. The retired Justfile publication entry refuses legacy arguments
+without reading observations or inferring a host-document Save destination;
+its fixture also proves the retained comparison delegation. The registry detaches
+only the root legacy fixture locator before its separately owned tag/block
+retirement. That root fixture still exists and may name this registered invariant;
+its continued historical coverage does not make it an active host-document
+consumer. The domain legacy tool, project protocol and projection fixture remain
+unchanged and registered. Earlier payload-bound rationale and observations retain
+their original source meaning.
