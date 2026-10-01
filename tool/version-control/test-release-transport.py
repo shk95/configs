@@ -57,7 +57,7 @@ class Fake:
         if route=='/pulls' and method=='GET':return self.response(self.pulls)
         if route=='/pulls' and method=='POST':
             p={'id':17,'number':17,'state':'open','head':{'ref':body['head'],'sha':self.dev,'repo':{'full_name':T.PUBLIC}},
-               'base':{'ref':body['base'],'sha':self.master,'repo':{'full_name':T.PUBLIC}}}
+               'base':{'ref':body['base'],'sha':self.master,'repo':{'full_name':T.PUBLIC}},'body':body['body']}
             self.pulls.append(p)
             if getattr(self,'lose_pr',False):raise T.Unknown('unknown-write')
             return self.response(p,201)
@@ -323,6 +323,19 @@ class TransportProof(unittest.TestCase):
         self.assertFalse(hasattr(client,'token'))
         self.assertNotIn('TOKEN',B.L.runtime_environment({'TOKEN':'secret'}))
 
+    def test_existing_pr_body_operation_is_independently_verified(self):
+        self.fake.pulls=[{'id':17,'number':17,'state':'open','body':F.X,
+             'head':{'ref':'dev','sha':F.D,'repo':{'full_name':T.PUBLIC}},
+             'base':{'ref':'master','sha':F.H,'repo':{'full_name':T.PUBLIC}}}]
+        executor,plan=self.executor()
+        with self.assertRaisesRegex(T.Refusal,'wrong-pr-operation'):executor.perform(plan)
+        self.assertFalse(any(method!='GET' for method,_,_ in self.fake.calls))
+
+    def test_unrecognized_pagination_header_cannot_prove_absence(self):
+        path='/repos/shk95/configs/pulls?state=all&per_page=100&page=1'
+        self.fake.responses[('GET',path)]=self.fake.response([],200,{'link':"<https://foreign.invalid>; rel='next'"})
+        with self.assertRaisesRegex(T.Refusal,'unknown-pagination-framing'):self.api.pages('/pulls',parameters={'state':'all'})
+
     def test_foreign_cancel_owner_refuses_before_endpoint(self):
         owner={'run':7,'attempt':1,'job':5,'workflow':2,'source':self.fake.source}
         count=len(self.fake.calls)
@@ -378,6 +391,10 @@ class TransportProof(unittest.TestCase):
         self.assertEqual(result.returncode,0,result.stderr)
         value=json.loads(result.stdout);self.assertFalse(value['enabled']);self.assertFalse(value['production_certification'])
         self.assertIn('operating-repository',value['unresolved'])
+        inputs=json.loads(template.read_text());inputs['transport-source']=F.H
+        template.write_text(json.dumps(inputs))
+        self.assertNotEqual(subprocess.run(command,capture_output=True).returncode,0)
+        inputs['transport-source']='UNRESOLVED';template.write_text(json.dumps(inputs))
         result=subprocess.run(command[:-3]+['not-a-sha','--template',str(template)],capture_output=True)
         self.assertNotEqual(result.returncode,0)
 

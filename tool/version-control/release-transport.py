@@ -145,6 +145,7 @@ class Api:
                 need(identifier not in ids, 'duplicate-page-item')
                 ids.add(identifier); result.append(row)
             link = headers.get('link', '')
+            need(isinstance(link,str) and (not link or re.fullmatch(r'<[^<>]+>; rel="(?:next|prev|first|last)"(?:, <[^<>]+>; rel="(?:next|prev|first|last)")*',link)), 'unknown-pagination-framing')
             next_links = re.findall(r'<([^>]+)>; rel="next"', link)
             need(len(next_links) <= 1, 'ambiguous-pagination')
             if not next_links:
@@ -434,6 +435,8 @@ class Executor:
             need(len(values) <= 1, 'ambiguous-pr')
             if not values:
                 return 'absent', None
+            if kind == 'pr':
+                need(values[0].get('body') == payload['body-operation'], 'wrong-pr-operation')
             source, target = (payload['head'], payload['base']) if kind == 'refresh-pr' else (payload['dev'], payload['master'])
             return 'applied', self.verify_pr(values[0], head, base, source, target)
         if kind == 'merge':
@@ -531,7 +534,7 @@ class Executor:
             need(not self.pulls(head, base), 'pr-appeared-before-post')
             # Serial writer plus fresh complete absence; GitHub offers no PR-create CAS.
             return 'POST', '/pulls', {'head': head, 'base': base, 'title': 'Release control candidate',
-                                    'body': 'operation=' + digest(canonical(p))}, (201,)
+                                    'body': p['body-operation'] if kind == 'pr' else 'operation=' + digest(canonical(p))}, (201,)
         if kind == 'merge':
             self.entry.protection('dev'); self.entry.protection('master')
             need(self.api.ref('heads/dev') == p['dev'] and self.api.ref('heads/master') == p['master'], 'stale-merge-base')

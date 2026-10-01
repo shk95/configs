@@ -40,8 +40,16 @@ def main():
             data=subprocess.check_output(command+['show',args.source+':'+name],stderr=subprocess.DEVNULL,env=env)
             if hashlib.sha256(data).hexdigest()!=expected:raise ValueError()
         if names!=sorted(FILES):raise ValueError()
-        value=json.loads(Path(args.template).read_text())
+        def unique(pairs):
+            result={}
+            for key,value in pairs:
+                if key in result:raise ValueError()
+                result[key]=value
+            return result
+        value=json.loads(Path(args.template).read_text(),object_pairs_hook=unique)
         if set(value)!=FIELDS or type(value['format']) is not int or value['format']!=1:raise ValueError()
+        if value['transport-source'] not in ('UNRESOLVED',args.source):raise ValueError()
+        if value['transport-manifest'] not in ('UNRESOLVED',hashlib.sha256(manifest).hexdigest()):raise ValueError()
         unresolved=sorted(k for k,v in value.items() if v in (None,'UNRESOLVED',False,[]) and k!='format')
         # Even resolved input text cannot enable transport. Separate source/ref/
         # Environment provenance and authenticated operating authorization are needed.
