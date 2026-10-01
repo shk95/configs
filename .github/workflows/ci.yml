@@ -109,6 +109,7 @@ jobs:
           esac
           tool/version-control/test-release-preview
           tool/version-control/test-release-control
+          tool/version-control/test-retired-capture
 
   unix:
     name: Flake and Unix-like hosts

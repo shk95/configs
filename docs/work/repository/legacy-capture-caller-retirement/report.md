@@ -28,3 +28,25 @@ consumer adoption, activation, release or controller-parent completion is claime
 | AC4 | pending | |
 | AC5 | pending | |
 | AC6 | pending | |
+
+## Source pickup, 2026-10-01
+
+Root assigned issue #469 after U2 #458, Unix-like entry/locator retirement #465,
+refresh #464 and global-history #468 were integrated. Sole source owner uses
+`feature/repository-legacy-capture-caller-retirement` in its dedicated linked
+worktree, pinned base and reviewed plan c5d06dd1c249ee6061d5509f9bfa11e6157157d3.
+Shared root files are released by their previous workers; no Unix-like file is
+edited. The global-history merged tree equals its verified final worker tree;
+its separate post-merge CI remains pending at pickup.
+
+Repository doctor passed with functional CPython3.13.15. Narrow finite proof
+passes256 historical invocation cases and20 grammar-boundary cases against
+disposable Git repositories and synthetic originals. Spies for Git, projection,
+host readers and scratch creation never execute for retired calls. Byte/mode
+snapshots include provider files, originals, index, HEAD and all local refs,
+with independent before/after bare-remote refs. Mode-000 is POSIX evidence;
+Windows proof is refusal before reader execution, not an ACL claim.
+
+Normal full regressions, current-head hosted native proof and final review remain
+pending. No real app originals, Save, consumer adoption, activation or Apply was
+performed. No release, promotion, operating connection or cleanup is claimed.

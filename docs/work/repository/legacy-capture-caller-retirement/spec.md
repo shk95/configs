@@ -3,6 +3,7 @@ kind: spec
 date: 2026-10-01
 scope: repository
 status: approved
+issue: #469
 review-by: 2026-10-15
 
 ## Outcome and assignment

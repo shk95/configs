@@ -224,9 +224,11 @@ just check
 
 just zellij-patch-check v0.45.1
 just karabiner-check   # target Mac only; compares the Karabiner payloads
-just karabiner-capture # target Mac only; reads the drift back and commits it
 just karabiner-test
 ```
+
+Observed Darwin settings use the pinned host-document preview/review/save
+workflow in [CONTRIBUTING.md](CONTRIBUTING.md#capture-darwin-host-documents).
 
 Host-specific Justfile recipes refuse to use the provider's synthetic
 outputs. Evaluate or build a real host from its explicitly selected final
