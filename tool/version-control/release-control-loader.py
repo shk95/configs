@@ -28,7 +28,7 @@ def runtime_environment(source):
 def git(repo, *args, data=None):
     env = runtime_environment(os.environ)
     env.update(GIT_CONFIG_NOSYSTEM="1", GIT_CONFIG_GLOBAL=os.devnull,
-               GIT_NO_REPLACE_OBJECTS="1", GIT_NO_LAZY_FETCH="1",
+               GIT_NO_REPLACE_OBJECTS="1", GIT_NO_LAZY_FETCH="1", GIT_GRAFT_FILE=os.devnull,
                GIT_ALLOW_PROTOCOL="", GIT_TERMINAL_PROMPT="0")
     result = subprocess.run(["git", "--no-replace-objects", "-C", str(repo), *args],
                             input=data, env=env, capture_output=True, timeout=30)
@@ -218,6 +218,10 @@ def object_digest(kind, data):
 
 
 def verify_graphs(repo, heads):
+    # Legacy grafts are another graph override, separate from replacement refs.
+    grafts = Path(git(repo, "rev-parse", "--path-format=absolute", "--git-common-dir").decode("utf-8").strip()) / "info/grafts"
+    if grafts.is_symlink() or (grafts.exists() and (not grafts.is_file() or grafts.stat().st_size)):
+        raise ValueError("grafted-history-refused")
     # Find ancestry-covering roots solely for integrity, never package selection.
     heads = set(heads)
     for head in heads:

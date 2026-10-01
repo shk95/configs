@@ -1310,5 +1310,18 @@ sys.stdout.buffer.write(engine.index(state,last))
         self.assertEqual(subprocess.run(['git','-C',str(self.operating),'cat-file','blob',blob],capture_output=True,check=True).stdout,altered)
         self.refuse()
 
+    # INV repository/release-control-preview-only
+    def test_global_legacy_grafts_refuse_in_both_repositories(self):
+        self.prepare()
+        for repo, head in ((self.operating, self.head), (self.public, self.packages['3']['master'])):
+            with self.subTest(repository=repo.name):
+                grafts=repo/'.git/info/grafts'
+                grafts.parent.mkdir(exist_ok=True)
+                grafts.write_bytes((head+'\n').encode('ascii'))
+                self.refuse()
+                grafts.unlink()
+                result=self.invoke()
+                self.assertEqual(result.returncode,0,result.stderr)
+
 if __name__ == "__main__":
     unittest.main()

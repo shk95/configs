@@ -41,7 +41,9 @@ configuration cannot waive retained outstanding obligations or fresh stop.
 Accepted Git ancestry preserves original event bytes and fixed context bindings;
 a rewritten tail or repointed completed archive refuses even with a recomputed
 current index. Selected blob identities are independently rehashed and Git graph
-connectivity/integrity is checked without reading unrelated blob contents. This
+connectivity/integrity is checked without reading unrelated blob contents. Legacy
+grafts and replacement graph overrides refuse; private Git reads disable both
+independently. This
 still authenticates no operating source and implements no write transport.
 
 ## Limits and authority

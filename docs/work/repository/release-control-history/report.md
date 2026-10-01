@@ -30,7 +30,7 @@ changes. Protocol3 preserves the eight executing paths. Real protocol1 blobs
 come from24cf09b5 and real protocol2 blobs from7f43ec3b; current semantics are
 not relabeled as old code. Current caller assertions do not select old batches.
 
-Local functional Python3.13.15 on Darwin passed twenty-three fixture families, including
+Local functional Python3.13.15 on Darwin passed twenty-four fixture families, including
 original-byte global history, actual old packages plus later protocol3 offset,
 semantic completed-prefix refusal, whole-ledger mismatch, immutable config and
 archival inputs, quiet/empty selection, fresh stop, unsafe/unreachable/shallow/
@@ -50,7 +50,10 @@ Native Git-for-Windows reached all23 tests, but14 refusal assertions compared
 the platform-native CRLF stderr line with a literal LF expectation. The fixed
 public refusal remained exact and original history bytes were unchanged. The
 fixture now uses os.linesep like the existing retained-package refusal proof;
-repaired final-head native CI remains pending.
+repaired final-head native CI remains pending. Further review found the legacy
+info/grafts graph override: private Git reads now disable it explicitly and both
+repositories refuse a nonempty or symlink graft file. A new positive/refusal family
+checks both repositories and restored ordinary-history selection.
 
 No original app/host document, provider lock, private operating connection,
 workflow dispatch, schedule, promotion, tag/release or host activation/Apply changed.
