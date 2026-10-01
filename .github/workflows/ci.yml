@@ -108,6 +108,7 @@ jobs:
             *) echo 'Expected native Git for Windows bash' >&2; exit 1 ;;
           esac
           tool/version-control/test-release-preview
+          tool/version-control/test-production-release
           tool/version-control/test-release-control
           tool/version-control/test-retired-capture
 

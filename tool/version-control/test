@@ -4731,12 +4731,21 @@ printf 'An example item is docs/work/unixlike/probe/spec.md.\n' >"$design_fixtur
 printf 'The form is docs/work/README.md and the order is docs/work/roadmap.md.\n' >"$design_fixture/AGENTS.md"
 printf 'id: repository/probe\nstatement: docs/work/README.md is the format.\n' >"$design_fixture/docs/policy/invariants/repository/probe.md"
 printf '#!/bin/sh\necho "See docs/work/README.md and docs/work/roadmap.md." >&2\n' >"$design_fixture/tool/version-control/probe"
+printf 'production-map\texact\tdocs/work/repository/probe/spec.md\tprod-repository-policy\n' >"$design_fixture/tool/version-control/release-preview.rules"
 git -C "$design_fixture" add -A
 if ! design_output=$(cd "$design_fixture" && "$design_citations" 2>&1); then
   printf '%s\n' "$design_output" >&2
   echo "design-citations refused a placement rule, a slug template, an inlet's source, the classifier's path table, a status link, the tree map or the area's own files" >&2
   exit 1
 fi
+for design_bad in '# authority: docs/work/repository/probe/spec.md' 'production-map	exact	docs/work/repository/probe/spec.md	prod-repository-policy	extra'; do
+  printf '%b\n' "$design_bad" >"$design_fixture/tool/version-control/release-preview.rules"
+  git -C "$design_fixture" add -A
+  if (cd "$design_fixture" && "$design_citations" >/dev/null 2>&1); then
+    echo "design-citations accepted authority or extra fields in a mapping table" >&2
+    exit 1
+  fi
+done
 case "$design_fixture" in /tmp/*) rm -rf -- "$design_fixture" ;; esac
 
 # INV repository/document-index-generated
@@ -5552,6 +5561,9 @@ git -C "$authoring_root" worktree add -q -b fix/repository-pinned "$authoring_pi
 
 # INV repository/release-preview-read-only
 "$root/tool/version-control/test-release-preview"
+
+# INV repository/production-release-qualification
+"$root/tool/version-control/test-production-release"
 
 # INV repository/release-control-preview-only
 "$root/tool/version-control/test-release-control"

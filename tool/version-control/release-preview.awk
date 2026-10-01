@@ -1,6 +1,7 @@
 # Strict data engine; no system(), getline commands, eval or candidate execution.
 # INV repository/release-preview-read-only
 # INV repository/evidence-three-states
+# INV repository/production-release-qualification
 function refuse(code) { errors[code]=1 }
 function id(s) { return s ~ /^[a-z0-9][a-z0-9-]*$/ }
 function sha(s) { return s ~ /^[a-f0-9]+$/ && (length(s)==40 || length(s)==64) }
@@ -34,15 +35,20 @@ function add_reason(check, reason, kind, seen,d,n,i) {
   n=list(check_dependencies[check],d)
   for(i=1;i<=n;i++) add_reason(d[i],reason,kind,seen)
 }
-function select_path(p, reason, m,n,cs,i,hit,visiting,seen) {
+function select_path(p, reason, owner, validate_only, reason_kind, m,n,cs,i,hit,owned,visiting,seen) {
   hit=0
   for(m=1;m<=map_count;m++) {
+    if(map_production[m] != production)continue
     if((map_match[m]=="exact" && p==map_path[m]) || (map_match[m]=="prefix" && index(p,map_path[m])==1)) {
       hit=1; n=list(map_checks[m],cs)
-      for(i=1;i<=n;i++) { require_check(cs[i],visiting); add_reason(cs[i],reason,"promotion-delta",seen) }
+      for(i=1;i<=n;i++) {
+        if(check_domain[cs[i]]==owner)owned=1; else if(production)refuse("production-mapping-domain-mismatch")
+        if(!validate_only) { mapped_impact[cs[i]]=1; require_check(cs[i],visiting); add_reason(cs[i],reason,reason_kind ? reason_kind : "promotion-delta",seen) }
+      }
     }
   }
   if(!hit) refuse("mapping-review-needed")
+  if(production && hit && !owned)refuse("production-mapping-domain-mismatch")
 }
 function add_one(s, result,i,d,carry) {
   result=""; carry=1
@@ -59,13 +65,30 @@ BEGIN { impacts["none"]=0; impacts["patch"]=1; impacts["minor"]=2; impacts["majo
 FNR==1 && FILENAME!=ARGV[4] { if($1!="format" || $2!="1" || NF!=2) refuse("invalid-replay-format"); next }
 FILENAME!=ARGV[4] && /[\001-\010\013-\037\177]/ { refuse("invalid-control-character") }
 FILENAME==ARGV[1] {
-  if($1=="check") {
+  if($1=="production" && NF==2 && $2=="1") {
+    if(production_marker++)refuse("duplicate-production-rules")
+  } else if($1=="production-domain") {
+    if(NF!=3 || $2!~/^(unixlike|windows)$/ || !id($3) || production_domain[$2])refuse("invalid-production-domain")
+    else production_domain[$2]=$3
+  } else if($1=="production-template") {
+    if(NF!=5 || $2!="unixlike" || $3!~/^[A-Za-z0-9_.-]+\/[A-Za-z0-9_.-]+$/ || !id($4) || template_check)refuse("invalid-production-template")
+    else {template_repository=$3;template_check=$4;template_triggers=$5}
+  } else if($1=="production-historical-only") {
+    if(NF!=2 || !path($2) || production_historical[$2]++)refuse("invalid-production-historical-path")
+  } else if($1=="production-tool-source") {
+    if(NF!=3 || !id($2) || production_tool_sources[$2])refuse("invalid-production-tool-source")
+    else production_tool_sources[$2]=$3
+  } else if($1=="production-surface") {
+    if(NF!=5 || !id($2) || $3!~/^(unixlike|windows)$/ || !path($4) || surface_domain[$2])refuse("invalid-production-surface")
+    else { surface_domain[$2]=$3; surface_path[$2]=$4; surface_checks[$2]=$5 }
+  } else if($1=="check" || $1=="production-check") {
+    if($1=="production-check" && !production)next
     if(NF!=7 || !id($2) || check_domain[$2] || $3!~/^(unixlike|windows|repository)$/ || $4!~/^(evaluation|build|native-runtime|fixtures|policy-checks|review)$/ || $5!~/^(required|advisory)$/ || $7=="") { refuse("invalid-check-definition"); next }
-    check_domain[$2]=$3; check_lane[$2]=$4; check_requirement[$2]=$5; check_dependencies[$2]=$6; check_tool[$2]=$7
-  } else if($1=="map") {
+    check_production[$2]=($1=="production-check"); check_domain[$2]=$3; check_lane[$2]=$4; check_requirement[$2]=$5; check_dependencies[$2]=$6; check_tool[$2]=$7
+  } else if($1=="map" || $1=="production-map") {
     if(NF!=4 || $2!~/^(exact|prefix)$/ || !path($3)) { refuse("invalid-map-definition"); next }
-    if(map_seen[$2,$3,$4]++) refuse("duplicate-map-definition")
-    map_match[++map_count]=$2; map_path[map_count]=$3; map_checks[map_count]=$4
+    if(map_seen[$1,$2,$3,$4]++) refuse("duplicate-map-definition")
+    map_production[++map_count]=($1=="production-map"); map_match[map_count]=$2; map_path[map_count]=$3; map_checks[map_count]=$4
   } else refuse("unknown-rule-record")
   next
 }
@@ -84,6 +107,9 @@ FILENAME==ARGV[3] {
     if(NF!=9 || !id($2) || evidence_seen[$2]++) { refuse("invalid-evidence-record"); next }
     evidence_candidate[$2]=$3; evidence_master[$2]=$4; evidence_tree[$2]=$5; evidence_rules[$2]=$6; evidence_tool[$2]=$7; evidence_state[$2]=$8; evidence_reference[$2]=$9
     if(!sha($3)||!sha($4)||!sha($5)||!sha($6)||$7==""||$8!~/^(verified|failed|unverified)$/||$9=="") refuse("invalid-evidence-record")
+  } else if($1=="template-pair" && production) {
+    if(NF!=7 || $2!="unixlike" || template_pair++ || $3!=template_repository || !sha($4) || $5!=candidate || !sha($5) || $6!="delivered" || $7!="verified")refuse("invalid-template-pair")
+    else template_revision=$4
   } else if($1=="defect") {
     if(NF!=3 || !id($2) || $3=="") refuse("invalid-defect-record")
     if(defects[$2]) refuse("duplicate-defect-record")
@@ -93,6 +119,12 @@ FILENAME==ARGV[3] {
 }
 FILENAME==ARGV[4] {
   if($1=="pending-source") { pending_source=$2+0
+  } else if($1=="inventory") {
+    if(NF!=3 || !path($2) || $3!~/^(unixlike|windows|repository)$/ || inventory_owner[$2])refuse("invalid-production-inventory")
+    else inventory_owner[$2]=$3
+  } else if($1=="surface") {
+    if(NF!=5 || observed_surface[$2]++ || !sha($5) || $3!=surface_domain[$2] || $4!=surface_path[$2])refuse("production-surface-mismatch")
+    else surface_blob[$2]=$5
   } else if($1=="promotion") {
     promotion_path[$3]=$2; promotion_owner[$3]=$4
     if($4!="repository") affected[$4]=1
@@ -101,7 +133,7 @@ FILENAME==ARGV[4] {
   } else if($1=="bootstrap") {
     if(NF!=4 || bootstrap_seen[$2,$3]++) refuse("invalid-bootstrap-record")
     bootstrap_value[$2,$3]=$4
-  } else if($1=="delta") { domain_delta[$2]=1
+  } else if($1=="delta") { domain_delta[$2]=1; domain_delta_path[$2,$3]=1
   } else if($1=="history") {
     h=$2 SUBSEP $3; history_order[++history_count]=h; history_domain[h]=$2; history_sha[h]=$3; history_parent[h]=$4; history_digest[h]=$5
   } else if($1=="trailer") {
@@ -128,11 +160,50 @@ END {
   for(c in check_domain) require_check(c,visit)
   for(c in selected) delete selected[c]
   for(m=1;m<=map_count;m++) {
+    if(map_production[m]!=production)continue
     n=list(map_checks[m],values)
     if(n<1) refuse("invalid-map-checks")
     for(i=1;i<=n;i++) if(!check_domain[values[i]]) refuse("unknown-check")
   }
-  for(p in promotion_path) select_path(p,p)
+  if(production) {
+    if(production_marker!=1 || !production_domain["unixlike"] || !production_domain["windows"])refuse("production-rules-required")
+    for(p in inventory_owner) {select_path(p,p,inventory_owner[p],1);if(production_historical[p])refuse("historical-path-in-candidate")}
+    for(d in production_domain) if(check_domain[production_domain[d]]!=d)refuse("invalid-production-domain")
+    for(k in surface_domain) {
+      if(!observed_surface[k])refuse("missing-production-surface")
+      n=list(surface_checks[k],values)
+      if(n<1)refuse("invalid-production-surface-checks")
+      for(i=1;i<=n;i++)if(check_domain[values[i]]!=surface_domain[k])refuse("production-surface-check-domain")
+    }
+  }
+  if(production) {
+    n=list(template_triggers,values)
+    if(n<1 || check_domain[template_check]!="unixlike")refuse("invalid-production-template")
+    for(i=1;i<=n;i++)if(check_domain[values[i]]!="unixlike")refuse("invalid-production-template-trigger")
+    for(c in production_tool_sources) {
+      n=list(production_tool_sources[c],values)
+      if(n<1 || !check_production[c])refuse("invalid-production-tool-source")
+      for(i=1;i<=n;i++) {
+        k=values[i]
+        if(surface_domain[k]!=check_domain[c] || !surface_blob[k])refuse("production-tool-source-mismatch")
+        else check_tool[c]=check_tool[c] ":" k "-" surface_blob[k]
+      }
+    }
+  }
+  if(proposal) {
+    error_count=keys(errors,error_keys)
+    out="{\"format\":1,\"kind\":\"bootstrap-proposal\",\"selected\":false,\"approval_required\":true,\"production_certification\":false,\"source\":" quote(candidate) ",\"master\":" quote(master) ",\"rules\":" quote(rules) ",\"rules_digest\":" quote(rules_digest) ",\"engine_digest\":" quote(engine_digest) ",\"calendar_conversion\":false,\"domains\":["
+    comma=""; n=keys(production_domain,ds)
+    for(i=1;i<=n;i++) {d=ds[i];out=out comma "{\"domain\":" quote(d) ",\"version\":\"1.0.0\",\"contracts\":[" quote(production_domain[d]) "]}";comma=","}
+    out=out "],\"surfaces\":[";comma="";n=keys(surface_domain,ss)
+    for(i=1;i<=n;i++) {k=ss[i];out=out comma "{\"id\":" quote(k) ",\"domain\":" quote(surface_domain[k]) ",\"path\":" quote(surface_path[k]) ",\"blob\":" quote(surface_blob[k]) "}";comma=","}
+    out=out "],\"requirements\":[";comma="";n=keys(check_domain,cc)
+    for(i=1;i<=n;i++) {c=cc[i];if(!check_production[c])continue;out=out comma "{\"id\":" quote(c) ",\"domain\":" quote(check_domain[c]) ",\"lane\":" quote(check_lane[c]) ",\"tool\":" quote(check_tool[c]) "}";comma=","}
+    out=out "],\"reasons\":["
+    for(i=1;i<=error_count;i++) {if(i>1)out=out ",";out=out quote(error_keys[i])}
+    print out "]}";exit error_count?1:0
+  }
+  for(p in promotion_path) select_path(p,p,promotion_owner[p],0)
   for(d in affected) if(!baseline_kind[d]) refuse("missing-domain-baseline")
   for(d in baseline_kind) {
     if(baseline_kind[d]=="bootstrap") {
@@ -162,7 +233,7 @@ END {
     for(k in diff_path) {
       split(k,parts,SUBSEP); if(parts[1]!=d || parts[2]!=history_sha[h])continue
       p=parts[3]
-      for(m=1;m<=map_count;m++) if((map_match[m]=="exact" && p==map_path[m]) || (map_match[m]=="prefix" && index(p,map_path[m])==1)) {
+      for(m=1;m<=map_count;m++) if(map_production[m]==production && ((map_match[m]=="exact" && p==map_path[m]) || (map_match[m]=="prefix" && index(p,map_path[m])==1))) {
         n=list(map_checks[m],values)
         for(i=1;i<=n;i++) if(check_domain[values[i]]==d && !declared[h,values[i]]) refuse("release-contract-path-mismatch")
       }
@@ -201,6 +272,35 @@ END {
       for(i=1;i<=n;i++) { require_check(values[i],visit); delete reason_visit; add_reason(values[i],d ":" history_sha[h],"domain-release",reason_visit) }
     }
   }
+  if(production)for(k in domain_delta_path) {
+    split(k,parts,SUBSEP);d=parts[1];p=parts[2]
+    if(next_version[d]!="")select_path(p,p,d,0,"domain-release")
+  }
+  if(production && next_version["unixlike"]!="") {
+    n=list(template_triggers,values);need_template=(baseline_kind["unixlike"]=="bootstrap")
+    if(n<1 || check_domain[template_check]!="unixlike")refuse("invalid-production-template")
+    for(i=1;i<=n;i++)if(mapped_impact[values[i]])need_template=1
+    for(h in history_domain)if(history_domain[h]=="unixlike" && !canceled[h]) {
+      n=list(trailer[h,"release-contracts"],values)
+      for(i=1;i<=n;i++)if(index("," template_triggers ",","," values[i] ","))need_template=1
+    }
+    if(need_template) {
+      require_check(template_check,visit);delete reason_visit;add_reason(template_check,"exact-candidate-pair","domain-release",reason_visit)
+      if(template_pair!=1)refuse("missing-template-pair")
+    }
+  }
+  if(production)for(d in baseline_kind)if(baseline_kind[d]=="bootstrap") {
+    require_check("prod-" d "-bootstrap-review",visit)
+    delete reason_visit;add_reason("prod-" d "-bootstrap-review",domain_record[d],"domain-release",reason_visit)
+  }
+  if(production)for(d in next_version)if(next_version[d]!="") {
+    require_check(production_domain[d],visit)
+    delete reason_visit;add_reason(production_domain[d],d,"domain-release",reason_visit)
+    for(k in surface_domain)if(surface_domain[k]==d) {
+      n=list(surface_checks[k],values)
+      for(i=1;i<=n;i++) {require_check(values[i],visit);delete reason_visit;add_reason(values[i],k,"domain-release",reason_visit)}
+    }
+  }
   for(c in evidence_seen) {
     if(!check_domain[c]) refuse("unknown-evidence-check")
     if(evidence_candidate[c]!=candidate || evidence_master[c]!=master || evidence_tree[c]!=merge_tree || evidence_rules[c]!=rules) refuse("evidence-identity-mismatch")
@@ -215,6 +315,7 @@ END {
   changed=pending_source>0; for(d in next_version) if(next_version[d]!="") changed=1
   decision=error_count ? "refusal" : changed ? "candidate" : "no-op"
   out="{\"format\":1,\"decision\":" quote(decision) ",\"master\":" quote(master) ",\"candidate\":" quote(candidate) ",\"merge_tree\":" quote(merge_tree) ",\"rules\":" quote(rules) ",\"pending_source_commits\":" pending_source
+  if(production)out=out ",\"qualification\":\"offline-production\",\"production_certification\":false,\"evidence_authority\":\"asserted-offline\""
   out=out ",\"git_version\":" quote(git_version) ",\"object_format\":" quote(object_format) ",\"git_command_digest\":" quote(git_command_digest) ",\"awk_command_digest\":" quote(awk_command_digest)
   out=out ",\"engine_digest\":" quote(engine_digest) ",\"classifier_digest\":" quote(classifier_digest) ",\"rules_digest\":" quote(rules_digest) ",\"baselines_digest\":" quote(baselines_digest) ",\"evidence_digest\":" quote(evidence_digest)
   out=out ",\"promotion_delta\":["; n=keys(promotion_path,promotion_paths)

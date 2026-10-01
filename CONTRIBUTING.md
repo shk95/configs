@@ -197,8 +197,8 @@ The pinned rules commit supplies `tool/version-control/release-preview.rules` as
 data: seven-field `check` rows name ID/domain/lane/requiredness/dependencies/exact
 tool identity; four-field `map` rows name exact-or-prefix/path/check IDs.
 Unknown ownership, common-domain inputs and unmapped contract paths refuse.
-The current table is bounded; add reviewed mappings rather than claiming blanket
-production coverage.
+The ordinary table remains bounded. Production mode uses the separately reviewed
+explicit production mapping and representative contract requirements below.
 
 Use one five-field baseline row per affected configuration domain:
 
@@ -237,6 +237,34 @@ use that diagnostic to bind subsequently gathered evidence, then rerun qualifica
 tool/configs release-preview --master "$master_sha" --candidate "$candidate_sha" \
   --rules "$rules_sha" --baselines baselines.tsv --evidence evidence.tsv --json
 ```
+
+Use `--production` for the reviewed complete-tree contract mapping. Its rules add
+explicit production checks, exact paths, public surface/source-tool bindings,
+domain obligations and template triggers. Unknown future paths require review.
+A domain release selects all of its public contract obligations even when its
+source is already on master. Missing native evidence refuses qualification.
+
+Before selecting an initial semantic baseline, produce an unselected proposal:
+
+```sh
+tool/configs release-preview --production --bootstrap-proposal \
+  --master "$master_sha" --candidate "$candidate_sha" --rules "$rules_sha" --json
+```
+
+This mode accepts no baseline or evidence file. Review its pinned surfaces and
+requirements; do not treat the proposal as bootstrap selection. Publish a separate
+reviewed source-bound bootstrap record only after actual maintainer adoption.
+For affected Unix-like API releases, evidence additionally contains:
+
+```text
+template-pair<TAB>unixlike<TAB>shk95/configs-host-template<TAB>TEMPLATE_SHA<TAB>CANDIDATE_SHA<TAB>delivered<TAB>verified
+```
+
+Verify that delivered adaptation revision and exact provider pair before release.
+Update the template's provider tag pin independently after release. Exact tool
+identities include the declared source-blob suffixes; gather genuine receipts for
+those identities. Production mode still reports `production_certification=false`:
+receipt authenticity, permissions and live execution need operating transport.
 
 Domain-changing source commits require strict `Release-Format`, `Release-Domain`,
 `Release-Impact`, `Release-Contracts`, `Release-Compatibility`, `Release-Rationale`

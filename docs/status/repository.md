@@ -82,8 +82,8 @@ On 2026-10-01, historical master-to-dev classification was restored for the
 old Unix-like roots and exact Nix editor settings under
 `docs/provisional/repository/classify-unixlike-old-roots.md`. These temporary
 answers cover migration history; new domain material still belongs under
-`unixlike/`. The retained editor settings await their separate domain-owned
-relocation. The measure remains until master no longer retains those paths.
+`unixlike/`. The retained editor settings now live byte-identically under
+`unixlike/.vscode/settings.json` after their domain-owned relocation. The measure remains until master no longer retains those paths.
 
 On 2026-09-24 the physical module tree was regrouped under `flake`,
 `machines`, `platforms`, `foundation`, `desktop`, and `programs`. The concern
@@ -298,3 +298,10 @@ semantics across independent platform validation and release cycles.
 - `docs/policy/decisions/repository/annotated-tag-is-the-release-record.md`: reopens when a
   consumer needs a release artifact or a note the tag annotation cannot
   carry.
+
+Production-mode offline qualification now has explicit complete-tree mappings,
+source-bound public surfaces, exact tool requirements and separate native evidence
+obligations (`docs/policy/decisions/repository/production-release-qualification.md`).
+Its bootstrap proposal is unselected and its receipts remain offline assertions.
+No operating record repository is selected; manual/scheduled proof, bootstrap
+adoption, actual release and activation or Apply remain separate pending gates.
