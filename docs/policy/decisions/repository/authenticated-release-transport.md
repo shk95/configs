@@ -1,0 +1,60 @@
+# Separate trusted transport from retained semantics
+date: 2026-10-01
+scope: repository
+status: accepted
+reopen-when: A new endpoint, semantic protocol, transport closure or executing credential boundary is required.
+
+## Decision
+
+Keep release-control preview and its historical eight-file semantic packages inert.
+A separate trusted transport inventory contains the finite API client, retained
+bridge, fixed loader and disabled operator preflight. Pin that complete inventory
+at the approved master entry. A credential-free child executes only the exact
+manifest-verified retained package. Current transport glue never supplies a newer
+reducer, serializer, classifier or qualification engine to an old batch.
+
+The trusted deployment wrapper owns runtime event inputs and the reviewed operating
+bootstrap; candidate/request bodies cannot provide them. Independently fetch run,
+attempt, actor, workflow, job, source/ref and protection. Required evidence additionally
+binds successful check/run/job identity and reviewed exact workflow/tool blobs.
+Mutable prose, candidate artifacts and an asserted version string are insufficient.
+No provisioned wrapper or selected operating connection is claimed by source proof.
+
+Transport uses one fixed TLS API host, no redirects/proxies, a 30-second request
+bound, bounded response sizes and complete bounded pagination. Unknown pages or
+responses refuse. An external write follows durable intent and a fresh stop reread.
+A lost response is reconciled by target observation; it is never an automatic retry.
+Private records use exact current head, one-parent child commits and non-force ref
+updates, followed by actual observed-head reconciliation. This is not atomic API CAS.
+
+Promotion requires fresh exact head/base/protection/evidence; actual post-merge parents
+and tree gate immutable tag objects/refs. Unexpected merges stop publication without
+automatic undo. Complete PR lookup includes closed/merged history; absence cannot be
+inferred from a count or one open page. A duplicate successful operation joins once.
+
+GitHub cancellation is run-wide and has no expected-attempt guard. Refuse cancellation
+unless a fresh complete job inventory contains precisely the recorded owner job.
+Recheck latest attempt before and after the call; 202 is not termination. Mixed-job
+runs, changed attempts, timeout-only takeover and unknown termination refuse. Future
+manual provisioning must isolate the writer into its own run and serialize rerun
+mutations. Separate inspector/wait executions receive no writer credential authority.
+
+Authenticated stop/resume retains original history and old-package obligations;
+resume clears stale validation/approval rather than reviving it. Actions failure is
+an authenticated notification-source receipt, not proof of user inbox delivery.
+Wake acknowledgement never grants ownership or exact-candidate approval.
+
+The public operator interface is read-only preflight only. Workflows remain disabled,
+with no connection, secret, Environment, dispatch, schedule or executing write mode.
+Source fixtures use only disposable Git and fake endpoints. Actual bootstrap,
+connection, permissions/protection, master source promotion, manual authorization
+and manual/scheduled receipts remain separate unresolved operating gates.
+
+## Sources and scope
+
+The source work and criterion proof are in
+`docs/work/repository/release-operating-transport/`. API limitations were reviewed
+against the official GitHub REST documentation for workflow runs, Git refs, Git
+objects, check runs and pull-request merge. This decision reconsiders only the future
+transport boundary of release-controller-preview-boundary.md; it preserves that
+preview contract and authorizes no actual operating effect or host change.

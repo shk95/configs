@@ -17,7 +17,7 @@ Review:          classify  work  records  invariants  provisional
                 hygiene  domain-reads  design-citations  test
                 test-refresh-candidate-nix
 Integration:     audit  audit-remote  plan-promotion  plan-release  release-preview
-                release-control
+                release-control  release-transport
 Evidence:        hook-evidence
 
 Use 'tool/configs <command> --help' where the target supports it.
@@ -55,6 +55,7 @@ case "$command" in
   plan-release) target=version-control/plan-release ;;
   release-preview) target=version-control/release-preview ;;
   release-control) target=version-control/release-control ;;
+  release-transport) target=version-control/release-transport ;;
   hook-evidence) target=version-control/hook-evidence ;;
   *)
     echo "unknown repository command: $command" >&2

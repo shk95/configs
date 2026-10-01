@@ -34,6 +34,7 @@ for route in \
   plan-release:version-control/plan-release \
   release-preview:version-control/release-preview \
   release-control:version-control/release-control \
+  release-transport:version-control/release-transport \
   test-refresh-candidate-nix:version-control/test-refresh-candidate-nix \
   hook-evidence:version-control/hook-evidence; do
   command=${route%%:*}
@@ -5567,5 +5568,8 @@ git -C "$authoring_root" worktree add -q -b fix/repository-pinned "$authoring_pi
 
 # INV repository/release-control-preview-only
 "$root/tool/version-control/test-release-control"
+
+# INV repository/authenticated-release-transport
+"$root/tool/version-control/test-release-transport"
 
 echo "version-control fixtures passed"
