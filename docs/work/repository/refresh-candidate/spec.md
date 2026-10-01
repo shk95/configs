@@ -3,6 +3,7 @@ kind: spec
 date: 2026-09-30
 scope: repository
 status: approved
+issue: #460
 review-by: 2026-10-14
 
 ## Outcome and authority
@@ -33,6 +34,20 @@ preview, including reviewed recovery repairs; reviewed child plan and source
 ownership. Source does not start from an unrepaired proposal. Inspect the actual
 merged launcher, loader, protocol, manifest, parser/reducer, adapter and fixtures
 at pickup. Changed interfaces or required semantics return to planning.
+
+### Execution assignment, 2026-10-01
+
+Root assigned D as sole source continuation owner in issue #460 after the
+prerequisites and reviewed plan entered dev. Source pickup pins dev
+`21532ddf5b6f98cd7ade1163ffa43a44b16dd339` independently of reviewed plan merge
+`4a7e6e2b3c0c231d671cf203cb479c78b8c87b82`. The dedicated source tree is
+`../configs-wt/refresh-candidate-source`; prior trees and checkpoints are preserved.
+The original planning-only ownership paragraph records the earlier state.
+Root reviewed explicit current protocol 2 with exact retained protocol 1 execution,
+the unchanged eight-file closure, and actual preparation in fixture code only.
+One supplied batch owns a stable automation branch; immutable candidate revision
+and operation identities change on a required normal base update. Acceptance
+criteria remain unchanged. Root alone integrates; live operations remain excluded.
 
 ## Implementation choices and file ownership
 

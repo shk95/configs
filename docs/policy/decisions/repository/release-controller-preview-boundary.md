@@ -20,6 +20,19 @@ decision, approval or serializer dependencies. Synthetic approved-master asserti
 exercise that boundary, without authenticating production approval/provenance.
 Unknown compatibility or incomplete identity refuses.
 
+2026-10-01: current semantic protocol 2 adds finite refresh outcomes and separate
+refresh-branch/refresh-pr proposals targeting dev. Promotion keeps its original
+dev-to-master meaning. Supported protocol 1 retains its exact historical code,
+records and eight-file executing closure. The stable loader admits only explicit
+supported protocols and does not substitute newer semantics for old batches.
+Actual trusted CLI/local Git preparation runs exclusively in credential-free
+disposable fixtures, outside retained preview execution. Bound preparation DTOs
+are synthetic assertions; strict validation is not source authentication.
+The fixture adopts the delivered domain utility explicitly rather than copying
+selection logic. CI selects the existing Nix-enabled lane for affected controller
+or preparation-fixture inputs, alongside Linux/native-Windows fake governance
+proof. Nix is not a Windows prerequisite and no production transport is added.
+
 ## Limits and authority
 
 Existing calendar tags, promotion authorization and host boundaries remain in

@@ -32,7 +32,7 @@ X = "a" * 64
 Y = "b" * 64
 CONFIG = {"enabled": "1", "public-repository": "shk95/configs", "repository": "1",
           "operating-repository": "fixture/operating", "operating-ref": "operations",
-          "workflow": "2", "actors": "3", "checks": "gate", "protocol": "1"}
+          "workflow": "2", "actors": "3", "checks": "gate", "protocol": "2"}
 STOP = {"stop": "0", "revision": "0", "reason": "none", "operator": "3"}
 OWNER = {"repository": "1", "workflow": "2", "run": "4", "attempt": "1",
          "job": "5", "generation": "1", "operating-head": H}
@@ -77,7 +77,7 @@ def sequence(events):
 
 def start(control=H, manifest=X, approval=X, config=H):
     return event("batch-start", control=control, manifest=manifest,
-                 **{"approval-provenance": approval, "config": config, "protocol": "1",
+                 **{"approval-provenance": approval, "config": config, "protocol": "2",
                     "day": "2026-09-30", "run": "4", "attempt": "1", "time": "2026-09-30T00:00:00Z"})
 
 
@@ -104,6 +104,52 @@ def run_git(root, *args, data=None):
     result = subprocess.run(["git", "-C", str(root), *args], input=data,
                             capture_output=True, check=True)
     return result.stdout.decode().strip()
+
+
+def refresh_fixture(**changes):
+    value = {"batch": X, "source": D, "base": D, "parent": D, "head": T, "tree": H,
+             "before-lock": Y, "lock": X, "utility-source": H, "utility-manifest": X,
+             "source-fingerprint": Y, "previous": "-", "branch": adapter.refresh_branch(X)}
+    value.update(changes)
+    return value
+
+
+def refresh_checks(candidate):
+    return {"head": candidate["head"], "base": candidate["base"], "tree": candidate["tree"],
+            "lock": candidate["lock"], "name": "Required checks", "app": "15368", "status": "success"}
+
+
+def refresh_context_fixture(candidate, proof=None):
+    context = {"prepared": candidate, "current-dev": candidate["base"], "checks": refresh_checks(candidate),
+               "branch": {"batch": candidate["batch"], "branch": candidate["branch"], "head": candidate["head"]},
+               "integration": None,
+               "proof": {"head-parents": [candidate["parent"]], "merge-parents": [] if candidate["previous"] == "-" else [candidate["previous"], candidate["base"]],
+                         "changed": ["unixlike/flake.lock"], "before-lock": candidate["before-lock"], "lock": candidate["lock"], "before-mode": 0o644, "mode": 0o644}}
+    if proof is not None:
+        context["proof"] = proof
+    return context
+
+
+def refresh_event(candidate):
+    return event("refresh-result", payload=canonical({"status": "changed", "candidate": candidate}).decode())
+
+
+def refresh_flow(candidate=None, proof=None, prefix=None):
+    candidate = candidate or refresh_fixture()
+    context = refresh_context_fixture(candidate, proof)
+    supplied = transcript()
+    supplied["refresh"] = {"revisions": [context], "current": copy.deepcopy(context)}
+    events = copy.deepcopy(prefix) if prefix is not None else [start(), event("claim", **OWNER)]
+    events.append(refresh_event(candidate))
+    payload = dict(candidate, repository="shk95/configs")
+    branch = adapter.refresh_operation_id("refresh-branch", payload)
+    pr = adapter.refresh_operation_id("refresh-pr", payload)
+    branch_observed = {"status": "present", "complete": True, "target": {"candidate": candidate}}
+    pr_observed = {"status": "present", "complete": True, "target": {"matches": [{"number": "17", "repository": "shk95/configs", "base-ref": "dev", "state": "open", "candidate": candidate, "checks": refresh_checks(candidate)}]}}
+    events += [effect("refresh-branch", payload, op_id=branch), effect("refresh-branch", payload, "observed", branch_observed, branch),
+               effect("refresh-pr", payload, op_id=pr), effect("refresh-pr", payload, "observed", pr_observed, pr)]
+    supplied["observations"] = {branch: [branch_observed], pr: [pr_observed]}
+    return events, supplied, payload, branch, pr, branch_observed, pr_observed
 
 
 class ControllerProof(unittest.TestCase):
@@ -147,7 +193,7 @@ class ControllerProof(unittest.TestCase):
             run_git(root, "merge", "--no-ff", "-qm", "fixture old promotion", "dev")
             old = run_git(root, "rev-parse", "HEAD")
             approved = {"public-repository": "shk95/configs", "control": old,
-                        "master": old, "manifest": m, "approval": X, "protocol": "1"}
+                        "master": old, "manifest": m, "approval": X, "protocol": "2"}
             scratch = Path(directory) / "old-extract"
             loader.extract(root, approved, scratch)
             for name in loader.FILES:
@@ -231,7 +277,7 @@ class ControllerProof(unittest.TestCase):
             self.assertEqual(run_git(root, "rev-parse", "HEAD"), newer)
             self.refuse(loader.extract, root, dict(approved, control=original), Path(directory) / "ancestor")
             self.refuse(loader.extract, root, dict(approved, manifest=Y), Path(directory) / "tamper")
-            self.refuse(loader.approved, encode(dict(approved, protocol="2")))
+            self.refuse(loader.approved, encode(dict(approved, protocol="3")))
             self.refuse(loader.approved, encode(dict(approved, **{"public-repository": "fixture/other"})))
             # Missing closure entry, even with its newly asserted manifest digest, refuses.
             raw = (root / loader.MANIFEST).read_bytes().splitlines(keepends=True)
@@ -610,6 +656,323 @@ class ControllerProof(unittest.TestCase):
         for path in (TOOLS / "release-control-package").glob("*.py"):
             for forbidden in ("urllib", "requests.", "http.client", "socket.", "eval(", "exec("):
                 self.assertNotIn(forbidden, path.read_text())
+
+
+    # INV repository/release-control-preview-only
+    def test_refresh_fixed_branch_revision_recovery_and_proof(self):
+        events, proof, payload, branch, pr, bo, po = refresh_flow()
+        candidate = {k: payload[k] for k in adapter.REFRESH_FIELDS}
+        state = engine.reduce(sequence(copy.deepcopy(events)), CONFIG, proof)
+        self.assertEqual(state["refresh-stage"], "ready")
+        self.assertEqual(adapter.operation("refresh-pr", payload)["body"]["title"], "Refresh Unix-like dependencies")
+        self.assertEqual(adapter.operation("refresh-pr", payload)["body"]["base"], "dev")
+        self.assertEqual(adapter.operation("pr", {"repository": "shk95/configs", "head": "dev", "base": "master", "dev": D, "master": H, "body-operation": X})["body"]["base"], "master")
+        for status in ("noop", "failed", "terminated-timeout"):
+            plain = event("refresh-result", payload=canonical({"status": status}).decode())
+            empty = engine.reduce(sequence([start(), event("claim", **OWNER), plain]), CONFIG, transcript())
+            self.assertIsNone(empty["refresh"])
+            self.refuse(engine.reduce, sequence(copy.deepcopy(events) + [plain]), CONFIG, proof)
+            bad = event("refresh-result", payload=canonical({"status": status, "head": T}).decode())
+            self.refuse(engine.reduce, sequence([start(), event("claim", **OWNER), bad]), CONFIG, transcript())
+        joined = engine.reduce(sequence(copy.deepcopy(events) + [refresh_event(candidate)]), CONFIG, proof)
+        self.assertEqual(joined["refresh-stage"], "ready")
+        self.assertEqual(sum(o["state"] == "intent" for o in joined["operations"].values()), 0)
+        new = refresh_fixture(source="d" * 40, parent="d" * 40, base=H, head="e" * 40, previous=T, lock="c" * 64)
+        self.assertEqual(new["branch"], candidate["branch"])
+        new_context = refresh_context_fixture(new)
+        proof["refresh"]["revisions"].append(new_context)
+        proof["refresh"]["current"] = copy.deepcopy(new_context)
+        updated = copy.deepcopy(events) + [refresh_event(new)]
+        # Old completed observations cannot advance the new prepared revision.
+        updated += [effect("refresh-branch", payload, "observed", bo, branch), effect("refresh-pr", payload, "observed", po, pr)]
+        state = engine.reduce(sequence(updated), CONFIG, proof)
+        self.assertEqual(state["refresh-stage"], "prepared")
+        self.assertEqual(state["operations"][branch]["remote"], T)
+        self.assertEqual(state["operations"][pr]["remote"], "17")
+        new_payload = dict(new, repository="shk95/configs")
+        self.assertNotEqual(adapter.refresh_operation_id("refresh-branch", new_payload), branch)
+        request_update = adapter.operation("refresh-branch", new_payload)
+        self.assertEqual(request_update["method"], "PATCH")
+        self.assertIs(request_update["body"]["force"], False)
+        self.refuse(engine.reduce, sequence(copy.deepcopy(updated) + [effect("refresh-branch", new_payload, op_id=branch)]), CONFIG, proof)
+        for name, bad in [("head-parents", [H]), ("merge-parents", [H, T]), ("changed", ["unixlike/flake.lock", "README.md"]), ("mode", 0o755)]:
+            forged = copy.deepcopy(proof)
+            forged["refresh"]["revisions"][-1]["proof"][name] = bad
+            self.refuse(engine.reduce, sequence(copy.deepcopy(events) + [refresh_event(new)]), CONFIG, forged)
+        # Unknown response fences new revision; confirmed absence supersedes old PR intent.
+        unknown = {"status": "unknown", "target": {}, "complete": True}
+        uncertain = copy.deepcopy(events[:-1]) + [effect("refresh-pr", payload, "unknown", unknown, pr)]
+        proof["observations"][pr].append(unknown)
+        self.refuse(engine.reduce, sequence(uncertain + [refresh_event(new)]), CONFIG, proof)
+        absent = {"status": "absent", "target": {}, "complete": True}
+        proof["observations"][pr].append(absent)
+        recovered = copy.deepcopy(uncertain) + [effect("refresh-pr", payload, "intent", absent, pr), refresh_event(new)]
+        recovered_state = engine.reduce(sequence(copy.deepcopy(recovered)), CONFIG, proof)
+        self.assertEqual(recovered_state["operations"][pr]["state"], "superseded")
+        self.assertEqual(sum(o["state"] == "intent" for o in recovered_state["operations"].values()), 0)
+        for suffix in [effect("refresh-pr", payload, op_id=pr), effect("refresh-pr", payload, "observed", po, pr)]:
+            self.refuse(engine.reduce, sequence(copy.deepcopy(recovered) + [suffix]), CONFIG, proof)
+        for suffix in [effect("refresh-pr", payload, "intent", absent, pr), effect("refresh-pr", payload, "unknown", unknown, pr)]:
+            self.refuse(engine.reduce, sequence(copy.deepcopy(events) + [suffix]), CONFIG, proof)
+        self.refuse(engine.reduce, sequence(copy.deepcopy(events[:3]) + [effect("refresh-pr", payload, op_id=pr)]), CONFIG, proof)
+        # Observations require exact head/base/lock/checks and one PR, never its body.
+        for changed in ("head", "base", "lock"):
+            wrong = copy.deepcopy(po); wrong["target"]["matches"][0]["candidate"][changed] = H if changed != "lock" else Y
+            self.assertEqual(adapter.reconcile("refresh-pr", payload, wrong), "conflict")
+        wrong = copy.deepcopy(po); wrong["target"]["matches"][0]["checks"]["status"] = "pending"
+        self.assertEqual(adapter.reconcile("refresh-pr", payload, wrong), "conflict")
+        wrong = copy.deepcopy(po); wrong["target"]["matches"] *= 2
+        self.assertEqual(adapter.reconcile("refresh-pr", payload, wrong), "conflict")
+        merged = copy.deepcopy(po); merged["target"]["matches"][0]["state"] = "merged"
+        self.assertEqual(adapter.reconcile("refresh-pr", payload, merged), "applied")
+        stopped = copy.deepcopy(events[:3]) + [event("stop-observed", revision="1", reason="operator"), effect("refresh-branch", payload, op_id=branch)]
+        self.refuse(engine.reduce, sequence(stopped), CONFIG, proof)
+
+    # INV repository/release-control-preview-only
+    def test_refresh_integration_generation_freeze_and_opportunities(self):
+        merge = {"repository": "shk95/configs", "number": "7", "dev": D, "master": H, "tree": T}
+        applied = {"status": "present", "target": {"merged": True, "commit": "d" * 40, "parents": [H, D], "tree": T, "source": D}, "complete": True}
+        for frozen in (False, True):
+            prefix = base_events()
+            if frozen:
+                prefix += [effect("merge", merge), effect("merge", merge, "observed", applied)]
+            events, proof, payload, _, _, _, _ = refresh_flow(prefix=prefix)
+            if frozen:
+                proof["observations"][X] = [applied]
+            integrated = {"base": payload["base"], "head": payload["head"], "commit": "f" * 40, "parents": [payload["base"], payload["head"]], "tree": payload["tree"]}
+            proof["refresh"]["current"].update(integration=integrated, **{"current-dev": integrated["commit"]})
+            events.append(event("refresh-integrated", payload=canonical(integrated).decode()))
+            state = engine.reduce(sequence(copy.deepcopy(events)), CONFIG, proof)
+            self.assertEqual(state["frozen"], frozen)
+            self.assertEqual(state["refresh-stage"], "next-opportunity" if frozen else "integrated")
+            if frozen:
+                self.assertIsNotNone(state["approval"])
+                self.assertEqual(state["candidate"]["dev"], D)
+                self.refuse(engine.reduce, sequence(events + [event("candidate", **dict(CANDIDATE, **{"candidate-generation": "2"}))]), CONFIG, proof)
+            else:
+                self.assertIsNone(state["candidate"]); self.assertIsNone(state["approval"]); self.assertEqual(state["evidence"], [])
+                self.assertEqual(state["promotion-generation"], "1")
+                self.refuse(engine.reduce, sequence(copy.deepcopy(events) + [event("candidate", **CANDIDATE)]), CONFIG, proof)
+                new = dict(CANDIDATE, dev=integrated["commit"], **{"candidate-generation": "2"})
+                state = engine.reduce(sequence(copy.deepcopy(events) + [event("candidate", **new)]), CONFIG, proof)
+                self.assertEqual(state["promotion-generation"], "2")
+                self.refuse(engine.reduce, sequence(copy.deepcopy(events) + [effect("merge", merge)]), CONFIG, proof)
+        self.assertEqual(adapter.refresh_window("2026-10-01", 5, [])["refresh"], "start")
+        self.assertEqual(adapter.refresh_window("2026-10-01", 5, ["2026-10-01"], manual=True)["refresh"], "join")
+        self.assertEqual(adapter.refresh_window("2026-10-01", 6, [], refresh="waiting")["promotion"], "wait")
+        self.assertEqual(adapter.refresh_window("2026-10-01", 7, [], refresh="waiting"), {"refresh": "missed", "promotion": "reconcile", "integration": "invalidate"})
+        self.assertEqual(adapter.refresh_window("2026-10-01", 8, [], promoted=True)["integration"], "next-opportunity")
+        self.refuse(adapter.refresh_window, "2026-02-30", 5, [])
+        for malformed in ([[]], [{}], [1], ["2026-10-01", "2026-10-01"], {}):
+            with self.assertRaises(Refusal):
+                adapter.refresh_window("2026-10-01", 5, malformed)
+
+
+    # INV repository/release-control-preview-only
+    def test_refresh_protocol_one_actual_old_blobs_and_two_real_loader(self):
+        source = "24cf09b5efbb4db821210632da8b44dcb822a337"
+        with tempfile.TemporaryDirectory() as directory:
+            scratch = Path(directory)
+            repo = scratch / "public"; repo.mkdir()
+            run_git(repo, "init", "-q", "-b", "master")
+            run_git(repo, "config", "user.name", "Fixture")
+            run_git(repo, "config", "user.email", "fixture@example.invalid")
+            run_git(repo, "config", "core.hooksPath", str(scratch / "no-hooks"))
+            # Actual historical eight blobs, not current modules relabeled protocol 1.
+            executable_names = []
+            for name in sorted(loader.FILES):
+                data = subprocess.run(["git", "-C", str(TOOLS.parent.parent), "show", source + ":" + name], check=True, capture_output=True).stdout
+                path = repo / name; path.parent.mkdir(parents=True, exist_ok=True); path.write_bytes(data)
+                mode = run_git(TOOLS.parent.parent, "ls-tree", source, "--", name).split()[0]
+                if mode == "100755":
+                    path.chmod(0o755)
+                    executable_names.append(name)
+            raw = subprocess.run(["git", "-C", str(TOOLS.parent.parent), "show", source + ":" + loader.MANIFEST], check=True, capture_output=True).stdout
+            (repo / loader.MANIFEST).write_bytes(raw)
+            old_manifest = digest(raw)
+            run_git(repo, "add", ".")
+            # Native Git for Windows cannot infer executable index mode from chmod.
+            for name in executable_names:
+                run_git(repo, "update-index", "--chmod=+x", name)
+            run_git(repo, "commit", "-qm", "fixture historical package")
+            run_git(repo, "checkout", "-qb", "dev")
+            (repo / "marker").write_text("old\n"); run_git(repo, "add", "."); run_git(repo, "commit", "-qm", "fixture historical dev")
+            run_git(repo, "checkout", "-q", "master"); run_git(repo, "merge", "--no-ff", "-qm", "fixture historical promotion", "dev")
+            old = run_git(repo, "rev-parse", "HEAD")
+            run_git(repo, "checkout", "-q", "dev")
+            for name in loader.FILES:
+                shutil.copyfile(TOOLS.parent.parent / name, repo / name)
+            shutil.copyfile(TOOLS.parent.parent / loader.MANIFEST, repo / loader.MANIFEST)
+            new_manifest = digest((repo / loader.MANIFEST).read_bytes())
+            run_git(repo, "add", "."); run_git(repo, "commit", "-qm", "fixture protocol two")
+            run_git(repo, "checkout", "-q", "master"); run_git(repo, "merge", "--no-ff", "-qm", "fixture protocol two promotion", "dev")
+            newer = run_git(repo, "rev-parse", "HEAD")
+            for protocol, control, manifest_hash in [("1", old, old_manifest), ("2", newer, new_manifest)]:
+                approval = {"public-repository": "shk95/configs", "control": control, "master": newer,
+                            "manifest": manifest_hash, "approval": X, "protocol": protocol}
+                retained = scratch / ("retained-" + protocol)
+                loader.extract(repo, approval, retained)
+                self.assertEqual(len(list(retained.rglob("*"))) > 8, True)
+                for name in loader.FILES:
+                    actual = subprocess.run(["git", "-C", str(repo), "show", control + ":" + name], check=True, capture_output=True).stdout
+                    self.assertEqual((retained / name).read_bytes(), actual)
+                # Build the original index using that exact package, isolated process.
+                code = "import sys;sys.path.insert(0,sys.argv[1]);import engine;sys.stdout.buffer.write(engine.index(engine.initial(),'0'*64))"
+                initial_index = subprocess.run([sys.executable, "-I", "-S", "-B", "-c", code, str(retained / loader.ROOT)], check=True, capture_output=True).stdout
+                operating = scratch / ("operating-" + protocol)
+                for folder in ("config", "control", "history", "current"):
+                    (operating / folder).mkdir(parents=True)
+                (operating / "config/operating.tsv").write_bytes(encode(dict(CONFIG, protocol=protocol)))
+                (operating / "control/stop.tsv").write_bytes(encode(STOP))
+                (operating / "current/index.tsv").write_bytes(initial_index)
+                approved_file = scratch / "approved.tsv"; approved_file.write_bytes(encode(approval))
+                request_file = scratch / "request.tsv"; request_file.write_bytes(encode(request(candidate=None)))
+                transcript_file = scratch / "transcript.json"; transcript_file.write_bytes(canonical(transcript("preview")))
+                command = ["sh", WRAPPER, "preview", "--fixture-inputs", "--bundle-repository", repo.as_posix(), "--approved", approved_file.as_posix(), "--operating", operating.as_posix(), "--transcript", transcript_file.as_posix(), "--request", request_file.as_posix()]
+                result = subprocess.run(command, capture_output=True)
+                self.assertEqual(result.returncode, 0, result.stderr)
+                self.assertEqual(json.loads(result.stdout), {"outcome": "preview", "stage": "empty", "proposed": 0})
+                # Original retained modules serialize and project a nonempty history.
+                if protocol == "1":
+                    supplied_events = base_events()
+                    payload = {"repository": "shk95/configs", "head": "dev", "base": "master", "dev": D, "master": H, "body-operation": X}
+                    supplied_transcript = transcript(); supplied_transcript["source"] += transcript("preview")["source"]
+                    bound_request = request()
+                else:
+                    supplied_events, supplied_transcript, _, _, _, _, _ = refresh_flow()
+                    supplied_events = supplied_events[:-1]
+                    supplied_transcript["source"] = transcript("preview", candidate=refresh_fixture())["source"]
+                    payload = None
+                    bound_request = request(candidate=refresh_fixture())
+                generate = '''import sys,json
+from pathlib import Path
+sys.path.insert(0,sys.argv[1])
+import records,engine,adapter
+value=json.loads(sys.stdin.buffer.read())
+root=Path(sys.argv[2])
+config=records.encode(value['config'])
+(root/'config/operating.tsv').write_bytes(config)
+events=value['events']
+events[0].update(control=value['approved']['control'],manifest=value['approved']['manifest'],**{'approval-provenance':value['approved']['approval'],'config':records.blob_identity(config),'protocol':value['config']['protocol']})
+if value['pr']:
+ p=value['pr'];request=adapter.operation('pr',p)
+ events.append({'sequence':'1','kind':'intent','prior':'0'*64,'batch':events[0]['batch'],'payload':records.canonical(p).decode(),'operation':[['c'*64,'pr',request['payload-digest'],'1','intent','-','-']]})
+previous='0'*64
+for n,event in enumerate(events,1):
+ event.update(sequence=str(n),prior=previous)
+ data=records.encode(event);records.parse(data,'event')
+ (root/'history'/f'{n:012d}.tsv').write_bytes(data)
+ previous=records.digest(data)
+state=engine.reduce(events,value['config'],value['transcript'])
+(root/'current/index.tsv').write_bytes(engine.index(state,previous))
+'''
+                supplied = {"events": supplied_events, "config": dict(CONFIG, protocol=protocol), "approved": approval,
+                            "transcript": supplied_transcript, "pr": payload}
+                subprocess.run([sys.executable, "-I", "-S", "-B", "-c", generate, str(retained / loader.ROOT), str(operating)], input=canonical(supplied), check=True, capture_output=True)
+                request_file.write_bytes(encode(bound_request)); transcript_file.write_bytes(canonical(supplied_transcript))
+                nonempty = subprocess.run(command, capture_output=True)
+                self.assertEqual(nonempty.returncode, 0, nonempty.stderr)
+                self.assertEqual(json.loads(nonempty.stdout), {"outcome": "preview", "stage": "approved" if protocol == "1" else "active", "proposed": 1})
+                # Mislabeled semantic package cannot consume a different protocol.
+                (operating / "config/operating.tsv").write_bytes(encode(dict(CONFIG, protocol="2" if protocol == "1" else "1")))
+                self.assertNotEqual(subprocess.run(command, capture_output=True).returncode, 0)
+                approved_file.write_bytes(encode(dict(approval, protocol="3")))
+                self.assertNotEqual(subprocess.run(command, capture_output=True).returncode, 0)
+                self.refuse(loader.approved, encode(dict(approval, protocol="3")))
+            self.assertEqual(run_git(repo, "rev-parse", "HEAD"), newer)
+
+
+    # INV repository/release-control-preview-only
+    def test_refresh_current_dto_gate_real_preview(self):
+        events, proof, payload, _, _, _, _ = refresh_flow()
+        events = events[:-1]  # Historical good checks with a pending PR effect.
+        candidate = {k: payload[k] for k in adapter.REFRESH_FIELDS}
+        proof["source"] = transcript("preview", candidate=candidate)["source"]
+        def view(supplied, supplied_events=None):
+            records = copy.deepcopy(supplied_events or events)
+            with tempfile.TemporaryDirectory() as directory:
+                root = Path(directory)
+                for name in ("config", "control", "history", "current"):
+                    (root / name).mkdir()
+                config_data = encode(CONFIG)
+                records[0]["config"] = blob_identity(config_data)
+                records = sequence(records)
+                projected = engine.reduce(records, CONFIG, supplied)
+                for n, record in enumerate(records, 1):
+                    (root / "history" / f"{n:012d}.tsv").write_bytes(encode(record))
+                (root / "config/operating.tsv").write_bytes(config_data)
+                (root / "control/stop.tsv").write_bytes(encode(STOP))
+                (root / "current/index.tsv").write_bytes(engine.index(projected, digest(encode(records[-1]))))
+                return engine.preview(root, supplied, request(candidate=candidate), {"control": H, "manifest": X, "approval": X})
+        self.assertEqual(view(proof)["proposed"], 1)
+        for key, bad in [("status", "failure"), ("status", "unknown"), ("status", "pending"), ("app", "99"), ("head", H), ("base", H), ("tree", T), ("lock", Y), ("name", "arbitrary")]:
+            malformed = copy.deepcopy(proof); malformed["refresh"]["current"]["checks"][key] = bad
+            self.refuse(view, malformed)
+        for key, bad in [("prepared", {}), ("branch", {"batch": X, "branch": payload["branch"], "head": H}), ("current-dev", H), ("proof", {})]:
+            malformed = copy.deepcopy(proof); malformed["refresh"]["current"][key] = bad
+            self.refuse(view, malformed)
+        malformed = copy.deepcopy(proof); del malformed["refresh"]["current"]["checks"]
+        self.refuse(view, malformed)
+        # Current schema always applies, but branch proposal does not demand checks.
+        branch_events = events[:4]
+        branch_proof = copy.deepcopy(proof)
+        branch_proof["refresh"]["current"]["branch"]["head"] = "-"
+        branch_proof["refresh"]["current"]["checks"] = None
+        self.assertEqual(view(branch_proof, branch_events)["proposed"], 1)
+        malformed = copy.deepcopy(branch_proof); malformed["refresh"]["current"]["unknown"] = "value"
+        self.refuse(view, malformed, branch_events)
+        # Completed historical PR is absorbing when current checks later fail.
+        completed_events, completed, _, _, _, _, _ = refresh_flow()
+        completed["source"] = proof["source"]
+        completed["refresh"]["current"]["checks"]["status"] = "failure"
+        self.assertEqual(view(completed, completed_events)["proposed"], 0)
+
+    # INV repository/release-control-preview-only
+    def test_refresh_promotion_effect_recovery_and_base_advance(self):
+        events, proof, payload, _, _, _, _ = refresh_flow(prefix=base_events())
+        merge = {"repository": "shk95/configs", "number": "7", "dev": D, "master": H, "tree": T}
+        unknown = {"status": "unknown", "target": {}, "complete": True}
+        applied = {"status": "present", "target": {"merged": True, "commit": "d" * 40, "parents": [H, D], "tree": T, "source": D}, "complete": True}
+        absent = {"status": "absent", "target": {}, "complete": True}
+        proof["observations"][X] = [unknown, applied, absent]
+        unresolved = copy.deepcopy(events) + [effect("merge", merge), effect("merge", merge, "unknown", unknown)]
+        integrated = {"base": payload["base"], "head": payload["head"], "commit": "f" * 40, "parents": [payload["base"], payload["head"]], "tree": payload["tree"]}
+        proof["refresh"]["current"].update(integration=integrated, **{"current-dev": integrated["commit"]})
+        integration = event("refresh-integrated", payload=canonical(integrated).decode())
+        self.refuse(engine.reduce, sequence(copy.deepcopy(unresolved) + [integration]), CONFIG, proof)
+        original = engine.reduce(sequence(copy.deepcopy(unresolved)), CONFIG, proof)
+        self.assertEqual(original["candidate"], CANDIDATE)
+        recovered = copy.deepcopy(unresolved) + [effect("merge", merge, "observed", applied), integration]
+        state = engine.reduce(sequence(recovered), CONFIG, proof)
+        self.assertTrue(state["frozen"]); self.assertEqual(state["refresh-stage"], "next-opportunity")
+        self.assertEqual(state["operations"][X]["remote"], applied["target"]["commit"])
+        missing = copy.deepcopy(unresolved) + [effect("merge", merge, "intent", absent), integration]
+        state = engine.reduce(sequence(missing), CONFIG, proof)
+        self.assertIsNone(state["candidate"]); self.assertIsNone(state["approval"]); self.assertEqual(state["evidence"], [])
+        self.assertEqual(state["operations"][X]["state"], "superseded")
+        self.assertEqual(sum(o["state"] == "intent" for o in state["operations"].values()), 0)
+        self.refuse(engine.reduce, sequence(copy.deepcopy(missing) + [effect("merge", merge, "observed", applied)]), CONFIG, proof)
+        for bad in ("failure", "unknown"):
+            failed = copy.deepcopy(proof); failed["refresh"]["current"]["checks"]["status"] = bad
+            self.refuse(engine.reduce, sequence(copy.deepcopy(events) + [integration]), CONFIG, failed)
+        # A verified required base update invalidates old dev approval before intent.
+        new = refresh_fixture(source="d" * 40, parent="d" * 40, base=H, head="e" * 40, previous=T, lock="c" * 64)
+        new_context = refresh_context_fixture(new)
+        proof["refresh"]["revisions"].append(new_context); proof["refresh"]["current"] = copy.deepcopy(new_context)
+        advanced = copy.deepcopy(events) + [refresh_event(new)]
+        state = engine.reduce(sequence(copy.deepcopy(advanced)), CONFIG, proof)
+        self.assertIsNone(state["candidate"]); self.assertIsNone(state["approval"]); self.assertEqual(state["promotion-generation"], "1")
+        self.refuse(engine.reduce, sequence(copy.deepcopy(advanced) + [effect("merge", merge)]), CONFIG, proof)
+        self.refuse(engine.reduce, sequence(copy.deepcopy(unresolved) + [refresh_event(new)]), CONFIG, proof)
+        # Reselect at generation2 and authenticate exact current-dev evidence/approval.
+        new_candidate = dict(CANDIDATE, dev=H, **{"candidate-generation": "2"})
+        evidence = list(EVIDENCE); evidence[1] = H
+        proof["checks"].append(evidence)
+        proof["source"] += transcript(candidate=new_candidate)["source"]
+        approval = copy.deepcopy(base_events()[4]); approval.update(dev=H, **{"candidate-generation": "2", "evidence-digest": digest(canonical([evidence]))})
+        current = advanced + [event("candidate", **new_candidate), event("evidence", evidence=[evidence], **{"evidence-digest": digest(canonical([evidence]))}), approval, effect("merge", dict(merge, dev=H))]
+        state = engine.reduce(sequence(current), CONFIG, proof)
+        self.assertEqual(state["candidate"]["dev"], H); self.assertEqual(state["operations"][X]["state"], "intent")
 
 
 if __name__ == "__main__":

@@ -104,7 +104,10 @@ if [ "$stage" = ci ]; then
     printf '%s\n' repository:fixtures unixlike:suite windows:suite
   else
     if has_scope repository; then echo repository:fixtures; fi
-    if has_scope unixlike; then echo unixlike:suite; fi
+    # Explicit dependency adoption: this repository fixture executes the pinned
+    # domain utility in disposable local Nix workspaces, on the Nix-enabled job.
+    # Native Windows governance fixtures remain Nix-independent.
+    if has_scope unixlike || grep -Eq '^tool/version-control/(release-control($|-)|test-release-control($|\.)|test-refresh-candidate-nix($|\.))' "$paths"; then echo unixlike:suite; fi
     if has_scope windows || [ "$windows_runtime" -eq 1 ]; then echo windows:suite; fi
   fi
   exit 0

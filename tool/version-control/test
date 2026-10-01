@@ -34,6 +34,7 @@ for route in \
   plan-release:version-control/plan-release \
   release-preview:version-control/release-preview \
   release-control:version-control/release-control \
+  test-refresh-candidate-nix:version-control/test-refresh-candidate-nix \
   hook-evidence:version-control/hook-evidence; do
   command=${route%%:*}
   target=${route#*:}
@@ -612,6 +613,12 @@ for preview_path in release-preview release-preview.awk release-preview.rules te
   for preview_stage in commit push ci; do
     expect_units 'repository:fixtures' "$preview_stage" "$(printf 'M\ttool/version-control/%s' "$preview_path")"
   done
+done
+# INV repository/local-gate-selects-by-effect
+for refresh_path in release-control release-control-loader.py release-control-package/engine.py test-release-control.py test-refresh-candidate-nix.py; do
+  expect_units 'repository:fixtures
+unixlike:suite' ci "$(printf 'M\ttool/version-control/%s' "$refresh_path")"
+  expect_units 'repository:fixtures' push "$(printf 'M\ttool/version-control/%s' "$refresh_path")"
 done
 expect_units '' commit "$entry_modified"
 # A document is owned by the scope its directory names, but no domain suite

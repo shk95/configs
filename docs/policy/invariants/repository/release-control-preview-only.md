@@ -3,6 +3,7 @@ statement: Release controller preview verifies exact retained control dependenci
 rationale: AGENTS.md § Rules that are expensive to break
 enforced-by: tool tool/version-control/release-control
 enforced-by: fixture tool/version-control/test-release-control.py
+enforced-by: fixture tool/version-control/test-refresh-candidate-nix.py
 owner: repository maintainer
 decision: docs/policy/decisions/repository/release-controller-preview-boundary.md § Decision
 
