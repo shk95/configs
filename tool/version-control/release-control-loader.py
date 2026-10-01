@@ -201,6 +201,61 @@ def replay_package(package, batch, protocol, before, prior):
     return projection, fields, result
 
 
+def verify_append_only_snapshot(repo, head):
+    # Explicit read-only flags defeat local diff, notes and signature overrides.
+    flags = ("--full-history", "-m", "--format=", "--no-notes", "--no-show-signature",
+             "--no-ext-diff", "--no-textconv", "--no-renames", "-z")
+    changed = git(repo, "log", *flags, "--name-status", "--diff-filter=MDT", head, "--", "history/")
+    if changed.strip(b"\n\x00"):
+        raise ValueError("rewritten-or-truncated-history")
+    changes = git(repo, "log", *flags, "--raw", "--no-abbrev", head, "--", "current/batches.tsv")
+    records = changes.split(b"\0")
+    cache = {}
+    def data(blob):
+        identity(blob)
+        if blob not in cache:
+            cache[blob] = git(repo, "cat-file", "blob", blob)
+        result = cache[blob]
+        if not result.startswith(b"format\t1\n") or not result.endswith(b"\n"):
+            raise ValueError("malformed-ancestor-context")
+        return result
+    for offset in range(0, len(records) - 1, 2):
+        fields = records[offset].lstrip(b"\n").decode("ascii").split()
+        if len(fields) != 5 or records[offset + 1] != b"current/batches.tsv":
+            raise ValueError("invalid-context-diff")
+        oldmode, newmode, oldblob, newblob, status = fields
+        if oldmode.startswith(":"):
+            oldmode = oldmode[1:]
+        else:
+            raise ValueError("invalid-context-diff")
+        if newmode != "100644" or status not in {"A", "M"}:
+            raise ValueError("deleted-or-unsafe-retained-context")
+        new = data(newblob)
+        if status == "A":
+            if oldmode != "000000" or oldblob != "0" * 40:
+                raise ValueError("invalid-context-addition")
+            continue
+        if oldmode != "100644":
+            raise ValueError("unsafe-ancestor-context")
+        old = data(oldblob)
+        if new.startswith(old):
+            continue # exact old rows plus appended contexts
+        lines = old.splitlines(keepends=True)
+        if len(lines) < 2:
+            raise ValueError("changed-context-header")
+        prefix = b"".join(lines[:-1])
+        if not new.startswith(prefix):
+            raise ValueError("changed-retained-context-prefix")
+        oldrow = table(b"format\t1\n" + lines[-1])
+        nextline = new[len(prefix):].split(b"\n", 1)[0] + b"\n"
+        newrow = table(b"format\t1\n" + nextline)
+        if (len(oldrow) != 1 or len(newrow) != 1 or len(oldrow[0]) != 12 or len(newrow[0]) != 12
+                or oldrow[0][0] != "context" or newrow[0][0] != "context"
+                or oldrow[0][-2:] != ["-", "-"] or oldrow[0][:-2] != newrow[0][:-2]):
+            raise ValueError("changed-immutable-retained-context")
+        identity(newrow[0][-2]); identity(newrow[0][-1])
+
+
 def global_preview(paths, assertion, head, scratch):
     repo = paths["operating"]
     identity(head)
@@ -214,6 +269,7 @@ def global_preview(paths, assertion, head, scratch):
     if git(repo, "rev-parse", "--show-object-format").strip() != b"sha1" or git(repo, "rev-parse", "--is-shallow-repository").strip() != b"false":
         raise ValueError("incomplete-operating-history")
     git(repo, "cat-file", "commit", head)
+    verify_append_only_snapshot(repo, head)
     _, current_config = record_blob(repo, head, "config/operating.tsv")
     _, stop = record_blob(repo, head, "control/stop.tsv")
     stop_fields = singletons(stop, {"stop", "revision", "reason", "operator"})
@@ -324,6 +380,8 @@ def global_preview(paths, assertion, head, scratch):
             selected = (package, batch, approval, before, boundary_prior)
     current_package = None
     if selected is None:
+        if request["candidate"] != "0" * 64:
+            raise ValueError("no-outstanding-request-candidate")
         current_package = scratch / "current-package"
         extract(paths["bundle_repository"], assertion, current_package)
         empty = scratch / "empty"

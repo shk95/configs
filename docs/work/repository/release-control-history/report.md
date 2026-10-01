@@ -30,11 +30,14 @@ changes. Protocol3 preserves the eight executing paths. Real protocol1 blobs
 come from24cf09b5 and real protocol2 blobs from7f43ec3b; current semantics are
 not relabeled as old code. Current caller assertions do not select old batches.
 
-Local functional Python3.13.15 on Darwin passed twenty fixture families, including
+Local functional Python3.13.15 on Darwin passed twenty-two fixture families, including
 original-byte global history, actual old packages plus later protocol3 offset,
 semantic completed-prefix refusal, whole-ledger mismatch, immutable config and
 archival inputs, quiet/empty selection, fresh stop, unsafe/unreachable/shallow/
 replacement/offset/context/overlap refusals and unchanged original Git state.
+Follow-up review added full-ancestry event immutability and context-prefix/archive
+immutability; coherent tail truncation plus recomputed metadata now refuses,
+while a valid outstanding-to-completed archival transition passes.
 Actual credential-free local Nix2.34.8/Git2.55 preparation proof also passed all
 four existing refresh groups against the evolved reducer. Linux/native
 Git-for-Windows source CI and complete normal policy checks remain

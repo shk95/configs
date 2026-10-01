@@ -1036,7 +1036,7 @@ class GlobalHistoryProof(unittest.TestCase):
         self.approval_file=self.root/'approved.tsv';self.approval_file.write_bytes(encode(self.packages['3']))
         self.transcript_file=self.root/'transcript.json';self.transcript_file.write_bytes(canonical(transcript('preview',candidate=None)))
         self.request_file=self.root/'request.tsv';self.request_file.write_bytes(encode(request(candidate=None)))
-        self.contexts=[];self.events=[];self.ledger=[]
+        self.contexts=[];self.events=[];self.ledger=[];self.projections=[]
 
     def commit(self, repo):
         run_git(repo,'add','.');run_git(repo,'commit','-qm','fixture snapshot')
@@ -1092,6 +1092,7 @@ sys.stdout.buffer.write(engine.index(state,last))
             input=self.transcript_file.read_bytes(),capture_output=True,check=True).stdout
         self.ledger.append({'context':context,'projection':digest(projection)})
         self.final=dict(row for row in [line.split('\t') for line in projection.decode().splitlines()[1:]])
+        self.projections.append(self.final.copy())
 
     def save(self):
         fields=('start','batch','master','control','manifest','approval','protocol','config-commit','config','transcript-commit','transcript')
@@ -1156,11 +1157,14 @@ sys.stdout.buffer.write(engine.index(state,last))
     # INV repository/release-control-preview-only
     def test_global_semantic_completed_prefix_not_structural_marker(self):
         self.prepare(second=False)
+        run_git(self.operating,'reset','--hard',self.contexts[0]['config-commit'])
+        (self.operating/'config/operating.tsv').write_bytes(encode(CONFIG))
         self.events=self.events[:2]
+        (self.operating/'history').mkdir(exist_ok=True)
         for path in (self.operating/'history').iterdir():path.unlink()
         for n,item in enumerate(self.events,1):(self.operating/'history'/('%012d.tsv'%n)).write_bytes(encode(item))
         self.append(event('candidate',**CANDIDATE));self.append(event('complete'))
-        self.head=self.commit(self.operating)
+        self.save()
         paths={'operating':self.operating,'bundle_repository':self.public,'approved':self.approval_file,
                'transcript':self.transcript_file,'request':self.request_file}
         with self.assertRaisesRegex(ValueError,'retained-replay-refusal'):
@@ -1210,6 +1214,7 @@ sys.stdout.buffer.write(engine.index(state,last))
         # A second start while the first batch is outstanding refuses before replay.
         run_git(self.operating,'reset','--hard',old)
         self.events=self.events[:2]
+        (self.operating/'history').mkdir(exist_ok=True)
         for path in (self.operating/'history').iterdir():path.unlink()
         for n,item in enumerate(self.events,1):(self.operating/'history'/('%012d.tsv'%n)).write_bytes(encode(item))
         self.append(dict(self.events[0],batch=Y))
@@ -1224,6 +1229,8 @@ sys.stdout.buffer.write(engine.index(state,last))
         self.save()
         result=self.invoke();self.assertEqual(result.returncode,0,result.stderr)
         self.assertEqual(json.loads(result.stdout),{'outcome':'preview','stage':'empty','proposed':0})
+        self.request_file.write_bytes(encode(request()))
+        self.refuse()
         self.request_file.write_bytes(encode(request(mode='start',candidate=None)))
         self.refuse()
         self.request_file.write_bytes(encode(request(candidate=None)))
@@ -1238,9 +1245,11 @@ sys.stdout.buffer.write(engine.index(state,last))
         context=self.contexts[0]
         tree=run_git(self.operating,'rev-parse',context['config-commit']+'^{tree}')
         unrelated=run_git(self.operating,'commit-tree',tree,'-m','fixture unrelated config')
-        path=self.operating/'current/batches.tsv'
-        path.write_bytes(path.read_bytes().replace(context['config-commit'].encode(),unrelated.encode()))
-        self.head=self.commit(self.operating);self.refuse()
+        run_git(self.operating,'reset','--hard',self.contexts[1]['config-commit'])
+        for n,item in enumerate(self.events,1):(self.operating/'history'/('%012d.tsv'%n)).write_bytes(encode(item))
+        original_config_commit=context['config-commit'];context['config-commit']=unrelated
+        self.save();self.refuse()
+        context['config-commit']=original_config_commit
         run_git(self.operating,'reset','--hard',original);self.head=original
         (self.operating/'.git/shallow').write_bytes((original+'\n').encode())
         self.refuse();(self.operating/'.git/shallow').unlink()
@@ -1249,6 +1258,42 @@ sys.stdout.buffer.write(engine.index(state,last))
         run_git(self.public,'replace',self.packages['3']['control'],self.packages['1']['control'])
         self.refuse()
 
+
+    # INV repository/release-control-preview-only
+    def test_global_coherent_truncation_and_repointed_archive_refuse(self):
+        self.prepare();original=self.head
+        contexts=copy.deepcopy(self.contexts);ledger=copy.deepcopy(self.ledger);final=self.final.copy()
+        for path in (self.operating/'history').iterdir():
+            if int(path.stem)>3:path.unlink()
+        self.contexts=self.contexts[:1];self.ledger=self.ledger[:1];self.final=self.projections[0]
+        self.save()
+        with self.assertRaisesRegex(ValueError,'rewritten-or-truncated-history'):
+            loader.verify_append_only_snapshot(self.operating,self.head)
+        self.refuse() # even a recomputed internally consistent index cannot hide tail loss
+        run_git(self.operating,'reset','--hard',original)
+        self.contexts=contexts;self.ledger=ledger;self.final=final
+        # Repoint to identical archived bytes at a newer reachable commit; identity
+        # remains immutable even when the old semantic projection would be unchanged.
+        self.contexts[0]['transcript-commit']=self.contexts[1]['config-commit']
+        self.ledger[0]['context']=self.contexts[0]
+        self.save()
+        with self.assertRaisesRegex(ValueError,'changed-retained-context-prefix'):
+            loader.verify_append_only_snapshot(self.operating,self.head)
+        self.refuse()
+
+    # INV repository/release-control-preview-only
+    def test_global_outstanding_completion_archives_once(self):
+        self.prepare()
+        self.append(event('complete',batch=Y))
+        current=self.contexts[-1];current['transcript-commit']=current['config-commit']
+        current['transcript']=run_git(self.operating,'rev-parse',current['config-commit']+':current/transcript.json')
+        state=engine.reduce(self.events[3:],CONFIG,json.loads(self.transcript_file.read_bytes()))
+        projection=engine.index(state,digest(encode(self.events[-1])))
+        self.final=parse(projection,'index')
+        self.ledger[-1]={'context':current,'projection':digest(projection)}
+        self.save()
+        result=self.invoke();self.assertEqual(result.returncode,0,result.stderr)
+        self.assertEqual(json.loads(result.stdout),{'outcome':'preview','stage':'complete','proposed':0})
 
 if __name__ == "__main__":
     unittest.main()

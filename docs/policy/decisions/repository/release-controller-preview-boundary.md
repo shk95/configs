@@ -37,7 +37,10 @@ proof. Nix is not a Windows prerequisite and no production transport is added.
 the eight-file semantic closure. The stable loader selects exact reachable
 configuration and completed-envelope archival inputs; protocol1/2 remain exact
 zero-offset interfaces. Global indexing binds every semantic envelope, and current
-configuration cannot waive retained outstanding obligations or fresh stop. This
+configuration cannot waive retained outstanding obligations or fresh stop.
+Accepted Git ancestry preserves original event bytes and fixed context bindings;
+a rewritten tail or repointed completed archive refuses even with a recomputed
+current index. This
 still authenticates no operating source and implements no write transport.
 
 ## Limits and authority

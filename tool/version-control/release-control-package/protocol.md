@@ -7,7 +7,7 @@ are never production authentication. The retained loader validates package
 identity and approved merge shape, not the truth of an approval-file author.
 
 The stable loader supports explicit approved protocols 1, 2 and 3 only. This
-current package accepts protocol 3; protocol 1 executes its exact retained
+current package accepts protocol 3; protocols 1 and 2 execute their exact retained
 historical eight blobs, serializer, reducer and main. Old records are never
 rewritten and a mismatched or unknown semantic protocol refuses. TSV format 1
 and the eight manifest paths stay unchanged; semantic protocol is separate.
@@ -219,3 +219,12 @@ waives damaged history. Public output remains a bounded summary or refusal.
 This selects/replays supplied objects; it creates no batches, records, credentials,
 requests or remote effects. It does not provision operating storage or certify
 manual/scheduled operation. Real authenticated transport remains separate.
+
+The complete accepted Git ancestry additionally permits only additions under
+history/, never modification, deletion, renaming or mode change of original
+events. A recomputed shortened index cannot conceal truncation. Context rows
+retain exact original bytes: append rows, or fill the last outstanding row's
+previously absent archival transcript identities once. Fixed source/config and
+already completed archival selection cannot be repointed, even to identical
+bytes at another commit. Read-only log traversal explicitly disables local
+external diff/text conversion, signature and notes execution/display settings.
