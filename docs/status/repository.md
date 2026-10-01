@@ -78,6 +78,13 @@ patterns, and the three tools that enumerated Unix-like locations no longer
 repeat a list (`docs/policy/decisions/unixlike/unixlike-domain-owns-its-tree.md`,
 `docs/policy/decisions/unixlike/concern-first-inside-the-domain.md`).
 
+On 2026-10-01, historical master-to-dev classification was restored for the
+old Unix-like roots and exact Nix editor settings under
+`docs/provisional/repository/classify-unixlike-old-roots.md`. These temporary
+answers cover migration history; new domain material still belongs under
+`unixlike/`. The retained editor settings await their separate domain-owned
+relocation. The measure remains until master no longer retains those paths.
+
 On 2026-09-24 the physical module tree was regrouped under `flake`,
 `machines`, `platforms`, `foundation`, `desktop`, and `programs`. The concern
 remains the unit inside each group; group names do not choose module classes.

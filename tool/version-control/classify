@@ -105,6 +105,12 @@ while IFS= read -r path; do
     invariants/unixlike/*|provisional/unixlike/*) echo unixlike ;;
     invariants/windows/*|provisional/windows/*) echo windows ;;
     invariants/repository/*|provisional/repository/*) echo repository ;;
+    # INV repository/scope-ownership
+    # Historical Unix-like namespaces retained on master, plus the exact
+    # Nix editor file pending its domain-owned relocation. No new root-domain
+    # material is permitted by these history-only answers.
+    # PROV repository/classify-unixlike-old-roots
+    flake.nix|flake.lock|assets/*|modules/*|tool/checks/*|tool/darwin/*|.vscode/settings.json) echo unixlike ;; # PROV repository/classify-unixlike-old-roots
     *) echo unclassified ;;
   esac
 done <"$paths" | sort -u >"$scopes"

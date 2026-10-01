@@ -1,5 +1,5 @@
 format	1
-file	tool/version-control/classify	c69c5024c3e8ac8c5923039d28cda2e5c6074ddc13cbd4d0132523c080d1894d
+file	tool/version-control/classify	ce017e7fc4a1feb33adf9b63574d8d10921d8f604ef289b7aae9a14433f4340c
 file	tool/version-control/release-control-package/adapter.py	02a7d20519082184fadcbdfa8e2eac20d61fbd60877c46bff96ee50e6a7bae55
 file	tool/version-control/release-control-package/engine.py	8819d2644b057f4263183689fa53d13d9faeb5a0923d211ae23d867d3369e945
 file	tool/version-control/release-control-package/main.py	3f6139b8fea46ed13be76a1275335dab45ffb1d9b1b7ab7b8c2ff051f5d1af85

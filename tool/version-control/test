@@ -437,7 +437,7 @@ expect unixlike "$classify" --files unixlike/modules/programs/karabiner/tool
 # The domain owns one tree. .envrc and the Justfile answer from the same arm,
 # because those two stay at the root: direnv reads the first there, and where
 # the second belongs is a separate decision. A similar prefix outside the
-# domain has no owner, and neither do the locations the tree was moved from.
+# domain has no owner. Historical roots retain only the temporary answers below.
 expect unixlike "$classify" --files unixlike/flake.nix
 expect unixlike "$classify" --files unixlike/modules/programs/git.nix
 expect unixlike "$classify" --files unixlike/payloads.json
@@ -445,8 +445,22 @@ expect unixlike "$classify" --files unixlike/tool/checks/test
 expect unixlike "$classify" --files .envrc
 expect unixlike "$classify" --files Justfile
 expect unclassified "$classify" --files unixlike-extra/flake.nix
-expect unclassified "$classify" --files flake.nix
-expect unclassified "$classify" --files modules/git.nix
+# INV repository/scope-ownership
+expect unixlike "$classify" --files flake.nix # PROV repository/classify-unixlike-old-roots
+expect unixlike "$classify" --files flake.lock # PROV repository/classify-unixlike-old-roots
+expect unixlike "$classify" --files modules/git.nix # PROV repository/classify-unixlike-old-roots
+expect unixlike "$classify" --files assets/wezterm/config.lua # PROV repository/classify-unixlike-old-roots
+expect unixlike "$classify" --files tool/checks/test # PROV repository/classify-unixlike-old-roots
+expect unixlike "$classify" --files tool/darwin/karabiner # PROV repository/classify-unixlike-old-roots
+expect unixlike "$classify" --files .vscode/settings.json # PROV repository/classify-unixlike-old-roots
+expect unixlike "$classify" --files unixlike/.vscode/settings.json
+expect unclassified "$classify" --files .vscode/launch.json
+expect unclassified "$classify" --files .vscode-extra/settings.json
+expect unclassified "$classify" --files assets-extra/config.lua
+expect unclassified "$classify" --files modules-extra/git.nix
+expect unclassified "$classify" --files tool/checks-extra/test
+expect unclassified "$classify" --files tool/darwin-extra/karabiner
+expect unclassified "$classify" --files flake-other.nix
 expect windows "$classify" --files windows/src/WinEnv.psm1
 expect unclassified "$classify" --files common/example.txt
 expect repository "$classify" --files .agents/skills/example/SKILL.md
