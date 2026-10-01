@@ -45,6 +45,13 @@ Actual credential-free local Nix2.34.8/Git2.55 preparation proof also passed all
 four existing refresh groups against the evolved reducer. Linux/native
 Git-for-Windows source CI and complete normal policy checks remain
 pending. This local proof authenticates no operating provenance or permission.
+Source CI36813821176 at c7ae02c passed Linux repository fixtures and policy scans.
+Native Git-for-Windows reached all23 tests, but14 refusal assertions compared
+the platform-native CRLF stderr line with a literal LF expectation. The fixed
+public refusal remained exact and original history bytes were unchanged. The
+fixture now uses os.linesep like the existing retained-package refusal proof;
+repaired final-head native CI remains pending.
+
 No original app/host document, provider lock, private operating connection,
 workflow dispatch, schedule, promotion, tag/release or host activation/Apply changed.
 

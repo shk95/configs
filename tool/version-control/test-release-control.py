@@ -1119,7 +1119,7 @@ sys.stdout.buffer.write(engine.index(state,last))
 
     def refuse(self):
         result=self.invoke();self.assertEqual(result.returncode,1,result.stdout)
-        self.assertEqual(result.stdout,b'');self.assertEqual(result.stderr,b'release-control: refused\n')
+        self.assertEqual(result.stdout,b'');self.assertEqual(result.stderr,b'release-control: refused'+os.linesep.encode('ascii'))
 
     # INV repository/release-control-preview-only
     def test_global_original_bytes_retained_one_and_later_three(self):
