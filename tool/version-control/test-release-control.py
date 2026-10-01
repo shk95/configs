@@ -12,6 +12,7 @@ import subprocess
 import sys
 import tempfile
 import unittest
+import zlib
 
 TOOLS = Path(__file__).resolve().parent
 WRAPPER = (TOOLS / "release-control").as_posix()
@@ -1294,6 +1295,20 @@ sys.stdout.buffer.write(engine.index(state,last))
         self.save()
         result=self.invoke();self.assertEqual(result.returncode,0,result.stderr)
         self.assertEqual(json.loads(result.stdout),{'outcome':'preview','stage':'complete','proposed':0})
+
+    # INV repository/release-control-preview-only
+    def test_global_tampered_bytes_under_recorded_blob_id_refuse(self):
+        self.prepare()
+        blob=self.contexts[0]['transcript']
+        original=subprocess.run(['git','-C',str(self.operating),'cat-file','blob',blob],capture_output=True,check=True).stdout
+        # Different original bytes, same decoded JSON and otherwise identical ledger.
+        altered=original+b'\n'
+        path=self.operating/'.git/objects'/blob[:2]/blob[2:]
+        path.chmod(0o600)
+        path.write_bytes(zlib.compress(b'blob '+str(len(altered)).encode()+b'\0'+altered))
+        # cat-file alone accepts this corruption; explicit blob identity must refuse.
+        self.assertEqual(subprocess.run(['git','-C',str(self.operating),'cat-file','blob',blob],capture_output=True,check=True).stdout,altered)
+        self.refuse()
 
 if __name__ == "__main__":
     unittest.main()

@@ -60,6 +60,11 @@ def approved(data):
 
 
 def extract(repo, assertion, target):
+    verify_graphs(repo, [assertion["master"]])
+    _extract_verified(repo, assertion, target)
+
+
+def _extract_verified(repo, assertion, target):
     control = assertion["control"]
     # Full identities and absence of replacement objects; no arbitrary URL/ref/path.
     if git(repo, "rev-parse", "--show-object-format").strip() != b"sha1":
@@ -74,6 +79,8 @@ def extract(repo, assertion, target):
     if len(metadata) != 4 or metadata[0:2] != ["100644", "blob"] or metadata[3] != MANIFEST:
         raise ValueError("unsafe-manifest-object")
     manifest = git(repo, "show", control + ":" + MANIFEST)
+    if object_digest("blob", manifest) != metadata[2]:
+        raise ValueError("corrupt-manifest-object")
     if hashlib.sha256(manifest).hexdigest() != assertion["manifest"]:
         raise ValueError("manifest-identity-mismatch")
     try:
@@ -93,6 +100,8 @@ def extract(repo, assertion, target):
             if len(metadata) != 4 or metadata[0] not in {"100644", "100755"} or metadata[1] != "blob":
                 raise ValueError("unsafe-package-object")
             data = git(repo, "show", control + ":" + name)
+            if object_digest("blob", data) != metadata[2]:
+                raise ValueError("corrupt-package-object")
             if hashlib.sha256(data).hexdigest() != expected:
                 raise ValueError("package-digest-mismatch")
             path = target / name
@@ -142,7 +151,10 @@ def record_blob(repo, commit, path):
     row = git(repo, "ls-tree", commit, "--", path).decode("utf-8").strip().split()
     if len(row) != 4 or row[0:2] != ["100644", "blob"] or row[3] != path:
         raise ValueError("missing-or-unsafe-operating-object")
-    return row[2], git(repo, "cat-file", "blob", row[2])
+    data = git(repo, "cat-file", "blob", row[2])
+    if object_digest("blob", data) != row[2]:
+        raise ValueError("corrupt-operating-blob")
+    return row[2], data
 
 
 def encode_index(fields):
@@ -201,6 +213,36 @@ def replay_package(package, batch, protocol, before, prior):
     return projection, fields, result
 
 
+def object_digest(kind, data):
+    return hashlib.sha1(kind.encode("ascii") + b" " + str(len(data)).encode("ascii") + b"\0" + data).hexdigest()
+
+
+def verify_graphs(repo, heads):
+    # Find ancestry-covering roots solely for integrity, never package selection.
+    heads = set(heads)
+    for head in heads:
+        identity(head)
+    lines = git(repo, "rev-list", "--topo-order", "--parents", "--stdin",
+                data=("\n".join(sorted(heads)) + "\n").encode("ascii")).decode("ascii").splitlines()
+    roots, covered = [], set()
+    for line in lines:
+        values = line.split()
+        if not values:
+            raise ValueError("invalid-object-graph")
+        for value in values:
+            identity(value)
+        if values[0] not in covered:
+            if values[0] not in heads:
+                raise ValueError("unexpected-object-graph-root")
+            roots.append(values[0]); covered.add(values[0])
+        covered.update(values[1:])
+    if not roots or not heads <= covered:
+        raise ValueError("incomplete-object-graph")
+    for offset in range(0, len(roots), 100):
+        # Git verifies commit/tree integrity without reading unrelated blob contents.
+        git(repo, "fsck", "--connectivity-only", "--no-dangling", "--no-reflogs",
+            "--no-progress", *roots[offset:offset + 100])
+
 def verify_append_only_snapshot(repo, head):
     # Explicit read-only flags defeat local diff, notes and signature overrides.
     flags = ("--full-history", "-m", "--format=", "--no-notes", "--no-show-signature",
@@ -215,6 +257,8 @@ def verify_append_only_snapshot(repo, head):
         identity(blob)
         if blob not in cache:
             cache[blob] = git(repo, "cat-file", "blob", blob)
+            if object_digest("blob", cache[blob]) != blob:
+                raise ValueError("corrupt-ancestor-context")
         result = cache[blob]
         if not result.startswith(b"format\t1\n") or not result.endswith(b"\n"):
             raise ValueError("malformed-ancestor-context")
@@ -268,7 +312,7 @@ def global_preview(paths, assertion, head, scratch):
         raise ValueError("invalid-global-request")
     if git(repo, "rev-parse", "--show-object-format").strip() != b"sha1" or git(repo, "rev-parse", "--is-shallow-repository").strip() != b"false":
         raise ValueError("incomplete-operating-history")
-    git(repo, "cat-file", "commit", head)
+    verify_graphs(repo, [head])
     verify_append_only_snapshot(repo, head)
     _, current_config = record_blob(repo, head, "config/operating.tsv")
     _, stop = record_blob(repo, head, "control/stop.tsv")
@@ -329,6 +373,10 @@ def global_preview(paths, assertion, head, scratch):
         envelopes.append((before, active, False))
     if len(envelopes) != len(contexts):
         raise ValueError("missing-or-surplus-context")
+    public_heads = {context["master"] for context in contexts}
+    if not envelopes or envelopes[-1][2]:
+        public_heads.add(assertion["master"])
+    verify_graphs(paths["bundle_repository"], public_heads)
     ledger, final_fields, last_result, selected = [], None, None, None
     for ordinal, ((before, events, completed), context) in enumerate(zip(envelopes, contexts)):
         first = events[0][2]
@@ -357,7 +405,7 @@ def global_preview(paths, assertion, head, scratch):
         approval["public-repository"] = "shk95/configs"
         approval = approved(encode_index(approval))
         package = scratch / ("package-%d" % ordinal)
-        extract(paths["bundle_repository"], approval, package)
+        _extract_verified(paths["bundle_repository"], approval, package)
         batch = scratch / ("batch-%d" % ordinal)
         for folder in ("config", "control", "current", "history"):
             (batch / folder).mkdir(parents=True, exist_ok=True)
@@ -383,7 +431,7 @@ def global_preview(paths, assertion, head, scratch):
         if request["candidate"] != "0" * 64:
             raise ValueError("no-outstanding-request-candidate")
         current_package = scratch / "current-package"
-        extract(paths["bundle_repository"], assertion, current_package)
+        _extract_verified(paths["bundle_repository"], assertion, current_package)
         empty = scratch / "empty"
         for folder in ("config", "history"):
             (empty / folder).mkdir(parents=True, exist_ok=True)
