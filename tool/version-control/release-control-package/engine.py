@@ -336,7 +336,7 @@ def index(state, prior):
                    "state-digest": digest(canonical(state))})
 
 
-def preview(directory, transcript, request, approved):
+def preview(directory, transcript, request, approved, before=0, prior="0" * 64):
     root = Path(directory)
     require(root.is_dir() and not root.is_symlink(), "unsafe-operating-root")
     for name in ("config", "control", "history", "current"):
@@ -347,10 +347,10 @@ def preview(directory, transcript, request, approved):
         return None
     require(config["actors"] != "-" and config["checks"] != "-", "enabled-misconfiguration")
     stop = parse(read(root / "control/stop.tsv"), "stop")
-    events, prior = history(root / "history")
+    events, prior = history(root / "history", before, prior)
     if events:
         start = events[0]
-        require(start["kind"] == "batch-start" and start["control"] == approved["control"] and start["manifest"] == approved["manifest"] and start["approval-provenance"] == approved["approval"], "wrong-retained-batch-control")
+        require(start["kind"] == "batch-start" and start["control"] == approved["control"] and start["manifest"] == approved["manifest"] and start["approval-provenance"] == approved["approval"] and start["approved-master"] == approved["master"], "wrong-retained-batch-control")
         # Pinned config is supplied at its recorded blob SHA, not current config.
         actual = blob_identity(config_data)
         require(actual == start["config"], "changed-pinned-batch-config")
@@ -374,3 +374,22 @@ def preview(directory, transcript, request, approved):
     # Safe public output reveals neither repository connection nor raw records.
     pending = [o for o in state["operations"].values() if o["state"] == "intent"]
     return {"outcome": "preview", "stage": state["stage"], "proposed": len(pending)}
+
+
+def project_range(directory, transcript, approved, before, prior):
+    """Protocol-3 replay interface; original event bytes and verified boundary only."""
+    root = Path(directory)
+    config_data = read(root / "config/operating.tsv")
+    config = parse(config_data, "config")
+    events, last = history(root / "history", before, prior)
+    require(not events or (config["enabled"] == "1" and config["actors"] != "-" and config["checks"] != "-"), "disabled-retained-batch")
+    if events:
+        start = events[0]
+        require(start["kind"] == "batch-start" and start["control"] == approved["control"]
+                and start["manifest"] == approved["manifest"]
+                and start["approval-provenance"] == approved["approval"]
+                and start["approved-master"] == approved["master"]
+                and start["config"] == blob_identity(config_data), "wrong-retained-range-context")
+    state = reduce(events, config, transcript)
+    pending = sum(o["state"] == "intent" for o in state["operations"].values())
+    return index(state, last), state["stage"], pending

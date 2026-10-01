@@ -6,7 +6,7 @@ MSYS2_ARG_CONV_EXCL='*'
 export MSYS_NO_PATHCONV MSYS2_ARG_CONV_EXCL
 tools=$(CDPATH= cd -- "$(dirname -- "$0")" && pwd)
 python=${CONFIGS_CONTROLLER_PYTHON:-python3}
-if ! "$python" -I -S -c 'import sys,json,hashlib,subprocess; assert sys.version_info >= (3,9)' >/dev/null 2>&1; then
+if ! "$python" -I -S -c 'import sys,json,hashlib,subprocess,base64; assert sys.version_info >= (3,9)' >/dev/null 2>&1; then
   echo 'release-control: functional Python >=3.9 unavailable' >&2
   [ "${REQUIRE_NATIVE:-0}" != 1 ] && exit 69
   exit 1

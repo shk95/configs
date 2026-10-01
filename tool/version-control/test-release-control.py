@@ -32,7 +32,7 @@ X = "a" * 64
 Y = "b" * 64
 CONFIG = {"enabled": "1", "public-repository": "shk95/configs", "repository": "1",
           "operating-repository": "fixture/operating", "operating-ref": "operations",
-          "workflow": "2", "actors": "3", "checks": "gate", "protocol": "2"}
+          "workflow": "2", "actors": "3", "checks": "gate", "protocol": "3"}
 STOP = {"stop": "0", "revision": "0", "reason": "none", "operator": "3"}
 OWNER = {"repository": "1", "workflow": "2", "run": "4", "attempt": "1",
          "job": "5", "generation": "1", "operating-head": H}
@@ -77,8 +77,8 @@ def sequence(events):
 
 def start(control=H, manifest=X, approval=X, config=H):
     return event("batch-start", control=control, manifest=manifest,
-                 **{"approval-provenance": approval, "config": config, "protocol": "2",
-                    "day": "2026-09-30", "run": "4", "attempt": "1", "time": "2026-09-30T00:00:00Z"})
+                 **{"approval-provenance": approval, "config": config, "protocol": "3",
+                    "day": "2026-09-30", "run": "4", "attempt": "1", "time": "2026-09-30T00:00:00Z", "approved-master": control, "config-commit": H})
 
 
 def base_events(approved=True):
@@ -193,7 +193,7 @@ class ControllerProof(unittest.TestCase):
             run_git(root, "merge", "--no-ff", "-qm", "fixture old promotion", "dev")
             old = run_git(root, "rev-parse", "HEAD")
             approved = {"public-repository": "shk95/configs", "control": old,
-                        "master": old, "manifest": m, "approval": X, "protocol": "2"}
+                        "master": old, "manifest": m, "approval": X, "protocol": "3"}
             scratch = Path(directory) / "old-extract"
             loader.extract(root, approved, scratch)
             for name in loader.FILES:
@@ -277,7 +277,7 @@ class ControllerProof(unittest.TestCase):
             self.assertEqual(run_git(root, "rev-parse", "HEAD"), newer)
             self.refuse(loader.extract, root, dict(approved, control=original), Path(directory) / "ancestor")
             self.refuse(loader.extract, root, dict(approved, manifest=Y), Path(directory) / "tamper")
-            self.refuse(loader.approved, encode(dict(approved, protocol="3")))
+            self.refuse(loader.approved, encode(dict(approved, protocol="4")))
             self.refuse(loader.approved, encode(dict(approved, **{"public-repository": "fixture/other"})))
             # Missing closure entry, even with its newly asserted manifest digest, refuses.
             raw = (root / loader.MANIFEST).read_bytes().splitlines(keepends=True)
@@ -464,7 +464,7 @@ class ControllerProof(unittest.TestCase):
                 (root / "history" / f"{n:012d}.tsv").write_bytes(encode(item))
             (root / "current/index.tsv").write_bytes(engine.index(state, digest(encode(packet[-1]))))
             replacement_proof["source"] += transcript("preview", replacement)["source"]
-            self.assertEqual(engine.preview(root, replacement_proof, request(candidate=replacement), {"control": H, "manifest": X, "approval": X})["proposed"], 0)
+            self.assertEqual(engine.preview(root, replacement_proof, request(candidate=replacement), {"control": H, "manifest": X, "approval": X, "master": H})["proposed"], 0)
         # Lost operating update confirmed absent at the exact old parent can reload/retry.
         absent = {"status": "absent", "target": {"parent": H}, "complete": True}
         events = base_events() + [effect("record", record), effect("record", record, "unknown", unknown), effect("record", record, "intent", absent)]
@@ -769,7 +769,7 @@ class ControllerProof(unittest.TestCase):
 
 
     # INV repository/release-control-preview-only
-    def test_refresh_protocol_one_actual_old_blobs_and_two_real_loader(self):
+    def test_refresh_protocol_one_two_actual_old_blobs_and_three_real_loader(self):
         source = "24cf09b5efbb4db821210632da8b44dcb822a337"
         with tempfile.TemporaryDirectory() as directory:
             scratch = Path(directory)
@@ -800,6 +800,15 @@ class ControllerProof(unittest.TestCase):
             run_git(repo, "checkout", "-q", "master"); run_git(repo, "merge", "--no-ff", "-qm", "fixture historical promotion", "dev")
             old = run_git(repo, "rev-parse", "HEAD")
             run_git(repo, "checkout", "-q", "dev")
+            protocol_two_source = "7f43ec3b49243d10b0ea3d75272d8cd4c6ff3d7f"
+            for name in loader.FILES | {loader.MANIFEST}:
+                data = subprocess.run(["git", "-C", str(TOOLS.parent.parent), "show", protocol_two_source + ":" + name], check=True, capture_output=True).stdout
+                (repo / name).write_bytes(data)
+            middle_manifest = digest((repo / loader.MANIFEST).read_bytes())
+            run_git(repo, "add", "."); run_git(repo, "commit", "-qm", "fixture actual protocol two")
+            run_git(repo, "checkout", "-q", "master"); run_git(repo, "merge", "--no-ff", "-qm", "fixture protocol two promotion", "dev")
+            middle = run_git(repo, "rev-parse", "HEAD")
+            run_git(repo, "checkout", "-q", "dev")
             for name in loader.FILES:
                 shutil.copyfile(TOOLS.parent.parent / name, repo / name)
             shutil.copyfile(TOOLS.parent.parent / loader.MANIFEST, repo / loader.MANIFEST)
@@ -807,7 +816,7 @@ class ControllerProof(unittest.TestCase):
             run_git(repo, "add", "."); run_git(repo, "commit", "-qm", "fixture protocol two")
             run_git(repo, "checkout", "-q", "master"); run_git(repo, "merge", "--no-ff", "-qm", "fixture protocol two promotion", "dev")
             newer = run_git(repo, "rev-parse", "HEAD")
-            for protocol, control, manifest_hash in [("1", old, old_manifest), ("2", newer, new_manifest)]:
+            for protocol, control, manifest_hash in [("1", old, old_manifest), ("2", middle, middle_manifest), ("3", newer, new_manifest)]:
                 approval = {"public-repository": "shk95/configs", "control": control, "master": newer,
                             "manifest": manifest_hash, "approval": X, "protocol": protocol}
                 retained = scratch / ("retained-" + protocol)
@@ -854,6 +863,10 @@ config=records.encode(value['config'])
 (root/'config/operating.tsv').write_bytes(config)
 events=value['events']
 events[0].update(control=value['approved']['control'],manifest=value['approved']['manifest'],**{'approval-provenance':value['approved']['approval'],'config':records.blob_identity(config),'protocol':value['config']['protocol']})
+if value['config']['protocol']=='3':
+ events[0]['approved-master']=value['approved']['master']
+else:
+ events[0].pop('approved-master',None);events[0].pop('config-commit',None)
 if value['pr']:
  p=value['pr'];request=adapter.operation('pr',p)
  events.append({'sequence':'1','kind':'intent','prior':'0'*64,'batch':events[0]['batch'],'payload':records.canonical(p).decode(),'operation':[['c'*64,'pr',request['payload-digest'],'1','intent','-','-']]})
@@ -874,11 +887,11 @@ state=engine.reduce(events,value['config'],value['transcript'])
                 self.assertEqual(nonempty.returncode, 0, nonempty.stderr)
                 self.assertEqual(json.loads(nonempty.stdout), {"outcome": "preview", "stage": "approved" if protocol == "1" else "active", "proposed": 1})
                 # Mislabeled semantic package cannot consume a different protocol.
-                (operating / "config/operating.tsv").write_bytes(encode(dict(CONFIG, protocol="2" if protocol == "1" else "1")))
+                (operating / "config/operating.tsv").write_bytes(encode(dict(CONFIG, protocol="3" if protocol == "1" else "1")))
                 self.assertNotEqual(subprocess.run(command, capture_output=True).returncode, 0)
-                approved_file.write_bytes(encode(dict(approval, protocol="3")))
+                approved_file.write_bytes(encode(dict(approval, protocol="4")))
                 self.assertNotEqual(subprocess.run(command, capture_output=True).returncode, 0)
-                self.refuse(loader.approved, encode(dict(approval, protocol="3")))
+                self.refuse(loader.approved, encode(dict(approval, protocol="4")))
             self.assertEqual(run_git(repo, "rev-parse", "HEAD"), newer)
 
 
@@ -903,7 +916,7 @@ state=engine.reduce(events,value['config'],value['transcript'])
                 (root / "config/operating.tsv").write_bytes(config_data)
                 (root / "control/stop.tsv").write_bytes(encode(STOP))
                 (root / "current/index.tsv").write_bytes(engine.index(projected, digest(encode(records[-1]))))
-                return engine.preview(root, supplied, request(candidate=candidate), {"control": H, "manifest": X, "approval": X})
+                return engine.preview(root, supplied, request(candidate=candidate), {"control": H, "manifest": X, "approval": X, "master": H})
         self.assertEqual(view(proof)["proposed"], 1)
         for key, bad in [("status", "failure"), ("status", "unknown"), ("status", "pending"), ("app", "99"), ("head", H), ("base", H), ("tree", T), ("lock", Y), ("name", "arbitrary")]:
             malformed = copy.deepcopy(proof); malformed["refresh"]["current"]["checks"][key] = bad
@@ -973,6 +986,268 @@ state=engine.reduce(events,value['config'],value['transcript'])
         current = advanced + [event("candidate", **new_candidate), event("evidence", evidence=[evidence], **{"evidence-digest": digest(canonical([evidence]))}), approval, effect("merge", dict(merge, dev=H))]
         state = engine.reduce(sequence(current), CONFIG, proof)
         self.assertEqual(state["candidate"]["dev"], H); self.assertEqual(state["operations"][X]["state"], "intent")
+
+
+
+class GlobalHistoryProof(unittest.TestCase):
+    # INV repository/release-control-preview-only
+    # INV repository/fixture-git-isolation
+    def setUp(self):
+        self.temp = tempfile.TemporaryDirectory()
+        self.addCleanup(self.temp.cleanup)
+        self.root = Path(self.temp.name)
+        self.public = self.root / 'public'; self.public.mkdir()
+        self.operating = self.root / 'operating'; self.operating.mkdir()
+        for repo in (self.public, self.operating):
+            run_git(repo, 'init', '-q', '-b', 'master')
+            run_git(repo, 'config', 'user.name', 'Fixture')
+            run_git(repo, 'config', 'user.email', 'fixture@example.invalid')
+            run_git(repo, 'config', 'core.hooksPath', str(self.root / 'no-hooks'))
+        (self.public / 'seed').write_text('seed\n')
+        self.commit(self.public)
+        self.packages = {}
+        for protocol, source in [('1','24cf09b5efbb4db821210632da8b44dcb822a337'),
+                                 ('2','7f43ec3b49243d10b0ea3d75272d8cd4c6ff3d7f'), ('3',None)]:
+            if protocol == '1':
+                run_git(self.public, 'checkout', '-qb', 'dev')
+            else:
+                run_git(self.public, 'checkout', '-q', 'dev')
+            for name in loader.FILES | {loader.MANIFEST}:
+                target = self.public / name; target.parent.mkdir(parents=True, exist_ok=True)
+                data = (TOOLS.parent.parent / name).read_bytes() if source is None else subprocess.run(
+                    ['git','-C',str(TOOLS.parent.parent),'show',source+':'+name],capture_output=True,check=True).stdout
+                target.write_bytes(data)
+            run_git(self.public, 'add', '.')
+            for name in ('release-preview', 'classify'):
+                (self.public/'tool/version-control'/name).chmod(0o755)
+                run_git(self.public, 'update-index', '--chmod=+x', 'tool/version-control/'+name)
+            run_git(self.public, 'commit', '-qm', 'fixture package '+protocol)
+            run_git(self.public, 'checkout', '-q', 'master')
+            run_git(self.public, 'merge', '--no-ff', '-qm', 'fixture promotion '+protocol, 'dev')
+            control = run_git(self.public, 'rev-parse', 'HEAD')
+            self.packages[protocol] = {'public-repository':'shk95/configs','control':control,
+                'master':control,'manifest':digest((self.public/loader.MANIFEST).read_bytes()),'approval':X,'protocol':protocol}
+        master = run_git(self.public, 'rev-parse', 'HEAD')
+        for approval in self.packages.values():
+            approval['master'] = master
+        for folder in ('config','control','current','history'):
+            (self.operating/folder).mkdir()
+        (self.operating/'control/stop.tsv').write_bytes(encode(STOP))
+        self.approval_file=self.root/'approved.tsv';self.approval_file.write_bytes(encode(self.packages['3']))
+        self.transcript_file=self.root/'transcript.json';self.transcript_file.write_bytes(canonical(transcript('preview',candidate=None)))
+        self.request_file=self.root/'request.tsv';self.request_file.write_bytes(encode(request(candidate=None)))
+        self.contexts=[];self.events=[];self.ledger=[]
+
+    def commit(self, repo):
+        run_git(repo,'add','.');run_git(repo,'commit','-qm','fixture snapshot')
+        return run_git(repo,'rev-parse','HEAD')
+
+    def append(self, item):
+        item=copy.deepcopy(item)
+        item['sequence']=str(len(self.events)+1)
+        item['prior']=digest(encode(self.events[-1])) if self.events else Z
+        self.events.append(item)
+        (self.operating/'history'/('%012d.tsv'%len(self.events))).write_bytes(encode(item))
+
+    def add_batch(self, protocol, batch, completed):
+        config=encode(dict(CONFIG,protocol=protocol))
+        (self.operating/'config/operating.tsv').write_bytes(config)
+        (self.operating/'current/transcript.json').write_bytes(self.transcript_file.read_bytes())
+        cfg_commit=self.commit(self.operating)
+        transcript_blob=run_git(self.operating,'rev-parse',cfg_commit+':current/transcript.json')
+        approval=self.packages[protocol]
+        before=len(self.events);prior=digest(encode(self.events[-1])) if self.events else Z
+        start_event=start(approval['control'],approval['manifest'],approval['approval'],blob_identity(config))
+        start_event.update(batch=batch,protocol=protocol,**{'approved-master':approval['master'],'config-commit':cfg_commit})
+        if protocol!='3':
+            start_event.pop('approved-master');start_event.pop('config-commit')
+        self.append(start_event);self.append(event('claim',batch=batch,**OWNER))
+        if completed:
+            self.append(event('complete',batch=batch))
+        context={'start':str(before+1),'batch':batch,'master':approval['master'],'control':approval['control'],
+                 'manifest':approval['manifest'],'approval':approval['approval'],'protocol':protocol,
+                 'config-commit':cfg_commit,'config':blob_identity(config),
+                 'transcript-commit':cfg_commit if completed else '-',
+                 'transcript':transcript_blob if completed else '-'}
+        self.contexts.append(context)
+        isolated=self.root/('package-'+str(len(self.contexts)));loader.extract(self.public,approval,isolated)
+        isolated_batch=self.root/('batch-'+str(len(self.contexts)))
+        (isolated_batch/'config').mkdir(parents=True);(isolated_batch/'history').mkdir()
+        (isolated_batch/'config/operating.tsv').write_bytes(config)
+        for number,item in enumerate(self.events[before:],before+1):
+            (isolated_batch/'history'/('%012d.tsv'%number)).write_bytes(encode(item))
+        # Fixture generator uses the exact historical serializer/reducer independently
+        # of the global selector, including original global filenames and bytes.
+        generator="""import sys,json
+from pathlib import Path
+sys.path.insert(0,sys.argv[1]);import records,engine
+root=Path(sys.argv[2]);protocol=sys.argv[3];before=int(sys.argv[4]);prior=sys.argv[5]
+cfg=records.parse(records.read(root/'config/operating.tsv'),'config')
+transcript=json.loads(sys.stdin.buffer.read())
+events,last=records.history(root/'history',before,prior) if protocol=='3' else records.history(root/'history')
+state=engine.reduce(events,cfg,transcript)
+sys.stdout.buffer.write(engine.index(state,last))
+"""
+        projection=subprocess.run([sys.executable,'-I','-S','-B','-c',generator,str(isolated/loader.ROOT),str(isolated_batch),protocol,str(before),prior],
+            input=self.transcript_file.read_bytes(),capture_output=True,check=True).stdout
+        self.ledger.append({'context':context,'projection':digest(projection)})
+        self.final=dict(row for row in [line.split('\t') for line in projection.decode().splitlines()[1:]])
+
+    def save(self):
+        fields=('start','batch','master','control','manifest','approval','protocol','config-commit','config','transcript-commit','transcript')
+        raw='format\t1\n'+''.join('context\t'+'\t'.join(c[k] for k in fields)+'\n' for c in self.contexts)
+        (self.operating/'current/batches.tsv').write_bytes(raw.encode('utf-8'))
+        index=dict(self.final,**{'index-kind':'global-1','ledger-digest':digest(canonical(self.ledger))})
+        (self.operating/'current/index.tsv').write_bytes(encode(index))
+        self.head=self.commit(self.operating)
+
+    def prepare(self, first='1', second=True):
+        self.add_batch(first,X,True)
+        if second:
+            self.add_batch('3',Y,False)
+        else:
+            (self.operating/'config/operating.tsv').write_bytes(encode(CONFIG))
+        self.save()
+
+    def invoke(self):
+        command=['sh',WRAPPER,'preview','--fixture-inputs','--global-history','--operating-head',self.head,
+            '--bundle-repository',self.public.as_posix(),'--approved',self.approval_file.as_posix(),
+            '--operating',self.operating.as_posix(),'--transcript',self.transcript_file.as_posix(),'--request',self.request_file.as_posix()]
+        return subprocess.run(command,capture_output=True)
+
+    def refuse(self):
+        result=self.invoke();self.assertEqual(result.returncode,1,result.stdout)
+        self.assertEqual(result.stdout,b'');self.assertEqual(result.stderr,b'release-control: refused\n')
+
+    # INV repository/release-control-preview-only
+    def test_global_original_bytes_retained_one_and_later_three(self):
+        self.prepare()
+        original={name:subprocess.run(['git','-C',str(self.operating),'show',self.head+':'+name],capture_output=True,check=True).stdout
+                  for name in run_git(self.operating,'ls-files').splitlines()}
+        status=run_git(self.operating,'status','--porcelain');head=self.head
+        result=self.invoke();self.assertEqual(result.returncode,0,result.stderr)
+        self.assertEqual(json.loads(result.stdout),{'outcome':'preview','stage':'active','proposed':0})
+        self.assertEqual(run_git(self.operating,'rev-parse','HEAD'),head)
+        self.assertEqual(run_git(self.operating,'status','--porcelain'),status)
+        for name,data in original.items():self.assertEqual((self.operating/name).read_bytes(),data)
+        # Working tree config changes do not substitute the accepted Git snapshot.
+        (self.operating/'config/operating.tsv').write_bytes(b'untrusted working bytes\n')
+        self.assertEqual(self.invoke().returncode,0)
+        # A current config disabling new work cannot suppress old obligations.
+        (self.operating/'config/operating.tsv').write_bytes(encode(dict(CONFIG,enabled='0',actors='-',checks='-')))
+        self.head=self.commit(self.operating)
+        self.assertEqual(json.loads(self.invoke().stdout)['stage'],'active')
+        (self.operating/'control/stop.tsv').write_bytes(encode(dict(STOP,stop='1',revision='1')))
+        self.head=self.commit(self.operating)
+        self.assertEqual(json.loads(self.invoke().stdout),{'outcome':'stopped','proposed':0})
+        (self.operating/'history/000000000001.tsv').write_bytes(b'format\t1\n')
+        self.head=self.commit(self.operating)
+        self.refuse() # fresh stop never excuses invalid old history
+
+    # INV repository/release-control-preview-only
+    def test_global_actual_protocol_two_and_quiet_completed_selection(self):
+        self.prepare(first='2',second=False)
+        result=self.invoke();self.assertEqual(result.returncode,0,result.stderr)
+        self.assertEqual(json.loads(result.stdout),{'outcome':'preview','stage':'complete','proposed':0})
+        (self.operating/'config/operating.tsv').write_bytes(encode(dict(CONFIG,enabled='0',actors='-',checks='-')))
+        self.head=self.commit(self.operating)
+        result=self.invoke();self.assertEqual((result.returncode,result.stdout),(0,b''),result.stderr)
+
+    # INV repository/release-control-preview-only
+    def test_global_semantic_completed_prefix_not_structural_marker(self):
+        self.prepare(second=False)
+        self.events=self.events[:2]
+        for path in (self.operating/'history').iterdir():path.unlink()
+        for n,item in enumerate(self.events,1):(self.operating/'history'/('%012d.tsv'%n)).write_bytes(encode(item))
+        self.append(event('candidate',**CANDIDATE));self.append(event('complete'))
+        self.head=self.commit(self.operating)
+        paths={'operating':self.operating,'bundle_repository':self.public,'approved':self.approval_file,
+               'transcript':self.transcript_file,'request':self.request_file}
+        with self.assertRaisesRegex(ValueError,'retained-replay-refusal'):
+            loader.global_preview(paths,self.packages['3'],self.head,self.root/'failure')
+        self.refuse()
+
+    # INV repository/release-control-preview-only
+    def test_global_chain_overlap_context_and_index_refusals(self):
+        self.prepare()
+        original=self.head
+        cases=[('history/000000000006.tsv',encode(self.events[-1])),
+               ('history/000000000002.tsv',encode(dict(self.events[1],prior=Y))),
+               ('history/000000000002.tsv',encode(dict(self.events[1],batch=Y))),
+               ('current/index.tsv',encode(dict(self.final,**{'index-kind':'global-1','ledger-digest':Y}))),
+               ('current/batches.tsv',b'format\t1\n')]
+        for name,data in cases:
+            with self.subTest(name=name):
+                run_git(self.operating,'reset','--hard',original)
+                (self.operating/name).write_bytes(data);self.head=self.commit(self.operating);self.refuse()
+        run_git(self.operating,'reset','--hard',original)
+        path=self.operating/'history/000000000003.tsv';path.unlink()
+        self.head=self.commit(self.operating);self.refuse()
+
+    # INV repository/release-control-preview-only
+    def test_global_missing_config_source_and_unsafe_objects_refuse(self):
+        self.prepare();original=self.head
+        path=self.operating/'current/batches.tsv';raw=path.read_bytes()
+        for key in ('config','config-commit','manifest','protocol'):
+            run_git(self.operating,'reset','--hard',original)
+            old=self.contexts[0][key];new='9' if key=='protocol' else 'f'*len(old)
+            path.write_bytes(raw.replace(old.encode(),new.encode()))
+            self.head=self.commit(self.operating);self.refuse()
+        run_git(self.operating,'reset','--hard',original)
+        target=self.operating/'history/000000000001.tsv'
+        run_git(self.operating,'update-index','--chmod=+x','history/000000000001.tsv')
+        run_git(self.operating,'commit','-qm','fixture unsafe mode')
+        self.head=run_git(self.operating,'rev-parse','HEAD');self.refuse()
+
+    # INV repository/release-control-preview-only
+    def test_global_old_offset_and_ambiguous_boundaries_refuse(self):
+        self.prepare()
+        old=self.head
+        # Offset protocol1/2 is never adapted to global3 by renumbering.
+        for protocol in ('1','2'):
+            with self.assertRaisesRegex(ValueError,'unsupported-retained-offset'):
+                loader.replay_package(self.root/'unused',self.root/'unused',protocol,3,X)
+        # A second start while the first batch is outstanding refuses before replay.
+        run_git(self.operating,'reset','--hard',old)
+        self.events=self.events[:2]
+        for path in (self.operating/'history').iterdir():path.unlink()
+        for n,item in enumerate(self.events,1):(self.operating/'history'/('%012d.tsv'%n)).write_bytes(encode(item))
+        self.append(dict(self.events[0],batch=Y))
+        self.head=self.commit(self.operating);self.refuse()
+
+
+    # INV repository/release-control-preview-only
+    def test_global_empty_snapshot_and_invalid_request(self):
+        (self.operating/'config/operating.tsv').write_bytes(encode(CONFIG))
+        (self.operating/'current/transcript.json').write_bytes(self.transcript_file.read_bytes())
+        self.final=parse(engine.index(engine.initial(),Z),'index')
+        self.save()
+        result=self.invoke();self.assertEqual(result.returncode,0,result.stderr)
+        self.assertEqual(json.loads(result.stdout),{'outcome':'preview','stage':'empty','proposed':0})
+        self.request_file.write_bytes(encode(request(mode='start',candidate=None)))
+        self.refuse()
+        self.request_file.write_bytes(encode(request(candidate=None)))
+        (self.operating/'config/operating.tsv').write_bytes(encode(dict(CONFIG,enabled='0',actors='-',checks='-')))
+        self.head=self.commit(self.operating)
+        result=self.invoke();self.assertEqual((result.returncode,result.stdout),(0,b''),result.stderr)
+
+    # INV repository/release-control-preview-only
+    def test_global_unreachable_shallow_and_replaced_history(self):
+        self.prepare();original=self.head
+        # An available config object on an unrelated history is not accepted ancestry.
+        context=self.contexts[0]
+        tree=run_git(self.operating,'rev-parse',context['config-commit']+'^{tree}')
+        unrelated=run_git(self.operating,'commit-tree',tree,'-m','fixture unrelated config')
+        path=self.operating/'current/batches.tsv'
+        path.write_bytes(path.read_bytes().replace(context['config-commit'].encode(),unrelated.encode()))
+        self.head=self.commit(self.operating);self.refuse()
+        run_git(self.operating,'reset','--hard',original);self.head=original
+        (self.operating/'.git/shallow').write_bytes((original+'\n').encode())
+        self.refuse();(self.operating/'.git/shallow').unlink()
+        run_git(self.operating,'replace',original,context['config-commit'])
+        self.refuse();run_git(self.operating,'replace','-d',original)
+        run_git(self.public,'replace',self.packages['3']['control'],self.packages['1']['control'])
+        self.refuse()
 
 
 if __name__ == "__main__":

@@ -21,6 +21,27 @@ encoding in the spec. This is planning evidence only; every source criterion bel
 remains pending. The sequential user instruction supplies continuation priority,
 not operating repository, approval bootstrap or deployment evidence.
 
+## Source pickup and local verification, 2026-10-01
+
+Root picked up issue #467 at current dev and reviewed plan revision
+351f3d2ed993c2406d670d267217f83a7f5e0959 after #464/#465/#466 integration.
+The dedicated source worktree owns loader/package/manifest, fixture and usage
+changes. Protocol3 preserves the eight executing paths. Real protocol1 blobs
+come from24cf09b5 and real protocol2 blobs from7f43ec3b; current semantics are
+not relabeled as old code. Current caller assertions do not select old batches.
+
+Local functional Python3.13.15 on Darwin passed twenty fixture families, including
+original-byte global history, actual old packages plus later protocol3 offset,
+semantic completed-prefix refusal, whole-ledger mismatch, immutable config and
+archival inputs, quiet/empty selection, fresh stop, unsafe/unreachable/shallow/
+replacement/offset/context/overlap refusals and unchanged original Git state.
+Actual credential-free local Nix2.34.8/Git2.55 preparation proof also passed all
+four existing refresh groups against the evolved reducer. Linux/native
+Git-for-Windows source CI and complete normal policy checks remain
+pending. This local proof authenticates no operating provenance or permission.
+No original app/host document, provider lock, private operating connection,
+workflow dispatch, schedule, promotion, tag/release or host activation/Apply changed.
+
 ## Acceptance
 
 | ID | State | Evidence |

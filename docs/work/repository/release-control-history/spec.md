@@ -4,6 +4,7 @@ date: 2026-09-30
 scope: repository
 status: approved
 review-by: 2026-10-14
+issue: #467
 
 ## Outcome and assignment boundary
 

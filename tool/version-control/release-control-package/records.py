@@ -69,7 +69,7 @@ def rows(data):
 
 BASE = {"sequence", "kind", "prior", "batch"}
 EVENT_FIELDS = {
-    "batch-start": {"control", "manifest", "approval-provenance", "config", "protocol", "day", "run", "attempt", "time"},
+    "batch-start": {"control", "manifest", "approval-provenance", "config", "protocol", "day", "run", "attempt", "time", "approved-master", "config-commit"},
     "claim": {"repository", "workflow", "run", "attempt", "job", "generation", "operating-head"},
     "candidate": {"candidate-generation", "dev", "master", "tree", "rules", "tool", "baselines", "selected", "classification", "versions", "migrations", "approval-required"},
     "evidence": {"evidence-digest"},
@@ -118,7 +118,7 @@ def parse(data, kind):
     for key, value in singles.items():
         if key in {"sequence", "run", "attempt", "job", "repository", "workflow", "generation", "candidate-generation", "revision", "actor", "operator", "minutes"}:
             decimal(value)
-        if key in {"dev", "master", "tree", "control", "config", "operating-head"}:
+        if key in {"dev", "master", "tree", "control", "config", "operating-head", "approved-master", "config-commit"}:
             identity(value, 40)
         if key in {"prior", "batch", "manifest", "approval-provenance", "approval", "rules", "tool", "baselines", "evidence-digest", "candidate", "state-digest"}:
             identity(value)
@@ -127,7 +127,7 @@ def parse(data, kind):
         if key == "classification":
             require(value in {"patch", "minor", "major"}, "unsupported-classification")
         if key == "protocol":
-            require(value == "2", "unsupported-protocol")
+            require(value == "3", "unsupported-protocol")
         if key == "time":
             require(re.fullmatch(r"\d{4}-\d\d-\d\dT\d\d:\d\d:\d\dZ", value) is not None, "invalid-time")
             try:
@@ -195,12 +195,15 @@ def read(path):
     return path.read_bytes()
 
 
-def history(directory):
+def history(directory, before=0, prior="0" * 64):
     directory = Path(directory)
     require(directory.is_dir() and not directory.is_symlink(), "missing-history")
     paths = sorted(directory.iterdir())
-    result, previous = [], "0" * 64
-    for sequence, path in enumerate(paths, 1):
+    require(type(before) is int and 0 <= before < 10 ** 12, "invalid-range-boundary")
+    identity(prior)
+    require(before != 0 or prior == "0" * 64, "invalid-range-prior")
+    result, previous = [], prior
+    for sequence, path in enumerate(paths, before + 1):
         require(sequence < 10 ** 12 and path.name == f"{sequence:012d}.tsv", "event-sequence-gap-or-path")
         data = read(path)
         event = parse(data, "event")

@@ -312,6 +312,17 @@ serializer/reducer; it does not upgrade old records. Unknown protocol or missing
 closure refuses. The supplied single envelope is still not global storage or
 automatic cross-batch configuration/package selection.
 
+For global supplied history, add `--global-history --operating-head <full-sha>`
+to the same explicit preview. Supply a complete local operating Git repository,
+not a mutable directory projection. Fixed global-1 context/index schemas are in
+`tool/version-control/release-control-package/protocol.md`. Retain reachable
+config objects and completed-envelope transcript objects with exact approved
+package identities. Missing bindings/objects, old offsets, malformed history,
+shallow/replaced inputs or inconsistent whole-ledger indexes refuse without fetch.
+Do not migrate or renumber old records to bypass refusal. The preview reads only
+accepted objects and uses isolated scratch; no-outstanding is quiet, old completed
+effects stay complete, and fresh stop cannot waive damaged history.
+
 The master-only workflow is an inert interface with independent inspection and
 constant writer-job serialization shape; it reads no private connection, secret
 or Environment and has no schedule or enabled write mode. This source contract

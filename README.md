@@ -154,9 +154,16 @@ local input options shown by `--help`. It requires functional Python >=3.9;
 credentials, HTTP transport or release authority. Its workflow is inert; no
 schedule is installed. See `CONTRIBUTING.md`, "Inert controller preview".
 
-Current protocol 2 adds separate fake refresh branch/PR requests targeting dev;
-promotion still means dev to master. Exact retained protocol 1 packages keep
-their original semantics. `tool/configs test-refresh-candidate-nix` runs the
+For complete supplied operating Git history, add `--global-history` and
+`--operating-head <full-sha>` to that explicit fixture preview. The accepted object
+snapshot supplies fixed context/history/index/stop records; retained packages and
+configurations govern each original envelope. Unknown old offsets or missing
+bindings refuse; this reads no live connection and writes no operating records.
+See the package protocol for the finite global-1 schemas.
+
+Current protocol 3 retains protocol 2's separate fake refresh branch/PR requests
+targeting dev; promotion still means dev to master. Exact retained protocol 1
+and 2 packages keep their original semantics. `tool/configs test-refresh-candidate-nix` runs the
 trusted delivered refresh CLI and lock-only Git preparation exclusively in
 credential-free disposable fixtures on native Linux/Darwin with Nix. Preview
 does not invoke preparation. These proofs do not authenticate real source or

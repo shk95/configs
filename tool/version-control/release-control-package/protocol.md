@@ -1,4 +1,4 @@
-# Inert controller protocol 2
+# Inert controller protocol 3
 
 This package implements the repository's preview boundary. Its launcher accepts
 only `preview --fixture-inputs` and local inputs; no live transport exists.
@@ -6,8 +6,8 @@ Approval/protection/check observations are supplied synthetic assertions. They
 are never production authentication. The retained loader validates package
 identity and approved merge shape, not the truth of an approval-file author.
 
-The stable loader supports explicit approved protocols 1 and 2 only. This
-current package accepts protocol 2; protocol 1 executes its exact retained
+The stable loader supports explicit approved protocols 1, 2 and 3 only. This
+current package accepts protocol 3; protocol 1 executes its exact retained
 historical eight blobs, serializer, reducer and main. Old records are never
 rewritten and a mismatched or unknown semantic protocol refuses. TSV format 1
 and the eight manifest paths stay unchanged; semantic protocol is separate.
@@ -15,7 +15,7 @@ and the eight manifest paths stay unchanged; semantic protocol is separate.
 An approved assertion is strict TSV1 with public-repository, master, control,
 manifest, approval and protocol singletons. The literal public repository is
 shk95/configs; control and master are full SHA-1 commits, manifest and approval
-are SHA-256 identities, current protocol is 2. Control must be a two-parent merge reachable
+are SHA-256 identities, current protocol is 3. Control must be a two-parent merge reachable
 from the asserted master. The exact approved control is selected explicitly;
 mere ancestor reachability does not select a different commit. Manifest rows are
 `file<TAB>constant-path<TAB>sha256`, sorted with exactly the loader's executing
@@ -179,3 +179,43 @@ start per day, manual duplicates join, 06:00 waits only for an in-flight refresh
 and fixed 07:00 cutoff reconciles without canceling refresh or extending wait.
 Late/missed events are reported as such. It reads no clock, schedules nothing,
 and creates no notification or cross-batch storage.
+
+## Global snapshot interface global-1
+
+The explicit --global-history preview additionally requires --operating-head as
+a full accepted local Git commit. It reads objects without checkout or network.
+Global config/stop/index/context/history records require ordinary 100644 blobs;
+shallow or replacement-bearing input histories refuse. Working-tree edits do not
+change the supplied immutable snapshot. Fixture assertions are not authentication.
+
+current/batches.tsv has format 1 followed by ordered twelve-field context rows:
+context, start sequence, batch, approved public master, control, manifest digest,
+approval-provenance digest, semantic protocol, config commit/blob and transcript
+commit/blob. Completed envelopes require reachable immutable archival transcript
+objects at current/transcript.json. Outstanding transcript fields are both literal
+-; the current explicit transcript supplies its observations. All config objects
+come from reachable config/operating.tsv blobs. Protocol3 batch-start additionally
+binds approved-master and config-commit; its config field retains blob identity.
+
+Original filenames, global sequence, prior digest and event bytes are preserved.
+The finite loader calls exact retained records.history/parse and engine.reduce/index
+for protocol1/2 only at seq1/prior-zero. An old offset or missing context refuses
+for explicit recovery. Protocol3 retains a range parser and main.replay callable
+with explicit preceding sequence/digest. Its eight-file closure is unchanged.
+Every completed prefix must semantically project to complete with no pending
+effects; a marker alone does not establish completion. At most one incomplete
+final suffix is selected. No original event is normalized or renumbered.
+
+Global index format 1 carries index-kind=global-1, sequence, prior, batch, generation,
+stage, state-digest and ledger-digest. The projection fields come from the final
+exact retained index, or the selected current package's empty index for no history.
+Ledger digest is SHA-256 of canonical ordered JSON context/projection pairs, where
+projection is SHA-256 of each envelope's exact semantic index bytes. Whole-index
+bytes must match. Completed effects are never re-proposed. Current disabled config
+is quiet only after validating complete history; it cannot waive old outstanding
+obligations. Fresh stop is independently read from the accepted head, and never
+waives damaged history. Public output remains a bounded summary or refusal.
+
+This selects/replays supplied objects; it creates no batches, records, credentials,
+requests or remote effects. It does not provision operating storage or certify
+manual/scheduled operation. Real authenticated transport remains separate.
