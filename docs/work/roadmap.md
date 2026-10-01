@@ -51,6 +51,10 @@ states; this table records order and prerequisites rather than copying them.
 | 6 | Manual operating cycle | Maintainer-selected operating repository/ref, approved source, actual permissions/protection and separate operating authorization. |
 | 7 | Scheduled operation | Successful manual proof and separately authorized enablement/stop/resume. |
 
+The maintainer subsequently confirmed no operating repository exists; this run
+implements/verifies orders 2–5 and prepares operating templates. Orders 6–7 remain
+future operating gates, not actions assigned to this source continuation.
+
 The active work links are release-control-history, legacy-capture-caller-retirement,
 production-release-qualification and release-operating-transport under
 `docs/work/repository/`. Parent provider-release-contract and scheduled-flake-refresh

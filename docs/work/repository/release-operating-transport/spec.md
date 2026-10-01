@@ -78,6 +78,15 @@ with authenticated receipts before separately enabling scheduled 05:00 refresh,
 Replan on changed trust model, missing actual identity/protection, closure expansion,
 unsupported protocol or inability to reconcile a write conclusively.
 
+## Implementation-only scope clarification
+
+Amended 2026-10-01 AC6: the maintainer confirmed that no operating repository
+exists and selected implementation/verification only. Deliver a source-bound
+manual rollout template with explicit unresolved connection/bootstrap/protection
+inputs, expected effects and refusal until those inputs are reviewed. Actual
+connection selection and manual/scheduled receipts remain parent operating work;
+source completion cannot imply provisioning or enablement.
+
 ## Acceptance
 
 | ID | Criterion | Required lanes |
@@ -87,4 +96,4 @@ unsupported protocol or inability to reconcile a write conclusively.
 | AC3 | Refresh branch/PR lookup and promotion/tag reconciliation use exact immutable identities, complete absence and actual post-merge parents/tree; duplicate and unknown cases cannot create unsafe effects. | review, fixtures, policy checks, affected dispatch |
 | AC4 | Approval/wakeup/stop/resume/timeout/cancel/notification interfaces refuse wrong authority or foreign jobs and preserve fresh stop and old package obligations. | review, fixtures, policy checks, affected dispatch |
 | AC5 | Disabled source/workflow delivery passes isolated Linux/native Windows fake transport proof, documents exact permission and recovery prerequisites, and cannot be mistaken for real operating evidence. | review, fixtures, policy checks, affected dispatch |
-| AC6 | A concrete manual rollout proposal records maintainer-selected connection/bootstrap/protection and expected effects while manual/scheduled parent acceptance stays pending until actual authorized receipts. | review, policy checks |
+| AC6 | A source-bound manual rollout template names unresolved connection/bootstrap/protection inputs, expected effects and fail-closed prerequisites while actual manual/scheduled parent acceptance stays pending. | review, policy checks |

@@ -10,6 +10,12 @@ the user-selected sequential continuation. No source, production bootstrap,
 transport authentication or operating proof is claimed. Source assignment follows
 reviewed plan publication and predecessor completion.
 
+## Scope clarification, 2026-10-01
+
+The maintainer confirmed no operating repository exists and limited continuation
+to implementation/verification. AC6 now delivers an explicit unresolved-input
+rollout template; it does not select a connection or claim an operating receipt.
+
 ## Acceptance
 
 | ID | State | Evidence |

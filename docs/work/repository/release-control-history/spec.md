@@ -153,13 +153,18 @@ fields: literal context, start sequence, batch identity, approved public master,
 control commit, manifest digest, approval-provenance digest, semantic protocol,
 config commit, config blob, transcript commit and transcript blob. Rows are ordered
 by strictly increasing start sequence and unique batch identity. Configuration and
-transcript commits must be ancestors of the accepted operating head. Read exact
+completed-envelope transcript commits must be ancestors of the accepted operating
+head. Read exact
 config/operating.tsv and current/transcript.json blobs from those commits and bind
 their identities; do not substitute working files or the latest config/transcript.
 The archived transcript is an explicit synthetic replay input, never production
 provenance. Context fields must agree with the original batch-start identities;
-protocol 3 additionally records approved-master, config-commit, transcript-commit
-and transcript-blob in batch-start. Its existing config field names the config blob.
+protocol 3 additionally records approved-master and config-commit in batch-start.
+Its existing config field names the config blob. Transcript commit/blob are both
+literal - for an outstanding suffix and both full identities for a semantically
+completed envelope. They select its final archival replay inputs, not a prediction
+of future API observations at batch start. Source/config bindings remain immutable;
+completed archival selection cannot be repointed to newer weaker proof.
 Old records without sufficient explicit context refuse for manual recovery; this
 lane does not migrate or fabricate bindings for old operating records.
 
