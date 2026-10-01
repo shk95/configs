@@ -421,6 +421,13 @@ bootstrap inputs independently of candidate/request payloads. Match exact source
 ref, workflow, actor, current run/attempt/job, complete original history and required
 check/workflow/tool blobs. Never pass its token to retained code or candidate code.
 There is no provisioned wrapper, selected connection or enabled workflow yet.
+The library sequence is authenticated Entry, verified retained Snapshot and Journal,
+then one projected operation through Executor. A future wrapper attaches that Entry
+as the HTTPS channel gate only after its independent Environment/bootstrap review.
+Start/claim/planning and bounded wait orchestration remain wrapper responsibilities;
+this source consumes complete durably projected intents. Cancellation is restricted
+to the authenticated entry's own sole job/run; a separate inspector observes terminal
+state before a later writer can recover. Never use an arbitrary owner DTO to cancel.
 
 Before every effect, confirm durable intent and fresh stop. Unknown write response
 requires observation/reconciliation, not retry; reload full authenticated history

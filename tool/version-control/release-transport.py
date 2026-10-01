@@ -303,6 +303,9 @@ class Entry:
         return run.get('status') == 'completed' and jobs[0].get('status') == 'completed'
 
     def cancel(self, owner):
+        need((owner.get('run'),owner.get('attempt'),owner.get('job'),owner.get('workflow'),owner.get('source')) ==
+             (self.runtime['run'],self.runtime['attempt'],self.runtime['job'],self.trusted['workflow'],self.trusted['source']),
+             'foreign-cancel-owner')
         if self.owner_terminal(owner):
             return 'terminal'
         # Recheck exact latest attempt and complete jobs immediately before POST.
@@ -413,7 +416,7 @@ class Executor:
 
     def pulls(self, head, base):
         values = self.api.pages('/pulls', parameters={'state': 'all'})
-        # Unfiltered complete open inventory avoids ambiguous head-filter results.
+        # Unfiltered complete all-state inventory avoids ambiguous head-filter results.
         return [p for p in values if p.get('head', {}).get('ref') == head and p.get('base', {}).get('ref') == base]
 
     def verify_pr(self, value, head, base, source, base_sha):

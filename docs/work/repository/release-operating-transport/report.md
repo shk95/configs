@@ -17,7 +17,11 @@ provisioned wrapper is delivered. The operator and workflow remain disabled.
 
 Finite fake-endpoint fixtures exercise actual disposable public/private Git objects,
 retained history and semantic transitions; no endpoint contacts production.
-Current-source Linux/native Git-for-Windows CI remains required before Ready.
+The initial implementation passed the complete local repository suite and normal
+commit hooks at 609d9fd105d03896c5aa4f1b01d70fa7a03a06f5. Review repairs additionally
+bind approval source and cancellation owner, exercise actual lock-only refresh,
+and use the retained package's original serializer. Current-source Linux/native
+Git-for-Windows CI remains required before Ready.
 
 ## Acceptance
 

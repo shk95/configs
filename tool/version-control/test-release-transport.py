@@ -323,6 +323,37 @@ class TransportProof(unittest.TestCase):
         self.assertFalse(hasattr(client,'token'))
         self.assertNotIn('TOKEN',B.L.runtime_environment({'TOKEN':'secret'}))
 
+    def test_foreign_cancel_owner_refuses_before_endpoint(self):
+        owner={'run':7,'attempt':1,'job':5,'workflow':2,'source':self.fake.source}
+        count=len(self.fake.calls)
+        with self.assertRaisesRegex(T.Refusal,'foreign-cancel-owner'):self.entry.cancel(owner)
+        self.assertEqual(len(self.fake.calls),count)
+
+    def test_approval_from_wrong_actual_source_refuses_merge(self):
+        executor,_=self.executor()
+        key=('GET','/repos/shk95/configs/actions/runs/4/attempts/1')
+        code,headers,raw=self.fake.request(*key,None)
+        value=T.document(raw);value['head_sha']=F.H
+        self.fake.responses[key]=self.fake.response(value)
+        with self.assertRaisesRegex(T.Refusal,'untrusted-approval-source'):
+            executor.snapshot.verify_merge({'dev':F.D,'master':F.H,'tree':F.T},self.entry)
+
+    def test_actual_lock_only_refresh_commit_and_contamination_refusal(self):
+        executor,_=self.executor();f=self.fixture
+        lock=f.public/'unixlike/flake.lock';lock.parent.mkdir(parents=True,exist_ok=True)
+        lock.write_bytes(b'before');base=f.commit(f.public)
+        lock.write_bytes(b'after');head=f.commit(f.public);self.fake.dev=base
+        p={'branch':'feature/unixlike-refresh-'+F.X,'base':base,'parent':base,'head':head,
+           'tree':F.run_git(f.public,'rev-parse',head+'^{tree}'),'lock':T.digest(b'after'),
+           'before-lock':T.digest(b'before'),'previous':'-'}
+        method,path,body,statuses=executor.request('refresh-branch',p)
+        self.assertEqual((method,path,body['sha']),('POST','/git/refs',head))
+        # A correctly parented commit with another changed leaf cannot qualify.
+        extra=f.public/'foreign.txt';extra.write_text('contamination')
+        bad=f.commit(f.public)
+        p.update(parent=head,head=bad,tree=F.run_git(f.public,'rev-parse',bad+'^{tree}'),**{'before-lock':T.digest(b'after')})
+        with self.assertRaisesRegex(T.Refusal,'contaminated-refresh'):executor.request('refresh-branch',p)
+
     def test_current_config_revocation_refuses_live_projection(self):
         f=self.fixture
         config=f.operating/'config/operating.tsv'

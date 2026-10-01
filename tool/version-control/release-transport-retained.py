@@ -152,7 +152,7 @@ class Snapshot:
         owner=current['owner']
         if owner and (int(owner['run']),int(owner['attempt']),int(owner['job'])) != (entry.runtime['run'],entry.runtime['attempt'],entry.runtime['job']):
             T.need(entry.owner_terminal({'run':int(owner['run']),'attempt':int(owner['attempt']),'job':int(owner['job']),
-                 'workflow':entry.trusted['workflow'],'source':self.owner_source}),'old-owner-not-terminal')
+                 'workflow':int(owner['workflow']),'source':self.owner_source}),'old-owner-not-terminal')
         T.need(op and op['state'] in {'intent','unknown'} and plan['digest']==T.digest(T.canonical(op['payload'])),'wrong-recovery-operation')
         kind,payload=op['kind'],copy.deepcopy(op['payload'])
         if kind=='merge':payload['number']=int(payload['number'])
@@ -258,13 +258,14 @@ class Snapshot:
         fields.update({'index-kind':'global-1','ledger-digest':T.digest(T.canonical(ledger))})
         return {path:raw,'current/index.tsv':L.encode_index(fields),'current/transcript.json':T.canonical(transcript)}
 
-    @staticmethod
-    def encode_event(fields):
-        lines=['format\t1']
-        for key in sorted(fields):
-            if key=='operation':lines.extend('\t'.join([key]+row) for row in fields[key])
-            else:lines.append(key+'\t'+fields[key])
-        return ('\n'.join(lines)+'\n').encode()
+    def encode_event(self, fields):
+        # Use this batch's manifest-verified original serializer, not a transport
+        # reimplementation whose treatment of old framing might silently diverge.
+        driver="import json,sys;sys.path.insert(0,sys.argv[1]);import records;sys.stdout.buffer.write(records.encode(json.load(sys.stdin)))"
+        result=subprocess.run([sys.executable,'-I','-S','-B','-c',driver,str(self.package/L.ROOT)],
+               input=T.canonical(fields),env=L.runtime_environment(os.environ),capture_output=True,timeout=30)
+        T.need(result.returncode==0 and 0<len(result.stdout)<=T.MAX_BODY,'retained-serializer-refusal')
+        return result.stdout
 
     def verify_refresh(self,p,api):
         T.need(api.ref('heads/dev')==p['base'],'stale-refresh-base')
@@ -291,7 +292,10 @@ class Snapshot:
             latest=entry.api.get('/actions/runs/'+approval['run'])
             T.need(latest.get('run_attempt')==int(approval['attempt']) and run.get('event')=='workflow_dispatch'
                    and run.get('head_branch')=='master' and run.get('workflow_id')==entry.trusted['workflow']
-                   and run.get('actor',{}).get('id')==int(approval['actor']),'untrusted-approval-source')
+                   and run.get('actor',{}).get('id')==int(approval['actor'])
+                   and run.get('triggering_actor',{}).get('id')==int(approval['actor'])
+                   and run.get('head_sha')==self.owner_source
+                   and run.get('repository',{}).get('id')==entry.trusted['repository-id'],'untrusted-approval-source')
 
     def verify_publication(self,p,api):
         merges=[o for o in self.state['operations'].values() if o['kind']=='merge' and o['state']=='observed']
