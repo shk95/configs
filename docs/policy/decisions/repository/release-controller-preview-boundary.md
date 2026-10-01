@@ -33,6 +33,19 @@ selection logic. CI selects the existing Nix-enabled lane for affected controlle
 or preparation-fixture inputs, alongside Linux/native-Windows fake governance
 proof. Nix is not a Windows prerequisite and no production transport is added.
 
+2026-10-01: protocol3 adds inert original-byte global range replay without expanding
+the eight-file semantic closure. The stable loader selects exact reachable
+configuration and completed-envelope archival inputs; protocol1/2 remain exact
+zero-offset interfaces. Global indexing binds every semantic envelope, and current
+configuration cannot waive retained outstanding obligations or fresh stop.
+Accepted Git ancestry preserves original event bytes and fixed context bindings;
+a rewritten tail or repointed completed archive refuses even with a recomputed
+current index. Selected blob identities are independently rehashed and Git graph
+connectivity/integrity is checked without reading unrelated blob contents. Legacy
+grafts and replacement graph overrides refuse; private Git reads disable both
+independently. This
+still authenticates no operating source and implements no write transport.
+
 ## Limits and authority
 
 Existing calendar tags, promotion authorization and host boundaries remain in
