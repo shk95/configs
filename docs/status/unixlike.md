@@ -231,16 +231,27 @@ after the final reboot, as recorded in
 WSL host the existing hand-written `~/.config/btop/btop.conf` must be moved
 aside first.
 
-Karabiner's configuration is desired state and the application is not:
-`unixlike/modules/programs/karabiner/karabiner.json` and
-`unixlike/modules/programs/karabiner/symbolic-hotkeys.json` declare the members this
-repository owns, `unixlike/modules/programs/karabiner/module.nix` delivers them from
-`homeManager.darwin` through an activation script rather than a link, and
-`unixlike/modules/programs/karabiner/tool` compares and reads them back through one
-projection onto those members (`INV unixlike/host-written-payload-projected`,
-`just karabiner-check` and `just karabiner-capture`). Symbolic hotkeys other
-than 60 and 61 are unmanaged; the host dictionary holds dozens of entries and
-each declared one is written on its own.
+Karabiner configuration uses finite whole-unit ownership in
+`unixlike/modules/programs/karabiner/units.json`. The Home Manager module's
+permanent native adapter and the pinned `darwin-capture` preview/review/save
+workflow share validation and projection; explicit host-owned documents are
+connected per unit through `providerDarwin.capture`. Runtime siblings remain
+unmanaged, and disabling a unit excludes its document reads and apply operation.
+Consumer adoption, publication and activation are separate choices
+(`INV unixlike/host-written-payload-projected`).
+
+As of 2026-10-01, `just karabiner-capture` permanently refuses legacy publication
+invocations and points to `unixlike/tool/darwin-capture/README.md`; it does not
+redirect to Save or infer a destination. `just karabiner-check` and
+`just karabiner-test`, the domain legacy executable/project protocol and provider
+payloads retain historical comparison compatibility. The root caller and its
+fixture remain pending separately owned repository retirement, while the
+Unix-like invariant no longer depends on that root fixture locator. Active U2
+schema and positive/refusal fixtures remain registered. This entry retirement
+changes no module, engine, units or rendered settings.
+
+Historical 2026-09-06 evidence follows with its original source and activation
+limits; it is not proof of private host-document adoption.
 
 `unixlike/modules/programs/karabiner/karabiner.json` was a reconstruction of the host
 file from the description in #177 until 2026-09-06, when the Mac's own `check`
@@ -251,6 +262,15 @@ because the host already matched, so Karabiner's last load of the file predates
 the activation. The `INV unixlike/generated-config-key-in-schema` item is
 observed as Karabiner running a file whose declared members are the payload's
 bytes; a load after an activation that rewrites the file is not yet observed
+(`docs/policy/decisions/unixlike/karabiner-desired-state-by-projection.md`).
+
+The corrected delivered U2 rendering has exact16.3 parser and separately
+reviewed native synthetic migration/startup/save/reread evidence following the
+maintainer's explicit current-Mac experiment permission on 2026-09-30/10-01.
+The manual generated-config startup gate was accepted finitely at that rendered
+artifact. Earlier sandbox loader failures remain distinct from direct-host
+success, which does not certify GUI/driver/input events or activation. No new app
+execution or private host adoption is claimed by entry retirement
 (`docs/policy/decisions/unixlike/karabiner-desired-state-by-projection.md`).
 
 The NixOS-WSL host is headless and its system layer is a decided boundary since
