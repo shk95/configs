@@ -23,6 +23,15 @@ git init -q -b dev
 git config user.name Fixture
 git config user.email fixture@example.invalid
 git config core.hooksPath "$scratch/no-hooks"
+# INV repository/scope-ownership
+# Direct native Git-for-Windows and Linux proof of historical ownership.
+for historical_path in flake.nix flake.lock modules/git.nix assets/wezterm/config.lua tool/checks/test tool/darwin/karabiner .vscode/settings.json; do # PROV repository/classify-unixlike-old-roots
+  [ "$("$tools/classify" --files "$historical_path")" = unixlike ] || exit 1 # PROV repository/classify-unixlike-old-roots
+done # PROV repository/classify-unixlike-old-roots
+[ "$("$tools/classify" --files unixlike/.vscode/settings.json)" = unixlike ] || exit 1
+for unrelated_path in .vscode/launch.json .vscode-extra/settings.json assets-extra/config.lua modules-extra/git.nix tool/checks-extra/test tool/darwin-extra/karabiner flake-other.nix; do
+  [ "$("$tools/classify" --files "$unrelated_path")" = unclassified ] || exit 1
+done
 mkdir -p tool/version-control docs/reference unixlike/api windows/desired
 cp "$tools/release-preview.rules" tool/version-control/release-preview.rules
 cat >>tool/version-control/release-preview.rules <<'EOF'
