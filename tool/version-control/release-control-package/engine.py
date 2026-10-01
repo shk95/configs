@@ -5,7 +5,8 @@ import os
 import subprocess
 from pathlib import Path
 from records import blob_identity, canonical, decimal, digest, encode, history, identifiers, parse, read, require
-from adapter import authenticate, document, operation, reconcile, remote_identity, takeover
+from adapter import (authenticate, document, operation, reconcile, remote_identity, takeover,
+                     REFRESH_FIELDS, refresh_candidate, refresh_context, refresh_operation_id)
 
 
 def retained_replay(source_repository, control, master, candidate, baselines, evidence):
@@ -39,7 +40,8 @@ def initial():
             "candidate": None, "evidence": [], "approval": None, "operations": {},
             "releases": [], "stopped": False, "sequence": "0", "control": None,
             "retry": 0, "publication-payloads": {}, "stop-revision": "0",
-            "frozen": False, "publication-stage": None}
+            "frozen": False, "publication-stage": None, "refresh": None,
+            "refresh-stage": "absent", "refresh-integrations": [], "promotion-generation": "0"}
 
 
 def candidate_digest(candidate):
@@ -47,6 +49,7 @@ def candidate_digest(candidate):
 
 
 CANDIDATE_EFFECTS = {"pr", "merge", "tag-object", "tag-ref"}
+REFRESH_EFFECTS = {"refresh-branch", "refresh-pr"}
 
 
 def publication_ref_id(release):
@@ -58,6 +61,19 @@ def publication_ref_id(release):
 def reconciled(op):
     return op["state"] == "observed" or (op["state"] in {"intent", "superseded"} and op["observation"]
             and op["observation"]["status"] == "absent" and op["observation"]["complete"] is True)
+
+
+def invalidate_promotion(state, current_dev):
+    candidate = state["candidate"]
+    if not candidate or candidate["dev"] == current_dev:
+        return
+    effects = [o for o in state["operations"].values() if o["kind"] in CANDIDATE_EFFECTS]
+    require(all(reconciled(o) for o in effects), "dev-moved-before-promotion-reconciliation")
+    if not state["frozen"]:
+        for op in effects:
+            if op["state"] == "intent":
+                op["state"] = "superseded"
+        state.update(candidate=None, evidence=[], approval=None, stage="active")
 
 
 def reduce(events, config, transcript):
@@ -87,7 +103,8 @@ def reduce(events, config, transcript):
                 if op["kind"] in CANDIDATE_EFFECTS and op["state"] == "intent":
                     op["state"] = "superseded"
             old = state["candidate"]
-            require(decimal(event["candidate-generation"]) == (decimal(old["candidate-generation"]) + 1 if old else 1), "wrong-candidate-generation")
+            require(decimal(event["candidate-generation"]) == decimal(state["promotion-generation"]) + 1, "wrong-candidate-generation")
+            state["promotion-generation"] = event["candidate-generation"]
             fields = ("candidate-generation", "dev", "master", "tree", "rules", "tool", "baselines", "selected", "classification", "versions", "migrations", "approval-required")
             selected = identifiers(event["selected"])
             require(selected and set(selected) <= set(identifiers(config["checks"])), "unsupported-coverage")
@@ -97,6 +114,56 @@ def reduce(events, config, transcript):
                 require(row[2] == event["dev"], "release-source-candidate-mismatch")
             if state["releases"]:
                 require(event["versions"] == ",".join(r[0] + ":" + r[1] for r in sorted(state["releases"])), "release-version-candidate-mismatch")
+        elif kind == "refresh-result":
+            require(state["owner"] and not state["stopped"], "unowned-or-stopped-refresh")
+            result = document(event["payload"].encode("utf-8"))
+            require(isinstance(result, dict) and result.get("status") in {"changed", "noop", "failed", "terminated-timeout"}, "invalid-refresh-result")
+            if result["status"] != "changed":
+                require(set(result) == {"status"}, "nonconsumable-refresh-has-candidate")
+                require(state["refresh"] is None, "nonconsumable-replaces-candidate")
+                state["refresh-stage"] = result["status"]
+            else:
+                require(set(result) == {"status", "candidate"}, "invalid-changed-refresh")
+                candidate = refresh_candidate(result["candidate"])
+                require(candidate["batch"] == state["batch"], "wrong-refresh-batch")
+                refresh_context(transcript, candidate)
+                old = state["refresh"]
+                if old == candidate:
+                    state["sequence"] = event["sequence"]
+                    continue
+                require(all(reconciled(o) for o in state["operations"].values()), "refresh-before-effect-reconciliation")
+                if old:
+                    observed_branches = [o for o in state["operations"].values() if o["kind"] == "refresh-branch" and o["state"] == "observed" and o["refresh"] == candidate_digest(old)]
+                    require(candidate["base"] != old["base"] and
+                            ((len(observed_branches) == 1 and candidate["previous"] == old["head"])
+                             or (not observed_branches and candidate["previous"] == "-")), "unowned-or-unrequired-refresh-update")
+                else:
+                    require(candidate["previous"] == "-", "unowned-existing-refresh-branch")
+                for op in state["operations"].values():
+                    if op["kind"] in REFRESH_EFFECTS and op["state"] == "intent":
+                        op["state"] = "superseded"
+                invalidate_promotion(state, candidate["base"])
+                state.update(refresh=candidate, **{"refresh-stage": "prepared"})
+        elif kind == "refresh-integrated":
+            candidate = state["refresh"]
+            require(candidate and state["refresh-stage"] == "ready", "unverified-refresh-integration")
+            integrated = document(event["payload"].encode("utf-8"))
+            require(isinstance(integrated, dict) and set(integrated) == {"base", "head", "commit", "parents", "tree"}, "invalid-refresh-integration")
+            require(integrated["base"] == candidate["base"] and integrated["head"] == candidate["head"]
+                    and integrated["parents"] == [candidate["base"], candidate["head"]]
+                    and integrated["tree"] == candidate["tree"], "stale-refresh-integration")
+            from records import identity
+            identity(integrated["commit"], 40)
+            context = refresh_context(transcript, candidate, checks=True, current=True, current_dev=integrated["commit"])
+            require(context.get("integration") == integrated and context.get("current-dev") == integrated["commit"], "unobserved-refresh-integration")
+            require(integrated not in state["refresh-integrations"], "duplicate-refresh-integration")
+            require(all(reconciled(o) for o in state["operations"].values()), "integration-before-effect-reconciliation")
+            invalidate_promotion(state, integrated["commit"])
+            state["refresh-integrations"].append(integrated)
+            if state["frozen"]:
+                state["refresh-stage"] = "next-opportunity"
+            else:
+                state["refresh-stage"] = "integrated"
         elif kind == "evidence":
             candidate = state["candidate"]
             require(candidate and state["stage"] == "candidate", "impossible-evidence-stage")
@@ -134,12 +201,21 @@ def reduce(events, config, transcript):
                 require(all(o["state"] not in {"unknown", "conflict"} for o in state["operations"].values()), "unreconciled-operation")
                 require(status == "intent" and remote == "-" and observation == "-", "invalid-intent")
                 bound_candidate = candidate_digest(state["candidate"]) if op_kind in CANDIDATE_EFFECTS else None
+                bound_refresh = candidate_digest(state["refresh"]) if op_kind in REFRESH_EFFECTS else None
                 if op_kind in CANDIDATE_EFFECTS:
                     require(state["candidate"] is not None, "candidate-effect-without-candidate")
                 if previous:
                     require(previous["payload"] == payload and previous["kind"] == op_kind, "changed-duplicate-operation")
                     require(previous["state"] not in {"observed", "superseded"}, "repeated-completed-or-superseded-operation")
                     require(previous["candidate"] == bound_candidate, "changed-operation-candidate")
+                    require(previous["refresh"] == bound_refresh, "changed-operation-refresh")
+                if op_kind in REFRESH_EFFECTS:
+                    require(state["refresh"] and {k: payload[k] for k in REFRESH_FIELDS} == state["refresh"], "stale-refresh-payload")
+                    require(op_id == refresh_operation_id(op_kind, payload), "changed-fixed-refresh-operation")
+                    context = refresh_context(transcript, state["refresh"], checks=op_kind == "refresh-pr")
+                    if op_kind == "refresh-pr":
+                        branches = [o for o in state["operations"].values() if o["kind"] == "refresh-branch" and o["refresh"] == bound_refresh and o["state"] == "observed"]
+                        require(len(branches) == 1 and context["branch"]["head"] == payload["head"], "pr-before-current-owned-branch")
                 if op_kind == "pr":
                     require(all(payload[k] == state["candidate"][k] for k in ("dev", "master")), "stale-pr-payload")
                 if op_kind == "merge":
@@ -171,12 +247,15 @@ def reduce(events, config, transcript):
                 if op_kind == "cancel":
                     require(all(payload[k] == state["owner"][k] for k in ("run", "attempt", "workflow"))
                             and payload["jobs"] == state["owner"]["job"], "cancel-target-not-recorded-owner")
-                state["operations"][op_id] = {"kind": op_kind, "payload": payload, "state": "intent", "observation": None, "phase": state["stage"], "candidate": bound_candidate, "remote": "-"}
+                state["operations"][op_id] = {"kind": op_kind, "payload": payload, "state": "intent", "observation": None, "phase": state["stage"], "candidate": bound_candidate, "refresh": bound_refresh, "remote": "-"}
             else:
                 require(previous and previous["payload"] == payload and previous["kind"] == op_kind, "observation-without-matching-intent")
                 if op_kind in CANDIDATE_EFFECTS:
                     require(previous["candidate"] == candidate_digest(state["candidate"])
                             and previous["state"] != "superseded", "stale-candidate-effect-observation")
+                if op_kind in REFRESH_EFFECTS:
+                    require(previous["state"] != "superseded" and
+                            (previous["state"] == "observed" or previous["refresh"] == candidate_digest(state["refresh"])), "stale-refresh-effect-observation")
                 supplied = transcript["observations"].get(op_id)
                 require(isinstance(supplied, list), "missing-operation-observations")
                 matches = [o for o in supplied if digest(canonical(o)) == observation]
@@ -206,6 +285,8 @@ def reduce(events, config, transcript):
                     state.update(frozen=True, **{"publication-stage": "promoted"})
                 if result == "applied" and op_kind.startswith("tag"):
                     state["publication-stage"] = "publishing"
+                if result == "applied" and op_kind in REFRESH_EFFECTS:
+                    state["refresh-stage"] = "branch-ready" if op_kind == "refresh-branch" else "ready"
                 if result in {"unknown", "conflict"}:
                     state["stage"] = "blocked"
                 elif not state["stopped"] and result == "applied" and op_kind == "merge":
@@ -238,6 +319,7 @@ def reduce(events, config, transcript):
         elif kind == "complete":
             require(state["stage"] in {"active", "publishing", "promoted"}, "impossible-completion")
             require(all(o["state"] in {"observed", "superseded"} for o in state["operations"].values()), "incomplete-operations")
+            require(state["refresh"] is None or state["refresh-stage"] in {"ready", "integrated", "next-opportunity"}, "incomplete-refresh")
             if state["frozen"] and state["candidate"]["versions"] != "-":
                 require(state["releases"], "missing-publication-plan")
             if state["releases"]:
@@ -273,12 +355,18 @@ def preview(directory, transcript, request, approved):
         actual = blob_identity(config_data)
         require(actual == start["config"], "changed-pinned-batch-config")
     state = reduce(events, config, transcript)
+    if state["refresh"]:
+        expected_dev = state["refresh-integrations"][-1]["commit"] if state["refresh-stage"] in {"integrated", "next-opportunity"} else state["refresh"]["base"]
+        pending_pr = any(o["kind"] == "refresh-pr" and o["state"] == "intent" for o in state["operations"].values())
+        current = refresh_context(transcript, state["refresh"], checks=pending_pr, current=True, current_dev=expected_dev)
+        require(current.get("branch") == {"batch": state["batch"], "branch": state["refresh"]["branch"],
+                "head": state["refresh"]["head"] if state["refresh-stage"] != "prepared" else state["refresh"]["previous"]}, "stale-current-refresh-head")
     actual_index = read(root / "current/index.tsv")
     parse(actual_index, "index")
     require(actual_index == index(state, prior), "history-index-mismatch")
     require(request["mode"] == "preview", "live-mode-unavailable")
-    if state["candidate"]:
-        authenticate(transcript, config, request, candidate_digest(state["candidate"]))
+    if state["candidate"] or state["refresh"]:
+        authenticate(transcript, config, request, candidate_digest(state["candidate"] or state["refresh"]))
     elif request["candidate"] != "0" * 64:
         require(False, "missing-request-candidate")
     if stop["stop"] == "1" or state["stopped"]:

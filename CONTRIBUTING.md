@@ -289,6 +289,28 @@ describes the bounded schemas and supplied-input limits.
 5. Run `tool/configs test` for repository fixtures. CI declares Python and runs
    the narrow controller fixture on native Git for Windows in addition to Linux.
    Foreign proof does not establish Windows behavior.
+6. For the actual preparation fixture on native Linux/Darwin, run
+   `tool/configs test-refresh-candidate-nix` with an existing functional Python,
+   Git and Nix CLI. This test extracts the reviewed trusted utility into disposable
+   providers using only controlled local upstreams. It snapshots source bytes,
+   modes, refs and commit counts; no-op/failure/confirmed timeout publishes no
+   candidate. Only a changed lock creates a local automation dependency commit.
+   A required base update uses a normal merge on that same fixture-owned branch.
+   Missing Nix is unavailable, never installation permission or a native Windows
+   prerequisite. The selected Nix-enabled CI lane must pass separately.
+
+Current semantic protocol 2 has distinct refresh-branch/refresh-pr requests;
+the promotion pr operation remains dev to master. A batch owns a fixed branch,
+while immutable candidate revision/effect IDs bind exact source/base/parent/head,
+lock and preparation identities. Historical observations replay old effects;
+current schema/head/base/checks gate the next request. Unknown effects fence
+revision change and promotion invalidation until exact reconciliation. Confirmed
+absent old intents become history-only, and completed effects remain absorbing.
+No PR body or asserted DTO supplies production authority. The loader executes
+supported protocol 1 packages at their exact pinned source with the original
+serializer/reducer; it does not upgrade old records. Unknown protocol or missing
+closure refuses. The supplied single envelope is still not global storage or
+automatic cross-batch configuration/package selection.
 
 The master-only workflow is an inert interface with independent inspection and
 constant writer-job serialization shape; it reads no private connection, secret

@@ -50,7 +50,7 @@ def approved(data):
     result = dict(lines[1:])
     if len(result) != len(lines) - 1 or set(result) != {"public-repository", "master", "control", "manifest", "approval", "protocol"}:
         raise ValueError("invalid-approval-assertion")
-    if result["public-repository"] != "shk95/configs" or result["protocol"] != "1":
+    if result["public-repository"] != "shk95/configs" or result["protocol"] not in {"1", "2"}:
         raise ValueError("unsupported-approval-protocol")
     for key, size in (("master", 40), ("control", 40), ("manifest", 64), ("approval", 64)):
         if not re.fullmatch(r"[0-9a-f]{%d}" % size, result[key]) or result[key] == "0" * size:

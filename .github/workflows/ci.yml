@@ -84,6 +84,8 @@ jobs:
       REQUIRE_NATIVE: "1"
     steps:
       - uses: actions/checkout@v7
+        with:
+          fetch-depth: 0
       - name: Explicit controller fixture runtime
         uses: actions/setup-python@v6
         with:
@@ -119,11 +121,21 @@ jobs:
       REQUIRE_NATIVE: "1"
     steps:
       - uses: actions/checkout@v7
+        with:
+          fetch-depth: 0
       - uses: cachix/install-nix-action@v31.10.6
         with:
           install_url: https://releases.nixos.org/nix/nix-2.34.8/install
           extra_nix_config: |
             experimental-features = nix-command flakes
+      - name: Explicit actual refresh-candidate fixture runtime
+        uses: actions/setup-python@v6
+        with:
+          python-version: '3.13'
+      - name: Actual disposable refresh CLI and local lock/Git integration
+        env:
+          CONFIGS_CONTROLLER_PYTHON: python
+        run: tool/version-control/test-refresh-candidate-nix
       - name: Verify upstream Nix baseline
         shell: bash
         run: |

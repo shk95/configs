@@ -15,6 +15,7 @@ usage: tool/configs <command> [arguments]
 Clone and task:  setup  doctor  worktree  session  commit
 Review:          classify  work  records  invariants  provisional
                 hygiene  domain-reads  design-citations  test
+                test-refresh-candidate-nix
 Integration:     audit  audit-remote  plan-promotion  plan-release  release-preview
                 release-control
 Evidence:        hook-evidence
@@ -47,6 +48,7 @@ case "$command" in
   domain-reads) target=version-control/domain-reads ;;
   design-citations) target=version-control/design-citations ;;
   test) target=version-control/test ;;
+  test-refresh-candidate-nix) target=version-control/test-refresh-candidate-nix ;;
   audit) target=version-control/audit ;;
   audit-remote) target=version-control/audit-remote ;;
   plan-promotion) target=version-control/plan-promotion ;;

@@ -1,4 +1,4 @@
-# Inert controller protocol 1
+# Inert controller protocol 2
 
 This package implements the repository's preview boundary. Its launcher accepts
 only `preview --fixture-inputs` and local inputs; no live transport exists.
@@ -6,10 +6,16 @@ Approval/protection/check observations are supplied synthetic assertions. They
 are never production authentication. The retained loader validates package
 identity and approved merge shape, not the truth of an approval-file author.
 
+The stable loader supports explicit approved protocols 1 and 2 only. This
+current package accepts protocol 2; protocol 1 executes its exact retained
+historical eight blobs, serializer, reducer and main. Old records are never
+rewritten and a mismatched or unknown semantic protocol refuses. TSV format 1
+and the eight manifest paths stay unchanged; semantic protocol is separate.
+
 An approved assertion is strict TSV1 with public-repository, master, control,
 manifest, approval and protocol singletons. The literal public repository is
 shk95/configs; control and master are full SHA-1 commits, manifest and approval
-are SHA-256 identities, protocol is 1. Control must be a two-parent merge reachable
+are SHA-256 identities, current protocol is 2. Control must be a two-parent merge reachable
 from the asserted master. The exact approved control is selected explicitly;
 mere ancestor reachability does not select a different commit. Manifest rows are
 `file<TAB>constant-path<TAB>sha256`, sorted with exactly the loader's executing
@@ -112,3 +118,64 @@ Public output is a bounded outcome/stage/proposal count, never private connectio
 IDs, payload digests, record prose, paths or raw exceptions.
 Disabled config produces no output; enabled invalid inputs refuse. This protocol
 does not adopt production semantic releases or replace calendar tags.
+
+## Bounded refresh data and effects
+
+`refresh-result` has one literal JSON payload. Noop, failed and
+terminated-timeout have exactly a status and no consumable identities. Changed
+has status and a candidate with exactly batch, source, base, parent, head, tree,
+before-lock, lock, utility-source, utility-manifest, source-fingerprint, previous
+and branch. Commit/tree IDs are full SHA-1; data identities/batch are SHA-256.
+Source equals parent, head differs from parent, lock differs from before-lock,
+and initial parent equals base. Previous is `-` or the prior observed owned head.
+Branch is always `feature/unixlike-refresh-` plus the supplied batch identity.
+No time, owner generation or mutable PR body derives that branch.
+
+Refresh transcript has exactly revisions and current. Each DTO has prepared,
+proof, current-dev, branch, checks and integration. Historical DTOs match a
+candidate exactly and uniquely for replay. Proof requires one dependency-commit
+parent, only unixlike/flake.lock in the diff, matching before/after data identity
+and unchanged integer permission mode. An update requires the exact normal-merge
+parents [previous, base]; initial merge-parents is empty. These assertions bind
+fixture observations, not production source provenance. Current DTO schema,
+proof, branch head and dev are always rechecked; pending PR and new integration
+also require exact head/base/tree/lock Required checks, app15368 and success.
+Absent checks are allowed before branch publication; failed/pending/unknown
+checks cannot authorize a next PR. Old completed effects stay absorbing.
+
+Refresh-branch and refresh-pr payloads add literal public repository to the
+candidate. Their immutable operation ID is SHA-256 of canonical JSON
+{kind, payload}. Creation proposes POST git/refs; updates propose PATCH on that
+same owned branch with force=false. The observed previous head is a precheck,
+not API CAS/fencing. PR creation proposes feature-to-dev with a fixed readable
+title and canonical operation marker. Recovery requires a unique observed PR
+number and exact candidate/check identities, never its mutable body. An already
+observed unique PR joins the new head revision without proposing another create.
+The original `pr` operation remains dev-to-master.
+
+Unknown/conflicting effects fence revision advance; completed effects retain
+their historical remote IDs. Confirmed-absent old intents become superseded,
+history-only and proposed=0; old intent/observation cannot consume a new revision.
+Observed old success cannot advance the new refresh stage. A known dev advance
+uses the same promotion invalidation as verified refresh integration: unresolved
+promotion effects first reconcile, confirmed absence becomes superseded, and
+unfrozen candidate/evidence/approval clears. The last promotion generation stays
+monotonic; reselection needs the next generation and exact new evidence/approval.
+Verified promotion stays frozen; later refresh integration is next-opportunity.
+Late nonconsumable results refuse rather than erase an existing changed candidate.
+Identical changed results join without executing another preparation.
+
+Actual CLI/Git preparation exists only in the native-Nix integration fixture.
+Preview does not execute it. The fixture extracts the two trusted utility blobs
+at their reviewed source, runs controlled local upstreams with an explicit
+credential-free environment, and independently compares all bytes/modes. A
+required base update preflights merge-tree in a disposable repository without a
+commit; only a changed result performs a normal merge and isolated dependency
+commit. Noop/failure/confirmed timeout preserve owned refs/source/commit counts.
+Only synthetic lock data and exact identities reach this pure reducer.
+
+`refresh_window` consumes supplied Asia/Seoul calendar observations: one 05:00
+start per day, manual duplicates join, 06:00 waits only for an in-flight refresh,
+and fixed 07:00 cutoff reconciles without canceling refresh or extending wait.
+Late/missed events are reported as such. It reads no clock, schedules nothing,
+and creates no notification or cross-batch storage.
