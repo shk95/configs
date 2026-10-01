@@ -1,0 +1,135 @@
+#!/bin/sh
+# INV unixlike/host-written-payload-projected
+# The retained comparison route still delegates; the retired publication route
+# cannot bypass finite host-document ownership or infer a Save destination.
+set -eu
+. "$(CDPATH= cd -- "$(dirname -- "$0")" && pwd)/prerequisite"
+require_command nix git
+repo=$(CDPATH= cd -- "$(dirname -- "$0")/../../.." && pwd -P)
+domain=$repo/unixlike
+packages="(builtins.getFlake \"path:$domain\").inputs.nixpkgs.legacyPackages.\${builtins.currentSystem}"
+runtime=$(nix build --impure --no-link --print-out-paths --expr "$packages.python3.out")
+just_runtime=$(nix build --impure --no-link --print-out-paths --expr "$packages.just.out")
+PYTHONDONTWRITEBYTECODE=1 "$runtime/bin/python3" -I -S -B - "$repo" "$just_runtime/bin/just" <<'PY'
+import os
+from pathlib import Path
+import shlex
+import shutil
+import stat
+import subprocess
+import sys
+import tempfile
+
+source, just = Path(sys.argv[1]), sys.argv[2]
+assert (source / "unixlike/tool/darwin-capture/README.md").is_file()
+git_binary = shutil.which("git")
+assert git_binary
+with tempfile.TemporaryDirectory(prefix="karabiner-entry-") as directory:
+    work = Path(directory)
+    repo = work / "repository"
+    repo.mkdir()
+    trace = work / "calls"
+    sentinel = work / "argument-executed"
+    env = {key: value for key, value in os.environ.items() if not key.startswith("GIT_")}
+    env.update(GIT_CONFIG_GLOBAL=os.devnull, GIT_CONFIG_NOSYSTEM="1", GIT_OPTIONAL_LOCKS="0",
+               HOME=str(work / "home"), XDG_CONFIG_HOME=str(work / "xdg"))
+    Path(env["HOME"]).mkdir()
+    Path(env["XDG_CONFIG_HOME"]).mkdir()
+    def run(argv, **kwargs):
+        return subprocess.run(argv, cwd=repo, env=env, text=True, capture_output=True,
+                              timeout=10, **kwargs)
+    def git(*args):
+        result = run([git_binary, *args])
+        assert result.returncode == 0, result.stderr
+        return result.stdout
+    def spy(path, label):
+        path.parent.mkdir(parents=True, exist_ok=True)
+        path.write_text("#!/bin/sh\nprintf '%s\\n' " + shlex.quote(label) +
+                        " >> " + shlex.quote(str(trace)) + "\nprintf '%s\\n' \"$*\" >> " +
+                        shlex.quote(str(trace)) + "\nexit 97\n")
+        path.chmod(0o755)
+    shutil.copyfile(source / "Justfile", repo / "Justfile")
+    for relative, label in [
+        ("tool/version-control/commit", "commit"),
+        ("unixlike/modules/programs/karabiner/tool", "legacy-projection"),
+        ("unixlike/tool/checks/karabiner-test", "projection-fixture"),
+        ("unixlike/tool/darwin-capture/adapter.py", "adapter"),
+        ("unixlike/tool/darwin-capture/engine.py", "new-cli")]:
+        spy(repo / relative, label)
+    for command in ["nix", "darwin-capture", "defaults", "plutil", "karabiner_cli"]:
+        spy(work / "bin" / command, command)
+    env["PATH"] = str(work / "bin") + os.pathsep + env["PATH"]
+    originals = repo / "synthetic-originals"
+    originals.mkdir()
+    for name in ["karabiner.json", "symbolic-hotkeys.json"]:
+        for parent in [originals, repo / "unixlike/modules/programs/karabiner"]:
+            path = parent / name
+            path.write_text('{"synthetic":"unchanged"}\n')
+            path.chmod(0o600)
+    git("init", "-q", "-b", "fixture")
+    hooks = work / "empty-hooks"
+    hooks.mkdir()
+    git("config", "core.hooksPath", str(hooks))
+    git("add", ".")
+    git("-c", "user.name=Fixture", "-c", "user.email=fixture@example.invalid",
+        "commit", "-qm", "fixture")
+    git("branch", "other")
+    git("update-ref", "refs/remotes/synthetic/dev", "HEAD")
+    def snapshot():
+        files = {str(path.relative_to(repo)): (path.read_bytes(), stat.S_IMODE(path.stat().st_mode))
+                 for path in repo.rglob("*") if path.is_file() and ".git" not in path.relative_to(repo).parts}
+        return (files, (repo / ".git/index").read_bytes(),
+                git("rev-parse", "HEAD"), git("symbolic-ref", "HEAD"), git("show-ref"),
+                git("status", "--porcelain=v1", "--untracked-files=all"),
+                git("diff", "--cached", "--binary"), git("diff", "--binary"))
+    before = snapshot()
+    def unchanged():
+        assert snapshot() == before, "retired entry changed files, modes or Git state"
+        assert not trace.exists(), "retired entry executed a reader, CLI or publication"
+        assert not sentinel.exists(), "retired entry executed argument syntax"
+    def invoke(*args, input="y\nyes\n"):
+        return run([just, "--justfile", str(repo / "Justfile"), *args], input=input)
+    listing = invoke("--list")
+    assert listing.returncode == 0
+    for recipe in ["karabiner-capture", "karabiner-check", "karabiner-test"]:
+        assert recipe in listing.stdout
+    for recipe, command in [("karabiner-check", "unixlike/modules/programs/karabiner/tool check"),
+                            ("karabiner-test", "unixlike/tool/checks/karabiner-test")]:
+        shown = invoke("--show", recipe)
+        assert shown.returncode == 0 and command in shown.stdout
+    unchanged()
+    attacks = [f'; touch {shlex.quote(str(sentinel))}; #',
+               f'$(touch {shlex.quote(str(sentinel))})',
+               f'`touch {shlex.quote(str(sentinel))}`',
+               f'\n touch {shlex.quote(str(sentinel))}\n', "{{error('executed')}}"]
+    invocations = [[], ["--dry-run"], ["--publish"], ["--dry-run", "--publish"],
+                   ["--host", str(originals / "karabiner.json"), "--hotkeys-host",
+                    str(originals / "symbolic-hotkeys.json")],
+                   ["capture", "karabiner"], ["save", "--preview", str(work / "proposal.json")],
+                   ["--payload", str(originals / "karabiner.json"), "--hotkeys-payload",
+                    str(originals / "symbolic-hotkeys.json"), "--target", str(work / "target.json")],
+                   ["--help"], ["--yes"], ["--unknown", "yes"], *[[argument] for argument in attacks]]
+    for arguments in invocations:
+        result = invoke("karabiner-capture", *arguments)
+        assert result.returncode == 1, (arguments, result.returncode, result.stderr)
+        assert "karabiner-capture is retired." in result.stderr, result.stderr
+        assert "unixlike/tool/darwin-capture/README.md" in result.stderr
+        assert "explicit host-owned document destinations" in result.stderr
+        unchanged()
+    # Just's own --dry-run is a successful preview, not legacy recipe execution.
+    preview = invoke("--dry-run", "karabiner-capture", "--publish", attacks[0])
+    assert preview.returncode == 0
+    assert "karabiner-capture is retired." in preview.stderr
+    assert "tool/version-control/commit" not in preview.stderr
+    assert attacks[0] not in preview.stderr
+    unchanged()
+    # Positive retained delegation uses only disposable spies, never real readers.
+    for recipe, expected in [("karabiner-check", ["legacy-projection", "check"]),
+                             ("karabiner-test", ["projection-fixture", ""])]:
+        result = invoke(recipe, input="")
+        assert result.returncode != 0
+        assert trace.read_text().splitlines() == expected
+        trace.unlink()
+        unchanged()
+print("✓ actual pinned Just entry refusal, inert global preview, retained delegation and full-state invariance")
+PY

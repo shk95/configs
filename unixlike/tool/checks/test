@@ -45,6 +45,8 @@ require_command nix
 root=$(CDPATH= cd -- "$(dirname "$0")/../.." && pwd)
 # INV unixlike/host-written-payload-projected: capture owns its independent block.
 "$root/tool/checks/darwin-capture-test"
+# INV unixlike/host-written-payload-projected: retired entry cannot publish observations.
+"$root/tool/checks/karabiner-entry-test"
 flake=${CHECKS_FLAKE:-path:$root}
 here=$(nix eval --raw --impure --expr 'builtins.currentSystem')
 

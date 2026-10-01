@@ -3,6 +3,7 @@ kind: spec
 date: 2026-10-01
 scope: unixlike
 status: approved
+issue: #463
 review-by: 2026-10-15
 
 ## Outcome and planning assignment
@@ -21,6 +22,19 @@ Root assigned B planning publication only. Dedicated planning workspace is
 remain pending. A later source worker pins actual dev and this reviewed plan
 revision separately after root explicitly assigns continuation. Root alone
 integrates; this planning delivery does not authorize source or host operations.
+
+## Source assignment clarification, 2026-10-01
+
+Root assigns C sole Unix-like implementation ownership through #463 after U2
+#458 at 4726a1341d3ddf602e2be908fd21cdd8a24dccc8 and this plan #462 at
+23254df5e58ff49da3bbd093f30a6dd44b975616 completed exact-head and post-merge
+checks. Fresh source pickup origin/dev is 23254df5e58ff49da3bbd093f30a6dd44b975616;
+the reviewed integrated plan revision is independently pinned at the same SHA.
+The plan content remains the reviewed 821143c version. The dedicated source
+worktree is `../configs-wt/legacy-darwin-capture-entry-source`, branch
+`feature/unixlike-legacy-capture-entry-source`. The earlier unassigned/Draft
+observations above and below describe planning pickup. Acceptance is unchanged.
+Root alone integrates; repository caller retirement remains a later assignment.
 
 ## Actual prerequisites and ordered delivery
 
