@@ -4,6 +4,7 @@ date: 2026-10-01
 scope: repository
 status: approved
 review-by: 2026-10-15
+issue: #471
 
 ## Outcome and ownership
 

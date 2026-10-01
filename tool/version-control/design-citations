@@ -129,6 +129,9 @@ fi
 # citation is left once every mention of them is taken out of it.
 awk -v citation="$citation" '
   {
+    # A strict data-only path mapping names inventory, never document authority.
+    # Do not exempt the file: comments, malformed rows and extra fields still scan.
+    if ($0 ~ /^tool\/version-control\/release-preview.rules:[0-9]+:production-map	exact	[^	]+	[A-Za-z0-9_,.-]+$/) next
     line = $0
     gsub(/docs\/work\/(README|roadmap)\.md/, "", line)
     if (line ~ citation) print

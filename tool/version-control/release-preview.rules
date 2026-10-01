@@ -10,3 +10,931 @@ map	prefix	unixlike/api/	unixlike-api
 map	exact	unixlike/modules/flake/configurations.nix	unixlike-api
 map	exact	unixlike/tool/contract-inspect	unixlike-inspection
 map	exact	unixlike/tool/standalone-readiness	unixlike-readiness
+production	1
+production-check	prod-repository-policy	repository	policy-checks	required	-	repository-scans-v1:git-2.55.0
+production-check	prod-repository-native	repository	fixtures	required	-	git-2.55.0.windows.5:python-3.13.15
+production-check	prod-unixlike-evaluation	unixlike	evaluation	required	-	nix-2.34.8:all-published-constructors-v1
+production-check	prod-unixlike-build-x86-64-linux	unixlike	build	required	-	nix-2.34.8:x86_64-linux:homeConfigurations.example+homeConfigurations.example-wsl+nixosConfigurations.fixture-cli+nixosConfigurations.fixture-graphical+nixosConfigurations.fixture-wsl
+production-check	prod-unixlike-build-aarch64-linux	unixlike	build	required	-	nix-2.34.8:aarch64-linux:nixosConfigurations.fixture-arm-cli
+production-check	prod-unixlike-build-aarch64-darwin	unixlike	build	required	-	nix-2.34.8:aarch64-darwin:darwinConfigurations.fixture-mac
+production-check	prod-unixlike-payloads	unixlike	fixtures	required	prod-unixlike-evaluation	payload-parser-contracts-v1
+production-check	prod-unixlike-api	unixlike	fixtures	required	prod-unixlike-evaluation,prod-unixlike-build-x86-64-linux,prod-unixlike-build-aarch64-linux,prod-unixlike-build-aarch64-darwin	provider-api-v1:nix-2.34.8
+production-check	prod-unixlike-inspection	unixlike	fixtures	required	prod-unixlike-api	inspect-readiness-v1:nix-2.34.8
+production-check	prod-unixlike-darwin-capture	unixlike	native-runtime	required	prod-unixlike-api	darwin-capture-v1:aarch64-darwin:python-3.13.15:installed-reader-v1
+production-check	prod-unixlike-documentation	unixlike	review	required	-	unixlike-public-contract-review-v1
+production-check	prod-unixlike-bootstrap-review	unixlike	review	required	-	source-bound-bootstrap-review-v1
+production-check	prod-unixlike-template-pair	unixlike	fixtures	required	prod-unixlike-evaluation	delivered-template-exact-provider-pair-v1
+production-check	prod-unixlike-contract	unixlike	fixtures	required	prod-unixlike-api,prod-unixlike-payloads,prod-unixlike-inspection,prod-unixlike-darwin-capture	unixlike-public-promise-v1
+production-check	prod-windows-native	windows	native-runtime	required	-	pwsh-7.6.6-x64:zip-sha256-02fe458be20493fbdf43f61ea20610b811ee6c738ab1676c61b9cfcd1a33c860:pester-5.7.1:lua-5.4.6
+production-check	prod-windows-ltsc-runtime	windows	native-runtime	required	-	windows-10-iot-enterprise-ltsc-21h2:build-19044:x64:pwsh-7.6.6:read-only-check-v1
+production-check	prod-windows-bootstrap	windows	native-runtime	required	-	inbox-windows-powershell-5.1:x64:bootstrap-v1
+production-check	prod-windows-generation	windows	fixtures	required	prod-windows-native,prod-windows-bootstrap	consumer-generation-v1:environment-1:settings-1:generation-1
+production-check	prod-windows-catalogue	windows	fixtures	required	prod-windows-native	windows-manifest-4:state-3:variant-parser-ownership-v1
+production-check	prod-windows-capture	windows	fixtures	required	prod-windows-generation	unit-document-capture-v1:preview-save-stale-partial-refusals
+production-check	prod-windows-documentation	windows	review	required	-	windows-public-contract-review-v1
+production-check	prod-windows-bootstrap-review	windows	review	required	-	source-bound-bootstrap-review-v1
+production-check	prod-windows-contract	windows	fixtures	required	prod-windows-generation,prod-windows-catalogue,prod-windows-capture,prod-windows-ltsc-runtime	windows-public-promise-v1
+production-domain	unixlike	prod-unixlike-contract
+production-domain	windows	prod-windows-contract
+production-template	unixlike	shk95/configs-host-template	prod-unixlike-template-pair	unixlike-api,prod-unixlike-api,prod-unixlike-darwin-capture,prod-unixlike-inspection
+production-surface	unixlike-constructors	unixlike	unixlike/modules/flake/configurations.nix	prod-unixlike-api
+production-surface	unixlike-api	unixlike	unixlike/api/contract.json	prod-unixlike-api
+production-surface	unixlike-import-classes	unixlike	unixlike/flake.nix	prod-unixlike-api
+production-surface	unixlike-lock	unixlike	unixlike/flake.lock	prod-unixlike-api
+production-surface	unixlike-inspection	unixlike	unixlike/tool/contract-inspect	prod-unixlike-inspection
+production-surface	unixlike-readiness	unixlike	unixlike/tool/standalone-readiness	prod-unixlike-inspection
+production-surface	unixlike-capture-schema	unixlike	unixlike/tool/darwin-capture/validation.nix	prod-unixlike-darwin-capture
+production-surface	unixlike-capture-engine	unixlike	unixlike/tool/darwin-capture/engine.py	prod-unixlike-darwin-capture
+production-surface	unixlike-capture-adapter	unixlike	unixlike/tool/darwin-capture/adapter.py	prod-unixlike-darwin-capture
+production-surface	unixlike-capture-units	unixlike	unixlike/modules/programs/karabiner/units.json	prod-unixlike-darwin-capture
+production-surface	unixlike-capture-consumer	unixlike	unixlike/modules/programs/karabiner/module.nix	prod-unixlike-darwin-capture
+production-surface	windows-generation	windows	windows/src/WinEnvGeneration.psm1	prod-windows-generation
+production-surface	windows-formats	windows	windows/tool/consumer-format.json	prod-windows-generation
+production-surface	windows-runtime	windows	windows/tool/ci-runtime.json	prod-windows-native
+production-surface	windows-catalogue	windows	windows/desired/manifest.json	prod-windows-catalogue
+production-surface	windows-entry	windows	windows/win-env.ps1	prod-windows-contract
+production-surface	windows-capture	windows	windows/src/WinEnvCapture.psm1	prod-windows-capture
+production-tool-source	prod-unixlike-evaluation	unixlike-lock
+production-tool-source	prod-unixlike-api	unixlike-lock
+production-tool-source	prod-unixlike-build-x86-64-linux	unixlike-lock
+production-tool-source	prod-unixlike-build-aarch64-linux	unixlike-lock
+production-tool-source	prod-unixlike-build-aarch64-darwin	unixlike-lock
+production-tool-source	prod-unixlike-darwin-capture	unixlike-capture-engine,unixlike-capture-adapter,unixlike-capture-schema,unixlike-capture-units
+production-tool-source	prod-windows-native	windows-runtime
+production-map	exact	.agents/skills/execute-work/SKILL.md	prod-repository-policy
+production-map	exact	.agents/skills/inspect-work/SKILL.md	prod-repository-policy
+production-map	exact	.agents/skills/integrate-work/SKILL.md	prod-repository-policy
+production-map	exact	.agents/skills/plan-work/SKILL.md	prod-repository-policy
+production-map	exact	.agents/skills/reclaim-workspaces/SKILL.md	prod-repository-policy
+production-map	exact	.agents/skills/run-version-control-workflow/SKILL.md	prod-repository-policy
+production-map	exact	.agents/skills/run-version-control-workflow/agents/openai.yaml	prod-repository-policy
+production-map	exact	.claude/commands/finish-work.md	prod-repository-policy
+production-map	exact	.claude/commands/start-work.md	prod-repository-policy
+production-map	exact	.claude/settings.json	prod-repository-policy
+production-map	exact	.claude/skills/run-version-control-workflow/SKILL.md	prod-repository-policy
+production-map	exact	.editorconfig	prod-repository-policy
+production-map	exact	.envrc	prod-unixlike-api
+production-map	exact	.gitattributes	prod-repository-policy
+production-map	exact	.githooks/commit-msg	prod-repository-policy,prod-repository-native
+production-map	exact	.githooks/evidence	prod-repository-policy,prod-repository-native
+production-map	exact	.githooks/pre-commit	prod-repository-policy,prod-repository-native
+production-map	exact	.githooks/pre-push	prod-repository-policy,prod-repository-native
+production-map	exact	.github/scripts/WindowsCiRuntime.psm1	prod-repository-policy,prod-repository-native
+production-map	exact	.github/scripts/assert-windows-ci-runtime.ps1	prod-repository-policy,prod-repository-native
+production-map	exact	.github/scripts/prepare-windows-ci-runtime.ps1	prod-repository-policy,prod-repository-native
+production-map	exact	.github/scripts/windows-ci.ps1	prod-repository-policy,prod-repository-native
+production-map	exact	.github/tests/test-windows-ci-runtime.ps1	prod-repository-policy,prod-repository-native
+production-map	exact	.github/workflows/ci.yml	prod-repository-policy,prod-repository-native
+production-map	exact	.github/workflows/release-control.yml	prod-repository-policy,prod-repository-native
+production-map	exact	.github/workflows/work-closure.yml	prod-repository-policy,prod-repository-native
+production-map	exact	.github/workflows/zellij-upstream-5500.yml	prod-repository-policy,prod-repository-native
+production-map	exact	.gitignore	prod-repository-policy
+production-map	exact	.vscode/settings.json	prod-unixlike-payloads
+production-historical-only	.vscode/settings.json
+production-map	exact	AGENTS.md	prod-repository-policy
+production-map	exact	CLAUDE.md	prod-repository-policy
+production-map	exact	CONTRIBUTING.md	prod-repository-policy
+production-map	exact	Justfile	prod-unixlike-api
+production-map	exact	LICENSE	prod-repository-policy
+production-map	exact	README.md	prod-repository-policy
+production-map	exact	assets/karabiner/karabiner.json	prod-unixlike-payloads
+production-historical-only	assets/karabiner/karabiner.json
+production-map	exact	assets/karabiner/symbolic-hotkeys.json	prod-unixlike-payloads
+production-historical-only	assets/karabiner/symbolic-hotkeys.json
+production-map	exact	assets/payloads.json	prod-unixlike-payloads
+production-historical-only	assets/payloads.json
+production-map	exact	assets/powershell/profile.ps1	prod-unixlike-payloads
+production-historical-only	assets/powershell/profile.ps1
+production-map	exact	assets/wezterm/config/appearance.lua	prod-unixlike-payloads
+production-historical-only	assets/wezterm/config/appearance.lua
+production-map	exact	assets/wezterm/config/behavior.lua	prod-unixlike-payloads
+production-historical-only	assets/wezterm/config/behavior.lua
+production-map	exact	assets/wezterm/config/bindings.lua	prod-unixlike-payloads
+production-historical-only	assets/wezterm/config/bindings.lua
+production-map	exact	assets/wezterm/config/fonts.lua	prod-unixlike-payloads
+production-historical-only	assets/wezterm/config/fonts.lua
+production-map	exact	assets/wezterm/config/startup.lua	prod-unixlike-payloads
+production-historical-only	assets/wezterm/config/startup.lua
+production-map	exact	assets/wezterm/fonts.json	prod-unixlike-payloads
+production-historical-only	assets/wezterm/fonts.json
+production-map	exact	assets/wezterm/local.lua.example	prod-unixlike-payloads
+production-historical-only	assets/wezterm/local.lua.example
+production-map	exact	assets/wezterm/platform/darwin.lua	prod-unixlike-payloads
+production-historical-only	assets/wezterm/platform/darwin.lua
+production-map	exact	assets/wezterm/platform/linux.lua	prod-unixlike-payloads
+production-historical-only	assets/wezterm/platform/linux.lua
+production-map	exact	assets/wezterm/platform/windows.lua	prod-unixlike-payloads
+production-historical-only	assets/wezterm/platform/windows.lua
+production-map	exact	assets/wezterm/wezterm.lua	prod-unixlike-payloads
+production-historical-only	assets/wezterm/wezterm.lua
+production-map	exact	assets/zellij/config.kdl	prod-unixlike-payloads
+production-historical-only	assets/zellij/config.kdl
+production-map	exact	docs/README.md	prod-repository-policy
+production-map	exact	docs/architecture.md	prod-repository-policy
+production-map	exact	docs/candidates/README.md	prod-repository-policy
+production-map	exact	docs/candidates/ci-windows-checks-through-the-entry-point.md	prod-repository-policy
+production-map	exact	docs/candidates/delete-check-powershell-script.md	prod-repository-policy
+production-map	exact	docs/candidates/domain-tool-placement-and-justfile-exception.md	prod-repository-policy
+production-map	exact	docs/candidates/drop-ci-calls-scripts-directly-sentence.md	prod-repository-policy
+production-map	exact	docs/candidates/drop-registry-count-from-status.md	prod-repository-policy
+production-map	exact	docs/candidates/fixture-tag-fit-below-describe.md	prod-repository-policy
+production-map	exact	docs/candidates/rationale-fit-evidence-item.md	prod-repository-policy
+production-map	exact	docs/candidates/review-finding-reproduced-before-history.md	prod-repository-policy
+production-map	exact	docs/candidates/subject-scope-and-two-scope-allowance.md	prod-repository-policy
+production-map	exact	docs/candidates/topic-branch-catch-up-procedure.md	prod-repository-policy
+production-map	exact	docs/candidates/troubleshooting-file-misreads-ps1.md	prod-repository-policy
+production-map	exact	docs/candidates/troubleshooting-worktree-fetch-symptom.md	prod-repository-policy
+production-map	exact	docs/candidates/windows-older-shell-lane-in-procedure.md	prod-repository-policy
+production-map	exact	docs/decisions/README.md	prod-repository-policy
+production-map	exact	docs/decisions/annotated-tag-is-the-release-record.md	prod-repository-policy
+production-map	exact	docs/decisions/appx-detection-unverified-not-absent.md	prod-repository-policy
+production-map	exact	docs/decisions/candidates-observed-before-adoption.md	prod-repository-policy
+production-map	exact	docs/decisions/capture-moves-host-changes.md	prod-repository-policy
+production-map	exact	docs/decisions/capture-restores-one-placeholder.md	prod-repository-policy
+production-map	exact	docs/decisions/check-evidence-three-states.md	prod-repository-policy
+production-map	exact	docs/decisions/ci-evidence-without-hosted-runners.md	prod-repository-policy
+production-map	exact	docs/decisions/composed-homes-render-in-declared-terminals.md	prod-repository-policy
+production-map	exact	docs/decisions/drift-outranks-unverified.md	prod-repository-policy
+production-map	exact	docs/decisions/feature-selection-closed.md	prod-repository-policy
+production-map	exact	docs/decisions/fixture-tags-name-proven-invariants.md	prod-repository-policy
+production-map	exact	docs/decisions/font-install-states.md	prod-repository-policy
+production-map	exact	docs/decisions/home-manager-platform-classes.md	prod-repository-policy
+production-map	exact	docs/decisions/homebrew-owns-mac-apps.md	prod-repository-policy
+production-map	exact	docs/decisions/hooks-run-under-git-for-windows.md	prod-repository-policy
+production-map	exact	docs/decisions/hygiene-tool-owns-enforcement.md	prod-repository-policy
+production-map	exact	docs/decisions/identity-contract-values-separated.md	prod-repository-policy
+production-map	exact	docs/decisions/invariant-registry-created.md	prod-repository-policy
+production-map	exact	docs/decisions/jsonsubset-captured-by-projection.md	prod-repository-policy
+production-map	exact	docs/decisions/karabiner-desired-state-by-projection.md	prod-repository-policy
+production-map	exact	docs/decisions/local-gate-selects-by-effect.md	prod-repository-policy
+production-map	exact	docs/decisions/monorepo-starts-clean-history.md	prod-repository-policy
+production-map	exact	docs/decisions/nixpkgs-overlays-declared-once.md	prod-repository-policy
+production-map	exact	docs/decisions/package-ownership-by-generating-module.md	prod-repository-policy
+production-map	exact	docs/decisions/payloads-declared-and-parsed.md	prod-repository-policy
+production-map	exact	docs/decisions/powershell-copied-per-domain.md	prod-repository-policy
+production-map	exact	docs/decisions/provisional-registry-created.md	prod-repository-policy
+production-map	exact	docs/decisions/sdkman-adopted-not-owned.md	prod-repository-policy
+production-map	exact	docs/decisions/terminal-delegation-unverified-below-boundary.md	prod-repository-policy
+production-map	exact	docs/decisions/terminal-generated-profiles-tolerated.md	prod-repository-policy
+production-map	exact	docs/decisions/windows-adopts-catppuccin-latte.md	prod-repository-policy
+production-map	exact	docs/decisions/windows-adopts-modus-operandi.md	prod-repository-policy
+production-map	exact	docs/decisions/windows-checks-run-under-native-pwsh.md	prod-repository-policy
+production-map	exact	docs/decisions/windows-entry-point-in-domain.md	prod-repository-policy
+production-map	exact	docs/decisions/wslconfig-selected-by-windows-build.md	prod-repository-policy
+production-map	exact	docs/decisions/zellij-patched-on-darwin-until-upstream.md	prod-repository-policy
+production-map	exact	docs/definition-of-done.md	prod-repository-policy
+production-map	exact	docs/policy/architecture.md	prod-repository-policy
+production-map	exact	docs/policy/candidates/README.md	prod-repository-policy
+production-map	exact	docs/policy/candidates/repository/citation-by-section-not-line.md	prod-repository-policy
+production-map	exact	docs/policy/candidates/repository/comment-carries-unregistered-rationale.md	prod-repository-policy
+production-map	exact	docs/policy/candidates/repository/rationale-fit-evidence-item.md	prod-repository-policy
+production-map	exact	docs/policy/candidates/repository/review-finding-reproduced-before-history.md	prod-repository-policy
+production-map	exact	docs/policy/candidates/repository/troubleshooting-file-misreads-ps1.md	prod-repository-policy
+production-map	exact	docs/policy/candidates/repository/troubleshooting-worktree-fetch-symptom.md	prod-repository-policy
+production-map	exact	docs/policy/candidates/windows/fixture-tag-fit-below-describe.md	prod-windows-documentation
+production-map	exact	docs/policy/candidates/windows/windows-older-shell-lane-in-procedure.md	prod-windows-documentation
+production-map	exact	docs/policy/decisions/README.md	prod-repository-policy
+production-map	exact	docs/policy/decisions/repository/annotated-tag-is-the-release-record.md	prod-repository-policy
+production-map	exact	docs/policy/decisions/repository/branch-lives-as-long-as-its-milestone.md	prod-repository-policy
+production-map	exact	docs/policy/decisions/repository/candidates-observed-before-adoption.md	prod-repository-policy
+production-map	exact	docs/policy/decisions/repository/check-evidence-three-states.md	prod-repository-policy
+production-map	exact	docs/policy/decisions/repository/ci-evidence-without-hosted-runners.md	prod-repository-policy
+production-map	exact	docs/policy/decisions/repository/commit-marks-a-judgement-point.md	prod-repository-policy
+production-map	exact	docs/policy/decisions/repository/design-documents-outside-the-authority-model.md	prod-repository-policy
+production-map	exact	docs/policy/decisions/repository/documents-classified-by-scope.md	prod-repository-policy
+production-map	exact	docs/policy/decisions/repository/fixture-tags-name-proven-invariants.md	prod-repository-policy
+production-map	exact	docs/policy/decisions/repository/github-agent-workflow.md	prod-repository-policy
+production-map	exact	docs/policy/decisions/repository/hooks-run-under-git-for-windows.md	prod-repository-policy
+production-map	exact	docs/policy/decisions/repository/hygiene-tool-owns-enforcement.md	prod-repository-policy
+production-map	exact	docs/policy/decisions/repository/invariant-registry-created.md	prod-repository-policy
+production-map	exact	docs/policy/decisions/repository/linked-worktrees-own-change-authoring.md	prod-repository-policy
+production-map	exact	docs/policy/decisions/repository/local-gate-selects-by-effect.md	prod-repository-policy
+production-map	exact	docs/policy/decisions/repository/monorepo-starts-clean-history.md	prod-repository-policy
+production-map	exact	docs/policy/decisions/repository/one-private-host-repository-from-public-template.md	prod-repository-policy
+production-map	exact	docs/policy/decisions/repository/operator-entry-boundary.md	prod-repository-policy
+production-map	exact	docs/policy/decisions/repository/powershell-copied-per-domain.md	prod-repository-policy
+production-map	exact	docs/policy/decisions/repository/production-release-qualification.md	prod-repository-policy
+production-map	exact	docs/policy/decisions/repository/provisional-registry-created.md	prod-repository-policy
+production-map	exact	docs/policy/decisions/repository/release-annotation-states-each-host.md	prod-repository-policy
+production-map	exact	docs/policy/decisions/repository/release-controller-preview-boundary.md	prod-repository-policy
+production-map	exact	docs/policy/decisions/repository/retired-capture-publication.md	prod-repository-policy
+production-map	exact	docs/policy/decisions/repository/single-flake-host-consumers.md	prod-repository-policy
+production-map	exact	docs/policy/decisions/repository/windows-ci-consumes-domain-runtime.md	prod-repository-policy
+production-map	exact	docs/policy/decisions/repository/work-planned-and-verified-in-documents.md	prod-repository-policy
+production-map	exact	docs/policy/decisions/unixlike/amd-apu-desktop-uses-labelled-luks-btrfs.md	prod-unixlike-documentation
+production-map	exact	docs/policy/decisions/unixlike/bounded-provider-input-refresh.md	prod-unixlike-documentation
+production-map	exact	docs/policy/decisions/unixlike/composed-homes-render-in-declared-terminals.md	prod-unixlike-documentation
+production-map	exact	docs/policy/decisions/unixlike/concern-first-inside-the-domain.md	prod-unixlike-documentation
+production-map	exact	docs/policy/decisions/unixlike/home-manager-platform-classes.md	prod-unixlike-documentation
+production-map	exact	docs/policy/decisions/unixlike/homebrew-owns-mac-apps.md	prod-unixlike-documentation
+production-map	exact	docs/policy/decisions/unixlike/hosts-select-offered-machine-profiles.md	prod-unixlike-documentation
+production-map	exact	docs/policy/decisions/unixlike/identity-contract-values-separated.md	prod-unixlike-documentation
+production-map	exact	docs/policy/decisions/unixlike/install-targets-are-explicit-runtime-inputs.md	prod-unixlike-documentation
+production-map	exact	docs/policy/decisions/unixlike/karabiner-desired-state-by-projection.md	prod-unixlike-documentation
+production-map	exact	docs/policy/decisions/unixlike/nixos-hosts-declared-in-typed-inventory.md	prod-unixlike-documentation
+production-map	exact	docs/policy/decisions/unixlike/nixos-wsl-system-layer-ownership.md	prod-unixlike-documentation
+production-map	exact	docs/policy/decisions/unixlike/nixpkgs-overlays-declared-once.md	prod-unixlike-documentation
+production-map	exact	docs/policy/decisions/unixlike/package-ownership-by-generating-module.md	prod-unixlike-documentation
+production-map	exact	docs/policy/decisions/unixlike/payloads-declared-and-parsed.md	prod-unixlike-documentation
+production-map	exact	docs/policy/decisions/unixlike/provider-constructors-own-composition.md	prod-unixlike-documentation
+production-map	exact	docs/policy/decisions/unixlike/public-environment-host-boundary.md	prod-unixlike-documentation
+production-map	exact	docs/policy/decisions/unixlike/sdkman-adopted-not-owned.md	prod-unixlike-documentation
+production-map	exact	docs/policy/decisions/unixlike/shared-linux-graphical-base-is-niri-and-noctalia.md	prod-unixlike-documentation
+production-map	exact	docs/policy/decisions/unixlike/unixlike-domain-owns-its-tree.md	prod-unixlike-documentation
+production-map	exact	docs/policy/decisions/unixlike/utm-ghostty-uses-software-gl.md	prod-unixlike-documentation
+production-map	exact	docs/policy/decisions/unixlike/vm-guests-share-the-graphical-profile.md	prod-unixlike-documentation
+production-map	exact	docs/policy/decisions/unixlike/x86-64-guest-runs-on-vmware-workstation.md	prod-unixlike-documentation
+production-map	exact	docs/policy/decisions/unixlike/zellij-patched-on-darwin-until-upstream.md	prod-unixlike-documentation
+production-map	exact	docs/policy/decisions/windows/appx-detection-unverified-not-absent.md	prod-windows-documentation
+production-map	exact	docs/policy/decisions/windows/automation-uses-internal-tools.md	prod-windows-documentation
+production-map	exact	docs/policy/decisions/windows/capture-moves-host-changes.md	prod-windows-documentation
+production-map	exact	docs/policy/decisions/windows/capture-restores-one-placeholder.md	prod-windows-documentation
+production-map	exact	docs/policy/decisions/windows/ci-runtime-is-verification-data.md	prod-windows-documentation
+production-map	exact	docs/policy/decisions/windows/drift-outranks-unverified.md	prod-windows-documentation
+production-map	exact	docs/policy/decisions/windows/feature-selection-closed.md	prod-windows-documentation
+production-map	exact	docs/policy/decisions/windows/font-install-states.md	prod-windows-documentation
+production-map	exact	docs/policy/decisions/windows/host-capture-owns-originals.md	prod-windows-documentation
+production-map	exact	docs/policy/decisions/windows/host-generation-owns-selection.md	prod-windows-documentation
+production-map	exact	docs/policy/decisions/windows/jsonsubset-captured-by-projection.md	prod-windows-documentation
+production-map	exact	docs/policy/decisions/windows/terminal-delegation-unverified-below-boundary.md	prod-windows-documentation
+production-map	exact	docs/policy/decisions/windows/terminal-generated-profiles-tolerated.md	prod-windows-documentation
+production-map	exact	docs/policy/decisions/windows/windows-adopts-catppuccin-latte.md	prod-windows-documentation
+production-map	exact	docs/policy/decisions/windows/windows-adopts-modus-operandi.md	prod-windows-documentation
+production-map	exact	docs/policy/decisions/windows/windows-checks-run-under-native-pwsh.md	prod-windows-documentation
+production-map	exact	docs/policy/decisions/windows/windows-entry-point-in-domain.md	prod-windows-documentation
+production-map	exact	docs/policy/decisions/windows/wslconfig-selected-by-windows-build.md	prod-windows-documentation
+production-map	exact	docs/policy/definition-of-done/repository.md	prod-repository-policy
+production-map	exact	docs/policy/definition-of-done/unixlike.md	prod-unixlike-documentation
+production-map	exact	docs/policy/definition-of-done/windows.md	prod-windows-documentation
+production-map	exact	docs/policy/invariants/README.md	prod-repository-policy
+production-map	exact	docs/policy/invariants/repository/adapters-pointer-only.md	prod-repository-policy
+production-map	exact	docs/policy/invariants/repository/change-authoring-in-linked-worktree.md	prod-repository-policy
+production-map	exact	docs/policy/invariants/repository/conventional-subject.md	prod-repository-policy
+production-map	exact	docs/policy/invariants/repository/design-outside-authority.md	prod-repository-policy
+production-map	exact	docs/policy/invariants/repository/document-index-generated.md	prod-repository-policy
+production-map	exact	docs/policy/invariants/repository/evidence-three-states.md	prod-repository-policy
+production-map	exact	docs/policy/invariants/repository/fixture-git-isolation.md	prod-repository-policy
+production-map	exact	docs/policy/invariants/repository/fixtures-name-invariants.md	prod-repository-policy
+production-map	exact	docs/policy/invariants/repository/flake-lock-isolated.md	prod-repository-policy
+production-map	exact	docs/policy/invariants/repository/hook-evidence-recorded.md	prod-repository-policy
+production-map	exact	docs/policy/invariants/repository/hooks-are-the-tracked-ones.md	prod-repository-policy
+production-map	exact	docs/policy/invariants/repository/hygiene-declared-names.md	prod-repository-policy
+production-map	exact	docs/policy/invariants/repository/hygiene-exclusion-symmetry.md	prod-repository-policy
+production-map	exact	docs/policy/invariants/repository/hygiene-home-paths.md	prod-repository-policy
+production-map	exact	docs/policy/invariants/repository/hygiene-machine-identity.md	prod-repository-policy
+production-map	exact	docs/policy/invariants/repository/hygiene-prose-account-name.md	prod-repository-policy
+production-map	exact	docs/policy/invariants/repository/hygiene-runtime-state.md	prod-repository-policy
+production-map	exact	docs/policy/invariants/repository/issue-closes-from-report.md	prod-repository-policy
+production-map	exact	docs/policy/invariants/repository/local-gate-selects-by-effect.md	prod-repository-policy
+production-map	exact	docs/policy/invariants/repository/merge-gate-requires-native.md	prod-repository-policy
+production-map	exact	docs/policy/invariants/repository/msys-argument-guard.md	prod-repository-policy
+production-map	exact	docs/policy/invariants/repository/no-closing-keyword.md	prod-repository-policy
+production-map	exact	docs/policy/invariants/repository/no-cross-domain-dependency.md	prod-repository-policy
+production-map	exact	docs/policy/invariants/repository/no-secret-in-history.md	prod-repository-policy
+production-map	exact	docs/policy/invariants/repository/operator-entry-boundary.md	prod-repository-policy
+production-map	exact	docs/policy/invariants/repository/pr-integration-authority.md	prod-repository-policy
+production-map	exact	docs/policy/invariants/repository/production-release-qualification.md	prod-repository-policy
+production-map	exact	docs/policy/invariants/repository/promotion-source.md	prod-repository-policy
+production-map	exact	docs/policy/invariants/repository/provisional-registry-coverage.md	prod-repository-policy
+production-map	exact	docs/policy/invariants/repository/publish-through-dev.md	prod-repository-policy
+production-map	exact	docs/policy/invariants/repository/pull-request-spans-an-evidence-lane.md	prod-repository-policy
+production-map	exact	docs/policy/invariants/repository/registry-coverage.md	prod-repository-policy
+production-map	exact	docs/policy/invariants/repository/release-control-preview-only.md	prod-repository-policy
+production-map	exact	docs/policy/invariants/repository/release-preview-read-only.md	prod-repository-policy
+production-map	exact	docs/policy/invariants/repository/release-tag-contract.md	prod-repository-policy
+production-map	exact	docs/policy/invariants/repository/required-checks-gate.md	prod-repository-policy
+production-map	exact	docs/policy/invariants/repository/retired-capture-publication.md	prod-repository-policy
+production-map	exact	docs/policy/invariants/repository/scope-ownership.md	prod-repository-policy
+production-map	exact	docs/policy/invariants/repository/windows-ci-runtime-bound.md	prod-repository-policy
+production-map	exact	docs/policy/invariants/repository/work-spec-has-report.md	prod-repository-policy
+production-map	exact	docs/policy/invariants/repository/worker-checkpoint.md	prod-repository-policy
+production-map	exact	docs/policy/invariants/unixlike/composition-in-one-place.md	prod-unixlike-documentation
+production-map	exact	docs/policy/invariants/unixlike/desktop-not-wsl.md	prod-unixlike-documentation
+production-map	exact	docs/policy/invariants/unixlike/eval-covers-every-host.md	prod-unixlike-documentation
+production-map	exact	docs/policy/invariants/unixlike/generated-config-key-in-schema.md	prod-unixlike-documentation
+production-map	exact	docs/policy/invariants/unixlike/host-written-payload-projected.md	prod-unixlike-documentation
+production-map	exact	docs/policy/invariants/unixlike/import-order-independence.md	prod-unixlike-documentation
+production-map	exact	docs/policy/invariants/unixlike/package-ownership.md	prod-unixlike-documentation
+production-map	exact	docs/policy/invariants/unixlike/payload-declared-and-parsed.md	prod-unixlike-documentation
+production-map	exact	docs/policy/invariants/unixlike/provider-input-refresh-bounded.md	prod-unixlike-documentation
+production-map	exact	docs/policy/invariants/unixlike/typed-identity.md	prod-unixlike-documentation
+production-map	exact	docs/policy/invariants/unixlike/version-manager-last.md	prod-unixlike-documentation
+production-map	exact	docs/policy/invariants/windows/appx-fallback-bounded-and-isolated.md	prod-windows-documentation
+production-map	exact	docs/policy/invariants/windows/automation-tools-standalone.md	prod-windows-documentation
+production-map	exact	docs/policy/invariants/windows/capture-owns-host-originals.md	prod-windows-documentation
+production-map	exact	docs/policy/invariants/windows/capture-source-policy.md	prod-windows-documentation
+production-map	exact	docs/policy/invariants/windows/check-exit-contract.md	prod-windows-documentation
+production-map	exact	docs/policy/invariants/windows/ci-runtime-declared.md	prod-windows-documentation
+production-map	exact	docs/policy/invariants/windows/compare-mode-declared.md	prod-windows-documentation
+production-map	exact	docs/policy/invariants/windows/declared-list-has-content.md	prod-windows-documentation
+production-map	exact	docs/policy/invariants/windows/diagnostic-categories-preserved.md	prod-windows-documentation
+production-map	exact	docs/policy/invariants/windows/entry-point-forwards-status.md	prod-windows-documentation
+production-map	exact	docs/policy/invariants/windows/external-profile-blocks-preserved.md	prod-windows-documentation
+production-map	exact	docs/policy/invariants/windows/feature-owns-every-item.md	prod-windows-documentation
+production-map	exact	docs/policy/invariants/windows/font-state-total.md	prod-windows-documentation
+production-map	exact	docs/policy/invariants/windows/hash-covers-selection.md	prod-windows-documentation
+production-map	exact	docs/policy/invariants/windows/host-generation-bound.md	prod-windows-documentation
+production-map	exact	docs/policy/invariants/windows/no-inherited-git-context.md	prod-windows-documentation
+production-map	exact	docs/policy/invariants/windows/no-unix-host-required.md	prod-windows-documentation
+production-map	exact	docs/policy/invariants/windows/one-placeholder.md	prod-windows-documentation
+production-map	exact	docs/policy/invariants/windows/parser-declared.md	prod-windows-documentation
+production-map	exact	docs/policy/invariants/windows/pre-bootstrap-shell-compatible.md	prod-windows-documentation
+production-map	exact	docs/policy/invariants/windows/precondition-declared.md	prod-windows-documentation
+production-map	exact	docs/policy/invariants/windows/schema-version-refused.md	prod-windows-documentation
+production-map	exact	docs/policy/invariants/windows/selected-precondition-evaluated.md	prod-windows-documentation
+production-map	exact	docs/policy/invariants/windows/selection-closed-and-explicit.md	prod-windows-documentation
+production-map	exact	docs/policy/invariants/windows/sources-total-function.md	prod-windows-documentation
+production-map	exact	docs/policy/invariants/windows/subset-owns-declared-keys.md	prod-windows-documentation
+production-map	exact	docs/policy/invariants/windows/support-boundary-named.md	prod-windows-documentation
+production-map	exact	docs/policy/invariants/windows/unique-ids.md	prod-windows-documentation
+production-map	exact	docs/provisional/README.md	prod-repository-policy
+production-map	exact	docs/provisional/repository/classify-registry-old-roots.md	prod-repository-policy
+production-map	exact	docs/provisional/repository/classify-unixlike-old-roots.md	prod-repository-policy
+production-map	exact	docs/provisional/unixlike/zellij-combining-marks.md	prod-unixlike-documentation
+production-map	exact	docs/reference/troubleshooting.md	prod-repository-policy
+production-map	exact	docs/reference/wsl-interop.md	prod-repository-policy
+production-map	exact	docs/status.md	prod-repository-policy
+production-map	exact	docs/status/repository.md	prod-repository-policy
+production-map	exact	docs/status/unixlike.md	prod-unixlike-documentation
+production-map	exact	docs/status/windows.md	prod-windows-documentation
+production-map	exact	docs/troubleshooting.md	prod-repository-policy
+production-map	exact	docs/work/README.md	prod-repository-policy
+production-map	exact	docs/work/repository/agent-workflow/report.md	prod-repository-policy
+production-map	exact	docs/work/repository/agent-workflow/spec.md	prod-repository-policy
+production-map	exact	docs/work/repository/ci-effect-selection/report.md	prod-repository-policy
+production-map	exact	docs/work/repository/ci-effect-selection/spec.md	prod-repository-policy
+production-map	exact	docs/work/repository/ci-headless-runtime/report.md	prod-repository-policy
+production-map	exact	docs/work/repository/ci-headless-runtime/spec.md	prod-repository-policy
+production-map	exact	docs/work/repository/commit-granularity-and-branch-lifetime/study.md	prod-repository-policy
+production-map	exact	docs/work/repository/docs-layout/report.md	prod-repository-policy
+production-map	exact	docs/work/repository/docs-layout/spec.md	prod-repository-policy
+production-map	exact	docs/work/repository/legacy-capture-caller-retirement/report.md	prod-repository-policy
+production-map	exact	docs/work/repository/legacy-capture-caller-retirement/spec.md	prod-repository-policy
+production-map	exact	docs/work/repository/legacy-unixlike-classification/report.md	prod-repository-policy
+production-map	exact	docs/work/repository/legacy-unixlike-classification/spec.md	prod-repository-policy
+production-map	exact	docs/work/repository/linked-worktree-authoring/report.md	prod-repository-policy
+production-map	exact	docs/work/repository/linked-worktree-authoring/spec.md	prod-repository-policy
+production-map	exact	docs/work/repository/no-wsl-gui-roadmap/report.md	prod-repository-policy
+production-map	exact	docs/work/repository/no-wsl-gui-roadmap/spec.md	prod-repository-policy
+production-map	exact	docs/work/repository/production-release-qualification/study.md	prod-repository-policy
+production-map	exact	docs/work/repository/production-release-qualification/report.md	prod-repository-policy
+production-map	exact	docs/work/repository/production-release-qualification/spec.md	prod-repository-policy
+production-map	exact	docs/work/repository/provider-documentation-alignment/report.md	prod-repository-policy
+production-map	exact	docs/work/repository/provider-documentation-alignment/spec.md	prod-repository-policy
+production-map	exact	docs/work/repository/provider-release-contract/report.md	prod-repository-policy
+production-map	exact	docs/work/repository/provider-release-contract/spec.md	prod-repository-policy
+production-map	exact	docs/work/repository/provider-release-contract/study.md	prod-repository-policy
+production-map	exact	docs/work/repository/refresh-candidate/report.md	prod-repository-policy
+production-map	exact	docs/work/repository/refresh-candidate/spec.md	prod-repository-policy
+production-map	exact	docs/work/repository/release-control-history/report.md	prod-repository-policy
+production-map	exact	docs/work/repository/release-control-history/spec.md	prod-repository-policy
+production-map	exact	docs/work/repository/release-controller/report.md	prod-repository-policy
+production-map	exact	docs/work/repository/release-controller/spec.md	prod-repository-policy
+production-map	exact	docs/work/repository/release-operating-transport/report.md	prod-repository-policy
+production-map	exact	docs/work/repository/release-operating-transport/spec.md	prod-repository-policy
+production-map	exact	docs/work/repository/release-preview/report.md	prod-repository-policy
+production-map	exact	docs/work/repository/release-preview/spec.md	prod-repository-policy
+production-map	exact	docs/work/repository/release-tag-contract/report.md	prod-repository-policy
+production-map	exact	docs/work/repository/release-tag-contract/spec.md	prod-repository-policy
+production-map	exact	docs/work/repository/repository-domain-map/map.md	prod-repository-policy
+production-map	exact	docs/work/repository/scheduled-flake-refresh/report.md	prod-repository-policy
+production-map	exact	docs/work/repository/scheduled-flake-refresh/spec.md	prod-repository-policy
+production-map	exact	docs/work/repository/tool-cleanup/report.md	prod-repository-policy
+production-map	exact	docs/work/repository/tool-cleanup/spec.md	prod-repository-policy
+production-map	exact	docs/work/repository/tool-entry-boundary/report.md	prod-repository-policy
+production-map	exact	docs/work/repository/tool-entry-boundary/spec.md	prod-repository-policy
+production-map	exact	docs/work/repository/unixlike-restructure-plan/plan.md	prod-repository-policy
+production-map	exact	docs/work/repository/unixlike-restructure-study/study.md	prod-repository-policy
+production-map	exact	docs/work/repository/windows-ci-runtime/report.md	prod-repository-policy
+production-map	exact	docs/work/repository/windows-ci-runtime/spec.md	prod-repository-policy
+production-map	exact	docs/work/repository/work-model/report.md	prod-repository-policy
+production-map	exact	docs/work/repository/work-model/spec.md	prod-repository-policy
+production-map	exact	docs/work/repository/worktree-work-preflight/report.md	prod-repository-policy
+production-map	exact	docs/work/repository/worktree-work-preflight/spec.md	prod-repository-policy
+production-map	exact	docs/work/roadmap.md	prod-repository-policy
+production-map	exact	docs/work/unixlike/amd-apu-desktop/report.md	prod-unixlike-documentation
+production-map	exact	docs/work/unixlike/amd-apu-desktop/spec.md	prod-unixlike-documentation
+production-map	exact	docs/work/unixlike/automatic-flake-refresh/report.md	prod-unixlike-documentation
+production-map	exact	docs/work/unixlike/automatic-flake-refresh/spec.md	prod-unixlike-documentation
+production-map	exact	docs/work/unixlike/binfmt-scope-investigation/report.md	prod-unixlike-documentation
+production-map	exact	docs/work/unixlike/binfmt-scope-investigation/spec.md	prod-unixlike-documentation
+production-map	exact	docs/work/unixlike/graphical-vm-guests/report.md	prod-unixlike-documentation
+production-map	exact	docs/work/unixlike/graphical-vm-guests/spec.md	prod-unixlike-documentation
+production-map	exact	docs/work/unixlike/headless-runtime-ci/report.md	prod-unixlike-documentation
+production-map	exact	docs/work/unixlike/headless-runtime-ci/spec.md	prod-unixlike-documentation
+production-map	exact	docs/work/unixlike/host-provider-api/report.md	prod-unixlike-documentation
+production-map	exact	docs/work/unixlike/host-provider-api/spec.md	prod-unixlike-documentation
+production-map	exact	docs/work/unixlike/host-selected-machine-profiles/report.md	prod-unixlike-documentation
+production-map	exact	docs/work/unixlike/host-selected-machine-profiles/spec.md	prod-unixlike-documentation
+production-map	exact	docs/work/unixlike/installation-and-deployment/report.md	prod-unixlike-documentation
+production-map	exact	docs/work/unixlike/installation-and-deployment/spec.md	prod-unixlike-documentation
+production-map	exact	docs/work/unixlike/legacy-darwin-capture-entry-retirement/report.md	prod-unixlike-documentation
+production-map	exact	docs/work/unixlike/legacy-darwin-capture-entry-retirement/spec.md	prod-unixlike-documentation
+production-map	exact	docs/work/unixlike/module-layout/report.md	prod-unixlike-documentation
+production-map	exact	docs/work/unixlike/module-layout/spec.md	prod-unixlike-documentation
+production-map	exact	docs/work/unixlike/module-layout/study.md	prod-unixlike-documentation
+production-map	exact	docs/work/unixlike/niri-noctalia-graphical-base/report.md	prod-unixlike-documentation
+production-map	exact	docs/work/unixlike/niri-noctalia-graphical-base/spec.md	prod-unixlike-documentation
+production-map	exact	docs/work/unixlike/nixos-host-inventory/report.md	prod-unixlike-documentation
+production-map	exact	docs/work/unixlike/nixos-host-inventory/spec.md	prod-unixlike-documentation
+production-map	exact	docs/work/unixlike/nixos-wsl-in-place-update/report.md	prod-unixlike-documentation
+production-map	exact	docs/work/unixlike/nixos-wsl-in-place-update/spec.md	prod-unixlike-documentation
+production-map	exact	docs/work/unixlike/no-wsl-gui-boundary/report.md	prod-unixlike-documentation
+production-map	exact	docs/work/unixlike/no-wsl-gui-boundary/spec.md	prod-unixlike-documentation
+production-map	exact	docs/work/unixlike/orbstack-sandbox/report.md	prod-unixlike-documentation
+production-map	exact	docs/work/unixlike/orbstack-sandbox/spec.md	prod-unixlike-documentation
+production-map	exact	docs/work/unixlike/provider-consumer-contract/report.md	prod-unixlike-documentation
+production-map	exact	docs/work/unixlike/provider-consumer-contract/spec.md	prod-unixlike-documentation
+production-map	exact	docs/work/unixlike/provider-consumer-contract/study.md	prod-unixlike-documentation
+production-map	exact	docs/work/unixlike/test-efficiency/report.md	prod-unixlike-documentation
+production-map	exact	docs/work/unixlike/test-efficiency/spec.md	prod-unixlike-documentation
+production-map	exact	docs/work/unixlike/tool-cleanup/report.md	prod-unixlike-documentation
+production-map	exact	docs/work/unixlike/tool-cleanup/spec.md	prod-unixlike-documentation
+production-map	exact	docs/work/unixlike/utm-headless-guest/report.md	prod-unixlike-documentation
+production-map	exact	docs/work/unixlike/utm-headless-guest/spec.md	prod-unixlike-documentation
+production-map	exact	docs/work/unixlike/vmware-headless-guest/report.md	prod-unixlike-documentation
+production-map	exact	docs/work/unixlike/vmware-headless-guest/spec.md	prod-unixlike-documentation
+production-map	exact	docs/work/windows/host-consumer-contract/report.md	prod-windows-documentation
+production-map	exact	docs/work/windows/host-consumer-contract/spec.md	prod-windows-documentation
+production-map	exact	docs/work/windows/host-consumer-contract/study.md	prod-windows-documentation
+production-map	exact	docs/work/windows/test-efficiency/report.md	prod-windows-documentation
+production-map	exact	docs/work/windows/test-efficiency/spec.md	prod-windows-documentation
+production-map	exact	docs/work/windows/tool-cleanup/report.md	prod-windows-documentation
+production-map	exact	docs/work/windows/tool-cleanup/spec.md	prod-windows-documentation
+production-map	exact	docs/work/windows/tool-entry-boundary/report.md	prod-windows-documentation
+production-map	exact	docs/work/windows/tool-entry-boundary/spec.md	prod-windows-documentation
+production-map	exact	docs/work/windows/vmware-host/report.md	prod-windows-documentation
+production-map	exact	docs/work/windows/vmware-host/spec.md	prod-windows-documentation
+production-map	exact	docs/wsl-interop.md	prod-repository-policy
+production-map	exact	flake.lock	prod-unixlike-payloads
+production-historical-only	flake.lock
+production-map	exact	flake.nix	prod-unixlike-api,prod-unixlike-payloads
+production-historical-only	flake.nix
+production-map	exact	invariants/README.md	prod-repository-policy
+production-map	exact	invariants/repository/adapters-pointer-only.md	prod-repository-policy
+production-map	exact	invariants/repository/conventional-subject.md	prod-repository-policy
+production-map	exact	invariants/repository/evidence-three-states.md	prod-repository-policy
+production-map	exact	invariants/repository/fixtures-name-invariants.md	prod-repository-policy
+production-map	exact	invariants/repository/flake-lock-isolated.md	prod-repository-policy
+production-map	exact	invariants/repository/hook-evidence-recorded.md	prod-repository-policy
+production-map	exact	invariants/repository/hooks-are-the-tracked-ones.md	prod-repository-policy
+production-map	exact	invariants/repository/hygiene-declared-names.md	prod-repository-policy
+production-map	exact	invariants/repository/hygiene-exclusion-symmetry.md	prod-repository-policy
+production-map	exact	invariants/repository/hygiene-home-paths.md	prod-repository-policy
+production-map	exact	invariants/repository/hygiene-machine-identity.md	prod-repository-policy
+production-map	exact	invariants/repository/hygiene-prose-account-name.md	prod-repository-policy
+production-map	exact	invariants/repository/hygiene-runtime-state.md	prod-repository-policy
+production-map	exact	invariants/repository/local-gate-selects-by-effect.md	prod-repository-policy
+production-map	exact	invariants/repository/merge-gate-requires-native.md	prod-repository-policy
+production-map	exact	invariants/repository/msys-argument-guard.md	prod-repository-policy
+production-map	exact	invariants/repository/no-cross-domain-dependency.md	prod-repository-policy
+production-map	exact	invariants/repository/no-secret-in-history.md	prod-repository-policy
+production-map	exact	invariants/repository/promotion-source.md	prod-repository-policy
+production-map	exact	invariants/repository/provisional-registry-coverage.md	prod-repository-policy
+production-map	exact	invariants/repository/publish-through-dev.md	prod-repository-policy
+production-map	exact	invariants/repository/registry-coverage.md	prod-repository-policy
+production-map	exact	invariants/repository/release-tag-contract.md	prod-repository-policy
+production-map	exact	invariants/repository/required-checks-gate.md	prod-repository-policy
+production-map	exact	invariants/repository/scope-ownership.md	prod-repository-policy
+production-map	exact	invariants/unixlike/composition-in-one-place.md	prod-unixlike-documentation
+production-historical-only	invariants/unixlike/composition-in-one-place.md
+production-map	exact	invariants/unixlike/desktop-not-wsl.md	prod-unixlike-documentation
+production-historical-only	invariants/unixlike/desktop-not-wsl.md
+production-map	exact	invariants/unixlike/eval-covers-every-host.md	prod-unixlike-documentation
+production-historical-only	invariants/unixlike/eval-covers-every-host.md
+production-map	exact	invariants/unixlike/generated-config-key-in-schema.md	prod-unixlike-documentation
+production-historical-only	invariants/unixlike/generated-config-key-in-schema.md
+production-map	exact	invariants/unixlike/host-written-payload-projected.md	prod-unixlike-documentation
+production-historical-only	invariants/unixlike/host-written-payload-projected.md
+production-map	exact	invariants/unixlike/import-order-independence.md	prod-unixlike-documentation
+production-historical-only	invariants/unixlike/import-order-independence.md
+production-map	exact	invariants/unixlike/package-ownership.md	prod-unixlike-documentation
+production-historical-only	invariants/unixlike/package-ownership.md
+production-map	exact	invariants/unixlike/payload-declared-and-parsed.md	prod-unixlike-documentation
+production-historical-only	invariants/unixlike/payload-declared-and-parsed.md
+production-map	exact	invariants/unixlike/typed-identity.md	prod-unixlike-documentation
+production-historical-only	invariants/unixlike/typed-identity.md
+production-map	exact	invariants/unixlike/version-manager-last.md	prod-unixlike-documentation
+production-historical-only	invariants/unixlike/version-manager-last.md
+production-map	exact	invariants/windows/capture-publishes-through-dev.md	prod-windows-documentation
+production-map	exact	invariants/windows/check-exit-contract.md	prod-windows-documentation
+production-map	exact	invariants/windows/compare-mode-declared.md	prod-windows-documentation
+production-map	exact	invariants/windows/declared-list-has-content.md	prod-windows-documentation
+production-map	exact	invariants/windows/entry-point-forwards-status.md	prod-windows-documentation
+production-map	exact	invariants/windows/external-profile-blocks-preserved.md	prod-windows-documentation
+production-map	exact	invariants/windows/feature-owns-every-item.md	prod-windows-documentation
+production-map	exact	invariants/windows/font-state-total.md	prod-windows-documentation
+production-map	exact	invariants/windows/hash-covers-selection.md	prod-windows-documentation
+production-map	exact	invariants/windows/no-inherited-git-context.md	prod-windows-documentation
+production-map	exact	invariants/windows/no-unix-host-required.md	prod-windows-documentation
+production-map	exact	invariants/windows/one-placeholder.md	prod-windows-documentation
+production-map	exact	invariants/windows/parser-declared.md	prod-windows-documentation
+production-map	exact	invariants/windows/pre-bootstrap-shell-compatible.md	prod-windows-documentation
+production-map	exact	invariants/windows/schema-version-refused.md	prod-windows-documentation
+production-map	exact	invariants/windows/selection-closed-and-explicit.md	prod-windows-documentation
+production-map	exact	invariants/windows/sources-total-function.md	prod-windows-documentation
+production-map	exact	invariants/windows/subset-owns-declared-keys.md	prod-windows-documentation
+production-map	exact	invariants/windows/support-boundary-named.md	prod-windows-documentation
+production-map	exact	invariants/windows/unique-ids.md	prod-windows-documentation
+production-map	exact	modules/bat.nix	prod-unixlike-api,prod-unixlike-payloads
+production-historical-only	modules/bat.nix
+production-map	exact	modules/btop.nix	prod-unixlike-api,prod-unixlike-payloads
+production-historical-only	modules/btop.nix
+production-map	exact	modules/darwin-defaults.nix	prod-unixlike-api,prod-unixlike-payloads
+production-historical-only	modules/darwin-defaults.nix
+production-map	exact	modules/darwin-editor.nix	prod-unixlike-api,prod-unixlike-payloads
+production-historical-only	modules/darwin-editor.nix
+production-map	exact	modules/darwin-firewall.nix	prod-unixlike-api,prod-unixlike-payloads
+production-historical-only	modules/darwin-firewall.nix
+production-map	exact	modules/darwin-home-shell.nix	prod-unixlike-api,prod-unixlike-payloads
+production-historical-only	modules/darwin-home-shell.nix
+production-map	exact	modules/darwin-homebrew.nix	prod-unixlike-api,prod-unixlike-payloads
+production-historical-only	modules/darwin-homebrew.nix
+production-map	exact	modules/darwin-host.nix	prod-unixlike-api,prod-unixlike-payloads
+production-historical-only	modules/darwin-host.nix
+production-map	exact	modules/darwin-nix.nix	prod-unixlike-api,prod-unixlike-payloads
+production-historical-only	modules/darwin-nix.nix
+production-map	exact	modules/darwin-shell.nix	prod-unixlike-api,prod-unixlike-payloads
+production-historical-only	modules/darwin-shell.nix
+production-map	exact	modules/desktop-fonts.nix	prod-unixlike-api,prod-unixlike-payloads
+production-historical-only	modules/desktop-fonts.nix
+production-map	exact	modules/direnv.nix	prod-unixlike-api,prod-unixlike-payloads
+production-historical-only	modules/direnv.nix
+production-map	exact	modules/eza.nix	prod-unixlike-api,prod-unixlike-payloads
+production-historical-only	modules/eza.nix
+production-map	exact	modules/flake/configurations.nix	prod-unixlike-api,prod-unixlike-payloads
+production-historical-only	modules/flake/configurations.nix
+production-map	exact	modules/flake/dev-shell.nix	prod-unixlike-api,prod-unixlike-payloads
+production-historical-only	modules/flake/dev-shell.nix
+production-map	exact	modules/flake/identity.nix	prod-unixlike-api,prod-unixlike-payloads
+production-historical-only	modules/flake/identity.nix
+production-map	exact	modules/flake/inventory.nix	prod-unixlike-api,prod-unixlike-payloads
+production-historical-only	modules/flake/inventory.nix
+production-map	exact	modules/flake/module-classes.nix	prod-unixlike-api,prod-unixlike-payloads
+production-historical-only	modules/flake/module-classes.nix
+production-map	exact	modules/flake/nixpkgs.nix	prod-unixlike-api,prod-unixlike-payloads
+production-historical-only	modules/flake/nixpkgs.nix
+production-map	exact	modules/flake/systems.nix	prod-unixlike-api,prod-unixlike-payloads
+production-historical-only	modules/flake/systems.nix
+production-map	exact	modules/fonts.nix	prod-unixlike-api,prod-unixlike-payloads
+production-historical-only	modules/fonts.nix
+production-map	exact	modules/gh.nix	prod-unixlike-api,prod-unixlike-payloads
+production-historical-only	modules/gh.nix
+production-map	exact	modules/ghostty.nix	prod-unixlike-api,prod-unixlike-payloads
+production-historical-only	modules/ghostty.nix
+production-map	exact	modules/git.nix	prod-unixlike-api,prod-unixlike-payloads
+production-historical-only	modules/git.nix
+production-map	exact	modules/home-account.nix	prod-unixlike-api,prod-unixlike-payloads
+production-historical-only	modules/home-account.nix
+production-map	exact	modules/karabiner.nix	prod-unixlike-api,prod-unixlike-payloads
+production-historical-only	modules/karabiner.nix
+production-map	exact	modules/lazygit.nix	prod-unixlike-api,prod-unixlike-payloads
+production-historical-only	modules/lazygit.nix
+production-map	exact	modules/neovim.nix	prod-unixlike-api,prod-unixlike-payloads
+production-historical-only	modules/neovim.nix
+production-map	exact	modules/nix-conf.nix	prod-unixlike-api,prod-unixlike-payloads
+production-historical-only	modules/nix-conf.nix
+production-map	exact	modules/packages.nix	prod-unixlike-api,prod-unixlike-payloads
+production-historical-only	modules/packages.nix
+production-map	exact	modules/powershell.nix	prod-unixlike-api,prod-unixlike-payloads
+production-historical-only	modules/powershell.nix
+production-map	exact	modules/shell.nix	prod-unixlike-api,prod-unixlike-payloads
+production-historical-only	modules/shell.nix
+production-map	exact	modules/skim.nix	prod-unixlike-api,prod-unixlike-payloads
+production-historical-only	modules/skim.nix
+production-map	exact	modules/ssh.nix	prod-unixlike-api,prod-unixlike-payloads
+production-historical-only	modules/ssh.nix
+production-map	exact	modules/starship.nix	prod-unixlike-api,prod-unixlike-payloads
+production-historical-only	modules/starship.nix
+production-map	exact	modules/state-version.nix	prod-unixlike-api,prod-unixlike-payloads
+production-historical-only	modules/state-version.nix
+production-map	exact	modules/uv.nix	prod-unixlike-api,prod-unixlike-payloads
+production-historical-only	modules/uv.nix
+production-map	exact	modules/wezterm.nix	prod-unixlike-api,prod-unixlike-payloads
+production-historical-only	modules/wezterm.nix
+production-map	exact	modules/wsl.nix	prod-unixlike-api,prod-unixlike-payloads
+production-historical-only	modules/wsl.nix
+production-map	exact	modules/yazi.nix	prod-unixlike-api,prod-unixlike-payloads
+production-historical-only	modules/yazi.nix
+production-map	exact	modules/zellij.nix	prod-unixlike-api,prod-unixlike-payloads
+production-historical-only	modules/zellij.nix
+production-map	exact	provisional/README.md	prod-repository-policy
+production-map	exact	provisional/unixlike/zellij-combining-marks.md	prod-unixlike-documentation
+production-historical-only	provisional/unixlike/zellij-combining-marks.md
+production-map	exact	tool/checks/composition	prod-unixlike-payloads
+production-historical-only	tool/checks/composition
+production-map	exact	tool/checks/composition-test	prod-unixlike-payloads
+production-historical-only	tool/checks/composition-test
+production-map	exact	tool/checks/eval-coverage-test	prod-unixlike-payloads
+production-historical-only	tool/checks/eval-coverage-test
+production-map	exact	tool/checks/fixtures/composition/forces/feature.nix	prod-unixlike-api,prod-unixlike-payloads
+production-historical-only	tool/checks/fixtures/composition/forces/feature.nix
+production-map	exact	tool/checks/fixtures/composition/mentions-in-comment/feature.nix	prod-unixlike-api,prod-unixlike-payloads
+production-historical-only	tool/checks/fixtures/composition/mentions-in-comment/feature.nix
+production-map	exact	tool/checks/fixtures/composition/names-host/feature.nix	prod-unixlike-api,prod-unixlike-payloads
+production-historical-only	tool/checks/fixtures/composition/names-host/feature.nix
+production-map	exact	tool/checks/fixtures/eval-coverage/empty-flavour/flake.nix	prod-unixlike-api,prod-unixlike-payloads
+production-historical-only	tool/checks/fixtures/eval-coverage/empty-flavour/flake.nix
+production-map	exact	tool/checks/fixtures/eval-coverage/no-flavour/flake.nix	prod-unixlike-api,prod-unixlike-payloads
+production-historical-only	tool/checks/fixtures/eval-coverage/no-flavour/flake.nix
+production-map	exact	tool/checks/fixtures/eval-coverage/probe/flake.nix	prod-unixlike-api,prod-unixlike-payloads
+production-historical-only	tool/checks/fixtures/eval-coverage/probe/flake.nix
+production-map	exact	tool/checks/fixtures/import-order/order-dependent/a.nix	prod-unixlike-api,prod-unixlike-payloads
+production-historical-only	tool/checks/fixtures/import-order/order-dependent/a.nix
+production-map	exact	tool/checks/fixtures/import-order/order-dependent/b.nix	prod-unixlike-api,prod-unixlike-payloads
+production-historical-only	tool/checks/fixtures/import-order/order-dependent/b.nix
+production-map	exact	tool/checks/fixtures/payloads/broken-lua/payloads.json	prod-unixlike-payloads
+production-historical-only	tool/checks/fixtures/payloads/broken-lua/payloads.json
+production-map	exact	tool/checks/fixtures/payloads/broken-lua/sample.lua	prod-unixlike-payloads
+production-historical-only	tool/checks/fixtures/payloads/broken-lua/sample.lua
+production-map	exact	tool/checks/fixtures/payloads/stale/payloads.json	prod-unixlike-payloads
+production-historical-only	tool/checks/fixtures/payloads/stale/payloads.json
+production-map	exact	tool/checks/fixtures/payloads/undeclared/orphan.lua	prod-unixlike-payloads
+production-historical-only	tool/checks/fixtures/payloads/undeclared/orphan.lua
+production-map	exact	tool/checks/fixtures/payloads/undeclared/payloads.json	prod-unixlike-payloads
+production-historical-only	tool/checks/fixtures/payloads/undeclared/payloads.json
+production-map	exact	tool/checks/fixtures/payloads/undeclared/sample.lua	prod-unixlike-payloads
+production-historical-only	tool/checks/fixtures/payloads/undeclared/sample.lua
+production-map	exact	tool/checks/fixtures/payloads/unknown-format/payloads.json	prod-unixlike-payloads
+production-historical-only	tool/checks/fixtures/payloads/unknown-format/payloads.json
+production-map	exact	tool/checks/fixtures/payloads/unknown-format/sample.toml	prod-unixlike-payloads
+production-historical-only	tool/checks/fixtures/payloads/unknown-format/sample.toml
+production-map	exact	tool/checks/flake-test	prod-unixlike-payloads
+production-historical-only	tool/checks/flake-test
+production-map	exact	tool/checks/format	prod-unixlike-payloads
+production-historical-only	tool/checks/format
+production-map	exact	tool/checks/import-order	prod-unixlike-payloads
+production-historical-only	tool/checks/import-order
+production-map	exact	tool/checks/import-order-test	prod-unixlike-payloads
+production-historical-only	tool/checks/import-order-test
+production-map	exact	tool/checks/karabiner-test	prod-unixlike-payloads
+production-historical-only	tool/checks/karabiner-test
+production-map	exact	tool/checks/lint	prod-unixlike-payloads
+production-historical-only	tool/checks/lint
+production-map	exact	tool/checks/payloads	prod-unixlike-payloads
+production-historical-only	tool/checks/payloads
+production-map	exact	tool/checks/payloads-test	prod-unixlike-payloads
+production-historical-only	tool/checks/payloads-test
+production-map	exact	tool/checks/prerequisite	prod-unixlike-payloads
+production-historical-only	tool/checks/prerequisite
+production-map	exact	tool/checks/prerequisite-test	prod-unixlike-payloads
+production-historical-only	tool/checks/prerequisite-test
+production-map	exact	tool/checks/test	prod-unixlike-payloads
+production-historical-only	tool/checks/test
+production-map	exact	tool/configs	prod-repository-policy
+production-map	exact	tool/darwin/karabiner	prod-unixlike-payloads
+production-historical-only	tool/darwin/karabiner
+production-map	exact	tool/dispatch/ci-base	prod-repository-policy
+production-map	exact	tool/dispatch/select	prod-repository-policy
+production-map	exact	tool/doctor.sh	prod-repository-policy
+production-map	exact	tool/setup	prod-repository-policy
+production-map	exact	tool/version-control/audit	prod-repository-policy,prod-repository-native
+production-map	exact	tool/version-control/audit-remote	prod-repository-policy,prod-repository-native
+production-map	exact	tool/version-control/check-promotion	prod-repository-policy,prod-repository-native
+production-map	exact	tool/version-control/check-promotion-queue	prod-repository-policy,prod-repository-native
+production-map	exact	tool/version-control/classify	prod-repository-policy,prod-repository-native
+production-map	exact	tool/version-control/close-issues	prod-repository-policy,prod-repository-native
+production-map	exact	tool/version-control/closing-keywords	prod-repository-policy,prod-repository-native
+production-map	exact	tool/version-control/commit	prod-repository-policy,prod-repository-native
+production-map	exact	tool/version-control/design-citations	prod-repository-policy,prod-repository-native
+production-map	exact	tool/version-control/domain-reads	prod-repository-policy,prod-repository-native
+production-map	exact	tool/version-control/fixture-git-environment.sh	prod-repository-policy,prod-repository-native
+production-map	exact	tool/version-control/fixture-git-isolation-test	prod-repository-policy,prod-repository-native
+production-map	exact	tool/version-control/hook-evidence	prod-repository-policy,prod-repository-native
+production-map	exact	tool/version-control/hygiene	prod-repository-policy,prod-repository-native
+production-map	exact	tool/version-control/hygiene.allow	prod-repository-policy,prod-repository-native
+production-map	exact	tool/version-control/hygiene.names	prod-repository-policy,prod-repository-native
+production-map	exact	tool/version-control/invariants	prod-repository-policy,prod-repository-native
+production-map	exact	tool/version-control/plan-promotion	prod-repository-policy,prod-repository-native
+production-map	exact	tool/version-control/plan-release	prod-repository-policy,prod-repository-native
+production-map	exact	tool/version-control/provisional	prod-repository-policy,prod-repository-native
+production-map	exact	tool/version-control/records	prod-repository-policy,prod-repository-native
+production-map	exact	tool/version-control/release-control	prod-repository-policy,prod-repository-native
+production-map	exact	tool/version-control/release-control-loader.py	prod-repository-policy,prod-repository-native
+production-map	exact	tool/version-control/release-control-package/adapter.py	prod-repository-policy,prod-repository-native
+production-map	exact	tool/version-control/release-control-package/engine.py	prod-repository-policy,prod-repository-native
+production-map	exact	tool/version-control/release-control-package/main.py	prod-repository-policy,prod-repository-native
+production-map	exact	tool/version-control/release-control-package/manifest.tsv	prod-repository-policy,prod-repository-native
+production-map	exact	tool/version-control/release-control-package/protocol.md	prod-repository-policy,prod-repository-native
+production-map	exact	tool/version-control/release-control-package/records.py	prod-repository-policy,prod-repository-native
+production-map	exact	tool/version-control/release-preview	prod-repository-policy,prod-repository-native
+production-map	exact	tool/version-control/release-preview.awk	prod-repository-policy,prod-repository-native
+production-map	exact	tool/version-control/release-preview.rules	prod-repository-policy,prod-repository-native
+production-map	exact	tool/version-control/require-linked-worktree	prod-repository-policy,prod-repository-native
+production-map	exact	tool/version-control/required-checks	prod-repository-policy,prod-repository-native
+production-map	exact	tool/version-control/session-test	prod-repository-policy,prod-repository-native
+production-map	exact	tool/version-control/test	prod-repository-policy,prod-repository-native
+production-map	exact	tool/version-control/test-production-release	prod-repository-policy,prod-repository-native
+production-map	exact	tool/version-control/test-production-release.py	prod-repository-policy,prod-repository-native
+production-map	exact	tool/version-control/test-refresh-candidate-nix	prod-repository-policy,prod-repository-native
+production-map	exact	tool/version-control/test-refresh-candidate-nix.py	prod-repository-policy,prod-repository-native
+production-map	exact	tool/version-control/test-release-control	prod-repository-policy,prod-repository-native
+production-map	exact	tool/version-control/test-release-control.py	prod-repository-policy,prod-repository-native
+production-map	exact	tool/version-control/test-release-preview	prod-repository-policy,prod-repository-native
+production-map	exact	tool/version-control/test-retired-capture	prod-repository-policy,prod-repository-native
+production-map	exact	tool/version-control/test-retired-capture.py	prod-repository-policy,prod-repository-native
+production-map	exact	tool/version-control/work	prod-repository-policy,prod-repository-native
+production-map	exact	tool/work-session.sh	prod-repository-policy
+production-map	exact	tool/worktree.sh	prod-repository-policy
+production-map	exact	unixlike/.vscode/settings.json	prod-unixlike-payloads
+production-map	exact	unixlike/api/contract.json	prod-unixlike-api
+production-map	exact	unixlike/api/contract.nix	prod-unixlike-api
+production-map	exact	unixlike/flake-refresh-exclusions.json	prod-unixlike-payloads
+production-map	exact	unixlike/flake.lock	prod-unixlike-api
+production-map	exact	unixlike/flake.nix	prod-unixlike-api
+production-map	exact	unixlike/modules/desktop/audio.nix	prod-unixlike-api,prod-unixlike-payloads
+production-map	exact	unixlike/modules/desktop/fonts/desktop.nix	prod-unixlike-api,prod-unixlike-payloads
+production-map	exact	unixlike/modules/desktop/fonts/wsl.nix	prod-unixlike-api,prod-unixlike-payloads
+production-map	exact	unixlike/modules/desktop/graphical/base.nix	prod-unixlike-api,prod-unixlike-payloads
+production-map	exact	unixlike/modules/desktop/graphical/home.nix	prod-unixlike-api,prod-unixlike-payloads
+production-map	exact	unixlike/modules/desktop/hypridle.nix	prod-unixlike-api,prod-unixlike-payloads
+production-map	exact	unixlike/modules/desktop/input-method.nix	prod-unixlike-api,prod-unixlike-payloads
+production-map	exact	unixlike/modules/desktop/media.nix	prod-unixlike-api,prod-unixlike-payloads
+production-map	exact	unixlike/modules/desktop/niri/home.nix	prod-unixlike-api,prod-unixlike-payloads
+production-map	exact	unixlike/modules/desktop/niri/system.nix	prod-unixlike-api,prod-unixlike-payloads
+production-map	exact	unixlike/modules/desktop/noctalia.nix	prod-unixlike-api,prod-unixlike-payloads
+production-map	exact	unixlike/modules/flake/configurations.nix	prod-unixlike-api
+production-map	exact	unixlike/modules/flake/contract-tools.nix	prod-unixlike-api
+production-map	exact	unixlike/modules/flake/dev-shell.nix	prod-unixlike-api
+production-map	exact	unixlike/modules/flake/graphical-runtime-test.nix	prod-unixlike-api
+production-map	exact	unixlike/modules/flake/module-classes.nix	prod-unixlike-api
+production-map	exact	unixlike/modules/flake/nixpkgs.nix	prod-unixlike-api
+production-map	exact	unixlike/modules/flake/systems.nix	prod-unixlike-api
+production-map	exact	unixlike/modules/foundation/home-account.nix	prod-unixlike-api,prod-unixlike-payloads
+production-map	exact	unixlike/modules/foundation/nix/darwin.nix	prod-unixlike-api,prod-unixlike-payloads
+production-map	exact	unixlike/modules/foundation/nix/shared.nix	prod-unixlike-api,prod-unixlike-payloads
+production-map	exact	unixlike/modules/foundation/packages.nix	prod-unixlike-api,prod-unixlike-payloads
+production-map	exact	unixlike/modules/foundation/shell/darwin-home.nix	prod-unixlike-api,prod-unixlike-payloads
+production-map	exact	unixlike/modules/foundation/shell/shared.nix	prod-unixlike-api,prod-unixlike-payloads
+production-map	exact	unixlike/modules/foundation/ssh.nix	prod-unixlike-api,prod-unixlike-payloads
+production-map	exact	unixlike/modules/foundation/state-version.nix	prod-unixlike-api,prod-unixlike-payloads
+production-map	exact	unixlike/modules/foundation/timezone.nix	prod-unixlike-api,prod-unixlike-payloads
+production-map	exact	unixlike/modules/platforms/darwin.nix	prod-unixlike-api,prod-unixlike-payloads
+production-map	exact	unixlike/modules/platforms/defaults.nix	prod-unixlike-api,prod-unixlike-payloads
+production-map	exact	unixlike/modules/platforms/editor/darwin.nix	prod-unixlike-api,prod-unixlike-payloads
+production-map	exact	unixlike/modules/platforms/editor/wsl.nix	prod-unixlike-api,prod-unixlike-payloads
+production-map	exact	unixlike/modules/platforms/homebrew.nix	prod-unixlike-api,prod-unixlike-payloads
+production-map	exact	unixlike/modules/programs/agents.nix	prod-unixlike-api,prod-unixlike-payloads
+production-map	exact	unixlike/modules/programs/bat.nix	prod-unixlike-api,prod-unixlike-payloads
+production-map	exact	unixlike/modules/programs/btop.nix	prod-unixlike-api,prod-unixlike-payloads
+production-map	exact	unixlike/modules/programs/direnv.nix	prod-unixlike-api,prod-unixlike-payloads
+production-map	exact	unixlike/modules/programs/eza.nix	prod-unixlike-api,prod-unixlike-payloads
+production-map	exact	unixlike/modules/programs/fzf.nix	prod-unixlike-api,prod-unixlike-payloads
+production-map	exact	unixlike/modules/programs/gh.nix	prod-unixlike-api,prod-unixlike-payloads
+production-map	exact	unixlike/modules/programs/ghostty.nix	prod-unixlike-api,prod-unixlike-payloads
+production-map	exact	unixlike/modules/programs/git.nix	prod-unixlike-api,prod-unixlike-payloads
+production-map	exact	unixlike/modules/programs/glow.nix	prod-unixlike-api,prod-unixlike-payloads
+production-map	exact	unixlike/modules/programs/karabiner/karabiner.json	prod-unixlike-darwin-capture
+production-map	exact	unixlike/modules/programs/karabiner/module.nix	prod-unixlike-darwin-capture
+production-map	exact	unixlike/modules/programs/karabiner/symbolic-hotkeys.json	prod-unixlike-darwin-capture
+production-map	exact	unixlike/modules/programs/karabiner/tool	prod-unixlike-darwin-capture
+production-map	exact	unixlike/modules/programs/karabiner/units.json	prod-unixlike-darwin-capture
+production-map	exact	unixlike/modules/programs/lazygit.nix	prod-unixlike-api,prod-unixlike-payloads
+production-map	exact	unixlike/modules/programs/neovim.nix	prod-unixlike-api,prod-unixlike-payloads
+production-map	exact	unixlike/modules/programs/nix-index.nix	prod-unixlike-api,prod-unixlike-payloads
+production-map	exact	unixlike/modules/programs/nix-ld.nix	prod-unixlike-api,prod-unixlike-payloads
+production-map	exact	unixlike/modules/programs/powershell/module.nix	prod-unixlike-api,prod-unixlike-payloads
+production-map	exact	unixlike/modules/programs/powershell/profile.ps1	prod-unixlike-payloads
+production-map	exact	unixlike/modules/programs/skim.nix	prod-unixlike-api,prod-unixlike-payloads
+production-map	exact	unixlike/modules/programs/starship.nix	prod-unixlike-api,prod-unixlike-payloads
+production-map	exact	unixlike/modules/programs/tealdeer.nix	prod-unixlike-api,prod-unixlike-payloads
+production-map	exact	unixlike/modules/programs/uv.nix	prod-unixlike-api,prod-unixlike-payloads
+production-map	exact	unixlike/modules/programs/wezterm/config/appearance.lua	prod-unixlike-payloads
+production-map	exact	unixlike/modules/programs/wezterm/config/behavior.lua	prod-unixlike-payloads
+production-map	exact	unixlike/modules/programs/wezterm/config/bindings.lua	prod-unixlike-payloads
+production-map	exact	unixlike/modules/programs/wezterm/config/fonts.lua	prod-unixlike-payloads
+production-map	exact	unixlike/modules/programs/wezterm/config/startup.lua	prod-unixlike-payloads
+production-map	exact	unixlike/modules/programs/wezterm/fonts.json	prod-unixlike-payloads
+production-map	exact	unixlike/modules/programs/wezterm/local.lua.example	prod-unixlike-payloads
+production-map	exact	unixlike/modules/programs/wezterm/module.nix	prod-unixlike-api,prod-unixlike-payloads
+production-map	exact	unixlike/modules/programs/wezterm/platform/darwin.lua	prod-unixlike-payloads
+production-map	exact	unixlike/modules/programs/wezterm/platform/linux.lua	prod-unixlike-payloads
+production-map	exact	unixlike/modules/programs/wezterm/platform/windows.lua	prod-unixlike-payloads
+production-map	exact	unixlike/modules/programs/wezterm/wezterm.lua	prod-unixlike-payloads
+production-map	exact	unixlike/modules/programs/yazi.nix	prod-unixlike-api,prod-unixlike-payloads
+production-map	exact	unixlike/modules/programs/zellij/config.kdl	prod-unixlike-payloads
+production-map	exact	unixlike/modules/programs/zellij/module.nix	prod-unixlike-api,prod-unixlike-payloads
+production-map	exact	unixlike/modules/programs/zoxide.nix	prod-unixlike-api,prod-unixlike-payloads
+production-map	exact	unixlike/payloads.json	prod-unixlike-payloads
+production-map	exact	unixlike/tool/README.md	prod-unixlike-api,prod-unixlike-payloads
+production-map	exact	unixlike/tool/checks/composition	prod-unixlike-api,prod-unixlike-payloads
+production-map	exact	unixlike/tool/checks/composition-test	prod-unixlike-api,prod-unixlike-payloads
+production-map	exact	unixlike/tool/checks/contract-inspect-test	prod-unixlike-inspection
+production-map	exact	unixlike/tool/checks/darwin-capture-consumer-test	prod-unixlike-darwin-capture
+production-map	exact	unixlike/tool/checks/darwin-capture-test	prod-unixlike-darwin-capture
+production-map	exact	unixlike/tool/checks/darwin-capture-test.py	prod-unixlike-darwin-capture
+production-map	exact	unixlike/tool/checks/eval-coverage-test	prod-unixlike-api,prod-unixlike-payloads
+production-map	exact	unixlike/tool/checks/external-consumer-test	prod-unixlike-inspection
+production-map	exact	unixlike/tool/checks/fixtures/composition/forces/feature.nix	prod-unixlike-api,prod-unixlike-payloads
+production-map	exact	unixlike/tool/checks/fixtures/composition/mentions-in-comment/feature.nix	prod-unixlike-api,prod-unixlike-payloads
+production-map	exact	unixlike/tool/checks/fixtures/composition/names-host/feature.nix	prod-unixlike-api,prod-unixlike-payloads
+production-map	exact	unixlike/tool/checks/fixtures/eval-coverage/empty-flavour/flake.nix	prod-unixlike-api,prod-unixlike-payloads
+production-map	exact	unixlike/tool/checks/fixtures/eval-coverage/failing-host/flake.nix	prod-unixlike-api,prod-unixlike-payloads
+production-map	exact	unixlike/tool/checks/fixtures/eval-coverage/nixos-hosts/flake.nix.in	prod-unixlike-api,prod-unixlike-payloads
+production-map	exact	unixlike/tool/checks/fixtures/eval-coverage/no-flavour/flake.nix	prod-unixlike-api,prod-unixlike-payloads
+production-map	exact	unixlike/tool/checks/fixtures/eval-coverage/probe/flake.nix	prod-unixlike-api,prod-unixlike-payloads
+production-map	exact	unixlike/tool/checks/fixtures/import-order/minimal/base.nix	prod-unixlike-api,prod-unixlike-payloads
+production-map	exact	unixlike/tool/checks/fixtures/import-order/order-dependent/a.nix	prod-unixlike-api,prod-unixlike-payloads
+production-map	exact	unixlike/tool/checks/fixtures/import-order/order-dependent/b.nix	prod-unixlike-api,prod-unixlike-payloads
+production-map	exact	unixlike/tool/checks/fixtures/payloads/broken-lua/payloads.json	prod-unixlike-api,prod-unixlike-payloads
+production-map	exact	unixlike/tool/checks/fixtures/payloads/broken-lua/sample.lua	prod-unixlike-api,prod-unixlike-payloads
+production-map	exact	unixlike/tool/checks/fixtures/payloads/stale/payloads.json	prod-unixlike-api,prod-unixlike-payloads
+production-map	exact	unixlike/tool/checks/fixtures/payloads/undeclared/orphan.lua	prod-unixlike-api,prod-unixlike-payloads
+production-map	exact	unixlike/tool/checks/fixtures/payloads/undeclared/payloads.json	prod-unixlike-api,prod-unixlike-payloads
+production-map	exact	unixlike/tool/checks/fixtures/payloads/undeclared/sample.lua	prod-unixlike-api,prod-unixlike-payloads
+production-map	exact	unixlike/tool/checks/fixtures/payloads/unknown-format/payloads.json	prod-unixlike-api,prod-unixlike-payloads
+production-map	exact	unixlike/tool/checks/fixtures/payloads/unknown-format/sample.toml	prod-unixlike-api,prod-unixlike-payloads
+production-map	exact	unixlike/tool/checks/fixtures/provider-api/contract-coverage.nix	prod-unixlike-api
+production-map	exact	unixlike/tool/checks/flake-test	prod-unixlike-api,prod-unixlike-payloads
+production-map	exact	unixlike/tool/checks/format	prod-unixlike-api,prod-unixlike-payloads
+production-map	exact	unixlike/tool/checks/import-order	prod-unixlike-api,prod-unixlike-payloads
+production-map	exact	unixlike/tool/checks/import-order-test	prod-unixlike-api,prod-unixlike-payloads
+production-map	exact	unixlike/tool/checks/karabiner-entry-test	prod-unixlike-api,prod-unixlike-payloads
+production-map	exact	unixlike/tool/checks/karabiner-test	prod-unixlike-api,prod-unixlike-payloads
+production-map	exact	unixlike/tool/checks/lint	prod-unixlike-api,prod-unixlike-payloads
+production-map	exact	unixlike/tool/checks/payloads	prod-unixlike-api,prod-unixlike-payloads
+production-map	exact	unixlike/tool/checks/payloads-test	prod-unixlike-api,prod-unixlike-payloads
+production-map	exact	unixlike/tool/checks/prerequisite	prod-unixlike-api,prod-unixlike-payloads
+production-map	exact	unixlike/tool/checks/prerequisite-test	prod-unixlike-api,prod-unixlike-payloads
+production-map	exact	unixlike/tool/checks/provider-api-test	prod-unixlike-api,prod-unixlike-payloads
+production-map	exact	unixlike/tool/checks/refresh-inputs-test	prod-unixlike-api,prod-unixlike-payloads
+production-map	exact	unixlike/tool/checks/refresh_inputs_test.py	prod-unixlike-api,prod-unixlike-payloads
+production-map	exact	unixlike/tool/checks/standalone-readiness-test	prod-unixlike-inspection
+production-map	exact	unixlike/tool/checks/test	prod-unixlike-api,prod-unixlike-payloads
+production-map	exact	unixlike/tool/contract-inspect	prod-unixlike-inspection
+production-map	exact	unixlike/tool/darwin-capture/README.md	prod-unixlike-darwin-capture
+production-map	exact	unixlike/tool/darwin-capture/adapter.py	prod-unixlike-darwin-capture
+production-map	exact	unixlike/tool/darwin-capture/engine.py	prod-unixlike-darwin-capture
+production-map	exact	unixlike/tool/darwin-capture/validation.nix	prod-unixlike-darwin-capture
+production-map	exact	unixlike/tool/refresh-inputs	prod-unixlike-api,prod-unixlike-payloads
+production-map	exact	unixlike/tool/refresh_inputs.py	prod-unixlike-api,prod-unixlike-payloads
+production-map	exact	unixlike/tool/standalone-readiness	prod-unixlike-inspection
+production-map	exact	windows/desired/files/powershell/profile.ps1	prod-windows-catalogue
+production-map	exact	windows/desired/files/powertoys/AdvancedPaste/settings.json	prod-windows-catalogue
+production-map	exact	windows/desired/files/powertoys/Awake/settings.json	prod-windows-catalogue
+production-map	exact	windows/desired/files/powertoys/CmdPal/settings.json	prod-windows-catalogue
+production-map	exact	windows/desired/files/powertoys/FancyZones/custom-layouts.json	prod-windows-catalogue
+production-map	exact	windows/desired/files/powertoys/FancyZones/default-layouts.json	prod-windows-catalogue
+production-map	exact	windows/desired/files/powertoys/FancyZones/layout-hotkeys.json	prod-windows-catalogue
+production-map	exact	windows/desired/files/powertoys/FancyZones/settings.json	prod-windows-catalogue
+production-map	exact	windows/desired/files/powertoys/File Explorer/settings.json	prod-windows-catalogue
+production-map	exact	windows/desired/files/powertoys/File Locksmith/file-locksmith-settings.json	prod-windows-catalogue
+production-map	exact	windows/desired/files/powertoys/FindMyMouse/settings.json	prod-windows-catalogue
+production-map	exact	windows/desired/files/powertoys/Keyboard Manager/default.json	prod-windows-catalogue
+production-map	exact	windows/desired/files/powertoys/Keyboard Manager/settings.json	prod-windows-catalogue
+production-map	exact	windows/desired/files/powertoys/NewPlus/settings.json	prod-windows-catalogue
+production-map	exact	windows/desired/files/powertoys/Peek/preview-settings.json	prod-windows-catalogue
+production-map	exact	windows/desired/files/powertoys/Peek/settings.json	prod-windows-catalogue
+production-map	exact	windows/desired/files/powertoys/PowerRename/power-rename-settings.json	prod-windows-catalogue
+production-map	exact	windows/desired/files/powertoys/Workspaces/settings.json	prod-windows-catalogue
+production-map	exact	windows/desired/files/powertoys/settings.json	prod-windows-catalogue
+production-map	exact	windows/desired/files/terminal/settings.json	prod-windows-catalogue
+production-map	exact	windows/desired/files/wezterm/config/appearance.lua	prod-windows-catalogue
+production-map	exact	windows/desired/files/wezterm/config/behavior.lua	prod-windows-catalogue
+production-map	exact	windows/desired/files/wezterm/config/bindings.lua	prod-windows-catalogue
+production-map	exact	windows/desired/files/wezterm/config/fonts.lua	prod-windows-catalogue
+production-map	exact	windows/desired/files/wezterm/fonts.json	prod-windows-catalogue
+production-map	exact	windows/desired/files/wezterm/local.lua.example	prod-windows-catalogue
+production-map	exact	windows/desired/files/wezterm/platform/darwin.lua	prod-windows-catalogue
+production-map	exact	windows/desired/files/wezterm/platform/linux.lua	prod-windows-catalogue
+production-map	exact	windows/desired/files/wezterm/platform/windows.lua	prod-windows-catalogue
+production-map	exact	windows/desired/files/wezterm/wezterm.lua	prod-windows-catalogue
+production-map	exact	windows/desired/files/wsl/mirrored-networking.wslconfig	prod-windows-catalogue
+production-map	exact	windows/desired/files/wsl/nat-networking.wslconfig	prod-windows-catalogue
+production-map	exact	windows/desired/files/zellij/config.kdl	prod-windows-catalogue
+production-map	exact	windows/desired/manifest.json	prod-windows-catalogue
+production-map	exact	windows/examples/README.md	prod-windows-native,prod-windows-generation
+production-map	exact	windows/examples/environment.json	prod-windows-native,prod-windows-generation
+production-map	exact	windows/examples/settings/profile.json	prod-windows-native,prod-windows-generation
+production-map	exact	windows/src/WinEnv.psm1	prod-windows-native,prod-windows-generation
+production-map	exact	windows/src/WinEnvCapture.psm1	prod-windows-capture
+production-map	exact	windows/src/WinEnvGeneration.psm1	prod-windows-generation
+production-map	exact	windows/src/appx-query.ps1	prod-windows-native,prod-windows-generation
+production-map	exact	windows/tests/Capture.Tests.ps1	prod-windows-capture
+production-map	exact	windows/tests/CiRuntime.Tests.ps1	prod-windows-native,prod-windows-generation
+production-map	exact	windows/tests/Generation.Tests.ps1	prod-windows-generation
+production-map	exact	windows/tests/WinEnv.Tests.ps1	prod-windows-native,prod-windows-generation
+production-map	exact	windows/tests/WslConfig.Tests.ps1	prod-windows-native,prod-windows-generation
+production-map	exact	windows/tool/Test-FontRendering.ps1	prod-windows-native,prod-windows-generation
+production-map	exact	windows/tool/bootstrap.ps1	prod-windows-bootstrap
+production-map	exact	windows/tool/capture.ps1	prod-windows-capture
+production-map	exact	windows/tool/check-desired-state.ps1	prod-windows-native,prod-windows-generation
+production-map	exact	windows/tool/ci-runtime.json	prod-windows-native,prod-windows-generation
+production-map	exact	windows/tool/consumer-format.json	prod-windows-generation
+production-map	exact	windows/tool/consumer.ps1	prod-windows-generation
+production-map	exact	windows/tool/isolate-git.ps1	prod-windows-native,prod-windows-generation
+production-map	exact	windows/tool/read-ci-runtime.ps1	prod-windows-native,prod-windows-generation
+production-map	exact	windows/tool/setup-dev.ps1	prod-windows-native,prod-windows-generation
+production-map	exact	windows/tool/setup.ps1	prod-windows-native,prod-windows-generation
+production-map	exact	windows/tool/test.ps1	prod-windows-native,prod-windows-generation
+production-map	exact	windows/toolchain.json	prod-windows-native,prod-windows-generation
+production-map	exact	windows/tools/Test-FontRendering.ps1	prod-windows-native,prod-windows-generation
+production-map	exact	windows/tools/bootstrap.ps1	prod-windows-bootstrap
+production-map	exact	windows/tools/capture.ps1	prod-windows-capture
+production-map	exact	windows/tools/check-desired-state.ps1	prod-windows-native,prod-windows-generation
+production-map	exact	windows/tools/check-powershell.ps1	prod-windows-native,prod-windows-generation
+production-map	exact	windows/tools/isolate-git.ps1	prod-windows-native,prod-windows-generation
+production-map	exact	windows/tools/setup-dev.ps1	prod-windows-native,prod-windows-generation
+production-map	exact	windows/tools/setup.ps1	prod-windows-native,prod-windows-generation
+production-map	exact	windows/tools/test.ps1	prod-windows-native,prod-windows-generation
+production-map	exact	windows/win-env.ps1	prod-windows-native,prod-windows-generation

@@ -91,3 +91,9 @@ candidates remain observations until they are deleted on promotion. Neither
 adopts a rule. A durable result enters a decision record or invariant; a
 temporary measure enters the provisional registry. Status may link a report
 as evidence of current state. The direct-citation boundary remains in force.
+
+2026-10-01: strict data-only exact path mappings in release-preview.rules name
+inventory, like the classifier's path table, rather than borrowing a work item's
+argument. The scanner recognizes only a complete four-field production-map exact
+row with a path and check IDs. Comments, extra fields and other rows in that same
+file remain subject to the direct-citation boundary; no file-wide exclusion is added.
