@@ -66,3 +66,10 @@ promotion, tag creation/push, host activation or Windows Apply is assigned.
 | AC3 | Source-bound bootstrap/legacy cutover proposal preserves calendar tags, fixes baseline identities and refuses implicit semantic conversion. | review, fixtures, policy checks, affected dispatch |
 | AC4 | Structured cumulative impact, compatibility/migration and inverse-revert qualification retain exact comparison and template-pair obligations. | review, fixtures, policy checks, affected dispatch |
 | AC5 | Official offline qualification and Linux/native Windows positive/refusal proof stay read-only; synthetic receipts never become production certification. | review, fixtures, policy checks, affected dispatch |
+
+Amended 2026-10-01 (AC1, AC5): actual Git-tree inventory found the retained Nix
+editor settings unclassified and historical Unix-like root paths still on master.
+The repository prerequisite in legacy-unixlike-classification/spec.md must integrate,
+then a separate Unix-like editor-settings relocation must integrate before this
+suspended lane resumes. Root preserves and continues the existing #471 worktree.
+No unknown path is waived and no source proof becomes operating certification.
