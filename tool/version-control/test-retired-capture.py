@@ -20,10 +20,12 @@ def snapshot(root, original):
     # protected; its bytes were known before protection and cannot be rewritten
     # without changing the before/after filesystem snapshot or executing a spy.
     result = {}
-    for path in sorted(root.rglob('*')):
-        if path.is_file():
-            mode = path.stat().st_mode
-            result[str(path.relative_to(root))] = (mode, None if path == original and mode & 0o777 == 0 else path.read_bytes())
+    common = Path(git(root, 'rev-parse', '--path-format=absolute', '--git-common-dir').decode().strip())
+    for directory, prefix in ((root, 'tree/'), (common, 'git/')):
+        for path in sorted(directory.rglob('*')):
+            if path.is_file():
+                mode = path.stat().st_mode
+                result[prefix + str(path.relative_to(directory))] = (mode, None if path == original and mode & 0o777 == 0 else path.read_bytes())
     return result
 
 
@@ -35,7 +37,7 @@ def main():
         git(root, 'init', '-q', '-b', 'dev')
         git(root, 'config', 'user.name', 'Fixture')
         git(root, 'config', 'user.email', 'fixture@example.invalid')
-        for name in ('tool/configs', 'tool/version-control/commit'):
+        for name in ('tool/configs', 'tool/version-control/commit', 'tool/version-control/require-linked-worktree', '.githooks/evidence'):
             destination = root / name
             destination.parent.mkdir(parents=True, exist_ok=True)
             shutil.copy2(SOURCE / name, destination)
@@ -50,6 +52,11 @@ def main():
         subprocess.check_call(['git', 'init', '-q', '--bare', str(remote)])
         git(root, 'remote', 'add', 'origin', str(remote))
         git(root, 'push', '-q', 'origin', 'dev')
+        # Normal unknown-group parsing also passes the real linked-worktree gate.
+        git(root, 'worktree', 'add', '-q', '-b', 'feature/repository-synthetic', str(base / 'linked'))
+        root = base / 'linked'
+        payload = root / 'unixlike/modules/programs/karabiner/karabiner.json'
+        hotkeys = payload.with_name('symbolic-hotkeys.json')
         spies = base / 'spies'
         spies.mkdir()
         log = base / 'spy.log'
@@ -93,18 +100,24 @@ def main():
                         assert snapshot(root, original) == before, 'payload/original/index/HEAD/refs changed'
                         assert git(remote, 'show-ref') == refs, 'remote refs changed'
                         count += 1
+            # Also exercise the actual ordinary parser using isolated Git,
+            # independently of the early-refusal spies. These arguments stop at
+            # help/usage before classification or any edit operation.
+            for args, status in ((['--unknown', 'capture', 'karabiner'], 2),
+                                 (['capture', 'other'], 2), (['--help'], 0),
+                                 (['--host'], 2),
+                                 (['--host', str(original), 'brew', 'add', 'example'], 2)):
+                before_grammar = snapshot(root, original)
+                result = subprocess.run(['sh', (root / 'tool/version-control/commit').as_posix(), *args],
+                                        cwd=root, env=os.environ.copy(), capture_output=True, timeout=10)
+                assert result.returncode == status, (args, result.returncode, result.stderr)
+                assert b'capture karabiner is retired' not in result.stderr
+                assert b'usage: tool/configs commit' in result.stdout + result.stderr
+                assert snapshot(root, original) == before_grammar
+                assert git(remote, 'show-ref') == refs
             if state == 'unreadable':
                 original.chmod(0o600)
                 assert original.read_bytes() == body, 'protected original bytes changed'
-            # Unknown groups/options and help must not be reinterpreted as capture.
-            for args in (['--unknown', 'capture', 'karabiner'], ['capture', 'other'],
-                         ['--help'], ['--host'], ['brew', 'add', 'capture']):
-                result = subprocess.run(['sh', (root / 'tool/version-control/commit').as_posix(), *args],
-                                        cwd=root, env=environment, capture_output=True, timeout=10)
-                assert b'capture karabiner is retired' not in result.stderr
-                assert result.returncode != 0  # spy refuses normal Git setup
-                assert log.exists(), 'ordinary parser path was unexpectedly bypassed'
-                log.unlink()
         print(f'retired capture: {count} refusal/no-effect cases and 20 grammar boundary cases passed')
         print('POSIX mode-000 protection is platform-specific; Windows proves refusal before any reader execution.')
 

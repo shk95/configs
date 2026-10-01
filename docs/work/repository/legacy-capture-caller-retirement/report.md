@@ -47,6 +47,9 @@ snapshots include provider files, originals, index, HEAD and all local refs,
 with independent before/after bare-remote refs. Mode-000 is POSIX evidence;
 Windows proof is refusal before reader execution, not an ACL claim.
 
-Normal full regressions, current-head hosted native proof and final review remain
-pending. No real app originals, Save, consumer adoption, activation or Apply was
+Normal full regressions passed, including all24 controller families, release
+preview, normal commit/publication and Windows guard. Normal commit and push hooks
+passed, including secret scans. A follow-up narrows the20 grammar-boundary cases
+to actual help/usage exit codes in an isolated Git repository. Current-head
+hosted native proof and final review remain pending. No real app originals, Save, consumer adoption, activation or Apply was
 performed. No release, promotion, operating connection or cleanup is claimed.
