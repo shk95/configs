@@ -32,8 +32,12 @@ The public Checks observation is anonymous; Checks is not a token selection
 prerequisite. A denial probe reads only repository secret metadata, never values.
 Output carries public source/run plus fixed booleans, not private identities.
 
-Sixteen local Python 3.13 fixtures passed, with fake endpoints only. Native Windows
-and final policy CI evidence will be recorded before source delivery is Ready.
+Sixteen local Python 3.13 fixtures passed, with fake endpoints only. Normal source
+commit policy checks passed: full fixtures, hygiene, domain reads, design citations,
+work records, 82 invariants, provisional registry and secret scan. The source commit
+is 8140a29; root reviewed the fixed GET-only boundary and private-free outputs at
+that revision. Native Windows/current-head CI remain separate delivery gates and
+are recorded on the source PR before it is Ready.
 Actual probe execution awaits accepted master source; no private operating record,
 wrapper, bootstrap, mutation permission, dispatch or enablement is certified here.
 
@@ -47,4 +51,4 @@ wrapper, bootstrap, mutation permission, dispatch or enablement is certified her
 | AC4 | pending | |
 | AC5 | pending | |
 | AC6 | pending | |
-| AC7 | pending | Local 16 source fixtures passed; policy review and native CI pending. |
+| AC7 | verified | Fixtures: 16 local Python 3.13 fake-endpoint cases; policy checks: normal 8140a29 source commit full suite and registry/secret checks passed; review: root examined exact workflow/GET-only client and privacy boundary at 8140a29. Actual token/ref/isolation proof remains AC3, with native/current-head CI a separate Ready gate. |
