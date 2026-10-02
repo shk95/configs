@@ -156,7 +156,11 @@ class HistoryProof(unittest.TestCase):
             else:
                 import zlib
                 target=repo/'objects'/self.head[:2]/self.head[2:]
-                target.parent.mkdir(exist_ok=True);target.unlink(missing_ok=True);target.write_bytes(zlib.compress(b'commit 1\0x'))
+                target.parent.mkdir(exist_ok=True)
+                # Windows refuses unlink of Git's read-only loose objects. This
+                # receiver is an owned fixture copy; detach it before corruption.
+                if target.exists():target.chmod(0o600)
+                target.unlink(missing_ok=True);target.write_bytes(zlib.compress(b'commit 1\0x'))
         for kind in ('shallow','alternate','promisor','graft','replace','corrupt'):
             self.history=H.GitHistory(self.entry,22);self.addCleanup(self.history.close)
             with self.subTest(kind=kind),self.assertRaises((H.T.Refusal,ValueError)):

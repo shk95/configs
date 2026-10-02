@@ -152,3 +152,9 @@ CI remain delivery requirements. Actual HTTPS, seed/ref publication, independent
 private proposal review, initializer/workflow isolation, mutation permissions,
 bootstrap adoption and manual/scheduled operating proof are still missing. This
 increment does not complete AC1-AC6 or a deployed trusted wrapper.
+
+Amended 2026-10-02: first-head native Windows CI found that the corruption
+fixture could not unlink a read-only loose Git object before injecting corruption.
+The fixture now clears that attribute on its owned fetched receiver, unlinks the
+object and writes a separate corrupt object. Production acquisition is unchanged;
+native Windows success still requires the corrected head's independent CI receipt.
