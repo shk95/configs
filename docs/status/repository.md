@@ -302,12 +302,18 @@ Production-mode offline qualification now has explicit complete-tree mappings,
 source-bound public surfaces, exact tool requirements and separate native evidence
 obligations (`docs/policy/decisions/repository/production-release-qualification.md`).
 Its bootstrap proposal is unselected and its receipts remain offline assertions.
-No operating record repository is selected; manual/scheduled proof, bootstrap
-adoption, actual release and activation or Apply remain separate pending gates.
+A separate private operating repository has been selected. The maintainer stored
+a dedicated Environment credential directly. A master-only finite GET probe
+observed the selected private identity, required read access and denied Secrets
+metadata access. Manual/scheduled proof, bootstrap adoption, mutation permission,
+actual release and activation or Apply remain separate pending gates.
 
 Authenticated finite transport source and its unresolved-input manual template
 are verified separately from retained preview semantics (docs/policy/decisions/repository/authenticated-release-transport.md).
 Its finite library binds actual API observations and original history, while the
 operator/workflow stays disabled. A single-job writer topology is required before
-any cancellation. Operating connection/bootstrap/permissions and manual/scheduled
-proof remain unresolved; offline source fixtures certify no actual operation.
+any cancellation. The separate provisioning probe is deployed on accepted master source; routine
+writer/inspector orchestration remains disabled. The bridge has source-only durable
+start/claim proposals through original retained packages. Bootstrap, write
+permissions, actual isolation and manual/scheduled proof remain unresolved; source
+fixtures certify no actual operating cycle.

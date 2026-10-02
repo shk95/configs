@@ -40,6 +40,141 @@ state=engine.reduce(events,config,transcript)
 print(json.dumps({'state':state,'prior':prior,'index':base64.b64encode(engine.index(state,prior)).decode()},sort_keys=True))
 '''
 
+class StartPlan:
+    """Build a new durable batch using only its verified original package.
+
+    This is a journal proposal, not bootstrap or an external-effect executor.
+    A complete authenticated history must already exist. Outstanding batches
+    return to their pinned Snapshot rather than adopting current configuration.
+    """
+    def __init__(self, entry, bundle, operating, approved, head):
+        T.need(type(entry) is T.Entry and entry.authenticated, 'missing-entry')
+        T.need(entry.runtime['mode']=='start' and entry.runtime['candidate']=='0'*64,
+               'wrong-new-batch-request')
+        self.entry, self.api = entry, entry.api
+        self.head = self.expected = T.sha(head)
+        T.need(self.api.ref('heads/master')==entry.trusted['source']
+               and self.api.ref('heads/operations',self.api.operating)==head,
+               'moving-start-source')
+        jobs=self.api.jobs(entry.runtime['run'],entry.runtime['attempt'])
+        T.need(len(jobs)==1 and jobs[0].get('id')==entry.runtime['job'],
+               'nonisolated-start-job')
+        run=self.api.run(entry.runtime['run'],entry.runtime['attempt'])
+        date=run.get('run_started_at')
+        T.need(isinstance(date,str) and __import__('re').fullmatch(
+               r'\d{4}-\d\d-\d\dT\d\d:\d\d:\d\dZ',date),'missing-start-time')
+        self.tagger={'name':'Release controller','email':'release-controller@example.invalid','date':date}
+        self.bundle,self.operating=Path(bundle),Path(operating)
+        self.temporary=tempfile.TemporaryDirectory(prefix='release-start-plan-')
+        self.scratch=Path(self.temporary.name)
+        try:
+            self.build(approved,date)
+        except BaseException:
+            self.close()
+            raise
+
+    def close(self):
+        self.temporary.cleanup()
+
+    def build(self, approved, date):
+        assertion=L.approved(approved)
+        T.need(assertion['master']==self.entry.trusted['source']
+               and assertion['protocol']=='3','unapproved-new-batch-package')
+        T.need(L.git(self.operating,'rev-parse',self.head).decode().strip()==self.head,
+               'missing-operating-objects')
+        actual=self.api.commit(self.head,self.api.operating)
+        T.need(L.git(self.operating,'rev-parse',self.head+'^{tree}').decode().strip()==actual['tree'],
+               'unbound-operating-tree')
+        cfg_blob,config=L.record_blob(self.operating,self.head,'config/operating.tsv')
+        cfg=L.singletons(config,{'enabled','public-repository','repository','operating-repository',
+               'operating-ref','workflow','actors','checks','protocol'})
+        T.need(cfg['enabled']=='1' and cfg['public-repository']==T.PUBLIC
+               and cfg['repository']==str(self.entry.trusted['repository-id'])
+               and cfg['workflow']==str(self.entry.trusted['workflow'])
+               and cfg['operating-repository']==self.api.operating and cfg['operating-ref']=='operations'
+               and str(self.entry.runtime['actor']) in cfg['actors'].split(',')
+               and cfg['checks']!='-' and cfg['protocol']=='3','unbound-start-configuration')
+        stop=L.singletons(L.record_blob(self.operating,self.head,'control/stop.tsv')[1],
+                         {'stop','revision','reason','operator'})
+        T.need(stop['stop']=='0','stopped-new-batch')
+        request={k:str(self.entry.runtime[k]) for k in ('mode','actor','run','attempt','ref','candidate')}
+        request['mode']='preview'
+        source=dict(request,repository=cfg['repository'],workflow=cfg['workflow'],event='workflow_dispatch')
+        source['mode']='start'
+        transcript={'source':[source],'checks':[],'owner':None,'observations':{}}
+        transcript_path=self.scratch/'transcript.json';transcript_path.write_bytes(T.canonical(transcript))
+        request_path=self.scratch/'request.tsv';request_path.write_bytes(L.encode_index(request))
+        result=L.global_preview({'operating':self.operating,'bundle_repository':self.bundle,
+               'transcript':transcript_path,'request':request_path},assertion,self.head,self.scratch)
+        T.need(result and result.get('outcome')=='preview' and result.get('stage') in {'empty','complete'},
+               'outstanding-batch-needs-retained-owner')
+        current=L.singletons(L.record_blob(self.operating,self.head,'current/index.tsv')[1],
+                             L.PROJECTION_FIELDS|{'index-kind','ledger-digest'})
+        contexts=L.table(L.record_blob(self.operating,self.head,'current/batches.tsv')[1])
+        ledger=[]
+        for index,row in enumerate(contexts):
+            context=dict(zip(L.CONTEXT_FIELDS,row[1:]))
+            batch=self.scratch/('batch-'+str(index));package=self.scratch/('package-'+str(index))
+            first=sorted((batch/'history').iterdir())[0]
+            boundary=dict((r[0],r[1]) for r in L.table(first.read_bytes()) if len(r)==2)['prior']
+            projection=L.replay_package(package,batch,context['protocol'],int(context['start'])-1,boundary)[0]
+            ledger.append({'context':context,'projection':T.digest(projection)})
+        self.package=self.scratch/'current-package'
+        # global_preview verifies/extracts this package only without an outstanding batch.
+        T.need((self.package/L.ROOT/'records.py').is_file(),'missing-verified-start-package')
+        before=int(current['sequence']);prior=current['prior']
+        T.need(before+2<10**12,'start-sequence-bound')
+        batch_id=T.digest(T.canonical({'source':assertion['master'],'control':assertion['control'],
+            'config':cfg_blob,'day':date[:10],'run':self.entry.runtime['run'],'attempt':self.entry.runtime['attempt']}))
+        T.need(all(row[2]!=batch_id for row in contexts),'duplicate-start-batch')
+        self.batch=self.scratch/'new-batch'
+        for name in ('config','history'):(self.batch/name).mkdir(parents=True,exist_ok=True)
+        (self.batch/'config/operating.tsv').write_bytes(config)
+        (self.batch/'transcript.json').write_bytes(T.canonical(transcript))
+        first={'sequence':str(before+1),'kind':'batch-start','prior':prior,'batch':batch_id,
+            'control':assertion['control'],'manifest':assertion['manifest'],'approval-provenance':assertion['approval'],
+            'config':cfg_blob,'protocol':'3','day':date[:10],'run':str(self.entry.runtime['run']),
+            'attempt':str(self.entry.runtime['attempt']),'time':date,'approved-master':assertion['master'],'config-commit':self.head}
+        raw=self.encode_event(first)
+        changes={'history/%012d.tsv'%(before+1):raw}
+        claim={'sequence':str(before+2),'kind':'claim','prior':T.digest(raw),'batch':batch_id,
+            'repository':cfg['repository'],'workflow':cfg['workflow'],'run':str(self.entry.runtime['run']),
+            'attempt':str(self.entry.runtime['attempt']),'job':str(self.entry.runtime['job']),
+            'generation':'1','operating-head':self.head}
+        changes['history/%012d.tsv'%(before+2)]=self.encode_event(claim)
+        for path,data in changes.items():(self.batch/path).write_bytes(data)
+        result=subprocess.run([sys.executable,'-I','-S','-B','-c',DRIVER,str(self.package/L.ROOT),
+            str(self.batch),str(before),prior],env=L.runtime_environment(os.environ),capture_output=True,timeout=900)
+        T.need(result.returncode==0 and len(result.stdout)<=T.MAX_BODY,'retained-start-projection-refusal')
+        projected=T.document(result.stdout)
+        simple=base64.b64decode(projected['index'],validate=True)
+        context={'start':str(before+1),'batch':batch_id,'master':assertion['master'],'control':assertion['control'],
+            'manifest':assertion['manifest'],'approval':assertion['approval'],'protocol':'3','config-commit':self.head,
+            'config':cfg_blob,'transcript-commit':'-','transcript':'-'}
+        ledger.append({'context':context,'projection':T.digest(simple)})
+        fields=L.singletons(simple,L.PROJECTION_FIELDS)
+        fields.update({'index-kind':'global-1','ledger-digest':T.digest(T.canonical(ledger))})
+        row=['context']+[context[k] for k in L.CONTEXT_FIELDS]
+        changes.update({'current/index.tsv':L.encode_index(fields),'current/transcript.json':T.canonical(transcript),
+            'current/batches.tsv':('format\t1\n'+''.join('\t'.join(r)+'\n' for r in contexts+[row])).encode()})
+        self.pending_changes=changes
+
+        self.approved_changes=tuple(sorted((path,T.digest(data)) for path,data in changes.items()))
+
+    def encode_event(self, fields):
+        return Snapshot.encode_event(self,fields)
+
+    def validate_changes(self, changes):
+        T.need(self.pending_changes is not None and changes==self.pending_changes
+               and tuple(sorted((path,T.digest(data)) for path,data in changes.items()))==self.approved_changes,
+               'unprojected-start-changes')
+        T.need(self.api.ref('heads/master')==self.entry.trusted['source']
+               and self.api.ref('heads/operations',self.api.operating)==self.head,'moving-start-head')
+
+    def accept_changes(self, changes, head):
+        self.expected=self.head=head
+        self.pending_changes=None
+
 class Snapshot:
     """A whole-history verified, source-bound projector with no credentials."""
     def __init__(self, entry, bundle, operating, approved, head, tagger, requirements):
@@ -127,6 +262,40 @@ class Snapshot:
         op=self.state['operations'][operation]
         T.need(op['state'] in {'intent','unknown'},'completed-or-conflicting-operation')
         return {'id':operation,'digest':T.digest(T.canonical(op['payload'])),'head':self.head}
+
+    def claim(self):
+        """Propose one authenticated owner transition; never cancel another run."""
+        T.need(self.entry.runtime['mode']=='start','wrong-claim-entry')
+        T.need(self.api.ref('heads/operations',self.api.operating)==self.head,'moving-claim-head')
+        stop=L.singletons(L.record_blob(self.operating,self.head,'control/stop.tsv')[1],
+                         {'stop','revision','reason','operator'})
+        T.need(stop['stop']=='0','stopped-claim')
+        jobs=self.api.jobs(self.entry.runtime['run'],self.entry.runtime['attempt'])
+        T.need(len(jobs)==1 and jobs[0].get('id')==self.entry.runtime['job'],'nonisolated-claim-job')
+        previous=self.project();state=previous['state'];owner=state['owner']
+        T.need(not state['stopped'] and state['stage'] not in {'empty','complete','stopped'},'inactive-claim')
+        candidate=state['candidate'] or state.get('refresh')
+        expected=T.digest(T.canonical(candidate)) if candidate else '0'*64
+        T.need(self.entry.runtime['candidate']==expected,'stale-claim-candidate')
+        if owner and (int(owner['run']),int(owner['attempt']),int(owner['job'])) == (
+                self.entry.runtime['run'],self.entry.runtime['attempt'],self.entry.runtime['job']):
+            return {} # exact existing owner joins; no new generation or record
+        transcript=T.document((self.batch/'transcript.json').read_bytes())
+        if owner:
+            T.need(self.entry.owner_terminal(self.owner_target(owner)),'old-owner-not-terminal')
+            transcript['owner']={'owner':owner,'latest-attempt':owner['attempt'],
+                'jobs':{owner['job']:'terminal'},'complete':True,'status':'terminal'}
+        event={'sequence':str(int(state['sequence'])+1),'kind':'claim','prior':previous['prior'],'batch':state['batch'],
+            'repository':str(self.entry.trusted['repository-id']),'workflow':str(self.entry.trusted['workflow']),
+            'run':str(self.entry.runtime['run']),'attempt':str(self.entry.runtime['attempt']),
+            'job':str(self.entry.runtime['job']),'generation':str(int(state['generation'])+1),'operating-head':self.head}
+        raw=self.encode_event(event);path='history/%012d.tsv'%int(event['sequence'])
+        (self.batch/path).write_bytes(raw);(self.batch/'transcript.json').write_bytes(T.canonical(transcript))
+        # The original reducer, not a current helper, decides unresolved-effect
+        # and old-protocol takeover compatibility before publication.
+        changes=self.projected_changes(path,raw,transcript)
+        self.pending_changes=changes
+        return changes
 
     def owner_target(self, owner):
         target={k:int(owner[k]) for k in ('run','attempt','job','workflow')}

@@ -77,3 +77,20 @@ The public preflight and existing source writer workflows remain inert. Deployme
 of the probe still requires normal accepted master source, and actual observations
 remain separate from source fixture proof. Source stays pinned to the running SHA;
 candidate scripts/artifacts/caches never execute with its token.
+
+## Credential-free public inspection
+
+Amended 2026-10-02: allow a separate master-only single-job public inspector/wait
+workflow without an operating Environment, credential, private connection or writer
+concurrency. It observes only approved public writer/qualification workflow runs,
+exact latest attempts, actual actors/ref/source and complete sole-job metadata.
+The source must be in the accepted public master's full original Git history.
+The finite wait never cancels, wakes, claims or approves; completion and timeout
+remain observations, not retained-owner authority
+(`INV repository/release-inspection-without-authority`).
+
+Its network transport is bounded anonymous GET to the public provider only, without
+logs/artifacts/cache reads or candidate execution. Old/moving attempts, source,
+workflow/job identity, unknown pages and mixed jobs refuse. Trusted writer takeover
+must independently reconcile actual authenticated terminal evidence and old-package
+history. This change does not enable the writer or adopt operating bootstrap.

@@ -58,3 +58,13 @@ Before that delivery, the finite credential probe runs only from accepted master
 source using release-control, the dedicated token and locator, and the private
 numeric identity in CONFIGS_RELEASE_OPERATING_REPOSITORY_ID. This is read-only
 provisioning evidence, not an operating wrapper or a selected bootstrap.
+
+## Public inspector endpoint observations
+
+GitHub documents anonymous access to public workflow runs/attempts and jobs at:
+https://docs.github.com/en/rest/actions/workflow-runs#get-a-workflow-run-attempt
+https://docs.github.com/en/rest/actions/workflow-jobs#list-jobs-for-a-workflow-run-attempt
+
+The independent inspector uses those fixed public GET endpoints, no Authorization
+header, logs/artifacts/caches or private connection. Actual anonymous reads of the
+public qualification run succeeded separately from source-only fake fixtures.

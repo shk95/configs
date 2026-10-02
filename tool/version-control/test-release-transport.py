@@ -410,6 +410,7 @@ class TransportProof(unittest.TestCase):
         shutil.copyfile(ROOT/'release-transport-template.json',template)
         # Bind this disposable fixture's public commit, never the real delivery pin.
         inputs=json.loads(template.read_text());inputs['transport-source']=source
+        inputs['transport-manifest']=T.digest((f.public/'tool/version-control/release-transport.manifest.tsv').read_bytes())
         template.write_text(json.dumps(inputs))
         command=[sys.executable,'-I','-S','-B',str(f.public/'tool/version-control/release-transport-preflight.py'),
                  'preflight','--source',source,'--template',str(template)]
@@ -455,5 +456,152 @@ class TransportProof(unittest.TestCase):
         value={'id':4,'run_attempt':1,'workflow_id':2,'head_sha':self.fake.source,'status':'completed','conclusion':'failure'}
         self.fake.responses[('GET',path)]=self.fake.response(value)
         self.assertEqual(self.entry.notification(4,1)['delivery'],'unverified')
+
+    def test_claim_joins_same_owner_without_a_record(self):
+        snapshot=self.snapshot()
+        self.assertEqual(snapshot.claim(),{})
+        self.assertFalse(any(m!='GET' for m,_,_ in self.fake.calls))
+
+    def takeover_entry(self):
+        self.fake.terminal=True;self.fake.terminal_jobs=True
+        runtime=dict(self.runtime,run=6)
+        value={'id':6,'run_attempt':1,'head_sha':self.fake.source,'head_branch':'master','event':'workflow_dispatch',
+            'workflow_id':2,'repository':{'id':1},'actor':{'id':3},'triggering_actor':{'id':3},'status':'in_progress'}
+        for suffix in ('','/attempts/1'):
+            self.fake.responses[('GET','/repos/shk95/configs/actions/runs/6'+suffix)]=self.fake.response(value)
+        jobs={'total_count':1,'jobs':[{'id':5,'run_id':6,'name':'writer','head_sha':self.fake.source,'status':'in_progress'}]}
+        self.fake.responses[('GET','/repos/shk95/configs/actions/runs/6/attempts/1/jobs?per_page=100&page=1')]=self.fake.response(jobs)
+        self.entry=T.Entry(self.api,self.trusted,runtime)
+
+    def test_claim_refuses_unreconciled_old_intent_even_after_terminal_owner(self):
+        self.takeover_entry();snapshot=self.snapshot()
+        with self.assertRaises(T.Refusal):snapshot.claim()
+        self.assertFalse(any(m!='GET' for m,_,_ in self.fake.calls))
+
+    def test_claim_never_cancels_or_takes_over_a_live_owner(self):
+        self.takeover_entry();self.fake.terminal=False;self.fake.terminal_jobs=False
+        snapshot=self.snapshot()
+        with self.assertRaises(T.Refusal):snapshot.claim()
+        self.assertFalse(any(m!='GET' for m,_,_ in self.fake.calls))
+
+    def test_terminal_reconciled_owner_claim_advances_once_without_public_effect(self):
+        executor,plan=self.executor();self.assertEqual(executor.perform(plan),'applied')
+        self.takeover_entry();snapshot=self.snapshot()
+        public_writes=sum(m!='GET' and p.startswith('/repos/shk95/configs/') for m,p,_ in self.fake.calls)
+        changes=snapshot.claim();self.assertTrue(changes)
+        T.Journal(self.api,snapshot,self.fake.head).publish(changes)
+        self.assertEqual(snapshot.state['owner']['run'],'6')
+        self.assertEqual(snapshot.state['generation'],'2')
+        self.assertEqual(snapshot.claim(),{})
+        self.assertEqual(public_writes,sum(m!='GET' and p.startswith('/repos/shk95/configs/') for m,p,_ in self.fake.calls))
+
+class StartProof(unittest.TestCase):
+    # INV repository/authenticated-release-transport
+    # INV repository/fixture-git-isolation
+    def setUp(self):
+        self.fixture=F.GlobalHistoryProof();self.fixture.setUp();self.addCleanup(self.fixture.doCleanups)
+        f=self.fixture
+        (f.operating/'config/operating.tsv').write_bytes(F.encode(F.CONFIG))
+        (f.operating/'current/transcript.json').write_bytes(F.canonical(F.transcript('preview',candidate=None)))
+        (f.operating/'current/batches.tsv').write_bytes(b'format\t1\n')
+        fields=dict(F.loader.singletons(F.engine.index(F.engine.initial(),F.Z),F.loader.PROJECTION_FIELDS),
+                    **{'index-kind':'global-1','ledger-digest':F.digest(F.canonical([]))})
+        (f.operating/'current/index.tsv').write_bytes(F.encode(fields))
+        self.head=f.commit(f.operating)
+        self.connect()
+
+    def connect(self):
+        f=self.fixture
+        self.fake=Fake(f.public,f.operating,f.packages['3']['master'])
+        self.api=T.Api(self.fake,'fixture/operating')
+        self.runtime={'repository':T.PUBLIC,'ref':'refs/heads/master','event':'workflow_dispatch',
+            'run':4,'attempt':1,'job':5,'actor':3,'source':self.fake.source,'environment':'fixture-controller',
+            'mode':'start','candidate':F.Z}
+        self.trusted={'source':self.fake.source,'workflow':2,'workflow-path':'.github/workflows/release-control-writer.yml',
+            'repository-id':1,'actors':[3],'environment':'fixture-controller','job-name':'writer'}
+        value={'id':4,'run_attempt':1,'head_sha':self.fake.source,'head_branch':'master','event':'workflow_dispatch',
+            'workflow_id':2,'repository':{'id':1},'actor':{'id':3},'triggering_actor':{'id':3},
+            'status':'in_progress','run_started_at':'2026-10-02T00:00:00Z'}
+        self.fake.responses[('GET','/repos/shk95/configs/actions/runs/4/attempts/1')]=self.fake.response(value)
+        self.entry=T.Entry(self.api,self.trusted,self.runtime)
+
+    def start(self):
+        f=self.fixture
+        plan=B.StartPlan(self.entry,f.public,f.operating,F.encode(f.packages['3']),self.head)
+        self.addCleanup(plan.close)
+        return plan
+
+    def test_empty_start_uses_original_records_and_global_projection(self):
+        f=self.fixture;before=F.run_git(f.operating,'rev-parse','HEAD');plan=self.start()
+        self.assertEqual(F.run_git(f.operating,'rev-parse','HEAD'),before)
+        self.assertFalse(any(m!='GET' for m,_,_ in self.fake.calls))
+        changes=plan.pending_changes
+        first=F.parse(changes['history/000000000001.tsv'],'event')
+        claim=F.parse(changes['history/000000000002.tsv'],'event')
+        self.assertEqual(first['kind'],'batch-start');self.assertEqual(first['config-commit'],self.head)
+        self.assertEqual(claim['operating-head'],self.head);self.assertEqual(claim['generation'],'1')
+        self.assertEqual(claim['prior'],F.digest(changes['history/000000000001.tsv']))
+        journal=T.Journal(self.api,plan,self.head);result=journal.publish(changes)
+        snapshot=B.Snapshot(self.entry,f.public,f.operating,F.encode(f.packages['3']),result,plan.tagger,[])
+        self.addCleanup(snapshot.close)
+        self.assertEqual(snapshot.state['stage'],'active');self.assertEqual(snapshot.state['owner']['job'],'5')
+        self.assertFalse(any(p.endswith('/pulls') for _,p,_ in self.fake.calls))
+
+    def test_completed_old_protocols_keep_literal_history_and_original_ledgers(self):
+        f=self.fixture
+        f.add_batch('1',F.X,True);f.add_batch('3',F.Y,True);f.save()
+        self.head=f.head
+        self.connect()
+        old={p.name:p.read_bytes() for p in (f.operating/'history').iterdir()}
+        plan=self.start();self.assertIn('history/000000000007.tsv',plan.pending_changes)
+        result=T.Journal(self.api,plan,self.head).publish(plan.pending_changes)
+        snapshot=B.Snapshot(self.entry,f.public,f.operating,F.encode(f.packages['3']),result,plan.tagger,[])
+        self.addCleanup(snapshot.close)
+        self.assertEqual(snapshot.state['stage'],'active')
+        for name,data in old.items():self.assertEqual((f.operating/'history'/name).read_bytes(),data)
+
+    def test_outstanding_batch_never_restarts_or_adopts_current_package(self):
+        f=self.fixture;(f.operating/'current/transcript.json').write_bytes(F.canonical({'source':[]}));f.commit(f.operating)
+        f.add_batch('3',F.X,False);f.save();self.head=f.head;self.connect()
+        with self.assertRaises(T.Refusal):self.start()
+        self.assertFalse(any(m!='GET' for m,_,_ in self.fake.calls))
+
+    def test_disabled_stopped_and_wrong_configuration_refuse_before_write(self):
+        f=self.fixture
+        for changed in ({'enabled':'0'},{'workflow':'99'},{'actors':'99'},{'protocol':'2'}):
+            (f.operating/'config/operating.tsv').write_bytes(F.encode(dict(F.CONFIG,**changed)))
+            self.head=f.commit(f.operating);self.connect()
+            with self.subTest(changed=changed),self.assertRaises(T.Refusal):self.start()
+            self.assertFalse(any(m!='GET' for m,_,_ in self.fake.calls))
+        (f.operating/'config/operating.tsv').write_bytes(F.encode(F.CONFIG))
+        (f.operating/'control/stop.tsv').write_bytes(F.encode(dict(F.STOP,stop='1')))
+        self.head=f.commit(f.operating);self.connect()
+        with self.assertRaises(T.Refusal):self.start()
+
+    def test_mixed_job_and_moving_source_refuse(self):
+        self.fake.jobs_extra=[{'id':99,'name':'inspector'}]
+        with self.assertRaises(T.Refusal):self.start()
+        self.fake.jobs_extra=[]
+        self.fake.responses[('GET','/repos/shk95/configs/git/ref/heads/master')]=self.fake.response(
+            {'ref':'refs/heads/master','object':{'type':'commit','sha':F.H}})
+        with self.assertRaises(T.Refusal):self.start()
+
+    def test_bad_global_index_and_unprojected_changes_refuse(self):
+        plan=self.start()
+        with self.assertRaises(T.Refusal):T.Journal(self.api,plan,self.head).publish({'current/index.tsv':b'invented'})
+        plan.pending_changes['current/index.tsv']=b'modified through the shared proposal'
+        with self.assertRaises(T.Refusal):T.Journal(self.api,plan,self.head).publish(plan.pending_changes)
+        f=self.fixture;(f.operating/'current/index.tsv').write_bytes(b'format\t1\n')
+        self.head=f.commit(f.operating);self.connect()
+        with self.assertRaises(ValueError):self.start()
+        self.assertFalse(any(m!='GET' for m,_,_ in self.fake.calls))
+
+    def test_conflict_after_plan_and_lost_ref_response_never_duplicate_start(self):
+        plan=self.start();self.fake.lose_record=True
+        result=T.Journal(self.api,plan,self.head).publish(plan.pending_changes)
+        self.assertEqual(result,self.fake.head)
+        self.assertEqual(sum(m=='PATCH' for m,_,_ in self.fake.calls),1)
+        self.assertIsNone(plan.pending_changes)
+        with self.assertRaises(T.Refusal):plan.validate_changes({'current/index.tsv':b'invented'})
 
 if __name__=='__main__':unittest.main()

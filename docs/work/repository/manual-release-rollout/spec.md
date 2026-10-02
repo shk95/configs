@@ -114,3 +114,22 @@ The accepted deployment-boundary amendment precedes actual execution. Root owns
 this source lane; its pickup base and reviewed plan revision are separately pinned.
 Actual token/isolation observations remain AC3 affected-dispatch evidence and do
 not follow from AC7 fixtures. All other parent/child criteria retain their bars.
+
+## Durable start and claim source pickup, 2026-10-02
+
+Amended 2026-10-02: root owns a repository source increment within AC2 before
+wrapper deployment. It proposes a new protocol-3 batch and its first authenticated
+owner only from complete verified empty/completed history and the original retained
+serializer/reducer. Outstanding batches use their own pinned package and terminal,
+reconciled-owner claim; no new batch, implicit retry or foreign cancellation is
+allowed. One source PR carries this bridge, fixtures, inventory hash and actual
+provisioning observations. AC1-AC6 remain pending until the full wrapper and actual
+operating receipts exist. This increment enables no workflow or operating effect;
+the unresolved bootstrap and domain evidence remain independent deployment gates.
+
+Amended 2026-10-02: the same repository increment includes AC3's independent
+credential-free public inspector/wait source, its durable invariant, source/native
+fixtures and procedure. Deployment remains a normal accepted master promotion;
+actual public inspection and rejected foreign-ref dispatch are separate receipts.
+It reads public writer/qualification metadata only and cannot claim, approve,
+cancel, wake or certify an operating cycle. No writer or schedule is enabled.
