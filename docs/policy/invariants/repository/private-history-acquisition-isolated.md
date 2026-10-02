@@ -24,3 +24,8 @@ reconciliation observes only and requires the preserved expected child identity.
 The library fence is per-instance and cannot certify cross-run recovery; the
 deployed caller must preserve private attempt identity before effects and refuse
 blind retry after replacing an instance.
+
+Credential-free desired proposal inputs remain explicitly unauthenticated and
+cannot enter legacy publication. Source role declarations distinguish initializer
+and writer bindings without certifying deployed isolation. Prospective new-format
+commit reconstruction derives time from original source and is never remote proof.

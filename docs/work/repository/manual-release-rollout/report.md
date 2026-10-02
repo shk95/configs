@@ -224,3 +224,34 @@ preserves old proposal/transport readers and reconstructs new planned commits fr
 an original-source timestamp. Implementation and its exact-head/native receipts
 remain pending. No private input is invented, no runtime Entry is simulated for an
 operator, and no deployed wrapper or durable cross-run effect authority is claimed.
+
+## Desired review and source roles library, 2026-10-02
+
+Root picked up dev 573811dd0213804500408786f4348d8e12293108 independently from
+reviewed plan revision 957bab8444a35e252a0fc465a21c9e1c788fee5e. Credential-free
+format-2 desired projection verifies original source/package/transport and returns
+explicitly unauthenticated private assertions. Stop uses the initializer actor;
+disabled config binds only the source-declared writer actor set/workflow. No Entry
+is constructed and no API is contacted by desired projection. Legacy format-1
+same-entry restrictions remain intact; format-2 bytes refuse legacy effects.
+
+Canonical source roles are a seventh transport file. Metadata observation checks
+both numeric ID and fixed filename, stable actual master and original regular
+workflow blob; a missing initializer source refuses. This does not certify deployed
+job topology, Environment credentials or endpoint isolation. The writer declaration
+continues to name disabled writer-preflight with no Environment. No new entry mode,
+CLI, initializer workflow or new-format publication is delivered.
+
+New prospective child identities use original source committer time in UTC. Pure
+cross-instance reconstruction agrees with actual disposable Git commit-tree output;
+it is never remote commit proof or durable attempt persistence. Exact old five/six
+and new seven-file preflight inventories remain readable; mixed closure refuses.
+
+Local Python 3.13: 37 disposable-Git/fake-metadata cases passed in 110.016s, including
+role/job/Environment/type confusion, missing source, moving master, unsafe original
+role mode, retained package mismatch and repeatable child reconstruction. A final
+focused check passed canonical date, pre-epoch refusal and epoch-zero construction;
+pre-epoch refusal precedes platform timestamp conversion. Normal full source gates
+and exact-head native Windows CI remain independent delivery receipts. AC1-AC6
+remain pending. Durable attempts, role-aware initialization, production writer and
+actual private/manual/scheduled proof remain assigned to root.

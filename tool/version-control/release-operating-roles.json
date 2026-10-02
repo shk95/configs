@@ -1,0 +1,1 @@
+{"format":1,"roles":{"initializer":{"actors":[101378576],"environment":"release-control","job":"initialize-operating-records","path":".github/workflows/release-control-initialize.yml"},"writer":{"actors":[101378576],"environment":null,"job":"writer-preflight","path":".github/workflows/release-control-writer.yml"}}}

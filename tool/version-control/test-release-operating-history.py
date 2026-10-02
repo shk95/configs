@@ -165,7 +165,7 @@ class HistoryProof(unittest.TestCase):
             self.history=H.GitHistory(self.entry,22);self.addCleanup(self.history.close)
             with self.subTest(kind=kind),self.assertRaises((H.T.Refusal,ValueError)):
                 self.acquire(lambda:poison(kind))
-    def test_read_only_preflight_accepts_exact_five_and_six_file_history(self):
+    def test_read_only_preflight_accepts_exact_five_six_and_seven_file_history(self):
         import hashlib,json,shutil,sys
         preflight=load('history_preflight','release-transport-preflight.py')
         public=self.fixture.fixture.public
@@ -173,7 +173,7 @@ class HistoryProof(unittest.TestCase):
             target=public/name;target.parent.mkdir(parents=True,exist_ok=True)
             shutil.copyfile(ROOT.parents[1]/name,target)
         manifest=public/'tool/version-control/release-transport.manifest.tsv'
-        for names in (preflight.FILES,tuple(n for n in preflight.FILES if not n.endswith('/release-operating-history.py'))):
+        for names in (preflight.FILES,preflight.LEGACY_SIX,preflight.LEGACY_FIVE):
             manifest.write_text('format\t1\n'+''.join('file\t'+name+'\t'+hashlib.sha256((public/name).read_bytes()).hexdigest()+'\n' for name in sorted(names)))
             if len(names)==5:(public/'tool/version-control/release-operating-history.py').unlink()
             F.F.run_git(public,'add','.')
@@ -210,6 +210,139 @@ class HistoryProof(unittest.TestCase):
         self.fake.responses[('GET','/repos/fixture/operating')]=self.fake.response(
             {'id':22,'private':True,'full_name':'fixture/operating','default_branch':'main'})
         return (f.public,F.F.encode(dict(f.packages['3'],master=source)),H.L.encode_index(dict(F.F.CONFIG,enabled='0')),'fixture-token')
+
+    def desired_inputs(self):
+        import hashlib,json
+        bundle,approved,config,_=self.proposal_inputs()
+        roles=json.loads((bundle/H.ROLE_PATH).read_bytes())
+        roles['roles']['initializer']['actors']=[4]
+        roles['roles']['writer']['actors']=[3]
+        (bundle/H.ROLE_PATH).write_bytes(H.T.canonical(roles))
+        writer=bundle/'.github/workflows/release-control-writer.yml'
+        writer.parent.mkdir(parents=True,exist_ok=True)
+        writer.write_text('name: Fixture disabled writer\non: workflow_dispatch\npermissions: {}\njobs:\n  writer-preflight:\n    runs-on: ubuntu-latest\n    steps:\n      - run: echo disabled\n')
+        manifest=bundle/'tool/version-control/release-transport.manifest.tsv'
+        manifest.write_text('format\t1\n'+''.join('file\t'+name+'\t'+hashlib.sha256((bundle/name).read_bytes()).hexdigest()+'\n' for name in H.TRANSPORT_FILES))
+        F.F.run_git(bundle,'add','.')
+        F.F.run_git(bundle,'commit','-qm','chore(repository): fixture distinct source roles')
+        source=F.F.run_git(bundle,'rev-parse','HEAD')
+        self.fake.source=source
+        approved=F.F.encode(dict(H.L.approved(approved),master=source))
+        desired={'operating-repository':'fixture/operating','operating-repository-id':22,
+            'public-repository-id':1,'default-branch':'main','initializer-workflow':6,
+            'initializer-actor':4,'writer-workflow':2}
+        return bundle,approved,config,desired
+
+    def test_desired_projection_has_no_entry_or_credentials_and_distinct_stop_actor(self):
+        inputs=self.desired_inputs()
+        calls=len(self.fake.calls)
+        with patch.object(H.T,'Entry',side_effect=AssertionError('no runtime entry')):
+            proposal,records=H.desired_initial(*inputs)
+        value=H.T.document(proposal)
+        self.assertEqual(len(self.fake.calls),calls)
+        self.assertFalse(value['authenticated']);self.assertFalse(value['enabled'])
+        self.assertIsNone(value['semantic-baseline'])
+        self.assertIsNone(value['roles']['initializer']['blob'])
+        self.assertEqual(value['roles']['writer']['actors'],[3])
+        self.assertEqual(H.L.singletons(records['control/stop.tsv'],{'stop','revision','reason','operator'})['operator'],'4')
+        self.assertEqual(H.desired_initial(*inputs),(proposal,records))
+        # Format-2 desired assertions cannot enter the legacy authenticated writer.
+        with self.assertRaises(H.T.Refusal):self.history._initial_context(proposal,H.T.digest(proposal))
+
+    def test_desired_roles_and_configuration_cannot_widen_each_other(self):
+        bundle,approved,config,desired=self.desired_inputs()
+        for change in ({'initializer-actor':3},{'writer-workflow':7},{'operating-repository':H.T.PUBLIC},
+                       {'default-branch':'operations'},{'public-repository-id':True}):
+            with self.subTest(change=change),self.assertRaises(H.T.Refusal):
+                H.desired_initial(bundle,approved,config,dict(desired,**change))
+        fields=H.L.singletons(config,{'enabled','public-repository','repository','operating-repository',
+            'operating-ref','workflow','actors','checks','protocol'})
+        for change in ({'actors':'3,4'},{'enabled':'1'},{'operating-repository':'foreign/private'}):
+            with self.subTest(change=change),self.assertRaises(H.T.Refusal):
+                H.desired_initial(bundle,approved,H.L.encode_index(dict(fields,**change)),desired)
+
+    def test_desired_original_source_and_complete_closure_refuse_poisoning(self):
+        inputs=self.desired_inputs();bundle,approved,config,desired=inputs
+        path=bundle/H.ROLE_PATH
+        path.write_bytes(path.read_bytes()+b' ')
+        # Working bytes do not replace original committed bytes.
+        H.desired_initial(*inputs)
+        bad=dict(H.L.approved(approved),manifest='0'*64)
+        with self.assertRaises(ValueError):H.desired_initial(bundle,F.F.encode(bad),config,desired)
+        with patch.object(H,'TRANSPORT_FILES',H.TRANSPORT_FILES+('tool/version-control/missing.py',)),self.assertRaises(H.T.Refusal):
+            H.desired_initial(*inputs)
+
+    def test_role_observation_binds_current_numeric_identity_and_original_workflow(self):
+        bundle,approved,_,_=self.desired_inputs();source=H.L.approved(approved)['master']
+        path='.github/workflows/release-control-writer.yml'
+        value={'id':2,'path':path,'state':'active'}
+        for suffix in ('2','release-control-writer.yml'):
+            self.fake.responses[('GET','/repos/shk95/configs/actions/workflows/'+suffix)]=self.fake.response(value)
+        actual=H.verify_source_role(self.api,bundle,source,'writer',2)
+        self.assertEqual(actual['blob'],F.F.run_git(bundle,'rev-parse',source+':'+path))
+        self.assertEqual(actual['job'],'writer-preflight');self.assertIsNone(actual['environment'])
+        for change in ({'id':7},{'state':'disabled_manually'},{'path':'.github/workflows/foreign.yml'}):
+            self.fake.responses[('GET','/repos/shk95/configs/actions/workflows/release-control-writer.yml')]=self.fake.response(dict(value,**change))
+            with self.subTest(change=change),self.assertRaises(H.T.Refusal):H.verify_source_role(self.api,bundle,source,'writer',2)
+
+    def test_missing_original_initializer_is_never_authenticated_by_a_declaration(self):
+        bundle,approved,_,_=self.desired_inputs();source=H.L.approved(approved)['master']
+        value={'id':6,'path':'.github/workflows/release-control-initialize.yml','state':'active'}
+        for suffix in ('6','release-control-initialize.yml'):
+            self.fake.responses[('GET','/repos/shk95/configs/actions/workflows/'+suffix)]=self.fake.response(value)
+        with self.assertRaises(H.T.Refusal):H.verify_source_role(self.api,bundle,source,'initializer',6)
+        with self.assertRaises(H.T.Refusal):H.verify_source_role(self.api,bundle,source,'foreign',6)
+
+    def test_role_declaration_refuses_job_environment_and_actor_poisoning(self):
+        import hashlib
+        bundle,approved,_,_=self.desired_inputs()
+        original=H.T.document((bundle/H.ROLE_PATH).read_bytes())
+        for change in ({'job':'writer'},{'environment':'release-control'},{'actors':[True]},
+                       {'actors':[3,3]},{'actors':['private']},{'path':'.github/workflows/foreign.yml'}):
+            value=H.T.document(H.T.canonical(original))
+            value['roles']['writer'].update(change)
+            (bundle/H.ROLE_PATH).write_bytes(H.T.canonical(value))
+            manifest=bundle/'tool/version-control/release-transport.manifest.tsv'
+            manifest.write_text('format\t1\n'+''.join('file\t'+name+'\t'+hashlib.sha256((bundle/name).read_bytes()).hexdigest()+'\n' for name in H.TRANSPORT_FILES))
+            F.F.run_git(bundle,'add','.')
+            F.F.run_git(bundle,'commit','-qm','chore(repository): fixture invalid source role')
+            source=F.F.run_git(bundle,'rev-parse','HEAD')
+            with self.subTest(change=change),self.assertRaises(H.T.Refusal):H.source_roles(bundle,source)
+
+    def test_role_data_requires_a_regular_original_blob(self):
+        bundle,_,_,_=self.desired_inputs()
+        F.F.run_git(bundle,'update-index','--chmod=+x',H.ROLE_PATH)
+        F.F.run_git(bundle,'commit','-qm','chore(repository): fixture unsafe role mode')
+        source=F.F.run_git(bundle,'rev-parse','HEAD')
+        with self.assertRaises(ValueError):H.source_roles(bundle,source)
+
+    def test_role_source_movement_and_source_time_poisoning_refuse(self):
+        bundle,approved,_,_=self.desired_inputs();source=H.L.approved(approved)['master']
+        self.fake.source='b'*40
+        with self.assertRaises(H.T.Refusal):H.verify_source_role(self.api,bundle,source,'writer',2)
+        original=H.L.git
+        for raw in (b'committer person <email> private +0000\n\nmessage',
+                    b'committer person <email> 999999999999 +0000\n\nmessage',
+                    b'committer person <email> 1 +0000\ncommitter other <email> 2 +0000\n\nmessage'):
+            def poison(repo,*args,**kw):
+                return raw if args==('cat-file','commit',source) else original(repo,*args,**kw)
+            with self.subTest(raw=raw),patch.object(H.L,'git',poison),self.assertRaises(H.T.Refusal):H.source_date(bundle,source)
+
+    def test_source_date_rebuilds_the_exact_git_child_across_instances(self):
+        inputs=self.desired_inputs();proposal,records=H.desired_initial(*inputs)
+        value=H.T.document(proposal);date=value['date']
+        records=dict(records);records[H.SEED_PATH]=('format\t1\nproposal\t'+H.T.digest(proposal)+'\n').encode()
+        _,seed,_=self.history._local_initial(records,None,date)
+        expected=H.planned_initial(records,seed,date)
+        tree,head,_=self.history._local_initial(records,seed,date)
+        self.assertEqual(expected,{'tree':tree,'head':head,'date':date})
+        again,again_records=H.desired_initial(*inputs)
+        again_records[H.SEED_PATH]=records[H.SEED_PATH]
+        self.assertEqual(H.planned_initial(again_records,seed,H.T.document(again)['date']),expected)
+        self.fake.attempt=2
+        self.assertEqual(H.planned_initial(records,seed,date),expected)
+        for bad in ('2026-02-30T00:00:00Z','1969-12-31T23:59:59Z','private-time',None):
+            with self.subTest(date=bad),self.assertRaises(H.T.Refusal):H.planned_initial(records,seed,bad)
 
     def test_initial_proposal_binds_original_source_records_and_private_review_digest(self):
         import json

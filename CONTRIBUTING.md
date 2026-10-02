@@ -1234,3 +1234,20 @@ HTTPS/permissions, bootstrap and enabled execution remain independent gates.
 The library fence is per-instance. A future initializer must durably preserve its
 private attempt identity before effects; replacing the instance or rerunning a failed
 job does not authorize publication. Cross-run receipt handling is not deployed.
+
+
+### Desired initial review source boundary
+
+The current transport library can prepare desired private review bytes without a
+credential or runtime Entry. Desired identities are unauthenticated assertions;
+format-2 proposals explicitly preserve that distinction and cannot be submitted to
+legacy format-1 publication. Keep returned private bytes outside public source,
+Actions logs and artifacts. No deployed CLI or initializer workflow is supplied.
+
+The source role declaration currently describes a disabled writer-preflight job
+without an Environment and a future initializer. Missing original initializer
+source refuses actual role observation; matching declaration/metadata/blob alone
+never certifies deployment or credentials. Stable prospective child identities use
+original source time, while legacy proposals retain their original date contract.
+Do not wrap either library as an unattended retry: durable private attempts and
+independent review must precede any future new-format effects.
