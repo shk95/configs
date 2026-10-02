@@ -113,21 +113,6 @@ while IFS= read -r path; do
       emit_scope repository
       ;;
     # common/ has no arm: the change that creates the domain restores its classification, dispatch and gate together (docs/policy/architecture.md, "Common domain").
-    # PROV repository/classify-registry-old-roots
-    # The registries' roots before they moved under docs/, and the removed
-    # common scope's placeholder: a deletion must still classify while it sits
-    # inside a pull-request or promotion range. Dropped once the move has
-    # reached master.
-    invariants/README.md|invariants/common/.gitkeep|provisional/README.md) emit_scope repository ;;
-    invariants/unixlike/*|provisional/unixlike/*) emit_scope unixlike ;;
-    invariants/windows/*|provisional/windows/*) emit_scope windows ;;
-    invariants/repository/*|provisional/repository/*) emit_scope repository ;;
-    # INV repository/scope-ownership
-    # Historical Unix-like namespaces retained on master, plus the exact
-    # Nix editor file pending its domain-owned relocation. No new root-domain
-    # material is permitted by these history-only answers.
-    # PROV repository/classify-unixlike-old-roots
-    flake.nix|flake.lock|assets/*|modules/*|tool/checks/*|tool/darwin/*|.vscode/settings.json) emit_scope unixlike ;; # PROV repository/classify-unixlike-old-roots
     *) emit_scope unclassified ;;
   esac
 done <"$paths" | sort -u >"$scopes"

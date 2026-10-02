@@ -78,12 +78,11 @@ patterns, and the three tools that enumerated Unix-like locations no longer
 repeat a list (`docs/policy/decisions/unixlike/unixlike-domain-owns-its-tree.md`,
 `docs/policy/decisions/unixlike/concern-first-inside-the-domain.md`).
 
-On 2026-10-01, historical master-to-dev classification was restored for the
-old Unix-like roots and exact Nix editor settings under
-`docs/provisional/repository/classify-unixlike-old-roots.md`. These temporary
-answers cover migration history; new domain material still belongs under
-`unixlike/`. The retained editor settings now live byte-identically under
-`unixlike/.vscode/settings.json` after their domain-owned relocation. The measure remains until master no longer retains those paths.
+On 2026-10-02, master promotion c98ce7d contained both the registry move and
+Unix-like root/editor relocation. Master retains no historical root path.
+The two historical classification workarounds are retired together; old root
+paths now refuse classification. Retained semantic packages preserve their own
+historical classifier bytes and manifest; only the current package changes.
 
 On 2026-09-24 the physical module tree was regrouped under `flake`,
 `machines`, `platforms`, `foundation`, `desktop`, and `programs`. The concern
@@ -235,8 +234,8 @@ warns about a spec past its review-by, and `tool/version-control/audit-remote`
 reports an issue left open beside a terminal report; the workflow closed its
 first issue, #259, on 2026-09-19. The document layout is done
 (`docs/work/repository/docs-layout/report.md`); what it left is the
-classifier's handling of the registries' old roots, a provisional measure
-that ends when the move reaches `master` (#275). The work model is done too
+classifier's handling of the registries' old roots, a historical provisional measure
+retired after the move reached `master` (#275). The work model is done too
 (`docs/work/repository/work-model/report.md`), and so is the in-place
 NixOS-WSL update (`docs/work/unixlike/nixos-wsl-in-place-update/report.md`),
 whose issue the workflow also closed. A Windows release tag annotation states
