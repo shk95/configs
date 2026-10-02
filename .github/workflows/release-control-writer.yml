@@ -1,0 +1,25 @@
+name: Disabled authenticated transport writer
+
+on:
+  workflow_dispatch:
+    inputs:
+      mode:
+        description: Disabled source only; no operating connection or effects
+        required: true
+        default: preflight
+        type: choice
+        options: [preflight]
+
+permissions: {}
+
+jobs:
+  writer-preflight:
+    if: github.repository == 'shk95/configs' && github.ref == 'refs/heads/master' && github.event_name == 'workflow_dispatch' && inputs.mode == 'preflight'
+    runs-on: ubuntu-latest
+    timeout-minutes: 15
+    concurrency:
+      group: release-control-writer
+      cancel-in-progress: false
+    steps:
+      - name: Disabled operating boundary
+        run: echo 'Disabled transport source; no operating connection, credential or effect.'

@@ -1,0 +1,59 @@
+#!/bin/sh
+# Selected standalone prerequisites report satisfied, missing and unknown.
+set -eu
+. "$(CDPATH= cd -- "$(dirname -- "$0")" && pwd)/prerequisite"
+require_command nix
+cd "$(CDPATH= cd -- "$(dirname -- "$0")/../../.." && pwd)"
+python_cmd=$(python_for_test)
+"$python_cmd" - "$PWD/unixlike/tool/standalone-readiness" <<'PY'
+import json
+import runpy
+import subprocess
+import sys
+import tempfile
+from pathlib import Path
+
+script = sys.argv[1]
+check = runpy.run_path(script)["check"]
+fixture_home = str(Path("/home") / "example")
+facts = {
+    "system": "Linux", "machine": "x86_64", "kernel": "6.18-microsoft-WSL2",
+    "osId": "ubuntu", "osVersion": "26.04", "accountHome": fixture_home,
+    "sameUser": True, "homeExists": True, "homeWritable": True,
+    "nixVersion": "nix (Nix) 2.34.8", "locales": "C\nen_US.utf8\n",
+    "nixConfKind": "absent",
+}
+selected = {"homeDirectory": fixture_home, "wsl": False, "graphical": False,
+            "homeModules": False}
+
+def statuses(result):
+    return {item["id"]: item["status"] for item in result["conditions"]}
+
+plain = check(selected, facts)
+assert plain["scope"] == "read-only-prerequisites" and plain["summary"] == "satisfied"
+assert "wsl-kernel" not in statuses(plain) and "graphical-system" not in statuses(plain)
+assert statuses(check(selected, {**facts, "locales": "C\n"}))["locale"] == "missing"
+assert check(selected, {**facts, "nixConfKind": "file"})["summary"] == "missing"
+assert statuses(check(selected, {**facts, "osVersion": "24.04"}))["os-baseline"] == "unknown"
+
+wsl = {**selected, "wsl": True}
+assert statuses(check(wsl, facts))["wsl-kernel"] == "satisfied"
+assert statuses(check(wsl, {**facts, "kernel": "6.8.0-generic"}))["wsl-kernel"] == "missing"
+graphical = {**selected, "graphical": True, "homeModules": True}
+assert statuses(check(graphical, facts))["graphical-system"] == "unknown"
+assert statuses(check(graphical, facts))["host-modules"] == "unknown"
+assert check(graphical, facts)["summary"] == "unknown"
+
+with tempfile.TemporaryDirectory() as directory:
+    declaration = Path(directory) / "host.json"
+    declaration.write_text(json.dumps({
+        "constructor": "mkHome",
+        "inputs": {"system": "x86_64-linux", "user": "example",
+                   "homeDirectory": fixture_home, "environment": {"wsl": True, "graphical": True}},
+    }))
+    invalid = subprocess.run([sys.executable, script, "--declaration", str(declaration)],
+                             capture_output=True, text=True)
+    assert invalid.returncode == 2 and "cannot be true" in invalid.stderr
+
+print("✓ standalone readiness distinguishes selected, missing and unknown conditions")
+PY

@@ -2,10 +2,15 @@
 
 # Audit committed history and clone-local version-control policy. Read-only.
 #
-# usage: tool/version-control/audit [--history]
+# usage: tool/version-control/audit [--history [<revision>...]]
 #
-# `--history` is the merge-gate form, which audits committed history alone,
-# because a runner has no clone-local configuration to audit.
+# `--history` is the merge-gate and pre-push form, which audits committed
+# history alone, because a runner has no clone-local configuration to audit.
+# It judges dev and master as origin/ holds them when a fetch left those refs
+# (see ref_of below); every local tag is still judged. Each <revision> is a
+# commit the caller is about to publish, whose non-merge subjects are judged
+# with dev's: the merge gate names HEAD, the commit under test, and
+# .githooks/pre-push names the tips it pushes.
 #
 # INV repository/flake-lock-isolated, INV repository/release-tag-contract
 # INV repository/hooks-are-the-tracked-ones
@@ -20,15 +25,19 @@ set -eu
 # only answerable where a clone was configured by a person. A CI checkout is
 # a detached, hook-less, branch-less shape by construction, so the merge gate
 # asks for history alone rather than for findings it would have to ignore.
+usage() {
+  echo "usage: tool/configs audit [--history [<revision>...]]" >&2
+  exit 2
+}
 mode=full
 if [ "$#" -gt 0 ]; then
-  if [ "$#" -eq 1 ] && [ "$1" = --history ]; then
-    mode=history
-  else
-    echo "usage: tool/version-control/audit [--history]" >&2
-    exit 2
-  fi
+  [ "$1" = --history ] || usage
+  mode=history
+  shift
 fi
+for revision in "$@"; do
+  case "$revision" in -*) usage ;; esac
+done
 
 # Guards this script's sed/grep/awk calls from Git for Windows' MSYS argument
 # conversion (#79); see tool/version-control/hygiene. Inert elsewhere.
@@ -36,6 +45,9 @@ MSYS_NO_PATHCONV=1
 MSYS2_ARG_CONV_EXCL='*'
 export MSYS_NO_PATHCONV MSYS2_ARG_CONV_EXCL
 
+# Resolved before the directory changes: the checks beside this file read the
+# repository being audited, so the fixtures run them against a throwaway one.
+audit_tools=$(CDPATH= cd -- "$(dirname -- "$0")" && pwd)
 root=$(git rev-parse --show-toplevel)
 cd "$root"
 
@@ -103,12 +115,24 @@ if [ "$mode" = full ]; then
   fi
 fi
 
-# The integration branches as this clone can see them: a local branch when it
-# exists, else the remote-tracking ref a fetch left behind. A clone with
-# neither cannot answer the history questions below and says so as
+# The integration branches the checks below judge. The full form reads a local
+# branch when it exists, else the remote-tracking ref a fetch left behind. The
+# history form reads origin/<name> first, for dev and master together: a local
+# branch is clone state no push carries, and one that lags or leads its remote
+# would fail a push, or pass it unchecked, over history it does not change.
+# Resolving only one of the two to the remote would compare a fresh ref with a
+# stale one and fail the traceability checks. The server keeps origin/dev and
+# origin/master consistent, so the history form needs no rule for local and
+# remote diverging. What it accepts: a clone that has not fetched judges the
+# remote as it last saw it, and a subject on an unpublished local dev commit
+# is left to .githooks/commit-msg. tool/version-control/plan-release stays on
+# the local master, because it plans a tag this clone is about to create. A
+# clone with neither ref cannot answer the history questions and says so as
 # unverified, which CI turns into a failure.
 ref_of() {
-  if git show-ref --verify --quiet "refs/heads/$1"; then
+  if [ "$mode" = history ] && git show-ref --verify --quiet "refs/remotes/origin/$1"; then
+    printf 'origin/%s\n' "$1"
+  elif git show-ref --verify --quiet "refs/heads/$1"; then
     printf '%s\n' "$1"
   elif git show-ref --verify --quiet "refs/remotes/origin/$1"; then
     printf 'origin/%s\n' "$1"
@@ -148,8 +172,23 @@ commit_msg_hook="$root/.githooks/commit-msg"
 commits=$(mktemp)
 subject_file=$(mktemp)
 trap 'rm -f "$commits" "$subject_file"' EXIT
-if [ -n "$dev_ref" ]; then
-  git log "$dev_ref" --no-merges --format='%H%x09%s' >"$commits"
+# The revisions a caller names are read with dev. git log walks the union of
+# its arguments, so history a revision shares with dev is read once, and a
+# promotion's merge, whose non-merge commits are already on dev, adds nothing.
+# Each is resolved to a commit id, which holds no separator, so the list
+# splits safely where it is expanded below.
+subject_tips=
+subject_scope=dev
+for revision in "$@"; do
+  if resolved_revision=$(git rev-parse --verify --quiet "$revision^{commit}"); then
+    subject_tips="$subject_tips $resolved_revision"
+    subject_scope="$subject_scope, $revision"
+  else
+    fail "revision to judge does not name a commit: $revision"
+  fi
+done
+if [ -n "$dev_ref$subject_tips" ]; then
+  git log $dev_ref $subject_tips --no-merges --format='%H%x09%s' >"$commits"
   tab=$(printf '\t')
   commit_failures=$failures
   while IFS="$tab" read -r sha subject; do
@@ -161,7 +200,7 @@ if [ -n "$dev_ref" ]; then
     fi
   done <"$commits"
   if [ "$failures" -eq "$commit_failures" ]; then
-    ok "non-merge commit subjects on dev follow policy"
+    ok "non-merge commit subjects on $subject_scope follow policy"
   fi
 fi
 
@@ -187,6 +226,69 @@ if [ -n "$master_ref" ] && [ -n "$dev_ref" ]; then
   fi
 fi
 
+# The annotation of a release tag, one defect per line and nothing when it
+# follows the form. Windows states evidence per host. Unix-like provider and
+# common tags state the three lanes at domain level; their releases certify no
+# real host. A lane's value opens with one of three states. Historical tags
+# before these forms are excepted below by immutable name.
+annotation_defects() {
+  git for-each-ref --format='%(contents)' "refs/tags/$1" | awk -v domain="$2" '
+    function close_block(   i) {
+      if (!in_block) return
+      for (i = 1; i <= 3; i++)
+        if (seen[lanes[i]] == 0) print "host " label " lacks " lanes[i]
+      in_block = 0
+    }
+    BEGIN { lanes[1] = "Evaluation"; lanes[2] = "Build"; lanes[3] = "Native runtime" }
+    { sub(/^[ \t]+/, ""); sub(/[ \t\r]+$/, "") }
+    $0 == "Domain: " domain { domain_seen = 1; next }
+    /^Host:/ {
+      close_block()
+      label = $0; sub(/^Host:[ \t]*/, "", label)
+      in_block = 1; hosts++
+      for (i = 1; i <= 3; i++) seen[lanes[i]] = 0
+      if (domain != "windows") print "a " domain " tag carries a host block: " label
+      if (label !~ /^[a-z0-9][a-z0-9-]*$/) print "host label is outside [a-z0-9][a-z0-9-]*: " label
+      else if (labels[label]++) print "host label is repeated: " label
+      next
+    }
+    /^Deployment:/ { close_block(); next }
+    /^(Evaluation|Build|Native runtime):/ {
+      lane = $0; sub(/:.*/, "", lane)
+      value = $0; sub(/^[^:]*:[ \t]*/, "", value)
+      if (value !~ /^(passed|unavailable|not applicable)([ \t]*;.*)?$/)
+        print lane " is none of passed, unavailable, not applicable: " value
+      if (in_block) {
+        if (seen[lane]++) print "host " label " repeats " lane
+      } else if (domain != "windows") {
+        if (top[lane]++) print lane " is repeated"
+      } else {
+        print lane " stands outside a host block"
+      }
+      next
+    }
+    END {
+      close_block()
+      if (!domain_seen) print "lacks Domain: " domain
+      if (domain != "windows") {
+        for (i = 1; i <= 3; i++) if (top[lanes[i]] == 0) print "lacks " lanes[i]
+      } else if (hosts == 0) {
+        print "has no host block"
+      }
+    }'
+}
+
+# The tags created before the host-block form, excepted by name and held to
+# the check they were created under. The list is closed: a tag is immutable,
+# so nothing joins it.
+legacy_tags="unixlike-v2026.08.31 windows-v2026.08.31"
+legacy_annotation_defects() {
+  legacy_annotation=$(git for-each-ref --format='%(contents)' "refs/tags/$1")
+  for field in "Domain: $2" "Evaluation:" "Build:" "Native runtime:"; do
+    printf '%s\n' "$legacy_annotation" | grep -Fq "$field" || printf 'lacks %s\n' "$field"
+  done
+}
+
 tag_count=0
 for tag in $(git tag); do
   tag_count=$((tag_count + 1))
@@ -202,16 +304,17 @@ for tag in $(git tag); do
   elif ! git merge-base --is-ancestor "$tag^{}" "$master_ref"; then
     fail "release tag target is not reachable from master: $tag"
   else
-    annotation=$(git for-each-ref --format='%(contents)' "refs/tags/$tag")
     domain=${tag%%-v*}
-    missing=""
-    for field in "Domain: $domain" "Evaluation:" "Build:" "Native runtime:"; do
-      if ! printf '%s\n' "$annotation" | grep -Fq "$field"; then
-        missing="$missing $field"
-      fi
-    done
-    if [ -n "$missing" ]; then
-      fail "release tag annotation lacks evidence fields:$missing ($tag)"
+    case " $legacy_tags " in
+      *" $tag "*) defects=$(legacy_annotation_defects "$tag" "$domain") ;;
+      *) defects=$(annotation_defects "$tag" "$domain") ;;
+    esac
+    if [ -n "$defects" ]; then
+      while IFS= read -r defect; do
+        fail "release tag annotation: $defect ($tag)"
+      done <<EOF
+$defects
+EOF
     else
       ok "release tag is annotated, evidenced, and master-reachable: $tag"
     fi
@@ -222,18 +325,44 @@ if [ "$tag_count" -eq 0 ]; then
 fi
 
 root_commit=$(git rev-list --max-parents=0 HEAD | head -1)
-for sha in $(git log --format='%H' -- flake.lock); do
+# Both spellings, permanently. The lock moved into the domain, and this rule
+# reads history: the refreshes made before the move are still at the old path
+# and always will be, because history is not rewritten.
+for sha in $(git log --format='%H' -- flake.lock unixlike/flake.lock); do
   [ "$sha" = "$root_commit" ] && continue
+  # A commit that only moves the lock is not a refresh, and the rule is about
+  # refreshes. Rename detection answers that directly: a pure rename is R100
+  # and is skipped, while a rename carrying a content change scores lower and
+  # goes on to the rules below, where mixing it with the move fails as it
+  # should.
+  case "$(git diff-tree --no-commit-id -r -M --name-status "$sha" \
+    -- flake.lock unixlike/flake.lock)" in
+    R100*) continue ;;
+  esac
   subject=$(git show -s --format=%s "$sha")
   files=$(git diff-tree --no-commit-id --name-only -r "$sha")
   if ! printf '%s\n' "$subject" | grep -Eq '^chore\(unixlike-deps\): .+'; then
     fail "flake.lock changed outside chore(unixlike-deps): $sha"
-  elif [ "$files" != flake.lock ]; then
+  elif [ "$files" != flake.lock ] && [ "$files" != unixlike/flake.lock ]; then
     fail "flake.lock refresh is mixed with other files: $sha"
   else
     ok "isolated flake.lock refresh: $sha"
   fi
 done
+
+# A spec past its review-by whose report is still pending is reported, the
+# way the provisional check reports an overdue measure outside the scopes
+# under change: it is a prompt to end the report or move the date, not a
+# failure of the change at hand. The work check owns the reading.
+overdue_specs=$("$audit_tools/work" --overdue) || overdue_specs=
+if [ -n "$overdue_specs" ]; then
+  printf '%s\n' "$overdue_specs" | while IFS= read -r overdue_spec; do
+    printf 'warning: overdue spec: %s\n' "$overdue_spec"
+  done
+  warnings=$((warnings + $(printf '%s\n' "$overdue_specs" | wc -l | tr -d ' ')))
+else
+  ok "no spec is past its review-by with a pending report"
+fi
 
 printf 'summary: %s warning(s), %s failure(s)\n' "$warnings" "$failures"
 if [ "$failures" -ne 0 ]; then

@@ -1,0 +1,144 @@
+#!/bin/sh
+#
+# Enforce INV repository/no-closing-keyword: no commit message on its way to
+# dev and no promotion pull request body carries a GitHub closing keyword
+# before an issue reference.
+#
+# GitHub closes a referenced issue when a closing keyword reaches the default
+# branch. Here that is a promotion, which accepts source history and certifies
+# nothing, so an issue would close at a moment unrelated to the work: an
+# execution issue closes from what its report says. `Refs #<n>` links an issue
+# without closing it.
+#
+# The keywords are close, closes, closed, fix, fixes, fixed, resolve, resolves
+# and resolved, in any case, with or without a colon, before `#<n>` or
+# `<owner>/<repo>#<n>`, anywhere in the text. A keyword that does not stand
+# directly before the reference closes nothing and passes, and so does one
+# that is the tail of a longer word.
+#
+#   --message <file>   a commit message as .githooks/commit-msg receives it:
+#                      comment lines, and everything below the scissors line
+#                      of `git commit -v`, are not part of the message
+#   --text <file>      a text taken as it stands: a promotion's body
+#   --range <base> <head> --base-ref <name>
+#                      every commit message in <base>..<head>, merges
+#                      included, when the pull request's base is dev. A
+#                      promotion's range is not read: dev carries commits
+#                      from before this rule, history is not rewritten, and
+#                      every later commit was read on its way into dev; the
+#                      promotion answers for its body instead.
+#
+# Hooks are opt-in, so the merge gate is the complete check and commit-msg is
+# the early one.
+#
+# usage: tool/version-control/closing-keywords --message <file>
+#        tool/version-control/closing-keywords --text <file>
+#        tool/version-control/closing-keywords --range <base> <head> --base-ref <name>
+#
+# Exit 0 verified, 69 unverified, any other status failed. See
+# docs/policy/architecture.md, "Repository governance plane", and .githooks/evidence,
+# which is the one place that decides what each means.
+
+set -eu
+
+# Guards this script's sed/grep calls from Git for Windows' MSYS argument
+# conversion (#79); see tool/version-control/hygiene. Inert elsewhere.
+MSYS_NO_PATHCONV=1
+MSYS2_ARG_CONV_EXCL='*'
+export MSYS_NO_PATHCONV MSYS2_ARG_CONV_EXCL
+
+# The three-state prerequisite contract, restated rather than sourced from
+# unixlike/tool/checks/prerequisite for the reason tool/version-control/hygiene
+# gives: a repository check must not depend on a domain's plane.
+require_command() {
+  require_missing=
+  for require_name in "$@"; do
+    command -v "$require_name" >/dev/null 2>&1 ||
+      require_missing="$require_missing $require_name"
+  done
+  [ -n "$require_missing" ] || return 0
+
+  if [ "${REQUIRE_NATIVE:-0}" = 1 ]; then
+    printf '\033[31m✗ required tooling is missing:%s\033[0m\n' \
+      "$require_missing" >&2
+    exit 1
+  fi
+
+  printf '· unverified: this host has no%s\n' "$require_missing" >&2
+  exit 69
+}
+
+usage() {
+  echo "usage: tool/version-control/closing-keywords --message <file>" >&2
+  echo "       tool/version-control/closing-keywords --text <file>" >&2
+  echo "       tool/version-control/closing-keywords --range <base> <head> --base-ref <name>" >&2
+  exit 2
+}
+
+# The grammar's only owner. The character before the keyword keeps `prefix`
+# from reading as `fix`.
+keyword='(^|[^A-Za-z0-9_])(close[sd]?|fix(e[sd])?|resolve[sd]?):?[[:space:]]+([A-Za-z0-9_.-]+/[A-Za-z0-9_.-]+)?#[0-9]+'
+
+tmp=$(mktemp -d)
+trap 'rm -rf "$tmp"' EXIT
+
+# Prints each offending line of the file, prefixed by the label; fails if any.
+scan() {
+  hits=0
+  grep -n -i -E -e "$keyword" "$2" >"$tmp/hits" 2>/dev/null || hits=$?
+  if [ "$hits" -gt 1 ]; then
+    printf '\033[31m✗ scan did not run: grep exited %s\033[0m\n' "$hits" >&2
+    exit 1
+  fi
+  [ -s "$tmp/hits" ] || return 0
+  while IFS= read -r hit; do
+    printf '\033[31m✗ %s:%s\033[0m\n' "$1" "$hit" >&2
+  done <"$tmp/hits"
+  return 1
+}
+
+explain() {
+  echo "  A closing keyword before an issue reference closes the issue when it reaches" >&2
+  echo "  master. Write \`Refs #<n>\`; an execution issue closes from its report." >&2
+  echo "  See docs/policy/invariants/repository/no-closing-keyword.md." >&2
+}
+
+case "${1:-}" in
+  --message)
+    [ "$#" -eq 2 ] || usage
+    require_command grep sed
+    [ -r "$2" ] || { echo "cannot read $2" >&2; exit 2; }
+    sed -e '/^# -\{24\} >8 -\{24\}$/,$d' -e '/^#/d' "$2" >"$tmp/message"
+    scan "commit message" "$tmp/message" || { explain; exit 1; }
+    ;;
+  --text)
+    [ "$#" -eq 2 ] || usage
+    require_command grep
+    [ -r "$2" ] || { echo "cannot read $2" >&2; exit 2; }
+    scan "$2" "$2" || { explain; exit 1; }
+    echo "✓ closing keywords: the text carries none"
+    ;;
+  --range)
+    [ "$#" -eq 5 ] && [ "$4" = --base-ref ] || usage
+    require_command git grep
+    if [ "$5" != dev ]; then
+      echo "· closing keywords: the range of a pull request into $5 is not read; a promotion answers for its body"
+      exit 0
+    fi
+    git rev-parse -q --verify "$2^{commit}" >/dev/null ||
+      { printf '\033[31m✗ scan did not run: %s is not a commit\033[0m\n' "$2" >&2; exit 1; }
+    git rev-parse -q --verify "$3^{commit}" >/dev/null ||
+      { printf '\033[31m✗ scan did not run: %s is not a commit\033[0m\n' "$3" >&2; exit 1; }
+    git rev-list "$2..$3" >"$tmp/commits"
+    read_count=0
+    failed=0
+    while IFS= read -r sha; do
+      read_count=$((read_count + 1))
+      git show -s --format=%B "$sha" >"$tmp/body"
+      scan "$(git rev-parse --short "$sha")" "$tmp/body" || failed=1
+    done <"$tmp/commits"
+    [ "$failed" -eq 0 ] || { explain; exit 1; }
+    echo "✓ closing keywords: $read_count commit messages carry none"
+    ;;
+  *) usage ;;
+esac

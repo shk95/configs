@@ -16,11 +16,15 @@ export MSYS_NO_PATHCONV MSYS2_ARG_CONV_EXCL
 
 cd "$(dirname "$0")/.." || exit 1
 
+# Where the Unix-like flake is. Asked two questions below by path: whether
+# this machine can resolve it at all, and which flavours it declares.
+unixlike_flake=./unixlike
+
 scope=${1:-all}
 case "$scope" in
   all|unixlike|windows|common|repository) ;;
   *)
-    echo "usage: tool/doctor.sh [unixlike|windows|common|repository]" >&2
+    echo "usage: tool/configs doctor [unixlike|windows|common|repository]" >&2
     exit 2
     ;;
 esac
@@ -52,13 +56,13 @@ if [ "$scope" = all ] || [ "$scope" = unixlike ]; then
 # that cannot help. Not knowing is its own answer, and it stays a ✗ because the
 # question being asked is whether this machine can build.
   if command -v nix >/dev/null 2>&1; then
-    if err=$(nix flake metadata --no-write-lock-file 2>&1 >/dev/null); then
+    if err=$(nix flake metadata --no-write-lock-file "$unixlike_flake" 2>&1 >/dev/null); then
       ok "nix-command and flakes enabled"
     else
       case "$err" in
         *"experimental Nix feature"*)
           bad "nix-command/flakes not enabled by default" \
-              'export NIX_CONFIG="experimental-features = nix-command flakes" until the first home-manager switch writes it for you (see modules/nix-conf.nix)'
+              'export NIX_CONFIG="experimental-features = nix-command flakes" until the first home-manager switch writes it for you (see unixlike/modules/foundation/nix/shared.nix)'
           ;;
         *)
           detail=$(printf '%s\n' "$err" \
@@ -91,6 +95,27 @@ if [ "$scope" = windows ] || [ "$scope" = all ]; then
     warn "native PowerShell is unavailable" \
       "Windows checks stay unverified here; CI supplies that evidence."
   fi
+fi
+
+# INV repository/release-control-preview-only
+if [ "$scope" = all ] || [ "$scope" = repository ]; then
+  controller_python=${CONFIGS_CONTROLLER_PYTHON:-python3}
+  if "$controller_python" -I -S -c 'import sys,json,hashlib,subprocess,base64; assert sys.version_info >= (3,9)' >/dev/null 2>&1; then
+    ok "functional controller Python >=3.9"
+  else
+    warn "controller Python >=3.9 is unavailable" \
+      "Set CONFIGS_CONTROLLER_PYTHON to an existing functional runtime; controller previews/fixtures remain unverified."
+  fi
+  case $(uname -s) in
+    Linux|Darwin)
+      if command -v nix >/dev/null 2>&1; then
+        ok "optional disposable refresh-candidate Nix runtime available"
+      else
+        warn "actual refresh-candidate Nix fixture is unavailable" \
+          "Fake governance remains Nix-independent; the selected native Nix CI lane must supply actual preparation proof. Nothing is installed."
+      fi ;;
+    *) ok "fake controller fixtures require no Windows Nix runtime" ;;
+  esac
 fi
 
 # The directory Git will run hooks from, canonical. Relative values are
@@ -129,7 +154,7 @@ if hooks_enabled; then
 else
   # A hard failure: without this a clone commits with no local policy or secret
   # scan. CI remains a backstop, not the primary feedback loop.
-  bad "git hooks are NOT enabled" "Inspect with 'tool/setup', then enable with 'tool/setup --fix'."
+  bad "git hooks are NOT enabled" "Inspect with 'tool/configs setup', then enable with 'tool/configs setup --fix'."
 fi
 
 # INV repository/hook-evidence-recorded: silent when the log is absent, since
@@ -162,53 +187,22 @@ fi
 
 if [ "$scope" = all ] || [ "$scope" = unixlike ]; then
   echo
-  echo "Flavours declared by the flake"
-# tool/checks/test builds every configuration on the host it runs on, so what
-# matters here is only whether each one can also be *activated* from this
-# machine. Building and activating are different questions: a NixOS closure
-# builds on any Linux box, and only switching to it needs the real host.
-
-found=0
-
-if grep -Rqs --include='*.nix' 'homeConfigurations' flake.nix modules 2>/dev/null; then
-  found=1
-  ok "homeConfigurations — build and switch here"
-fi
-
-if grep -Rqs --include='*.nix' 'nixosConfigurations' flake.nix modules 2>/dev/null; then
-  found=1
-  if [ -r /etc/os-release ] && grep -q '^ID=nixos' /etc/os-release; then
-    ok "nixosConfigurations — build and switch here"
-  else
-    warn "nixosConfigurations — build here, but not switch" \
-         "nixos-rebuild switch needs the target host. The closure still builds and is still verified; only activation is out of reach."
-  fi
-fi
-
-if grep -Rqs --include='*.nix' 'darwinConfigurations' flake.nix modules 2>/dev/null; then
-  found=1
-  if [ "$(uname -s)" = Darwin ]; then
-    ok "darwinConfigurations — build and switch here"
-  else
-    warn "darwinConfigurations — evaluate here, but build and switch on Darwin" \
-         "The Linux check evaluates its complete derivation; native build and activation remain Darwin evidence."
-  fi
-fi
-
-  [ "$found" -eq 1 ] || warn "no Unix-like host configurations in the flake sources" \
-       "tool/checks/test has nothing to verify."
+  echo "Provider fixtures"
+  ok "Unix-like flake outputs are synthetic test instances; real host flakes live in configs-hosts"
+  ok "Run Unix-like evaluation and build checks here; activate only from a reviewed host consumer"
 
   echo
   echo "Karabiner (Darwin only)"
 # Karabiner-Elements is a Homebrew cask that rewrites its own configuration
-# file, so tool/darwin/karabiner compares that file rather than delivering it.
+# file, so unixlike/modules/programs/karabiner/tool compares that file rather than
+# delivering it.
 # These say whether this machine can run that comparison at all; they are
 # warnings everywhere, because a clone that is not a Mac is not broken.
   if [ "$(uname -s)" = Darwin ]; then
     [ -d /Applications/Karabiner-Elements.app ] \
       && ok "Karabiner-Elements.app installed" \
       || warn "Karabiner-Elements.app is not installed" \
-             "The cask is declared in modules/darwin-homebrew.nix; 'just karabiner-check' reports drift until it is installed."
+             "The cask is declared in unixlike/modules/platforms/homebrew.nix; 'just karabiner-check' reports drift until it is installed."
     # The cask installs it below the application's own support directory and
     # puts nothing on PATH, so the absolute path is the only probe that can
     # answer.
@@ -222,7 +216,7 @@ fi
              "'just karabiner-check' reports that as drift, not as unverified. Start Karabiner-Elements once, or apply the desired state."
   else
     warn "Karabiner probes are Darwin-only" \
-         "tool/darwin/karabiner reports unverified here; the Mac supplies that evidence."
+         "unixlike/modules/programs/karabiner/tool reports unverified here; the Mac supplies that evidence."
   fi
 fi
 
@@ -231,4 +225,4 @@ if [ "$failed" -eq 1 ]; then
   printf "${red}Not ready.${off} Fix the ✗ items above before starting work.\n"
   exit 1
 fi
-printf "${green}Ready.${off} Warnings above only limit which flavours you can build or switch here.\n"
+printf "${green}Ready.${off} Warnings above limit which provider checks run here.\n"

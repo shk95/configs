@@ -1,0 +1,99 @@
+# Design documents sit outside the authority model
+
+date: 2026-09-12
+scope: repository
+status: accepted
+reopen-when: an authority document needs to cite a design document directly, or a year passes with no document under `docs/work/` producing an outcome.
+
+Everything this repository tracks is a result. `AGENTS.md` and
+`docs/policy/architecture.md` hold rationale, `docs/policy/invariants/` what must remain true,
+`docs/policy/decisions/` the choices, `docs/policy/candidates/` an observation waiting to
+become a sentence, `docs/status/` the state, and `tool/` the enforcement.
+Nothing tracked holds the work that produced any of them: the survey, the
+spike and its measurements, the argument that weighed three layouts, the plan
+that predicted what each step would cost. That work had four homes, none of
+them the repository — a private artefact URL, an agent's memory, an untracked
+`notes/` the repository's own charter says not to read, and GitHub issues the
+repository already refuses authority to.
+
+It showed. `docs/policy/decisions/unixlike/unixlike-domain-owns-its-tree.md` had to write "a
+spike on 2026-09-10 found" with no path to name, and picking the work back up
+a session later meant recovering a link out of one machine's memory.
+
+`docs/work/` is that work's home, and it carries no authority. A design
+document is an argument: it observes the tracked tree and quotes it with a
+date and a commit, and it binds nothing by existing. The repository adopts
+from it only through an inlet that is reviewed on its own terms — a decision
+record, a promoted candidate, a registered provisional measure, or an issue —
+and the inlet names the document as its source, which is what `source:` in a
+decision record has always been for. `INV repository/design-outside-authority`
+holds the direction of that traffic: an authority document, a registry entry
+or a piece of executable policy may not cite a document here, so a rule can
+never come to rest on an argument nobody accepted.
+
+The division is not between kinds of judgement. Deciding where the repository
+should go is proposed outside and becomes internal the moment an inlet accepts
+it; deciding how to satisfy an accepted constraint is internal and stays in
+the commit, the comment and the record. What the internal side hands back is
+not a report but its ordinary output — commits, check evidence, a
+`docs/status/` line — and the outside reads that directly. A third kind of
+document, written by the work to describe itself, is exactly what this
+decision refuses: it would be neither argument nor authority, and nothing
+would own it.
+
+Rejected:
+
+- A separate repository, the way cross-project methods live in the sibling
+  `skills` project. That project's admission test is that the material
+  contains no repository decision, path convention, branch name,
+  infrastructure identity or current state (`AGENTS.md`, "Governance
+  design"). A design document is made of those, and a record there could not
+  be cited by a tracked path.
+- Tracking `notes/`. It is ignored so that free-form thinking stays out of a
+  public history and out of every ignore-aware search, which is the whole of
+  what it offers; tracking it would remove that and put unreviewed text in
+  the same tree as reviewed text.
+- Folding the documents into `docs/policy/decisions/`. A record is one choice, and
+  the index is readable because that is true. An argument that yields two
+  records, two candidates and a milestone is not one choice.
+- Folding them into `docs/policy/candidates/`. A candidate is one sentence's
+  observation and is deleted on promotion because its content moves into the
+  text it proposed. A design document is cited after adoption and has to
+  survive it.
+- Leaving them in issues, a wiki or Discussions. Milestones are already a
+  planning surface and not a source of authority; none of these is reviewed
+  as a diff, versioned with the code, or citable by path.
+
+What it costs. A seventh repository-wide scan runs on every commit and in CI.
+The tree gains a directory whose contents are never authoritative, which a
+reader has to learn to read as argument and an agent must not follow as rule;
+the charter in `docs/work/README.md` is the whole of that warning. Documents
+are never deleted, so the directory only grows and `superseded` is its only
+retirement. Porting the three documents that opened the area costs a
+translation: they were written as Korean HTML artefacts, and the repository is
+public and its text is English (`CONTRIBUTING.md`). And the checked rule
+is lexical: it separates citing a document from naming the directory, so a
+citation written in words rather than as a path passes, and a reviewer is what
+catches it.
+
+2026-09-19: one sentence above no longer holds. Work under an adopted
+direction now does hand back a report: a spec and the report that answers it
+live under `docs/work/` and are created together
+(`docs/policy/decisions/repository/work-planned-and-verified-in-documents.md`). The
+objection to a document written by the work to describe itself was that
+nothing would own it; a report is owned by its spec and checked against it.
+Everything else here stands: a work document carries no authority, the
+traffic runs one way, and the inlets are where a direction becomes binding.
+
+2026-09-24: the four inlets listed above no longer describe how a rule is
+adopted. The later work model gives issues execution state only, and
+candidates remain observations until they are deleted on promotion. Neither
+adopts a rule. A durable result enters a decision record or invariant; a
+temporary measure enters the provisional registry. Status may link a report
+as evidence of current state. The direct-citation boundary remains in force.
+
+2026-10-01: strict data-only exact path mappings in release-preview.rules name
+inventory, like the classifier's path table, rather than borrowing a work item's
+argument. The scanner recognizes only a complete four-field production-map exact
+row with a path and check IDs. Comments, extra fields and other rows in that same
+file remain subject to the direct-citation boundary; no file-wide exclusion is added.

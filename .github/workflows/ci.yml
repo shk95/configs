@@ -18,26 +18,27 @@ jobs:
       unixlike: ${{ steps.scopes.outputs.unixlike }}
       windows: ${{ steps.scopes.outputs.windows }}
       repository: ${{ steps.scopes.outputs.repository }}
+      unixlike_checks: ${{ steps.scopes.outputs.unixlike_checks }}
+      windows_checks: ${{ steps.scopes.outputs.windows_checks }}
+      repository_checks: ${{ steps.scopes.outputs.repository_checks }}
+      base: ${{ steps.scopes.outputs.base }}
     steps:
       - uses: actions/checkout@v7
         with:
           fetch-depth: 0
       - id: scopes
-        name: Resolve owning scopes
+        name: Resolve owning scopes and CI effects
         shell: bash
         env:
           EVENT_NAME: ${{ github.event_name }}
           PR_BASE: ${{ github.event.pull_request.base.sha }}
+          PR_BASE_REF: ${{ github.event.pull_request.base.ref }}
+          EVENT_BASE_REF: ${{ github.base_ref }}
+          PR_STACK: ${{ toJSON(github.event.pull_request.stack) }}
           PUSH_BASE: ${{ github.event.before }}
         run: |
-          if [[ "$EVENT_NAME" == pull_request ]]; then
-            base=$PR_BASE
-          else
-            base=$PUSH_BASE
-          fi
-          if [[ "$base" =~ ^0+$ ]]; then
-            base=$(git hash-object -t tree /dev/null)
-          fi
+          base=$(tool/dispatch/ci-base)
+          echo "base=$base" >>"$GITHUB_OUTPUT"
           scopes=$(tool/version-control/classify --range "$base" "$GITHUB_SHA")
           printf '%s\n' "$scopes"
           if grep -qx unclassified <<<"$scopes"; then
@@ -51,24 +52,72 @@ jobs:
               echo "$scope=false" >>"$GITHUB_OUTPUT"
             fi
           done
+          git diff --name-status "$base" "$GITHUB_SHA" >"$RUNNER_TEMP/ci-changes"
+          units=$(tool/dispatch/select ci <"$RUNNER_TEMP/ci-changes")
+          printf 'Selected CI units:\n%s\n' "$units"
+          while IFS= read -r unit; do
+            case "$unit" in
+              ''|repository:fixtures|unixlike:suite|windows:suite) ;;
+              *) echo "Unknown CI unit: $unit" >&2; exit 1 ;;
+            esac
+          done <<<"$units"
+          for scope in unixlike windows repository; do
+            if grep -q "^$scope:" <<<"$units"; then
+              echo "${scope}_checks=true" >>"$GITHUB_OUTPUT"
+            else
+              echo "${scope}_checks=false" >>"$GITHUB_OUTPUT"
+            fi
+          done
 
   repository:
-    name: Version-control policy
+    name: Version-control policy (${{ matrix.os }})
     needs: classify
-    if: needs.classify.outputs.repository == 'true'
-    runs-on: ubuntu-latest
+    if: needs.classify.outputs.repository_checks == 'true'
+    strategy:
+      fail-fast: false
+      matrix:
+        os: [ubuntu-latest, windows-latest]
+    runs-on: ${{ matrix.os }}
     # The merge gate is the one place where a check that could not run must not
     # pass.
     env:
       REQUIRE_NATIVE: "1"
     steps:
       - uses: actions/checkout@v7
-      - run: tool/version-control/test
+        with:
+          fetch-depth: 0
+      - name: Explicit controller fixture runtime
+        uses: actions/setup-python@v6
+        with:
+          python-version: '3.13'
+      - name: Bind functional controller runtime
+        shell: bash
+        run: |
+          python -I -S -c 'import sys,json,hashlib,subprocess; assert sys.version_info >= (3,9)'
+          echo 'CONFIGS_CONTROLLER_PYTHON=python' >>"$GITHUB_ENV"
+      - name: Full repository fixtures
+        if: runner.os == 'Linux'
+        shell: bash
+        run: tool/version-control/test
+      - name: Native Git for Windows release preview
+        if: runner.os == 'Windows'
+        shell: bash
+        run: |
+          case "$(uname -s)" in
+            MINGW*|MSYS*) ;;
+            *) echo 'Expected native Git for Windows bash' >&2; exit 1 ;;
+          esac
+          tool/version-control/test-release-preview
+          tool/version-control/test-production-release
+          tool/version-control/test-release-control
+          tool/version-control/test-release-transport
+          tool/version-control/test-release-credential-check
+          tool/version-control/test-retired-capture
 
   unix:
     name: Flake and Unix-like hosts
     needs: classify
-    if: needs.classify.outputs.unixlike == 'true'
+    if: needs.classify.outputs.unixlike_checks == 'true'
     runs-on: ubuntu-latest
     # The merge gate is the one place where a check that could not run must not
     # pass. Locally the same checks report unverified and let the push through.
@@ -76,24 +125,44 @@ jobs:
       REQUIRE_NATIVE: "1"
     steps:
       - uses: actions/checkout@v7
-      - uses: DeterminateSystems/nix-installer-action@v22
-      - run: tool/checks/format
-      - run: tool/checks/lint
-      - run: tool/checks/payloads-test
-      - run: tool/checks/karabiner-test
-      - run: tool/checks/flake-test
-      - run: tool/checks/composition-test
-      - run: tool/checks/eval-coverage-test
-      - run: tool/checks/prerequisite-test
-      - run: tool/checks/test
+        with:
+          fetch-depth: 0
+      - uses: cachix/install-nix-action@v31.10.6
+        with:
+          install_url: https://releases.nixos.org/nix/nix-2.34.8/install
+          extra_nix_config: |
+            experimental-features = nix-command flakes
+      - name: Explicit actual refresh-candidate fixture runtime
+        uses: actions/setup-python@v6
+        with:
+          python-version: '3.13'
+      - name: Actual disposable refresh CLI and local lock/Git integration
+        env:
+          CONFIGS_CONTROLLER_PYTHON: python
+        run: tool/version-control/test-refresh-candidate-nix
+      - name: Verify upstream Nix baseline
+        shell: bash
+        run: |
+          actual=$(nix --version)
+          printf 'Unix-like CI Nix implementation/version: %s\n' "$actual"
+          test "$actual" = 'nix (Nix) 2.34.8'
+      - run: unixlike/tool/checks/format
+      - run: unixlike/tool/checks/lint
+      - run: unixlike/tool/checks/payloads-test
+      - run: unixlike/tool/checks/karabiner-test
+      - run: unixlike/tool/checks/flake-test
+      - run: unixlike/tool/checks/composition-test
+      - run: unixlike/tool/checks/eval-coverage-test
+      - run: unixlike/tool/checks/prerequisite-test
+      - run: unixlike/tool/checks/test
       # Composes every host twice; the merge gate runs it, the local gate
       # does not (INV unixlike/import-order-independence).
-      - run: tool/checks/import-order-test
+      - run: unixlike/tool/checks/import-order-test
 
   windows:
     name: Windows desired state
     needs: classify
-    if: needs.classify.outputs.windows == 'true'
+    if: needs.classify.outputs.windows_checks == 'true'
     runs-on: windows-latest
     env:
       REQUIRE_NATIVE: "1"
@@ -103,32 +172,27 @@ jobs:
       WIN_ENV_E2E: "1"
     steps:
       - uses: actions/checkout@v7
-      - name: Validate desired state and test PowerShell
+      # INV repository/windows-ci-runtime-bound: hosted pwsh only acquires the
+      # Windows-owned exact artifact; management runs its explicit executable.
+      - name: Acquire declared Windows management runtime
+        id: runtime
         shell: pwsh
         run: |
-          .\windows\tools\setup-dev.ps1
-          winget install --id Zellij.Zellij --exact --source winget --accept-source-agreements --accept-package-agreements --disable-interactivity
-          $machinePath = [Environment]::GetEnvironmentVariable('Path', 'Machine')
-          $userPath = [Environment]::GetEnvironmentVariable('Path', 'User')
-          $env:Path = "$machinePath;$userPath;$env:Path"
-          # No parse loop here: windows/tools/test.ps1 parses every script
-          # under windows/ before the suite runs, and a loop from the checkout
-          # root reached the Unix-like PowerShell payload
-          # (INV repository/no-cross-domain-dependency).
-          # These report through their exit status rather than by throwing, so
-          # the status has to be read. Without this the block would run on past
-          # a failed desired-state check and the step would take its result
-          # from whatever ran last.
-          .\windows\tools\check-desired-state.ps1
+          & .\.github\scripts\prepare-windows-ci-runtime.ps1
           if ($LASTEXITCODE -ne 0) { exit $LASTEXITCODE }
-          .\windows\tools\test.ps1
+      - name: Verify native runtimes and run Windows management checks
+        shell: pwsh
+        env:
+          CONFIGS_CI_PWSH: ${{ steps.runtime.outputs.pwsh }}
+        run: |
+          & $env:CONFIGS_CI_PWSH -NoLogo -NoProfile -NonInteractive -File .\.github\scripts\windows-ci.ps1 -RuntimePath $env:CONFIGS_CI_PWSH
           if ($LASTEXITCODE -ne 0) { exit $LASTEXITCODE }
 
   # The job key stays `secrets`: the required-checks gate, its SECRETS_RESULT
   # input, and the `needs:` list below all key off it. Only the display name
-  # widens, because the job carries the six repository-wide scans.
+  # widens, because the job carries the seven repository-wide scans.
   secrets:
-    name: Secret, hygiene, domain-read, invariant, provisional and history scan
+    name: Secret, hygiene, domain-read, design-citation, invariant, provisional and history scan
     # Only for the classifier's scope outputs: the provisional check fails an
     # overdue entry solely in a scope this change touches.
     needs: classify
@@ -136,8 +200,10 @@ jobs:
     # The merge gate is the one place where a check that could not run must not
     # pass. tool/version-control/hygiene, tool/version-control/invariants and
     # tool/version-control/provisional need nothing but a POSIX shell, awk and
-    # Git today, as does tool/version-control/domain-reads; this is what keeps
-    # a future prerequisite from passing through the gate unverified.
+    # Git today, as do tool/version-control/domain-reads,
+    # tool/version-control/design-citations and tool/version-control/records;
+    # this is what keeps a future
+    # prerequisite from passing through the gate unverified.
     env:
       REQUIRE_NATIVE: "1"
     steps:
@@ -153,6 +219,29 @@ jobs:
       - run: gitleaks git --redact --no-banner
       - run: tool/version-control/hygiene
       - run: tool/version-control/domain-reads
+      - run: tool/version-control/design-citations
+      - run: tool/version-control/records
+      # The range is the one the classify job reads, so a criterion rewritten
+      # anywhere in a pull request or a push is judged against the spec its
+      # base carried. HEAD is the commit under test: on a pull request the
+      # merge GitHub would make.
+      - name: Check the work items
+        shell: bash
+        env:
+          CI_BASE: ${{ needs.classify.outputs.base }}
+        run: tool/version-control/work --range "$CI_BASE" HEAD
+      # Hooks are opt-in, so this is the complete check of the rule that
+      # .githooks/commit-msg applies early. The range is the pull request's own
+      # commits, base tip to head tip, not the synthetic merge. The tool reads
+      # it only when the base is dev and says so otherwise: a promotion's range
+      # holds commits from before the rule (INV repository/no-closing-keyword).
+      - name: Refuse closing keywords in the pull request's commits
+        if: github.event_name == 'pull_request'
+        env:
+          PR_BASE: ${{ github.event.pull_request.base.sha }}
+          PR_HEAD: ${{ github.event.pull_request.head.sha }}
+          BASE_REF: ${{ github.base_ref }}
+        run: tool/version-control/closing-keywords --range "$PR_BASE" "$PR_HEAD" --base-ref "$BASE_REF"
       - run: tool/version-control/invariants
       # An overdue entry fails only the scopes this change owns, so the scope
       # list comes from the classify job rather than from this one.
@@ -193,7 +282,10 @@ jobs:
       # merge gate can and must judge. Unconditional because a badly named
       # branch or a non-conventional subject is a property of the push, not of
       # a scope, and needs the fetch-depth: 0 checkout this job already takes.
-      - run: tool/version-control/audit --history
+      # HEAD is the commit under test: on a pull request the merge GitHub would
+      # make, whose own commits dev does not yet contain, so their subjects are
+      # judged before the pull request merges (INV repository/conventional-subject).
+      - run: tool/version-control/audit --history HEAD
 
   promotion:
     name: Promotion policy
@@ -218,6 +310,16 @@ jobs:
           PROMOTION_REPOSITORY: ${{ github.repository }}
           PROMOTION_PULL_NUMBER: ${{ github.event.pull_request.number }}
         run: tool/version-control/check-promotion-queue
+      # The body is read from the pull request as it stands when the job runs,
+      # not from the event that started it, so a re-run judges an edited body.
+      - name: Refuse closing keywords in the promotion body
+        env:
+          GH_TOKEN: ${{ github.token }}
+          PROMOTION_REPOSITORY: ${{ github.repository }}
+          PROMOTION_PULL_NUMBER: ${{ github.event.pull_request.number }}
+        run: |
+          gh pr view "$PROMOTION_PULL_NUMBER" --repo "$PROMOTION_REPOSITORY" --json body --jq .body >"$RUNNER_TEMP/promotion-body"
+          tool/version-control/closing-keywords --text "$RUNNER_TEMP/promotion-body"
 
   required:
     name: Required checks
@@ -226,11 +328,11 @@ jobs:
     runs-on: ubuntu-latest
     env:
       CLASSIFY_RESULT: ${{ needs.classify.result }}
-      REPOSITORY_SCOPE: ${{ needs.classify.outputs.repository }}
+      REPOSITORY_SCOPE: ${{ needs.classify.outputs.repository_checks }}
       REPOSITORY_RESULT: ${{ needs.repository.result }}
-      UNIXLIKE_SCOPE: ${{ needs.classify.outputs.unixlike }}
+      UNIXLIKE_SCOPE: ${{ needs.classify.outputs.unixlike_checks }}
       UNIXLIKE_RESULT: ${{ needs.unix.result }}
-      WINDOWS_SCOPE: ${{ needs.classify.outputs.windows }}
+      WINDOWS_SCOPE: ${{ needs.classify.outputs.windows_checks }}
       WINDOWS_RESULT: ${{ needs.windows.result }}
       SECRETS_RESULT: ${{ needs.secrets.result }}
       PROMOTION_SCOPE: ${{ github.event_name == 'pull_request' && github.base_ref == 'master' }}

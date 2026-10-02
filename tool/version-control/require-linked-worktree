@@ -1,0 +1,16 @@
+#!/bin/sh
+# INV repository/change-authoring-in-linked-worktree
+# A primary checkout remains available for integration and read-only work.
+# Source changes are committed from a linked worktree.
+
+set -eu
+
+git_dir=$(git rev-parse --git-dir)
+common_dir=$(git rev-parse --git-common-dir)
+git_dir=$(CDPATH= cd -- "$git_dir" && pwd -P)
+common_dir=$(CDPATH= cd -- "$common_dir" && pwd -P)
+
+if [ "$git_dir" = "$common_dir" ]; then
+  echo "INV repository/change-authoring-in-linked-worktree: create a topic branch in a linked worktree before changing or committing tracked source." >&2
+  exit 1
+fi

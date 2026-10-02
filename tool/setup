@@ -15,7 +15,7 @@ export MSYS_NO_PATHCONV MSYS2_ARG_CONV_EXCL
 cd "$(dirname "$0")/.." || exit 1
 
 usage() {
-  echo "usage: tool/setup [--fix]" >&2
+  echo "usage: tool/configs setup [--fix]" >&2
   exit 2
 }
 
@@ -70,7 +70,7 @@ else
 fi
 
 if [ "$fix" -eq 0 ]; then
-  echo "  No changes made. Run 'tool/setup --fix' to enable the tracked hooks."
+  echo "  No changes made. Run 'tool/configs setup --fix' to enable the tracked hooks."
   exit 1
 fi
 

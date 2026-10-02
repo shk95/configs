@@ -1,10 +1,11 @@
 # PROV unixlike/zellij-combining-marks
 #
 # Watch zellij-org/zellij#5500, the patch the Darwin zellij overlay in
-# modules/zellij.nix carries, and open one issue when a signal the tree cannot
-# see arrives. Three signals decide the overlay's life: the pull request's
-# state, which nixpkgs zellij version is current, and the review date in
-# provisional/unixlike/zellij-combining-marks.md. Only the first two are
+# unixlike/modules/programs/zellij/module.nix carries, and open one issue when a
+# signal the tree cannot see arrives. Three signals decide the overlay's
+# life: the pull request's state, which nixpkgs zellij version is current,
+# and the review date in
+# docs/provisional/unixlike/zellij-combining-marks.md. Only the first two are
 # checked here; the third is the registry's own.
 #
 # This file is the whole mechanism, and #175's retirement commit deletes it
@@ -19,9 +20,10 @@
 # authenticated gh, which is what #176 records as its pre-promotion evidence.
 #
 # Scheduled workflows in a public repository are disabled after 60 days
-# without repository activity. That is a silent failure mode, and the overlay's
-# `appliesTo` throw is what backstops it: a lock refresh past the pinned
-# version refuses to evaluate whether or not this file ever ran.
+# without repository activity. That is a silent failure mode, and the flake
+# checks the overlay's module declares are what backstop it: a lock refresh
+# whose zellij the range no longer applies to fails them in pre-push and in
+# the merge gate, and fails the Mac's build, whether or not this file ever ran.
 name: zellij upstream 5500
 
 on:
@@ -48,23 +50,26 @@ jobs:
     steps:
       - uses: actions/checkout@v7
 
+      # The version branch builds the overlay's own flake check against
+      # nixpkgs unstable rather than re-implementing it here.
+      - uses: DeterminateSystems/nix-installer-action@v22
+
       - name: Read the overlay's pin
         shell: bash
         run: |
           set -euo pipefail
-          applies_to=$(sed -n 's/^ *appliesTo = "\(.*\)";$/\1/p' modules/zellij.nix)
+          overlay=unixlike/modules/programs/zellij/module.nix
           # The overlay pins the pull request's commit range base...head; the
           # head is the commit the pull request must still carry.
-          range=$(sed -n 's|.*/zellij/compare/\([0-9a-f]\{40\}\)\.\.\.\([0-9a-f]\{40\}\)\.patch.*|\1...\2|p' modules/zellij.nix)
+          range=$(sed -n 's|.*/zellij/compare/\([0-9a-f]\{40\}\)\.\.\.\([0-9a-f]\{40\}\)\.patch.*|\1...\2|p' "$overlay")
           pinned=${range##*...}
-          if [[ -z "$applies_to" || -z "$range" ]]; then
-            echo "modules/zellij.nix carries no appliesTo or no pinned commit range; the overlay was retired or renamed" >&2
+          if [[ -z "$range" ]]; then
+            echo "$overlay carries no pinned commit range; the overlay was retired or renamed" >&2
             exit 1
           fi
-          echo "APPLIES_TO=$applies_to" >>"$GITHUB_ENV"
           echo "PINNED_RANGE=$range" >>"$GITHUB_ENV"
           echo "PINNED_COMMIT=$pinned" >>"$GITHUB_ENV"
-          echo "overlay pins zellij $applies_to to $range"
+          echo "overlay pins $range"
 
       - name: Watch the pull request
         shell: bash
@@ -118,17 +123,18 @@ jobs:
 
           retirement_checklist() {
             cat <<'CHECKLIST'
-          Retirement order (docs/decisions/zellij-patched-on-darwin-until-upstream.md):
+          Retirement order (docs/policy/decisions/unixlike/zellij-patched-on-darwin-until-upstream.md):
 
           1. `chore(unixlike-deps): refresh flake.lock` alone, once nixpkgs ships a
              zellij whose source already contains the fix.
-          2. One commit that deletes the overlay block in `modules/zellij.nix`, this
+          2. One commit that deletes the overlay block in
+             `unixlike/modules/programs/zellij/module.nix`, this
              workflow, the `CONTRIBUTING.md` subsection, the `README.md` line, the
-             `Justfile` recipe, `provisional/unixlike/zellij-combining-marks.md`, and
-             all three of `docs/status.md`'s mentions of the measure -- the Unix-like
-             paragraph, the provisional registry count, and the tagged open
-             condition -- and adds a dated line to the decision record and to the
-             `docs/troubleshooting.md` entry.
+             `Justfile` recipe, `docs/provisional/unixlike/zellij-combining-marks.md`, and
+             all three status mentions of the measure -- the Unix-like paragraph and
+             the tagged open condition in `docs/status/unixlike.md`, and the
+             provisional registry count in `docs/status/repository.md` -- and adds a dated line to the decision record and to the
+             `docs/reference/troubleshooting.md` entry.
           3. `git grep zellij-combining-marks` finds only the decision record and the
              troubleshooting entry.
           CHECKLIST
@@ -140,7 +146,7 @@ jobs:
           commits=$(gh api --paginate "repos/$upstream/pulls/$pr/commits" --jq '.[].sha')
 
           echo "pull request state=$state merged=$merged merge_commit_sha=$merge_sha"
-          echo "overlay pins zellij $APPLIES_TO to $PINNED_COMMIT"
+          echo "overlay pins $PINNED_COMMIT"
 
           if [[ "$merged" == true ]]; then
             # The latest 20 releases, oldest first, so the tag reported is the
@@ -162,7 +168,7 @@ jobs:
             nixpkgs=$(nixpkgs_version)
             body=$(printf '%s\n\n%s\n\n%s\n\n%s\n\n%s\n' \
               "zellij-org/zellij#$pr is merged as $merge_sha." \
-              "Earliest release containing it: $containing. nixpkgs nixos-unstable currently ships zellij $nixpkgs; the overlay pins $APPLIES_TO." \
+              "Earliest release containing it: $containing. nixpkgs nixos-unstable currently ships zellij $nixpkgs." \
               "Pinned commit to merge commit: https://github.com/$upstream/compare/$PINNED_COMMIT...$merge_sha" \
               "$(retirement_checklist)" \
               "Opened by .github/workflows/zellij-upstream-5500.yml.")
@@ -175,7 +181,7 @@ jobs:
           if [[ "$state" == closed ]]; then
             body=$(printf '%s\n\n%s\n\n%s\n' \
               "zellij-org/zellij#$pr was closed without being merged, so the patch the Darwin overlay carries has no upstream future in its present form." \
-              "Decide between rebasing $PINNED_COMMIT onto a later zellij in a fork and repointing the overlay's url and hash, and retiring the overlay and the workaround with it. provisional/unixlike/zellij-combining-marks.md and docs/decisions/zellij-patched-on-darwin-until-upstream.md carry both paths." \
+              "Decide between rebasing $PINNED_COMMIT onto a later zellij in a fork and repointing the overlay's url and hash, and retiring the overlay and the workaround with it. docs/provisional/unixlike/zellij-combining-marks.md and docs/policy/decisions/unixlike/zellij-patched-on-darwin-until-upstream.md carry both paths." \
               "Opened by .github/workflows/zellij-upstream-5500.yml.")
             ensure_issue "zellij upstream #$pr closed unmerged" \
               "unixlike: zellij upstream #$pr closed unmerged; decide the overlay's future" "$body"
@@ -194,36 +200,33 @@ jobs:
           if ! grep -qx "$PINNED_COMMIT" <<<"$commits"; then
             body=$(printf '%s\n\n%s\n\n%s\n' \
               "$PINNED_COMMIT is no longer in the commit list of zellij-org/zellij#$pr, so the branch was rewritten and the overlay fetches a commit the pull request no longer claims." \
-              "Re-read the pull request, pick the commit that now carries the fix, and repoint the overlay's url and hash in modules/zellij.nix." \
+              "Re-read the pull request, pick the commit that now carries the fix, and repoint the overlay's url and hash in unixlike/modules/programs/zellij/module.nix." \
               "Opened by .github/workflows/zellij-upstream-5500.yml.")
             ensure_issue "zellij upstream #$pr was rewritten" \
               "unixlike: zellij upstream #$pr was rewritten; re-pin the overlay" "$body"
             exit 0
           fi
 
-          nixpkgs=$(nixpkgs_version)
-          if [[ -n "$nixpkgs" && "$nixpkgs" != "$APPLIES_TO" ]]; then
-            # Pre-check the bump the maintainer is about to be asked for: a
-            # patch that still applies is a two-commit lock refresh, one that
-            # does not needs a rebased commit in a fork first.
-            work=$(mktemp -d)
-            verdict=clean
-            if ! git clone --quiet --depth 1 --branch "v$nixpkgs" "https://github.com/$upstream" "$work/zellij" 2>/dev/null; then
-              verdict="unknown (no tag v$nixpkgs upstream)"
-            else
-              curl -fsSL "https://github.com/$upstream/compare/$PINNED_RANGE.patch" >"$work/pr.patch"
-              if ! git -C "$work/zellij" apply --check --exclude=CHANGELOG.md "$work/pr.patch" 2>"$work/apply.err"; then
-                verdict="conflict: $(tr '\n' ' ' <"$work/apply.err")"
-              fi
-            fi
+          # The overlay names no zellij version, so a newer nixpkgs zellij is
+          # not itself a signal; a range that no longer applies to it is. The
+          # overlay's own flake check decides that — stdenv's patch phase with
+          # -F0 and the vendor Cargo.lock comparison, compiling nothing —
+          # against one resolved nixos-unstable revision, without writing the
+          # lock.
+          unstable_rev=$(git ls-remote https://github.com/NixOS/nixpkgs refs/heads/nixos-unstable | cut -f1)
+          unstable=(--override-input nixpkgs "github:NixOS/nixpkgs/$unstable_rev" --no-write-lock-file)
+          check="path:./unixlike#checks.x86_64-linux.zellij-combining-marks"
+          nixpkgs=$(nix eval --raw "${unstable[@]}" "$check.version")
+          echo "nixpkgs nixos-unstable $unstable_rev ships zellij $nixpkgs"
+          if ! nix build --no-link "${unstable[@]}" "$check" 2>"$RUNNER_TEMP/check.err"; then
             body=$(printf '%s\n\n%s\n\n%s\n\n%s\n' \
-              "nixpkgs nixos-unstable ships zellij $nixpkgs; the overlay in modules/zellij.nix pins $APPLIES_TO, so the next flake.lock refresh makes the Darwin evaluation refuse until the overlay is re-pinned." \
-              "git apply --check of $PINNED_RANGE against v$nixpkgs: $verdict" \
-              "The bump procedure is CONTRIBUTING.md § zellij overlay: refresh flake.lock alone, then re-pin appliesTo and the cargoDeps hash in a second commit." \
+              "The flake check zellij-combining-marks fails against nixpkgs nixos-unstable $unstable_rev, which ships zellij $nixpkgs: the range $PINNED_RANGE no longer applies with -F0, or the Cargo.lock it produces no longer matches the vendor set. A flake.lock refresh to that zellij is refused in pre-push and in the merge gate until the range is rebased." \
+              "$(printf 'Last lines of the build:\n\n~~~text\n%s\n~~~' "$(tail -n 20 "$RUNNER_TEMP/check.err")")" \
+              "The procedure is CONTRIBUTING.md § zellij overlay: rebase the range in a fork, repoint the overlay's url and hash, then refresh the lock." \
               "Opened by .github/workflows/zellij-upstream-5500.yml.")
-            ensure_issue "zellij $nixpkgs reached nixpkgs unstable" \
-              "unixlike: zellij $nixpkgs reached nixpkgs unstable; rebase the overlay" "$body"
+            ensure_issue "zellij $nixpkgs no longer takes the overlay's patch" \
+              "unixlike: zellij $nixpkgs no longer takes the overlay's patch; rebase the range" "$body"
             exit 0
           fi
 
-          echo "no-op: zellij-org/zellij#$pr is open, still carries $PINNED_COMMIT, and nixpkgs unstable is still on $APPLIES_TO"
+          echo "no-op: zellij-org/zellij#$pr is open, still carries $PINNED_COMMIT, and the range applies to nixpkgs unstable's zellij $nixpkgs"

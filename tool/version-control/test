@@ -3,6 +3,11 @@
 set -eu
 
 root=$(CDPATH= cd -- "$(dirname "$0")/../.." && pwd)
+# All fixture Git commands and their child hooks inherit this test-only
+# boundary, not caller routing/configuration or network transport authority.
+# INV repository/fixture-git-isolation
+. "$root/tool/version-control/fixture-git-environment.sh"
+"$root/tool/version-control/fixture-git-isolation-test"
 classify="$root/tool/version-control/classify"
 audit="$root/tool/version-control/audit"
 plan_release="$root/tool/version-control/plan-release"
@@ -10,6 +15,48 @@ required_checks="$root/tool/version-control/required-checks"
 check_promotion="$root/tool/version-control/check-promotion"
 check_promotion_queue="$root/tool/version-control/check-promotion-queue"
 plan_promotion="$root/tool/version-control/plan-promotion"
+
+# INV repository/operator-entry-boundary
+# Every published repository command selects exactly its own implementation,
+# preserving the caller's arguments and status. Unknown commands execute none.
+operator_fixture=$(mktemp -d)
+mkdir -p "$operator_fixture/tool/version-control"
+cp "$root/tool/configs" "$operator_fixture/tool/configs"
+for route in \
+  setup:setup doctor:doctor.sh worktree:worktree.sh session:work-session.sh \
+  commit:version-control/commit classify:version-control/classify \
+  work:version-control/work records:version-control/records \
+  invariants:version-control/invariants provisional:version-control/provisional \
+  hygiene:version-control/hygiene domain-reads:version-control/domain-reads \
+  design-citations:version-control/design-citations test:version-control/test \
+  audit:version-control/audit audit-remote:version-control/audit-remote \
+  plan-promotion:version-control/plan-promotion \
+  plan-release:version-control/plan-release \
+  release-preview:version-control/release-preview \
+  release-control:version-control/release-control \
+  release-transport:version-control/release-transport \
+  test-refresh-candidate-nix:version-control/test-refresh-candidate-nix \
+  hook-evidence:version-control/hook-evidence; do
+  command=${route%%:*}
+  target=${route#*:}
+  printf '#!/bin/sh\nprintf "operator-target=%%s\\n%%s\\n%%s\\n" %s "$1" "$2"\nexit 37\n' "$target" >"$operator_fixture/tool/$target"
+  chmod +x "$operator_fixture/tool/$target"
+  operator_status=0
+  operator_output=$("$operator_fixture/tool/configs" "$command" alpha 'two words') || operator_status=$?
+  if [ "$operator_status" -ne 37 ] || [ "$operator_output" != "$(printf 'operator-target=%s\nalpha\ntwo words' "$target")" ]; then
+    echo "operator command $command did not forward arguments and status to $target" >&2
+    exit 1
+  fi
+done
+operator_status=0
+"$operator_fixture/tool/configs" unknown >"$operator_fixture/out" 2>&1 || operator_status=$?
+if [ "$operator_status" -ne 64 ] || ! grep -q 'unknown repository command' "$operator_fixture/out" || grep -q 'operator-target=' "$operator_fixture/out"; then
+  echo 'operator interface did not refuse an unknown command with status 64' >&2
+  exit 1
+fi
+"$operator_fixture/tool/configs" help >"$operator_fixture/out"
+grep -q 'Windows host operations use windows/win-env.ps1' "$operator_fixture/out" || exit 1
+rm -rf "$operator_fixture"
 
 # Fixture repositories must own their indexes. An alternate parent index is
 # useful to callers such as staged-state tests, but must not leak through
@@ -45,8 +92,8 @@ export MSYS_NO_PATHCONV MSYS2_ARG_CONV_EXCL
 # "a literal appears" but "the script calls a text tool at all": every POSIX
 # shell script in the governance plane that invokes sed, grep or awk declares
 # the guard. Derived from the tree, so a new script is covered on arrival.
-# tool/checks/* is unixlike scope and outside this rule by the maintainer's
-# ruling.
+# unixlike/tool/checks/* is unixlike scope and outside this rule by the
+# maintainer's ruling.
 #
 # The scan is a function so the rule itself can be exercised, not only the
 # tree it happens to be run over: a derived check that silently matched
@@ -58,7 +105,7 @@ msys_scan() {
   msys_root=$1
   if git -C "$msys_root" rev-parse --git-dir >/dev/null 2>&1; then
     msys_list=$(git -C "$msys_root" ls-files -- tool/version-control tool/dispatch \
-      tool/doctor.sh tool/setup tool/worktree.sh .githooks)
+      tool/configs tool/doctor.sh tool/setup tool/worktree.sh tool/work-session.sh .githooks)
   else
     msys_list=$(cd "$msys_root" && find . -type f | sed 's|^\./||' | sort)
   fi
@@ -147,17 +194,60 @@ grep -q 'needs: \[classify, repository, unix, windows, secrets, promotion\]' \
   "$root/.github/workflows/ci.yml"
 grep -q 'run: tool/version-control/required-checks' \
   "$root/.github/workflows/ci.yml"
-# INV repository/local-gate-selects-by-effect: pre-push audits the pushed
-# history, never the clone's branches and tags, which no push can change.
-grep -q 'evidence_run audit tool/version-control/audit --history' "$root/.githooks/pre-push"
-grep -q 'run: tool/version-control/audit --history' "$root/.github/workflows/ci.yml"
-# INV repository/local-gate-selects-by-effect: the merge gate runs the whole
-# suite and never consults the local gate's selector.
+# INV repository/local-gate-selects-by-effect: pre-push runs the history form,
+# never the clone-local half (branch names, the hooks setting), which no push
+# can change.
+# INV repository/conventional-subject: each gate names what it publishes, the
+# pushed tips or the commit under test, so their own subjects are judged.
+grep -q 'evidence_run audit tool/version-control/audit --history \$pushed_tips || exit 1$' "$root/.githooks/pre-push"
+grep -q 'run: tool/version-control/audit --history HEAD$' "$root/.github/workflows/ci.yml"
+# INV repository/local-gate-selects-by-effect: CI selects whole suites by
+# effect, retaining ownership separately for unconditional policy scans.
 grep -q 'run: tool/version-control/test$' "$root/.github/workflows/ci.yml"
-if grep -q 'dispatch/select' "$root/.github/workflows/ci.yml"; then
-  echo "the CI workflow consults tool/dispatch/select, which is the local gate's" >&2
-  exit 1
-fi
+grep -q 'tool/dispatch/select ci' "$root/.github/workflows/ci.yml"
+for scope in repository unixlike windows; do
+  grep -q "if: needs.classify.outputs.${scope}_checks == 'true'" "$root/.github/workflows/ci.yml"
+  grep -q "needs.classify.outputs.${scope}_checks }}" "$root/.github/workflows/ci.yml"
+done
+grep -q 'base=$(tool/dispatch/ci-base)' "$root/.github/workflows/ci.yml"
+grep -q 'run: tool/version-control/work --range "\$CI_BASE" HEAD' "$root/.github/workflows/ci.yml"
+
+# INV repository/release-preview-read-only
+# INV repository/merge-gate-requires-native
+# Both native branches must qualify the same repository result; synthetic
+# weakening proves a missing Windows run cannot silently retain this proof.
+preview_matrix_scan() {
+  awk '
+    /^  [a-z][a-z0-9_-]*:$/ { repo=($0=="  repository:"); step="" }
+    repo && /^      fail-fast: false$/ { independent=1 }
+    repo && /^        os: \[ubuntu-latest, windows-latest\]$/ { both=1 }
+    repo && /^    runs-on: \$\{\{ matrix.os \}\}$/ { runner=1 }
+    repo && /continue-on-error:/ { weakened=1 }
+    repo && /^      - name:/ { step=$0 }
+    repo && /if: runner.os ==/ { conditional[step]=$0 }
+    repo && /^        shell: bash$/ { shell[step]=1 }
+    repo && /^        run: tool\/version-control\/test$/ { full=conditional[step]~/Linux/ && shell[step] }
+    repo && /^          tool\/version-control\/test-release-preview$/ { native=conditional[step]~/Windows/ && shell[step] }
+    /REPOSITORY_RESULT: \$\{\{ needs.repository.result \}\}/ { aggregate=1 }
+    END { exit !(independent && both && runner && full && native && aggregate && !weakened) }
+  ' "$1"
+}
+preview_matrix_scan "$root/.github/workflows/ci.yml" || { echo 'preview native matrix/gate wiring missing' >&2; exit 1; }
+preview_ci_fixture=$(mktemp -d)
+for weakening in windows failfast tolerated aggregate; do
+  case "$weakening" in
+    windows) sed 's/os: \[ubuntu-latest, windows-latest\]/os: [ubuntu-latest]/' "$root/.github/workflows/ci.yml" ;;
+    failfast) sed 's/fail-fast: false/fail-fast: true/' "$root/.github/workflows/ci.yml" ;;
+    tolerated) sed '/name: Native Git for Windows release preview/a\
+        continue-on-error: true' "$root/.github/workflows/ci.yml" ;;
+    aggregate) sed 's/needs.repository.result/needs.repository.outputs.result/' "$root/.github/workflows/ci.yml" ;;
+  esac >"$preview_ci_fixture/weakened.yml"
+  if preview_matrix_scan "$preview_ci_fixture/weakened.yml"; then
+    echo "preview matrix proof accepted weakening $weakening" >&2; exit 1
+  fi
+done
+rm -f "$preview_ci_fixture/weakened.yml"
+rmdir "$preview_ci_fixture"
 
 # INV repository/merge-gate-requires-native
 # Every job that runs a check converts unverified into failure; the two jobs
@@ -274,6 +364,28 @@ if (PROMOTION_SCOPE=true PROMOTION_RESULT=failure run_gate) >/dev/null 2>&1; the
   exit 1
 fi
 
+# INV repository/required-checks-gate: intended skips are accepted; missing,
+# cancelled, malformed or contradictory results cannot become a green gate.
+for result in skipped cancelled failure; do
+  if (REPOSITORY_SCOPE=true REPOSITORY_RESULT=$result run_gate) >/dev/null 2>&1; then
+    echo "gate accepted selected repository matrix result $result" >&2; exit 1
+  fi
+  if (UNIXLIKE_SCOPE=true UNIXLIKE_RESULT=$result run_gate) >/dev/null 2>&1; then
+    echo "gate accepted selected job result $result" >&2; exit 1
+  fi
+done
+for selection in unknown null; do
+  if (WINDOWS_SCOPE=$selection run_gate) >/dev/null 2>&1; then
+    echo "gate accepted invalid selection $selection" >&2; exit 1
+  fi
+done
+if (WINDOWS_RESULT=success run_gate) >/dev/null 2>&1; then
+  echo 'gate accepted an unselected job running' >&2; exit 1
+fi
+if (CLASSIFY_RESULT=failure run_gate) >/dev/null 2>&1; then
+  echo 'gate accepted failed selection' >&2; exit 1
+fi
+
 # INV repository/promotion-source
 PROMOTION_BASE_REF=master \
 PROMOTION_HEAD_REF=dev \
@@ -315,12 +427,41 @@ expect() {
   fi
 }
 
-expect unixlike "$classify" --files modules/git.nix
+expect unixlike "$classify" --files unixlike/modules/programs/git.nix
 # INV repository/scope-ownership
-# tool/darwin/ is the Unix-like domain's own Mac tooling: it reads and writes
-# a Unix-like payload, its evidence lane is a Mac, and no governance host can
-# produce it. Owned by unixlike, like modules/ and tool/checks/.
-expect unixlike "$classify" --files tool/darwin/karabiner
+# unixlike/modules/programs/karabiner/tool is the Unix-like domain's own Mac tooling:
+# it reads and writes a Unix-like payload, its evidence lane is a Mac, and
+# no governance host can produce it. Owned by unixlike, like the modules
+# and the checks beside it.
+expect unixlike "$classify" --files unixlike/modules/programs/karabiner/tool
+# INV repository/scope-ownership
+# The domain owns one tree. .envrc and the Justfile answer from the same arm,
+# because those two stay at the root: direnv reads the first there, and where
+# the second belongs is a separate decision. A similar prefix outside the
+# domain has no owner. Historical roots retain only the temporary answers below.
+expect unixlike "$classify" --files unixlike/flake.nix
+expect unixlike "$classify" --files unixlike/modules/programs/git.nix
+expect unixlike "$classify" --files unixlike/payloads.json
+expect unixlike "$classify" --files unixlike/tool/checks/test
+expect unixlike "$classify" --files .envrc
+expect unixlike "$classify" --files Justfile
+expect unclassified "$classify" --files unixlike-extra/flake.nix
+# INV repository/scope-ownership
+expect unixlike "$classify" --files flake.nix # PROV repository/classify-unixlike-old-roots
+expect unixlike "$classify" --files flake.lock # PROV repository/classify-unixlike-old-roots
+expect unixlike "$classify" --files modules/git.nix # PROV repository/classify-unixlike-old-roots
+expect unixlike "$classify" --files assets/wezterm/config.lua # PROV repository/classify-unixlike-old-roots
+expect unixlike "$classify" --files tool/checks/test # PROV repository/classify-unixlike-old-roots
+expect unixlike "$classify" --files tool/darwin/karabiner # PROV repository/classify-unixlike-old-roots
+expect unixlike "$classify" --files .vscode/settings.json # PROV repository/classify-unixlike-old-roots
+expect unixlike "$classify" --files unixlike/.vscode/settings.json
+expect unclassified "$classify" --files .vscode/launch.json
+expect unclassified "$classify" --files .vscode-extra/settings.json
+expect unclassified "$classify" --files assets-extra/config.lua
+expect unclassified "$classify" --files modules-extra/git.nix
+expect unclassified "$classify" --files tool/checks-extra/test
+expect unclassified "$classify" --files tool/darwin-extra/karabiner
+expect unclassified "$classify" --files flake-other.nix
 expect windows "$classify" --files windows/src/WinEnv.psm1
 expect unclassified "$classify" --files common/example.txt
 expect repository "$classify" --files .agents/skills/example/SKILL.md
@@ -335,30 +476,66 @@ expect unclassified "$classify" --files unexpected.file
 # INV repository/scope-ownership
 # The invariant registry is per scope: an entry classifies as the scope that
 # owns it, the format contract as repository, and anything else under
-# invariants/ as nothing, so a misplaced file is refused at commit.
-expect repository "$classify" --files invariants/README.md
-expect repository "$classify" --files invariants/repository/registry-coverage.md
-expect unixlike "$classify" --files invariants/unixlike/import-order.md
-expect windows "$classify" --files invariants/windows/parser-declared.md
+# docs/policy/invariants/ as nothing, so a misplaced file is refused at commit.
+expect repository "$classify" --files docs/policy/invariants/README.md
+expect repository "$classify" --files docs/policy/invariants/repository/registry-coverage.md
+expect unixlike "$classify" --files docs/policy/invariants/unixlike/import-order.md
+expect windows "$classify" --files docs/policy/invariants/windows/parser-declared.md
 # A common scope is restored together with the domain; until then its paths have no owner.
-expect unclassified "$classify" --files invariants/common/example.md
+expect unclassified "$classify" --files docs/policy/invariants/common/example.md
+# PROV repository/classify-registry-old-roots: the next four fixtures.
 # The removed scope's placeholder keeps an arm of its own: its deletion is
 # inside every pull-request range that spans it, and an unclassified path
 # cannot be pushed.
 expect repository "$classify" --files invariants/common/.gitkeep
-expect unclassified "$classify" --files invariants/stray.md
-expect unclassified "$classify" --files invariants/linux/x.md
+# The registries' roots before they moved under docs/: a deletion there is
+# inside every range that spans the move.
+expect repository "$classify" --files invariants/README.md
+expect unixlike "$classify" --files invariants/unixlike/import-order.md
+expect windows "$classify" --files provisional/windows/appx-detection.md
+expect unclassified "$classify" --files docs/policy/invariants/stray.md
+expect unclassified "$classify" --files docs/policy/invariants/linux/x.md
 # INV repository/scope-ownership
 # The provisional registry is per scope for the same reason: the scope that
 # carries a temporary measure owns its registration and is the scope an
 # overdue review blocks.
-expect repository "$classify" --files provisional/README.md
-expect unixlike "$classify" --files provisional/unixlike/zellij-overlay.md
-expect windows "$classify" --files provisional/windows/appx-detection.md
-expect repository "$classify" --files provisional/repository/hook-shim.md
-expect unclassified "$classify" --files provisional/stray.md
+expect repository "$classify" --files docs/provisional/README.md
+expect unixlike "$classify" --files docs/provisional/unixlike/zellij-overlay.md
+expect windows "$classify" --files docs/provisional/windows/appx-detection.md
+expect repository "$classify" --files docs/provisional/repository/hook-shim.md
+expect unclassified "$classify" --files docs/provisional/stray.md
+# INV repository/scope-ownership
+# Every other document area is owned the same way: a scope directory, or a
+# file named for a scope, decides; a scope position that names no domain and
+# a file beside an area's contract are refused; any other document is
+# repository's.
+expect unixlike "$classify" --files docs/policy/decisions/unixlike/example.md
+expect windows "$classify" --files docs/policy/candidates/windows/example.md
+expect repository "$classify" --files docs/policy/decisions/repository/unixlike-example.md
+expect unixlike "$classify" --files docs/work/unixlike/example/spec.md
+expect repository "$classify" --files docs/work/repository/example/report.md
+expect unixlike "$classify" --files docs/status/unixlike.md
+expect windows "$classify" --files docs/policy/definition-of-done/windows.md
+expect repository "$classify" --files docs/status/repository.md
+expect repository "$classify" --files docs/work/roadmap.md
+expect repository "$classify" --files docs/policy/architecture.md
+expect repository "$classify" --files docs/reference/troubleshooting.md
+expect repository "$classify" --files docs/README.md
+expect unclassified "$classify" --files docs/work/linux/example/spec.md
+expect unclassified "$classify" --files docs/status/linux.md
+expect unclassified "$classify" --files docs/policy/decisions/stray.md
+expect unclassified "$classify" --files docs/work/stray.md
+# A scope name counts only in its area's scope position: elsewhere inside an
+# area it is refused, as a slug it is just a name, and outside the areas it
+# is an ordinary repository document.
+expect unclassified "$classify" --files docs/work/unixlike.md
+expect unclassified "$classify" --files docs/policy/decisions/windows.md
+expect unclassified "$classify" --files docs/status/unixlike/example.md
+expect repository "$classify" --files docs/work/repository/windows/spec.md
+expect repository "$classify" --files docs/unixlike.md
+expect repository "$classify" --files tool/configs
 expect 'windows
-repository' "$classify" --files windows/setup.ps1 docs/status.md
+repository' "$classify" --files windows/setup.ps1 docs/status/repository.md
 
 # Ownership and check selection are different questions and both are fixtured.
 # classify keeps answering the first, for release tags, promotion and CI job
@@ -373,11 +550,11 @@ expect_units() {
   fi
 }
 
-kdl_modified=$(printf 'M\tassets/zellij/config.kdl')
-kdl_added=$(printf 'A\tassets/zellij/extra.kdl')
-module_modified=$(printf 'M\tmodules/git.nix')
+kdl_modified=$(printf 'M\tunixlike/modules/programs/zellij/config.kdl')
+kdl_added=$(printf 'A\tunixlike/modules/programs/zellij/extra.kdl')
+module_modified=$(printf 'M\tunixlike/modules/programs/git.nix')
 windows_modified=$(printf 'M\twindows/setup.ps1')
-docs_modified=$(printf 'M\tdocs/status.md')
+docs_modified=$(printf 'M\tdocs/status/repository.md')
 unknown_modified=$(printf 'M\tunexpected.file')
 
 # Nix copies a payload without reading it, so evaluating the flake says nothing
@@ -395,18 +572,30 @@ expect_units 'unixlike:test' push "$kdl_added"
 expect_units 'unixlike:test' push "$module_modified"
 
 # INV repository/local-gate-selects-by-effect
-# tool/darwin/ holds the projection the Karabiner payloads are compared and
-# applied by, so a change to it can alter what the Unix-like suite says; it
-# selects the same units a module does.
-darwin_tool_modified=$(printf 'M\ttool/darwin/karabiner')
+# unixlike/modules/programs/karabiner/tool holds the projection the Karabiner
+# payloads are compared and applied by, so a change to it can alter what
+# the Unix-like suite says; it selects the same units a module does.
+darwin_tool_modified=$(printf 'M\tunixlike/modules/programs/karabiner/tool')
 expect_units 'unixlike:format
 unixlike:lint
 unixlike:payloads' commit "$darwin_tool_modified"
 expect_units 'unixlike:test' push "$darwin_tool_modified"
 
+# INV repository/local-gate-selects-by-effect
+# A payload beside its module narrows the same way a payload tree used to, and
+# the module next to it does not: under the concern-first layout the file's
+# suffix is what separates what the evaluator reads from what it copies.
+unixlike_module_modified=$(printf 'M\tunixlike/modules/programs/git.nix')
+expect_units 'unixlike:test' push "$unixlike_module_modified"
+concern_kdl_modified=$(printf 'M\tunixlike/modules/programs/zellij/config.kdl')
+expect_units 'unixlike:payloads' commit "$concern_kdl_modified"
+expect_units '' push "$concern_kdl_modified"
+concern_module_modified=$(printf 'M\tunixlike/modules/programs/zellij/module.nix')
+expect_units 'unixlike:test' push "$concern_module_modified"
+
 # A rename carries two paths on one line. Both have to reach classify, or a
-# payload moved into assets/ is never selected for the payload check.
-renamed_into_assets=$(printf 'R100\tdocs/note.md\tassets/moved.lua')
+# payload moved into the module tree is never selected for the payload check.
+renamed_into_assets=$(printf 'R100\tdocs/note.md\tunixlike/modules/moved.lua')
 expect_units 'unixlike:format
 unixlike:lint
 unixlike:payloads' commit "$renamed_into_assets"
@@ -426,19 +615,44 @@ hook_modified=$(printf 'M\t.githooks/pre-commit')
 workflow_modified=$(printf 'M\t.github/workflows/ci.yml')
 dispatch_modified=$(printf 'M\ttool/dispatch/select')
 vc_modified=$(printf 'M\ttool/version-control/audit')
-entry_modified=$(printf 'M\tinvariants/repository/scope-ownership.md')
-measure_modified=$(printf 'M\tprovisional/unixlike/zellij-overlay.md')
-docs_and_hook=$(printf 'M\tdocs/status.md\nM\t.githooks/pre-push')
+entry_modified=$(printf 'M\tdocs/policy/invariants/repository/scope-ownership.md')
+measure_modified=$(printf 'M\tdocs/provisional/unixlike/zellij-overlay.md')
+docs_and_hook=$(printf 'M\tdocs/status/repository.md\nM\t.githooks/pre-push')
 expect_units 'repository:fixtures' commit "$hook_modified"
 expect_units 'repository:fixtures' push "$hook_modified"
 expect_units 'repository:fixtures' commit "$workflow_modified"
 expect_units 'repository:fixtures' commit "$dispatch_modified"
 expect_units 'repository:fixtures' push "$vc_modified"
+# INV repository/release-preview-read-only
+for preview_path in release-preview release-preview.awk release-preview.rules test-release-preview; do
+  for preview_stage in commit push ci; do
+    expect_units 'repository:fixtures' "$preview_stage" "$(printf 'M\ttool/version-control/%s' "$preview_path")"
+  done
+done
+# INV repository/local-gate-selects-by-effect
+for refresh_path in release-control release-control-loader.py release-control-package/engine.py test-release-control.py test-refresh-candidate-nix.py; do
+  expect_units 'repository:fixtures
+unixlike:suite' ci "$(printf 'M\ttool/version-control/%s' "$refresh_path")"
+  expect_units 'repository:fixtures' push "$(printf 'M\ttool/version-control/%s' "$refresh_path")"
+done
 expect_units '' commit "$entry_modified"
-# A provisional entry is owned by the scope that carries the measure, so a
-# Unix-like one selects that domain's payload check exactly as an invariant
-# entry under invariants/unixlike/ does.
-expect_units 'unixlike:payloads' commit "$measure_modified"
+# A document is owned by the scope its directory names, but no domain suite
+# reads one, so a Unix-like provisional entry, invariant, decision or status
+# file, or a Windows one, selects nothing at either stage.
+for stage in commit push; do
+  expect_units '' "$stage" "$measure_modified"
+  expect_units '' "$stage" "$(printf 'M\tdocs/policy/invariants/unixlike/import-order.md')"
+  expect_units '' "$stage" "$(printf 'A\tdocs/policy/decisions/windows/example.md')"
+  expect_units '' "$stage" "$(printf 'M\tdocs/status/unixlike.md\nM\tdocs/status/windows.md')"
+  expect_units '' "$stage" "$(printf 'A\tdocs/work/unixlike/example/spec.md')"
+done
+# PROV repository/classify-registry-old-roots
+# Deleting from the registries' old roots selects nothing either.
+for stage in commit push; do
+  expect_units '' "$stage" "$(printf 'D\tprovisional/unixlike/zellij-overlay.md\nD\tinvariants/windows/parser-declared.md')"
+done
+# A misplaced document is still refused.
+expect_units 'unclassified' commit "$(printf 'A\tdocs/status/linux.md')"
 expect_units '' push "$docs_modified"
 expect_units 'repository:fixtures' commit "$docs_and_hook"
 # The three governance scripts the suite scans for the MSYS guard and copies
@@ -452,8 +666,64 @@ codeowners_modified=$(printf 'M\t.github/CODEOWNERS')
 expect_units 'repository:fixtures' commit "$doctor_modified"
 expect_units 'repository:fixtures' push "$setup_modified"
 expect_units 'repository:fixtures' commit "$worktree_modified"
+expect_units 'repository:fixtures' commit "$(printf 'M\ttool/configs')"
+expect_units 'repository:fixtures' push "$(printf 'M\ttool/configs')"
 expect_units 'repository:fixtures' push "$hook_deleted"
+expect_units 'repository:fixtures' commit "$(printf 'M\ttool/work-session.sh')"
 expect_units '' commit "$codeowners_modified"
+
+# INV repository/local-gate-selects-by-effect
+# CI uses ownership only after removing documents. Unlike local push, it
+# deliberately does not narrow payloads. Cross-domain moves cover both ends.
+for change in "$docs_modified" "$entry_modified" "$measure_modified"; do
+  expect_units '' ci "$change"
+done
+expect_units '' ci "$(printf 'M\tdocs/status/unixlike.md\nM\tdocs/status/windows.md')"
+expect_units 'unixlike:suite' ci "$concern_kdl_modified"
+expect_units 'unixlike:suite' ci "$unixlike_module_modified"
+expect_units 'unixlike:suite' ci "$(printf 'M\tunixlike/flake.lock')"
+expect_units 'unixlike:suite' ci "$(printf 'D\tunixlike/modules/old.nix')"
+expect_units 'unixlike:suite' ci "$renamed_into_assets"
+expect_units 'unixlike:suite
+windows:suite' ci "$(printf 'R100\tunixlike/modules/old.ps1\twindows/desired/new.ps1')"
+expect_units 'windows:suite' ci "$windows_modified"
+expect_units 'repository:fixtures' ci "$(printf 'M\ttool/work-session.sh')"
+for path in .github/workflows/ci.yml tool/dispatch/select tool/dispatch/ci-base tool/version-control/classify tool/version-control/required-checks; do
+  expect_units 'repository:fixtures
+unixlike:suite
+windows:suite' ci "$(printf 'M\t%s' "$path")"
+done
+for input in "$unknown_modified" "$(printf 'M\tdocs/status/linux.md')" 'M' "$(printf 'R100\tdocs/a.md')"; do
+  if printf '%s\n' "$input" | "$root/tool/dispatch/select" ci >/dev/null 2>&1; then
+    echo 'CI selector accepted unknown or malformed input' >&2; exit 1
+  fi
+done
+
+# INV repository/local-gate-selects-by-effect
+# Native stack events can advertise trunk base_ref with a layer base SHA.
+# Refuse them before producing any range rather than silently testing a layer.
+event_sha=$(git -C "$root" rev-parse HEAD)
+event_base() {
+  EVENT_NAME=${EVENT_NAME:-pull_request} PR_BASE=$event_sha \
+    PR_BASE_REF=${PR_BASE_REF:-dev} EVENT_BASE_REF=${EVENT_BASE_REF:-dev} \
+    PR_STACK=${PR_STACK:-null} PUSH_BASE=${PUSH_BASE:-$event_sha} \
+    "$root/tool/dispatch/ci-base"
+}
+[ "$(event_base)" = "$event_sha" ]
+[ "$(EVENT_NAME=push event_base)" = "$event_sha" ]
+[ "$(EVENT_NAME=push PUSH_BASE=0000000000000000000000000000000000000000 event_base)" = "$(git hash-object -t tree /dev/null)" ]
+if (PR_STACK='{"base":{"ref":"dev"}}' event_base) >/dev/null 2>&1; then
+  echo 'CI accepted an unsupported native stack' >&2; exit 1
+fi
+if (PR_BASE_REF=feature/repository-layer event_base) >/dev/null 2>&1; then
+  echo 'CI accepted layer-only stack coverage' >&2; exit 1
+fi
+if (EVENT_BASE_REF=master event_base) >/dev/null 2>&1; then
+  echo 'CI accepted mismatched event bases' >&2; exit 1
+fi
+if (EVENT_NAME=push PUSH_BASE=bad event_base) >/dev/null 2>&1; then
+  echo 'CI accepted an invalid event SHA' >&2; exit 1
+fi
 
 # INV repository/local-gate-selects-by-effect
 # Codex project paths select no local units; the hooks' unconditional scans
@@ -668,6 +938,151 @@ if ! printf '%s\n' "$audit_ci_full" | grep -q 'core.hooksPath'; then
   echo "the full audit failed on a CI checkout for a reason other than hooks" >&2
   exit 1
 fi
+# INV repository/release-tag-contract: an annotated, evidenced release tag
+# whose target master does not contain fails the merge gate's form.
+audit_ci_commit=$(git -C "$audit_ci" -c user.name=Fixture -c user.email=fixture@example.invalid \
+  commit-tree -p HEAD -m 'feat(repository): leave master behind' 'HEAD^{tree}')
+git -C "$audit_ci" -c user.name=Fixture -c user.email=fixture@example.invalid \
+  tag -a windows-v2030.04.05 -m 'Domain: windows' -m 'Host: windows' \
+  -m 'Evaluation: passed; fixture' \
+  -m 'Build: passed; fixture' -m 'Native runtime: passed; fixture' "$audit_ci_commit"
+audit_status=0
+audit_ci_tag=$(cd "$audit_ci" && REQUIRE_NATIVE=1 "$audit" --history 2>&1) || audit_status=$?
+if [ "$audit_status" -eq 0 ] ||
+  ! printf '%s\n' "$audit_ci_tag" | grep -q 'not reachable from master: windows-v2030.04.05$'; then
+  printf '%s\n' "$audit_ci_tag" >&2
+  echo "audit --history accepted a release tag master does not contain" >&2
+  exit 1
+fi
+
+# INV repository/conventional-subject: the shape of a pull_request checkout,
+# detached at the merge of a topic into origin/dev with no local branch. The
+# topic's commits are reachable from HEAD alone, so the merge gate names HEAD
+# and a subject the hook refuses fails before the pull request merges. The
+# topic's catch-up merge and the synthetic merge carry subjects Git and GitHub
+# write, and are not judged.
+audit_pr="$test_root/audit-pr"
+git clone -q "$audit_bare" "$audit_pr"
+git -C "$audit_pr" checkout -q --detach origin/dev
+for audit_pr_branch in $(git -C "$audit_pr" for-each-ref --format='%(refname:short)' refs/heads); do
+  git -C "$audit_pr" branch -q -D "$audit_pr_branch"
+done
+audit_pr_commit() {
+  git -C "$audit_pr" -c user.name=Fixture -c user.email=fixture@example.invalid \
+    commit-tree "$@" 'origin/dev^{tree}'
+}
+audit_pr_checkout() {
+  audit_pr_topic=$(audit_pr_commit -p origin/dev~1 -m "$1")
+  audit_pr_catchup=$(audit_pr_commit -p "$audit_pr_topic" -p origin/dev \
+    -m "Merge branch 'dev' into fix/repository-pull-request")
+  audit_pr_merge=$(audit_pr_commit -p origin/dev -p "$audit_pr_catchup" \
+    -m "Merge $audit_pr_catchup into $(git -C "$audit_pr" rev-parse origin/dev)")
+  git -C "$audit_pr" checkout -q --detach "$audit_pr_merge"
+}
+audit_pr_checkout 'bad subject no type'
+audit_status=0
+audit_pr_output=$(cd "$audit_pr" && REQUIRE_NATIVE=1 "$audit" --history HEAD 2>&1) || audit_status=$?
+if [ "$audit_status" -eq 0 ] ||
+  ! printf '%s\n' "$audit_pr_output" | grep -q "commit-msg $audit_pr_topic: bad subject no type\$"; then
+  printf '%s\n' "$audit_pr_output" >&2
+  echo "audit --history HEAD accepted a pull request commit the hook refuses" >&2
+  exit 1
+fi
+audit_pr_checkout 'feat(repository): add a pull request change'
+if ! audit_pr_output=$(cd "$audit_pr" && REQUIRE_NATIVE=1 "$audit" --history HEAD 2>&1) ||
+  ! printf '%s\n' "$audit_pr_output" | grep -q '^ok: non-merge commit subjects on dev, HEAD follow policy$'; then
+  printf '%s\n' "$audit_pr_output" >&2
+  echo "audit --history HEAD refused a pull request whose own subjects conform" >&2
+  exit 1
+fi
+audit_status=0
+audit_pr_output=$(cd "$audit_pr" && "$audit" --history no-such-revision 2>&1) || audit_status=$?
+if [ "$audit_status" -eq 0 ] ||
+  ! printf '%s\n' "$audit_pr_output" | grep -q 'does not name a commit: no-such-revision$'; then
+  printf '%s\n' "$audit_pr_output" >&2
+  echo "audit --history accepted a revision that names no commit" >&2
+  exit 1
+fi
+
+# INV repository/local-gate-selects-by-effect
+# INV repository/release-tag-contract
+# The history form judges dev and master as origin/ holds them, both
+# together, and the full form stays local-first. A remote gains a promotion
+# and a release tag on it; a clone fetches both without moving its local
+# branches, the way `git fetch` in the Windows capture verb does.
+audit_remote="$test_root/audit-advanced.git"
+git clone -q --bare "$audit_bare" "$audit_remote"
+audit_stale="$test_root/audit-stale"
+git clone -q "$audit_remote" "$audit_stale"
+git -C "$audit_stale" branch -q dev origin/dev
+audit_stale_dev=$(git -C "$audit_stale" rev-parse dev)
+git -C "$audit_stale" switch -q -c feature/repository-audit-stale
+audit_publisher="$test_root/audit-publisher"
+git clone -q "$audit_remote" "$audit_publisher"
+git -C "$audit_publisher" config user.name Fixture
+git -C "$audit_publisher" config user.email fixture@example.invalid
+git -C "$audit_publisher" config core.hooksPath .githooks
+git -C "$audit_publisher" switch -q -c dev origin/dev
+printf 'advance\n' >>"$audit_publisher/file"
+git -C "$audit_publisher" commit -q -am 'feat(repository): advance dev'
+git -C "$audit_publisher" switch -q master
+git -C "$audit_publisher" merge -q --no-ff dev -m "Merge branch 'dev'"
+git -C "$audit_publisher" tag -a common-v2030.03.04 -m 'Domain: common' \
+  -m 'Evaluation: passed; fixture' -m 'Build: passed; fixture' \
+  -m 'Native runtime: passed; fixture'
+git -C "$audit_publisher" push -q origin master dev common-v2030.03.04
+git -C "$audit_stale" fetch -q origin
+
+# A local master that lags origin/master, which contains the release tag.
+git -C "$audit_stale" branch -q -D dev
+if ! audit_stale_output=$(cd "$audit_stale" && REQUIRE_NATIVE=1 "$audit" --history 2>&1) ||
+  ! printf '%s\n' "$audit_stale_output" | grep -q 'master resolves to origin/master$'; then
+  printf '%s\n' "$audit_stale_output" >&2
+  echo "audit --history judged a release tag against a stale local master" >&2
+  exit 1
+fi
+
+# No local master, and a local dev that lags origin/dev: resolving only
+# master to the remote would fail the dev/master traceability checks here.
+git -C "$audit_stale" branch -q dev "$audit_stale_dev"
+git -C "$audit_stale" branch -q -D master
+if ! audit_stale_output=$(cd "$audit_stale" && REQUIRE_NATIVE=1 "$audit" --history 2>&1) ||
+  ! printf '%s\n' "$audit_stale_output" | grep -q 'dev resolves to origin/dev$'; then
+  printf '%s\n' "$audit_stale_output" >&2
+  echo "audit --history compared origin/master with a stale local dev" >&2
+  exit 1
+fi
+
+# A local master ahead of origin/master that contains a release tag the
+# remote does not: the history form fails it, the full form does not.
+audit_ahead="$test_root/audit-ahead"
+git clone -q "$audit_remote" "$audit_ahead"
+git -C "$audit_ahead" config user.name Fixture
+git -C "$audit_ahead" config user.email fixture@example.invalid
+git -C "$audit_ahead" config core.hooksPath .githooks
+git -C "$audit_ahead" switch -q -c dev origin/dev
+printf 'unpublished\n' >>"$audit_ahead/file"
+git -C "$audit_ahead" commit -q -am 'feat(repository): prepare an unpublished release'
+git -C "$audit_ahead" switch -q master
+git -C "$audit_ahead" merge -q --no-ff dev -m "Merge branch 'dev'"
+git -C "$audit_ahead" tag -a windows-v2030.05.06 -m 'Domain: windows' -m 'Host: windows' \
+  -m 'Evaluation: passed; fixture' -m 'Build: passed; fixture' \
+  -m 'Native runtime: passed; fixture'
+audit_status=0
+audit_ahead_output=$(cd "$audit_ahead" && "$audit" --history 2>&1) || audit_status=$?
+if [ "$audit_status" -eq 0 ] ||
+  ! printf '%s\n' "$audit_ahead_output" | grep -q 'not reachable from master: windows-v2030.05.06$' ||
+  ! printf '%s\n' "$audit_ahead_output" | grep -q '^summary: 0 warning(s), 1 failure(s)$'; then
+  printf '%s\n' "$audit_ahead_output" >&2
+  echo "audit --history judged a release tag against a local master ahead of origin/master" >&2
+  exit 1
+fi
+if ! audit_ahead_full=$(cd "$audit_ahead" && "$audit" 2>&1); then
+  printf '%s\n' "$audit_ahead_full" >&2
+  echo "the full audit stopped reading the local master first" >&2
+  exit 1
+fi
+
 audit_status=0
 "$audit" --bogus >/dev/null 2>&1 || audit_status=$?
 if [ "$audit_status" -ne 2 ]; then
@@ -725,6 +1140,171 @@ if (cd "$test_root" && "$audit") >/dev/null 2>&1; then
   echo "audit accepted a release tag without evidence" >&2
   exit 1
 fi
+git -C "$test_root" tag -d windows-v2030.01.02 >/dev/null
+
+# INV repository/release-tag-contract: Windows states each host's evidence in
+# its own block; the Unix-like provider states its evidence once. Each case is
+# one tag on master, judged by
+# the real audit and removed; a refusal must name the tag and the defect.
+tag_case() {
+  # tag_case <accept|refuse> <tag> <expected output, a grep pattern> <annotation>
+  git -C "$test_root" tag -a "$2" -m "$4"
+  tag_case_status=0
+  tag_case_output=$(cd "$test_root" && "$audit" 2>&1) || tag_case_status=$?
+  git -C "$test_root" tag -d "$2" >/dev/null
+  if [ "$1" = accept ] && [ "$tag_case_status" -eq 0 ] &&
+    printf '%s\n' "$tag_case_output" | grep -q "$3"; then
+    return 0
+  fi
+  if [ "$1" = refuse ] && [ "$tag_case_status" -ne 0 ] &&
+    printf '%s\n' "$tag_case_output" | grep -q "$3"; then
+    return 0
+  fi
+  printf '%s\n' "$tag_case_output" >&2
+  echo "audit did not $1 $2 with: $3" >&2
+  exit 1
+}
+two_hosts='Domain: windows
+
+Host: darwin
+  Evaluation: passed; fixture
+  Build: passed
+  Native runtime: not applicable; fixture
+
+Host: wsl-nixos
+  Native runtime: unavailable; nobody ran it
+  Build: passed; fixture
+  Evaluation: passed; fixture
+
+Deployment: not performed by release'
+tag_case accept windows-v2030.06.01 '^ok: release tag is annotated, evidenced, and master-reachable: windows-v2030.06.01$' "$two_hosts"
+tag_case accept common-v2030.06.01 '^ok: .*: common-v2030.06.01$' 'Domain: common
+Evaluation: passed; fixture
+Build: not applicable
+Native runtime: not applicable; deploys nowhere
+Deployment: not performed by release'
+
+tag_case refuse unixlike-v2030.06.03 'lacks Native runtime (unixlike-v2030.06.03)$' 'Domain: unixlike
+Evaluation: passed
+Build: passed'
+tag_case refuse unixlike-v2030.06.04 'a unixlike tag carries a host block: darwin (unixlike-v2030.06.04)$' 'Domain: unixlike
+Host: darwin
+Evaluation: passed
+Build: passed
+Native runtime: passed'
+tag_case refuse unixlike-v2030.06.05 'Build is repeated (unixlike-v2030.06.05)$' 'Domain: unixlike
+Evaluation: passed
+Build: passed
+Build: passed
+Native runtime: passed'
+tag_case refuse unixlike-v2030.06.06 'Native runtime is none of passed, unavailable, not applicable: probably (unixlike-v2030.06.06)$' 'Domain: unixlike
+Evaluation: passed
+Build: passed
+Native runtime: probably'
+
+old_form='Evaluation: passed; fixture
+Build: passed; fixture
+Native runtime: passed; fixture'
+tag_case accept unixlike-v2030.06.02 '^ok: .*: unixlike-v2030.06.02$' "Domain: unixlike
+$old_form"
+tag_case refuse windows-v2030.06.02 'Build stands outside a host block (windows-v2030.06.02)$' "Domain: windows
+$old_form"
+tag_case refuse windows-v2030.06.04 'host darwin lacks Native runtime (windows-v2030.06.04)$' 'Domain: windows
+Host: darwin
+Evaluation: passed
+Build: passed
+Host: wsl-nixos
+Evaluation: passed
+Build: passed
+Native runtime: passed'
+tag_case refuse windows-v2030.06.05 'host darwin repeats Build (windows-v2030.06.05)$' 'Domain: windows
+Host: darwin
+Evaluation: passed
+Build: passed
+Build: passed
+Native runtime: passed'
+tag_case refuse windows-v2030.06.06 'Evaluation stands outside a host block (windows-v2030.06.06)$' 'Domain: windows
+Evaluation: passed
+Host: darwin
+Evaluation: passed
+Build: passed
+Native runtime: passed'
+tag_case refuse windows-v2030.06.07 'Native runtime is none of passed, unavailable, not applicable: probably (windows-v2030.06.07)$' 'Domain: windows
+Host: darwin
+Evaluation: passed
+Build: passed
+Native runtime: probably'
+tag_case refuse windows-v2030.06.08 'Build is none of passed, unavailable, not applicable: passedish; fixture (windows-v2030.06.08)$' 'Domain: windows
+Host: darwin
+Evaluation: passed
+Build: passedish; fixture
+Native runtime: passed'
+tag_case refuse windows-v2030.06.09 'host label is outside .*: Some-Machine.local (windows-v2030.06.09)$' 'Domain: windows
+Host: Some-Machine.local
+Evaluation: passed
+Build: passed
+Native runtime: passed'
+tag_case refuse windows-v2030.06.10 'host label is repeated: darwin (windows-v2030.06.10)$' 'Domain: windows
+Host: darwin
+Evaluation: passed
+Build: passed
+Native runtime: passed
+Host: darwin
+Evaluation: passed
+Build: passed
+Native runtime: passed'
+tag_case refuse common-v2030.06.02 'a common tag carries a host block: darwin (common-v2030.06.02)$' 'Domain: common
+Host: darwin
+Evaluation: passed
+Build: passed
+Native runtime: passed'
+tag_case refuse common-v2030.06.03 'lacks Build (common-v2030.06.03)$' 'Domain: common
+Evaluation: passed
+Native runtime: not applicable'
+tag_case refuse windows-v2030.06.03 'lacks Domain: windows (windows-v2030.06.03)$' 'Domain: unixlike
+Host: windows
+Evaluation: passed
+Build: passed
+Native runtime: passed'
+
+# The two tags that predate the host-block form are excepted by name. The
+# Unix-like domain-level form is now valid for provider-only releases.
+tag_case accept unixlike-v2026.08.31 '^ok: .*: unixlike-v2026.08.31$' "Domain: unixlike
+$old_form"
+tag_case accept windows-v2026.08.31 '^ok: .*: windows-v2026.08.31$' "Domain: windows
+$old_form"
+tag_case refuse windows-v2026.08.31 'lacks Build: (windows-v2026.08.31)$' 'Domain: windows
+Evaluation: passed
+Native runtime: passed'
+tag_case accept unixlike-v2026.08.31.1 '^ok: .*: unixlike-v2026.08.31.1$' "Domain: unixlike
+$old_form"
+
+# The planner templates the form the audit holds, per domain, and creates
+# no tag.
+tags_before=$(git -C "$test_root" tag)
+host_plan=$(cd "$test_root" && "$plan_release" windows master 2030.07.01)
+printf '%s\n' "$host_plan" | grep -q '^  Host: <label' &&
+  printf '%s\n' "$host_plan" | grep -q '^    Native runtime: <passed | unavailable | not applicable' &&
+  ! printf '%s\n' "$host_plan" | grep -q '^  Evaluation:' || {
+  echo "plan-release did not template a host block for windows" >&2
+  exit 1
+}
+common_plan=$(cd "$test_root" && "$plan_release" common master 2030.07.01)
+printf '%s\n' "$common_plan" | grep -q '^  Build: <passed | unavailable | not applicable' &&
+  ! printf '%s\n' "$common_plan" | grep -q 'Host:' || {
+  echo "plan-release did not template domain-level lanes for common" >&2
+  exit 1
+}
+unixlike_plan=$(cd "$test_root" && "$plan_release" unixlike master 2030.07.01)
+printf '%s\n' "$unixlike_plan" | grep -q '^  Build: <passed | unavailable | not applicable' &&
+  ! printf '%s\n' "$unixlike_plan" | grep -q 'Host:' || {
+  echo "plan-release did not template provider-level lanes for unixlike" >&2
+  exit 1
+}
+if [ "$(git -C "$test_root" tag)" != "$tags_before" ]; then
+  echo "plan-release created a tag" >&2
+  exit 1
+fi
 
 # #113: the pre-push hook must pick the pwsh that belongs to the host it is
 # running on rather than the first one PATH happens to expose. A Unix-like
@@ -732,11 +1312,11 @@ fi
 # interop) runs the checks under its own native `pwsh`; only an actual Windows
 # host uses `pwsh.exe`; a host with neither reports the checks unverified
 # rather than failing. Isolated from whatever pwsh binaries this suite's own
-# host happens to have — modules/powershell.nix installs a Unix-like `pwsh`
-# into every home this repository configures, and a WSL host additionally
-# reaches a `pwsh.exe` through Windows interop, which is the exact shape #113
-# regressed on — by hiding any real pwsh/pwsh.exe from PATH before each
-# scenario adds back only the stub it names.
+# host happens to have — unixlike/modules/programs/powershell/module.nix installs a
+# Unix-like `pwsh` into every home this repository configures, and a WSL
+# host additionally reaches a `pwsh.exe` through Windows interop, which is
+# the exact shape #113 regressed on — by hiding any real pwsh/pwsh.exe from
+# PATH before each scenario adds back only the stub it names.
 hook_root="$test_root/pre-push"
 mkdir -p "$hook_root/none" "$hook_root/pwsh-only" "$hook_root/pwshexe-only" \
   "$hook_root/win-host" "$hook_root/windows"
@@ -748,9 +1328,9 @@ cp -R "$root/tool/dispatch" "$hook_root/tool/dispatch"
 printf '#!/bin/sh\nexit 0\n' >"$hook_root/tool/version-control/audit"
 chmod +x "$hook_root/tool/version-control/audit"
 
-printf '#!/bin/sh\nexit 0\n' >"$hook_root/pwsh-only/pwsh"
+printf '#!/bin/sh\nprintf "stub pwsh: %%s\\n" "$*"\nexit 0\n' >"$hook_root/pwsh-only/pwsh"
 printf '#!/bin/sh\nexit 0\n' >"$hook_root/pwshexe-only/pwsh.exe"
-printf '#!/bin/sh\nexit 0\n' >"$hook_root/win-host/pwsh.exe"
+printf '#!/bin/sh\nprintf "stub pwsh: %%s\\n" "$*"\nexit 0\n' >"$hook_root/win-host/pwsh.exe"
 chmod +x "$hook_root/pwsh-only/pwsh" "$hook_root/pwshexe-only/pwsh.exe" \
   "$hook_root/win-host/pwsh.exe"
 cat >"$hook_root/win-host/uname" <<'STUB'
@@ -833,6 +1413,14 @@ if ! printf '%s\n' "$unix_output" | grep -q 'Windows desired-state check'; then
   echo "pre-push did not run the Windows checks under a Unix-like pwsh" >&2
   exit 1
 fi
+printf '%s\n' "$unix_output" | grep -qF -- '-File ./windows/tool/check-desired-state.ps1' || {
+  echo "pre-push did not use the internal Windows validation script" >&2
+  exit 1
+}
+printf '%s\n' "$unix_output" | grep -qF -- '-File ./windows/tool/test.ps1' || {
+  echo "pre-push did not use the internal Windows test script" >&2
+  exit 1
+}
 if printf '%s\n' "$unix_output" | grep -q 'CI must supply evidence'; then
   echo "pre-push reported the Windows checks unverified despite a Unix-like pwsh" >&2
   exit 1
@@ -878,13 +1466,27 @@ if ! printf '%s\n' "$win_output" | grep -q 'Windows desired-state check'; then
   echo "pre-push skipped the Windows checks on a native Windows host with pwsh.exe" >&2
   exit 1
 fi
+printf '%s\n' "$win_output" | grep -qF -- '-File ./windows/tool/check-desired-state.ps1' || {
+  echo "pre-push did not use the internal validation script on native Windows" >&2
+  exit 1
+}
+printf '#!/bin/sh\ncase " $* " in *"check-desired-state.ps1 "*) exit 1 ;; esac\nexit 0\n' >"$hook_root/pwsh-only/pwsh"
+if failed_windows_output=$(run_pre_push "$hook_root/pwsh-only"); then
+  echo "pre-push accepted a failing Windows validation script" >&2
+  exit 1
+fi
+printf '%s\n' "$failed_windows_output" | grep -q 'Windows desired-state check' || {
+  echo "pre-push did not report the failing Windows validation script" >&2
+  exit 1
+}
 
 # The three-state check protocol. A check that could not run must report and
 # let the push through locally, and must fail under REQUIRE_NATIVE, which is
 # what CI sets. Exercised through a real hook run with a stand-in check, so the
 # assertion covers the hook's own handling rather than a copy of it.
 protocol_root="$test_root/protocol"
-mkdir -p "$protocol_root/tool/checks" "$protocol_root/modules"
+mkdir -p "$protocol_root/unixlike/tool/checks" "$protocol_root/unixlike/modules" \
+  "$protocol_root/tool"
 cp -R "$root/.githooks" "$protocol_root/.githooks"
 cp -R "$root/tool/version-control" "$protocol_root/tool/version-control"
 cp -R "$root/tool/dispatch" "$protocol_root/tool/dispatch"
@@ -899,15 +1501,15 @@ printf 'fixture\n' >"$protocol_root/file"
 git -C "$protocol_root" add file
 git -C "$protocol_root" commit -q -m 'feat(repository): create protocol fixture'
 protocol_base=$(git -C "$protocol_root" rev-parse HEAD)
-printf '_: {}\n' >"$protocol_root/modules/fixture.nix"
-git -C "$protocol_root" add modules/fixture.nix
+printf '_: {}\n' >"$protocol_root/unixlike/modules/fixture.nix"
+git -C "$protocol_root" add unixlike/modules/fixture.nix
 git -C "$protocol_root" commit -q -m 'feat(unixlike): change a module'
 protocol_head=$(git -C "$protocol_root" rev-parse HEAD)
 
 # INV repository/evidence-three-states
 stub_check() {
-  printf '#!/bin/sh\nexit %s\n' "$1" >"$protocol_root/tool/checks/test"
-  chmod +x "$protocol_root/tool/checks/test"
+  printf '#!/bin/sh\nexit %s\n' "$1" >"$protocol_root/unixlike/tool/checks/test"
+  chmod +x "$protocol_root/unixlike/tool/checks/test"
 }
 
 run_protocol_pre_push() {
@@ -920,6 +1522,25 @@ if ! run_protocol_pre_push >/dev/null; then
   echo "pre-push rejected a passing check" >&2
   exit 1
 fi
+
+# The hook runs the check inside the domain rather than reporting it missing
+# and passing, which is what an unverified Unix-like check would look like.
+# The marker says it ran rather than that it was skipped.
+printf '#!/bin/sh\n: >ran-inside-the-domain\nexit 0\n' \
+  >"$protocol_root/unixlike/tool/checks/test"
+chmod +x "$protocol_root/unixlike/tool/checks/test"
+if ! protocol_output=$(run_protocol_pre_push 2>&1); then
+  printf '%s\n' "$protocol_output" >&2
+  echo "pre-push did not run the Unix-like check inside the domain" >&2
+  exit 1
+fi
+if [ ! -e "$protocol_root/ran-inside-the-domain" ]; then
+  printf '%s\n' "$protocol_output" >&2
+  echo "pre-push passed without running the check inside the domain" >&2
+  exit 1
+fi
+rm -f "$protocol_root/ran-inside-the-domain"
+stub_check 0
 
 stub_check 1
 if run_protocol_pre_push >/dev/null 2>&1; then
@@ -942,6 +1563,36 @@ if (REQUIRE_NATIVE=1; export REQUIRE_NATIVE; run_protocol_pre_push) >/dev/null 2
   exit 1
 fi
 
+# INV repository/conventional-subject: pre-push judges the subjects of the
+# tips it pushes and not HEAD. The real audit replaces the stand-in, HEAD sits
+# on a branch whose commit the hook refuses, and two pushes differ only in the
+# tip they name: the conforming one passes, the refused one fails. A push
+# failing over a commit it does not carry would judge clone state
+# (INV repository/local-gate-selects-by-effect).
+stub_check 0
+cp "$root/tool/version-control/audit" "$protocol_root/tool/version-control/audit"
+git -C "$protocol_root" switch -q -c fix/repository-refused-subject "$protocol_base"
+# The switch removed the module and, with it, the emptied directory.
+mkdir -p "$protocol_root/unixlike/modules"
+printf '_: { }\n' >"$protocol_root/unixlike/modules/fixture.nix"
+git -C "$protocol_root" add unixlike/modules/fixture.nix
+git -C "$protocol_root" commit -q --no-verify -m 'bad subject no type'
+protocol_refused=$(git -C "$protocol_root" rev-parse HEAD)
+run_protocol_push_tip() {
+  printf 'refs/heads/fix/repository-pushed %s refs/heads/fix/repository-pushed %s\n' \
+    "$1" "$protocol_base" | (cd "$protocol_root" && .githooks/pre-push 2>&1)
+}
+if ! protocol_output=$(run_protocol_push_tip "$protocol_head"); then
+  printf '%s\n' "$protocol_output" >&2
+  echo "pre-push judged a refused subject on HEAD that the push does not carry" >&2
+  exit 1
+fi
+if protocol_output=$(run_protocol_push_tip "$protocol_refused"); then
+  printf '%s\n' "$protocol_output" >&2
+  echo "pre-push accepted a pushed commit whose subject the hook refuses" >&2
+  exit 1
+fi
+
 # tool/version-control/commit is a composition rather than a new authority:
 # classify answers ownership, dispatch/select answers check selection,
 # .githooks/evidence decides what an exit status means, and the hook runs
@@ -953,19 +1604,12 @@ fi
 # `git -C` does not override it, so a fixture that trusted the environment
 # would commit into the repository it is meant to be testing.
 commit_root="$test_root/commit"
-mkdir -p "$commit_root/tool/checks" "$commit_root/modules" "$commit_root/stub" \
+mkdir -p "$commit_root/unixlike/tool/checks" "$commit_root/unixlike/modules" \
+  "$commit_root/tool" "$commit_root/stub" \
   "$commit_root/stub-nix"
 cp -R "$root/.githooks" "$commit_root/.githooks"
 cp -R "$root/tool/version-control" "$commit_root/tool/version-control"
 cp -R "$root/tool/dispatch" "$commit_root/tool/dispatch"
-# `capture karabiner` runs the real projection tool over the real payloads: the
-# command under test is the one that decides a capture is a commit, and a
-# stand-in for either side would leave that decision proving nothing. The host
-# it reads is faked through --host and --hotkeys-host, which is the whole
-# reason those flags exist.
-cp -R "$root/tool/darwin" "$commit_root/tool/darwin"
-mkdir -p "$commit_root/assets"
-cp -R "$root/assets/karabiner" "$commit_root/assets/karabiner"
 # The pre-commit hook this fixture enables also runs
 # tool/version-control/invariants, whose own cases are below; here it is a
 # stand-in so only the behaviour under test decides the outcome.
@@ -981,16 +1625,16 @@ chmod +x "$commit_root/tool/version-control/provisional"
 # declaration of record and rejects an allow entry naming a document this
 # repository does not have. Supply both, through printf arguments so the
 # naming context lives in the fixture rather than in this file.
-mkdir -p "$commit_root/modules/flake"
+mkdir -p "$commit_root/unixlike/modules/flake" "$commit_root/unixlike/modules/platforms"
 printf '_: {\n  identity = { %s = "%s"; };\n}\n' gitName Fixture \
-  >"$commit_root/modules/flake/inventory.nix"
+  >"$commit_root/unixlike/modules/flake/inventory.nix"
 : >"$commit_root/tool/version-control/hygiene.allow"
 
 # The shapes that break a naive editor: a comment attached to one entry, a
 # tapped cask whose sort key is its last path segment rather than the whole
 # string, and a masApps attrset whose alphabetized main block is followed by a
 # `# safari extensions` section that an insertion must never enter.
-cat >"$commit_root/modules/darwin-homebrew.nix" <<'FIXTURE'
+cat >"$commit_root/unixlike/modules/platforms/homebrew.nix" <<'FIXTURE'
 _: {
   modules.darwin.system = _: {
     homebrew = {
@@ -1021,7 +1665,7 @@ _: {
   };
 }
 FIXTURE
-printf '{ "nodes": {}, "root": "root", "version": 7 }\n' >"$commit_root/flake.lock"
+printf '{ "nodes": {}, "root": "root", "version": 7 }\n' >"$commit_root/unixlike/flake.lock"
 
 # gitleaks is stubbed so the hook's secret scan behaves the same on every host.
 # Otherwise a clone without it reports unverified for its own reason and the
@@ -1031,7 +1675,7 @@ cat >"$commit_root/stub-nix/nix" <<'STUB'
 #!/bin/sh
 [ "$1" = flake ] && [ "$2" = update ] || exit 1
 printf '{ "nodes": {}, "root": "root", "version": 7, "refreshed": "%s" }\n' \
-  "${3:-all}" >flake.lock
+  "${3:-all}" >unixlike/flake.lock
 STUB
 chmod +x "$commit_root/stub/gitleaks" "$commit_root/stub-nix/nix"
 
@@ -1057,6 +1701,14 @@ commit_git branch master
 # instead, which the publish block further down owns; leaving these on dev
 # would make every one of them exercise that path too.
 commit_git switch -q -c feature/unixlike-fixture
+
+# INV repository/change-authoring-in-linked-worktree: helper fixtures author
+# their source in a linked worktree; the primary checkout stays on dev.
+commit_primary=$commit_root
+git -C "$commit_primary" switch -q dev
+commit_root="$test_root/commit-linked"
+git -C "$commit_primary" worktree add -q "$commit_root" feature/unixlike-fixture
+mkdir -p "$commit_root/unixlike/tool/checks"
 
 commit_stub_path="$commit_root/stub"
 
@@ -1086,12 +1738,12 @@ run_commit_stdout() {
 commit_count() { commit_git rev-list --count HEAD; }
 
 stub_commit_check() {
-  printf '#!/bin/sh\nexit %s\n' "$1" >"$commit_root/tool/checks/format"
-  chmod +x "$commit_root/tool/checks/format"
+  printf '#!/bin/sh\nexit %s\n' "$1" >"$commit_root/unixlike/tool/checks/format"
+  chmod +x "$commit_root/unixlike/tool/checks/format"
 }
 
 casks_now() {
-  sed -n '/casks = \[/,/\];/p' "$commit_root/modules/darwin-homebrew.nix" \
+  sed -n '/casks = \[/,/\];/p' "$commit_root/unixlike/modules/platforms/homebrew.nix" \
     | sed -n 's/^ *"\(.*\)"$/\1/p' | tr '\n' ' '
 }
 
@@ -1108,7 +1760,8 @@ if [ -n "$(commit_git status --porcelain --untracked-files=no)" ] \
   exit 1
 fi
 
-if ! run_commit y cask add af >/dev/null; then
+if ! commit_output=$(run_commit y cask add af); then
+  printf '%s\n' "$commit_output" >&2
   echo "the commit helper refused a valid cask addition" >&2
   exit 1
 fi
@@ -1118,7 +1771,7 @@ if [ "$(commit_git show -s --format=%s HEAD)" \
   exit 1
 fi
 if [ "$(commit_git diff-tree --no-commit-id --name-only -r HEAD)" \
-  != modules/darwin-homebrew.nix ]; then
+  != unixlike/modules/platforms/homebrew.nix ]; then
   echo "commit helper touched more than the homebrew module" >&2
   exit 1
 fi
@@ -1140,12 +1793,12 @@ if [ "$(commit_git show -s --format=%s HEAD)" \
   echo "commit helper used an unexpected message for a formula removal" >&2
   exit 1
 fi
-if grep -q 'Broken on Darwin' "$commit_root/modules/darwin-homebrew.nix"; then
+if grep -q 'Broken on Darwin' "$commit_root/unixlike/modules/platforms/homebrew.nix"; then
   echo "commit helper left a removed entry's comment behind" >&2
   exit 1
 fi
-grep -q 'Portable command-line tools' "$commit_root/modules/darwin-homebrew.nix"
-grep -q '"displayplacer"' "$commit_root/modules/darwin-homebrew.nix"
+grep -q 'Portable command-line tools' "$commit_root/unixlike/modules/platforms/homebrew.nix"
+grep -q '"displayplacer"' "$commit_root/unixlike/modules/platforms/homebrew.nix"
 
 # ---------------------------------------------------------------------------
 # tool/version-control/commit mas add/remove
@@ -1156,12 +1809,12 @@ grep -q '"displayplacer"' "$commit_root/modules/darwin-homebrew.nix"
 # an insertion must never enter (#92).
 
 masapps_main_now() {
-  sed -n '/masApps = {/,/# safari extensions/p' "$commit_root/modules/darwin-homebrew.nix" \
+  sed -n '/masApps = {/,/# safari extensions/p' "$commit_root/unixlike/modules/platforms/homebrew.nix" \
     | sed -n 's/^ *\([A-Za-z_][A-Za-z0-9_-]*\) = [0-9]*;$/\1/p' | tr '\n' ' '
 }
 
 masapps_safari_now() {
-  sed -n '/# safari extensions/,/};/p' "$commit_root/modules/darwin-homebrew.nix" \
+  sed -n '/# safari extensions/,/};/p' "$commit_root/unixlike/modules/platforms/homebrew.nix" \
     | sed -n 's/^ *\([A-Za-z_][A-Za-z0-9_-]*\) = [0-9]*;$/\1/p' | tr '\n' ' '
 }
 
@@ -1185,7 +1838,7 @@ if [ "$(commit_git show -s --format=%s HEAD)" \
   exit 1
 fi
 if [ "$(commit_git diff-tree --no-commit-id --name-only -r HEAD)" \
-  != modules/darwin-homebrew.nix ]; then
+  != unixlike/modules/platforms/homebrew.nix ]; then
   echo "commit helper touched more than the homebrew module for a mas addition" >&2
   exit 1
 fi
@@ -1213,7 +1866,7 @@ if [ "$(masapps_safari_now)" != 'bitwarden wblock ' ]; then
 fi
 # The blank line separating the two sections must survive the insertion.
 if ! awk '/zzz = 999999999;/ { getline; if ($0 == "") found = 1 } END { exit !found }' \
-  "$commit_root/modules/darwin-homebrew.nix"; then
+  "$commit_root/unixlike/modules/platforms/homebrew.nix"; then
   echo "commit helper dropped the blank line before the safari extensions section" >&2
   exit 1
 fi
@@ -1296,20 +1949,21 @@ fi
 printf '%s\n' "$mas_name_output" | grep -q 'Not a usable Nix attribute name'
 
 # require_untouched applies to masApps exactly as it does to brews and casks.
-printf '\n' >>"$commit_root/modules/darwin-homebrew.nix"
+printf '\n' >>"$commit_root/unixlike/modules/platforms/homebrew.nix"
 if run_commit y mas add untouched-guard 111111111 >/dev/null; then
   echo "commit helper acted on masApps with uncommitted changes in the file" >&2
   exit 1
 fi
-commit_git checkout -q -- modules/darwin-homebrew.nix
+commit_git checkout -q -- unixlike/modules/platforms/homebrew.nix
 
 # What every mas edit above produced must still satisfy alejandra, the
-# formatter tool/checks/format delegates to through `nix fmt`. This fixture
+# formatter unixlike/tool/checks/format delegates to through `nix fmt`.
+# This fixture
 # has no flake.nix of its own, so alejandra runs directly rather than through
 # that indirection; it is still the same binary the real pipeline calls.
 if command -v alejandra >/dev/null 2>&1; then
-  if ! alejandra --check --quiet --quiet -- "$commit_root/modules/darwin-homebrew.nix"; then
-    echo "commit helper left modules/darwin-homebrew.nix unformatted after mas edits" >&2
+  if ! alejandra --check --quiet --quiet -- "$commit_root/unixlike/modules/platforms/homebrew.nix"; then
+    echo "commit helper left unixlike/modules/platforms/homebrew.nix unformatted after mas edits" >&2
     exit 1
   fi
 else
@@ -1350,9 +2004,9 @@ printf '%s\n' "$name_output" | grep -q 'Not a usable package name'
 # copy of it, so the whole edit is refused instead. Committed by hand first, so
 # the refusal is the readability guard and not the uncommitted-changes one.
 sed 's/^\( *\)"displayplacer"$/\1"displayplacer" # broken/' \
-  "$commit_root/modules/darwin-homebrew.nix" >"$test_root/trailing.nix"
-cp "$test_root/trailing.nix" "$commit_root/modules/darwin-homebrew.nix"
-commit_git add -- modules/darwin-homebrew.nix
+  "$commit_root/unixlike/modules/platforms/homebrew.nix" >"$test_root/trailing.nix"
+cp "$test_root/trailing.nix" "$commit_root/unixlike/modules/platforms/homebrew.nix"
+commit_git add -- unixlike/modules/platforms/homebrew.nix
 if ! annotate_output=$(
   unset GIT_DIR GIT_WORK_TREE GIT_INDEX_FILE
   cd "$commit_root" || exit 1
@@ -1369,7 +2023,7 @@ if trailing_output=$(run_commit y brew add displayplacer); then
   exit 1
 fi
 printf '%s\n' "$trailing_output" | grep -q 'bare quoted name'
-if [ "$(grep -c '"displayplacer"' "$commit_root/modules/darwin-homebrew.nix")" != 1 ]; then
+if [ "$(grep -c '"displayplacer"' "$commit_root/unixlike/modules/platforms/homebrew.nix")" != 1 ]; then
   echo "commit helper duplicated an entry it could not read" >&2
   exit 1
 fi
@@ -1398,8 +2052,8 @@ if [ -n "$(commit_git status --porcelain --untracked-files=no)" ]; then
 fi
 commit_git switch -q feature/unixlike-fixture
 
-# AGENTS.md line 93: a tool that takes the hook's bypass silently creates the
-# policy a human was trusted to decide.
+# AGENTS.md § Governance design: a tool that takes the hook's bypass silently
+# creates the policy a human was trusted to decide.
 if bypass_output=$(run_commit y --no-verify cask add zzz); then
   echo "commit helper honoured a hook bypass" >&2
   exit 1
@@ -1416,12 +2070,12 @@ fi
 commit_git reset -q -- unrelated
 rm -f "$commit_root/unrelated"
 
-printf '\n' >>"$commit_root/modules/darwin-homebrew.nix"
+printf '\n' >>"$commit_root/unixlike/modules/platforms/homebrew.nix"
 if run_commit y cask add zzz >/dev/null; then
   echo "commit helper acted on a file with uncommitted changes" >&2
   exit 1
 fi
-commit_git checkout -q -- modules/darwin-homebrew.nix
+commit_git checkout -q -- unixlike/modules/platforms/homebrew.nix
 
 # INV repository/scope-ownership
 # An unclassified path is fatal at both gates, so the helper refuses before it
@@ -1526,7 +2180,7 @@ if [ "$(commit_git show -s --format=%s HEAD)" \
   echo "commit helper used an unexpected message for a flake refresh" >&2
   exit 1
 fi
-if [ "$(commit_git diff-tree --no-commit-id --name-only -r HEAD)" != flake.lock ]; then
+if [ "$(commit_git diff-tree --no-commit-id --name-only -r HEAD)" != unixlike/flake.lock ]; then
   echo "a flake refresh commit carried more than flake.lock" >&2
   exit 1
 fi
@@ -1617,8 +2271,7 @@ fi
 # A uname stub proves a platform guard without depending on which platform
 # runs this suite, which is the only way a guard's own case can hold on both
 # sides of it. It answers `-s` and nothing else, because that is all the helper
-# ever asks. Two guards use it: capture karabiner's Darwin guard below, and
-# --publish's refusal on native Windows further down.
+# ever asks. It proves --publish's refusal on native Windows further down.
 uname_stub() {
   # $1: directory to create the stub in. $2: what `uname -s` reports there.
   mkdir -p "$1"
@@ -1633,146 +2286,8 @@ STUB
   chmod +x "$1/uname"
 }
 
-# ---------------------------------------------------------------------------
-# tool/version-control/commit capture karabiner
-# ---------------------------------------------------------------------------
-#
-# INV unixlike/host-written-payload-projected
-#
-# The capture direction of the same projection modules/karabiner.nix applies:
-# what the payloads declare decides what is read back, and what else the host
-# keeps in that file is runtime that is neither reported as drift nor captured.
-# The real tool/darwin/karabiner and the real payloads are in the throwaway
-# repository above; only the host is faked, through the flags that exist for
-# it, so the two directions of the rule are the fixture's subject rather than a
-# stand-in's.
-capture_host="$test_root/karabiner-host.json"
-capture_hotkeys_host="$test_root/karabiner-hotkeys-host.json"
-
-run_capture() {
-  capture_answer=$1
-  shift
-  printf '%s\n' "$capture_answer" | (
-    unset GIT_DIR GIT_WORK_TREE GIT_INDEX_FILE
-    cd "$commit_root" || exit 1
-    KARABINER_PLATFORM=darwin
-    export KARABINER_PLATFORM
-    PATH="$commit_stub_path:$PATH" tool/version-control/commit "$@" 2>&1
-  )
-}
-
-capture_payloads_untouched() {
-  for capture_payload in karabiner.json symbolic-hotkeys.json; do
-    if ! cmp -s "$commit_root/assets/karabiner/$capture_payload" \
-      "$root/assets/karabiner/$capture_payload"; then
-      echo "capture karabiner rewrote assets/karabiner/$capture_payload while $1" >&2
-      exit 1
-    fi
-  done
-  if [ -n "$(commit_git status --porcelain --untracked-files=no)" ] \
-    || [ "$(commit_count)" != "$capture_before" ]; then
-    echo "capture karabiner wrote something while $1" >&2
-    exit 1
-  fi
-}
-
-# A host that matches both payloads and holds one top-level key beside them.
-# `machine_specific` is the host's own runtime state: a capture that read it
-# back would put a per-machine identifier into desired state.
-{
-  printf '{\n'
-  printf '  "machine_specific": {},\n'
-  tail -n +2 "$root/assets/karabiner/karabiner.json"
-} >"$capture_host"
-cp "$root/assets/karabiner/symbolic-hotkeys.json" "$capture_hotkeys_host"
-
-capture_before=$(commit_count)
-capture_status=0
-capture_output=$(run_capture n --dry-run --host "$capture_host" \
-  --hotkeys-host "$capture_hotkeys_host" capture karabiner) || capture_status=$?
-if [ "$capture_status" -eq 0 ]; then
-  echo "capture karabiner planned a commit against a host that matches the payloads" >&2
-  exit 1
-fi
-if ! printf '%s\n' "$capture_output" | grep -q 'nothing to capture'; then
-  printf '%s\n' "$capture_output" >&2
-  echo "capture karabiner did not refuse with nothing to capture" >&2
-  exit 1
-fi
-capture_payloads_untouched "the host matched the payloads"
-
-# The same command on a host that is not a Mac refuses before it reads
-# anything: the projection of a host that holds no Karabiner state would
-# capture the payloads away. The platform comes from a uname stub rather than
-# from whatever runs this suite, so the case holds on the Mac this feature
-# targets as well; on that host the real uname would pass the guard, the run
-# would reach the still-matching host above, and this would be asserting the
-# refusal of the case before it.
-uname_stub "$commit_root/stub-uname" Linux
-capture_status=0
-capture_output=$(
-  printf 'n\n' | (
-    unset GIT_DIR GIT_WORK_TREE GIT_INDEX_FILE KARABINER_PLATFORM
-    cd "$commit_root" || exit 1
-    PATH="$commit_root/stub-uname:$commit_stub_path:$PATH" \
-      tool/version-control/commit --dry-run \
-      --host "$capture_host" --hotkeys-host "$capture_hotkeys_host" \
-      capture karabiner 2>&1
-  )
-) || capture_status=$?
-if [ "$capture_status" -eq 0 ]; then
-  printf '%s\n' "$capture_output" >&2
-  echo "capture karabiner ran on a host that is not a Mac" >&2
-  exit 1
-fi
-if ! printf '%s\n' "$capture_output" | grep -q 'runs on a Mac only'; then
-  printf '%s\n' "$capture_output" >&2
-  echo "capture karabiner refused a host that is not a Mac for another reason" >&2
-  exit 1
-fi
-capture_payloads_untouched "the host was not a Mac"
-
-# A host that differs in one declared member of each payload, and still holds
-# the undeclared one. The dry run answers the same four questions the other
-# commands answer and writes nothing.
-{
-  printf '{\n'
-  printf '  "machine_specific": {},\n'
-  tail -n +2 "$root/assets/karabiner/karabiner.json"
-} | sed 's/"check_for_updates": false/"check_for_updates": true/' >"$capture_host"
-sed 's/"enabled": false/"enabled": true/' \
-  "$root/assets/karabiner/symbolic-hotkeys.json" >"$capture_hotkeys_host"
-
-capture_before=$(commit_count)
-if ! capture_output=$(run_capture n --dry-run --host "$capture_host" \
-  --hotkeys-host "$capture_hotkeys_host" capture karabiner); then
-  printf '%s\n' "$capture_output" >&2
-  echo "capture karabiner refused a host that drifted from the payloads" >&2
-  exit 1
-fi
-for capture_line in \
-  '^edit: assets/karabiner/karabiner.json$' \
-  '^edit: assets/karabiner/symbolic-hotkeys.json$' \
-  '^-    "check_for_updates": false$' \
-  '^+    "check_for_updates": true$' \
-  '^-      "enabled": false,$' \
-  '^+      "enabled": true,$' \
-  '^classification: unixlike$' \
-  '^  unixlike:payloads$' \
-  '^message: feat(unixlike): capture karabiner desired state$'; do
-  if ! printf '%s\n' "$capture_output" | grep -q "$capture_line"; then
-    printf '%s\n' "$capture_output" >&2
-    echo "the capture dry run did not report a line matching $capture_line" >&2
-    exit 1
-  fi
-done
-# The runtime key is in the host this run read and in neither diff.
-if printf '%s\n' "$capture_output" | grep -q 'machine_specific'; then
-  printf '%s\n' "$capture_output" >&2
-  echo "capture karabiner offered to read an undeclared top-level key back" >&2
-  exit 1
-fi
-capture_payloads_untouched "a dry run described a drifted host"
+# INV repository/retired-capture-publication
+"$root/tool/version-control/test-retired-capture"
 
 # ---------------------------------------------------------------------------
 # tool/version-control/commit --publish
@@ -1794,7 +2309,9 @@ publish_body="$test_root/publish-pr-body"
   git init -q --bare -b dev "$publish_remote"
 )
 
-mkdir -p "$publish_root/tool/checks" "$publish_root/modules/flake" \
+mkdir -p "$publish_root/unixlike/tool/checks" "$publish_root/unixlike/modules/flake" \
+  "$publish_root/unixlike/modules/platforms" \
+  "$publish_root/tool" \
   "$publish_root/stub" "$publish_root/nogh"
 cp -R "$root/.githooks" "$publish_root/.githooks"
 cp -R "$root/tool/version-control" "$publish_root/tool/version-control"
@@ -1812,9 +2329,9 @@ chmod +x "$publish_root/tool/version-control/provisional"
 printf '#!/bin/sh\nexit 0\n' >"$publish_root/tool/version-control/audit"
 chmod +x "$publish_root/tool/version-control/audit"
 printf '_: {\n  identity = { %s = "%s"; };\n}\n' gitName Fixture \
-  >"$publish_root/modules/flake/inventory.nix"
+  >"$publish_root/unixlike/modules/flake/inventory.nix"
 : >"$publish_root/tool/version-control/hygiene.allow"
-cat >"$publish_root/modules/darwin-homebrew.nix" <<'FIXTURE'
+cat >"$publish_root/unixlike/modules/platforms/homebrew.nix" <<'FIXTURE'
 _: {
   modules.darwin.system = _: {
     homebrew = {
@@ -1837,14 +2354,14 @@ _: {
   };
 }
 FIXTURE
-printf '{ "nodes": {}, "root": "root", "version": 7 }\n' >"$publish_root/flake.lock"
+printf '{ "nodes": {}, "root": "root", "version": 7 }\n' >"$publish_root/unixlike/flake.lock"
 
 # The pre-commit hook selects unixlike:format, lint and payloads for the module
 # and the pre-push hook selects unixlike:test for it. All four exist here so
 # the assertions below are about the helper rather than about a host's Nix.
 for publish_check in format lint payloads test; do
-  printf '#!/bin/sh\nexit 0\n' >"$publish_root/tool/checks/$publish_check"
-  chmod +x "$publish_root/tool/checks/$publish_check"
+  printf '#!/bin/sh\nexit 0\n' >"$publish_root/unixlike/tool/checks/$publish_check"
+  chmod +x "$publish_root/unixlike/tool/checks/$publish_check"
 done
 printf '#!/bin/sh\nexit 0\n' >"$publish_root/stub/gitleaks"
 chmod +x "$publish_root/stub/gitleaks"
@@ -1910,6 +2427,14 @@ publish_git push -q --set-upstream origin dev
 publish_git config core.hooksPath .githooks
 publish_git branch master
 
+# INV repository/change-authoring-in-linked-worktree: leave the primary
+# checkout on a fixture-only branch so the helper can use dev, master and
+# topic branches inside the linked worktree below.
+publish_primary=$publish_root
+publish_git switch -q -c feature/repository-fixture-primary
+publish_root="$test_root/publish-linked"
+git -C "$publish_primary" worktree add -q "$publish_root" dev
+
 publish_path="$publish_root/stub:$PATH"
 
 run_publish() {
@@ -1964,7 +2489,7 @@ printf '%s\n' "$publish_dry" | grep -q '^  Scope: unixlike$'
 printf '%s\n' "$publish_dry" \
   | grep -q '^  Selected checks: unixlike:format, unixlike:lint, unixlike:payloads$'
 printf '%s\n' "$publish_dry" \
-  | grep -q '^  Command: tool/version-control/commit --dry-run --publish cask add af$'
+  | grep -q '^  Command: tool/configs commit --dry-run --publish cask add af$'
 printf '%s\n' "$publish_dry" \
   | grep -q '^  git push --set-upstream origin feature/unixlike-cask-add-af$'
 printf '%s\n' "$publish_dry" \
@@ -2035,7 +2560,7 @@ printf '%s\n' "$publish_out" | grep -q '^https://github.com/owner/repo/pull/7$'
 grep -q '^Scope: unixlike$' "$publish_body"
 grep -q '^Selected checks: unixlike:format, unixlike:lint, unixlike:payloads$' \
   "$publish_body"
-grep -q '^Command: tool/version-control/commit --publish cask add af$' "$publish_body"
+grep -q '^Command: tool/configs commit --publish cask add af$' "$publish_body"
 grep -q '^→ format$' "$publish_body"
 grep -q '^→ hygiene$' "$publish_body"
 grep -q 'Required checks' "$publish_body"
@@ -2114,8 +2639,8 @@ publish_wrote_nothing "refusing on master"
 publish_git switch -q dev
 
 # #90: --publish is a Unix-like flow with a PowerShell counterpart in
-# windows/tools/capture.ps1, and uname_stub above proves that guard the same
-# way the capture cases prove theirs.
+# the Windows capture verb, and uname_stub above proves that guard the same
+# way on every host.
 
 # Positive: a Unix-like uname still reaches the ordinary preflight, gh
 # included.
@@ -2146,7 +2671,7 @@ for publish_uname_win in MINGW64_NT-10.0-19045 MSYS_NT-10.0-19045 CYGWIN_NT-10.0
   fi
   publish_path="$publish_root/stub:$PATH"
   printf '%s\n' "$win_out" | grep -q 'not supported on native Windows'
-  printf '%s\n' "$win_out" | grep -q 'capture\.ps1 -Feature <id> -Publish'
+  printf '%s\n' "$win_out" | grep -q 'win-env\.ps1 capture -Feature <id> -Publish'
   if [ -s "$publish_log" ]; then
     echo "commit --publish consulted gh on native Windows ($publish_uname_win)" >&2
     exit 1
@@ -2197,12 +2722,12 @@ publish_wrote_nothing "gh was not authenticated"
 # under --publish must stop before the push, so nothing reaches the remote and
 # no pull request is proposed for a commit that was never made.
 publish_snapshot
-printf '#!/bin/sh\nexit 1\n' >"$publish_root/tool/checks/format"
+printf '#!/bin/sh\nexit 1\n' >"$publish_root/unixlike/tool/checks/format"
 if precommit_out=$(run_publish y --publish cask add nf); then
   echo "commit --publish survived a failing pre-commit hook" >&2
   exit 1
 fi
-printf '#!/bin/sh\nexit 0\n' >"$publish_root/tool/checks/format"
+printf '#!/bin/sh\nexit 0\n' >"$publish_root/unixlike/tool/checks/format"
 printf '%s\n' "$precommit_out" | grep -q 'The commit was rejected'
 # It names the branch it put the operator on, which is not where they started.
 printf '%s\n' "$precommit_out" \
@@ -2299,12 +2824,12 @@ publish_wrote_nothing "dev was behind origin/dev"
 # A push the pre-push hook rejects leaves the commit local and says so. Nothing
 # is retried, and no pull request is opened for a commit the remote never got.
 publish_snapshot
-printf '#!/bin/sh\nexit 1\n' >"$publish_root/tool/checks/test"
+printf '#!/bin/sh\nexit 1\n' >"$publish_root/unixlike/tool/checks/test"
 if push_out=$(run_publish y --publish cask add gf); then
   echo "commit --publish survived a rejected push" >&2
   exit 1
 fi
-printf '#!/bin/sh\nexit 0\n' >"$publish_root/tool/checks/test"
+printf '#!/bin/sh\nexit 0\n' >"$publish_root/unixlike/tool/checks/test"
 printf '%s\n' "$push_out" | grep -q 'push was rejected'
 if [ "$(publish_git show -s --format=%s refs/heads/feature/unixlike-cask-add-gf)" \
   != 'feat(unixlike): add homebrew cask gf' ]; then
@@ -2351,7 +2876,7 @@ if [ "$(publish_remote_git rev-parse refs/heads/feature/unixlike-mas-add-pages)"
   exit 1
 fi
 grep -q '^Scope: unixlike$' "$publish_body"
-grep -q '^Command: tool/version-control/commit --publish mas add pages 409201541$' \
+grep -q '^Command: tool/configs commit --publish mas add pages 409201541$' \
   "$publish_body"
 printf '%s\n' "$mas_publish_out" | grep -q '^https://github.com/owner/repo/pull/7$'
 publish_git switch -q dev
@@ -2414,8 +2939,8 @@ publish_git branch prune-merged dev
 # A commit dev does not have makes this a permanent non-candidate, however
 # stale its name looks.
 publish_git switch -q -c prune-unique dev
-printf '\n# prune-unique fixture marker\n' >>"$publish_root/modules/darwin-homebrew.nix"
-publish_git add modules/darwin-homebrew.nix
+printf '\n# prune-unique fixture marker\n' >>"$publish_root/unixlike/modules/platforms/homebrew.nix"
+publish_git add unixlike/modules/platforms/homebrew.nix
 publish_git commit -q -m 'chore(unixlike): create prune-unique fixture commit'
 publish_git switch -q dev
 # Also an ancestor of origin/dev, but the branch prune runs from: surviving
@@ -2622,18 +3147,11 @@ hygiene_seq=0
 hygiene_new() {
   hygiene_seq=$((hygiene_seq + 1))
   hygiene_repo="$test_root/hygiene-$hygiene_seq"
-  mkdir -p "$hygiene_repo/tool/version-control" "$hygiene_repo/modules/flake"
+  mkdir -p "$hygiene_repo/tool/version-control"
   git -C "$hygiene_repo" init -q -b dev
   git -C "$hygiene_repo" config user.name Fixture
   git -C "$hygiene_repo" config user.email fixture@example.invalid
-  # The declaration of record for axis 2, written through printf arguments so
-  # that the naming context lives in the fixture rather than in this file.
-  {
-    printf '_: {\n  identity = {\n'
-    printf '    %s = "%s";\n' gitName declared-name
-    printf '    %s = "%s";\n' hostName declared-host
-    printf '  };\n}\n'
-  } >"$hygiene_repo/modules/flake/inventory.nix"
+  printf '%s\n' declared-name declared-host >"$hygiene_repo/tool/version-control/hygiene.names"
   : >"$hygiene_repo/tool/version-control/hygiene.allow"
 }
 
@@ -2664,7 +3182,7 @@ hygiene_expect_fail() {
 }
 
 # Axis 1, positive: the anchoring rule. A guillemet does not open a path, which
-# is why the Nix error message docs/troubleshooting.md quotes is not one.
+# is why the Nix error message docs/reference/troubleshooting.md quotes is not one.
 hygiene_new
 printf 'error: path %s»/%s/programs/x.nix%s does not exist\n' "'" home "'" \
   >"$hygiene_repo/doc.md"
@@ -2702,7 +3220,7 @@ if ! printf '%s\n' "$hygiene_output" | grep -qF "undeclared name 'eve'"; then
 fi
 
 # Axis 2, positive and negative: a name is only decidable inside a naming
-# context, and the allowed set is every literal the inventory declares.
+# context, and the allowed set is the repository-owned declaration.
 hygiene_new
 printf '%s: %s\n' hostname declared-host >"$hygiene_repo/host.yml"
 hygiene_expect_pass 'axis 2, a declared host name'
@@ -2727,8 +3245,9 @@ printf '{ "%s" = "%s"; }\n' hostName eve >"$hygiene_repo/host.nix"
 hygiene_expect_fail 'axis 2, a quoted Nix attribute' "undeclared name 'eve'"
 
 # The two separator forms the bare and quoted branches exist for: a shell
-# environment assignment, and the Nix quoted form -- the likeliest real leak in
-# modules/, and the one the spaced ` = ` exclusion must not swallow.
+# environment assignment, and the Nix quoted form -- the likeliest real leak
+# in unixlike/modules/, and the one the spaced ` = ` exclusion must not
+# swallow.
 hygiene_new
 printf '%s=%s\n' USER eve >"$hygiene_repo/profile.sh"
 hygiene_expect_fail 'axis 2, a bare shell assignment' "undeclared name 'eve'"
@@ -2738,7 +3257,7 @@ printf '  %s = "%s";\n' user eve >"$hygiene_repo/module.nix"
 hygiene_expect_fail 'axis 2, a quoted Nix assignment' "undeclared name 'eve'"
 
 # A bare right-hand side after the spaced ` = ` form is an expression, not a
-# name; modules/home-account.nix assigns one on every evaluation.
+# name; unixlike/modules/foundation/home-account.nix assigns one on every evaluation.
 hygiene_new
 printf '  %s = config.identity.wsl.%s;\n' username user >"$hygiene_repo/module.nix"
 hygiene_expect_pass 'axis 2, a bare expression is not a name'
@@ -2748,29 +3267,26 @@ hygiene_expect_pass 'axis 2, a bare expression is not a name'
 # index, so the pre-commit hook and CI could disagree about the same commit.
 hygiene_new
 printf '{ %s = "%s"; }\n' user eve >"$hygiene_repo/module.nix"
-hygiene_expect_fail 'axis 2, a leak against the staged inventory' "undeclared name 'eve'"
-{
-  printf '_: {\n  identity = {\n'
-  printf '    %s = "%s";\n' gitName declared-name
-  printf '    %s = "%s";\n' hostName declared-host
-  printf '    %s = "%s";\n' leak eve
-  printf '  };\n}\n'
-} >"$hygiene_repo/modules/flake/inventory.nix"
+hygiene_expect_fail 'axis 2, a leak against the staged declaration' "undeclared name 'eve'"
+printf '%s\n' declared-name declared-host eve >"$hygiene_repo/tool/version-control/hygiene.names"
 if (cd "$hygiene_repo" && "$hygiene") >/dev/null 2>&1; then
-  echo "hygiene widened the declared set from an unstaged inventory" >&2
+  echo "hygiene widened the declared set from an unstaged declaration" >&2
   exit 1
 fi
 # Staged, the same edit does take effect: the index is the authority, not the
 # file's absence or presence on disk.
-hygiene_expect_pass 'axis 2, a name declared by the staged inventory'
+hygiene_expect_pass 'axis 2, a name declared by the staged declaration'
 
-# The extraction must fail closed. An inventory whose literals move out of
-# reach cannot silently retire the axis, which is what #18 makes a live
-# possibility.
+# The extraction must fail closed. An empty or absent declaration cannot
+# silently retire the axis.
 hygiene_new
-printf '_: {\n  identity = {};\n}\n' >"$hygiene_repo/modules/flake/inventory.nix"
+: >"$hygiene_repo/tool/version-control/hygiene.names"
 printf 'clean\n' >"$hygiene_repo/file"
 hygiene_expect_fail 'axis 2, an empty declared-name extraction' 'no declared name'
+
+hygiene_new
+rm "$hygiene_repo/tool/version-control/hygiene.names"
+hygiene_expect_fail 'axis 2, an absent name declaration' 'no declared name'
 
 # Axis 3, positive: a near-miss basename the denylist must not claim.
 hygiene_new
@@ -2930,16 +3446,17 @@ if [ "$hygiene_status" -eq 0 ] || [ "$hygiene_status" -eq 69 ]; then
   exit 1
 fi
 
-# The pre-commit wiring. The hook's run_check helper resolves tool/checks/<name>
-# and cannot reach a repository-scope check, so the hook calls evidence_run
+# The pre-commit wiring. The hook's run_check helper resolves
+# unixlike/tool/checks/<name> and cannot reach a repository-scope check, so
+# the hook calls evidence_run
 # directly; these cases exercise that call through a real hook run with a
 # stand-in check, in the style of the pre-push protocol fixture above.
 hygiene_hook_root="$test_root/hygiene-hook"
-mkdir -p "$hygiene_hook_root/tool" "$hygiene_hook_root/modules"
-mkdir -p "$hygiene_hook_root/tool/checks"
+mkdir -p "$hygiene_hook_root/tool" "$hygiene_hook_root/unixlike/modules"
+mkdir -p "$hygiene_hook_root/unixlike/tool/checks"
 for stub_check_name in format lint payloads; do
-  printf '#!/bin/sh\nexit 0\n' >"$hygiene_hook_root/tool/checks/$stub_check_name"
-  chmod +x "$hygiene_hook_root/tool/checks/$stub_check_name"
+  printf '#!/bin/sh\nexit 0\n' >"$hygiene_hook_root/unixlike/tool/checks/$stub_check_name"
+  chmod +x "$hygiene_hook_root/unixlike/tool/checks/$stub_check_name"
 done
 cp -R "$root/.githooks" "$hygiene_hook_root/.githooks"
 cp -R "$root/tool/version-control" "$hygiene_hook_root/tool/version-control"
@@ -2958,12 +3475,17 @@ git -C "$hygiene_hook_root" init -q -b dev
 git -C "$hygiene_hook_root" config user.name Fixture
 git -C "$hygiene_hook_root" config user.email fixture@example.invalid
 printf 'fixture\n' >"$hygiene_hook_root/file"
-git -C "$hygiene_hook_root" add file
+git -C "$hygiene_hook_root" add .
 git -C "$hygiene_hook_root" commit -q -m 'feat(repository): create hygiene hook fixture'
+# INV repository/change-authoring-in-linked-worktree
+hygiene_hook_primary=$hygiene_hook_root
+hygiene_hook_root="$test_root/hygiene-hook-linked"
+git -C "$hygiene_hook_primary" worktree add -q -b feature/repository-hygiene-hook "$hygiene_hook_root"
+mkdir -p "$hygiene_hook_root/unixlike/modules"
 # A Unix-like path, so the hook does not select repository:fixtures and re-enter
 # this script.
-printf '_: {}\n' >"$hygiene_hook_root/modules/fixture.nix"
-git -C "$hygiene_hook_root" add modules/fixture.nix
+printf '_: {}\n' >"$hygiene_hook_root/unixlike/modules/fixture.nix"
+git -C "$hygiene_hook_root" add unixlike/modules/fixture.nix
 
 stub_hygiene() {
   printf '#!/bin/sh\nexit %s\n' "$1" \
@@ -3061,11 +3583,11 @@ fi
 # pass so only the secret scan decides the outcome.
 
 secret_hook_root="$test_root/secret-hook"
-mkdir -p "$secret_hook_root/tool" "$secret_hook_root/modules" "$secret_hook_root/stub"
-mkdir -p "$secret_hook_root/tool/checks"
+mkdir -p "$secret_hook_root/tool" "$secret_hook_root/unixlike/modules" "$secret_hook_root/stub"
+mkdir -p "$secret_hook_root/unixlike/tool/checks"
 for stub_check_name in format lint payloads; do
-  printf '#!/bin/sh\nexit 0\n' >"$secret_hook_root/tool/checks/$stub_check_name"
-  chmod +x "$secret_hook_root/tool/checks/$stub_check_name"
+  printf '#!/bin/sh\nexit 0\n' >"$secret_hook_root/unixlike/tool/checks/$stub_check_name"
+  chmod +x "$secret_hook_root/unixlike/tool/checks/$stub_check_name"
 done
 cp -R "$root/.githooks" "$secret_hook_root/.githooks"
 cp -R "$root/tool/version-control" "$secret_hook_root/tool/version-control"
@@ -3083,10 +3605,15 @@ git -C "$secret_hook_root" init -q -b dev
 git -C "$secret_hook_root" config user.name Fixture
 git -C "$secret_hook_root" config user.email fixture@example.invalid
 printf 'fixture\n' >"$secret_hook_root/file"
-git -C "$secret_hook_root" add file
+git -C "$secret_hook_root" add .
 git -C "$secret_hook_root" commit -q -m 'feat(repository): create secret hook fixture'
-printf '_: {}\n' >"$secret_hook_root/modules/fixture.nix"
-git -C "$secret_hook_root" add modules/fixture.nix
+# INV repository/change-authoring-in-linked-worktree
+secret_hook_primary=$secret_hook_root
+secret_hook_root="$test_root/secret-hook-linked"
+git -C "$secret_hook_primary" worktree add -q -b feature/repository-secret-hook "$secret_hook_root"
+mkdir -p "$secret_hook_root/unixlike/modules" "$secret_hook_root/stub"
+printf '_: {}\n' >"$secret_hook_root/unixlike/modules/fixture.nix"
+git -C "$secret_hook_root" add unixlike/modules/fixture.nix
 
 stub_gitleaks() {
   printf '#!/bin/sh\ncase "$*" in *--help*) exit 0 ;; esac\nexit %s\n' "$1" \
@@ -3127,16 +3654,16 @@ inv_seq=0
 inv_new() {
   inv_seq=$((inv_seq + 1))
   inv_repo="$test_root/invariants-$inv_seq"
-  mkdir -p "$inv_repo/invariants/repository" "$inv_repo/docs" \
+  mkdir -p "$inv_repo/docs/policy/invariants/repository" "$inv_repo/docs/policy/definition-of-done" "$inv_repo/docs/status" \
     "$inv_repo/tool" "$inv_repo/tests"
   git -C "$inv_repo" init -q -b dev
   git -C "$inv_repo" config user.name Fixture
   git -C "$inv_repo" config user.email fixture@example.invalid
   printf '# Fixture\n\n## Rules\n\ntext\n' >"$inv_repo/AGENTS.md"
-  printf '# Architecture\n\n## Model\n\ntext\n' >"$inv_repo/docs/architecture.md"
+  printf '# Architecture\n\n## Model\n\ntext\n' >"$inv_repo/docs/policy/architecture.md"
   printf '# Definition of done\n\n- [ ] read the diff\n' \
-    >"$inv_repo/docs/definition-of-done.md"
-  printf '# Status\n\n## Why\n\ntext\n' >"$inv_repo/docs/status.md"
+    >"$inv_repo/docs/policy/definition-of-done/repository.md"
+  printf '# Status\n\n## Why\n\ntext\n' >"$inv_repo/docs/status/repository.md"
   : >"$inv_repo/.exec"
 }
 
@@ -3151,7 +3678,7 @@ inv_exec() {
   printf '%s\n' "$1" >>"$inv_repo/.exec"
 }
 inv_entry() {
-  cat >"$inv_repo/invariants/repository/$1.md"
+  cat >"$inv_repo/docs/policy/invariants/repository/$1.md"
 }
 inv_run() {
   git -C "$inv_repo" add -A
@@ -3197,10 +3724,10 @@ inv_base() {
   inv_entry base-rule <<'ENTRY'
 id: repository/base-rule
 statement: The fixture holds.
-rationale: docs/architecture.md § Model
+rationale: docs/policy/architecture.md § Model
 enforced-by: tool tool/probe
 enforced-by: fixture tests/probe.sh
-decision: docs/status.md § Why
+decision: docs/status/repository.md § Why
 
 Body text.
 ENTRY
@@ -3213,7 +3740,7 @@ inv_base
 inv_entry base-rule <<'ENTRY'
 id: repository/base-rule
 statement: The fixture holds.
-rationale: docs/architecture.md § Model
+rationale: docs/policy/architecture.md § Model
 enforced-by: tool tool/probe
 enforced-by: fixture tests/probe.sh
 since: 2026-09-03
@@ -3227,7 +3754,7 @@ inv_entry base-rule <<'ENTRY'
 id: repository/base-rule
 statement: The fixture holds.
 statement: The fixture holds twice.
-rationale: docs/architecture.md § Model
+rationale: docs/policy/architecture.md § Model
 enforced-by: tool tool/probe
 enforced-by: fixture tests/probe.sh
 ENTRY
@@ -3237,7 +3764,7 @@ inv_base
 inv_entry base-rule <<'ENTRY'
 id: repository/base-rule
 statement: The fixture holds.
-rationale: docs/architecture.md § Model
+rationale: docs/policy/architecture.md § Model
 enforced-by: tool tool/probe
 enforced-by: fixture tests/probe.sh
   a continuation line
@@ -3248,18 +3775,18 @@ inv_base
 inv_entry other-name <<'ENTRY'
 id: repository/base-rule
 statement: The fixture holds.
-rationale: docs/architecture.md § Model
+rationale: docs/policy/architecture.md § Model
 enforced-by: tool tool/probe
 enforced-by: fixture tests/probe.sh
 ENTRY
-rm "$inv_repo/invariants/repository/base-rule.md"
+rm "$inv_repo/docs/policy/invariants/repository/base-rule.md"
 inv_expect_fail 'C3 id does not match the path' "C3 id 'repository/base-rule' does not match path"
 
 inv_base
 inv_entry base-rule <<'ENTRY'
 id: repository/base-rule
 statement: The fixture holds.
-rationale: docs/architecture.md § Missing
+rationale: docs/policy/architecture.md § Missing
 enforced-by: tool tool/probe
 enforced-by: fixture tests/probe.sh
 ENTRY
@@ -3269,20 +3796,20 @@ inv_base
 inv_entry base-rule <<'ENTRY'
 id: repository/base-rule
 statement: The fixture holds.
-rationale: docs/status.md § Why
+rationale: docs/status/repository.md § Why
 enforced-by: tool tool/probe
 enforced-by: fixture tests/probe.sh
 ENTRY
-inv_expect_fail 'C9 rationale outside the two layer-2 files' 'C9 rationale must point at AGENTS.md or docs/architecture.md'
+inv_expect_fail 'C9 rationale outside the two layer-2 files' 'C9 rationale must point at AGENTS.md or docs/policy/architecture.md'
 
 inv_base
 inv_entry base-rule <<'ENTRY'
 id: repository/base-rule
 statement: The fixture holds.
-rationale: docs/architecture.md § Model
+rationale: docs/policy/architecture.md § Model
 enforced-by: tool tool/probe
 enforced-by: fixture tests/probe.sh
-decision: docs/status.md § Nowhere
+decision: docs/status/repository.md § Nowhere
 ENTRY
 inv_expect_fail 'C4 decision heading missing' "C4 decision names no heading 'Nowhere'"
 
@@ -3290,7 +3817,7 @@ inv_base
 inv_entry base-rule <<'ENTRY'
 id: repository/base-rule
 statement: The fixture holds.
-rationale: docs/architecture.md § Model
+rationale: docs/policy/architecture.md § Model
 enforced-by: schema tool/absent.nix
 enforced-by: fixture tests/probe.sh
 ENTRY
@@ -3309,7 +3836,7 @@ inv_base
 inv_entry base-rule <<'ENTRY'
 id: repository/base-rule
 statement: The fixture holds.
-rationale: docs/architecture.md § Model
+rationale: docs/policy/architecture.md § Model
 enforced-by: tool tool/probe
 ENTRY
 inv_expect_fail 'C6 tool without fixture' 'C6 schema or tool enforcement needs a fixture too'
@@ -3318,7 +3845,7 @@ inv_base
 inv_entry base-rule <<'ENTRY'
 id: repository/base-rule
 statement: The fixture holds.
-rationale: docs/architecture.md § Model
+rationale: docs/policy/architecture.md § Model
 enforced-by: pending #12
 enforced-by: tool tool/probe
 enforced-by: fixture tests/probe.sh
@@ -3330,7 +3857,7 @@ inv_base
 inv_entry base-rule <<'ENTRY'
 id: repository/base-rule
 statement: The fixture holds.
-rationale: docs/architecture.md § Model
+rationale: docs/policy/architecture.md § Model
 enforced-by: pending issue-12
 owner: repository maintainer
 ENTRY
@@ -3342,7 +3869,7 @@ inv_base
 inv_entry base-rule <<'ENTRY'
 id: repository/base-rule
 statement: The fixture holds.
-rationale: docs/architecture.md § Model
+rationale: docs/policy/architecture.md § Model
 enforced-by: pending #12
 ENTRY
 rm "$inv_repo/tool/probe" "$inv_repo/tests/probe.sh"
@@ -3353,7 +3880,7 @@ inv_base
 inv_entry base-rule <<'ENTRY'
 id: repository/base-rule
 statement: The fixture holds.
-rationale: docs/architecture.md § Model
+rationale: docs/policy/architecture.md § Model
 enforced-by: pending #12
 owner: repository maintainer
 ENTRY
@@ -3365,19 +3892,19 @@ inv_base
 inv_entry base-rule <<'ENTRY'
 id: repository/base-rule
 statement: The fixture holds.
-rationale: docs/architecture.md § Model
+rationale: docs/policy/architecture.md § Model
 enforced-by: manual the reviewer reads the diff
 owner: repository maintainer
 ENTRY
 rm "$inv_repo/tool/probe" "$inv_repo/tests/probe.sh"
 : >"$inv_repo/.exec"
-inv_expect_fail 'C5 manual not in the definition of done' 'C5 manual invariant is not listed in docs/definition-of-done.md'
+inv_expect_fail 'C5 manual not in the definition of done' 'C5 manual invariant is not listed in docs/policy/definition-of-done/repository.md'
 
 inv_base
 inv_entry base-rule <<'ENTRY'
 id: repository/base-rule
 statement: The fixture holds.
-rationale: docs/architecture.md § Model
+rationale: docs/policy/architecture.md § Model
 enforced-by: manual the reviewer reads the diff
 owner: repository maintainer
 ENTRY
@@ -3389,31 +3916,52 @@ rm "$inv_repo/tool/probe" "$inv_repo/tests/probe.sh"
 # own file.
 inv_dod_id=repository/base-rule
 printf -- '- [ ] read the diff (%s %s)\n' INV "$inv_dod_id" \
-  >>"$inv_repo/docs/definition-of-done.md"
+  >>"$inv_repo/docs/policy/definition-of-done/repository.md"
 inv_expect_pass 'a manual entry listed in the definition of done'
+
+# C5 reads the definition of done of the entry's own scope: a Unix-like
+# manual entry listed only in the repository file is not listed, and the same
+# line in the Unix-like file is.
+inv_base
+mkdir -p "$inv_repo/docs/policy/invariants/unixlike"
+cat >"$inv_repo/docs/policy/invariants/unixlike/scoped-rule.md" <<'ENTRY'
+id: unixlike/scoped-rule
+statement: The fixture holds in its own scope.
+rationale: docs/policy/architecture.md § Model
+enforced-by: manual the reviewer reads the diff
+owner: repository maintainer
+ENTRY
+inv_dod_id=unixlike/scoped-rule
+printf -- '- [ ] read the diff (%s %s)\n' INV "$inv_dod_id" \
+  >>"$inv_repo/docs/policy/definition-of-done/repository.md"
+inv_expect_fail 'C5 manual listed only in another scope' \
+  'C5 manual invariant is not listed in docs/policy/definition-of-done/unixlike.md'
+printf '# Definition of done: Unix-like\n\n- [ ] read the diff (%s %s)\n' INV "$inv_dod_id" \
+  >"$inv_repo/docs/policy/definition-of-done/unixlike.md"
+inv_expect_pass 'a manual entry listed in its own scope'
 
 inv_base
 inv_tag tests/orphan.sh repository/never-registered
 inv_expect_fail 'C8 orphan tag' 'C8 names unregistered invariant repository/never-registered'
 
 inv_base
-printf 'id: repository/stray\n' >"$inv_repo/invariants/stray.md"
-inv_expect_fail 'C1 misplaced file' 'invariants/stray.md: C1 not a registry path'
+printf 'id: repository/stray\n' >"$inv_repo/docs/policy/invariants/stray.md"
+inv_expect_fail 'C1 misplaced file' 'docs/policy/invariants/stray.md: C1 not a registry path'
 
 inv_base
-mkdir -p "$inv_repo/invariants/linux"
-cp "$inv_repo/invariants/repository/base-rule.md" "$inv_repo/invariants/linux/base-rule.md"
+mkdir -p "$inv_repo/docs/policy/invariants/linux"
+cp "$inv_repo/docs/policy/invariants/repository/base-rule.md" "$inv_repo/docs/policy/invariants/linux/base-rule.md"
 inv_expect_fail 'C1 unknown scope directory' "C1 unknown scope 'linux'"
 
 inv_base
-mkdir -p "$inv_repo/invariants/repository/nested"
-cp "$inv_repo/invariants/repository/base-rule.md" \
-  "$inv_repo/invariants/repository/nested/base-rule.md"
+mkdir -p "$inv_repo/docs/policy/invariants/repository/nested"
+cp "$inv_repo/docs/policy/invariants/repository/base-rule.md" \
+  "$inv_repo/docs/policy/invariants/repository/nested/base-rule.md"
 inv_expect_fail 'C1 nested entry' 'C1 not a registry path'
 
 inv_base
-cp "$inv_repo/invariants/repository/base-rule.md" \
-  "$inv_repo/invariants/repository/Base_Rule.md"
+cp "$inv_repo/docs/policy/invariants/repository/base-rule.md" \
+  "$inv_repo/docs/policy/invariants/repository/Base_Rule.md"
 inv_expect_fail 'C1 slug grammar' "C1 slug 'Base_Rule'"
 
 inv_base
@@ -3453,7 +4001,7 @@ inv_pester="$inv_repo/tests/Fixture.Tests.ps1"
 inv_entry base-rule <<'ENTRY'
 id: repository/base-rule
 statement: The fixture holds.
-rationale: docs/architecture.md § Model
+rationale: docs/policy/architecture.md § Model
 enforced-by: tool tool/probe
 enforced-by: fixture tests/probe.sh
 enforced-by: fixture tests/Fixture.Tests.ps1
@@ -3510,11 +4058,11 @@ fi
 # The pre-commit wiring, in the style of the hygiene hook fixture: a real hook
 # run with a stand-in checker returning each of the three states.
 inv_hook_root="$test_root/invariants-hook"
-mkdir -p "$inv_hook_root/tool" "$inv_hook_root/modules"
-mkdir -p "$inv_hook_root/tool/checks"
+mkdir -p "$inv_hook_root/tool" "$inv_hook_root/unixlike/modules"
+mkdir -p "$inv_hook_root/unixlike/tool/checks"
 for stub_check_name in format lint payloads; do
-  printf '#!/bin/sh\nexit 0\n' >"$inv_hook_root/tool/checks/$stub_check_name"
-  chmod +x "$inv_hook_root/tool/checks/$stub_check_name"
+  printf '#!/bin/sh\nexit 0\n' >"$inv_hook_root/unixlike/tool/checks/$stub_check_name"
+  chmod +x "$inv_hook_root/unixlike/tool/checks/$stub_check_name"
 done
 cp -R "$root/.githooks" "$inv_hook_root/.githooks"
 cp -R "$root/tool/version-control" "$inv_hook_root/tool/version-control"
@@ -3535,10 +4083,15 @@ git -C "$inv_hook_root" init -q -b dev
 git -C "$inv_hook_root" config user.name Fixture
 git -C "$inv_hook_root" config user.email fixture@example.invalid
 printf 'fixture\n' >"$inv_hook_root/file"
-git -C "$inv_hook_root" add file
+git -C "$inv_hook_root" add .
 git -C "$inv_hook_root" commit -q -m 'feat(repository): create invariants hook fixture'
-printf '_: {}\n' >"$inv_hook_root/modules/fixture.nix"
-git -C "$inv_hook_root" add modules/fixture.nix
+# INV repository/change-authoring-in-linked-worktree
+inv_hook_primary=$inv_hook_root
+inv_hook_root="$test_root/invariants-hook-linked"
+git -C "$inv_hook_primary" worktree add -q -b feature/repository-invariants-hook "$inv_hook_root"
+mkdir -p "$inv_hook_root/unixlike/modules"
+printf '_: {}\n' >"$inv_hook_root/unixlike/modules/fixture.nix"
+git -C "$inv_hook_root" add unixlike/modules/fixture.nix
 
 stub_invariants() {
   printf '#!/bin/sh\nexit %s\n' "$1" \
@@ -3576,7 +4129,7 @@ fi
 # INV repository/evidence-three-states
 # A selected check whose script this host cannot run is unverified, not
 # silently passed: the hook says so, and REQUIRE_NATIVE turns it into failure.
-rm "$inv_hook_root/tool/checks/format"
+rm "$inv_hook_root/unixlike/tool/checks/format"
 stub_invariants 0
 if ! inv_hook_output=$(run_inv_pre_commit); then
   printf '%s\n' "$inv_hook_output" >&2
@@ -3598,11 +4151,11 @@ if ! printf '%s\n' "$inv_hook_output" | grep -q 'format is unverified'; then
   echo "pre-commit did not fail the absent format check under REQUIRE_NATIVE" >&2
   exit 1
 fi
-printf '#!/bin/sh\nexit 0\n' >"$inv_hook_root/tool/checks/format"
-chmod +x "$inv_hook_root/tool/checks/format"
+printf '#!/bin/sh\nexit 0\n' >"$inv_hook_root/unixlike/tool/checks/format"
+chmod +x "$inv_hook_root/unixlike/tool/checks/format"
 
 # INV repository/hook-evidence-recorded
-inv_hook_log="$inv_hook_root/.git/hooks-evidence.log"
+inv_hook_log="$inv_hook_primary/.git/hooks-evidence.log"
 if [ ! -f "$inv_hook_log" ]; then
   echo "pre-commit recorded no hook evidence" >&2
   exit 1
@@ -3665,13 +4218,13 @@ prov_now=2026-09-05
 prov_new() {
   prov_seq=$((prov_seq + 1))
   prov_repo="$test_root/provisional-$prov_seq"
-  mkdir -p "$prov_repo/provisional/unixlike" "$prov_repo/docs/decisions" \
+  mkdir -p "$prov_repo/docs/provisional/unixlike" "$prov_repo/docs/policy/decisions" \
     "$prov_repo/modules"
   git -C "$prov_repo" init -q -b dev
   git -C "$prov_repo" config user.name Fixture
   git -C "$prov_repo" config user.email fixture@example.invalid
-  printf '# Provisional\n\ntext\n' >"$prov_repo/provisional/README.md"
-  printf '# Measure accepted\n\ntext\n' >"$prov_repo/docs/decisions/measure.md"
+  printf '# Provisional\n\ntext\n' >"$prov_repo/docs/provisional/README.md"
+  printf '# Measure accepted\n\ntext\n' >"$prov_repo/docs/policy/decisions/measure.md"
   # The watched path and the tagged measure are different files, so a case
   # that deletes the measure exercises P6 alone.
   printf '_: {}\n' >"$prov_repo/modules/upstream.nix"
@@ -3683,12 +4236,12 @@ prov_tag() {
   printf '_: {\n  # %s %s\n}\n' PROV "$2" >"$prov_repo/$1"
 }
 prov_entry() {
-  cat >"$prov_repo/provisional/$1.md"
+  cat >"$prov_repo/docs/provisional/$1.md"
 }
 # The base entry with one header line replaced, so a case about one key is
 # one line rather than another copy of the entry.
 prov_replace() {
-  prov_file="$prov_repo/provisional/unixlike/probe-measure.md"
+  prov_file="$prov_repo/docs/provisional/unixlike/probe-measure.md"
   awk -v key="$1" -v value="$2" '
     $0 ~ "^" key ": " { print key ": " value; next }
     { print }
@@ -3745,7 +4298,7 @@ exit-when: Upstream merges the change this patch anticipates.
 watch: modules/upstream.nix
 review-by: 2026-12-01
 issue: #175
-decision: docs/decisions/measure.md § Measure accepted
+decision: docs/policy/decisions/measure.md § Measure accepted
 owner: repository maintainer
 
 Body text.
@@ -3760,7 +4313,20 @@ prov_expect_pass 'a registered measure with a tag' '1 registered, 0 overdue' \
 prov_base
 rm "$prov_repo/modules/probe.nix"
 prov_expect_fail 'P6 entry without a tag' \
-  'P6 no tracked file outside provisional/ names unixlike/probe-measure' \
+  'P6 no tracked file outside docs/provisional/ names unixlike/probe-measure' \
+  --date "$prov_now"
+
+# P6 at the registry's own root: an entry that writes its tag in its own
+# prose, as a real entry does to show the form, is still a registration
+# nothing carries. The registry directory is excluded by the root the checker
+# reads, so the exclusion follows the registry wherever it lives.
+prov_base
+rm "$prov_repo/modules/probe.nix"
+prov_own_id=unixlike/probe-measure
+printf '\nThe tree carries it as `%s %s`.\n' PROV "$prov_own_id" \
+  >>"$prov_repo/docs/provisional/unixlike/probe-measure.md"
+prov_expect_fail 'P6 the entry does not carry its own tag' \
+  'P6 no tracked file outside docs/provisional/ names unixlike/probe-measure' \
   --date "$prov_now"
 
 # P7: a tagged line whose registration was deleted, or never written.
@@ -3783,19 +4349,19 @@ exit-when: The longer measure is retired.
 watch: modules/upstream.nix
 review-by: 2026-12-01
 issue: #175
-decision: docs/decisions/measure.md § Measure accepted
+decision: docs/policy/decisions/measure.md § Measure accepted
 owner: repository maintainer
 
 Body text.
 ENTRY
 prov_expect_fail 'P6 a longer slug does not tag a shorter one' \
-  'P6 no tracked file outside provisional/ names unixlike/probe' \
+  'P6 no tracked file outside docs/provisional/ names unixlike/probe' \
   --date "$prov_now"
 
 # P1, P3 and P5: the path, the kind and the decision pointer, one case each.
 prov_base
-cp "$prov_repo/provisional/unixlike/probe-measure.md" \
-  "$prov_repo/provisional/unixlike/Probe_Measure.md"
+cp "$prov_repo/docs/provisional/unixlike/probe-measure.md" \
+  "$prov_repo/docs/provisional/unixlike/Probe_Measure.md"
 prov_expect_fail 'P1 slug grammar' "P1 slug 'Probe_Measure'" --date "$prov_now"
 
 prov_base
@@ -3805,9 +4371,9 @@ prov_expect_fail 'P3 kind outside the three' \
   --date "$prov_now"
 
 prov_base
-prov_replace decision 'docs/decisions/measure.md § Nowhere'
+prov_replace decision 'docs/policy/decisions/measure.md § Nowhere'
 prov_expect_fail 'P5 decision heading missing' \
-  "P5 decision names no heading 'Nowhere' in docs/decisions/measure.md" \
+  "P5 decision names no heading 'Nowhere' in docs/policy/decisions/measure.md" \
   --date "$prov_now"
 
 # P4: a date with the right shape and no such day. Every arithmetic below
@@ -3828,7 +4394,7 @@ since: 2026-09-01
 exit-when: Upstream merges the change this patch anticipates.
 review-by: 2026-12-01
 issue: #175
-decision: docs/decisions/measure.md § Measure accepted
+decision: docs/policy/decisions/measure.md § Measure accepted
 
 Body text.
 ENTRY
@@ -3845,7 +4411,7 @@ since: 2026-09-01
 exit-when: Upstream merges the change this patch anticipates.
 review-by: 2027-06-01
 issue: #175
-decision: docs/decisions/measure.md § Measure accepted
+decision: docs/policy/decisions/measure.md § Measure accepted
 owner: repository maintainer
 
 Body text.
@@ -3863,7 +4429,7 @@ since: 2026-09-01
 exit-when: Upstream merges the change this patch anticipates.
 review-by: 2027-06-01
 issue: #175
-decision: docs/decisions/measure.md § Measure accepted
+decision: docs/policy/decisions/measure.md § Measure accepted
 owner: repository maintainer
 
 Body text.
@@ -3885,7 +4451,7 @@ since: 2026-03-01
 exit-when: Upstream merges the change this patch anticipates.
 review-by: 2026-08-01
 issue: #175
-decision: docs/decisions/measure.md § Measure accepted
+decision: docs/policy/decisions/measure.md § Measure accepted
 owner: repository maintainer
 
 Body text.
@@ -3909,7 +4475,7 @@ prov_expect_pass 'P8 an unselected scope list fails nothing' \
 # A tree with no registry at all is zero entries and passes: the registry
 # exists to be emptied.
 prov_base
-rm -r "$prov_repo/provisional" "$prov_repo/modules/probe.nix"
+rm -r "$prov_repo/docs/provisional" "$prov_repo/modules/probe.nix"
 prov_expect_pass 'an absent registry' '0 registered, 0 overdue' --date "$prov_now"
 
 prov_base
@@ -3955,8 +4521,56 @@ domain_reads="$root/tool/version-control/domain-reads"
 # second known read across the boundary, so its absence is asserted too.
 grep -q 'evidence_run "domain reads" tool/version-control/domain-reads' "$root/.githooks/pre-commit"
 grep -q 'run: tool/version-control/domain-reads' "$root/.github/workflows/ci.yml"
+for windows_ci_script in setup-dev.ps1 check-desired-state.ps1 test.ps1; do
+  if ! grep -Fq "windows/tool/$windows_ci_script" "$root/.github/scripts/windows-ci.ps1"; then
+    echo "Windows CI no longer invokes the $windows_ci_script implementation" >&2
+    exit 1
+  fi
+done
+windows_winget_next=$(grep -F -A1 '& winget.exe install --id Zellij.Zellij' "$root/.github/scripts/windows-ci.ps1" | sed -n '2p')
+if ! printf '%s\n' "$windows_winget_next" | grep -Fq 'if ($LASTEXITCODE -ne 0) { throw'; then
+  echo "Windows CI does not stop on Zellij installation failure" >&2
+  exit 1
+fi
 if grep -q 'Get-ChildItem -Recurse' "$root/.github/workflows/ci.yml"; then
-  echo "the CI workflow walks the checkout for PowerShell files; windows/tools/test.ps1 owns that parse" >&2
+  echo "the CI workflow walks the checkout for PowerShell files; the Windows test verb owns that parse" >&2
+  exit 1
+fi
+
+# INV repository/windows-ci-runtime-bound
+# Native fixtures run in the Windows job; these assertions hold selection
+# and the explicit controller, not native runtime evidence.
+windows_ci_workflow="$root/.github/workflows/ci.yml"
+windows_ci_module="$root/.github/scripts/WindowsCiRuntime.psm1"
+windows_ci_controller="$root/.github/scripts/windows-ci.ps1"
+# INV repository/local-gate-selects-by-effect
+# Native runtime inputs select Windows even alone. Unknown .github material
+# keeps repository ownership without acquiring a Windows runtime effect.
+for path in .github/scripts/WindowsCiRuntime.psm1 \
+  .github/scripts/assert-windows-ci-runtime.ps1 \
+  .github/scripts/prepare-windows-ci-runtime.ps1 \
+  .github/scripts/windows-ci.ps1 .github/tests/test-windows-ci-runtime.ps1; do
+  for status in M A D; do
+    expect_units 'repository:fixtures
+windows:suite' ci "$(printf '%s\t%s' "$status" "$path")"
+  done
+done
+expect_units 'repository:fixtures
+windows:suite' ci "$(printf 'R100\tdocs/fixture.md\t.github/tests/test-windows-ci-runtime.ps1')"
+expect_units 'repository:fixtures' ci "$(printf 'M\t.github/CODEOWNERS')"
+expect_units 'repository:fixtures' ci "$(printf 'M\t.github/scripts/unrelated.ps1')"
+for stage in commit push; do
+  expect_units 'repository:fixtures' "$stage" "$(printf 'M\t.github/scripts/WindowsCiRuntime.psm1')"
+  expect_units 'repository:fixtures' "$stage" "$(printf 'M\t.github/scripts/windows-ci.ps1')"
+  expect_units '' "$stage" "$(printf 'M\t.github/CODEOWNERS')"
+done
+grep -Fq 'CONFIGS_CI_PWSH: ${{ steps.runtime.outputs.pwsh }}' "$windows_ci_workflow"
+grep -Fq '& $env:CONFIGS_CI_PWSH -NoLogo -NoProfile -NonInteractive -File' "$windows_ci_workflow"
+grep -Fq '.github/tests/test-windows-ci-runtime.ps1' "$windows_ci_controller"
+grep -Fq 'Invoke-CiProcess -Executable $RuntimePath' "$windows_ci_controller"
+grep -Fq 'if ($LASTEXITCODE -ne 0) { throw' "$windows_ci_module"
+if grep -Eq 'pwsh +-NoProfile +-File .*windows' "$windows_ci_workflow"; then
+  echo 'Windows CI management reverted to the hosted-image runtime' >&2
   exit 1
 fi
 
@@ -3974,13 +4588,13 @@ printf '%s\n' "$domain_reads_output" | grep -q '^✓ domain reads: [1-9][0-9]* U
 
 domain_reads_fixture=$(mktemp -d)
 git -C "$domain_reads_fixture" init -q
-mkdir -p "$domain_reads_fixture/tool/checks" "$domain_reads_fixture/tool/darwin" \
-  "$domain_reads_fixture/windows/tools" "$domain_reads_fixture/modules"
-printf '#!/bin/sh\ncat windows/desired/manifest.json\n' >"$domain_reads_fixture/tool/checks/probe"
-printf '#!/bin/sh\ncat windows/desired/files/probe.json\n' >"$domain_reads_fixture/tool/darwin/probe"
-printf '_: {\n  home.file."probe".source = ../windows/desired/files/probe;\n}\n' >"$domain_reads_fixture/modules/probe.nix"
-printf '$fonts = Get-Content (Join-Path $root %s)\n' "'assets\\wezterm\\fonts.json'" >"$domain_reads_fixture/windows/tools/probe.ps1"
-printf 'Import-Module (Join-Path $root %s)\n' "'modules/flake/probe.nix'" >"$domain_reads_fixture/windows/tools/module.psm1"
+mkdir -p "$domain_reads_fixture/unixlike/tool/checks" "$domain_reads_fixture/unixlike/modules/programs/karabiner" \
+  "$domain_reads_fixture/windows/probe" "$domain_reads_fixture/unixlike/modules"
+printf '#!/bin/sh\ncat windows/desired/manifest.json\n' >"$domain_reads_fixture/unixlike/tool/checks/probe"
+printf '#!/bin/sh\ncat windows/desired/files/probe.json\n' >"$domain_reads_fixture/unixlike/modules/programs/karabiner/probe"
+printf '_: {\n  home.file."probe".source = ../windows/desired/files/probe;\n}\n' >"$domain_reads_fixture/unixlike/modules/probe.nix"
+printf '$fonts = Get-Content (Join-Path $root %s)\n' "'unixlike\\modules\\wezterm\\fonts.json'" >"$domain_reads_fixture/windows/probe/probe.ps1"
+printf 'Import-Module (Join-Path $root %s)\n' "'unixlike/modules/flake/probe.nix'" >"$domain_reads_fixture/windows/probe/module.psm1"
 git -C "$domain_reads_fixture" add -A
 if domain_reads_output=$(cd "$domain_reads_fixture" && "$domain_reads" 2>&1); then
   printf '%s\n' "$domain_reads_output" >&2
@@ -3988,11 +4602,11 @@ if domain_reads_output=$(cd "$domain_reads_fixture" && "$domain_reads" 2>&1); th
   exit 1
 fi
 for domain_reads_hit in \
-  'tool/checks/probe:2:' \
-  'tool/darwin/probe:2:' \
-  'modules/probe.nix:2:' \
-  'windows/tools/probe.ps1:1:' \
-  'windows/tools/module.psm1:1:'; do
+  'unixlike/tool/checks/probe:2:' \
+  'unixlike/modules/programs/karabiner/probe:2:' \
+  'unixlike/modules/probe.nix:2:' \
+  'windows/probe/probe.ps1:1:' \
+  'windows/probe/module.psm1:1:'; do
   printf '%s\n' "$domain_reads_output" | grep -qF "$domain_reads_hit" || {
     printf '%s\n' "$domain_reads_output" >&2
     echo "domain-reads did not name $domain_reads_hit" >&2
@@ -4003,10 +4617,10 @@ case "$domain_reads_fixture" in /tmp/*) rm -rf -- "$domain_reads_fixture" ;; esa
 
 domain_reads_fixture=$(mktemp -d)
 git -C "$domain_reads_fixture" init -q
-mkdir -p "$domain_reads_fixture/windows/src" "$domain_reads_fixture/windows/desired/files" "$domain_reads_fixture/modules"
-printf '# The Windows domain declares this terminal in windows/desired/files/terminal/settings.json.\n_: {\n  home.file."probe".text = "windows-terminal"; # not windows/\n}\n' >"$domain_reads_fixture/modules/probe.nix"
-printf '<#\n    .SYNOPSIS\n    Copied from assets/powershell/profile.ps1; see modules/powershell.nix and flake.nix.\n#>\n# tool/checks/payloads parses the Unix-like copy.\n$own = Join-Path $root %s <# not modules/ #>\nif ($args.Count -ne $#) { $x = ${#own} }\n' "'desired\\files\\profile.ps1'" >"$domain_reads_fixture/windows/src/probe.psm1"
-printf '$profile = %s\n' "'assets/powershell/profile.ps1'" >"$domain_reads_fixture/windows/desired/files/payload.ps1"
+mkdir -p "$domain_reads_fixture/windows/src" "$domain_reads_fixture/windows/desired/files" "$domain_reads_fixture/unixlike/modules"
+printf '# The Windows domain declares this terminal in windows/desired/files/terminal/settings.json.\n_: {\n  home.file."probe".text = "windows-terminal"; # not windows/\n}\n' >"$domain_reads_fixture/unixlike/modules/probe.nix"
+printf '<#\n    .SYNOPSIS\n    Copied from unixlike/modules/programs/powershell/profile.ps1; see its module and the flake.\n#>\n# unixlike/tool/checks/payloads parses the Unix-like copy.\n$own = Join-Path $root %s <# not unixlike/ #>\nif ($args.Count -ne $#) { $x = ${#own} }\n' "'desired\\files\\profile.ps1'" >"$domain_reads_fixture/windows/src/probe.psm1"
+printf '$profile = %s\n' "'unixlike/modules/programs/powershell/profile.ps1'" >"$domain_reads_fixture/windows/desired/files/payload.ps1"
 git -C "$domain_reads_fixture" add -A
 if ! domain_reads_output=$(cd "$domain_reads_fixture" && "$domain_reads" 2>&1); then
   printf '%s\n' "$domain_reads_output" >&2
@@ -4022,5 +4636,942 @@ if ! inv_real_output=$(cd "$root" && "$invariants" 2>&1); then
   echo "the repository's own invariant registry fails its coverage check" >&2
   exit 1
 fi
+
+# ---------------------------------------------------------------------------
+# Work documents do not authorize repository rules
+# ---------------------------------------------------------------------------
+#
+# INV repository/design-outside-authority
+# tool/version-control/design-citations scans the index for a work-item path
+# in authority-bearing material. The real repository is the positive case.
+# A fixture must refuse references from policy, procedures, hooks, CI and
+# domain code. Another must allow placement rules, slug templates, source
+# references in decision and provisional entries, candidate observations,
+# status evidence links, the document map and work-area format files.
+design_citations="$root/tool/version-control/design-citations"
+
+# Wired the way domain-reads is: every commit, and the repository-wide CI
+# scan job.
+grep -q 'evidence_run "design citations" tool/version-control/design-citations' "$root/.githooks/pre-commit"
+grep -q 'run: tool/version-control/design-citations' "$root/.github/workflows/ci.yml"
+
+if ! design_output=$(cd "$root" && "$design_citations" 2>&1); then
+  printf '%s\n' "$design_output" >&2
+  echo "the repository's own authority documents cite a work item" >&2
+  exit 1
+fi
+# A positive count, or a broken pathspec has retired the scan.
+printf '%s\n' "$design_output" | grep -q '^✓ design citations: [1-9][0-9]* tracked paths' || {
+  printf '%s\n' "$design_output" >&2
+  echo "design-citations did not report a positive count of scanned paths" >&2
+  exit 1
+}
+
+design_fixture=$(mktemp -d)
+git -C "$design_fixture" init -q
+mkdir -p "$design_fixture/docs/work" "$design_fixture/docs/policy/invariants/repository" \
+  "$design_fixture/tool/version-control"
+printf '# Restructure\n\nkind: study\n' >"$design_fixture/docs/work/restructure.md"
+printf 'The tree moves, as docs/work/restructure.md argues.\n' >"$design_fixture/docs/policy/architecture.md"
+printf 'id: repository/probe\nrationale: docs/work/restructure.md \302\247 Restructure\n' >"$design_fixture/docs/policy/invariants/repository/probe.md"
+printf '#!/bin/sh\n# Why this shape: docs/work/restructure.md.\nexit 0\n' >"$design_fixture/tool/version-control/probe"
+# A work item's path, in each place the rule names as carrying authority. The
+# last line also names the area's format contract, which does not excuse the
+# work item beside it.
+mkdir -p "$design_fixture/.githooks" "$design_fixture/.github/workflows" \
+  "$design_fixture/unixlike/modules" "$design_fixture/windows/src"
+printf 'Follow docs/work/unixlike/probe/spec.md.\n' >"$design_fixture/AGENTS.md"
+printf 'The steps are in docs/work/unixlike/probe/spec.md.\n' >"$design_fixture/CONTRIBUTING.md"
+printf '#!/bin/sh\n# docs/work/unixlike/probe/report.md says so.\n' >"$design_fixture/.githooks/pre-commit"
+printf '# see docs/work/repository/probe/spec.md\n' >"$design_fixture/.github/workflows/ci.yml"
+printf '# docs/work/unixlike/probe/spec.md decided this.\n_: { }\n' >"$design_fixture/unixlike/modules/probe.nix"
+printf '# docs/work/windows/probe/spec.md decided this.\n' >"$design_fixture/windows/src/Probe.psm1"
+printf 'The form is docs/work/README.md; the reason is docs/work/unixlike/probe/spec.md.\n' >"$design_fixture/README.md"
+git -C "$design_fixture" add -A
+if design_output=$(cd "$design_fixture" && "$design_citations" 2>&1); then
+  printf '%s\n' "$design_output" >&2
+  echo "design-citations accepted an authority document that cites a work item" >&2
+  exit 1
+fi
+for design_hit in \
+  'docs/policy/architecture.md:1:' \
+  'docs/policy/invariants/repository/probe.md:2:' \
+  'tool/version-control/probe:2:' \
+  'AGENTS.md:1:' \
+  'CONTRIBUTING.md:1:' \
+  '.githooks/pre-commit:2:' \
+  '.github/workflows/ci.yml:1:' \
+  'unixlike/modules/probe.nix:1:' \
+  'windows/src/Probe.psm1:1:' \
+  'README.md:1:'; do
+  printf '%s\n' "$design_output" | grep -qF "$design_hit" || {
+    printf '%s\n' "$design_output" >&2
+    echo "design-citations did not name $design_hit" >&2
+    exit 1
+  }
+done
+case "$design_fixture" in /tmp/*) rm -rf -- "$design_fixture" ;; esac
+
+design_fixture=$(mktemp -d)
+git -C "$design_fixture" init -q
+mkdir -p "$design_fixture/docs/work" "$design_fixture/docs/policy/decisions" \
+  "$design_fixture/docs/policy/candidates" "$design_fixture/docs/provisional/repository" \
+  "$design_fixture/tool/version-control"
+printf 'Arguments live in docs/work/, one file per document, docs/work/<slug>.md.\n' >"$design_fixture/CONTRIBUTING.md"
+printf 'source: docs/work/restructure.md \302\247 Restructure\n' >"$design_fixture/docs/policy/decisions/probe.md"
+printf 'target: docs/work/restructure.md\n' >"$design_fixture/docs/policy/candidates/probe.md"
+printf 'exit-when: docs/work/restructure.md is adopted\n' >"$design_fixture/docs/provisional/repository/probe.md"
+printf 'Superseded by docs/work/restructure.md.\n' >"$design_fixture/docs/work/older.md"
+printf '#!/bin/sh\n# docs/work/repository/*) echo repository ;;\n' >"$design_fixture/tool/version-control/classify"
+# Current state links the report behind it, the map of the tree may name an
+# item, and the area's own two files — the format contract and the order of
+# work — are named from anything, a policy file and a script included.
+mkdir -p "$design_fixture/docs/status" "$design_fixture/docs/policy/invariants/repository"
+printf 'Updated in place since docs/work/unixlike/probe/report.md closed.\n' >"$design_fixture/docs/status/unixlike.md"
+printf 'An example item is docs/work/unixlike/probe/spec.md.\n' >"$design_fixture/docs/README.md"
+printf 'The form is docs/work/README.md and the order is docs/work/roadmap.md.\n' >"$design_fixture/AGENTS.md"
+printf 'id: repository/probe\nstatement: docs/work/README.md is the format.\n' >"$design_fixture/docs/policy/invariants/repository/probe.md"
+printf '#!/bin/sh\necho "See docs/work/README.md and docs/work/roadmap.md." >&2\n' >"$design_fixture/tool/version-control/probe"
+printf 'production-map\texact\tdocs/work/repository/probe/spec.md\tprod-repository-policy\n' >"$design_fixture/tool/version-control/release-preview.rules"
+git -C "$design_fixture" add -A
+if ! design_output=$(cd "$design_fixture" && "$design_citations" 2>&1); then
+  printf '%s\n' "$design_output" >&2
+  echo "design-citations refused a placement rule, a slug template, an inlet's source, the classifier's path table, a status link, the tree map or the area's own files" >&2
+  exit 1
+fi
+for design_bad in '# authority: docs/work/repository/probe/spec.md' 'production-map	exact	docs/work/repository/probe/spec.md	prod-repository-policy	extra'; do
+  printf '%b\n' "$design_bad" >"$design_fixture/tool/version-control/release-preview.rules"
+  git -C "$design_fixture" add -A
+  if (cd "$design_fixture" && "$design_citations" >/dev/null 2>&1); then
+    echo "design-citations accepted authority or extra fields in a mapping table" >&2
+    exit 1
+  fi
+done
+case "$design_fixture" in /tmp/*) rm -rf -- "$design_fixture" ;; esac
+
+# INV repository/document-index-generated
+# tool/version-control/records refuses an area README that names one of the
+# area's documents, and prints the area's index from the headers. The real
+# repository is the positive case. A throwaway repository holds a decision
+# record the README lists (refused), then the same README without the row
+# (accepted, a slug template still in it), and a record nothing names, which
+# the table must list anyway.
+records="$root/tool/version-control/records"
+
+# Wired the way design-citations is: every commit, and the repository-wide
+# CI scan job.
+grep -q 'evidence_run records tool/version-control/records' "$root/.githooks/pre-commit"
+grep -q 'run: tool/version-control/records' "$root/.github/workflows/ci.yml"
+
+if ! records_output=$(cd "$root" && "$records" 2>&1); then
+  printf '%s\n' "$records_output" >&2
+  echo "the repository's own area READMEs keep a hand-maintained index" >&2
+  exit 1
+fi
+
+records_fixture=$(mktemp -d)
+git -C "$records_fixture" init -q
+mkdir -p "$records_fixture/docs/policy/decisions/unixlike"
+printf '# Records\n\nOne file per record, `<slug>.md`.\n\n| Record |\n|---|\n| listed-choice.md |\n' \
+  >"$records_fixture/docs/policy/decisions/README.md"
+printf '# A listed choice\n\ndate: 2026-01-02\nscope: unixlike\nstatus: accepted\n\ntext\n' \
+  >"$records_fixture/docs/policy/decisions/unixlike/listed-choice.md"
+printf '# An unlisted choice\n\ndate: 2026-01-03\nscope: unixlike\nstatus: accepted\n\ntext\n' \
+  >"$records_fixture/docs/policy/decisions/unixlike/unlisted-choice.md"
+git -C "$records_fixture" add -A
+if records_output=$(cd "$records_fixture" && "$records" 2>&1); then
+  printf '%s\n' "$records_output" >&2
+  echo "records accepted a README that lists its area's documents" >&2
+  exit 1
+fi
+printf '%s\n' "$records_output" | grep -qF 'docs/policy/decisions/README.md:7: listed-choice.md' || {
+  printf '%s\n' "$records_output" >&2
+  echo "records did not name the listing line" >&2
+  exit 1
+}
+printf '# Records\n\nOne file per record, `<slug>.md`.\n' \
+  >"$records_fixture/docs/policy/decisions/README.md"
+git -C "$records_fixture" add -A
+if ! records_output=$(cd "$records_fixture" && "$records" 2>&1); then
+  printf '%s\n' "$records_output" >&2
+  echo "records refused a README that states only its format" >&2
+  exit 1
+fi
+records_table=$(cd "$records_fixture" && "$records" --table decisions)
+printf '%s\n' "$records_table" | grep -qF '|  | 2026-01-03 | unixlike | accepted | An unlisted choice | docs/policy/decisions/unixlike/unlisted-choice.md |' || {
+  printf '%s\n' "$records_table" >&2
+  echo "records --table did not list a record nothing named" >&2
+  exit 1
+}
+if (cd "$records_fixture" && "$records" --table issues) >/dev/null 2>&1; then
+  echo "records accepted an unknown area" >&2
+  exit 1
+fi
+case "$records_fixture" in /tmp/*) rm -rf -- "$records_fixture" ;; esac
+
+# ---------------------------------------------------------------------------
+# A spec is paired with a report that answers it
+# ---------------------------------------------------------------------------
+#
+# INV repository/work-spec-has-report
+# tool/version-control/work reads the index for the work items under the work
+# area. The real repository is the positive case. Every rule is proved in both
+# directions in a throwaway repository: a valid pair and a carried study that
+# spans scopes pass; a spec without a report, a report without a spec, a
+# criterion with no row and a row with no criterion, a report that is done
+# while a criterion is not verified, a spec whose scope is not its
+# directory's or that lists two, and a criterion removed or rewritten after
+# its report existed are each refused, and the last is accepted once a new
+# dated amendment names the criterion.
+work_check="$root/tool/version-control/work"
+
+# Wired the way records is: every commit, against what the commit changes,
+# and the repository-wide CI scan job, against the range under test.
+grep -q 'evidence_run work tool/version-control/work --staged' "$root/.githooks/pre-commit"
+grep -q 'tool/version-control/work --range' "$root/.github/workflows/ci.yml"
+
+if ! work_output=$(cd "$root" && "$work_check" 2>&1); then
+  printf '%s\n' "$work_output" >&2
+  echo "work refused the repository's own work items" >&2
+  exit 1
+fi
+printf '%s\n' "$work_output" | grep -q '^✓ work: [1-9][0-9]* work items, [1-9][0-9]* specs' || {
+  printf '%s\n' "$work_output" >&2
+  echo "work did not report a positive count of work items and pairs" >&2
+  exit 1
+}
+
+work_seq=0
+work_new() {
+  work_seq=$((work_seq + 1))
+  work_repo="$test_root/work-$work_seq"
+  work_item="$work_repo/docs/work/unixlike/probe"
+  mkdir -p "$work_item"
+  git -C "$work_repo" init -q -b dev
+  git -C "$work_repo" config user.name Fixture
+  git -C "$work_repo" config user.email fixture@example.invalid
+  work_spec unixlike 'the output evaluates' 'evaluation, build'
+  work_report pending pending pending
+}
+
+# work_spec <scope lines, space separated> <AC1 text> <AC1 lanes>
+work_spec() {
+  {
+    printf '# Probe\n\nkind: spec\ndate: 2026-01-05\n'
+    for work_scope in $1; do printf 'scope: %s\n' "$work_scope"; done
+    printf 'status: approved\nreview-by: 2026-02-05\n\n## Acceptance\n\n'
+    printf '| ID | Criterion | Required lanes |\n| --- | --- | --- |\n'
+    printf '| AC1 | %s | %s |\n' "$2" "$3"
+    printf '| AC2 | the procedure is written down | review |\n'
+  } >"$work_item/spec.md"
+}
+
+# work_report <status> <AC1 state> <AC2 state>
+work_report() {
+  {
+    printf '# Report: probe\n\nkind: report\nspec: docs/work/unixlike/probe/spec.md\nstatus: %s\n\n' "$1"
+    printf '## Acceptance\n\n| ID | State | Evidence |\n| --- | --- | --- |\n'
+    for work_row in "AC1 $2" "AC2 $3"; do
+      case "$work_row" in
+        *verified) printf '| %s | verified | read at 0000000 |\n' "${work_row% *}" ;;
+        *) printf '| %s | %s | |\n' "${work_row% *}" "${work_row#* }" ;;
+      esac
+    done
+  } >"$work_item/report.md"
+}
+
+work_run() {
+  git -C "$work_repo" add -A
+  (cd "$work_repo" && "$work_check" "$@" 2>&1)
+}
+
+work_expect_pass() {
+  work_label=$1
+  shift
+  if ! work_output=$(work_run "$@"); then
+    printf '%s\n' "$work_output" >&2
+    echo "work refused a valid fixture: $work_label" >&2
+    exit 1
+  fi
+}
+
+work_expect_fail() {
+  work_label=$1
+  work_want=$2
+  shift 2
+  if work_output=$(work_run "$@"); then
+    printf '%s\n' "$work_output" >&2
+    echo "work accepted a violation: $work_label" >&2
+    exit 1
+  fi
+  if ! printf '%s\n' "$work_output" | grep -qF "$work_want"; then
+    printf '%s\n' "$work_output" >&2
+    echo "work did not name the violation: $work_label" >&2
+    exit 1
+  fi
+}
+
+worktree_run() {
+  (cd "$work_repo" && "$work_check" --working-tree docs/work/unixlike/probe 2>&1)
+}
+
+worktree_expect_fail() {
+  work_label=$1
+  work_want=$2
+  if work_output=$(worktree_run); then
+    printf '%s\n' "$work_output" >&2
+    echo "work accepted a working-tree violation: $work_label" >&2
+    exit 1
+  fi
+  if ! printf '%s\n' "$work_output" | grep -qF "$work_want"; then
+    printf '%s\n' "$work_output" >&2
+    echo "work did not name the working-tree violation: $work_label" >&2
+    exit 1
+  fi
+}
+
+# The local mode reads precisely one item, including untracked files, and
+# names that source. The default still reads the index alone.
+work_new
+work_output=$(worktree_run) || {
+  printf '%s\n' "$work_output" >&2
+  echo "work refused a valid untracked pair" >&2
+  exit 1
+}
+printf '%s\n' "$work_output" |
+  grep -qF '1 work items, 1 specs paired with a report (working tree: docs/work/unixlike/probe)' || {
+    printf '%s\n' "$work_output" >&2
+    echo "work did not identify the untracked item it checked" >&2
+    exit 1
+  }
+work_output=$(cd "$work_repo" && "$work_check")
+printf '%s\n' "$work_output" | grep -qF '0 work items, 0 specs paired with a report (index)' || {
+  printf '%s\n' "$work_output" >&2
+  echo "work did not identify that the untracked pair is absent from the index" >&2
+  exit 1
+}
+
+work_new
+rm "$work_item/report.md"
+worktree_expect_fail "an untracked spec without a report" 'spec.md: W2 has no report.md beside it'
+work_new
+work_spec unixlike 'the output evaluates' 'evaluation, vibes'
+worktree_expect_fail "an unknown lane in an untracked spec" 'W4 criterion AC1 names an unknown lane: vibes'
+work_new
+printf 'notes\n' >"$work_item/notes.md"
+worktree_expect_fail "an unexpected untracked file" 'notes.md: W1'
+work_new
+git -C "$work_repo" add -A
+work_spec unixlike 'the output evaluates' 'evaluation, vibes'
+worktree_expect_fail "an unstaged change to a tracked spec" 'W4 criterion AC1 names an unknown lane: vibes'
+work_output=$(cd "$work_repo" && "$work_check")
+printf '%s\n' "$work_output" | grep -qF '(index)' || {
+  printf '%s\n' "$work_output" >&2
+  echo "work did not keep the staged pair as the index subject" >&2
+  exit 1
+}
+
+work_new
+if work_output=$(cd "$work_repo" && "$work_check" --working-tree docs/work/unixlike/absent 2>&1); then
+  echo "work accepted a missing working-tree item" >&2
+  exit 1
+fi
+printf '%s\n' "$work_output" | grep -qF 'docs/work/unixlike/absent: no work files found in the working tree' || {
+  printf '%s\n' "$work_output" >&2
+  echo "work did not name the missing item" >&2
+  exit 1
+}
+if work_output=$(cd "$work_repo" && "$work_check" --working-tree docs/work/unixlike/../probe 2>&1); then
+  echo "work accepted a noncanonical working-tree path" >&2
+  exit 1
+fi
+printf '%s\n' "$work_output" | grep -qF 'invalid work item path:' || {
+  printf '%s\n' "$work_output" >&2
+  echo "work did not name the invalid path" >&2
+  exit 1
+}
+
+# The valid pair, with a carried study that spans two scopes beside the area's
+# own two files.
+work_new
+mkdir -p "$work_repo/docs/work/repository/older"
+printf '# Older\n\nkind: study\ndate: 2026-01-02\nscope: unixlike\nscope: repository\nstatus: closed\noutcome: #1\n\nProse.\n' \
+  >"$work_repo/docs/work/repository/older/study.md"
+printf '# Work\n' >"$work_repo/docs/work/README.md"
+printf '# Roadmap\n' >"$work_repo/docs/work/roadmap.md"
+work_expect_pass "a pending pair and a carried study with two scopes"
+printf '%s\n' "$work_output" | grep -qF '2 work items, 1 specs paired' || {
+  printf '%s\n' "$work_output" >&2
+  echo "work miscounted the fixture's work items" >&2
+  exit 1
+}
+
+# W1: a file that is no kind, and a file beside the item directories.
+work_new
+printf 'notes\n' >"$work_item/notes.md"
+work_expect_fail "a file that is no kind" 'docs/work/unixlike/probe/notes.md: W1'
+
+# W2, both directions.
+work_new
+rm "$work_item/report.md"
+work_expect_fail "a spec without a report" 'spec.md: W2 has no report.md beside it'
+work_new
+rm "$work_item/spec.md"
+work_expect_fail "a report without a spec" 'report.md: W2 has no spec.md beside it'
+
+# W3: the spec's one scope is its directory's.
+work_new
+work_spec windows 'the output evaluates' 'evaluation, build'
+work_expect_fail "a spec whose scope is not its directory's" 'W3 scope is windows, the directory names unixlike'
+work_new
+work_spec 'unixlike repository' 'the output evaluates' 'evaluation, build'
+work_expect_fail "a spec that lists two scopes" 'W3 needs exactly one scope'
+work_new
+sed 's/^review-by: .*/review-by: 2026-02-30/' "$work_item/spec.md" >"$work_item/spec.tmp"
+mv "$work_item/spec.tmp" "$work_item/spec.md"
+work_expect_fail "a review-by that is no calendar date" 'W3 review-by is not a real YYYY-MM-DD date'
+work_new
+sed 's#^spec: .*#spec: docs/work/unixlike/other/spec.md#' "$work_item/report.md" >"$work_item/report.tmp"
+mv "$work_item/report.tmp" "$work_item/report.md"
+work_expect_fail "a report that names another spec" 'W3 spec is docs/work/unixlike/other/spec.md'
+
+# W4: a lane outside the known set.
+work_new
+work_spec unixlike 'the output evaluates' 'evaluation, vibes'
+work_expect_fail "an unknown lane" 'W4 criterion AC1 names an unknown lane: vibes'
+
+# W5, both directions, and a verified row with nothing behind it.
+work_new
+sed '/^| AC2 /d' "$work_item/report.md" >"$work_item/report.tmp"
+mv "$work_item/report.tmp" "$work_item/report.md"
+work_expect_fail "a criterion with no report row" 'W5 criterion AC2 has no row'
+work_new
+printf '| AC3 | pending | |\n' >>"$work_item/report.md"
+work_expect_fail "a row with no criterion" 'W5 row AC3 answers no criterion of the spec'
+work_new
+printf '| AC2 | verified | |\n' >"$work_item/row.tmp"
+sed '/^| AC2 /d' "$work_item/report.md" >"$work_item/report.tmp"
+cat "$work_item/report.tmp" "$work_item/row.tmp" >"$work_item/report.md"
+rm "$work_item/report.tmp" "$work_item/row.tmp"
+work_expect_fail "a verified row with no evidence" 'W5 row AC2 is verified with no evidence'
+
+# W6: done follows from the rows, in both directions; an abandoned report
+# states what it did not meet.
+work_new
+work_report done verified pending
+work_expect_fail "done while a criterion is not verified" 'W6 is done while these rows are not verified: AC2'
+work_report done verified verified
+work_expect_pass "done with every criterion verified"
+work_report abandoned verified pending
+work_expect_fail "abandoned with a row still pending" 'W6 is abandoned while these rows are still pending'
+work_report abandoned verified unmet
+work_expect_pass "abandoned with the unmet criterion stated"
+work_report superseded verified unmet
+work_expect_fail "superseded naming no successor" 'W3 is superseded and names no tracked spec in superseded-by'
+
+# W7: the bar is set before the work. The pair is committed, then a criterion
+# is rewritten, removed, and finally amended.
+work_new
+work_run >/dev/null
+git -C "$work_repo" commit -q -m 'docs(unixlike): open the probe'
+work_base=$(git -C "$work_repo" rev-parse HEAD)
+work_expect_pass "an unchanged spec against its own commit" --staged
+work_spec unixlike 'the output evaluates on one system' 'evaluation, build'
+work_expect_fail "a criterion rewritten after its report existed" 'W7 criterion AC1 was rewritten' --staged
+work_spec unixlike 'the output evaluates' 'evaluation'
+work_expect_fail "a criterion's lanes weakened after its report existed" 'W7 criterion AC1 was rewritten' --staged
+sed '/^| AC2 /d' "$work_item/spec.md" >"$work_item/spec.tmp"
+mv "$work_item/spec.tmp" "$work_item/spec.md"
+sed '/^| AC2 /d' "$work_item/report.md" >"$work_item/report.tmp"
+mv "$work_item/report.tmp" "$work_item/report.md"
+work_expect_fail "a criterion removed after its report existed" 'W7 criterion AC2 was removed' --staged
+printf '\n## Amendments\n\nAmended 2026-01-20, AC1 and AC2. One system is enough, and the\nprocedure moved to another item.\n' \
+  >>"$work_item/spec.md"
+work_expect_pass "the same changes under a dated amendment naming both" --staged
+work_run >/dev/null
+git -C "$work_repo" commit -q -m 'docs(unixlike): amend the probe'
+work_expect_pass "the amended range" --range "$work_base" HEAD
+# An amendment that names another criterion does not cover this one, and one
+# the base already carried does not cover a later change.
+work_new
+work_run >/dev/null
+git -C "$work_repo" commit -q -m 'docs(unixlike): open the probe'
+work_spec unixlike 'the output evaluates on one system' 'evaluation, build'
+printf '\n## Amendments\n\nAmended 2026-01-20, AC2. Reworded.\n' >>"$work_item/spec.md"
+work_expect_fail "an amendment naming another criterion" 'W7 criterion AC1 was rewritten' --staged
+work_base=$(git -C "$work_repo" rev-parse HEAD)
+git -C "$work_repo" commit -q -m 'docs(unixlike): reword the probe'
+work_expect_fail "the same change as a range between commits" 'W7 criterion AC1 was rewritten' --range "$work_base" HEAD
+# A spec edited before any report existed is not held to it: the first commit
+# of the pair has no base.
+work_new
+work_expect_pass "a first commit" --staged
+
+# --overdue lists a spec past its review-by while its report is pending, and
+# not one whose report is terminal.
+work_new
+work_run >/dev/null
+work_overdue=$(cd "$work_repo" && "$work_check" --overdue --date 2026-03-01)
+printf '%s\n' "$work_overdue" | grep -qF 'docs/work/unixlike/probe/spec.md: review-by 2026-02-05 has passed' || {
+  printf '%s\n' "$work_overdue" >&2
+  echo "work --overdue did not list a spec past its review-by" >&2
+  exit 1
+}
+work_overdue=$(cd "$work_repo" && "$work_check" --overdue --date 2026-02-05)
+[ -z "$work_overdue" ] || {
+  printf '%s\n' "$work_overdue" >&2
+  echo "work --overdue listed a spec on its review-by date" >&2
+  exit 1
+}
+work_report done verified verified
+work_run >/dev/null
+work_overdue=$(cd "$work_repo" && "$work_check" --overdue --date 2026-03-01)
+[ -z "$work_overdue" ] || {
+  printf '%s\n' "$work_overdue" >&2
+  echo "work --overdue listed a spec whose report is done" >&2
+  exit 1
+}
+
+# ---------------------------------------------------------------------------
+# No closing keyword reaches dev or a promotion body
+# ---------------------------------------------------------------------------
+#
+# INV repository/no-closing-keyword
+# tool/version-control/closing-keywords owns the grammar. Every listed form —
+# nine keywords, with and without a colon, before `#<n>` and before
+# `<owner>/<repo>#<n>` — is refused in a subject and in a body by the real
+# commit-msg hook, in a commit of a range whose base is dev, and in a text
+# taken as a promotion's body. `Refs #<n>`, a keyword that does not stand
+# before the reference and a keyword that is the tail of a longer word are
+# accepted by all three. The same range is left unread when the base is
+# master, because dev carries commits from before the rule.
+closing_keywords="$root/tool/version-control/closing-keywords"
+
+# Wired three ways: the hook, the merge gate's scan job for every pull
+# request, and the promotion job for the body.
+grep -q 'tool/version-control/closing-keywords' "$root/.githooks/commit-msg"
+grep -q 'closing-keywords --range "$PR_BASE" "$PR_HEAD" --base-ref "$BASE_REF"' "$root/.github/workflows/ci.yml"
+grep -q 'closing-keywords --text "$RUNNER_TEMP/promotion-body"' "$root/.github/workflows/ci.yml"
+
+closing_repo="$test_root/closing-keywords"
+mkdir -p "$closing_repo"
+git -C "$closing_repo" init -q -b dev
+git -C "$closing_repo" config user.name Fixture
+git -C "$closing_repo" config user.email fixture@example.invalid
+git -C "$closing_repo" commit -q --allow-empty -m 'chore(repository): start'
+closing_base=$(git -C "$closing_repo" rev-parse HEAD)
+closing_file="$test_root/closing-keywords-message"
+
+# closing_refused <label> <message>: the hook, the text form and a range
+# based on dev each refuse it, and the range based on master leaves it unread.
+closing_refused() {
+  printf '%s\n' "$2" >"$closing_file"
+  if "$commit_msg" "$closing_file" >/dev/null 2>&1; then
+    echo "commit-msg accepted a closing keyword: $1" >&2
+    exit 1
+  fi
+  if "$closing_keywords" --text "$closing_file" >/dev/null 2>&1; then
+    echo "closing-keywords --text accepted a closing keyword: $1" >&2
+    exit 1
+  fi
+  git -C "$closing_repo" reset -q --hard "$closing_base"
+  git -C "$closing_repo" commit -q --allow-empty -F "$closing_file"
+  if (cd "$closing_repo" && "$closing_keywords" --range "$closing_base" HEAD --base-ref dev) >/dev/null 2>&1; then
+    echo "closing-keywords --range accepted a closing keyword on its way to dev: $1" >&2
+    exit 1
+  fi
+  if ! (cd "$closing_repo" && "$closing_keywords" --range "$closing_base" HEAD --base-ref master) >/dev/null 2>&1; then
+    echo "closing-keywords --range read a promotion's range: $1" >&2
+    exit 1
+  fi
+}
+
+closing_accepted() {
+  printf '%s\n' "$2" >"$closing_file"
+  "$commit_msg" "$closing_file" >/dev/null 2>&1 ||
+    { echo "commit-msg refused a message with no closing keyword: $1" >&2; exit 1; }
+  "$closing_keywords" --text "$closing_file" >/dev/null 2>&1 ||
+    { echo "closing-keywords --text refused a text with no closing keyword: $1" >&2; exit 1; }
+  git -C "$closing_repo" reset -q --hard "$closing_base"
+  git -C "$closing_repo" commit -q --allow-empty -F "$closing_file"
+  (cd "$closing_repo" && "$closing_keywords" --range "$closing_base" HEAD --base-ref dev) >/dev/null 2>&1 ||
+    { echo "closing-keywords --range refused a commit with no closing keyword: $1" >&2; exit 1; }
+}
+
+for closing_word in close closes closed fix fixes fixed resolve resolves resolved; do
+  for closing_colon in '' ':'; do
+    for closing_ref in '#12' 'owner/repo#12'; do
+      closing_form="$closing_word$closing_colon $closing_ref"
+      closing_refused "$closing_form in the body" \
+        "$(printf 'feat(repository): add a rule\n\nSome reason. This %s, as agreed.' "$closing_form")"
+    done
+  done
+done
+closing_refused "a keyword in the subject" 'feat(repository): add a rule, fixes #12'
+closing_refused "a capitalised keyword at the start of a line" \
+  "$(printf 'feat(repository): add a rule\n\nCloses #12')"
+closing_refused "an upper-case keyword" "$(printf 'feat(repository): add a rule\n\nRESOLVES: #12')"
+closing_refused "a keyword in a merge Git subjects itself" \
+  "$(printf "Merge branch 'dev' into feature/x\n\nfixes #12")"
+
+closing_accepted "Refs" "$(printf 'feat(repository): add a rule\n\nRefs #12')"
+closing_accepted "a keyword that does not stand before the reference" \
+  "$(printf 'feat(repository): add a rule\n\nThis fixes the regression #12 described.')"
+closing_accepted "a keyword that is the tail of a longer word" \
+  "$(printf 'feat(repository): add a rule\n\nThe prefix #12 is kept, and so is unresolved #13.')"
+closing_accepted "a conventional fix subject that names an issue" 'fix(repository): stop the gate reading #12 twice'
+
+# What Git shows in the editor is not the message: a comment line and the
+# diff below the scissors line of `git commit -v` are not read by the hook.
+printf 'feat(repository): add a rule\n\nRefs #12\n# fixes #13 in a comment\n# ------------------------ >8 ------------------------\n+fixes #14 in the diff\n' >"$closing_file"
+"$commit_msg" "$closing_file" >/dev/null 2>&1 ||
+  { echo "commit-msg read a comment line or the diff below the scissors line" >&2; exit 1; }
+# The text form takes every line as it stands.
+if "$closing_keywords" --text "$closing_file" >/dev/null 2>&1; then
+  echo "closing-keywords --text skipped a line of a promotion body" >&2
+  exit 1
+fi
+
+# A range names the commit and the line, and reads every commit in it.
+git -C "$closing_repo" reset -q --hard "$closing_base"
+git -C "$closing_repo" commit -q --allow-empty -m 'feat(repository): first' -m 'Refs #12'
+git -C "$closing_repo" commit -q --allow-empty -m 'feat(repository): second' -m 'Fixes #13'
+closing_bad=$(git -C "$closing_repo" rev-parse --short HEAD)
+git -C "$closing_repo" commit -q --allow-empty -m 'feat(repository): third'
+if closing_output=$(cd "$closing_repo" && "$closing_keywords" --range "$closing_base" HEAD --base-ref dev 2>&1); then
+  printf '%s\n' "$closing_output" >&2
+  echo "closing-keywords --range missed a keyword in the middle of a range" >&2
+  exit 1
+fi
+printf '%s\n' "$closing_output" | grep -qF "$closing_bad:3:Fixes #13" || {
+  printf '%s\n' "$closing_output" >&2
+  echo "closing-keywords --range did not name the commit and the line" >&2
+  exit 1
+}
+git -C "$closing_repo" reset -q --hard "$closing_base"
+git -C "$closing_repo" commit -q --allow-empty -m 'feat(repository): first' -m 'Refs #12'
+git -C "$closing_repo" commit -q --allow-empty -m 'feat(repository): second'
+closing_output=$(cd "$closing_repo" && "$closing_keywords" --range "$closing_base" HEAD --base-ref dev)
+printf '%s\n' "$closing_output" | grep -qF '2 commit messages carry none' || {
+  printf '%s\n' "$closing_output" >&2
+  echo "closing-keywords --range did not count the commits it read" >&2
+  exit 1
+}
+if (cd "$closing_repo" && "$closing_keywords" --range 0000000000000000000000000000000000000000 HEAD --base-ref dev) >/dev/null 2>&1; then
+  echo "closing-keywords --range passed a base that is no commit" >&2
+  exit 1
+fi
+
+# ---------------------------------------------------------------------------
+# An execution issue closes from its report
+# ---------------------------------------------------------------------------
+#
+# INV repository/issue-closes-from-report
+# tool/version-control/close-issues is what the closure workflow runs on a
+# push to dev. A stand-in gh on PATH records every call and answers an issue's
+# state. Between two commits, the report that became done closes its issue as
+# completed and the one that stayed pending closes nothing; an abandoned one
+# closes as not planned; a report that was already terminal at the base, a
+# spec that names no issue, and a tree the work check refuses close nothing.
+# The same stand-in proves the two audit readings: `work --unclosed`, which
+# tool/version-control/audit-remote reports, lists a terminal report whose
+# issue is open and not one whose issue is closed, and
+# tool/version-control/audit warns about a spec past its review-by.
+close_issues="$root/tool/version-control/close-issues"
+
+grep -q 'run: tool/version-control/close-issues "$PUSH_BASE" "$PUSH_HEAD"' "$root/.github/workflows/work-closure.yml"
+grep -q 'issues: write' "$root/.github/workflows/work-closure.yml"
+grep -q 'contents: read' "$root/.github/workflows/work-closure.yml"
+grep -q '"$audit_tools/work" --unclosed' "$root/tool/version-control/audit-remote"
+grep -q '"$audit_tools/work" --overdue' "$root/tool/version-control/audit"
+
+closure_stub="$test_root/closure-gh"
+closure_log="$test_root/closure-gh.log"
+mkdir -p "$closure_stub"
+cat >"$closure_stub/gh" <<'STUB'
+#!/bin/sh
+printf '%s\n' "$*" >>"$CLOSURE_LOG"
+case "$1 $2" in
+  "issue view") case "$3" in 7) echo OPEN ;; *) echo CLOSED ;; esac ;;
+esac
+STUB
+chmod +x "$closure_stub/gh"
+
+closure_run() {
+  : >"$closure_log"
+  (cd "$work_repo" && PATH="$closure_stub:$PATH" CLOSURE_LOG="$closure_log" \
+    GITHUB_REPOSITORY=owner/repo "$close_issues" "$@" 2>&1)
+}
+
+# closure_issue <item directory> <n>: the spec names its execution issue.
+closure_issue() {
+  sed "s/^review-by: .*/&\\
+issue: #$2/" "$1/spec.md" >"$1/spec.tmp"
+  mv "$1/spec.tmp" "$1/spec.md"
+}
+
+# Two items, both pending: probe (#7) and other (#8).
+work_new
+closure_issue "$work_item" 7
+closure_probe=$work_item
+closure_other="$work_repo/docs/work/unixlike/other"
+mkdir -p "$closure_other"
+sed 's/^# Probe/# Other/' "$closure_probe/spec.md" | sed 's/^issue: #7/issue: #8/' >"$closure_other/spec.md"
+sed 's#unixlike/probe/#unixlike/other/#' "$closure_probe/report.md" >"$closure_other/report.md"
+work_run >/dev/null
+git -C "$work_repo" commit -q -m 'docs(unixlike): open two items'
+closure_base=$(git -C "$work_repo" rev-parse HEAD)
+
+# probe becomes done; other stays pending.
+work_item=$closure_probe
+work_report done verified verified
+work_run >/dev/null
+git -C "$work_repo" commit -q -m 'docs(unixlike): end the probe'
+closure_done=$(git -C "$work_repo" rev-parse HEAD)
+
+closure_listing=$(cd "$work_repo" && "$work_check" --became-terminal "$closure_base" "$closure_done")
+[ "$closure_listing" = '#7 done docs/work/unixlike/probe/report.md' ] || {
+  printf '%s\n' "$closure_listing" >&2
+  echo "work --became-terminal did not list exactly the report that became done" >&2
+  exit 1
+}
+closure_output=$(closure_run "$closure_base" "$closure_done") || {
+  printf '%s\n' "$closure_output" >&2
+  echo "close-issues failed on a report that became done" >&2
+  exit 1
+}
+grep -qF "issue close 7 --repo owner/repo --reason completed --comment" "$closure_log" &&
+  grep -qF "https://github.com/owner/repo/blob/$closure_done/docs/work/unixlike/probe/report.md" "$closure_log" || {
+  cat "$closure_log" >&2
+  echo "close-issues did not close the done report's issue as completed with a link to the report" >&2
+  exit 1
+}
+if grep -q 'issue close 8' "$closure_log"; then
+  cat "$closure_log" >&2
+  echo "close-issues closed an issue whose report is still pending" >&2
+  exit 1
+fi
+
+# The same report, already terminal at the base, closes nothing again, and
+# --dry-run performs no close.
+closure_run "$closure_done" "$closure_done" >/dev/null
+if grep -q 'issue close' "$closure_log"; then
+  cat "$closure_log" >&2
+  echo "close-issues closed an issue whose report was already terminal at the base" >&2
+  exit 1
+fi
+closure_output=$(closure_run --dry-run "$closure_base" "$closure_done")
+printf '%s\n' "$closure_output" | grep -qF 'would close #7 as completed' || {
+  printf '%s\n' "$closure_output" >&2
+  echo "close-issues --dry-run did not print the close" >&2
+  exit 1
+}
+if grep -q 'issue close' "$closure_log"; then
+  echo "close-issues --dry-run performed a close" >&2
+  exit 1
+fi
+
+# The zero id of a first push holds no report: everything terminal is listed.
+closure_listing=$(cd "$work_repo" && "$work_check" --became-terminal 0000000000000000000000000000000000000000 "$closure_done")
+[ "$closure_listing" = '#7 done docs/work/unixlike/probe/report.md' ] || {
+  echo "work --became-terminal did not read a first push" >&2
+  exit 1
+}
+
+# The remote reading: #7 is open while its report is done; #8's report is
+# pending, so it is not listed whatever the remote says.
+closure_unclosed=$(cd "$work_repo" && PATH="$closure_stub:$PATH" CLOSURE_LOG="$closure_log" "$work_check" --unclosed)
+[ "$closure_unclosed" = '#7 done docs/work/unixlike/probe/report.md' ] || {
+  printf '%s\n' "$closure_unclosed" >&2
+  echo "work --unclosed did not list the terminal report whose issue is open" >&2
+  exit 1
+}
+
+# other is abandoned: closed as not planned. Its issue then reads closed, so
+# --unclosed still lists only #7.
+work_item=$closure_other
+{
+  printf '# Report: other\n\nkind: report\nspec: docs/work/unixlike/other/spec.md\nstatus: abandoned\n\n'
+  printf '## Acceptance\n\n| ID | State | Evidence |\n| --- | --- | --- |\n'
+  printf '| AC1 | verified | read at 0000000 |\n| AC2 | unmet | |\n'
+} >"$work_item/report.md"
+work_run >/dev/null
+git -C "$work_repo" commit -q -m 'docs(unixlike): abandon the other'
+closure_abandoned=$(git -C "$work_repo" rev-parse HEAD)
+closure_run "$closure_done" "$closure_abandoned" >/dev/null
+grep -qF 'issue close 8 --repo owner/repo --reason not planned --comment' "$closure_log" || {
+  cat "$closure_log" >&2
+  echo "close-issues did not close an abandoned report's issue as not planned" >&2
+  exit 1
+}
+if grep -q 'issue close 7' "$closure_log"; then
+  echo "close-issues closed the earlier report's issue a second time" >&2
+  exit 1
+fi
+closure_unclosed=$(cd "$work_repo" && PATH="$closure_stub:$PATH" CLOSURE_LOG="$closure_log" "$work_check" --unclosed)
+[ "$closure_unclosed" = '#7 done docs/work/unixlike/probe/report.md' ] || {
+  printf '%s\n' "$closure_unclosed" >&2
+  echo "work --unclosed listed a terminal report whose issue is closed" >&2
+  exit 1
+}
+
+# A done report whose spec names no issue closes nothing.
+work_new
+work_run >/dev/null
+git -C "$work_repo" commit -q -m 'docs(unixlike): open the probe'
+closure_base=$(git -C "$work_repo" rev-parse HEAD)
+work_report done verified verified
+work_run >/dev/null
+git -C "$work_repo" commit -q -m 'docs(unixlike): end the probe'
+closure_run "$closure_base" HEAD >/dev/null
+if grep -q 'issue close' "$closure_log"; then
+  echo "close-issues closed something for a spec that names no issue" >&2
+  exit 1
+fi
+
+# A report that says done while a criterion is pending is refused by the work
+# check, and nothing is closed.
+work_new
+closure_issue "$work_item" 7
+work_run >/dev/null
+git -C "$work_repo" commit -q -m 'docs(unixlike): open the probe'
+closure_base=$(git -C "$work_repo" rev-parse HEAD)
+work_report done verified pending
+git -C "$work_repo" add -A
+git -C "$work_repo" commit -q -m 'docs(unixlike): end the probe early'
+if closure_output=$(closure_run "$closure_base" HEAD); then
+  printf '%s\n' "$closure_output" >&2
+  echo "close-issues ran on a tree the work check refuses" >&2
+  exit 1
+fi
+if grep -q 'issue close' "$closure_log"; then
+  echo "close-issues closed an issue from a report the work check refuses" >&2
+  exit 1
+fi
+
+# The audit warns about a spec past its review-by whose report is pending, and
+# says so when there is none. The clone has origin/dev and origin/master, so
+# the audit can answer.
+closure_audit="$test_root/closure-audit"
+git clone -q "$audit_bare" "$closure_audit"
+git -C "$closure_audit" config user.name Fixture
+git -C "$closure_audit" config user.email fixture@example.invalid
+git -C "$closure_audit" config core.hooksPath .githooks
+mkdir -p "$closure_audit/.githooks"
+closure_audit_output=$(cd "$closure_audit" && "$audit" 2>&1) || true
+printf '%s\n' "$closure_audit_output" | grep -qF 'ok: no spec is past its review-by with a pending report' || {
+  printf '%s\n' "$closure_audit_output" >&2
+  echo "audit did not report that no spec is overdue" >&2
+  exit 1
+}
+mkdir -p "$closure_audit/docs/work/unixlike"
+cp -R "$work_repo/docs/work/unixlike/probe" "$closure_audit/docs/work/unixlike/probe"
+work_item="$closure_audit/docs/work/unixlike/probe"
+work_report pending pending pending
+git -C "$closure_audit" add -A
+closure_audit_output=$(cd "$closure_audit" && "$audit" 2>&1) || true
+printf '%s\n' "$closure_audit_output" | grep -qF 'warning: overdue spec: docs/work/unixlike/probe/spec.md: review-by 2026-02-05 has passed' || {
+  printf '%s\n' "$closure_audit_output" >&2
+  echo "audit did not warn about a spec past its review-by" >&2
+  exit 1
+}
+
+# ---------------------------------------------------------------------------
+# A source commit belongs to a linked worktree
+# ---------------------------------------------------------------------------
+# INV repository/change-authoring-in-linked-worktree
+authoring_root="$test_root/authoring-primary"
+authoring_linked="$test_root/authoring-linked"
+mkdir -p "$authoring_root/tool/version-control" "$authoring_root/.githooks"
+git -C "$authoring_root" init -q -b dev
+git -C "$authoring_root" config user.name Fixture
+git -C "$authoring_root" config user.email fixture@example.invalid
+cp "$root/tool/version-control/require-linked-worktree" "$authoring_root/tool/version-control/require-linked-worktree"
+cp "$root/tool/version-control/commit" "$authoring_root/tool/version-control/commit"
+cp "$root/.githooks/evidence" "$authoring_root/.githooks/evidence"
+chmod +x "$authoring_root/tool/version-control/require-linked-worktree" "$authoring_root/tool/version-control/commit"
+printf 'fixture\n' >"$authoring_root/source"
+git -C "$authoring_root" add source
+git -C "$authoring_root" -c core.hooksPath=/dev/null commit -q -m 'feat(repository): create authoring fixture'
+git -C "$authoring_root" worktree add -q -b feature/repository-authoring "$authoring_linked"
+
+if authoring_output=$(cd "$authoring_root" && "$root/tool/version-control/require-linked-worktree" 2>&1); then
+  echo "the primary checkout passed the linked-worktree guard" >&2
+  exit 1
+fi
+printf '%s\n' "$authoring_output" | grep -qF 'INV repository/change-authoring-in-linked-worktree' || {
+  printf '%s\n' "$authoring_output" >&2
+  echo "the guard did not name the primary-checkout violation" >&2
+  exit 1
+}
+(cd "$authoring_linked" && "$root/tool/version-control/require-linked-worktree") || {
+  echo "the linked worktree failed the authoring guard" >&2
+  exit 1
+}
+if authoring_output=$(cd "$authoring_root" && "$root/.githooks/pre-commit" 2>&1); then
+  echo "pre-commit accepted the primary checkout" >&2
+  exit 1
+fi
+printf '%s\n' "$authoring_output" | grep -qF 'INV repository/change-authoring-in-linked-worktree' || {
+  printf '%s\n' "$authoring_output" >&2
+  echo "pre-commit did not invoke the worktree guard first" >&2
+  exit 1
+}
+if ! (cd "$authoring_root" && tool/version-control/commit --help >/dev/null); then
+  echo "the primary checkout could not read helper help" >&2
+  exit 1
+fi
+if ! (cd "$authoring_root" && tool/version-control/commit prune >/dev/null); then
+  echo "the primary checkout could not run standalone branch maintenance" >&2
+  exit 1
+fi
+if authoring_output=$(cd "$authoring_root" && tool/version-control/commit --dry-run brew add fixture 2>&1); then
+  echo "the commit helper accepted the primary checkout" >&2
+  exit 1
+fi
+printf '%s\n' "$authoring_output" | grep -qF 'INV repository/change-authoring-in-linked-worktree' || {
+  printf '%s\n' "$authoring_output" >&2
+  echo "the commit helper did not refuse before editing" >&2
+  exit 1
+}
+
+# A linked caller must create siblings of the primary checkout, and removal
+# follows the topic branch even for a user-pinned worktree with another name.
+cp "$root/tool/worktree.sh" "$authoring_root/tool/worktree.sh"
+chmod +x "$authoring_root/tool/worktree.sh"
+authoring_remote="$test_root/authoring-remote.git"
+git init -q --bare "$authoring_remote"
+git -C "$authoring_root" remote add origin "$authoring_remote"
+git -C "$authoring_root" push -q origin dev
+(cd "$authoring_linked" && "$authoring_root/tool/worktree.sh" new repository-from-linked feature >/dev/null)
+authoring_sibling="$test_root/authoring-primary-wt/feature-repository-from-linked"
+[ -d "$authoring_sibling" ] || {
+  echo "the linked caller did not create a sibling of the primary checkout" >&2
+  exit 1
+}
+authoring_pinned="$test_root/pinned-base"
+git -C "$authoring_root" worktree add -q -b fix/repository-pinned "$authoring_pinned" HEAD
+(cd "$authoring_linked" && "$authoring_root/tool/worktree.sh" done repository-pinned >/dev/null)
+[ ! -e "$authoring_pinned" ] || {
+  echo "worktree done did not find the topic branch at its pinned path" >&2
+  exit 1
+}
+
+# INV repository/worker-checkpoint
+"$root/tool/version-control/session-test"
+
+# INV repository/release-preview-read-only
+"$root/tool/version-control/test-release-preview"
+
+# INV repository/production-release-qualification
+"$root/tool/version-control/test-production-release"
+
+# INV repository/release-control-preview-only
+"$root/tool/version-control/test-release-control"
+
+# INV repository/authenticated-release-transport
+"$root/tool/version-control/test-release-transport"
+# INV repository/operating-credential-qualification
+"$root/tool/version-control/test-release-credential-check"
 
 echo "version-control fixtures passed"

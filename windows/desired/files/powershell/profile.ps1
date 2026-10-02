@@ -37,4 +37,19 @@ if (
             Set-PSReadLineKeyHandler -Chord Ctrl+r -Function ReverseSearchHistory
         }
     }
+
+    # A bare `zellij` starts config.kdl's `session_name` with
+    # `attach_to_session`, which zellij 0.45.1 resolves against live sessions
+    # only: an exited `win-env` is not resurrected but replaced by a new
+    # session of the same name. `attach --create` resurrects before it
+    # creates, as the Windows Terminal profile already does. Defined at this
+    # scope rather than inside the block above so the dot-sourced profile
+    # leaves it in the session.
+    function zellij {
+        if ($args.Count -eq 0) {
+            & zellij.exe attach --create win-env
+        } else {
+            & zellij.exe @args
+        }
+    }
 }

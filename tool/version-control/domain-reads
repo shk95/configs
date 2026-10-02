@@ -5,24 +5,29 @@
 #
 # Each configuration domain must be authorable and checkable on its own host,
 # so a Unix-like check that opens a file under windows/ or a Windows script
-# that opens a file under assets/ or modules/ makes one domain's evidence
-# depend on the other's tree. The two known cases were exactly that: the
-# Windows suite byte-compared assets/wezterm/fonts.json, and the merge-gate
-# job parsed every PowerShell file in the checkout. Similarity between copies
-# is never a failure; a read across the boundary is.
+# that opens a file under the Unix-like module tree makes one domain's
+# evidence depend on the other's tree. The two known cases were exactly
+# that: the Windows suite byte-compared a Unix-like WezTerm font payload, and the
+# merge-gate job parsed every PowerShell file in the checkout. Similarity
+# between copies is never a failure; a read across the boundary is.
 #
 # A read is a path in code, so the scan looks at code and not prose: line
 # comments (`#`) and PowerShell block comments (`<# … #>`) are stripped before
 # the patterns are applied, which is what lets a Nix module say "the Windows
 # domain declares this terminal" and a Windows script cite a Nix file for the
-# reader. Payload trees are not scanned; a payload is data and reads nothing.
+# reader. Windows desired payload files are not scanned; they are data and
+# read nothing. Unix-like colocated payloads remain in the scanned tree.
 #
-#   Unix-like code   flake.nix, Justfile, .envrc, modules/, tool/checks/,
-#                    tool/darwin/
+#   Unix-like code   unixlike/, plus .envrc and the Justfile at the root
 #                    must not name  windows/
 #   Windows code     windows/ *.ps1 and *.psm1, outside windows/desired/files
-#                    must not name  assets/  modules/  flake.nix  flake.lock
-#                                   tool/checks
+#                    must not name  unixlike/
+#
+# The Unix-like side no longer excludes a payload tree, because there is no
+# longer a tree that holds payloads and nothing else: each payload sits beside
+# the module that delivers it. Scanning them is stricter than the rule needs
+# and costs nothing today; a payload that legitimately names the other tree is
+# the first reason to narrow this again.
 #
 # Three limits are accepted and are what a reviewer reads for by hand: a path
 # assembled from pieces at run time is not a literal and passes; a `#` after
@@ -38,7 +43,7 @@
 # usage: tool/version-control/domain-reads
 #
 # Exit 0 verified, 69 unverified, any other status failed. See
-# docs/architecture.md, "Repository governance plane", and .githooks/evidence,
+# docs/policy/architecture.md, "Repository governance plane", and .githooks/evidence,
 # which is the one place that decides what each means.
 
 set -eu
@@ -50,8 +55,8 @@ MSYS2_ARG_CONV_EXCL='*'
 export MSYS_NO_PATHCONV MSYS2_ARG_CONV_EXCL
 
 # The three-state prerequisite contract, restated rather than sourced from
-# tool/checks/prerequisite for the reason tool/version-control/hygiene gives:
-# a repository check must not depend on a domain's plane.
+# unixlike/tool/checks/prerequisite for the reason tool/version-control/hygiene
+# gives: a repository check must not depend on a domain's plane.
 require_command() {
   require_missing=
   for require_name in "$@"; do
@@ -150,16 +155,14 @@ scan() {
 # `$root/windows/` and `..\assets\` are what they look like.
 open='(^|[^A-Za-z0-9_-])'
 
-scan 'Unix-like' "${open}windows[/\\\\]" \
-  flake.nix Justfile .envrc 'modules/*' 'tool/checks/*' 'tool/darwin/*'
+scan 'Unix-like' "${open}windows[/\\\\]" Justfile .envrc 'unixlike/*'
 unixlike_count=$count
-scan Windows \
-  "${open}(assets|modules)[/\\\\]|${open}flake\\.(nix|lock)([^A-Za-z0-9_]|\$)|${open}tool[/\\\\]checks" \
+scan Windows "${open}unixlike[/\\\\]" \
   'windows/*.ps1' 'windows/*.psm1' ':(exclude)windows/desired/files'
 windows_count=$count
 
 if [ "$status" -ne 0 ]; then
-  echo "  See invariants/repository/no-cross-domain-dependency.md: copy what the other domain" >&2
+  echo "  See docs/policy/invariants/repository/no-cross-domain-dependency.md: copy what the other domain" >&2
   echo "  owns into this one instead of reading it there." >&2
   exit 1
 fi

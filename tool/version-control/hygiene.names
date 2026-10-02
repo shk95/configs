@@ -1,0 +1,21 @@
+# Names admitted in current provider fixtures and independently owned desired state.
+25.11
+26.05
+26.11
+aarch64-darwin
+aarch64-linux
+agents
+desktop
+example
+fixture-desktop
+fixture-mac
+fixture-orbstack
+fixture-utm
+fixture-vm
+fixture-wsl
+orbstack
+utm
+vm
+vmware
+wsl
+x86_64-linux

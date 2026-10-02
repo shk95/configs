@@ -4,11 +4,36 @@ default:
 
 [private]
 _home-target:
-    @nix eval --raw path:.#homeConfigurations --apply 'configs: let names = builtins.attrNames configs; in assert builtins.length names == 1; builtins.head names'
+    @echo 'This flake exports synthetic fixtures only. Use the host flake in configs-hosts.' >&2; exit 1
 
 [private]
 _darwin-target:
-    @nix eval --raw path:.#darwinConfigurations --apply 'configs: let names = builtins.attrNames configs; in assert builtins.length names == 1; builtins.head names'
+    @echo 'This flake exports synthetic fixtures only. Use the host flake in configs-hosts.' >&2; exit 1
+
+# Host-specific recipes are retained as refusal points for callers that used
+# this provider checkout before adoption. Real hosts are owned by configs-hosts.
+[private]
+_nixos-target host="":
+    @echo 'This flake exports synthetic fixtures only. Use the host flake in configs-hosts.' >&2; exit 1
+
+# The recipes that touch a NixOS system act on the output named after the
+# host they run on, and on no other: a rebuild under another name would
+# activate, or list, another machine's system. Prints the target for the
+# caller.
+[private]
+_nixos-host:
+    #!/usr/bin/env bash
+    set -euo pipefail
+    if [ ! -e /etc/NIXOS ]; then
+      echo "This host is not NixOS (/etc/NIXOS is absent); the nixos-* recipes that rebuild, roll back or list generations run inside the NixOS distribution. 'just nixos-eval <host>' and 'just nixos-build <host>' run anywhere." >&2
+      exit 1
+    fi
+    host=$(cat /proc/sys/kernel/hostname)
+    if ! target=$(just _nixos-target "${host}"); then
+      echo "This NixOS host is '${host}'; refusing to act on another host's system." >&2
+      exit 1
+    fi
+    printf '%s\n' "${target}"
 
 ############################################################################
 #
@@ -25,62 +50,62 @@ doctor:
 # must have recipes of their own below and run in CI.
 [group('repository')]
 check:
-    tool/checks/format
-    tool/checks/lint
-    tool/checks/payloads
-    tool/checks/test
+    unixlike/tool/checks/format
+    unixlike/tool/checks/lint
+    unixlike/tool/checks/payloads
+    unixlike/tool/checks/test
 
 [group('repository')]
 format-check:
-    tool/checks/format
+    unixlike/tool/checks/format
 
 [group('repository')]
 lint:
-    tool/checks/lint
+    unixlike/tool/checks/lint
 
 # Parse every declared Unix-like source payload with its own native tool.
 [group('repository')]
 payloads:
-    tool/checks/payloads
+    unixlike/tool/checks/payloads
 
 # The same check plus the fixtures that prove it rejects what it must.
 [group('repository')]
 payloads-test:
-    tool/checks/payloads-test
+    unixlike/tool/checks/payloads-test
 
 # Prove each Unix-like check reports a missing Nix as unverified, not failed.
 [group('repository')]
 prerequisite-test:
-    tool/checks/prerequisite-test
+    unixlike/tool/checks/prerequisite-test
 
 # Prove the flake's typed identity and class composition refuse what they must.
 [group('repository')]
 flake-test:
-    tool/checks/flake-test
+    unixlike/tool/checks/flake-test
 
 # Prove a feature file names no host and forces no value, and that the check refuses one that does.
 [group('repository')]
 composition-test:
-    tool/checks/composition-test
+    unixlike/tool/checks/composition-test
 
-# Prove the evaluation check fails when it reaches no configuration.
+# Prove what the evaluation check reaches, refuses and builds.
 [group('repository')]
 eval-coverage-test:
-    tool/checks/eval-coverage-test
+    unixlike/tool/checks/eval-coverage-test
 
 # Compose every host in walk order and reversed; the toplevels must match.
 [group('repository')]
 import-order:
-    tool/checks/import-order
+    unixlike/tool/checks/import-order
 
 # The same check plus the order-dependent pair it must refuse.
 [group('repository')]
 import-order-test:
-    tool/checks/import-order-test
+    unixlike/tool/checks/import-order-test
 
 [group('repository')]
 test:
-    tool/checks/test
+    unixlike/tool/checks/test
 
 ############################################################################
 #
@@ -94,7 +119,7 @@ home-eval:
     #!/usr/bin/env bash
     set -euo pipefail
     target=$(just _home-target)
-    drv=$(nix eval --raw "path:.#homeConfigurations.${target}.activationPackage.drvPath")
+    drv=$(nix eval --raw "path:./unixlike#homeConfigurations.${target}.activationPackage.drvPath")
     printf '%s\n' "${drv}"
 
 # Build the standalone Home Manager generation without activating it.
@@ -103,15 +128,22 @@ home-build:
     #!/usr/bin/env bash
     set -euo pipefail
     target=$(just _home-target)
-    nix build --no-link --print-out-paths "path:.#homeConfigurations.${target}.activationPackage"
+    nix build --no-link --print-out-paths "path:./unixlike#homeConfigurations.${target}.activationPackage"
 
-# Activation: run only on the intended Ubuntu WSL host.
+# NixOS composes its home into the system, so the standalone home is refused
+# there; 'just nixos-switch' is that host's activation.
+
+# Activation: run only on the intended Ubuntu WSL host; refused on NixOS.
 [group('home-manager')]
 home-switch:
     #!/usr/bin/env bash
     set -euo pipefail
+    if [ -e /etc/NIXOS ]; then
+      echo "NixOS composes Home Manager into the system; activating the standalone home here would put the Ubuntu home over it. Use 'just nixos-switch'." >&2
+      exit 1
+    fi
     target=$(just _home-target)
-    generation=$(nix build --no-link --print-out-paths "path:.#homeConfigurations.${target}.activationPackage")
+    generation=$(nix build --no-link --print-out-paths "path:./unixlike#homeConfigurations.${target}.activationPackage")
     "${generation}/activate"
 
 # First activation without requiring a pre-existing home-manager command.
@@ -124,7 +156,7 @@ home-news:
     #!/usr/bin/env bash
     set -euo pipefail
     target=$(just _home-target)
-    home-manager news --flake "path:.#${target}"
+    home-manager news --flake "path:./unixlike#${target}"
 
 # List all home-manager generations
 [group('home-manager')]
@@ -144,10 +176,10 @@ alias generations := home-generations
 #
 ############################################################################
 
-# Update all the flake inputs
+# Refresh provider inputs except explicitly documented exclusions
 [group('nix')]
 up:
-    nix flake update
+    "{{justfile_directory()}}/unixlike/tool/refresh-inputs"
 
 # Update a single input, e.g. `just upp nixpkgs`
 [group('nix')]
@@ -160,23 +192,31 @@ fmt:
     nix fmt .
 
 # PROV unixlike/zellij-combining-marks
-# Check that the zellij combining-marks patch still applies to a tag, e.g. `just zellij-patch-check v0.45.1`.
+# Check that the zellij combining-marks patch applies with no fuzz: with no argument to the lock's zellij as nixpkgs builds it, or to an upstream tag, e.g. `just zellij-patch-check v0.45.1`.
 [group('nix')]
-zellij-patch-check tag:
+zellij-patch-check tag="":
     #!/usr/bin/env bash
     set -euo pipefail
-    range=$(sed -n 's|.*/zellij/compare/\([0-9a-f]\{40\}\)\.\.\.\([0-9a-f]\{40\}\)\.patch.*|\1...\2|p' modules/zellij.nix)
-    if [[ -z "${range}" ]]; then
-      echo "modules/zellij.nix carries no pinned zellij commit range" >&2
-      exit 1
+    system=$(nix eval --raw --impure --expr builtins.currentSystem)
+    check="path:./unixlike#checks.${system}.zellij-combining-marks"
+    if [[ -z '{{ tag }}' ]]; then
+      # The flake check itself: nixpkgs' source and patches, the range applied
+      # by stdenv's patch phase with -F0, and the vendor Cargo.lock comparison.
+      nix build --no-link "${check}"
+      printf 'the pinned range applies with -F0 to the lock'\''s zellij %s\n' "$(nix eval --raw "${check}.version")"
+      exit 0
     fi
+    patch=$(nix build --no-link --print-out-paths "${check}.patch")
+    gnupatch=$(nix build --no-link --print-out-paths --inputs-from path:./unixlike nixpkgs#gnupatch)
     work=$(mktemp -d)
     trap 'rm -rf "${work}"' EXIT
     git -c advice.detachedHead=false clone --quiet --depth 1 --branch '{{ tag }}' https://github.com/zellij-org/zellij "${work}/zellij"
-    curl -fsSL "https://github.com/zellij-org/zellij/compare/${range}.patch" >"${work}/pr.patch"
-    # CHANGELOG.md is excluded exactly as the overlay's fetchpatch excludes it.
-    git -C "${work}/zellij" apply --check --exclude=CHANGELOG.md "${work}/pr.patch"
-    printf '%s applies cleanly to %s\n' "${range}" '{{ tag }}'
+    # A real apply in the throwaway clone, not --dry-run: the range patches
+    # grid.rs three times, and a dry run never applies the earlier sections
+    # the later ones build on. --forward refuses an already-applied hunk
+    # instead of asking whether to reverse it.
+    "${gnupatch}/bin/patch" -d "${work}/zellij" -p1 -F0 --forward --quiet -i "${patch}" </dev/null
+    printf 'the pinned range applies with -F0 to %s\n' '{{ tag }}'
 
 ############################################################################
 #
@@ -190,7 +230,7 @@ darwin-eval:
     #!/usr/bin/env bash
     set -euo pipefail
     target=$(just _darwin-target)
-    drv=$(nix eval --raw "path:.#darwinConfigurations.${target}.config.system.build.toplevel.drvPath")
+    drv=$(nix eval --raw "path:./unixlike#darwinConfigurations.${target}.config.system.build.toplevel.drvPath")
     printf '%s\n' "${drv}"
 
 # Build the Darwin system without creating a result symlink or activating it.
@@ -199,7 +239,7 @@ darwin-build:
     #!/usr/bin/env bash
     set -euo pipefail
     target=$(just _darwin-target)
-    nix build --no-link --print-out-paths "path:.#darwinConfigurations.${target}.config.system.build.toplevel"
+    nix build --no-link --print-out-paths "path:./unixlike#darwinConfigurations.${target}.config.system.build.toplevel"
 
 # Evaluate and natively build the Darwin system without activating it.
 [group('darwin')]
@@ -211,8 +251,8 @@ darwin-bootstrap:
     #!/usr/bin/env bash
     set -euo pipefail
     target=$(just _darwin-target)
-    system=$(nix build --no-link --print-out-paths "path:.#darwinConfigurations.${target}.config.system.build.toplevel")
-    sudo "${system}/sw/bin/darwin-rebuild" switch --flake "path:.#${target}"
+    system=$(nix build --no-link --print-out-paths "path:./unixlike#darwinConfigurations.${target}.config.system.build.toplevel")
+    sudo "${system}/sw/bin/darwin-rebuild" switch --flake "path:./unixlike#${target}"
 
 # Rebuild and activate the target Mac.
 [group('darwin')]
@@ -220,7 +260,7 @@ darwin-switch:
     #!/usr/bin/env bash
     set -euo pipefail
     target=$(just _darwin-target)
-    sudo darwin-rebuild switch --flake "path:.#${target}"
+    sudo darwin-rebuild switch --flake "path:./unixlike#${target}"
 
 # List nix-darwin generations on an already configured Mac.
 [group('darwin')]
@@ -230,17 +270,17 @@ darwin-generations:
 # Compare this Mac's Karabiner file and symbolic hotkeys with the payloads.
 [group('darwin')]
 karabiner-check:
-    tool/darwin/karabiner check
+    unixlike/modules/programs/karabiner/tool check
 
-# Read this Mac's Karabiner drift back into the payloads and commit it.
+# Retired publication entry; use explicit pinned host-document preview/review/save.
 [group('darwin')]
 karabiner-capture *args:
-    tool/version-control/commit {{args}} capture karabiner
+    @echo 'karabiner-capture is retired. Use the pinned preview/review/save workflow in unixlike/tool/darwin-capture/README.md with explicit host-owned document destinations; connect and publish them separately.' >&2; exit 1
 
 # Prove the Karabiner projection tolerates runtime members and refuses drift.
 [group('darwin')]
 karabiner-test:
-    tool/checks/karabiner-test
+    unixlike/tool/checks/karabiner-test
 
 # Garbage collect unused nix store entries older than 7 days
 [group('nix')]
@@ -249,18 +289,32 @@ gc:
 
 ############################################################################
 #
-#  nixos-wsl  (M3 experiment)
+#  nixos
 #
 ############################################################################
 
-# `tool/checks/test` skips this build by default, because nothing on a
-# non-NixOS host can activate the result. This is the deliberate way to ask
-# for it; `CHECKS_BUILD_ALL=1 tool/checks/test` is the other.
+# Evaluate a NixOS host's toplevel without building or activating. Runs anywhere.
+[group('nixos')]
+nixos-eval host="":
+    #!/usr/bin/env bash
+    set -euo pipefail
+    target=$(just _nixos-target {{ quote(host) }})
+    drv=$(nix eval --raw "path:./unixlike#nixosConfigurations.${target}.config.system.build.toplevel.drvPath")
+    printf '%s\n' "${drv}"
 
-# Build the NixOS-WSL closure (~1.9 GiB)
-[group('nixos-wsl')]
-nixos-build:
-    nix build --no-link --print-out-paths path:.#nixosConfigurations.wsl.config.system.build.toplevel
+# `unixlike/tool/checks/test` builds a NixOS output only on the host it names,
+# because nothing anywhere else can activate the result. This is the
+# deliberate way to ask for it; `CHECKS_BUILD_ALL=1 unixlike/tool/checks/test`
+# is the other. An aarch64 host builds natively or on a remote builder, never
+# under emulation (unixlike/modules/flake/systems.nix).
+
+# Build a NixOS host's closure (the NixOS-WSL one is ~1.9 GiB)
+[group('nixos')]
+nixos-build host="":
+    #!/usr/bin/env bash
+    set -euo pipefail
+    target=$(just _nixos-target {{ quote(host) }})
+    nix build --no-link --print-out-paths "path:./unixlike#nixosConfigurations.${target}.config.system.build.toplevel"
 
 # NixOS-WSL's builder refuses to run unless EUID is 0 — it chowns paths inside
 # the rootfs it assembles — so this needs a password and an agent cannot run
@@ -272,12 +326,60 @@ nixos-build:
 # lands in the repo root and is gitignored; it is owned by root, so removing it
 # needs sudo as well.
 
+# The registered distribution is updated in place, from a clone inside it:
+# build and activate without touching the boot profile, then switch. WSL has
+# no boot loader, so a rollback is a switch to the previous generation, and it
+# is possible only while that generation is inside the garbage collector's
+# window (unixlike/modules/foundation/nix/shared.nix). CONTRIBUTING.md, "Update the
+# registered NixOS-WSL distribution", is the procedure.
+
+# Build and activate the NixOS system without making it the boot default.
+[group('nixos')]
+nixos-test:
+    #!/usr/bin/env bash
+    set -euo pipefail
+    target=$(just _nixos-host)
+    sudo nixos-rebuild test --flake "path:./unixlike#${target}"
+
+# Activation: rebuild and switch the NixOS host this clone sits on.
+[group('nixos')]
+nixos-switch:
+    #!/usr/bin/env bash
+    set -euo pipefail
+    target=$(just _nixos-host)
+    sudo nixos-rebuild switch --flake "path:./unixlike#${target}"
+
+# Activation: switch back to the previous NixOS generation.
+[group('nixos')]
+nixos-rollback:
+    #!/usr/bin/env bash
+    set -euo pipefail
+    target=$(just _nixos-host)
+    sudo nixos-rebuild switch --rollback --flake "path:./unixlike#${target}"
+
+# List the NixOS system generations on this host.
+[group('nixos')]
+nixos-generations:
+    #!/usr/bin/env bash
+    set -euo pipefail
+    just _nixos-host >/dev/null
+    nixos-rebuild list-generations
+
 # Produce the rootfs archive that `wsl --import` takes (needs sudo)
 [group('nixos-wsl')]
-nixos-tarball:
-    sudo $(nix build --no-link --print-out-paths path:.#nixosConfigurations.wsl.config.system.build.tarballBuilder)/bin/nixos-wsl-tarball-builder nixos.wsl
-    @echo
-    @echo "Wrote ./nixos.wsl (root-owned, gitignored). Now run: just nixos-stage"
+nixos-tarball host="":
+    #!/usr/bin/env bash
+    set -euo pipefail
+    target=$(just _nixos-target {{ quote(host) }})
+    kind=$(nix eval --raw "path:./unixlike#nixosConfigurations.${target}.config.host.kind")
+    if [ "${kind}" != wsl ]; then
+      echo "'${target}' is a host of kind ${kind}; only a host of kind wsl has a WSL rootfs archive." >&2
+      exit 1
+    fi
+    builder=$(nix build --no-link --print-out-paths "path:./unixlike#nixosConfigurations.${target}.config.system.build.tarballBuilder")
+    sudo "${builder}/bin/nixos-wsl-tarball-builder" nixos.wsl
+    echo
+    echo "Wrote ./nixos.wsl (root-owned, gitignored). Now run: just nixos-stage"
 
 # `wsl --import` will not take a UNC source path. `\\wsl.localhost\...` reads
 # perfectly from `dir`, so it is not a permissions or 9p problem — the importer
@@ -290,7 +392,7 @@ nixos-tarball:
 nixos-stage dest="/mnt/c/WSL":
     #!/usr/bin/env bash
     set -euo pipefail
-    [ -f nixos.wsl ] || { echo "No ./nixos.wsl — run 'just nixos-tarball' first." >&2; exit 1; }
+    [ -f nixos.wsl ] || { echo "No ./nixos.wsl — run 'just nixos-tarball <host>' first." >&2; exit 1; }
     [ -d "$(dirname "{{ dest }}")" ] || { echo "{{ dest }} is not reachable — is that drive mounted?" >&2; exit 1; }
     mkdir -p "{{ dest }}"
     cp nixos.wsl "{{ dest }}/nixos.wsl"
@@ -300,7 +402,9 @@ nixos-stage dest="/mnt/c/WSL":
     echo "Staged and verified. From PowerShell or CMD — not from in here:"
     echo
     echo "  wsl --import NixOS C:\\WSL\\NixOS $win"
-    echo "  wsl -d NixOS"
+    echo
+    echo "Then follow CONTRIBUTING.md § Import the NixOS-WSL distribution: the"
+    echo "account is created locked, and ssh needs an authorized_keys copied in."
     echo
     echo "That registers a NEW distribution. Ubuntu is untouched;"
     echo "rollback is: wsl --unregister NixOS"
@@ -311,13 +415,30 @@ nixos-stage dest="/mnt/c/WSL":
 #
 ############################################################################
 
-# Make the home-manager-managed zsh the login shell
+# Make the Home Manager zsh the login shell — standalone Ubuntu and Darwin.
+# NixOS selects it declaratively (unixlike/modules/foundation/shell/wsl.nix) and is refused here.
 [group('setup')]
 switch-shell:
     #!/usr/bin/env bash
     set -euo pipefail
 
-    TARGET_SHELL="$HOME/.nix-profile/bin/zsh"
+    if [ -e /etc/NIXOS ]; then
+      echo "NixOS selects the login shell in unixlike/modules/foundation/shell/wsl.nix; nothing to switch here." >&2
+      exit 1
+    fi
+
+    case "$(uname -s)" in
+      # Registered in /etc/shells by unixlike/modules/foundation/shell/darwin.nix; the store path
+      # behind it changes with every zsh update, this one does not.
+      Darwin) TARGET_SHELL="/run/current-system/sw/bin/zsh" ;;
+      # The standalone Home Manager profile.
+      *)      TARGET_SHELL="$HOME/.nix-profile/bin/zsh" ;;
+    esac
+
+    if [ ! -x "$TARGET_SHELL" ]; then
+      echo "$TARGET_SHELL does not exist yet; activate the home (or the Darwin system) first." >&2
+      exit 1
+    fi
 
     if [ "$SHELL" = "$TARGET_SHELL" ]; then
       echo "Current shell is already $TARGET_SHELL"

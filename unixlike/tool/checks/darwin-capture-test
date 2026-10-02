@@ -1,0 +1,10 @@
+#!/bin/sh
+# INV unixlike/host-written-payload-projected
+set -eu
+. "$(CDPATH= cd -- "$(dirname -- "$0")" && pwd)/prerequisite"
+require_command nix
+domain=$(CDPATH= cd -- "$(dirname -- "$0")/../.." && pwd -P)
+runtime_expr="(builtins.getFlake \"path:$domain\").inputs.nixpkgs.legacyPackages.\${builtins.currentSystem}.python3"
+runtime=$(nix build --impure --no-link --print-out-paths --expr "$runtime_expr")
+PYTHONDONTWRITEBYTECODE=1 "$runtime/bin/python3" "$domain/tool/checks/darwin-capture-test.py"
+"$domain/tool/checks/darwin-capture-consumer-test" "$@"

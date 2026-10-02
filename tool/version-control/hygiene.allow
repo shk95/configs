@@ -2,7 +2,7 @@
 #
 # One `<path><TAB><literal string>` row per line, each preceded by a comment
 # giving its reason. File-granularity exclusion is refused deliberately:
-# docs/troubleshooting.md is the one file that has already drifted through
+# docs/reference/troubleshooting.md is the one file that has already drifted through
 # this invariant, so blinding all of it would retire the check on its only
 # real target.
 #
@@ -15,4 +15,4 @@
 # the line, because the character before the slash is a guillemet. The entry
 # is declared so that widening the anchoring rule later cannot silently admit
 # it unreviewed.
-docs/troubleshooting.md	/home/programs/
+docs/reference/troubleshooting.md	/home/programs/

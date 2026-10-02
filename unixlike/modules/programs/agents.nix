@@ -1,0 +1,29 @@
+# The coding agents, as a class of their own. Composed only where they are
+# wanted: the NixOS-WSL host selects the `agents` profile interpreted by
+# modules/flake/configurations.nix, so the standalone Ubuntu home and the
+# Darwin home are unchanged by this file — the mechanism that keeps
+# `homeManager.desktop` out of the WSL homes, used the other way round
+# (#195; docs/policy/decisions/unixlike/home-manager-platform-classes.md).
+#
+# Both come from the flake's nixpkgs input, which already tracks
+# nixos-unstable; a newer version arrives with the next `flake.lock` refresh
+# rather than from a second input. claude-code is unfree, and
+# modules/flake/nixpkgs.nix allows that for every flavour.
+_: {
+  modules.homeManager.agents = {
+    pkgs,
+    lib,
+    config,
+    ...
+  }: {
+    options.providerTools.agents.enable = lib.mkOption {
+      type = lib.types.bool;
+      default = true;
+      description = "Install the shared coding agent command-line tools.";
+    };
+    config.home.packages = lib.optionals config.providerTools.agents.enable [
+      pkgs.claude-code
+      pkgs.codex
+    ];
+  };
+}

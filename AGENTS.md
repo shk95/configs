@@ -21,10 +21,18 @@ workflows form a `repository` governance scope. This is not a fourth
 configuration domain, has no host output, and receives no domain release tag.
 Use it only when one configuration domain cannot honestly own the change.
 
-Files below `modules/` are flake-parts modules collected by import-tree for the
-Unix-like domain. Prefer one feature per file.
-`modules/flake/configurations.nix` is the only place that decides which
-deferred module classes reach a Unix-like host.
+The Unix-like domain owns one tree, `unixlike/`, and everything the classifier
+answers `unixlike` for lives under it, except `.envrc` and the `Justfile`,
+which stay at the root because direnv reads the first there and where the
+second belongs is a separate decision, and the domain's documents, which
+live in the Unix-like scope directories under `docs/`. Files below `unixlike/modules/` are
+flake-parts modules collected by import-tree. The first level groups concerns
+as `flake`, `platforms`, `foundation`, `desktop`, and `programs`.
+Inside a group, a concern with one fragment is one file, and a concern with
+more, or with a payload or a script beside it, is a directory. The class a
+fragment reaches is read in the file that writes it, never from its directory.
+`unixlike/modules/flake/configurations.nix` is the only place that decides
+which deferred module classes reach a Unix-like host.
 
 ## Domain boundaries
 
@@ -47,7 +55,7 @@ deferred module classes reach a Unix-like host.
   copy on that platform's schedule. A common change must not silently alter a
   platform output.
 
-See `docs/architecture.md` for the complete ownership, versioning, and
+See `docs/policy/architecture.md` for the complete ownership, versioning, and
 deployment model.
 
 ## Rules that are expensive to break
@@ -60,45 +68,60 @@ rule stands on this sentence alone.
 | Never activate Home Manager, NixOS, or nix-darwin without an explicit request. | Activation changes a host; evaluation and build evidence never imply permission. | none |
 | Never run Windows `Apply` without an explicit request. `-Check` is the read-only path. | The same boundary on the Windows side. | none |
 | Do not commit, push, tag, rewrite history, or change branches unless the user explicitly requests it. | A tool allowlist reduces prompts; it never authorizes a mutation. | skill (`run-version-control-workflow` refuses); `tool/version-control/commit` refuses on `master` |
+| Author tracked source changes and commits in a linked worktree dedicated to the task. Keep the primary checkout for read-only inspection and integration. | A task's edits must not disturb the integration checkout or another task's index. | tool (`tool/version-control/require-linked-worktree` refuses commits from the primary checkout); fixture |
 | Do not update flake inputs, change login shells, garbage-collect Nix stores, shut down WSL, or change global Git configuration unless the task calls for it. | Each is host-global or irreversible from inside a session. | none |
-| Treat WSL cgroups, binfmt_misc, mounts, and similar kernel-global resources as shared by every distribution. | One distribution's fix is every distribution's change. | none |
+| Treat WSL cgroups, binfmt_misc, mounts, and similar kernel-global resources as shared by every distribution, and the kernel under an OrbStack machine as shared by every machine and by OrbStack's container engine. | One distribution's fix is every distribution's change, and an OrbStack machine's UIDs are mapped one to one: its root is UID 0 on that kernel. | none for WSL; consumer-owned assertion and fixture for an OrbStack machine's binfmt registry |
 | Preserve externally managed PowerShell profile blocks. Do not change Windows OpenSSH DefaultShell or add a `.wslconfig` firewall value without explicit direction. | Both are host state another owner writes. | none |
 | Classify a change before editing and change only the owning domain. | Evidence, release tags, and CI jobs are selected by ownership. | hook (`tool/version-control/classify` refuses an unclassified path) |
 | Report evaluation, build, native runtime, and activation or Apply evidence separately, and never upgrade partial evidence. | A tag or a merge is only as true as the lane it names. | `.githooks/evidence`; skill |
-| Register a temporary measure under `provisional/` in the change that adds it, tag every disposable line `PROV <scope>/<slug>`, and retire it by deleting the entry and its tags together. | A measure with no exit condition and no review date becomes permanent by neglect. | tool (`tool/version-control/provisional`) |
+| Register a temporary measure under `docs/provisional/` in the change that adds it, tag every disposable line `PROV <scope>/<slug>`, and retire it by deleting the entry and its tags together. | A measure with no exit condition and no review date becomes permanent by neglect. | tool (`tool/version-control/provisional`) |
 
 ## Where invariants are enforced
 
 Codebase invariants — what must remain true of committed desired state and
-tooling — are enumerated under `invariants/<scope>/`, one file each. An entry
+tooling — are enumerated under `docs/policy/invariants/<scope>/`, one file each. An entry
 states the rule without naming a command, cites its rationale in
-`docs/architecture.md` or this file, and declares its enforcement as
+`docs/policy/architecture.md` or this file, and declares its enforcement as
 `schema` (an evaluator or loader refuses it), `tool` (a script refuses it),
 `fixture` (a test proves both directions), `manual` (a reviewer evidence item
-in `docs/definition-of-done.md`), or `pending` (an issue, until a check
+in `docs/policy/definition-of-done/<scope>.md`), or `pending` (an issue, until a check
 exists). `tool/version-control/invariants` checks in both directions that
 every declaration exists and names its invariant, on every commit and in CI.
 Read the classified scope's list before editing that scope.
-`invariants/README.md` is the format.
+`docs/policy/invariants/README.md` is the format.
 
 ## Governance design
 
 When adding a repository rule, separate its concerns before implementation:
 
-- Put durable rationale in `AGENTS.md` or `docs/architecture.md` and the
-  invariant itself in `invariants/<scope>/`. State what must remain true
+- Put durable rationale in `AGENTS.md` or `docs/policy/architecture.md` and the
+  invariant itself in `docs/policy/invariants/<scope>/`. State what must remain true
   without depending on a particular command, product, or model.
 - Put human-operable prerequisites, ordered steps, recovery, and authorization
   boundaries in `CONTRIBUTING.md`.
 - Put repeatable agent orchestration in a canonical `.agents/skills/` skill.
 - Put deterministic classification and enforcement in `tool/`, hooks, CI, and
   remote repository settings.
-- Put current adoption state and migration gaps in `docs/status.md` and
-  expensive choices in `docs/decisions/`; put per-run proof in CI, pull
+- Give repository operators one documented command entry point. Hooks, CI and
+  implementation scripts call the underlying tools directly; a test may call
+  the entry point to prove its public contract. Keep each configuration
+  domain's operator commands and implementation inside that domain's boundary.
+- Put current adoption state and migration gaps in `docs/status/<scope>.md` and
+  expensive choices in `docs/policy/decisions/`; put per-run proof in CI, pull
   requests, and release evidence.
 - Put a rule that has been observed but not accepted, and a document or tool
-  judged stale, in `docs/candidates/` until recurrence or silence decides it.
+  judged stale, in `docs/policy/candidates/` until recurrence or silence decides it.
   A candidate is an observation and never a source of authority.
+- Put the plan for a piece of work and its verification in `docs/work/`,
+  outside the authority model: a spec with its acceptance criteria and the
+  evidence lanes each requires, a report that answers every criterion, and
+  optionally the study that argued the direction. A work document binds only
+  the work it describes. A durable rule it produces belongs in a decision
+  record or invariant; a temporary measure belongs in the provisional
+  registry. A decision record or provisional entry may name the work as its
+  source. Other rule-bearing material cites the adopted result
+  (`INV repository/design-outside-authority`). An agent reads a work item
+  when a task, an issue or a record points at it, never as a rule to follow.
 
 Each obligation has one authoritative source. Procedures and tools implement
 policy but must not silently create new policy. Model-specific adapters only
@@ -120,25 +143,47 @@ does not certify a domain release or authorize deployment. Do not merge
 repository maintainer owns promotion decisions. There is no operational
 bypass; change this policy through the governance workflow before deviating.
 
-GitHub milestones are the repository's planning surface, not a source of
-configuration, architecture, release, or deployment authority. Each milestone
-owns exactly one of `unixlike`, `windows`, `common`, or `repository`, uses the
-title `<scope>: <outcome>`, and contains only issues in that scope. Cross-scope
-dependencies are linked instead of being assigned to the same milestone. A
-closed milestone means its planned source work is complete; it does not certify
-a domain release or authorize activation or Apply. Repository documents remain
-authoritative for durable decisions and current support boundaries. The
-repository maintainer owns milestone scope and closure decisions, with the
-milestone description and final evidence issue providing the manual evidence.
+Work is planned and verified in documents; execution issues name work lanes
+and dependencies without copying evidence or native pull-request state.
+The planner manages docs/work plans and roadmap priorities, not every document.
+A roadmap entry is optional. A standalone plan is valid. Only a small,
+unambiguous, single-scope, single-criterion change may go directly to a worker;
+other work goes through planning. The existing spec/report format and dated
+amendment rule remain in force. The maintainer owns roadmap priorities and
+acceptance of a completed report.
+
+A worker pins the current origin/dev and reviewed plan revision at pickup,
+then immediately works in a dedicated linked worktree. One coherent same-scope
+outcome is one branch and PR; evidence lanes are reported separately but do not
+force separate PRs. Workers deliver remote branches and Ready PRs. They do not
+merge dev, arm auto-merge or orchestrate other workers. GitHub is integration
+authority; local worktrees and ignored checkpoints preserve execution only.
+A PR and its remote branch must suffice to reconstruct integration after the
+worker's local workspace disappears.
+
+Roles are dynamic. An unfinished worker must leave a useful checkpoint before
+suspension, planner return or role change; interruption is not completion.
+Changed acceptance, scope or dependency returns to planning. The planner
+resolves continuation ownership; no process-liveness guess authorizes cleanup.
+A single authorized integration session admits GitHub Ready PRs and performs
+server-side PR integration. Refresh a candidate only for an actual conflict or
+required integration update, not whenever dev moves. Reclamation checks local,
+remote and ignored data before any explicitly authorized deletion.
+
+Use plan-work, execute-work, integrate-work, inspect-work and
+reclaim-workspaces for these operations; run-version-control-workflow routes
+ambiguous requests and retains audits, promotion and releases. Procedural
+steps live in CONTRIBUTING.md. The accepted operating contract is
+`docs/policy/decisions/repository/github-agent-workflow.md`.
 
 ## Working contract
 
-1. Read `CONTRIBUTING.md`, `docs/architecture.md`, `invariants/<scope>/` for
-   the classified scope, the scope's current state in `docs/status.md`, and
+1. Read `CONTRIBUTING.md`, `docs/policy/architecture.md`, `docs/policy/invariants/<scope>/` for
+   the classified scope, the scope's current state in `docs/status/<scope>.md`, and
    every decision record those entries and that state cite.
 2. Classify the task as `unixlike`, `windows`, `common`, `repository`, or an
    explicit transfer.
-3. Use `tool/doctor.sh` before relying on host-local capabilities.
+3. Use `tool/configs doctor` before relying on host-local capabilities.
 4. Change only the owning domain. Treat a cross-domain copy as a separate,
    reviewable adoption change.
 5. Run narrow domain checks before broader checks. Do not require an unrelated
@@ -147,11 +192,14 @@ milestone description and final evidence issue providing the manual evidence.
    evidence separately for each affected domain.
 
 User-facing usage belongs in `README.md`, workflow in `CONTRIBUTING.md`,
-architecture and ownership in `docs/architecture.md`, current state in
-`docs/status.md`, decisions in `docs/decisions/`, recurring symptoms in
-`docs/troubleshooting.md`, invariants in `invariants/`, and executable policy
-in `tool/`, hooks, and CI. Canonical project-specific agent workflows live
-under `.agents/skills/` and follow the Agent Skills open standard. Reusable
+architecture and ownership in `docs/policy/architecture.md`, current state in
+`docs/status/`, decisions in `docs/policy/decisions/`, recurring symptoms in
+`docs/reference/troubleshooting.md`, invariants in `docs/policy/invariants/`, plans and
+their verification in `docs/work/`, and executable policy in `tool/`, hooks, and CI.
+`docs/README.md` maps the document tree; a document is owned by the scope
+directory, or the scope-named file, that holds it.
+Canonical project-specific agent workflows live under `.agents/skills/` and
+follow the Agent Skills open standard. Reusable
 cross-project methods live in the separate sibling `skills` project.
 Model-specific context and skill files only point to canonical sources.
 

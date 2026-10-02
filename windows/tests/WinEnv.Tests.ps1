@@ -9,8 +9,15 @@ BeforeAll {
     $desiredStateRoot = Join-Path $repositoryRoot 'desired'
     Import-Module (Join-Path $repositoryRoot 'src\WinEnv.psm1') -Force
     # Invoke-Pester can be called without test.ps1; the suite defends itself.
-    . (Join-Path $repositoryRoot 'tools\isolate-git.ps1')
+    . (Join-Path $repositoryRoot 'tool\isolate-git.ps1')
 
+    # Synthetic write-back proves the pure legacy projection against the
+    # comparison; no production provider capture/save function remains.
+    function Save-FixtureCapturedProjection {
+        param($Plan, [string]$RepositoryRoot)
+        $path = Join-Path $RepositoryRoot $Plan.Source
+        Write-WinEnvAtomicText $path (ConvertTo-WinEnvPayloadText -Content $Plan.Content -PayloadPath $path -Parser $Plan.Parser)
+    }
     function Test-Throws {
         param([scriptblock] $ScriptBlock)
         try { & $ScriptBlock; return $false } catch { return $true }
@@ -66,13 +73,59 @@ BeforeAll {
     # $TestDrive stand-in for it), never under windows/tests/, or that
     # exclusion stops holding by construction.
     $WindowsHomePathPattern = '(?i)C:\\{1,2}Users\\{1,2}[A-Za-z0-9._-]+'
+
+    # What a function under test prints for its operator is that function's
+    # product, not this suite's. Left alone it lands in the transcript
+    # .githooks/pre-push shows for a push, where a fixture's "-> pushing"
+    # line or a throwaway remote reads as a real publish. Write-Host is
+    # stream 6, so it is captured here and handed back as Host, for the
+    # fixtures whose subject it is to assert.
+    function Invoke-CapturingHost {
+        param([Parameter(Mandatory)][scriptblock] $ScriptBlock)
+
+        $capturedHostLine = [System.Collections.Generic.List[string]]::new()
+        $capturedOutput = @(& $ScriptBlock 6>&1 | ForEach-Object {
+                if ($_ -is [System.Management.Automation.InformationRecord]) {
+                    [void]$capturedHostLine.Add([string]$_.MessageData)
+                }
+                else { $_ }
+            })
+        return [pscustomobject]@{
+            Output = if ($capturedOutput.Count -eq 1) { $capturedOutput[0] } else { $capturedOutput }
+            Host   = $capturedHostLine.ToArray()
+        }
+    }
+
+    # A -WhatIf message is not stream 6 or any other stream: ShouldProcess
+    # writes it to the host's own UI, which no redirection in this process
+    # reaches. A runspace created without a host has no UI to write it to,
+    # so a fixture that proves -WhatIf writes nothing runs the call there.
+    function Invoke-WithoutHost {
+        param(
+            [Parameter(Mandatory)][string] $Command,
+            [Parameter(Mandatory)][hashtable] $Parameter
+        )
+
+        $shell = [powershell]::Create()
+        try {
+            [void]$shell.AddCommand('Import-Module').AddParameter('Name', (Join-Path $repositoryRoot 'src\WinEnv.psm1'))
+            [void]$shell.AddStatement().AddCommand($Command).AddParameters($Parameter)
+            $returned = @($shell.Invoke() | ForEach-Object { if ($_.BaseObject -is [string]) { $_.BaseObject } else { $_ } })
+            if ($shell.Streams.Error.Count) { throw $shell.Streams.Error[0] }
+            if ($returned.Count -eq 1) { return $returned[0] }
+            return $returned
+        }
+        finally {
+            $shell.Dispose()
+        }
+    }
 }
 
 Describe 'win-env manifest' {
     It 'INV windows/schema-version-refused: loads schema 4 and the desired-state compatibility version' {
         $manifest = Get-WinEnvManifest -Path (Join-Path $desiredStateRoot 'manifest.json')
         $manifest.SchemaVersion | Should -Be 4
-        $manifest.ProjectVersion | Should -Be '0.6.0'
+        $manifest.ProjectVersion | Should -Be '0.7.0'
     }
 
     It 'INV windows/schema-version-refused: refuses a manifest schema this module does not read' {
@@ -131,48 +184,14 @@ Describe 'win-env manifest' {
         ($terminal.profiles.list | Where-Object name -eq 'Zellij Workspace').guid | Should -Be $manifest.Terminal.ZellijProfileGuid
     }
 
-    It 'splits the Windows-side WSL configuration by the build each key needs' {
-        # Reworked from the single-payload assertion this replaces. The four
-        # keys did not all move together, so asserting them against one source
-        # would now pin the wrong thing: three carry Microsoft's "require
-        # Windows 11 version 22H2 or higher" footnote and one carries no
-        # footnote at all. Every assertion below traces to a row of the per-key
-        # gate table in
-        # docs/decisions/wslconfig-selected-by-windows-build.md.
+    It 'leaves host-global WSL and personal layout units outside the provider catalog' {
+        # INV windows/host-generation-bound
         $manifest = Get-WinEnvManifest -Path (Join-Path $desiredStateRoot 'manifest.json')
-        $wsl = $manifest.ManagedFiles | Where-Object Id -eq 'wslConfig'
-        $wsl.Target | Should -Be '{USERPROFILE}\.wslconfig'
-        $wsl.Feature | Should -Be 'wsl'
-        $wsl.Parser | Should -Be 'Ini'
-        # One entry with alternative sources, not two entries competing for one
-        # Target, so drift, backup and deselection still see one logical file.
-        $wsl.ContainsKey('Source') | Should -Be $false
-        $wsl.Sources.Count | Should -Be 2
-
-        $mirrored = Get-Content (Join-Path $desiredStateRoot 'files/wsl/mirrored-networking.wslconfig') -Raw
-        $nat = Get-Content (Join-Path $desiredStateRoot 'files/wsl/nat-networking.wslconfig') -Raw
-
-        # At or above the bound: every key, and this is the content this
-        # repository already deployed.
-        $mirrored | Should -Match '(?m)^networkingMode=Mirrored$'
-        $mirrored | Should -Match '(?m)^hostAddressLoopback=true$'
-        $mirrored | Should -Match '(?m)^bestEffortDnsParsing=true$'
-        $mirrored | Should -Match '(?m)^autoMemoryReclaim=Gradual$'
-
-        # Below the bound: no key gated on Windows 11 22H2 survives, including
-        # networkingMode in any spelling, because the host would ignore it in
-        # silence rather than report it.
-        $nat | Should -Not -Match '(?m)^networkingMode='
-        $nat | Should -Not -Match '(?m)^hostAddressLoopback='
-        $nat | Should -Not -Match '(?m)^bestEffortDnsParsing='
-        # autoMemoryReclaim carries no Windows footnote: it is gated by the
-        # installed WSL application, so it stays. Dropping it here would remove
-        # a setting the host honours, a regression dressed as a version fix.
-        $nat | Should -Match '(?m)^autoMemoryReclaim=Gradual$'
-
-        # AGENTS.md: no .wslconfig firewall value without explicit direction.
-        $mirrored | Should -Not -Match '(?m)^firewall\s*='
-        $nat | Should -Not -Match '(?m)^firewall\s*='
+        $manifest.Features.Id | Should -Not -Contain 'wsl'
+        $manifest.ManagedFiles.Id | Should -Not -Contain 'wslConfig'
+        $manifest.ManagedFiles.Id | Should -Not -Contain 'fancyZonesCustomLayouts'
+        $manifest.ManagedFiles.Id | Should -Not -Contain 'fancyZonesLayoutHotkeys'
+        $manifest.ManagedFiles.Id | Should -Contain 'fancyZonesDefaultLayouts'
     }
 }
 
@@ -869,7 +888,7 @@ Describe 'state safety' {
 
     It 'INV windows/schema-version-refused: refuses a state schema this module does not read' {
         $path = Join-Path $TestDrive 'schema3.json'
-        [IO.File]::WriteAllText($path, '{"schemaVersion":3,"projectVersion":"0.1.0","appliedAtUtc":"2026-01-01T00:00:00+00:00","gitCommit":"0123456789abcdef","features":["core"]}')
+        [IO.File]::WriteAllText($path, '{"schemaVersion":4,"projectVersion":"0.1.0","appliedAtUtc":"2026-01-01T00:00:00+00:00","gitCommit":"0123456789abcdef","features":["core"]}')
         $message = $null
         try { Get-WinEnvState -Path $path | Out-Null } catch { $message = $_.Exception.Message }
         $message | Should -Match 'INV windows/schema-version-refused'
@@ -1056,11 +1075,8 @@ Describe 'managed sources' {
         } | Sort-Object)
         ($declared -join "`n") | Should -Be ($actual -join "`n")
 
-        # Both .wslconfig variants belong to one entry, so they share one
-        # Feature by construction rather than by agreement between two entries
-        # that could drift apart.
-        $declaredFeature['files/wsl/mirrored-networking.wslconfig'] | Should -Be 'wsl'
-        $declaredFeature['files/wsl/nat-networking.wslconfig'] | Should -Be 'wsl'
+        $declaredFeature.ContainsKey('files/wsl/mirrored-networking.wslconfig') | Should -BeFalse
+        $declaredFeature.ContainsKey('files/wsl/nat-networking.wslconfig') | Should -BeFalse
     }
 }
 
@@ -1072,6 +1088,62 @@ Describe 'feature model' {
         foreach ($definition in $manifest.ManagedFiles) { $declared | Should -Contain $definition.Feature }
         $declared | Should -Contain $manifest.Font.Feature
         $declared | Should -Contain $manifest.Terminal.Feature
+    }
+
+    It 'INV windows/precondition-declared: refuses an unknown precondition type and a missing field when the manifest loads' {
+        $valid = @{ Type = 'Appx'; Name = 'Vendor.Palette'; Message = 'repair the vendor suite before applying' }
+        $manifestWith = {
+            param([hashtable] $Precondition)
+            New-FeatureManifest -Override @{
+                Features = @(
+                    @{ Id = 'core'; Name = 'Core'; Required = $true },
+                    @{ Id = 'font'; Name = 'Font' },
+                    @{ Id = 'zellij'; Name = 'Zellij' },
+                    @{ Id = 'terminal'; Name = 'Terminal'; Requires = @('font', 'zellij'); Preconditions = @($Precondition) }
+                )
+            }
+        }
+
+        (Test-Throws { Assert-WinEnvFeatureModel -Manifest (& $manifestWith $valid) }) | Should -Be $false
+
+        $message = ''
+        $unknownType = $valid.Clone(); $unknownType.Type = 'Ouija'
+        try { Assert-WinEnvFeatureModel -Manifest (& $manifestWith $unknownType) } catch { $message = $_.Exception.Message }
+        $message | Should -Match "INV windows/precondition-declared: Feature 'terminal' declares a precondition of unknown type 'Ouija'"
+
+        foreach ($field in 'Message', 'Name') {
+            $message = ''
+            $missing = $valid.Clone(); $missing.Remove($field)
+            try { Assert-WinEnvFeatureModel -Manifest (& $manifestWith $missing) } catch { $message = $_.Exception.Message }
+            $message | Should -Match "declares a Appx precondition without $field"
+            $message = ''
+            $blank = $valid.Clone(); $blank[$field] = ' '
+            try { Assert-WinEnvFeatureModel -Manifest (& $manifestWith $blank) } catch { $message = $_.Exception.Message }
+            $message | Should -Match "declares a Appx precondition without $field"
+        }
+    }
+
+    It 'INV windows/precondition-declared: the repository manifest loads, and every declared type has an evaluator arm' {
+        $manifest = Get-WinEnvManifest -Path (Join-Path $desiredStateRoot 'manifest.json')
+        @($manifest.Features | Where-Object { $_.ContainsKey('Preconditions') }).Count | Should -BeGreaterThan 0
+
+        # A type the loader accepts and the evaluator has no arm for would be
+        # refused on the host instead, which is what this rule exists to stop.
+        $module = Join-Path $repositoryRoot 'src\WinEnv.psm1'
+        $tokens = $null
+        $errors = $null
+        $ast = [System.Management.Automation.Language.Parser]::ParseFile($module, [ref]$tokens, [ref]$errors)
+        $evaluator = @($ast.FindAll({
+                    param($node)
+                    $node -is [System.Management.Automation.Language.FunctionDefinitionAst] -and
+                    $node.Name -eq 'Test-WinEnvFeaturePrecondition'
+                }, $true))
+        $evaluator.Count | Should -Be 1
+        $switch = @($evaluator[0].FindAll({ param($node) $node -is [System.Management.Automation.Language.SwitchStatementAst] }, $true))
+        $switch.Count | Should -Be 1
+        $arms = @($switch[0].Clauses | ForEach-Object { $_.Item1.Extent.Text.Trim("'") } | Sort-Object)
+        $declared = @(& (Get-Module WinEnv) { $script:WinEnvPreconditionField.Keys } | Sort-Object)
+        ($arms -join ',') | Should -Be ($declared -join ',')
     }
 
     It 'INV windows/feature-owns-every-item: rejects a deployable item that names no feature' {
@@ -1138,7 +1210,7 @@ Describe 'feature model' {
         $owner = @($manifest.Features | Where-Object { $_.ContainsKey('Lifecycle') })
         $owner.Count | Should -Be 1
         $owner[0].Id | Should -Be 'powertoys'
-        @($manifest.ManagedFiles | Where-Object Feature -eq 'powertoys').Count | Should -Be 18
+        @($manifest.ManagedFiles | Where-Object Feature -eq 'powertoys').Count | Should -Be 16
     }
 }
 
@@ -1469,6 +1541,12 @@ Describe 'Appx detection capability' {
         $uninstalled = Get-WinEnvPackageStatus -Package $AppxPackage -AppxQuery $AbsentQuery -RegistrationQuery $Unregistered
         $uninstalled.Missing | Should -Be $true
         $uninstalled.Conflict | Should -Be $false
+
+        $storeOnly = Get-WinEnvPackageStatus -Package $AppxPackage -AppxQuery $PresentQuery -RegistrationQuery $Unregistered
+        $storeOnly.Registered | Should -Be $false
+        $storeOnly.Detected | Should -Be $true
+        $storeOnly.Missing | Should -Be $false
+        $storeOnly.Conflict | Should -Be $true
     }
 
     It 'reports an unusable module as unverified instead of a missing package' {
@@ -1523,6 +1601,291 @@ Describe 'Appx detection capability' {
         # It promotes nothing that was decided.
         (Get-WinEnvCheckStatus -DriftCount 0 -UnverifiedCount 0 -RequireNative) | Should -Be 0
         (Get-WinEnvCheckStatus -DriftCount 1 -UnverifiedCount 0 -RequireNative) | Should -Be 2
+    }
+}
+
+Describe 'isolated Appx fallback transport' {
+    It 'INV windows/appx-fallback-bounded-and-isolated: pins the system executable and isolated child options' {
+        InModuleScope WinEnv -Parameters @{ TestRoot = $TestDrive } {
+            param($TestRoot)
+            $expectedExecutable = Join-Path $TestRoot 'System32\WindowsPowerShell\v1.0\powershell.exe'
+            [void](New-Item -ItemType Directory -Path (Split-Path -Parent $expectedExecutable) -Force)
+            [IO.File]::WriteAllText($expectedExecutable, '')
+            $resolved = Resolve-AppxPowerShell51Path -SystemRoot $TestRoot
+            $resolved | Should -Be ([IO.Path]::GetFullPath($expectedExecutable))
+
+            $payload = 'exit 0'
+            $encodedPayload = [Convert]::ToBase64String([Text.Encoding]::Unicode.GetBytes($payload))
+            $info = New-AppxQueryProcessStartInfo -ExecutablePath $resolved -Payload $payload
+            $info.FileName | Should -Be $resolved
+            (@($info.ArgumentList) -join '|') | Should -Be "-NoProfile|-NonInteractive|-EncodedCommand|$encodedPayload"
+            $info.UseShellExecute | Should -Be $false
+            $info.CreateNoWindow | Should -Be $true
+            $info.RedirectStandardInput | Should -Be $true
+            $info.RedirectStandardOutput | Should -Be $true
+            $info.RedirectStandardError | Should -Be $true
+            $info.UserName | Should -BeNullOrEmpty
+            $info.Verb | Should -BeNullOrEmpty
+
+            $checkedInPayload = Get-Content -LiteralPath $script:AppxQueryPayloadPath -Raw
+            $checkedInPayload | Should -Match 'Get-AppxPackage\s+-Name'
+            $checkedInPayload | Should -Not -Match '(?i)(?:^|\s)-AllUsers(?:\s|$)'
+        }
+    }
+
+    It 'INV windows/appx-fallback-bounded-and-isolated: bypasses fallback for present and absent primary results' {
+        InModuleScope WinEnv {
+            $fallbackCounter = [pscustomobject]@{ Calls = 0 }
+            $fallback = {
+                param([string] $Name)
+                $fallbackCounter.Calls++
+                [pscustomobject]@{ Name = $Name; Version = [version]'9.9' }
+            }
+
+            $present = @(Invoke-AppxQuery -Name 'Vendor.Terminal' `
+                    -PrimaryQuery { param($Name) [pscustomobject]@{ Name = $Name; Version = [version]'1.2.3' } } `
+                    -FallbackQuery $fallback)
+            $present.Count | Should -Be 1
+            $present[0].Version | Should -Be ([version]'1.2.3')
+
+            $absent = @(Invoke-AppxQuery -Name 'Vendor.Absent' -PrimaryQuery { param($Name) } -FallbackQuery $fallback)
+            $absent.Count | Should -Be 0
+            $fallbackCounter.Calls | Should -Be 0
+        }
+    }
+
+    It 'INV windows/appx-fallback-bounded-and-isolated: falls back on terminating and non-terminating failures and discards partial output' {
+        InModuleScope WinEnv {
+            $fallbackCounter = [pscustomobject]@{ Calls = 0 }
+            $fallback = {
+                param([string] $Name)
+                $fallbackCounter.Calls++
+                [pscustomobject]@{ Name = $Name; Version = [version]'2.4.6' }
+            }
+
+            $terminating = @(Invoke-AppxQuery -Name 'Vendor.Terminal' `
+                    -PrimaryQuery { throw 'primary terminating failure' } -FallbackQuery $fallback)
+            $terminating.Count | Should -Be 1
+            $terminating[0].Version | Should -Be ([version]'2.4.6')
+
+            $nonTerminating = @(Invoke-AppxQuery -Name 'Vendor.Terminal' -PrimaryQuery {
+                    param($Name)
+                    [pscustomobject]@{ Name = 'partial'; Version = [version]'0.0' }
+                    Write-Error 'primary non-terminating failure'
+                } -FallbackQuery $fallback)
+            $nonTerminating.Count | Should -Be 1
+            $nonTerminating[0].Name | Should -Be 'Vendor.Terminal'
+            $fallbackCounter.Calls | Should -Be 2
+
+            $absentCounter = [pscustomobject]@{ Calls = 0 }
+            $absentProbe = Get-WinEnvAppxPresence -Name 'Vendor.Absent' -Query {
+                Invoke-AppxQuery -Name 'Vendor.Absent' `
+                    -PrimaryQuery { throw 'primary unavailable' } `
+                    -FallbackQuery { param($Name) $absentCounter.Calls++ }
+            }
+            $absentProbe.Usable | Should -Be $true
+            $absentProbe.Present | Should -Be $false
+            $absentCounter.Calls | Should -Be 1
+        }
+    }
+
+    It 'INV windows/appx-fallback-bounded-and-isolated: preserves both route failures as one undecidable reason' {
+        InModuleScope WinEnv {
+            $probe = Get-WinEnvAppxPresence -Name 'Vendor.Terminal' -Query {
+                Invoke-AppxQuery -Name 'Vendor.Terminal' `
+                    -PrimaryQuery { throw 'primary route refused' } `
+                    -FallbackQuery { throw 'fallback route refused' }
+            }
+            $probe.Usable | Should -Be $false
+            ($null -eq $probe.Present) | Should -Be $true
+            $probe.Reason | Should -Match 'primary route refused'
+            $probe.Reason | Should -Match 'fallback route refused'
+        }
+    }
+
+    It 'INV windows/appx-fallback-bounded-and-isolated: validates present and absent response contracts' {
+        InModuleScope WinEnv {
+            $present = @(ConvertFrom-AppxQueryResponse -Name 'Vendor.Terminal' -ProcessResult ([pscustomobject]@{
+                        ExitCode = 0
+                        StdErr   = ''
+                        StdOut   = '{"SchemaVersion":1,"Name":"Vendor.Terminal","Present":true,"Version":"1.24.3.0"}'
+                    }))
+            $present.Count | Should -Be 1
+            $present[0].Name | Should -Be 'Vendor.Terminal'
+            $present[0].Version | Should -Be ([version]'1.24.3.0')
+
+            $absent = @(ConvertFrom-AppxQueryResponse -Name 'Vendor.Absent' -ProcessResult ([pscustomobject]@{
+                        ExitCode = 0
+                        StdErr   = ''
+                        StdOut   = '{"SchemaVersion":1,"Name":"Vendor.Absent","Present":false,"Version":null}'
+                    }))
+            $absent.Count | Should -Be 0
+        }
+    }
+
+    It 'INV windows/appx-fallback-bounded-and-isolated: rejects every invalid process and JSON result' {
+        InModuleScope WinEnv {
+            $invalid = @(
+                @{ Label = 'nonzero exit'; Result = @{ ExitCode = 7; StdErr = ''; StdOut = '{}' } },
+                @{ Label = 'stderr'; Result = @{ ExitCode = 0; StdErr = 'warning'; StdOut = '{}' } },
+                @{ Label = 'empty stdout'; Result = @{ ExitCode = 0; StdErr = ''; StdOut = '' } },
+                @{ Label = 'malformed JSON'; Result = @{ ExitCode = 0; StdErr = ''; StdOut = '{' } },
+                @{ Label = 'array JSON'; Result = @{ ExitCode = 0; StdErr = ''; StdOut = '[]' } },
+                @{ Label = 'wrong shape'; Result = @{ ExitCode = 0; StdErr = ''; StdOut = '{"SchemaVersion":1,"Name":"Vendor.Terminal","Present":true}' } },
+                @{ Label = 'wrong schema type'; Result = @{ ExitCode = 0; StdErr = ''; StdOut = '{"SchemaVersion":"1","Name":"Vendor.Terminal","Present":true,"Version":"1.0"}' } },
+                @{ Label = 'wrong name'; Result = @{ ExitCode = 0; StdErr = ''; StdOut = '{"SchemaVersion":1,"Name":"Vendor.Other","Present":true,"Version":"1.0"}' } },
+                @{ Label = 'wrong presence type'; Result = @{ ExitCode = 0; StdErr = ''; StdOut = '{"SchemaVersion":1,"Name":"Vendor.Terminal","Present":"true","Version":"1.0"}' } },
+                @{ Label = 'absent version'; Result = @{ ExitCode = 0; StdErr = ''; StdOut = '{"SchemaVersion":1,"Name":"Vendor.Terminal","Present":false,"Version":"1.0"}' } },
+                @{ Label = 'invalid version'; Result = @{ ExitCode = 0; StdErr = ''; StdOut = '{"SchemaVersion":1,"Name":"Vendor.Terminal","Present":true,"Version":"not-a-version"}' } }
+            )
+            foreach ($case in $invalid) {
+                { ConvertFrom-AppxQueryResponse -Name 'Vendor.Terminal' -ProcessResult ([pscustomobject]$case.Result) } |
+                    Should -Throw -Because $case.Label
+            }
+
+            $nonzero = [pscustomobject]@{ ExitCode = 7; StdErr = 'fallback detail'; StdOut = '' }
+            { ConvertFrom-AppxQueryResponse -Name 'Vendor.Terminal' -ProcessResult $nonzero } |
+                Should -Throw '*status 7*fallback detail*'
+        }
+    }
+
+    It 'INV windows/appx-fallback-bounded-and-isolated: refuses missing and unlaunchable executables' {
+        InModuleScope WinEnv -Parameters @{ TestRoot = $TestDrive } {
+            param($TestRoot)
+            $missing = Join-Path $TestRoot 'missing-powershell.exe'
+            { Invoke-AppxQueryChildProcess -ExecutablePath $missing -Payload 'exit 0' -Request '{}' -TimeoutMilliseconds 1000 } |
+                Should -Throw '*not found*'
+
+            $notExecutable = Join-Path $TestRoot 'not-an-executable.txt'
+            [IO.File]::WriteAllText($notExecutable, 'plain text')
+            { Invoke-AppxQueryChildProcess -ExecutablePath $notExecutable -Payload 'exit 0' -Request '{}' -TimeoutMilliseconds 1000 } |
+                Should -Throw '*could not start*'
+        }
+    }
+
+    It 'INV windows/appx-fallback-bounded-and-isolated: kills the child when the internal timeout expires' {
+        InModuleScope WinEnv -Parameters @{ TestRoot = $TestDrive } {
+            param($TestRoot)
+            $pidPath = Join-Path $TestRoot 'timed-out.pid'
+            $request = @{ PidPath = $pidPath } | ConvertTo-Json -Compress
+            $payload = @'
+$request = [Console]::In.ReadToEnd() | ConvertFrom-Json
+[IO.File]::WriteAllText([string]$request.PidPath, [string]$PID)
+Start-Sleep -Seconds 30
+'@
+            $pwsh = (Get-Process -Id $PID).Path
+            { Invoke-AppxQueryChildProcess -ExecutablePath $pwsh -Payload $payload `
+                    -Request $request -TimeoutMilliseconds 2000 } | Should -Throw '*timed out*'
+            Test-Path -LiteralPath $pidPath | Should -Be $true
+            $childPid = [int](Get-Content -LiteralPath $pidPath -Raw)
+            Get-Process -Id $childPid -ErrorAction SilentlyContinue | Should -BeNullOrEmpty
+        }
+    }
+
+    It 'INV windows/appx-fallback-bounded-and-isolated: bounds output drains after the direct child exits' {
+        InModuleScope WinEnv -Parameters @{ TestRoot = $TestDrive } {
+            param($TestRoot)
+            $pidPath = Join-Path $TestRoot 'descendant.pid'
+            $request = @{ PidPath = $pidPath } | ConvertTo-Json -Compress
+            $payload = @'
+$request = [Console]::In.ReadToEnd() | ConvertFrom-Json
+$info = [Diagnostics.ProcessStartInfo]::new((Get-Process -Id $PID).Path)
+$info.UseShellExecute = $false
+$info.Arguments = '-NoProfile -NonInteractive -Command "Start-Sleep -Seconds 5"'
+$descendant = [Diagnostics.Process]::Start($info)
+[IO.File]::WriteAllText([string]$request.PidPath, [string]$descendant.Id)
+exit 0
+'@
+            $pwsh = (Get-Process -Id $PID).Path
+            $watch = [Diagnostics.Stopwatch]::StartNew()
+            try {
+                { Invoke-AppxQueryChildProcess -ExecutablePath $pwsh -Payload $payload `
+                        -Request $request -TimeoutMilliseconds 1000 } | Should -Throw '*timed out*draining*'
+                $watch.Stop()
+                $watch.ElapsedMilliseconds | Should -BeLessThan 3000
+            }
+            finally {
+                $watch.Stop()
+                if (Test-Path -LiteralPath $pidPath) {
+                    $descendantPid = [int](Get-Content -LiteralPath $pidPath -Raw)
+                    Stop-Process -Id $descendantPid -Force -ErrorAction SilentlyContinue
+                }
+            }
+        }
+    }
+
+    It 'INV windows/appx-fallback-bounded-and-isolated: rejects a non-integer request schema before querying Appx' {
+        InModuleScope WinEnv {
+            $payload = Get-Content -LiteralPath $script:AppxQueryPayloadPath -Raw
+            $pwsh = (Get-Process -Id $PID).Path
+            $result = Invoke-AppxQueryChildProcess -ExecutablePath $pwsh -Payload $payload `
+                -Request '{"SchemaVersion":"1","Name":"Vendor.Terminal"}' -TimeoutMilliseconds 5000
+            $result.ExitCode | Should -Be 1
+            $result.StdErr | Should -Match 'SchemaVersion must be an integer'
+            $result.StdOut | Should -BeNullOrEmpty
+        }
+    }
+
+    It 'INV windows/appx-fallback-bounded-and-isolated: rejects invalid UTF-8 from the child' {
+        InModuleScope WinEnv {
+            $payload = @'
+$stream = [Console]::OpenStandardOutput()
+$bytes = [byte[]](0xc3, 0x28)
+$stream.Write($bytes, 0, $bytes.Length)
+'@
+            $pwsh = (Get-Process -Id $PID).Path
+            { Invoke-AppxQueryChildProcess -ExecutablePath $pwsh -Payload $payload `
+                    -Request '{}' -TimeoutMilliseconds 5000 } | Should -Throw
+        }
+    }
+
+    It 'INV windows/appx-fallback-bounded-and-isolated: executes the checked-in payload with controlled Appx responses and literal names' {
+        InModuleScope WinEnv -Parameters @{ TestRoot = $TestDrive } {
+            param($TestRoot)
+            # Exercise the real child transport and checked-in payload without
+            # depending on the runner's Appx service availability. A real query
+            # timing out is an undecidable observation, not a transport failure.
+            $executable = if ($IsWindows) { Resolve-AppxPowerShell51Path } else { (Get-Process -Id $PID).Path }
+            $queryFixture = @'
+function Get-AppxPackage {
+    [CmdletBinding()]
+    param([string] $Name)
+    if ($Name -eq 'WinEnv.Nonexistent.Appx.Control') { return }
+    if ($Name -eq 'WinEnv.Unavailable.Appx.Control') { throw 'fixture Appx query unavailable' }
+    [pscustomobject]@{ Name = $Name; Version = '1.2.3.4' }
+}
+'@
+            $fixturePath = Join-Path $TestRoot 'appx-query-fixture.ps1'
+            $payload = Get-Content -LiteralPath $script:AppxQueryPayloadPath -Raw -Encoding utf8
+            [IO.File]::WriteAllText($fixturePath, $queryFixture + "`r`n" + $payload, [Text.UTF8Encoding]::new($false))
+
+            $absent = @(Invoke-AppxPowerShell51Query -Name 'WinEnv.Nonexistent.Appx.Control' `
+                    -ExecutablePath $executable -PayloadPath $fixturePath)
+            $absent.Count | Should -Be 0
+
+            $present = @(Invoke-AppxPowerShell51Query -Name 'Vendor.Terminal' `
+                    -ExecutablePath $executable -PayloadPath $fixturePath)
+            $present.Count | Should -Be 1
+            $present[0].Name | Should -BeExactly 'Vendor.Terminal'
+            $present[0].Version | Should -Be ([version]'1.2.3.4')
+
+            $probe = Get-WinEnvAppxPresence -Name 'WinEnv.Unavailable.Appx.Control' -Query {
+                param($Name)
+                Invoke-AppxPowerShell51Query -Name $Name -ExecutablePath $executable -PayloadPath $fixturePath
+            }
+            $probe.Usable | Should -Be $false
+            $probe.Present | Should -BeNullOrEmpty
+            $probe.Reason | Should -Match 'fixture Appx query unavailable'
+
+            $sentinel = Join-Path $TestRoot 'name-was-executed.txt'
+            $name = 'WinEnv.Nonexistent;[IO.File]::WriteAllText("' + $sentinel + '","unsafe")'
+            $literal = @(Invoke-AppxPowerShell51Query -Name $name `
+                    -ExecutablePath $executable -PayloadPath $fixturePath)
+            $literal.Count | Should -Be 1
+            $literal[0].Name | Should -BeExactly $name
+            $literal[0].Version | Should -Be ([version]'1.2.3.4')
+            Test-Path -LiteralPath $sentinel | Should -Be $false
+        }
     }
 }
 
@@ -1886,32 +2249,26 @@ Describe 'Windows build condition' {
         (Get-WinEnvDesiredStateHash -Root $root -Manifest $manifest -Feature @('core')) | Should -Not -Be $after
     }
 
-    It 'accepts the repository manifest and keeps the 22H2 payload byte-identical' {
-        $manifest = Get-WinEnvManifest -Path (Join-Path $desiredStateRoot 'manifest.json')
-        $wsl = $manifest.ManagedFiles | Where-Object Id -eq 'wslConfig'
+    It 'resolves a historical WSL definition without offering host-global defaults' {
+        $wsl = New-ConditionalFile -Sources @(@{ MinimumBuild = 22621; Source = $Upper }, @{ Source = $Lower })
         (Resolve-WinEnvManagedFile -Definition $wsl -Build $Windows11_23H2).Source | Should -Be $Upper
         (Resolve-WinEnvManagedFile -Definition $wsl -Build $Windows11_22H2).Source | Should -Be $Upper
         (Resolve-WinEnvManagedFile -Definition $wsl -Build $Windows11_21H2).Source | Should -Be $Lower
         (Resolve-WinEnvManagedFile -Definition $wsl -Build $Windows10_22H2).Source | Should -Be $Lower
         (Resolve-WinEnvManagedFile -Definition $wsl -Build $null).Source | Should -Be $Lower
 
-        # A host at or above the bound receives what it already had. Pinned as
-        # a literal rather than against the old file, which no longer exists.
-        $expected = "[wsl2]`nnetworkingMode=Mirrored`n`n[experimental]`nhostAddressLoopback=true`nautoMemoryReclaim=Gradual`nbestEffortDnsParsing=true`n"
-        $actual = (Get-Content (Join-Path $desiredStateRoot $Upper) -Raw).Replace("`r`n", "`n")
-        $actual | Should -Be $expected
     }
 
-    It 'parses both payloads with the parser the entry declares' {
-        # The merge gate must not accept a payload nobody parsed, and one of
-        # these is never the local answer on any single host.
-        $manifest = Get-WinEnvManifest -Path (Join-Path $desiredStateRoot 'manifest.json')
-        $wsl = $manifest.ManagedFiles | Where-Object Id -eq 'wslConfig'
-        foreach ($variant in (Get-WinEnvManagedFileVariant -Definition $wsl)) {
-            (Test-WinEnvSourceFile -Definition $variant -RepositoryRoot $desiredStateRoot) | Should -BeNullOrEmpty
+    It 'parses synthetic historical variants with their declared parser' {
+        $historical = Join-Path $TestDrive 'historical-desired'
+        [void](New-Item -ItemType Directory $historical -Force)
+        [IO.File]::WriteAllText((Join-Path $historical 'upper.ini'), "[wsl2]`nnetworkingMode=Mirrored`n")
+        [IO.File]::WriteAllText((Join-Path $historical 'lower.ini'), "[wsl2]`nmemory=4GB`n")
+        $wsl = New-ConditionalFile -Sources @(@{MinimumBuild=22621;Source='upper.ini'},@{Source='lower.ini'})
+        foreach ($variant in Get-WinEnvManagedFileVariant $wsl) {
+            (Test-WinEnvSourceFile -Definition $variant -RepositoryRoot $historical) | Should -BeNullOrEmpty
         }
     }
-
     It 'INV windows/sources-total-function: refuses a variant list whose last entry is conditional' {
         # Negative fixture for the invariant the two-entry shape would have
         # needed and could not have enforced: on a host below every bound this
@@ -2132,14 +2489,17 @@ Describe 'terminal delegation boundary' {
         $above = Test-Delegation -Build $Windows11_24H2
         $above.Matches | Should -Be $true
         ($null -eq $above.Unverified) | Should -Be $true
+        $above.EvidenceCategory | Should -BeNullOrEmpty
 
         $below = Test-Delegation -Build $Windows10_21H2
         $below.Matches | Should -Be $true
         $below.Unverified | Should -Match 'below'
+        $below.EvidenceCategory | Should -Be 'KnownSupportLimit'
 
         $undetermined = Test-Delegation -Build $null
         $undetermined.Matches | Should -Be $true
         $undetermined.Unverified | Should -Match 'build'
+        $undetermined.EvidenceCategory | Should -Be 'UnavailableObservation'
     }
 
     It 'INV windows/check-exit-contract: a mismatched read-back is drift on either side of the boundary' {
@@ -2170,10 +2530,26 @@ Describe 'terminal delegation boundary' {
         ($null -eq $unusable.Supported) | Should -Be $true
         $unusable.Unverified | Should -Match 'Windows Terminal'
         $unusable.Unverified | Should -Match 'could not be loaded'
+        $unusable.EvidenceCategory | Should -Be 'UnavailableObservation'
         $absent = Test-Delegation -AppxQuery $TerminalAbsentQuery
         $absent.Supported | Should -Be $false
         $absent.Unverified | Should -Match 'not installed'
-        (Test-Delegation -AppxQuery $Terminal116Query).Unverified | Should -Match '1\.17'
+        $absent.EvidenceCategory | Should -Be 'KnownSupportLimit'
+        $old = Test-Delegation -AppxQuery $Terminal116Query
+        $old.Unverified | Should -Match '1\.17'
+        $old.EvidenceCategory | Should -Be 'KnownSupportLimit'
+    }
+
+    It 'INV windows/diagnostic-categories-preserved: derives the category from typed support state' {
+        $known = Test-Delegation -Build $Windows10_21H2 -AppxQuery $TerminalUnusableQuery
+        $known.Supported | Should -Be $false
+        $known.EvidenceCategory | Should -Be 'KnownSupportLimit'
+        $known.Unverified | Should -Not -Match 'could not be loaded'
+
+        $unknown = Test-Delegation -Build $null -AppxQuery $Terminal117Query
+        ($null -eq $unknown.Supported) | Should -Be $true
+        $unknown.EvidenceCategory | Should -Be 'UnavailableObservation'
+        $unknown.Unverified | Should -Match 'build'
     }
 
     It 'treats a read-back that throws as drift rather than aborting' {
@@ -2207,6 +2583,107 @@ Describe 'terminal delegation boundary' {
             $result.Matches | Should -Be $false
             $result.Unverified | Should -Match 'build'
         }
+    }
+}
+
+Describe 'unverified evidence presentation' {
+    BeforeAll {
+        # Exercise the functions setup.ps1 actually runs without dot-sourcing
+        # the host reconciliation around them. Reading their definitions from
+        # its AST makes this fixture fail when production formatting diverges.
+        $setupPath = Join-Path $repositoryRoot 'tool\setup.ps1'
+        $tokens = $null
+        $errors = $null
+        $setupAst = [System.Management.Automation.Language.Parser]::ParseFile(
+            $setupPath, [ref]$tokens, [ref]$errors)
+        if ($errors.Count) { throw ($errors -join [Environment]::NewLine) }
+        foreach ($name in @('Add-UnverifiedEvidence', 'Get-UnverifiedEvidenceLine', 'Write-Summary')) {
+            $definition = @($setupAst.FindAll({
+                        param($node)
+                        $node -is [System.Management.Automation.Language.FunctionDefinitionAst] -and
+                        $node.Name -eq $name
+                    }, $true))
+            if ($definition.Count -ne 1) { throw "setup.ps1 must define $name exactly once." }
+            . ([scriptblock]::Create($definition[0].Extent.Text))
+        }
+    }
+
+    It 'INV windows/diagnostic-categories-preserved: separates unavailable observations from known support limits' {
+        $lines = @(Format-WinEnvUnverifiedEvidence `
+                -UnavailableObservation @('Microsoft.WindowsTerminal: both Appx routes failed') `
+                -KnownSupportLimit @('default terminal delegation: Windows build 19044 is below the documented boundary'))
+
+        $lines | Should -Be @(
+            'unavailable observation: Microsoft.WindowsTerminal: both Appx routes failed',
+            'known support limit: default terminal delegation: Windows build 19044 is below the documented boundary'
+        )
+        ($lines -join "`n") | Should -Not -Match 'neither present nor missing'
+    }
+
+    It 'INV windows/diagnostic-categories-preserved: emits every reason once in the shared summary and failure representation' {
+        $lines = @(Format-WinEnvUnverifiedEvidence `
+                -Source @('zellij: parser unavailable') `
+                -UnavailableObservation @('build could not be determined', 'Appx query failed') `
+                -KnownSupportLimit @('Terminal 1.16 is below 1.17'))
+        $text = $lines -join '; '
+
+        $lines.Count | Should -Be 3
+        foreach ($reason in @('parser unavailable', 'build could not be determined', 'Appx query failed', 'below 1.17')) {
+            ([regex]::Matches($text, [regex]::Escape($reason))).Count | Should -Be 1
+        }
+    }
+
+    It 'INV windows/diagnostic-categories-preserved: runs the actual check and verification summary modes with the right category' {
+        $selected = @('core', 'terminal')
+        $selection = [pscustomobject]@{ Implied = @(); Excluded = @() }
+        $unmanaged = @()
+        $changed = @()
+        $drift = @()
+        $unverified = [System.Collections.Generic.List[string]]::new()
+        $unavailableObservation = [System.Collections.Generic.List[string]]::new()
+        $knownSupportLimit = [System.Collections.Generic.List[string]]::new()
+        $conditionalFiles = @()
+        $wslInformation = @()
+
+        $knownSupportLimit.Add('default terminal delegation: Windows build 19044 is below the boundary')
+        $check = @(& { Write-Summary -Mode 'check' } *>&1 | ForEach-Object { "$_" }) -join "`n"
+        $check | Should -Match 'win-env check summary'
+        $check | Should -Match 'known support limit: default terminal delegation'
+        $check | Should -Not -Match 'unavailable observation:'
+        $check | Should -Not -Match 'neither present nor missing'
+
+        $knownSupportLimit.Clear()
+        $unavailableObservation.Add('the Windows build could not be determined')
+        $verification = @(& { Write-Summary -Mode 'verification' } *>&1 | ForEach-Object { "$_" }) -join "`n"
+        $verification | Should -Match 'win-env verification summary'
+        $verification | Should -Match 'unavailable observation: the Windows build could not be determined'
+        $verification | Should -Not -Match 'known support limit:'
+        $verification | Should -Not -Match 'no changes or drift detected'
+    }
+
+    It 'INV windows/diagnostic-categories-preserved: routes every production reason through its typed category' {
+        $unverified = [System.Collections.Generic.List[string]]::new()
+        $unavailableObservation = [System.Collections.Generic.List[string]]::new()
+        $knownSupportLimit = [System.Collections.Generic.List[string]]::new()
+        Add-UnverifiedEvidence -Category 'Source' -Item 'source reason'
+        Add-UnverifiedEvidence -Category 'UnavailableObservation' -Item 'observation reason'
+        Add-UnverifiedEvidence -Category 'KnownSupportLimit' -Item 'limit reason'
+        $unverified.ToArray() | Should -Be @('source reason')
+        $unavailableObservation.ToArray() | Should -Be @('observation reason')
+        $knownSupportLimit.ToArray() | Should -Be @('limit reason')
+
+        $producerCalls = @($setupAst.FindAll({
+                    param($node)
+                    $node -is [System.Management.Automation.Language.CommandAst] -and
+                    $node.GetCommandName() -eq 'Add-UnverifiedEvidence'
+                }, $true))
+        $producerCalls.Count | Should -Be 4
+        $producerText = @($producerCalls | ForEach-Object { $_.Extent.Text })
+        @($producerText | Where-Object { $_ -match "-Category\s+'Source'" }).Count | Should -Be 1
+        @($producerText | Where-Object { $_ -match "-Category\s+'UnavailableObservation'" }).Count | Should -Be 2
+        @($producerText | Where-Object { $_ -match '-Category\s+\$delegation\.EvidenceCategory' }).Count | Should -Be 1
+        ($producerText -join "`n") | Should -Match '\$status\.Unverified'
+        ($producerText -join "`n") | Should -Match 'precondition:\s+\$item'
     }
 }
 
@@ -2319,7 +2796,7 @@ Describe 'capture' {
         $plan.Content | Should -Be '{"template":"__LOCALAPPDATA_JSON__\\New"}'
         $plan.Content | Should -Not -Match 'Users'
 
-        [void](Save-WinEnvCapturedPayload -Plan $plan -RepositoryRoot $CaptureRoot)
+        [void](Save-FixtureCapturedProjection -Plan $plan -RepositoryRoot $CaptureRoot)
         # The point of the whole tool: the file the check called drift now
         # matches the payload, through the same comparison the check uses.
         (Test-WinEnvManagedFile -Definition $definition -RepositoryRoot $CaptureRoot -HostPath $CaptureHost) |
@@ -2368,7 +2845,7 @@ Describe 'capture' {
         @($captured.profiles.list | ForEach-Object { $_.name }) | Should -Be @('PowerShell 7', 'Zellij Workspace')
         $captured.copyOnSelect | Should -Be $flipped
 
-        [void](Save-WinEnvCapturedPayload -Plan $plan -RepositoryRoot $CaptureRoot)
+        [void](Save-FixtureCapturedProjection -Plan $plan -RepositoryRoot $CaptureRoot)
         (Test-WinEnvManagedFile -Definition $definition -RepositoryRoot $CaptureRoot -HostPath $CaptureHost) |
             Should -Be $true
     }
@@ -2418,7 +2895,7 @@ Describe 'capture' {
         $plan.Content | Should -Not -Match 'version'
         $plan.Content | Should -Not -Match 'window'
 
-        [void](Save-WinEnvCapturedPayload -Plan $plan -RepositoryRoot $CaptureRoot)
+        [void](Save-FixtureCapturedProjection -Plan $plan -RepositoryRoot $CaptureRoot)
         # The point of the whole change: a JsonSubset file the check called
         # drift is clean afterwards, through the comparison the check uses.
         (Test-WinEnvManagedFile -Definition $definition -RepositoryRoot $CaptureRoot -HostPath $CaptureHost) |
@@ -2567,8 +3044,12 @@ Describe 'capture' {
             Sources = @(@{ MinimumBuild = 22621; Source = $upper }, @{ Source = $lower })
         }
 
-        (Get-WinEnvCapturePlan -Definition $definition -RepositoryRoot $CaptureRoot `
-                -Build 22631 -HostPath $CaptureHost).Source | Should -Be $upper
+        [IO.File]::WriteAllText($target, "[wsl2]`nnetworkingMode=Mirrored`nmemory=8GB`n")
+        $above = Get-WinEnvCapturePlan -Definition $definition -RepositoryRoot $CaptureRoot `
+            -Build 22631 -HostPath $CaptureHost -WslVersion '2.0.5'
+        $above.Status | Should -Be 'Captured'
+        $above.Source | Should -Be $upper
+        [IO.File]::WriteAllText($target, "[wsl2]`nmemory=8GB`n")
         $below = Get-WinEnvCapturePlan -Definition $definition -RepositoryRoot $CaptureRoot `
             -Build 19045 -HostPath $CaptureHost
         $below.Source | Should -Be $lower
@@ -2633,25 +3114,7 @@ Describe 'capture' {
             -Build 22631 -HostPath $CaptureHost
         $plan.Status | Should -Be 'Unchanged'
         $plan.Content | Should -BeNullOrEmpty
-        { Save-WinEnvCapturedPayload -Plan $plan -RepositoryRoot $CaptureRoot } | Should -Throw
         (Get-FileHash -LiteralPath $payloadPath -Algorithm SHA256).Hash | Should -Be $before
-    }
-
-    It 'writes nothing under -WhatIf' {
-        $source = New-CapturePayload 'whatif.json' "{`n  `"a`": 1`n}`n"
-        $target = New-CaptureTarget 'whatif.json' '{"a":2}'
-        $definition = New-CaptureDefinition -Id 'whatif' -Source $source -Target $target
-        $payloadPath = Join-Path $CaptureRoot $source
-        $before = (Get-FileHash -LiteralPath $payloadPath -Algorithm SHA256).Hash
-
-        $plan = Get-WinEnvCapturePlan -Definition $definition -RepositoryRoot $CaptureRoot `
-            -Build 22631 -HostPath $CaptureHost
-        $plan.Status | Should -Be 'Captured'
-        (Save-WinEnvCapturedPayload -Plan $plan -RepositoryRoot $CaptureRoot -WhatIf) | Should -Be $payloadPath
-        (Get-FileHash -LiteralPath $payloadPath -Algorithm SHA256).Hash | Should -Be $before
-
-        [void](Save-WinEnvCapturedPayload -Plan $plan -RepositoryRoot $CaptureRoot)
-        (Get-FileHash -LiteralPath $payloadPath -Algorithm SHA256).Hash | Should -Not -Be $before
     }
 
     It 'keeps the line-ending and final-newline convention the payload already uses' {
@@ -2723,7 +3186,7 @@ Describe 'capture' {
         # exactly what the host held.
         $plan.Content | Should -Be '{"a":2,"b":{"c":[1,2,3]},"d":[]}'
 
-        [void](Save-WinEnvCapturedPayload -Plan $plan -RepositoryRoot $CaptureRoot)
+        [void](Save-FixtureCapturedProjection -Plan $plan -RepositoryRoot $CaptureRoot)
         $payloadPath = Join-Path $CaptureRoot $source
         $written = Get-Content -LiteralPath $payloadPath -Raw -Encoding utf8
         $written | Should -Be (
@@ -2788,7 +3251,7 @@ Describe 'capture' {
         $result = $plan.Content | ConvertFrom-Json
         @($result.profiles.list | ForEach-Object { $_.name }) | Should -Be @('Declared', 'Hand written')
 
-        [void](Save-WinEnvCapturedPayload -Plan $plan -RepositoryRoot $CaptureRoot)
+        [void](Save-FixtureCapturedProjection -Plan $plan -RepositoryRoot $CaptureRoot)
         # Still drift, because the host holds a profile no payload can own.
         # Drift is the honest answer; a thrown exception is not, and before the
         # guidless entry was dropped this is where the suite blew up.
@@ -2850,1559 +3313,11 @@ Describe 'capture' {
         }
     }
 
-    It 'offers the documented selection and no unattended mode' {
-        # The script is the part of capture that needs a terminal and a Git
-        # repository, so this suite holds it to its interface rather than
-        # running it end to end. Its selection and payload rules are fixtured
-        # above through the functions it calls, and so is its branch rule now
-        # (Describe 'capture branch', below) -- both against a throwaway
-        # repository, never this one. What remains genuinely host-only is
-        # whether the commit's pre-commit hook actually ran, which #77 has
-        # since shown happens under Git for Windows
-        # (docs/decisions/hooks-run-under-git-for-windows.md).
-        $capturePath = Join-Path $repositoryRoot 'tools\capture.ps1'
-        (Test-Path -LiteralPath $capturePath -PathType Leaf) | Should -Be $true
-
-        $tokens = $null; $errors = $null
-        $ast = [System.Management.Automation.Language.Parser]::ParseFile($capturePath, [ref]$tokens, [ref]$errors)
-        $errors.Count | Should -Be 0
-
-        $parameters = @($ast.ParamBlock.Parameters | ForEach-Object { $_.Name.VariablePath.UserPath })
-        $parameters | Should -Contain 'Feature'
-        $parameters | Should -Contain 'Id'
-        $parameters | Should -Contain 'Branch'
-        $parameters | Should -Contain 'Publish'
-        # -WhatIf comes from SupportsShouldProcess rather than from a parameter
-        # of its own, and there is deliberately no -Yes, -Force or override.
-        ($ast.ParamBlock.Attributes | ForEach-Object { $_.Extent.Text }) -join ' ' |
-            Should -Match 'SupportsShouldProcess'
-        $parameters | Should -Not -Contain 'Force'
-        $parameters | Should -Not -Contain 'Yes'
-    }
-
-    It 'guards every host read behind Test-WinEnvWindowsHost' {
-        # The predicate is one line over the automatic variable and has no
-        # fixture of its own. What this suite asserts on any platform without
-        # running the script is that the call happens exactly once, ahead of
-        # the first host read, and that finding it false is what stops the run.
-        $capturePath = Join-Path $repositoryRoot 'tools\capture.ps1'
-        $tokens = $null; $errors = $null
-        $tree = [System.Management.Automation.Language.Parser]::ParseFile($capturePath, [ref]$tokens, [ref]$errors)
-        $errors.Count | Should -Be 0
-
-        $guardCalls = @($tree.FindAll(
-                { $args[0] -is [System.Management.Automation.Language.CommandAst] }, $true) |
-                Where-Object { $_.GetCommandName() -eq 'Test-WinEnvWindowsHost' })
-        $guardCalls.Count | Should -Be 1
-
-        $firstManifestRead = @($tree.FindAll(
-                { $args[0] -is [System.Management.Automation.Language.CommandAst] }, $true) |
-                Where-Object { $_.GetCommandName() -eq 'Get-WinEnvManifest' }) | Select-Object -First 1
-        $firstManifestRead | Should -Not -BeNullOrEmpty
-        $guardCalls[0].Extent.StartOffset | Should -BeLessThan $firstManifestRead.Extent.StartOffset
-
-        $guardIf = @($tree.FindAll(
-                { $args[0] -is [System.Management.Automation.Language.IfStatementAst] }, $true) |
-                Where-Object { $_.Clauses[0].Item1.Extent.Text -match 'Test-WinEnvWindowsHost' }) |
-            Select-Object -First 1
-        $guardIf | Should -Not -BeNullOrEmpty
-        $guardIf.Clauses[0].Item1.Extent.Text | Should -Match '-not'
-
-        $guardBody = @($guardIf.Clauses[0].Item2.FindAll(
-                { $args[0] -is [System.Management.Automation.Language.CommandAst] }, $true) |
-                ForEach-Object { $_.GetCommandName() })
-        $guardBody | Should -Contain 'Stop-Capture'
-    }
-
-    It 'refuses to run at all on a non-Windows host' {
-        # Genuinely end-to-end, unlike the rest of this Describe block: the
-        # guard is the one thing in capture.ps1 that is safe to run for real,
-        # anywhere, because it is the only code that runs before any host
-        # read or write. On native Windows the real answer is the positive
-        # branch instead, where the guard passes and the script would go on
-        # to read the host; running the full script here would need a fixture
-        # repository this block does not build, and must never be this one.
-        if ([Environment]::OSVersion.Platform -eq [System.PlatformID]::Win32NT) {
-            Set-ItResult -Skipped -Because 'this host is Windows, where capture.ps1 does not refuse'
-            return
-        }
-
-        $capturePath = Join-Path $repositoryRoot 'tools\capture.ps1'
-        $pwsh = (Get-Process -Id $PID).Path
-        $output = @(& $pwsh -NoLogo -NoProfile -NonInteractive -File $capturePath 2>&1)
-        $LASTEXITCODE | Should -Be 1
-        ($output -join [Environment]::NewLine) | Should -Match 'only runs on Windows'
-        ($output -join [Environment]::NewLine) | Should -Match ([regex]::Escape('tool/version-control/commit --publish'))
-    }
-
-    It 'asks the documented question once, and only that question' {
-        # The prompt's wording is asserted here rather than in the end-to-end
-        # transcript. Windows PowerShell's console host writes a Read-Host
-        # prompt to the console device instead of to stdout, so a captured
-        # child process never carries it and a transcript assertion would only
-        # ever be testing which console the suite ran on. The source is the
-        # same on every platform, and one Read-Host is itself the invariant:
-        # a second question would be a second confirmation.
-        $capturePath = Join-Path $repositoryRoot 'tools\capture.ps1'
-        $tokens = $null; $errors = $null
-        $tree = [System.Management.Automation.Language.Parser]::ParseFile($capturePath, [ref]$tokens, [ref]$errors)
-
-        $prompts = @($tree.FindAll(
-                { $args[0] -is [System.Management.Automation.Language.CommandAst] }, $true) |
-                Where-Object { $_.GetCommandName() -eq 'Read-Host' })
-        $prompts.Count | Should -Be 1
-
-        $literals = @($tree.FindAll(
-                { $args[0] -is [System.Management.Automation.Language.StringConstantExpressionAst] }, $true) |
-                ForEach-Object { $_.Value })
-        $literals | Should -Contain 'Write these payloads, commit and publish? [y/N]'
-        $literals | Should -Contain 'Write these payloads and commit? [y/N]'
-    }
-
-    It 'never spells a hook bypass or an administrative merge' {
-        # -Publish adds a push and a merge to this tool's reach, and each has a
-        # flag that would turn a gate off. Neither may appear in the source at
-        # all: an operator may decide to skip a gate, but a tool that took that
-        # decision silently would be writing policy rather than implementing it.
-        # Read from the commands the parser found rather than from the raw
-        # text, so the prose that explains why these flags are absent does not
-        # itself trip the guard.
-        $sources = @(
-            (Join-Path $repositoryRoot 'tools\capture.ps1'),
-            (Join-Path $repositoryRoot 'src\WinEnv.psm1'))
-        foreach ($source in $sources) {
-            $tokens = $null; $errors = $null
-            $tree = [System.Management.Automation.Language.Parser]::ParseFile($source, [ref]$tokens, [ref]$errors)
-            $commands = @($tree.FindAll(
-                    { $args[0] -is [System.Management.Automation.Language.CommandAst] }, $true) |
-                    ForEach-Object { $_.Extent.Text })
-            $invoked = $commands -join ' '
-            $invoked | Should -Not -Match '--no-verify' -Because $source
-            $invoked | Should -Not -Match '--force' -Because $source
-            $invoked | Should -Not -Match '--admin' -Because $source
-
-            # The same two gates have one-letter spellings: `git push -f` and
-            # `git commit -n` bypass exactly what the long flags do, and a
-            # guard that only knows the long ones invites the short ones.
-            # Scoped to git invocations, because -f and -n mean other things
-            # elsewhere in PowerShell.
-            $gitCommands = @($commands | Where-Object { $_ -cmatch '(^|\s)git(\s|$)' })
-            foreach ($command in $gitCommands) {
-                $command | Should -Not -Match '(^|\s)-[fn](\s|$)' -Because "$source : $command"
-            }
-        }
-    }
-}
-
-Describe 'capture branch' {
-    <#
-        The branch rule tool/version-control/commit applies (#72), copied into
-        Get-WinEnvCaptureBranchPlan and New-WinEnvCaptureBranch (#77) because
-        capture.ps1 restates that helper's shape rather than calling it. Every
-        fixture below runs against a throwaway working copy and a throwaway
-        bare remote under $TestDrive, the way tool/version-control/test builds
-        one for the same rule in #72 -- never this repository's own dev.
-    #>
-    BeforeAll {
-        function New-BranchFixture {
-            # A repository with one commit on dev, pushed to a bare remote and
-            # fetched back, plus a master branch: exactly the shape
-            # Get-WinEnvCaptureBranchPlan and New-WinEnvCaptureBranch read.
-            $token = [guid]::NewGuid().ToString('N')
-            $remote = Join-Path $TestDrive "branch-remote-$token.git"
-            $repo = Join-Path $TestDrive "branch-repo-$token"
-            [void](New-Item -ItemType Directory -Path $repo -Force)
-
-            & git init -q --bare -b dev $remote | Out-Null
-            & git -C $repo init -q -b dev | Out-Null
-            & git -C $repo config user.name Fixture | Out-Null
-            & git -C $repo config user.email fixture@example.invalid | Out-Null
-            & git -C $repo remote add origin $remote | Out-Null
-            [IO.File]::WriteAllText((Join-Path $repo 'seed.txt'), 'seed')
-            & git -C $repo add -- seed.txt | Out-Null
-            & git -C $repo commit -q -m 'seed' | Out-Null
-            & git -C $repo push -q --set-upstream origin dev | Out-Null
-            & git -C $repo branch -q master | Out-Null
-
-            return [pscustomobject]@{ Repo = $repo; Remote = $remote }
-        }
-
-        function Get-FixtureBranches {
-            param([Parameter(Mandatory)][string] $Repo)
-            return @(& git -C $Repo for-each-ref --format='%(refname)' refs/heads)
-        }
-
-        function Get-FixtureCurrentBranch {
-            param([Parameter(Mandatory)][string] $Repo)
-            return (& git -C $Repo branch --show-current).Trim()
-        }
-    }
-
-    It 'INV windows/capture-publishes-through-dev: refuses on master without reading the remote at all' {
-        $fixture = New-BranchFixture
-        & git -C $fixture.Repo switch -q master | Out-Null
-        # No origin/dev ref at all would make a remote-reading refusal true by
-        # accident; deleting it proves master is decided first.
-        & git -C $fixture.Repo update-ref -d refs/remotes/origin/dev | Out-Null
-
-        $plan = Get-WinEnvCaptureBranchPlan -RepositoryRoot $fixture.Repo -BranchName 'feature/windows-capture-font'
-        $plan.Status | Should -Be 'Refused'
-        $plan.Branch | Should -BeNullOrEmpty
-        $plan.Message | Should -Match 'master'
-    }
-
-    It 'commits where it is on a branch that is not dev or master' {
-        $fixture = New-BranchFixture
-        & git -C $fixture.Repo switch -q -c feature/windows-existing | Out-Null
-
-        $plan = Get-WinEnvCaptureBranchPlan -RepositoryRoot $fixture.Repo -BranchName 'feature/windows-capture-font'
-        $plan.Status | Should -Be 'Current'
-        $plan.Branch | Should -Be 'feature/windows-existing'
-    }
-
-    It 'refuses when origin/dev has never been fetched' {
-        $fixture = New-BranchFixture
-        & git -C $fixture.Repo update-ref -d refs/remotes/origin/dev | Out-Null
-
-        $plan = Get-WinEnvCaptureBranchPlan -RepositoryRoot $fixture.Repo -BranchName 'feature/windows-capture-font'
-        $plan.Status | Should -Be 'Refused'
-        $plan.Message | Should -Match 'origin/dev is unavailable'
-    }
-
-    It 'refuses when local dev has moved past a stale origin/dev' {
-        $fixture = New-BranchFixture
-        [IO.File]::WriteAllText((Join-Path $fixture.Repo 'seed.txt'), 'changed locally')
-        & git -C $fixture.Repo commit -q -a -m 'advance dev locally' | Out-Null
-
-        $plan = Get-WinEnvCaptureBranchPlan -RepositoryRoot $fixture.Repo -BranchName 'feature/windows-capture-font'
-        $plan.Status | Should -Be 'Refused'
-        $plan.Message | Should -Match 'dev is not at origin/dev'
-    }
-
-    It 'refuses a branch name that already exists' {
-        $fixture = New-BranchFixture
-        & git -C $fixture.Repo branch -q feature/windows-capture-font | Out-Null
-
-        $plan = Get-WinEnvCaptureBranchPlan -RepositoryRoot $fixture.Repo -BranchName 'feature/windows-capture-font'
-        $plan.Status | Should -Be 'Refused'
-        $plan.Message | Should -Match 'already exists'
-    }
-
-    It 'refuses a -Branch override that fails this repository''s naming policy' {
-        # The exact regression a review caught live: README's own example was
-        # -Branch fix/font, which tool/version-control/audit rejects for
-        # missing the windows- scope prefix. This must refuse before any read
-        # of the remote at all, the same as the master refusal does.
-        $fixture = New-BranchFixture
-        & git -C $fixture.Repo update-ref -d refs/remotes/origin/dev | Out-Null
-
-        $plan = Get-WinEnvCaptureBranchPlan -RepositoryRoot $fixture.Repo -BranchName 'fix/font'
-        $plan.Status | Should -Be 'Refused'
-        $plan.Branch | Should -BeNullOrEmpty
-        $plan.Message | Should -Match 'naming policy'
-        # Naming the pattern, not just the symptom, is the point: the operator
-        # can fix the name without having to go read tool/version-control/audit.
-        $plan.Detail | Should -Match ([regex]::Escape('(feature|fix)/(unixlike|windows|common|repository)-[a-z0-9][a-z0-9-]*'))
-    }
-
-    It 'accepts a -Branch override that follows the naming policy' {
-        $fixture = New-BranchFixture
-        $plan = Get-WinEnvCaptureBranchPlan -RepositoryRoot $fixture.Repo -BranchName 'fix/windows-font'
-        $plan.Status | Should -Be 'Create'
-        $plan.Branch | Should -Be 'fix/windows-font'
-
-        $originDev = (& git -C $fixture.Repo rev-parse refs/remotes/origin/dev).Trim()
-        $result = New-WinEnvCaptureBranch -RepositoryRoot $fixture.Repo -Branch $plan.Branch
-        $result.Status | Should -Be 'Created'
-        (Get-FixtureCurrentBranch -Repo $fixture.Repo) | Should -Be 'fix/windows-font'
-        (& git -C $fixture.Repo rev-parse HEAD).Trim() | Should -Be $originDev
-    }
-
-    It 'INV windows/capture-publishes-through-dev: creates the named branch from origin/dev and leaves dev untouched' {
-        $fixture = New-BranchFixture
-        $plan = Get-WinEnvCaptureBranchPlan -RepositoryRoot $fixture.Repo -BranchName 'feature/windows-capture-font'
-        $plan.Status | Should -Be 'Create'
-
-        $devBefore = (& git -C $fixture.Repo rev-parse dev).Trim()
-        $originDev = (& git -C $fixture.Repo rev-parse refs/remotes/origin/dev).Trim()
-
-        $result = New-WinEnvCaptureBranch -RepositoryRoot $fixture.Repo -Branch $plan.Branch
-        $result.Status | Should -Be 'Created'
-        (Get-FixtureCurrentBranch -Repo $fixture.Repo) | Should -Be 'feature/windows-capture-font'
-        (& git -C $fixture.Repo rev-parse HEAD).Trim() | Should -Be $originDev
-        # dev itself never moved: this run's branch is a sibling of dev, not a
-        # fast-forward of it.
-        (& git -C $fixture.Repo rev-parse dev).Trim() | Should -Be $devBefore
-    }
-
-    It 'creates nothing when the fetch fails' {
-        $fixture = New-BranchFixture
-        & git -C $fixture.Repo remote set-url origin (Join-Path $TestDrive 'no-such-remote.git') | Out-Null
-        $before = Get-FixtureBranches -Repo $fixture.Repo
-
-        $result = New-WinEnvCaptureBranch -RepositoryRoot $fixture.Repo -Branch 'feature/windows-capture-font'
-        $result.Status | Should -Be 'Refused'
-        $result.Message | Should -Match 'fetch'
-        (Get-FixtureBranches -Repo $fixture.Repo) | Should -Be $before
-        (Get-FixtureCurrentBranch -Repo $fixture.Repo) | Should -Be 'dev'
-    }
-
-    It 'refuses and creates nothing when origin/dev moves while waiting for an answer' {
-        $fixture = New-BranchFixture
-        # A second clone pushes past the origin/dev this repo already fetched,
-        # standing in for another change landing while the operator reads the
-        # diff between the plan and the confirmation.
-        $other = Join-Path $TestDrive ('branch-race-' + [guid]::NewGuid().ToString('N'))
-        & git clone -q $fixture.Remote $other | Out-Null
-        & git -C $other config user.name Fixture | Out-Null
-        & git -C $other config user.email fixture@example.invalid | Out-Null
-        [IO.File]::WriteAllText((Join-Path $other 'seed.txt'), 'raced')
-        & git -C $other commit -q -a -m 'a change that landed during the wait' | Out-Null
-        & git -C $other push -q origin dev | Out-Null
-
-        $before = Get-FixtureBranches -Repo $fixture.Repo
-        $result = New-WinEnvCaptureBranch -RepositoryRoot $fixture.Repo -Branch 'feature/windows-capture-font'
-        $result.Status | Should -Be 'Refused'
-        $result.Message | Should -Match 'moved'
-        (Get-FixtureBranches -Repo $fixture.Repo) | Should -Be $before
-        (Get-FixtureCurrentBranch -Repo $fixture.Repo) | Should -Be 'dev'
-    }
-
-    It 'writes nothing under -WhatIf' {
-        $fixture = New-BranchFixture
-        $before = Get-FixtureBranches -Repo $fixture.Repo
-
-        [void](New-WinEnvCaptureBranch -RepositoryRoot $fixture.Repo -Branch 'feature/windows-capture-font' -WhatIf)
-        (Get-FixtureBranches -Repo $fixture.Repo) | Should -Be $before
-        (Get-FixtureCurrentBranch -Repo $fixture.Repo) | Should -Be 'dev'
-    }
-}
-
-Describe 'capture branch pruning' {
-    <#
-        Remove-WinEnvMergedLocalBranch (#103): GitHub auto-deletes a merged
-        pull request's remote branch, but the same branch lingers in this
-        clone until something clears it. Every fixture below runs against a
-        throwaway working copy and a throwaway bare remote under $TestDrive,
-        the same shape Describe 'capture branch' builds -- never this
-        repository's own dev.
-    #>
-    BeforeAll {
-        function New-PruneFixture {
-            # A repository with one commit on dev, pushed to a bare remote and
-            # fetched back, plus a master branch: exactly the shape
-            # Remove-WinEnvMergedLocalBranch reads.
-            $token = [guid]::NewGuid().ToString('N')
-            $remote = Join-Path $TestDrive "prune-remote-$token.git"
-            $repo = Join-Path $TestDrive "prune-repo-$token"
-            [void](New-Item -ItemType Directory -Path $repo -Force)
-
-            & git init -q --bare -b dev $remote | Out-Null
-            & git -C $repo init -q -b dev | Out-Null
-            & git -C $repo config user.name Fixture | Out-Null
-            & git -C $repo config user.email fixture@example.invalid | Out-Null
-            & git -C $repo remote add origin $remote | Out-Null
-            [IO.File]::WriteAllText((Join-Path $repo 'seed.txt'), 'seed')
-            & git -C $repo add -- seed.txt | Out-Null
-            & git -C $repo commit -q -m 'seed' | Out-Null
-            & git -C $repo push -q --set-upstream origin dev | Out-Null
-            & git -C $repo branch -q master | Out-Null
-
-            return [pscustomobject]@{ Repo = $repo; Remote = $remote }
-        }
-
-        function Get-FixtureBranches {
-            param([Parameter(Mandatory)][string] $Repo)
-            return @(& git -C $Repo for-each-ref --format='%(refname:short)' refs/heads)
-        }
-    }
-
-    It 'INV windows/capture-publishes-through-dev: deletes a local branch already merged into origin/dev' {
-        $fixture = New-PruneFixture
-        & git -C $fixture.Repo branch -q feature/windows-old-capture | Out-Null
-
-        $result = @(Remove-WinEnvMergedLocalBranch -RepositoryRoot $fixture.Repo)
-        $result.Count | Should -Be 1
-        $result[0].Branch | Should -Be 'feature/windows-old-capture'
-        $result[0].Status | Should -Be 'Deleted'
-        (Get-FixtureBranches -Repo $fixture.Repo) | Should -Not -Contain 'feature/windows-old-capture'
-    }
-
-    It 'keeps a branch that carries a commit origin/dev does not have' {
-        $fixture = New-PruneFixture
-        & git -C $fixture.Repo switch -q -c feature/windows-unique | Out-Null
-        [IO.File]::WriteAllText((Join-Path $fixture.Repo 'unique.txt'), 'unique')
-        & git -C $fixture.Repo add -- unique.txt | Out-Null
-        & git -C $fixture.Repo commit -q -m 'a commit origin/dev does not have' | Out-Null
-        & git -C $fixture.Repo switch -q dev | Out-Null
-
-        $result = @(Remove-WinEnvMergedLocalBranch -RepositoryRoot $fixture.Repo)
-        $result | Should -BeNullOrEmpty
-        (Get-FixtureBranches -Repo $fixture.Repo) | Should -Contain 'feature/windows-unique'
-    }
-
-    It 'INV windows/capture-publishes-through-dev: never deletes the current branch, dev or master even when each is an ancestor of origin/dev' {
-        $fixture = New-PruneFixture
-        # Cut from dev's own tip, so this branch, dev and master are all,
-        # trivially, ancestors of origin/dev; only the name-based exclusion
-        # can be what keeps them.
-        & git -C $fixture.Repo switch -q -c feature/windows-current | Out-Null
-
-        $result = @(Remove-WinEnvMergedLocalBranch -RepositoryRoot $fixture.Repo)
-        $result | Should -BeNullOrEmpty
-        $branches = Get-FixtureBranches -Repo $fixture.Repo
-        $branches | Should -Contain 'dev'
-        $branches | Should -Contain 'master'
-        $branches | Should -Contain 'feature/windows-current'
-    }
-
-    It 'reports a deletion failure on its own branch without stopping the rest of the run' {
-        $fixture = New-PruneFixture
-        & git -C $fixture.Repo branch -q feature/windows-merged-one | Out-Null
-        & git -C $fixture.Repo branch -q feature/windows-merged-two | Out-Null
-
-        # A branch checked out in another worktree is the ordinary way git
-        # itself refuses `branch -D`, standing in for whatever else could make
-        # one deletion fail without weakening the ancestor proof under test.
-        $worktree = Join-Path $TestDrive ('prune-worktree-' + [guid]::NewGuid().ToString('N'))
-        & git -C $fixture.Repo worktree add -q $worktree feature/windows-merged-two | Out-Null
-
-        try {
-            $result = @(Remove-WinEnvMergedLocalBranch -RepositoryRoot $fixture.Repo)
-            ($result | Where-Object Branch -eq 'feature/windows-merged-one').Status | Should -Be 'Deleted'
-            $failed = $result | Where-Object Branch -eq 'feature/windows-merged-two'
-            $failed.Status | Should -Be 'Failed'
-            $failed.Detail | Should -Not -BeNullOrEmpty
-            (Get-FixtureBranches -Repo $fixture.Repo) | Should -Contain 'feature/windows-merged-two'
-        }
-        finally {
-            & git -C $fixture.Repo worktree remove --force $worktree 2>$null | Out-Null
-        }
-    }
-
-    It 'prunes nothing when origin/dev has never been fetched' {
-        $fixture = New-PruneFixture
-        & git -C $fixture.Repo branch -q feature/windows-old-capture | Out-Null
-        & git -C $fixture.Repo update-ref -d refs/remotes/origin/dev | Out-Null
-
-        $result = @(Remove-WinEnvMergedLocalBranch -RepositoryRoot $fixture.Repo)
-        $result | Should -BeNullOrEmpty
-        (Get-FixtureBranches -Repo $fixture.Repo) | Should -Contain 'feature/windows-old-capture'
-    }
-
-    It 'writes nothing under -WhatIf' {
-        $fixture = New-PruneFixture
-        & git -C $fixture.Repo branch -q feature/windows-old-capture | Out-Null
-        $before = Get-FixtureBranches -Repo $fixture.Repo
-
-        [void](Remove-WinEnvMergedLocalBranch -RepositoryRoot $fixture.Repo -WhatIf)
-        (Get-FixtureBranches -Repo $fixture.Repo) | Should -Be $before
-    }
-}
-
-Describe 'capture publish' {
-    <#
-        The publish half of capture (#80), a copy of what --publish added to
-        tool/version-control/commit (#72) rather than a caller of it. Every
-        fixture below runs against a throwaway working copy, a throwaway bare
-        remote and a stub `gh` under $TestDrive -- never this repository, never
-        this machine's real remote, and never a real `gh` call. Nothing here is
-        Windows evidence: what is owed from the maintainer's host is one real
-        -Publish run.
-    #>
-    BeforeAll {
-        $PwshPath = (Get-Process -Id $PID).Path
-
-        # The end-to-end cases in the last Context each launch a child
-        # PowerShell that imports this module and spawns a dozen git
-        # processes, and together they cost more than the rest of this suite.
-        # `.githooks/pre-push` runs the whole suite natively on every push
-        # that touches windows/**, so leaving them always-on taxes every
-        # Windows-lane push -- including the one -Publish itself makes. They
-        # are therefore opt-in, the way `.githooks/evidence` already makes the
-        # local gate advisory and CI the merge gate: the windows job in
-        # .github/workflows/ci.yml sets WIN_ENV_E2E, so the merge gate loses
-        # nothing, and a local run says out loud what it skipped. Every
-        # module-level fixture above runs unconditionally.
-        $EndToEnd = [Environment]::GetEnvironmentVariable('WIN_ENV_E2E') -eq '1'
-
-        function Skip-WithoutEndToEnd {
-            param([Parameter(Mandatory)][string] $Label)
-
-            if ($EndToEnd) { return }
-            Write-Host ("· skipped: publish end to end, $Label " +
-                '(set WIN_ENV_E2E=1 to run it; the CI windows job does)')
-            Set-ItResult -Skipped -Because 'WIN_ENV_E2E is not set'
-        }
-
-        function New-StubGh {
-            <#
-                A gh that answers from environment variables and records every
-                call, written as gh.ps1 because PowerShell resolves a bare
-                command name against .ps1 as well as the platform's executable
-                extensions -- on Windows and on the Unix-like hosts this suite
-                also runs on. One implementation therefore serves both, where a
-                .cmd and a shell script would be two that could disagree about
-                the very refusals under test, and a shim that spawned a second
-                PowerShell would cost more than every other fixture here
-                together.
-            #>
-            param([Parameter(Mandatory)][string] $Directory)
-
-            [void](New-Item -ItemType Directory -Path $Directory -Force)
-            # Its own writes go through .NET rather than through Add-Content
-            # and Copy-Item: a script run in process inherits the caller's
-            # $WhatIfPreference, and a -WhatIf run of capture would otherwise
-            # make the stub record nothing -- which reads as "gh was never
-            # called" and is exactly the claim the -WhatIf fixture is checking.
-            # A real gh.exe is a separate process and has no such inheritance.
-            [IO.File]::WriteAllText((Join-Path $Directory 'gh.ps1'), @'
-$call = @($args)
-if ($env:STUB_GH_LOG) { [IO.File]::AppendAllText($env:STUB_GH_LOG, ($call -join ' ') + [Environment]::NewLine) }
-function Get-StubStatus {
-    param([string] $Name)
-    $value = [Environment]::GetEnvironmentVariable($Name)
-    if ([string]::IsNullOrWhiteSpace($value)) { return 0 }
-    return [int]$value
-}
-function Get-StubValue {
-    param([string] $Name, [string] $Default)
-    $value = [Environment]::GetEnvironmentVariable($Name)
-    if ([string]::IsNullOrWhiteSpace($value)) { return $Default }
-    return $value
-}
-switch ((@($call | Select-Object -First 2) -join ' ')) {
-    'auth status' { exit (Get-StubStatus 'STUB_GH_AUTH_STATUS') }
-    'api repos/{owner}/{repo}' { Write-Output (Get-StubValue 'STUB_GH_ALLOW_AUTO_MERGE' 'true'); exit 0 }
-    'pr list' { Write-Output (Get-StubValue 'STUB_GH_PR_LIST' '[]'); exit 0 }
-    'pr create' {
-        $index = [array]::IndexOf($call, '--body-file')
-        if ($index -ge 0 -and $env:STUB_GH_BODY_COPY) {
-            [IO.File]::Copy($call[$index + 1], $env:STUB_GH_BODY_COPY, $true)
-        }
-        $status = Get-StubStatus 'STUB_GH_CREATE_STATUS'
-        if ($status -ne 0) { Write-Output 'stub: pr create refused'; exit $status }
-        Write-Output (Get-StubValue 'STUB_GH_PR_URL' 'https://github.com/example/repo/pull/1')
-        exit 0
-    }
-    'pr merge' { exit (Get-StubStatus 'STUB_GH_MERGE_STATUS') }
-}
-Write-Output 'stub: unknown gh invocation'
-exit 1
-'@)
-            return $Directory
-        }
-
-        function New-PublishRepository {
-            # dev, pushed to a bare remote and fetched back, plus master: the
-            # shape every function under test reads. -Populate lays whatever
-            # the run under test needs into the seed commit.
-            param([scriptblock] $Populate)
-
-            $token = [guid]::NewGuid().ToString('N')
-            $base = Join-Path $TestDrive "publish-$token"
-            $repo = Join-Path $base 'repo'
-            $remote = Join-Path $base 'remote.git'
-            [void](New-Item -ItemType Directory -Path $repo -Force)
-
-            & git init -q --bare -b dev $remote | Out-Null
-            & git -C $repo init -q -b dev | Out-Null
-            & git -C $repo config user.name Fixture | Out-Null
-            & git -C $repo config user.email fixture@example.invalid | Out-Null
-            & git -C $repo remote add origin $remote | Out-Null
-            if ($Populate) { & $Populate $repo } else { [IO.File]::WriteAllText((Join-Path $repo 'seed.txt'), 'seed') }
-            & git -C $repo add -A | Out-Null
-            & git -C $repo commit -q -m 'seed' | Out-Null
-            & git -C $repo push -q --set-upstream origin dev | Out-Null
-            & git -C $repo branch -q master | Out-Null
-
-            return [pscustomobject]@{
-                Base   = $base
-                Repo   = $repo
-                Remote = $remote
-                Bin    = (New-StubGh -Directory (Join-Path $base 'bin'))
-                Log    = (Join-Path $base 'gh.log')
-                Body   = (Join-Path $base 'pull-request-body.md')
-            }
-        }
-
-        function New-PublishWorkspace {
-            <#
-                A throwaway monorepo holding this repository's own capture
-                script and module over a manifest no host has to match, plus
-                the host files it captures from. The script is copied rather
-                than run in place, because a run of it commits, branches and
-                pushes: this suite must never point it at this repository.
-            #>
-            $features = @(
-                @{ Id = 'core'; Name = 'Core'; Required = $true },
-                @{ Id = 'extra'; Name = 'Extra' })
-            $managed = @(
-                @{ Id = 'sample'; Feature = 'core'; Source = 'files/sample.json'
-                    Target = '{LOCALAPPDATA}/sample.json'; Compare = 'ExactJson'; Parser = 'Json'
-                },
-                @{ Id = 'other'; Feature = 'extra'; Source = 'files/other.json'
-                    Target = '{LOCALAPPDATA}/other.json'; Compare = 'ExactJson'; Parser = 'Json'
-                })
-            $manifest = @{
-                SchemaVersion  = 4
-                ProjectVersion = '1.0.0'
-                Features       = $features
-                Packages       = @()
-                ManagedFiles   = $managed
-                Font           = @{ Feature = 'core'; Name = 'Test Font' }
-                Terminal       = @{ Feature = 'core' }
-            }
-
-            $fixture = New-PublishRepository -Populate {
-                param([string] $repo)
-                foreach ($relative in @('windows/src', 'windows/tools', 'windows/desired/files')) {
-                    [void](New-Item -ItemType Directory -Path (Join-Path $repo $relative) -Force)
-                }
-                Copy-Item -LiteralPath (Join-Path $repositoryRoot 'src\WinEnv.psm1') `
-                    -Destination (Join-Path $repo 'windows/src/WinEnv.psm1')
-                Copy-Item -LiteralPath (Join-Path $repositoryRoot 'tools\capture.ps1') `
-                    -Destination (Join-Path $repo 'windows/tools/capture.ps1')
-                [IO.File]::WriteAllText((Join-Path $repo 'windows/desired/manifest.json'),
-                    ($manifest | ConvertTo-Json -Depth 10))
-                [IO.File]::WriteAllText((Join-Path $repo 'windows/desired/files/sample.json'),
-                    "{`n  `"theme`": `"light`"`n}`n")
-                [IO.File]::WriteAllText((Join-Path $repo 'windows/desired/files/other.json'),
-                    "{`n  `"size`": 10`n}`n")
-            }
-
-            # The host this capture reads. It drifted from both payloads.
-            $hostDirectory = Join-Path $fixture.Base 'host'
-            [void](New-Item -ItemType Directory -Path $hostDirectory -Force)
-            [IO.File]::WriteAllText((Join-Path $hostDirectory 'sample.json'), '{"theme":"dark"}')
-            [IO.File]::WriteAllText((Join-Path $hostDirectory 'other.json'), '{"size":14}')
-
-            return $fixture | Add-Member -NotePropertyName HostDirectory -NotePropertyValue $hostDirectory -PassThru |
-                Add-Member -NotePropertyName Capture `
-                    -NotePropertyValue (Join-Path $fixture.Repo 'windows/tools/capture.ps1') -PassThru
-        }
-
-        function Invoke-Capture {
-            <#
-                One run of the copied script, answering its single prompt from
-                stdin. It runs in a child process because the script exits, and
-                because a run must inherit a PATH whose gh is the stub.
-            #>
-            param(
-                [Parameter(Mandatory)][object] $Fixture,
-                [Parameter(Mandatory)][string[]] $Argument,
-                [string] $Answer = 'y',
-                [hashtable] $Environment = @{}
-            )
-
-            $variables = $Environment.Clone()
-            $variables['LOCALAPPDATA'] = $Fixture.HostDirectory
-            $variables['APPDATA'] = $Fixture.HostDirectory
-            $variables['USERPROFILE'] = $Fixture.Base
-
-            # Every value the child run needs, copied into this scope first:
-            # GetNewClosure captures the local scope and nothing above it.
-            $shell = $PwshPath
-            $script = $Fixture.Capture
-            $reply = $Answer
-            $callArgument = $Argument
-            return Invoke-WithStubGh -Fixture $Fixture -Environment $variables -ScriptBlock {
-                $output = $reply | & $shell -NoProfile -File $script @callArgument 2>&1
-                [pscustomobject]@{
-                    ExitCode = $LASTEXITCODE
-                    Output   = @($output | ForEach-Object { [string]$_ })
-                }
-            }.GetNewClosure()
-        }
-
-        function Get-GhLog {
-            param([Parameter(Mandatory)][object] $Fixture)
-            if (-not (Test-Path -LiteralPath $Fixture.Log)) { return @() }
-            return @(Get-Content -LiteralPath $Fixture.Log)
-        }
-
-        function Invoke-WithStubGh {
-            # The stub is prepended to PATH rather than substituted for it,
-            # because git is still needed; it wins because PATH resolves in
-            # order.
-            param(
-                [Parameter(Mandatory)][object] $Fixture,
-                [Parameter(Mandatory)][scriptblock] $ScriptBlock,
-                [hashtable] $Environment = @{}
-            )
-
-            $variables = @{
-                PATH              = ($Fixture.Bin + [IO.Path]::PathSeparator + $env:PATH)
-                STUB_GH_LOG       = $Fixture.Log
-                STUB_GH_BODY_COPY = $Fixture.Body
-            }
-            foreach ($key in $Environment.Keys) { $variables[$key] = $Environment[$key] }
-
-            $saved = @{}
-            foreach ($key in $variables.Keys) {
-                $saved[$key] = [Environment]::GetEnvironmentVariable($key)
-                [Environment]::SetEnvironmentVariable($key, $variables[$key])
-            }
-            try { & $ScriptBlock }
-            finally {
-                foreach ($key in $saved.Keys) { [Environment]::SetEnvironmentVariable($key, $saved[$key]) }
-            }
-        }
-    }
-
-    Context 'the pull request a run would open' {
-        It 'titles a one-feature run with that commit''s own subject' {
-            Get-WinEnvPullRequestTitle -Commit @('feat(windows): capture font settings from the host') |
-                Should -Be 'feat(windows): capture font settings from the host'
-        }
-
-        It 'titles a multi-feature run generally, since no commit subject covers it' {
-            Get-WinEnvPullRequestTitle -Commit @(
-                'feat(windows): capture font settings from the host',
-                'feat(windows): capture terminal settings from the host') |
-                Should -Be 'feat(windows): capture settings from the host'
-        }
-
-        It 'carries the scope, the selection, the build, the files, the commits and the evidence' {
-            $body = New-WinEnvPullRequestBody -Branch 'feature/windows-capture-font' `
-                -Feature @('font') -ManagedFile @('fontPayload (windows/desired/files/font.json)') `
-                -Commit @('feat(windows): capture font settings from the host') `
-                -Command 'windows/tools/capture.ps1 -Feature font -Publish' -Build '22631' `
-                -Evidence @(([char]27 + '[31m') + '→ hygiene' + ([char]27 + '[0m')) `
-                -PushEvidence @('→ Windows tests', 'Tests Passed: 164, Failed: 0')
-
-            $body | Should -Match 'Scope: windows'
-            $body | Should -Match ([regex]::Escape('Branch: feature/windows-capture-font'))
-            $body | Should -Match 'Feature selection: font'
-            $body | Should -Match 'Windows build: 22631'
-            $body | Should -Match ([regex]::Escape('Command: windows/tools/capture.ps1 -Feature font -Publish'))
-            $body | Should -Match ([regex]::Escape('- fontPayload (windows/desired/files/font.json)'))
-            $body | Should -Match ([regex]::Escape('- feat(windows): capture font settings from the host'))
-            $body | Should -Match '→ hygiene'
-            # The native gate's own output. It is produced by the pre-push
-            # hook, which is the only hook that selects this domain's checks,
-            # so a body without this block carries no Windows evidence at all.
-            $body | Should -Match 'Local push evidence:'
-            $body | Should -Match ([regex]::Escape('Tests Passed: 164, Failed: 0'))
-            # A pull request renders the escape bytes rather than the colour.
-            $body | Should -Not -Match ([char]27)
-        }
-
-        It 'says the build is undetermined rather than leaving the line blank' {
-            $body = New-WinEnvPullRequestBody -Branch 'feature/windows-capture-font' -Feature @('font') `
-                -ManagedFile @('fontPayload (windows/desired/files/font.json)') `
-                -Commit @('feat(windows): capture font settings from the host') `
-                -Command 'windows/tools/capture.ps1 -Publish' -Build ''
-            $body | Should -Match 'Windows build: undetermined'
-        }
-
-        It 'promises both outputs where a plan has neither yet' {
-            $body = New-WinEnvPullRequestBody -Branch 'feature/windows-capture-font' -Feature @('font') `
-                -ManagedFile @('fontPayload (windows/desired/files/font.json)') `
-                -Commit @('feat(windows): capture font settings from the host') `
-                -Command 'windows/tools/capture.ps1 -Publish' -Build '22631'
-            $body | Should -Match ([regex]::Escape('(the commit output, once the commit runs)'))
-            $body | Should -Match ([regex]::Escape("(the pre-push hook's output, once the push runs)"))
-        }
-
-        It 'names what the branch already carried, which the same merge takes to dev' {
-            $body = New-WinEnvPullRequestBody -Branch 'feature/windows-capture-font' -Feature @('font') `
-                -ManagedFile @('fontPayload (windows/desired/files/font.json)') `
-                -Commit @('feat(windows): capture font settings from the host') `
-                -Command 'windows/tools/capture.ps1 -Publish' -Build '22631' `
-                -Carried @('1234abc an earlier commit on this branch')
-            $body | Should -Match ([regex]::Escape('- 1234abc an earlier commit on this branch'))
-        }
-    }
-
-    Context 'evidence a published capture writes, readable' {
-        <#
-            #85: PR #84's body (the first real -Publish) reached GitHub with
-            the hook's UTF-8 glyphs mislabelled as mojibake and a stray
-            control character in the transcript, and its push-evidence block
-            was this suite's own multi-minute Pester transcript, including
-            lines a rejected-push fixture prints on purpose ("- the Windows
-            checks failed", a throwaway `Temp\...\remote.git`). These fixtures
-            cover the fix: correct decoding regardless of the console's own
-            codepage, control characters stripped from the body only, and the
-            push block condensed to what a reviewer needs.
-        #>
-        It 'recovers a hook''s UTF-8 glyphs a non-UTF-8 console codepage would mislabel' {
-            # The exact failure mode: PowerShell's own `2>&1 | ForEach-Object`
-            # decodes a captured native command's output with
-            # [Console]::OutputEncoding, not the encoding the command wrote
-            # in. Reproduced by hand while designing this fix: under codepage
-            # 437, this same "-> <check> <dot>" line survives as "ΓåÆ Γ£ô
-            # ┬╖" through that pipe. Invoke-WinEnvTeeCommand must not care --
-            # it declares its own pipe's encoding as UTF-8 instead of trusting
-            # the console's.
-            $stubPath = Join-Path $TestDrive 'utf8-glyphs.ps1'
-            [IO.File]::WriteAllText($stubPath, @'
-[Console]::OutputEncoding = [System.Text.Encoding]::UTF8
-Write-Output '→ ✓ ·'
-[Console]::Error.WriteLine('→-err')
-exit 7
-'@)
-
-            $saved = [Console]::OutputEncoding
-            try {
-                [Console]::OutputEncoding = [System.Text.Encoding]::GetEncoding(437)
-                $result = Invoke-WinEnvTeeCommand -FilePath $PwshPath -ArgumentList @('-NoProfile', '-File', $stubPath)
-            }
-            finally {
-                [Console]::OutputEncoding = $saved
-            }
-
-            $result.ExitCode | Should -Be 7
-            $result.Evidence | Should -Contain '→ ✓ ·'
-            $result.Evidence | Should -Contain '→-err'
-        }
-
-        It 'recovers the same glyphs when the console is already UTF-8, the common case' {
-            # "Already UTF-8" is a condition this test establishes, never one
-            # it inherits from whoever ran it. #109: on the maintainer's
-            # Korean host the suite's own console was CP949, the child pwsh
-            # inherited that codepage, and the line was already encoded as
-            # CP949 before it reached the pipe -- so this test was red there
-            # and green on CI while asserting nothing about
-            # Invoke-WinEnvTeeCommand. Both sides are pinned here: the
-            # console this process owns, which a Windows child inherits, and
-            # the child's own output encoding, because a Unix child inherits
-            # no console codepage at all.
-            $stubPath = Join-Path $TestDrive 'utf8-glyphs-default.ps1'
-            [IO.File]::WriteAllText($stubPath, @'
-[Console]::OutputEncoding = [System.Text.Encoding]::UTF8
-Write-Output '→ ✓ ·'
-exit 0
-'@)
-
-            $saved = [Console]::OutputEncoding
-            try {
-                [Console]::OutputEncoding = [System.Text.Encoding]::UTF8
-                $result = Invoke-WinEnvTeeCommand -FilePath $PwshPath -ArgumentList @('-NoProfile', '-File', $stubPath)
-            }
-            finally {
-                [Console]::OutputEncoding = $saved
-            }
-
-            $result.ExitCode | Should -Be 0
-            $result.Evidence | Should -Contain '→ ✓ ·'
-        }
-
-        It 'reports what a CP949 console loses instead of inventing glyphs' {
-            # The regression #109 asked for, and the decision it asked for,
-            # recorded where it is exercised. Reproduced by hand on Linux
-            # pwsh with the same managed CP949 encoder .NET uses on Windows:
-            # the loss happens in the *child's* write, not in this
-            # repository's decode. A child encodes its own stdout with its
-            # own [Console]::OutputEncoding, so "→" and "·" (both mappable
-            # in CP949) leave as CP949 byte pairs and "✓" (not mappable at
-            # all) leaves as a literal "?". The glyphs are gone from the pipe
-            # before Invoke-WinEnvTeeCommand reads a byte.
-            #
-            # Decision: this is accepted display degradation, not a defect in
-            # that function's pinning.
-            #  - It owns only the read side and already pins it to UTF-8. No
-            #    read-side decoding recovers a glyph the writer never emitted,
-            #    and Windows offers no way to set a child's console codepage
-            #    from ProcessStartInfo; a child that wants its glyphs kept
-            #    declares its own encoding, as the CP437 fixture above does.
-            #  - Nothing that carries meaning is lost from real evidence. git,
-            #    the command actually teed for a push, writes its bytes
-            #    directly, and every marker ConvertTo-WinEnvCondensedPushEvidence
-            #    keys on ("→ <check>", "· ...") is printed by .githooks/evidence
-            #    through /bin/sh printf, which emits that file's own UTF-8
-            #    bytes whatever the console codepage is.
-            #  - ASCII survives byte for byte, asserted below: the tally, the
-            #    "[-]" markers and the failure detail a reviewer actually
-            #    reads are untouched.
-            # The contract is therefore that a line from a non-UTF-8 console
-            # arrives degraded but framed, ordered and ASCII-intact -- never
-            # silently replaced by plausible-but-wrong text.
-            $stubPath = Join-Path $TestDrive 'cp949-glyphs.ps1'
-            [IO.File]::WriteAllText($stubPath, @'
-[System.Text.Encoding]::RegisterProvider([System.Text.CodePagesEncodingProvider]::Instance)
-[Console]::OutputEncoding = [System.Text.Encoding]::GetEncoding(949)
-Write-Output '→ ✓ · Tests Passed: 1, Failed: 0'
-exit 0
-'@)
-
-            $saved = [Console]::OutputEncoding
-            try {
-                $result = Invoke-WinEnvTeeCommand -FilePath $PwshPath -ArgumentList @('-NoProfile', '-File', $stubPath)
-            }
-            finally {
-                # A console is shared by every process attached to it, so the
-                # child's own switch to CP949 outlives the child on Windows.
-                # Re-assigning the saved encoding puts the operator's console
-                # back where it was.
-                [Console]::OutputEncoding = $saved
-            }
-
-            $result.ExitCode | Should -Be 0
-            @($result.Evidence).Count | Should -Be 1
-            $line = @($result.Evidence)[0]
-            $line | Should -BeLike '*Tests Passed: 1, Failed: 0'
-            $line | Should -Not -Match ([regex]::Escape('→'))
-            $line | Should -Not -Match ([regex]::Escape('✓'))
-            $line | Should -Not -Match ([regex]::Escape('·'))
-            # Whatever replaced them is visibly lossy: U+FFFD where the bytes
-            # were not UTF-8, "?" where CP949 had no mapping to begin with.
-            @($line.ToCharArray() | Where-Object { [int]$_ -ge 0x80 -and [int]$_ -ne 0xFFFD }) |
-                Should -BeNullOrEmpty
-        }
-
-        It 'strips a stray control character from the body but keeps a tab' {
-            $body = New-WinEnvPullRequestBody -Branch 'feature/windows-capture-font' -Feature @('font') `
-                -ManagedFile @('fontPayload (windows/desired/files/font.json)') `
-                -Commit @('feat(windows): capture font settings from the host') `
-                -Command 'windows/tools/capture.ps1 -Publish' -Build '22631' `
-                -Evidence @("a line with a stray$([char]0x1A) control byte") `
-                -PushEvidence @("· a$([char]9)tabbed dot line", "Tests Passed: 1, Failed: 0")
-
-            $body | Should -Not -Match ([char]0x1A)
-            $body | Should -Match ([regex]::Escape('a line with a stray control byte'))
-            $body | Should -Match ([regex]::Escape("a$([char]9)tabbed dot line"))
-        }
-
-        It 'condenses a passing Pester transcript, keeping the summary and naming the count' {
-            $line = @(
-                '→ selected checks',
-                'windows:desired-state',
-                'windows:tests',
-                '→ Windows desired-state check',
-                'Windows desired state is valid.',
-                '→ Windows tests',
-                '',
-                'Starting discovery in 1 files.',
-                'Discovery found 165 tests in 620ms.',
-                'Running tests.',
-                '→ pushing feature/windows-capture-font',
-                'To C:\Users\…\Temp\publish-abc123\remote.git',
-                "branch 'feature/windows-capture-font' set up to track 'origin/feature/windows-capture-font'.",
-                '- the Windows checks failed',
-                "error: failed to push some refs to 'C:\Users\…\Temp\publish-abc123\remote.git'",
-                '· skipped: publish end to end, the happy path (set WIN_ENV_E2E=1 to run it; the CI windows job does)',
-                'Tests Passed: 154, Failed: 0, Skipped: 10, Inconclusive: 0, NotRun: 0'
-            )
-
-            $condensed = ConvertTo-WinEnvCondensedPushEvidence -Line $line
-
-            $condensed | Should -Contain '→ selected checks'
-            $condensed | Should -Contain '→ Windows desired-state check'
-            $condensed | Should -Contain 'Windows desired state is valid.'
-            $condensed | Should -Contain '→ Windows tests'
-            $condensed | Should -Contain ('· skipped: publish end to end, the happy path ' +
-                '(set WIN_ENV_E2E=1 to run it; the CI windows job does)')
-            $condensed | Should -Contain 'Tests Passed: 154, Failed: 0, Skipped: 10, Inconclusive: 0, NotRun: 0'
-            # The fixture's own push narration is inside the Windows tests
-            # span and matches none of the kept shapes, so it is elided along
-            # with Pester's own scaffolding -- this is the residual the note
-            # above the block exists for, not a promise this function makes.
-            $condensed | Should -Not -Contain '→ pushing feature/windows-capture-font'
-            $condensed | Should -Not -Contain 'Starting discovery in 1 files.'
-            # One elision marker naming a count, not one marker per line.
-            @($condensed | Where-Object { $_ -match '^… \d+ passing .* elided …$' }).Count | Should -Be 1
-        }
-
-        It 'keeps every line of a failed test, condensing only what passed around it' {
-            $esc = [char]27
-            $line = @(
-                '→ Windows tests',
-                'Discovery found 1 tests in 10ms.',
-                "$esc[91m[-] a test that failed$esc[0m$esc[90m 5ms (4ms|1ms)$esc[0m",
-                "$esc[91m Expected 1, but got 2.",
-                "$esc[91m at Should -Be 2, WinEnv.Tests.ps1:1$esc[0m",
-                '',
-                'Tests Passed: 0, Failed: 1, Skipped: 0, Inconclusive: 0, NotRun: 0'
-            )
-
-            $condensed = ConvertTo-WinEnvCondensedPushEvidence -Line $line
-
-            $condensed | Should -Contain "$esc[91m[-] a test that failed$esc[0m$esc[90m 5ms (4ms|1ms)$esc[0m"
-            $condensed | Should -Contain "$esc[91m Expected 1, but got 2."
-            $condensed | Should -Contain "$esc[91m at Should -Be 2, WinEnv.Tests.ps1:1$esc[0m"
-            $condensed | Should -Contain 'Tests Passed: 0, Failed: 1, Skipped: 0, Inconclusive: 0, NotRun: 0'
-            $condensed | Should -Not -Contain 'Discovery found 1 tests in 10ms.'
-        }
-
-        It 'leaves everything outside the Windows tests span untouched' {
-            # No "→ Windows tests" header at all: nothing here is a Pester
-            # transcript, so nothing is elided, regardless of shape.
-            $line = @('→ common check', 'a line that is neither a header nor a dot', 'common check passed')
-
-            ConvertTo-WinEnvCondensedPushEvidence -Line $line | Should -Be $line
-        }
-
-        It 'condenses the push-evidence block inside the pull-request body and keeps the note above it' {
-            $line = @(
-                '→ Windows tests',
-                'Discovery found 200 tests in 600ms.',
-                '→ pushing feature/windows-capture-font',
-                'To C:\Users\…\Temp\publish-abc123\remote.git',
-                'Tests Passed: 199, Failed: 0, Skipped: 1, Inconclusive: 0, NotRun: 0'
-            )
-
-            $body = New-WinEnvPullRequestBody -Branch 'feature/windows-capture-font' -Feature @('font') `
-                -ManagedFile @('fontPayload (windows/desired/files/font.json)') `
-                -Commit @('feat(windows): capture font settings from the host') `
-                -Command 'windows/tools/capture.ps1 -Publish' -Build '22631' -PushEvidence $line
-
-            $body | Should -Match ([regex]::Escape('Fixture output inside this suite may mention throwaway ' +
-                    '`Temp\…\remote.git` remotes'))
-            $body | Should -Match ([regex]::Escape('Tests Passed: 199, Failed: 0, Skipped: 1'))
-            $body | Should -Not -Match ([regex]::Escape('Discovery found 200 tests in 600ms.'))
-            $body | Should -Match '… \d+ passing .* elided …'
-        }
-    }
-
-    Context 'what the branch already carries' {
-        It 'is empty on a branch that is origin/dev' {
-            $fixture = New-PublishRepository
-            @(Get-WinEnvPublishCarriedCommit -RepositoryRoot $fixture.Repo).Count | Should -Be 0
-        }
-
-        It 'lists every commit a push would take to dev with the capture' {
-            $fixture = New-PublishRepository
-            & git -C $fixture.Repo switch -q -c feature/windows-existing | Out-Null
-            [IO.File]::WriteAllText((Join-Path $fixture.Repo 'seed.txt'), 'an unrelated local change')
-            & git -C $fixture.Repo commit -q -a -m 'an unrelated commit already on this branch' | Out-Null
-
-            $carried = @(Get-WinEnvPublishCarriedCommit -RepositoryRoot $fixture.Repo)
-            $carried.Count | Should -Be 1
-            $carried[0] | Should -Match 'an unrelated commit already on this branch'
-        }
-    }
-
-    Context 'the preflight, which reads and never writes' {
-        It 'refuses when gh is unavailable, before it asks git anything' {
-            $fixture = New-PublishRepository
-            $empty = Join-Path $fixture.Base 'no-tools'
-            [void](New-Item -ItemType Directory -Path $empty -Force)
-
-            $result = Invoke-WithStubGh -Fixture $fixture -Environment @{ PATH = $empty } -ScriptBlock {
-                Get-WinEnvPublishPreflight -RepositoryRoot $fixture.Repo `
-                    -Branch 'feature/windows-capture-font' -BranchIsNew
-            }
-            $result.Status | Should -Be 'Refused'
-            $result.Message | Should -Match 'gh is unavailable'
-            # The message has to name the way this platform installs it.
-            $result.Detail | Should -Match ([regex]::Escape('winget install GitHub.cli'))
-            (Get-GhLog $fixture).Count | Should -Be 0
-        }
-
-        It 'refuses an unauthenticated gh before reading any repository setting' {
-            $fixture = New-PublishRepository
-            $result = Invoke-WithStubGh -Fixture $fixture -Environment @{ STUB_GH_AUTH_STATUS = '1' } -ScriptBlock {
-                Get-WinEnvPublishPreflight -RepositoryRoot $fixture.Repo `
-                    -Branch 'feature/windows-capture-font' -BranchIsNew
-            }
-            $result.Status | Should -Be 'Refused'
-            $result.Message | Should -Match 'not authenticated'
-            @(Get-GhLog $fixture) | Should -Be @('auth status --hostname github.com')
-        }
-
-        It 'refuses when the repository does not allow auto-merge, before any pull request is listed' {
-            $fixture = New-PublishRepository
-            $result = Invoke-WithStubGh -Fixture $fixture -Environment @{ STUB_GH_ALLOW_AUTO_MERGE = 'false' } -ScriptBlock {
-                Get-WinEnvPublishPreflight -RepositoryRoot $fixture.Repo `
-                    -Branch 'feature/windows-capture-font' -BranchIsNew
-            }
-            $result.Status | Should -Be 'Refused'
-            $result.Message | Should -Match 'does not allow auto-merge'
-            # The field gh repo view has no column for; read through the API.
-            @(Get-GhLog $fixture)[1] | Should -Be 'api repos/{owner}/{repo} --jq .allow_auto_merge'
-            @(Get-GhLog $fixture).Count | Should -Be 2
-        }
-
-        It 'INV windows/capture-publishes-through-dev: refuses an open pull request from this head against a base other than dev' {
-            $fixture = New-PublishRepository
-            $listing = '[{"baseRefName":"master","isCrossRepository":false,' +
-            '"url":"https://github.com/example/repo/pull/9"}]'
-            $result = Invoke-WithStubGh -Fixture $fixture -Environment @{ STUB_GH_PR_LIST = $listing } -ScriptBlock {
-                Get-WinEnvPublishPreflight -RepositoryRoot $fixture.Repo `
-                    -Branch 'feature/windows-capture-font' -BranchIsNew
-            }
-            $result.Status | Should -Be 'Refused'
-            $result.Message | Should -Match 'different base'
-            $result.Detail | Should -Match ([regex]::Escape('https://github.com/example/repo/pull/9'))
-        }
-
-        It 'INV windows/capture-publishes-through-dev: reuses an open pull request from this head against dev instead of opening a second' {
-            $fixture = New-PublishRepository
-            $listing = '[{"baseRefName":"dev","isCrossRepository":false,' +
-            '"url":"https://github.com/example/repo/pull/7"}]'
-            $result = Invoke-WithStubGh -Fixture $fixture -Environment @{ STUB_GH_PR_LIST = $listing } -ScriptBlock {
-                Get-WinEnvPublishPreflight -RepositoryRoot $fixture.Repo `
-                    -Branch 'feature/windows-capture-font' -BranchIsNew
-            }
-            $result.Status | Should -Be 'Ready'
-            $result.PullRequest | Should -Be 'https://github.com/example/repo/pull/7'
-        }
-
-        It 'ignores a fork''s branch of the same name, which gh pr list --head cannot exclude' {
-            # gh filters --head by branch name alone and does not accept
-            # "<owner>:<branch>", so a cross-repository row arrives here. It is
-            # neither this branch nor this tool's to reuse or refuse over.
-            $fixture = New-PublishRepository
-            $listing = '[{"baseRefName":"master","isCrossRepository":true,' +
-            '"url":"https://github.com/fork/repo/pull/9"},' +
-            '{"baseRefName":"dev","isCrossRepository":true,' +
-            '"url":"https://github.com/fork/repo/pull/10"}]'
-            $result = Invoke-WithStubGh -Fixture $fixture -Environment @{ STUB_GH_PR_LIST = $listing } -ScriptBlock {
-                Get-WinEnvPublishPreflight -RepositoryRoot $fixture.Repo `
-                    -Branch 'feature/windows-capture-font' -BranchIsNew
-            }
-            $result.Status | Should -Be 'Ready'
-            $result.PullRequest | Should -BeNullOrEmpty
-        }
-
-        It 'refuses to create a branch the remote already has' {
-            $fixture = New-PublishRepository
-            & git -C $fixture.Repo push -q origin dev:feature/windows-capture-font | Out-Null
-
-            $result = Invoke-WithStubGh -Fixture $fixture -ScriptBlock {
-                Get-WinEnvPublishPreflight -RepositoryRoot $fixture.Repo `
-                    -Branch 'feature/windows-capture-font' -BranchIsNew
-            }
-            $result.Status | Should -Be 'Refused'
-            $result.Message | Should -Match ([regex]::Escape('origin already has feature/windows-capture-font'))
-        }
-
-        It 'does not ask about a remote branch when the commit stays on the current one' {
-            # -BranchIsNew is absent, so the branch is already this one and the
-            # remote having it is exactly the normal case.
-            $fixture = New-PublishRepository
-            & git -C $fixture.Repo push -q origin dev:feature/windows-existing | Out-Null
-
-            $result = Invoke-WithStubGh -Fixture $fixture -ScriptBlock {
-                Get-WinEnvPublishPreflight -RepositoryRoot $fixture.Repo -Branch 'feature/windows-existing'
-            }
-            $result.Status | Should -Be 'Ready'
-        }
-    }
-
-    Context 'the writing half' {
-        BeforeAll {
-            # The half of the body that is known before the push. The other
-            # half -- what the pre-push hook said -- only exists afterwards,
-            # which is why the body is built inside Publish-WinEnvCapture.
-            $BodyParameter = @{
-                Branch      = 'feature/windows-capture-font'
-                Feature     = @('font')
-                ManagedFile = @('fontPayload (windows/desired/files/font.json)')
-                Commit      = @('feat(windows): capture font settings from the host')
-                Command     = 'windows/tools/capture.ps1 -Feature font -Publish'
-                Build       = '22631'
-            }
-        }
-
-        It 'INV windows/capture-publishes-through-dev: pushes, opens one pull request and arms auto-merge exactly once' {
-            $fixture = New-PublishRepository
-            & git -C $fixture.Repo switch -q -c feature/windows-capture-font | Out-Null
-
-            $result = Invoke-WithStubGh -Fixture $fixture -ScriptBlock {
-                Publish-WinEnvCapture -RepositoryRoot $fixture.Repo -Branch 'feature/windows-capture-font' `
-                    -Title 'feat(windows): capture font settings from the host' `
-                    -BodyParameter $BodyParameter -PullRequest $null
-            }
-            $result.Status | Should -Be 'Published'
-            $result.Url | Should -Be 'https://github.com/example/repo/pull/1'
-
-            $log = @(Get-GhLog $fixture)
-            @($log | Where-Object { $_ -like 'pr create *' }).Count | Should -Be 1
-            @($log | Where-Object { $_ -like 'pr merge *' }).Count | Should -Be 1
-            $log[-1] | Should -Be 'pr merge --auto --merge https://github.com/example/repo/pull/1'
-            # --merge, never --admin: the wait for Required checks is the gate.
-            @($log | Where-Object { $_ -match '--admin' }).Count | Should -Be 0
-            @(& git -C $fixture.Remote for-each-ref --format='%(refname)' refs/heads) |
-                Should -Contain 'refs/heads/feature/windows-capture-font'
-
-            $body = Get-Content -LiteralPath $fixture.Body -Raw
-            $body | Should -Match ([regex]::Escape('- feat(windows): capture font settings from the host'))
-            # git's own push report stands in for the hook's here, since this
-            # fixture's remote runs no checks: what matters is that whatever
-            # the push printed reached the body rather than the floor.
-            $body | Should -Match 'Local push evidence:'
-            $body | Should -Match ([regex]::Escape('feature/windows-capture-font'))
-            $body | Should -Not -Match ([regex]::Escape("(the pre-push hook's output, once the push runs)"))
-        }
-
-        It 'INV windows/capture-publishes-through-dev: arms the pull request already open against dev and opens no second one' {
-            $fixture = New-PublishRepository
-            & git -C $fixture.Repo switch -q -c feature/windows-capture-font | Out-Null
-
-            $result = Invoke-WithStubGh -Fixture $fixture -ScriptBlock {
-                Publish-WinEnvCapture -RepositoryRoot $fixture.Repo -Branch 'feature/windows-capture-font' `
-                    -Title 'feat(windows): capture font settings from the host' `
-                    -BodyParameter $BodyParameter -PullRequest 'https://github.com/example/repo/pull/7'
-            }
-            $result.Status | Should -Be 'Published'
-            $result.Url | Should -Be 'https://github.com/example/repo/pull/7'
-
-            $log = @(Get-GhLog $fixture)
-            @($log | Where-Object { $_ -like 'pr create *' }).Count | Should -Be 0
-            @($log) | Should -Be @('pr merge --auto --merge https://github.com/example/repo/pull/7')
-            (Test-Path -LiteralPath $fixture.Body) | Should -Be $false
-        }
-
-        It 'INV windows/capture-publishes-through-dev: stops at a rejected push with the commits local and nothing published' {
-            $fixture = New-PublishRepository
-            & git -C $fixture.Repo switch -q -c feature/windows-capture-font | Out-Null
-            [IO.File]::WriteAllText((Join-Path $fixture.Repo 'seed.txt'), 'a captured payload')
-            & git -C $fixture.Repo commit -q -a -m 'feat(windows): capture font settings from the host' | Out-Null
-            $hooks = Join-Path $fixture.Repo '.githooks'
-            [void](New-Item -ItemType Directory -Path $hooks -Force)
-            $hook = Join-Path $hooks 'pre-push'
-            # On its error stream: git discards a pre-push hook's stdout when
-            # the push is not to a terminal, and the point of this fixture is
-            # that the operator reads what the hook said.
-            [IO.File]::WriteAllText($hook, "#!/bin/sh`necho '- the Windows checks failed' >&2`nexit 1`n")
-            if (-not $IsWindows) { & chmod +x $hook }
-            & git -C $fixture.Repo config core.hooksPath .githooks | Out-Null
-
-            $result = Invoke-WithStubGh -Fixture $fixture -ScriptBlock {
-                Publish-WinEnvCapture -RepositoryRoot $fixture.Repo -Branch 'feature/windows-capture-font' `
-                    -Title 'feat(windows): capture font settings from the host' `
-                    -BodyParameter $BodyParameter -PullRequest $null
-            }
-            $result.Status | Should -Be 'Refused'
-            $result.Message | Should -Match 'push was rejected'
-            $result.Detail | Should -Match ([regex]::Escape('feature/windows-capture-font'))
-            $result.Detail | Should -Match 'nothing here retries with a bypass'
-            (Get-GhLog $fixture).Count | Should -Be 0
-            @(& git -C $fixture.Remote for-each-ref --format='%(refname)' refs/heads) |
-                Should -Not -Contain 'refs/heads/feature/windows-capture-font'
-            # The commit is still here to push again once the hook passes.
-            (& git -C $fixture.Repo log --oneline -1).Trim() | Should -Match 'capture font settings'
-        }
-
-        It 'reports an unarmed auto-merge with the pull request it left open' {
-            $fixture = New-PublishRepository
-            & git -C $fixture.Repo switch -q -c feature/windows-capture-font | Out-Null
-
-            $result = Invoke-WithStubGh -Fixture $fixture -Environment @{ STUB_GH_MERGE_STATUS = '1' } -ScriptBlock {
-                Publish-WinEnvCapture -RepositoryRoot $fixture.Repo -Branch 'feature/windows-capture-font' `
-                    -Title 'feat(windows): capture font settings from the host' `
-                    -BodyParameter $BodyParameter -PullRequest $null
-            }
-            $result.Status | Should -Be 'Refused'
-            $result.Message | Should -Match 'Auto-merge could not be armed'
-            $result.Detail | Should -Match ([regex]::Escape('https://github.com/example/repo/pull/1'))
-        }
-
-        It 'reports a pull request that could not be opened, with the branch already pushed' {
-            $fixture = New-PublishRepository
-            & git -C $fixture.Repo switch -q -c feature/windows-capture-font | Out-Null
-
-            $result = Invoke-WithStubGh -Fixture $fixture -Environment @{ STUB_GH_CREATE_STATUS = '1' } -ScriptBlock {
-                Publish-WinEnvCapture -RepositoryRoot $fixture.Repo -Branch 'feature/windows-capture-font' `
-                    -Title 'feat(windows): capture font settings from the host' `
-                    -BodyParameter $BodyParameter -PullRequest $null
-            }
-            $result.Status | Should -Be 'Refused'
-            $result.Message | Should -Match 'could not be opened'
-            @(Get-GhLog $fixture | Where-Object { $_ -like 'pr merge *' }).Count | Should -Be 0
-        }
-
-        It 'writes nothing under -WhatIf' {
-            $fixture = New-PublishRepository
-            & git -C $fixture.Repo switch -q -c feature/windows-capture-font | Out-Null
-            $before = @(& git -C $fixture.Remote for-each-ref --format='%(refname)' refs/heads)
-
-            $result = Invoke-WithStubGh -Fixture $fixture -ScriptBlock {
-                Publish-WinEnvCapture -RepositoryRoot $fixture.Repo -Branch 'feature/windows-capture-font' `
-                    -Title 'feat(windows): capture font settings from the host' `
-                    -BodyParameter $BodyParameter -PullRequest $null -WhatIf
-            }
-            $result.Status | Should -Be 'Skipped'
-            @(& git -C $fixture.Remote for-each-ref --format='%(refname)' refs/heads) | Should -Be $before
-            (Get-GhLog $fixture).Count | Should -Be 0
-        }
-    }
-
-    Context 'the whole run, from a drifted host file to a pull request' {
-        It 'branches, commits, pushes, opens one pull request and arms auto-merge after one y' {
-            Skip-WithoutEndToEnd 'the happy path'
-
-            $fixture = New-PublishWorkspace
-            $run = Invoke-Capture -Fixture $fixture -Argument @('-Feature', 'core', '-Publish') -Answer 'y'
-
-            $run.ExitCode | Should -Be 0
-            # What the confirmation asked is asserted against the script's
-            # source below ('asks the documented question…'), not against this
-            # transcript. Windows PowerShell's console host writes a
-            # Read-Host prompt to the console device rather than to stdout, so
-            # a child process whose output is captured never carries it, while
-            # Unix-like pwsh happens to put it in the pipe. That difference is
-            # the console's, not the tool's; what this fixture is for is the
-            # behaviour the answer produced, which is everything below.
-            #
-            # The last line is the pull-request URL and nothing after it: this
-            # run never waits on CI and never merges.
-            $run.Output[-1] | Should -Be 'https://github.com/example/repo/pull/1'
-            # The run really did stop for the question and act on the answer:
-            # the plan was printed, and the payload was written only after it.
-            $run.Output | Should -Contain '  publish: one pull request against dev, auto-merge armed'
-
-            $log = @(Get-GhLog $fixture)
-            @($log | Where-Object { $_ -like 'pr create *' }).Count | Should -Be 1
-            @($log | Where-Object { $_ -like 'pr merge *' }).Count | Should -Be 1
-            $log[-1] | Should -Be 'pr merge --auto --merge https://github.com/example/repo/pull/1'
-            @($log | Where-Object { $_ -like 'pr create *' })[0] |
-                Should -Match ([regex]::Escape('pr create --base dev --head feature/windows-capture-core'))
-
-            @(& git -C $fixture.Remote for-each-ref --format='%(refname)' refs/heads) |
-                Should -Contain 'refs/heads/feature/windows-capture-core'
-            (& git -C $fixture.Repo branch --show-current).Trim() | Should -Be 'feature/windows-capture-core'
-            # dev never carried the commit.
-            (& git -C $fixture.Repo rev-parse dev).Trim() |
-                Should -Be (& git -C $fixture.Repo rev-parse refs/remotes/origin/dev).Trim()
-
-            $body = Get-Content -LiteralPath $fixture.Body -Raw
-            $body | Should -Match 'Scope: windows'
-            $body | Should -Match 'Feature selection: core'
-            $body | Should -Match 'Windows build:'
-            $body | Should -Match ([regex]::Escape('- sample (windows/desired/files/sample.json)'))
-            $body | Should -Match ([regex]::Escape('- feat(windows): capture core settings from the host'))
-            $body | Should -Match ([regex]::Escape('Command: windows/tools/capture.ps1 -Feature core -Publish'))
-            # The commit's own output, copied rather than intercepted.
-            $body | Should -Match '1 file changed'
-            # And the push's, which on a Windows host is where the domain's
-            # own checks run. This fixture's remote runs none, so what lands
-            # here is git's push report -- the point is that it lands.
-            $body | Should -Match 'Local push evidence:'
-            $body | Should -Match ([regex]::Escape('feature/windows-capture-core -> feature/windows-capture-core'))
-            $body | Should -Not -Match ([regex]::Escape("(the pre-push hook's output, once the push runs)"))
-            # Ordering: what the push said reaches the terminal too, between
-            # the push line and the pull request being opened. Anchored on the
-            # ASCII part of each line, because how a captured child's `→`
-            # survives depends on the console encoding of the host running the
-            # suite, and this fixture is about order rather than about bytes.
-            $text = $run.Output -join [Environment]::NewLine
-            $pushIndex = $text.IndexOf('pushing feature/windows-capture-core')
-            $reportIndex = $text.IndexOf('feature/windows-capture-core -> feature/windows-capture-core')
-            $openIndex = $text.IndexOf('opening a pull request against dev')
-            $pushIndex | Should -BeGreaterThan -1
-            $reportIndex | Should -BeGreaterThan -1
-            $openIndex | Should -BeGreaterThan -1
-            $pushIndex | Should -BeLessThan $reportIndex
-            $reportIndex | Should -BeLessThan $openIndex
-        }
-
-        It 'publishes nothing and writes nothing when the answer is not y' {
-            Skip-WithoutEndToEnd 'an answer that is not y'
-
-            $fixture = New-PublishWorkspace
-            $run = Invoke-Capture -Fixture $fixture -Argument @('-Feature', 'core', '-Publish') -Answer 'n'
-
-            $run.ExitCode | Should -Be 1
-            $run.Output | Should -Contain 'Aborted. Nothing was written.'
-            @(Get-GhLog $fixture | Where-Object { $_ -like 'pr create *' -or $_ -like 'pr merge *' }).Count |
-                Should -Be 0
-            @(& git -C $fixture.Repo for-each-ref --format='%(refname)' refs/heads) |
-                Should -Not -Contain 'refs/heads/feature/windows-capture-core'
-            @(& git -C $fixture.Remote for-each-ref --format='%(refname)' refs/heads) |
-                Should -Be @('refs/heads/dev')
-            @(& git -C $fixture.Repo status --porcelain).Count | Should -Be 0
-        }
-
-        It 'prints the branch, the title, the body and the commands under -WhatIf and writes nothing' {
-            Skip-WithoutEndToEnd 'the -WhatIf plan'
-
-            $fixture = New-PublishWorkspace
-            $before = @(& git -C $fixture.Repo for-each-ref --format='%(refname)' refs/heads)
-            $run = Invoke-Capture -Fixture $fixture -Argument @('-Feature', 'core', '-Publish', '-WhatIf')
-
-            $run.ExitCode | Should -Be 0
-            $text = $run.Output -join [Environment]::NewLine
-            $text | Should -Match ([regex]::Escape('branch: feature/windows-capture-core (new, from origin/dev)'))
-            $text | Should -Match ([regex]::Escape('pull request title: feat(windows): capture core settings from the host'))
-            $text | Should -Match 'pull request body:'
-            $text | Should -Match ([regex]::Escape('git push --set-upstream origin feature/windows-capture-core'))
-            $text | Should -Match ([regex]::Escape('gh pr create --base dev --head feature/windows-capture-core'))
-            $text | Should -Match ([regex]::Escape('gh pr merge --auto --merge <the pull request that opens>'))
-            $text | Should -Match ([regex]::Escape('What if: nothing was written and no commit was made.'))
-
-            # Read-only gh calls are allowed here and writing ones are not.
-            @(Get-GhLog $fixture) | Should -Be @(
-                'auth status --hostname github.com',
-                'api repos/{owner}/{repo} --jq .allow_auto_merge',
-                'pr list --head feature/windows-capture-core --state open --json baseRefName,isCrossRepository,url')
-            @(& git -C $fixture.Repo for-each-ref --format='%(refname)' refs/heads) | Should -Be $before
-            @(& git -C $fixture.Repo status --porcelain).Count | Should -Be 0
-            @(& git -C $fixture.Remote for-each-ref --format='%(refname)' refs/heads) | Should -Be @('refs/heads/dev')
-        }
-
-        It 'leaves the commit local and names the branch when the pre-push hook rejects the push' {
-            Skip-WithoutEndToEnd 'a rejected pre-push hook'
-
-            $fixture = New-PublishWorkspace
-            # Installed after the seed push, so it gates only the run under test.
-            $hook = Join-Path $fixture.Repo '.githooks/pre-push'
-            [void](New-Item -ItemType Directory -Path (Split-Path -Parent $hook) -Force)
-            [IO.File]::WriteAllText($hook, "#!/bin/sh`necho '- the Windows checks failed' >&2`nexit 1`n")
-            if (-not $IsWindows) { & chmod +x $hook }
-            & git -C $fixture.Repo config core.hooksPath .githooks | Out-Null
-
-            $run = Invoke-Capture -Fixture $fixture -Argument @('-Feature', 'core', '-Publish') -Answer 'y'
-
-            $run.ExitCode | Should -Be 1
-            $text = $run.Output -join [Environment]::NewLine
-            $text | Should -Match 'The push was rejected'
-            $text | Should -Match ([regex]::Escape('feature/windows-capture-core'))
-            $text | Should -Match 'nothing here retries with a bypass'
-            # The hook's own output reached the operator.
-            $text | Should -Match 'the Windows checks failed'
-
-            @(Get-GhLog $fixture | Where-Object { $_ -like 'pr create *' -or $_ -like 'pr merge *' }).Count |
-                Should -Be 0
-            @(& git -C $fixture.Remote for-each-ref --format='%(refname)' refs/heads) | Should -Be @('refs/heads/dev')
-            (& git -C $fixture.Repo branch --show-current).Trim() | Should -Be 'feature/windows-capture-core'
-            (& git -C $fixture.Repo log --oneline -1).Trim() | Should -Match 'capture core settings from the host'
-        }
-
-        It 'never reaches the push when the commit itself is rejected' {
-            Skip-WithoutEndToEnd 'a rejected commit'
-
-            # The most consequential ordering in the whole run: the commit is
-            # piped so a copy of its output can reach the pull request, and a
-            # pipeline that lost the commit's exit status would push a change
-            # the local gate had just refused.
-            $fixture = New-PublishWorkspace
-            $hook = Join-Path $fixture.Repo '.githooks/pre-commit'
-            [void](New-Item -ItemType Directory -Path (Split-Path -Parent $hook) -Force)
-            [IO.File]::WriteAllText($hook, "#!/bin/sh`necho '- hygiene refused this payload'`nexit 1`n")
-            if (-not $IsWindows) { & chmod +x $hook }
-            & git -C $fixture.Repo config core.hooksPath .githooks | Out-Null
-
-            $run = Invoke-Capture -Fixture $fixture -Argument @('-Feature', 'core', '-Publish') -Answer 'y'
-
-            $run.ExitCode | Should -Be 1
-            $text = $run.Output -join [Environment]::NewLine
-            $text | Should -Match 'The commit was rejected'
-            $text | Should -Match ([regex]::Escape('You are now on feature/windows-capture-core, which this run created.'))
-            @(Get-GhLog $fixture | Where-Object { $_ -like 'pr create *' -or $_ -like 'pr merge *' }).Count |
-                Should -Be 0
-            @(& git -C $fixture.Remote for-each-ref --format='%(refname)' refs/heads) | Should -Be @('refs/heads/dev')
-            # The branch this run created carries no commit, and the payload is
-            # staged where the operator can read or discard it.
-            (& git -C $fixture.Repo rev-parse HEAD).Trim() |
-                Should -Be (& git -C $fixture.Repo rev-parse refs/remotes/origin/dev).Trim()
-            @(& git -C $fixture.Repo diff --cached --name-only) |
-                Should -Be @('windows/desired/files/sample.json')
-        }
-
-        It 'names the commit it already made when a later feature''s commit is rejected' {
-            Skip-WithoutEndToEnd 'a rejected second commit'
-            # One commit per feature means a rejection can arrive with an
-            # earlier feature already committed on the branch this run made.
-            # An operator who followed the recovery advice without being told
-            # would be left holding a commit nobody named.
-            $fixture = New-PublishWorkspace
-            $hook = Join-Path $fixture.Repo '.githooks/commit-msg'
-            [void](New-Item -ItemType Directory -Path (Split-Path -Parent $hook) -Force)
-            [IO.File]::WriteAllText($hook,
-                "#!/bin/sh`nif grep -q 'capture extra settings' `"`$1`"; then exit 1; fi`nexit 0`n")
-            if (-not $IsWindows) { & chmod +x $hook }
-            & git -C $fixture.Repo config core.hooksPath .githooks | Out-Null
-
-            $run = Invoke-Capture -Fixture $fixture -Argument @('-Publish') -Answer 'y'
-
-            $run.ExitCode | Should -Be 1
-            $text = $run.Output -join [Environment]::NewLine
-            $text | Should -Match 'The commit was rejected'
-            $text | Should -Match 'This run already committed, and these commits remain on the branch:'
-            $text | Should -Match ([regex]::Escape('feat(windows): capture core settings from the host'))
-            # And that commit really is on the branch this run created.
-            (& git -C $fixture.Repo log --oneline -1).Trim() |
-                Should -Match ([regex]::Escape('capture core settings from the host'))
-            (& git -C $fixture.Repo branch --show-current).Trim() |
-                Should -Be 'feature/windows-capture-core-extra'
-            @(Get-GhLog $fixture | Where-Object { $_ -like 'pr create *' -or $_ -like 'pr merge *' }).Count |
-                Should -Be 0
-            @(& git -C $fixture.Remote for-each-ref --format='%(refname)' refs/heads) | Should -Be @('refs/heads/dev')
-            @(& git -C $fixture.Repo diff --cached --name-only) |
-                Should -Be @('windows/desired/files/other.json')
-        }
-
-        It 'reuses a pull request already open against dev without printing a body it would discard' {
-            Skip-WithoutEndToEnd 'the reuse path'
-
-            $fixture = New-PublishWorkspace
-            $listing = '[{"baseRefName":"dev","isCrossRepository":false,' +
-            '"url":"https://github.com/example/repo/pull/7"}]'
-            $run = Invoke-Capture -Fixture $fixture -Argument @('-Feature', 'core', '-Publish') `
-                -Answer 'y' -Environment @{ STUB_GH_PR_LIST = $listing }
-
-            $run.ExitCode | Should -Be 0
-            $text = $run.Output -join [Environment]::NewLine
-            $text | Should -Match ([regex]::Escape(
-                    'pull request: https://github.com/example/repo/pull/7 (existing; title and body unchanged)'))
-            # Showing a body nobody will read would promise a reviewer evidence
-            # that never reaches the pull request.
-            $text | Should -Not -Match 'pull request body:'
-            $run.Output[-1] | Should -Be 'https://github.com/example/repo/pull/7'
-
-            @(Get-GhLog $fixture | Where-Object { $_ -like 'pr create *' }).Count | Should -Be 0
-            @(Get-GhLog $fixture)[-1] | Should -Be 'pr merge --auto --merge https://github.com/example/repo/pull/7'
-        }
-
-        It 'titles a run that captured two features generally and lists both commits' {
-            Skip-WithoutEndToEnd 'a two-feature run'
-
-            $fixture = New-PublishWorkspace
-            $run = Invoke-Capture -Fixture $fixture -Argument @('-Publish') -Answer 'y'
-
-            $run.ExitCode | Should -Be 0
-            @(Get-GhLog $fixture | Where-Object { $_ -like 'pr create *' })[0] |
-                Should -Match ([regex]::Escape('--title feat(windows): capture settings from the host'))
-            $body = Get-Content -LiteralPath $fixture.Body -Raw
-            $body | Should -Match ([regex]::Escape('- feat(windows): capture core settings from the host'))
-            $body | Should -Match ([regex]::Escape('- feat(windows): capture extra settings from the host'))
-            $body | Should -Match 'Feature selection: core, extra'
-        }
-
-        It 'names the commits the branch already carries before the confirmation' {
-            Skip-WithoutEndToEnd 'the carried-commit disclosure'
-
-            $fixture = New-PublishWorkspace
-            & git -C $fixture.Repo switch -q -c feature/windows-existing | Out-Null
-            [IO.File]::WriteAllText((Join-Path $fixture.Repo 'windows/desired/files/other.json'),
-                "{`n  `"size`": 12`n}`n")
-            & git -C $fixture.Repo commit -q -a -m 'an unrelated commit already on this branch' | Out-Null
-
-            $run = Invoke-Capture -Fixture $fixture -Argument @('-Feature', 'core', '-Publish', '-WhatIf')
-
-            $run.ExitCode | Should -Be 0
-            $text = $run.Output -join [Environment]::NewLine
-            $text | Should -Match 'this branch also carries, and will publish and merge:'
-            $text | Should -Match 'an unrelated commit already on this branch'
-            $text | Should -Match ([regex]::Escape('branch: feature/windows-existing (current)'))
-        }
-
-        It 'refuses -Publish on a detached HEAD, which is no branch to publish' {
-            Skip-WithoutEndToEnd 'a detached HEAD'
-
-            $fixture = New-PublishWorkspace
-            & git -C $fixture.Repo switch -q --detach HEAD | Out-Null
-
-            $run = Invoke-Capture -Fixture $fixture -Argument @('-Feature', 'core', '-Publish') -Answer 'y'
-
-            $run.ExitCode | Should -Be 1
-            ($run.Output -join [Environment]::NewLine) | Should -Match 'HEAD is detached'
-            # Decided before gh is consulted and before anything is written.
-            (Get-GhLog $fixture).Count | Should -Be 0
-            @(& git -C $fixture.Repo status --porcelain).Count | Should -Be 0
-            @(& git -C $fixture.Remote for-each-ref --format='%(refname)' refs/heads) | Should -Be @('refs/heads/dev')
-        }
-
-    }
 }
 
 Describe 'repository isolation' {
     BeforeAll {
-        $isolate = Join-Path $repositoryRoot 'tools\isolate-git.ps1'
+        $isolate = Join-Path $repositoryRoot 'tool\isolate-git.ps1'
         $pwshPath = (Get-Process -Id $PID).Path
 
         # Runs one git command in a child pwsh whose environment names a decoy
@@ -4448,12 +3363,12 @@ Describe 'Windows tree isolation' {
         # the tokens a path can be -- a string, a bare command argument, and
         # the tokens nested inside an expandable string -- so a comment that
         # mentions a Unix-like path is not a read. The pattern names the
-        # Unix-like roots -- the payload and module trees, the flake, its
-        # checks -- rather than every path above windows/, because the
+        # Unix-like root, which owns payloads, modules, the flake and checks,
+        # rather than every path above windows/, because the
         # applied-commit code legitimately resolves the repository's own git
         # metadata from the repository root. Case-sensitive on purpose:
-        # PowerShell's own 'Modules' directory is not the Nix module tree.
-        $UnixLikeTreePattern = '(^|[\\/''" ])(assets|modules)([\\/]|$)|flake\.(nix|lock)|tool[\\/]checks'
+        # PowerShell's own paths are not the Unix-like domain tree.
+        $UnixLikeTreePattern = '(^|[\\/''" ])unixlike[\\/]'
         $StringTokenKinds = @('StringLiteral', 'StringExpandable', 'HereStringLiteral', 'HereStringExpandable')
 
         function Get-UnixLikeTreeReference {
@@ -4489,32 +3404,35 @@ Describe 'Windows tree isolation' {
 
     It 'INV windows/no-unix-host-required: the scan names a script that reads a Unix-like payload and passes a comment that mentions one' {
         # The offending path is assembled from pieces so this file, which
-        # the case above scans, does not carry the shape it looks for. Three
-        # spellings of the same read: a quoted string, a bare argument, and
-        # a string nested inside an expandable one.
-        $unixPayload = 'as' + 'sets' + '\wezterm\fonts.json'
-        $unixRoot = 'as' + 'sets'
+        # the case above scans, does not carry the shape it looks for. Four
+        # shapes of current reads: a quoted payload, a bare tool path, a
+        # nested expandable string, and a module path.
+        $unixPayload = 'unix' + 'like' + '\payloads.json'
+        $unixTool = 'unix' + 'like' + '\tool\install-plan'
+        $unixRoot = 'unix' + 'like'
         $offender = Join-Path $TestDrive 'reads-unixlike.ps1'
         [IO.File]::WriteAllText($offender, (@(
                     "`$fonts = Get-Content (Join-Path `$root '$unixPayload')"
-                    "`$fonts = Get-Content (Join-Path `$root $unixPayload)"
-                    "`$fonts = Get-Content `"`$root/`$(Join-Path '$unixRoot' 'wezterm')`""
+                    "`$fonts = Get-Content (Join-Path `$root $unixTool)"
+                    "`$fonts = Get-Content `"`$root/$unixPayload`""
+                    "`$fonts = Get-Content (Join-Path `$root '$unixRoot\modules\programs\probe.nix')"
                 ) -join "`n") + "`n")
         $hit = @(Get-UnixLikeTreeReference -Path $offender)
-        $hit.Count | Should -Be 3
+        $hit.Count | Should -Be 4
         $hit[0] | Should -Match 'reads-unixlike\.ps1:1: '
         $hit[1] | Should -Match 'reads-unixlike\.ps1:2: '
         $hit[2] | Should -Match 'reads-unixlike\.ps1:3: '
+        $hit[3] | Should -Match 'reads-unixlike\.ps1:4: '
 
         $mention = Join-Path $TestDrive 'mentions-unixlike.ps1'
-        [IO.File]::WriteAllText($mention, "# The Unix-like copy lives under $($unixPayload.Replace('\', '/')).`n`$own = 'files\wezterm\fonts.json'`n")
+        [IO.File]::WriteAllText($mention, "# The Unix-like copy lives under $($unixPayload.Replace('\', '/')).`n`$own = 'windows\tool\capture.ps1'`n")
         @(Get-UnixLikeTreeReference -Path $mention).Count | Should -Be 0
     }
 }
 
 Describe 'check entry points' {
     BeforeAll {
-        $bootstrap = Join-Path $repositoryRoot 'tools\bootstrap.ps1'
+        $bootstrap = Join-Path $repositoryRoot 'tool\bootstrap.ps1'
         $entryPoint = Join-Path $repositoryRoot 'win-env.ps1'
         $pwshPath = (Get-Process -Id $PID).Path
 
@@ -4583,6 +3501,38 @@ Describe 'check entry points' {
                 $env:REQUIRE_NATIVE = $savedNative
             }
         }
+
+        # INV windows/automation-tools-standalone: execute the implementation
+        # as automation does, with prerequisites deliberately hidden. The
+        # public entry point is not in this path.
+        function Invoke-InternalCheck {
+            param([string] $Script, [string] $RequireNative, [switch] $HidePester)
+            $savedPath = $env:PATH
+            $savedNative = $env:REQUIRE_NATIVE
+            try {
+                $env:PATH = ''
+                $env:REQUIRE_NATIVE = $RequireNative
+                $scriptPath = Join-Path $repositoryRoot "tool/$Script"
+                if ($HidePester) {
+                    # pwsh reconstructs its default module paths on startup,
+                    # so setting an empty parent PSModulePath would recurse.
+                    # Hide Pester after startup, then invoke the tool itself.
+                    $escaped = $scriptPath.Replace("'", "''")
+                    $command = '$env:PSModulePath = ""; & ''' + $escaped + '''; exit $LASTEXITCODE'
+                    $output = @(& $pwshPath -NoProfile -Command $command 2>&1 |
+                        ForEach-Object { "$_" })
+                }
+                else {
+                    $output = @(& $pwshPath -NoProfile -File $scriptPath 2>&1 |
+                        ForEach-Object { "$_" })
+                }
+                return [pscustomobject]@{ ExitCode = $LASTEXITCODE; Output = ($output -join "`n") }
+            }
+            finally {
+                $env:PATH = $savedPath
+                $env:REQUIRE_NATIVE = $savedNative
+            }
+        }
     }
 
     It 'INV windows/check-exit-contract: reports a missing prerequisite under -Check as unverified' {
@@ -4593,13 +3543,62 @@ Describe 'check entry points' {
         Invoke-BootstrapCheck -RequireNative '1' | Should -Be 1
     }
 
-    It 'INV windows/check-exit-contract: ranks a source no parser could read beside an undecided detection' {
+    It 'INV windows/selected-precondition-evaluated: no loop rebinds a parameter of the script block it runs in' {
+        # PowerShell names are case-insensitive and a parameter keeps its type
+        # constraint, so `foreach ($feature in ...)` under a `[string[]]
+        # $Feature` parameter converts every item to a string array and the
+        # body reads properties that are no longer there. setup.ps1 skipped
+        # every feature's preconditions that way. The check past the
+        # prerequisites needs a Windows host, so the rule is held by reading
+        # every script of the domain.
+        $windowsRoot = $repositoryRoot
+        $scripts = @(Get-ChildItem -LiteralPath $windowsRoot -Recurse -File -Include '*.ps1', '*.psm1' |
+                Where-Object { $_.FullName -notmatch '[\\/](tests|desired)[\\/]' })
+        $scripts.Count | Should -BeGreaterThan 5
+
+        $collisions = foreach ($script in $scripts) {
+            $tokens = $null
+            $errors = $null
+            $ast = [System.Management.Automation.Language.Parser]::ParseFile($script.FullName, [ref]$tokens, [ref]$errors)
+            foreach ($loop in $ast.FindAll({ param($node) $node -is [System.Management.Automation.Language.ForEachStatementAst] }, $true)) {
+                $scope = $loop.Parent
+                while ($scope -and $scope -isnot [System.Management.Automation.Language.ScriptBlockAst]) { $scope = $scope.Parent }
+                if (-not $scope -or -not $scope.ParamBlock) { continue }
+                $parameters = @($scope.ParamBlock.Parameters | ForEach-Object { $_.Name.VariablePath.UserPath })
+                if ($parameters -contains $loop.Variable.VariablePath.UserPath) {
+                    '{0}:{1} ${2}' -f $script.Name, $loop.Extent.StartLineNumber, $loop.Variable.VariablePath.UserPath
+                }
+            }
+        }
+        (@($collisions) -join '; ') | Should -Be ''
+
+        # And the loop that evaluates preconditions hands the evaluator the
+        # item it iterates over, once.
+        $setup = Join-Path $repositoryRoot 'tool\setup.ps1'
+        $tokens = $null
+        $errors = $null
+        $ast = [System.Management.Automation.Language.Parser]::ParseFile($setup, [ref]$tokens, [ref]$errors)
+        $calls = @($ast.FindAll({
+                    param($node)
+                    $node -is [System.Management.Automation.Language.CommandAst] -and
+                    $node.GetCommandName() -eq 'Test-WinEnvFeaturePrecondition'
+                }, $true))
+        $calls.Count | Should -Be 1
+        $loop = $calls[0].Parent
+        while ($loop -and $loop -isnot [System.Management.Automation.Language.ForEachStatementAst]) { $loop = $loop.Parent }
+        ($null -ne $loop) | Should -Be $true
+        $loop.Condition.Extent.Text | Should -Be '$manifest.Features'
+        $arguments = $calls[0].CommandElements | ForEach-Object { $_.Extent.Text }
+        $arguments[([array]::IndexOf($arguments, '-Feature') + 1)] | Should -Be $loop.Variable.Extent.Text
+    }
+
+    It 'INV windows/check-exit-contract: ranks every unverified evidence category exactly once' {
         # The check path past the prerequisites needs a Windows host (the
         # registry, the font store, WinGet), so the wiring is held by reading
-        # setup.ps1: the one call that ranks the run counts both lists, the
-        # sources nobody here could parse and the detections nobody here could
-        # decide, and the clean line is suppressed by either (#54).
-        $setup = Join-Path $repositoryRoot 'tools\setup.ps1'
+        # setup.ps1: the one call that ranks the run consumes one total made
+        # from unavailable sources, unavailable observations and known support
+        # limits. The clean line is suppressed by any of the three.
+        $setup = Join-Path $repositoryRoot 'tool\setup.ps1'
         $tokens = $null
         $errors = $null
         $ast = [System.Management.Automation.Language.Parser]::ParseFile($setup, [ref]$tokens, [ref]$errors)
@@ -4611,9 +3610,18 @@ Describe 'check entry points' {
                 }, $true))
         $calls.Count | Should -Be 1
         $arguments = $calls[0].CommandElements | ForEach-Object { $_.Extent.Text }
-        $unverifiedCount = $arguments[([array]::IndexOf($arguments, '-UnverifiedCount') + 1)]
-        $unverifiedCount | Should -Match '\$unverified\.Count'
-        $unverifiedCount | Should -Match '\$unverifiedDetection\.Count'
+        $arguments[([array]::IndexOf($arguments, '-UnverifiedCount') + 1)] | Should -Be '$unverifiedCount'
+
+        $countAssignment = @($ast.FindAll({
+                    param($node)
+                    $node -is [System.Management.Automation.Language.AssignmentStatementAst] -and
+                    $node.Left.Extent.Text -eq '$unverifiedCount'
+                }, $true))
+        $countAssignment.Count | Should -Be 1
+        $countExpression = $countAssignment[0].Right.Extent.Text
+        $countExpression | Should -Match '\$unverified\.Count'
+        $countExpression | Should -Match '\$unavailableObservation\.Count'
+        $countExpression | Should -Match '\$knownSupportLimit\.Count'
 
         $cleanLine = @($ast.FindAll({
                     param($node)
@@ -4623,12 +3631,30 @@ Describe 'check entry points' {
         $cleanLine.Count | Should -Be 1
         $condition = $cleanLine[0].Clauses[0].Item1.Extent.Text
         $condition | Should -Match '\$unverified\.Count'
-        $condition | Should -Match '\$unverifiedDetection\.Count'
+        $condition | Should -Match '\$unavailableObservation\.Count'
+        $condition | Should -Match '\$knownSupportLimit\.Count'
+
+        $sharedPresentationCalls = @($ast.FindAll({
+                    param($node)
+                    $node -is [System.Management.Automation.Language.CommandAst] -and
+                    $node.GetCommandName() -eq 'Get-UnverifiedEvidenceLine'
+                }, $true))
+        $sharedPresentationCalls.Count | Should -Be 2
     }
 
     It 'INV windows/entry-point-forwards-status: check returns the status bootstrap.ps1 -Check returned' {
         (Invoke-EntryPoint -Arguments @('check') -RequireNative $null).ExitCode | Should -Be 69
         (Invoke-EntryPoint -Arguments @('check') -RequireNative '1').ExitCode | Should -Be 1
+    }
+
+    It 'INV windows/automation-tools-standalone: direct validation reports unavailable and required-native failure' {
+        (Invoke-InternalCheck -Script 'check-desired-state.ps1' -RequireNative $null).ExitCode | Should -Be 69
+        (Invoke-InternalCheck -Script 'check-desired-state.ps1' -RequireNative '1').ExitCode | Should -Be 1
+    }
+
+    It 'INV windows/automation-tools-standalone: direct suite reports unavailable and required-native failure without Pester' {
+        (Invoke-InternalCheck -Script 'test.ps1' -RequireNative $null -HidePester).ExitCode | Should -Be 69
+        (Invoke-InternalCheck -Script 'test.ps1' -RequireNative '1' -HidePester).ExitCode | Should -Be 1
     }
 
     It 'INV windows/entry-point-forwards-status: refuses an unknown verb, and no verb, with 64 and forwards nothing' {
@@ -4653,7 +3679,7 @@ Describe 'check entry points' {
         $refused.Output | Should -Match 'Parameter set cannot be resolved'
     }
 
-    It 'INV windows/entry-point-forwards-status: every verb names a script under tools that ends in an explicit exit' {
+    It 'INV windows/entry-point-forwards-status: every verb names a script under tool that ends in an explicit exit' {
         $tokens = $null
         $errors = $null
         $ast = [System.Management.Automation.Language.Parser]::ParseFile($entryPoint, [ref]$tokens, [ref]$errors)
@@ -4662,9 +3688,9 @@ Describe 'check entry points' {
             ForEach-Object { $_.KeyValuePairs } |
             Where-Object { $_.Item1.Extent.Text -eq 'Script' } |
             ForEach-Object { $_.Item2.Extent.Text.Trim("'") })
-        $scripts.Count | Should -Be 7 -Because 'the table names check, apply, capture, validate, test, setup-dev and font; a new verb updates this count'
+        $scripts.Count | Should -Be 10 -Because 'three declaration/generation verbs join the seven legacy verbs'
         foreach ($script in $scripts) {
-            $path = Join-Path (Join-Path $repositoryRoot 'tools') $script
+            $path = Join-Path (Join-Path $repositoryRoot 'tool') $script
             $path | Should -Exist
             # In-process, the status the entry point returns is $LASTEXITCODE,
             # which a script that falls off its end leaves at whatever its last

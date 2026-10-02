@@ -1,0 +1,528 @@
+<#
+.SYNOPSIS
+Checks or reconciles the selected Windows desired state.
+
+.DESCRIPTION
+setup.ps1 is the PowerShell 7 desired-state runner. It resolves feature
+selection and dependencies, observes packages and managed files, and either
+reports the result with -Check or reconciles the host after all safety checks
+pass. Use bootstrap.ps1 or win-env.ps1 for the normal public entry point.
+
+Choose at most one of -Feature, -Add, -Minimal, and -All. With no selector, an
+already-applied host keeps its recorded selection and a new host selects every
+declared feature. Dependencies and the required core feature are added. When a
+feature is deselected, its files and packages are left in place but stop being
+managed.
+
+.PARAMETER Check
+Reports desired-state drift without installing packages, writing files,
+changing terminal delegation, or updating state. It cannot be combined with
+-Force.
+
+.PARAMETER Force
+Runs reconciliation even when version, desired-state hash, and selection gates
+would otherwise skip it. It does not bypass selection conflicts, missing
+prerequisites, package detection conflicts, feature preconditions, or font
+overwrite protection. It cannot be combined with -Check.
+
+.PARAMETER Feature
+Replaces the host selection with the named feature IDs. Comma-separated values
+or a PowerShell string array are accepted.
+
+.PARAMETER Add
+Adds the named feature IDs to the selection recorded on this host.
+
+.PARAMETER Minimal
+Selects only required features, currently core.
+
+.PARAMETER All
+Selects every feature declared by the manifest.
+
+.PARAMETER Generation
+Explicit generated directory with unchanged original inputs, payloads and tools.
+Its declaration owns selection; use the generated entry point. Default terminal
+delegation is excluded in the initial LTSC contract, independently from drift.
+
+.EXAMPLE
+PS> .\windows\win-env.ps1 check -Minimal
+
+Read-only. Checks only the required feature set.
+
+.EXAMPLE
+PS> .\windows\win-env.ps1 check -Feature terminal
+
+Read-only. Checks terminal and the font, zellij, and core dependencies that
+make that selection deployable.
+
+.EXAMPLE
+PS> .\windows\win-env.ps1 apply -Force -Add wezterm
+
+Changes the host. Extends the recorded selection and forces reconciliation,
+while retaining every normal refusal and precondition.
+
+.NOTES
+Requires PowerShell 7, WinGet, and Windows. Under -Check, exit 0 means
+converged, 2 means drift, 69 means unverified, and 1 means failure; drift
+outranks unverified evidence. REQUIRE_NATIVE=1 turns any incomplete native
+evidence into exit 1.
+
+For the established Appx module-loading diagnosis, follow the troubleshooting
+link below. The documented probe requires neither -AllUsers nor elevation.
+
+Apply can install selected packages and fonts, back up and replace selected
+managed files, add the managed PowerShell profile hook, set terminal delegation
+when selected, briefly stop and restart PowerToys when selected, and write
+state below LOCALAPPDATA. It does not activate WSL configuration or prove its
+runtime effect. PowerToys can request elevation when it must be closed; a
+cancelled or failed elevation request aborts the run.
+
+.LINK
+https://github.com/shk95/configs/blob/dev/README.md#windows
+
+.LINK
+https://github.com/shk95/configs/blob/dev/CONTRIBUTING.md#windows-changes
+
+.LINK
+https://github.com/shk95/configs/blob/dev/docs/reference/troubleshooting.md#checks
+#>
+[CmdletBinding(DefaultParameterSetName = 'Default')]
+param(
+    [Parameter(ParameterSetName = 'Check')]
+    [switch] $Check,
+
+    [Parameter(ParameterSetName = 'Force')]
+    [switch] $Force,
+
+    # Which features this host deploys. Selection is host state, not desired
+    # state: the manifest declares what exists, these switches decide how much
+    # of it this host takes. Exactly one may be supplied; with none, an applied
+    # host keeps its recorded selection and a new host takes everything, which
+    # is what this script did before selection existed.
+    [string[]] $Feature,
+    [string[]] $Add,
+    [switch] $Minimal,
+    [switch] $All,
+    [string] $Generation
+)
+
+$ErrorActionPreference = 'Stop'
+# INV windows/check-exit-contract — Get-WinEnvCheckStatus ranks this run and
+# the non-apply path exits with what it returns; nothing else decides the
+# status of a -Check.
+$windowsRoot = Split-Path -Parent $PSScriptRoot
+$repositoryRoot = Split-Path -Parent $windowsRoot
+$desiredStateRoot = Join-Path $windowsRoot 'desired'
+Import-Module (Join-Path $windowsRoot 'src\WinEnv.psm1') -Force
+
+$stateRoot = Join-Path $env:LOCALAPPDATA 'win-env'
+$statePath = Join-Path $stateRoot 'state.json'
+$backupRoot = Join-Path $stateRoot 'backups\original'
+$mutex = $null
+$powerToysWasRunning = $false
+$powerToysRestarted = $false
+$drift = [System.Collections.Generic.List[string]]::new()
+$changed = [System.Collections.Generic.List[string]]::new()
+# Sources this host has no parser for and other existing prerequisites such as
+# WSL support observations. Not drift and not a failure: Apply is a deployment,
+# and refusing it because a validator is absent would make the missing tool
+# look like broken desired state. They rank the same way the detections below
+# do: with no drift, an unavailable item makes the check unverified (#54).
+$unverified = [System.Collections.Generic.List[string]]::new()
+# Host observations this run could not make, as opposed to known support
+# limits. Both remain unverified evidence, but only an unavailable observation
+# is undecided. A below-boundary result is already decided against its named
+# requirement and must not inherit presence-query wording.
+$unavailableObservation = [System.Collections.Generic.List[string]]::new()
+$knownSupportLimit = [System.Collections.Generic.List[string]]::new()
+# CI sets this so the merge gate never accepts an undecided item; hooks and
+# hosts leave it unset so a host that cannot decide one is not blocked.
+$requireNative = ($env:REQUIRE_NATIVE -eq '1')
+$generationRecord = $null
+$applyingGeneration = $false
+$profileEnabled = $true
+$delegationIncluded = $true
+$selection = $null
+$selected = @()
+$unmanaged = @()
+# A managed file may declare alternative sources chosen by the host's Windows
+# build. The build is resolved once, reported in the summary, and never
+# compared by major version: OSVersion.Version.Major is 10 on Windows 10 and
+# Windows 11 alike. $null means the build could not be determined, which
+# selects the variant every supported build honours.
+$hostBuild = $null
+$conditionalFiles = @()
+$wslInformation = [System.Collections.Generic.List[string]]::new()
+
+function Add-UnverifiedEvidence {
+    param(
+        [Parameter(Mandatory)][ValidateSet('Source', 'UnavailableObservation', 'KnownSupportLimit')][string] $Category,
+        [Parameter(Mandatory)][string] $Item
+    )
+
+    switch ($Category) {
+        'Source' { $unverified.Add($Item) }
+        'UnavailableObservation' { $unavailableObservation.Add($Item) }
+        'KnownSupportLimit' { $knownSupportLimit.Add($Item) }
+    }
+}
+
+function Test-Sources {
+    param([array] $Definitions)
+    foreach ($definition in $Definitions) {
+        $reason = Test-WinEnvSourceFile -Definition $definition -RepositoryRoot $desiredStateRoot
+        if ($reason -and -not $unverified.Contains("$($definition.Id): $reason")) {
+            Add-UnverifiedEvidence -Category 'Source' -Item "$($definition.Id): $reason"
+        }
+    }
+}
+
+function Get-UnverifiedEvidenceLine {
+    return @(Format-WinEnvUnverifiedEvidence -Source $unverified.ToArray() `
+        -UnavailableObservation $unavailableObservation.ToArray() `
+        -KnownSupportLimit $knownSupportLimit.ToArray())
+}
+
+function Write-Summary {
+    param([string] $Mode)
+    Write-Host "win-env $Mode summary"
+    Write-Host ('  selected: ' + ($selected -join ', '))
+    if ($selection -and $selection.Implied.Count) {
+        Write-Host ('  added by dependency: ' + ($selection.Implied -join ', '))
+    }
+    if ($selection -and $selection.Excluded.Count) {
+        Write-Host ('  not selected: ' + ($selection.Excluded -join ', '))
+    }
+    if ($unmanaged.Count) {
+        Write-Warning ('  no longer managed: ' + ($unmanaged -join ', ') +
+            ' (installed packages and deployed files were left in place; nothing was removed)')
+    }
+    if ($changed.Count) { Write-Host ('  changed: ' + ($changed -join ', ')) }
+    if ($drift.Count) { Write-Warning ('  drift: ' + ($drift -join ', ')) }
+    foreach ($line in Get-UnverifiedEvidenceLine) { Write-Host ('  ' + $line) }
+    if ($conditionalFiles.Count) {
+        $build = if ($null -ne $hostBuild) { [string]$hostBuild } else { 'undetermined' }
+        Write-Host ('  Windows build ' + $build + ': ' +
+            (($conditionalFiles | ForEach-Object { "$($_.Id) from $($_.Source)" }) -join ', '))
+    }
+    foreach ($item in $wslInformation) { Write-Host ('  wslConfig: ' + $item) }
+    # Unverified evidence is not a clean run, so any category suppresses the
+    # clean line.
+    if (-not $changed.Count -and -not $drift.Count -and -not $unverified.Count -and
+        -not $unavailableObservation.Count -and -not $knownSupportLimit.Count) {
+        Write-Host '  no changes or drift detected'
+    }
+}
+
+try {
+    if ($PSVersionTable.PSVersion.Major -lt 7) { throw 'setup.ps1 requires PowerShell 7 or newer.' }
+    if (-not $Generation) {
+        if (Test-Path -LiteralPath (Join-Path $repositoryRoot 'generation.json')) { throw 'Generated configurations require explicit Generation mode.' }
+        $legacyCommit = Get-WinEnvGitCommit -RepositoryRoot $repositoryRoot
+        if ($legacyCommit -cnotmatch '\A[0-9a-f]{40}\z') { throw 'Source-only reconciliation requires an exact provider clone.' }
+    }
+    if ($Generation) {
+        foreach ($selector in @('Feature', 'Add', 'Minimal', 'All')) {
+            if ($PSBoundParameters.ContainsKey($selector)) { throw 'Generation owns selection; selector flags are refused.' }
+        }
+        Import-Module (Join-Path $windowsRoot 'src/WinEnvGeneration.psm1') -Force
+        $generationRecord = Assert-WinEnvGeneratedIntegrity -Generation $Generation
+        $generationRoot = (Resolve-Path -LiteralPath $Generation).ProviderPath
+        $setupIdentity = @($generationRecord.files | Where-Object { $_.path -ceq 'windows/tool/setup.ps1' })
+        if ($setupIdentity.Count -ne 1 -or (Get-WinEnvFileDigest $PSCommandPath) -cne $setupIdentity[0].sha256) {
+            throw 'Runner tools do not match this generation; use its generated Windows entry point.'
+        }
+        $repositoryRoot = $generationRoot
+        $windowsRoot = Join-Path $generationRoot 'windows'
+        $desiredStateRoot = Join-Path $windowsRoot 'desired'
+        Import-Module (Join-Path $windowsRoot 'src/WinEnv.psm1') -Force
+        $delegationIncluded = $false
+    }
+    if (-not (Get-Command winget.exe -ErrorAction SilentlyContinue)) { throw 'WinGet is required.' }
+
+    $manifest = Get-WinEnvManifest -Path (Join-Path $desiredStateRoot 'manifest.json')
+
+    $mutex = Enter-WinEnvLock
+    $state = Get-WinEnvState -Path $statePath
+    if ($state -and $state.schemaVersion -eq 3 -and -not $Generation) { throw 'Host-generation runtime state requires explicit Generation mode.' }
+    $appliedFeatures = Get-WinEnvAppliedFeature -Manifest $manifest -State $state
+
+    $requested = if ($generationRecord) { @($generationRecord.selected) } else {
+        Get-WinEnvRequestedFeature -Manifest $manifest -Applied $appliedFeatures -HasState ([bool]$state) `
+            -Feature $Feature -Add $Add -Minimal:$Minimal -All:$All
+    }
+
+    $selection = Get-WinEnvFeatureSelection -Manifest $manifest -Requested $requested
+    $selected = $selection.Selected
+    # Deselection stops management; it never uninstalls a package or deletes a
+    # deployed file. Removing what a previous Apply put on the host is a
+    # separate, destructive operation this script does not perform.
+    $unmanaged = @($appliedFeatures | Where-Object { $selected -notcontains $_ })
+
+    $packages = @($manifest.Packages | Where-Object { $selected -contains [string]$_.Feature })
+    # Resolved once, here and nowhere else: everything downstream keeps taking a
+    # definition with a scalar Source, exactly as it did before a managed file
+    # could declare alternatives.
+    $hostBuild = Get-WinEnvWindowsBuild
+    $conditionalIds = @($manifest.ManagedFiles |
+            Where-Object { $_.ContainsKey('Sources') } |
+            ForEach-Object { [string]$_.Id })
+    $managedFiles = @($manifest.ManagedFiles |
+            Where-Object { $selected -contains [string]$_.Feature } |
+            ForEach-Object { Resolve-WinEnvManagedFile -Definition $_ -Build $hostBuild })
+    $conditionalFiles = @($managedFiles | Where-Object { $conditionalIds -contains [string]$_.Id })
+    $profileEnabled = @($managedFiles | ForEach-Object { $_.Id }) -ccontains 'powershellProfile'
+    $fontSelected = $selected -contains [string]$manifest.Font.Feature
+    $terminalSelected = $selected -contains [string]$manifest.Terminal.Feature
+    # PowerToys rewrites its own settings when it exits, so its files can only
+    # be deployed while it is stopped. A host that did not select the feature
+    # keeps its running PowerToys untouched.
+    $managesPowerToys = @(
+        $manifest.Features |
+            Where-Object { $selected -contains [string]$_.Id -and $_.ContainsKey('Lifecycle') } |
+            ForEach-Object { [string]$_.Lifecycle }) -contains 'PowerToys'
+
+    $desiredStateHash = Get-WinEnvDesiredStateHash -Root $desiredStateRoot -Manifest $manifest -Feature $selected
+    Test-Sources -Definitions $managedFiles
+
+    $fontRegisteredAtUtc = if ($state -and $state.PSObject.Properties['fontRegisteredAtUtc']) {
+        ([DateTimeOffset]$state.fontRegisteredAtUtc).ToString('o')
+    }
+    elseif ($state -and ($state.schemaVersion -ne 3 -or $state.outcome -ceq 'success')) {
+        ([DateTimeOffset]$state.appliedAtUtc).ToString('o')
+    }
+    else {
+        $null
+    }
+    $appliedVersion = if ($state) { [string]$state.projectVersion } else { '0.0.0' }
+    $appliedDesiredStateHash = if ($state -and $state.PSObject.Properties['bundleHash']) {
+        [string]$state.bundleHash
+    }
+    else {
+        ''
+    }
+    $comparison = Compare-WinEnvVersion -RepositoryVersion $manifest.ProjectVersion -AppliedVersion $appliedVersion
+    $generationChanged = $generationRecord -and (-not $state -or $state.schemaVersion -ne 3 -or $state.outcome -cne 'success' -or $state.generationIdentity -cne $generationRecord.identity)
+    $desiredStateChanged = ($appliedDesiredStateHash -ne $desiredStateHash) -or $generationChanged
+    $featureSetChanged = (($appliedFeatures | Sort-Object) -join ',') -ne (($selected | Sort-Object) -join ',')
+    $shouldApply = -not $Check -and ($Force -or -not $state -or $comparison -gt 0 -or $desiredStateChanged -or $featureSetChanged)
+
+    if (-not $state) { $drift.Add('state missing') }
+    elseif ($comparison -lt 0) { Write-Warning "Repository version $($manifest.ProjectVersion) is lower than applied version $appliedVersion; downgrade is disabled." }
+    else {
+        if ($featureSetChanged) { $drift.Add('feature selection changed') }
+        if ($desiredStateChanged) { $drift.Add('desired state changed') }
+    }
+
+    $packageStatuses = @()
+    foreach ($package in $packages) {
+        $status = Get-WinEnvPackageStatus -Package $package
+        $packageStatuses += $status
+        Write-Verbose "$($status.Id): registered=$($status.Registered), detected=$($status.Detected)"
+        if ($status.Unverified) {
+            Add-UnverifiedEvidence -Category 'UnavailableObservation' -Item "$($status.Id): $($status.Unverified)"
+        }
+        if ($status.Conflict) { $drift.Add("$($status.Id) detection conflict") }
+        elseif ($status.Missing) { $drift.Add("$($status.Id) missing") }
+    }
+
+    $fontStatus = $null
+    if ($fontSelected) {
+        $fontStatus = Get-WinEnvFontStatus -Font $manifest.Font
+        if ($fontStatus.Conflict) { $drift.Add('D2Koding font partial/conflicting installation') }
+        elseif ($fontStatus.Incomplete) {
+            # Named apart from a conflict on purpose: this host has nothing
+            # wrong on it, the manifest simply lists faces it has not installed
+            # yet, and Apply installs them.
+            $drift.Add("D2Koding font incomplete: $($fontStatus.InstalledFaceCount) of $($fontStatus.FaceCount) faces installed")
+        }
+        elseif ($fontStatus.RegistrationRepairable) { $drift.Add('D2Koding font registration') }
+        elseif ($fontStatus.Missing) { $drift.Add('D2Koding font missing') }
+        elseif (-not (Test-WinEnvWindowsTerminalFontCache -FontRegisteredAtUtc $fontRegisteredAtUtc)) {
+            $drift.Add('Windows Terminal restart required for D2Koding')
+        }
+    }
+
+    # A precondition belongs to the feature that needs it. An unselected
+    # feature must not make this host look broken.
+    #
+    # INV windows/selected-precondition-evaluated — the loop variable is not
+    # `$feature`. PowerShell names are case-insensitive, so that is this
+    # script's `[string[]] $Feature` parameter, whose type constraint turned
+    # every declared feature into the string "System.Collections.Hashtable":
+    # no Id ever matched the selection and no precondition was evaluated, from
+    # the change that added the parameter until this one.
+    $preconditionFailures = [System.Collections.Generic.List[string]]::new()
+    foreach ($declaredFeature in $manifest.Features) {
+        if ($selected -notcontains [string]$declaredFeature.Id) { continue }
+        $preconditionResult = Test-WinEnvFeaturePrecondition -Feature $declaredFeature
+        foreach ($failure in $preconditionResult.Failures) {
+            $preconditionFailures.Add("$($declaredFeature.Id): $failure")
+            $drift.Add("$($declaredFeature.Id) precondition: $failure")
+        }
+        # An undecidable precondition is not a failed one. Blocking Apply on it
+        # would make a host that cannot ask the question look like a host that
+        # answered no.
+        foreach ($item in $preconditionResult.Unverified) {
+            Add-UnverifiedEvidence -Category 'UnavailableObservation' -Item "$($declaredFeature.Id) precondition: $item"
+        }
+    }
+
+    foreach ($definition in $managedFiles) {
+        $matches = Test-WinEnvManagedFile -Definition $definition -RepositoryRoot $desiredStateRoot
+        if (-not $matches) { $drift.Add("$($definition.Id) settings") }
+        if ($Check -and [string]$definition.Id -eq 'wslConfig') {
+            # INV windows/check-exit-contract — prerequisites and known file
+            # drift are independent evidence. Apply triggers stay unchanged.
+            $wslVersion = Get-WinEnvWslVersion
+            $versionText = if ($null -eq $wslVersion) { 'undetermined' } else { [string]$wslVersion }
+            $wslInformation.Add("WSL application $versionText; source agreement: $matches; runtime effect: unverified")
+            $texts = @{ desired = Get-Content -LiteralPath (Join-Path $desiredStateRoot $definition.Source) -Raw -Encoding utf8 }
+            $target = Resolve-WinEnvPath -Path $definition.Target
+            if (Test-Path -LiteralPath $target -PathType Leaf) { $texts.host = Get-Content -LiteralPath $target -Raw -Encoding utf8 }
+            foreach ($side in @('desired', 'host')) {
+                if (-not $texts.ContainsKey($side)) { continue }
+                $support = Test-WinEnvWslConfigSupport -Content $texts[$side] -Build $hostBuild -WslVersion $wslVersion
+                foreach ($reason in $support.Unverified) { $unverified.Add("wslConfig $side prerequisite: $reason") }
+                foreach ($item in $support.Information) { $wslInformation.Add("${side}: $item") }
+            }
+        }
+    }
+    $hostProfile = if ($profileEnabled) { Get-WinEnvPowerShellProfilePath } else { $null }
+    if ($profileEnabled -and -not (Test-WinEnvProfileHook -ProfilePath $hostProfile)) { $drift.Add('PowerShell profile hook') }
+    if ($terminalSelected -and $delegationIncluded) {
+        # INV windows/support-boundary-named — decided against the documented
+        # condition, not the write: a read-back the host accepts below the
+        # boundary is unverified, never verified. A mismatch is drift on either
+        # side, because Apply writes the values regardless.
+        $delegation = Test-WinEnvTerminalDelegation -Terminal $manifest.Terminal -Build $hostBuild
+        if (-not $delegation.Matches) { $drift.Add('default terminal delegation') }
+        if ($delegation.Unverified) {
+            $item = "default terminal delegation: $($delegation.Unverified)"
+            Add-UnverifiedEvidence -Category $delegation.EvidenceCategory -Item $item
+        }
+    }
+
+    if ($terminalSelected -and -not $delegationIncluded) { Write-Host '  excluded capability: defaultTerminalDelegation (LTSC client contract; no registry observation or write)' }
+
+    # One place decides what this run's status is, so Apply and the check rank
+    # drift, unverified items, and REQUIRE_NATIVE the same way. Every Appx and
+    # terminal-delegation reason has been categorized and every other
+    # unverified reason has been collected by here.
+    $unverifiedCount = $unverified.Count + $unavailableObservation.Count + $knownSupportLimit.Count
+    $runStatus = Get-WinEnvCheckStatus -DriftCount $drift.Count -UnverifiedCount $unverifiedCount -RequireNative:$requireNative
+    $mode = if ($Check) { 'check' } else { 'verification' }
+    if ($runStatus -eq 1) {
+        # The summary comes first on the one path where completeness is the
+        # point: the operator loses the selection and the drift list otherwise.
+        Write-Summary -Mode $mode
+        throw ('Native evidence is incomplete on this host and REQUIRE_NATIVE is set: ' +
+            (@(Get-UnverifiedEvidenceLine) -join '; ') + '.')
+    }
+
+    if (-not $shouldApply) {
+        Write-Summary -Mode $mode
+        exit $runStatus
+    }
+
+    if ($packageStatuses.Conflict -contains $true) { throw 'Package detection conflicts must be resolved before applying.' }
+    if ($fontSelected -and $fontStatus.Conflict) { throw 'The D2Koding font is partially installed; automatic overwrite is disabled.' }
+    if ($preconditionFailures.Count) { throw "Selected features are not ready to apply: $($preconditionFailures -join '; ')." }
+
+    if ($generationRecord) { [void](Assert-WinEnvGeneratedIntegrity $Generation); $applyingGeneration = $true }
+    foreach ($package in $packages) {
+        $status = $packageStatuses | Where-Object Id -eq $package.Id
+        if ($status.Missing) {
+            Install-WinEnvPackage -Package $package
+            $changed.Add($package.Id)
+        }
+    }
+    Update-WinEnvProcessPath
+
+    if ($fontSelected) {
+        if ($fontStatus.Missing) {
+            Install-WinEnvFont -Font $manifest.Font
+            $fontRegisteredAtUtc = [DateTimeOffset]::UtcNow.ToString('o')
+            $changed.Add('D2Koding font')
+        }
+        elseif ($fontStatus.Incomplete) {
+            # The same installer: it fetches the pinned archive, leaves every
+            # face this host already holds byte for byte alone, and writes and
+            # registers the rest.
+            Install-WinEnvFont -Font $manifest.Font
+            $fontRegisteredAtUtc = [DateTimeOffset]::UtcNow.ToString('o')
+            $changed.Add('D2Koding font (missing faces)')
+        }
+        elseif ($fontStatus.RegistrationRepairable) {
+            Register-WinEnvFont -Font $manifest.Font
+            $fontRegisteredAtUtc = [DateTimeOffset]::UtcNow.ToString('o')
+            $changed.Add('D2Koding font registration')
+        }
+    }
+
+    if ($managesPowerToys) { $powerToysWasRunning = Stop-WinEnvPowerToys }
+    foreach ($definition in $managedFiles) {
+        $target = Resolve-WinEnvPath $definition.Target
+        Backup-WinEnvFile -Id $definition.Id -Target $target -BackupRoot $backupRoot
+        Set-WinEnvManagedFile -Definition $definition -RepositoryRoot $desiredStateRoot
+        $changed.Add($definition.Id)
+    }
+
+    if ($profileEnabled) {
+        Backup-WinEnvFile -Id 'HostPowerShellProfile' -Target $hostProfile -BackupRoot $backupRoot
+        Set-WinEnvProfileHook -ProfilePath $hostProfile
+    }
+    if ($terminalSelected -and $delegationIncluded) { Set-WinEnvTerminalDelegation -Terminal $manifest.Terminal }
+    if ($powerToysWasRunning) {
+        Start-WinEnvPowerToys
+        $powerToysRestarted = $true
+    }
+
+    $drift.Clear()
+    foreach ($package in $packages) {
+        $status = Get-WinEnvPackageStatus -Package $package
+        if ($status.Missing -or $status.Conflict) { $drift.Add($package.Id) }
+    }
+    if ($fontSelected) {
+        $fontStatus = Get-WinEnvFontStatus -Font $manifest.Font
+        if (-not $fontStatus.Installed) { $drift.Add('D2Koding font') }
+    }
+    Test-Sources -Definitions $managedFiles
+    foreach ($definition in $managedFiles) {
+        if (-not (Test-WinEnvManagedFile -Definition $definition -RepositoryRoot $desiredStateRoot)) { $drift.Add($definition.Id) }
+    }
+    if ($profileEnabled -and -not (Test-WinEnvProfileHook -ProfilePath $hostProfile)) { $drift.Add('PowerShell profile hook') }
+    if ($terminalSelected -and $delegationIncluded -and -not (Test-WinEnvTerminalDelegation -Terminal $manifest.Terminal -Build $hostBuild).Matches) {
+        $drift.Add('default terminal delegation')
+    }
+    if ($drift.Count) { throw "Post-apply validation failed: $($drift -join ', ')" }
+
+    if ($generationRecord) {
+        Write-WinEnvGenerationAttempt -Path $statePath -Generation $generationRecord -ProjectVersion $manifest.ProjectVersion -BundleHash $desiredStateHash -Feature $selected -Outcome success -Completed $changed.ToArray() -FontRegisteredAtUtc $fontRegisteredAtUtc
+    }
+    else {
+        $commit = Get-WinEnvGitCommit -RepositoryRoot $repositoryRoot
+        Write-WinEnvState -Path $statePath -ProjectVersion $manifest.ProjectVersion -GitCommit $commit -DesiredStateHash $desiredStateHash -Feature $selected -FontRegisteredAtUtc $fontRegisteredAtUtc
+    }
+    if ($fontSelected -and -not (Test-WinEnvWindowsTerminalFontCache -FontRegisteredAtUtc $fontRegisteredAtUtc)) {
+        Write-Warning 'Close every Windows Terminal window and start it again so its per-process font cache can load D2Koding.'
+    }
+    Write-Summary -Mode 'apply'
+    exit 0
+}
+catch {
+    $failure = $_
+    if ($applyingGeneration) {
+        try {
+            Write-WinEnvGenerationAttempt -Path $statePath -Generation $generationRecord -ProjectVersion $manifest.ProjectVersion -BundleHash $desiredStateHash -Feature $selected -Outcome failed -Completed $changed.ToArray() -FontRegisteredAtUtc $fontRegisteredAtUtc
+        }
+        catch { Write-Warning "Partial Apply outcome could not be recorded: $($_.Exception.Message)" }
+    }
+    [Console]::Error.WriteLine($failure.Exception.Message)
+    exit 1
+}
+finally {
+    if ($powerToysWasRunning -and -not $powerToysRestarted) {
+        try { Start-WinEnvPowerToys } catch { Write-Warning "PowerToys could not be restarted after failure: $($_.Exception.Message)" }
+    }
+    if ($mutex) { Exit-WinEnvLock -Mutex $mutex }
+}

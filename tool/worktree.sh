@@ -14,34 +14,33 @@
 # They share .git, so `core.hooksPath` carries over — a new worktree has working
 # hooks with no setup.
 #
-# A worktree made for an implementer is due for removal only after the pull
-# request from its branch has merged: review feedback returns to the same
-# worktree, and one removed earlier costs a fresh setup for every fix. That
-# rule is the skill's (.agents/skills/run-version-control-workflow/SKILL.md,
-# Start and Integrate). `done` performs the removal and does not check the
-# merge, because whether a pull request has merged is a remote question this
-# tool does not ask; it says when the removal was due instead.
+# Removal requires reclaim-workspaces review and explicit authorization.
+# A remote branch and PR can preserve delivery before merge; a merged PR alone
+# does not prove that newer local commits or ignored files are disposable.
+# This low-level helper performs non-force removal, not an eligibility check.
 
 set -e
 
-# Guards the `grep -E "/(feature|fix)-${name}\$"` call below from Git for
-# Windows' MSYS argument conversion, which rewrites a leading-`/` argv
-# element into a Windows path before grep sees it. See
+# Guards text-tool arguments from Git for Windows' MSYS argument conversion,
+# which can rewrite a leading-`/` argv element into a Windows path. See
 # tool/version-control/hygiene for the full explanation and the observed
 # failure (#79). Inert everywhere else.
 MSYS_NO_PATHCONV=1
 MSYS2_ARG_CONV_EXCL='*'
 export MSYS_NO_PATHCONV MSYS2_ARG_CONV_EXCL
 
+# Resolve the primary checkout even when this script is invoked from one of
+# its linked worktrees. All task worktrees share one sibling directory.
 cd "$(dirname "$0")/.." || exit 1
-root=$(pwd)
+root=$(git worktree list --porcelain | sed -n '1s/^worktree //p')
+[ -n "$root" ] || { echo "cannot find the primary worktree" >&2; exit 1; }
 wt_root="$(dirname "$root")/$(basename "$root")-wt"
-integration=${INTEGRATION_BRANCH:-dev}
+integration=dev
 
 usage() {
-  echo "usage: tool/worktree.sh new <name> [feature|fix]"
-  echo "       tool/worktree.sh list"
-  echo "       tool/worktree.sh done <name>    (once its pull request has merged)"
+  echo "usage: tool/configs worktree new <name> [feature|fix]"
+  echo "       tool/configs worktree list"
+  echo "       tool/configs worktree done <name>    (after authorized reclaim review)"
   exit 1
 }
 
@@ -62,15 +61,6 @@ case "${1:-}" in
     git fetch -q origin "$integration"
     git worktree add -b "$kind/$name" "$wt_root/$kind-$name" "origin/$integration"
 
-    # Each worktree gets its own dependency directory, so they have to be
-    # resolved per directory. Doing it here means the session can start working
-    # rather than discovering it on the first build.
-    if [ -x tool/checks/install ]; then
-      echo "→ install"
-      (cd "$wt_root/$kind-$name" && ../../"$(basename "$root")"/tool/checks/install 2>/dev/null \
-        || tool/checks/install)
-    fi
-
     echo
     echo "Worktree ready:"
     echo "  cd $wt_root/$kind-$name"
@@ -89,20 +79,21 @@ case "${1:-}" in
   done)
     name=${2:?"name required"}
     validate_name "$name"
-    # Match on the directory, which is what `git worktree remove` takes, and
-    # which is named <kind>-<name> inside the -wt folder. sed rather than awk so
-    # a path containing spaces survives.
-    #
-    dir=$(git worktree list --porcelain \
-          | sed -n 's/^worktree //p' \
-          | grep -E "/(feature|fix)-${name}\$" \
-          | head -1)
+    # Find the branch, not the directory name. A worktree pinned to a user's
+    # base commit can have a different directory name and still be removable
+    # after authorized reclaim review.
+    dir=$(git worktree list --porcelain | awk -v name="$name" '
+      /^worktree / { path = substr($0, 10) }
+      /^branch / && ($2 == "refs/heads/feature/" name || $2 == "refs/heads/fix/" name) {
+        print path; exit
+      }
+    ')
     [ -n "$dir" ] || { echo "no worktree matching '$name'" >&2; exit 1; }
 
     git worktree remove "$dir"
     echo "Removed $dir"
-    echo "The branch is kept; delete it once its pull request has merged."
-    echo "That merge is also when this removal was due (run-version-control-workflow, Integrate)."
+    echo "The branch is kept; its deletion needs a separate retention review."
+    echo "Removal does not imply PR integration or authorize branch deletion."
     ;;
 
   *) usage ;;

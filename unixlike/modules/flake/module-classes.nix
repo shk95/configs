@@ -1,0 +1,89 @@
+# The store every aspect file writes into, and the reason the pattern works at
+# all.
+#
+# Merging is the whole mechanism. Concern files set a class such as
+# `modules.homeManager.shared`, and `deferredModule` combines them into one module
+# that imports all of them — so a feature contributes to a configuration without
+# knowing which other features exist, and without anything holding a list of
+# them. Declaring the option is what makes that legal: the freeform type guarding
+# flake-parts' own `flake` attribute refuses an undeclared attribute defined more
+# than once, and says so outright —
+#
+#   No option has been declared for this flake output attribute, so its
+#   definitions can't be merged automatically.
+#
+# **Not under `flake`, deliberately.** The usual spelling of this is
+# `flake.modules.<class>.<name>`, which makes the fragments flake *outputs* — and
+# `nix flake check` then prints `warning: unknown flake output 'modules'` on every
+# run, including every hook and every CI job. A warning on every run is not
+# worth an export nothing consumes. flake-parts has a `touchup` module
+# for hiding outputs from `nix flake check`, which is the other way out if these
+# ever need to be public; exporting them then is one line:
+#
+#   flake.homeManagerModules = config.modules.homeManager;
+#
+# The names under each class are not decoration. They are what
+# `flake/configurations.nix` imports, and that file is the single place deciding
+# which of them reaches which flavour:
+#
+#   homeManager.shared         every Unix-like home
+#   homeManager.desktop        graphical Unix-like homes, not WSL
+#   homeManager.linuxGraphical Linux-only graphical session and applications
+#   homeManager.wsl            both WSL flavours
+#   homeManager.standalone     standalone only — no system layer underneath
+#   homeManager.darwin         Darwin-only user behavior
+#   homeManager.agents         common coding agents, enabled by default
+#   nixos.environment         common NixOS environment settings
+#   nixos.graphical           reusable Linux graphical services
+#   darwin.environment        common nix-darwin environment defaults
+#
+# INV unixlike/composition-in-one-place — a feature file writes into a class
+# and never names a host; `flake/configurations.nix` alone maps classes to
+# hosts, and tool/checks/composition refuses a feature file that does either.
+#
+# INV unixlike/import-order-independence — the fragments a class collects are
+# imported in the order of the files that define them, not the order the walk
+# found them in. Without that key, every list-valued Home Manager option two
+# feature files contribute to — `home.packages` from the shared list and the
+# PowerShell module, for one — is concatenated in walk order, and the host's
+# toplevel derivation changes when the walk changes. tool/checks/import-order
+# composes every exported example in walk order and reversed and requires the same
+# toplevels; keying the imports is what makes that hold by construction. The
+# key is applied in `apply` below, on the merged value, because the module
+# system's `deferredModule` merge names each fragment after its file and that
+# name is the only thing here that survives the merge unchanged.
+{lib, ...}: let
+  inherit (lib) mapAttrs mkOption sort types;
+
+  keyedByFile = module:
+    module
+    // {
+      imports = sort (a: b: (a._file or "") < (b._file or "")) (module.imports or []);
+    };
+
+  # Mirrors what flake-parts does for its own `flake.nixosModules`. `_class` makes
+  # a module used against the wrong evaluator fail by name instead of failing
+  # later on a missing option, and `_file` puts this repository in the error
+  # rather than an anonymous position in a list.
+  #
+  # Neither affects output: removing this `apply` entirely was tested against the
+  # store-path invariant and changed nothing, so it is here for error messages
+  # and costs nothing else.
+  classed = class:
+    mkOption {
+      type = types.lazyAttrsOf types.deferredModule;
+      default = {};
+      apply = mapAttrs (name: module: {
+        _class = class;
+        _file = "modules.${class}.${name}";
+        imports = [(keyedByFile module)];
+      });
+      description = "${class} module fragments, merged from every file that defines one.";
+    };
+in {
+  options.modules = {
+    homeManager = classed "homeManager";
+    nixos = classed "nixos";
+    darwin = classed "darwin";
+  };
+}

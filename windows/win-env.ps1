@@ -1,6 +1,55 @@
-# win-env: the Windows domain's one entry point.
+<#
+.SYNOPSIS
+Runs one public Windows environment command.
+
+.DESCRIPTION
+This is the operator entry point for the Windows domain. The first positional
+argument selects a target script and every remaining argument is forwarded to
+that script unchanged. Use the help verb to list the targets, then use
+Get-Help on the target script for its parameters and examples.
+
+The inspect, export-selection, check, validate, test, font, and help verbs do
+not apply desired state. Generate materializes a local result without Apply.
+The apply verb can install packages and write managed host files. The capture
+verb previews host originals and writes them only with explicit Save. The
+setup-dev verb installs contributor tooling.
+
+.PARAMETER Command
+One of inspect, generate, export-selection, check, apply, capture, validate,
+test, setup-dev, font, or help. A
+missing or unknown command exits 64.
+
+.EXAMPLE
+PS> .\windows\win-env.ps1 help
+
+Lists every verb and the Get-Help commands for detailed documentation.
+
+.EXAMPLE
+PS> .\windows\win-env.ps1 check -Feature terminal
+
+Read-only. Checks the terminal selection and its dependencies. The target
+status is returned unchanged: 0 converged, 2 drift, 69 unverified, or 1 failed.
+
+.EXAMPLE
+PS> .\windows\win-env.ps1 apply -Feature terminal
+
+Changes the host. Runs bootstrap.ps1, which can install PowerShell 7, and then
+deploys the terminal selection after its checks pass.
+
+.NOTES
+The entry point runs under Windows PowerShell 5.1 as well as PowerShell 7 so a
+new host can bootstrap PowerShell 7. It does not implement target-specific
+policy and it never turns check status 2 into a generic failure.
+
+.LINK
+https://github.com/shk95/configs/blob/dev/README.md#windows
+
+.LINK
+https://github.com/shk95/configs/blob/dev/CONTRIBUTING.md#windows-changes
+#>
+# win-env: the Windows domain's operator entry point.
 #
-# Every verb runs exactly one script under tools\ and returns that script's
+# Every verb runs exactly one script under tool\ and returns that script's
 # exit status unchanged, so the check contract -- 0 converged, 2 drifted,
 # 69 unverified, 1 failed -- reaches the operator through this file exactly
 # as it does through the script. The verb table below is the whole policy
@@ -31,12 +80,15 @@
 param([string] $Command)
 
 $ErrorActionPreference = 'Stop'
-$toolsRoot = Join-Path $PSScriptRoot 'tools'
+$toolRoot = Join-Path $PSScriptRoot 'tool'
 
 $verbs = [ordered]@{
+    'inspect'   = @{ Script = 'consumer.ps1'; Arguments = @{ Operation = 'inspect' }; Summary = 'read-only: source-bound consumer contract JSON' }
+    'generate'  = @{ Script = 'consumer.ps1'; Arguments = @{ Operation = 'generate' }; Summary = 'materialize a checked local configuration; no Apply' }
+    'export-selection' = @{ Script = 'consumer.ps1'; Arguments = @{ Operation = 'export-selection' }; Summary = 'read-only: legacy selection proposal JSON' }
     'check'     = @{ Script = 'bootstrap.ps1'; Arguments = @{ Check = $true }; Summary = 'read-only: is an Apply needed; exits 0 converged, 2 drift, 69 unverified' }
     'apply'     = @{ Script = 'bootstrap.ps1'; Arguments = @{}; Summary = 'deploy the selection; explicit request only' }
-    'capture'   = @{ Script = 'capture.ps1'; Arguments = @{}; Summary = 'move a change made in an application into desired state' }
+    'capture'   = @{ Script = 'capture.ps1'; Arguments = @{}; Summary = 'preview host originals; explicit Save writes documents, never Git or Apply' }
     'validate'  = @{ Script = 'check-desired-state.ps1'; Arguments = @{}; Summary = 'parse every declared payload' }
     'test'      = @{ Script = 'test.ps1'; Arguments = @{}; Summary = 'run the Pester suite' }
     'setup-dev' = @{ Script = 'setup-dev.ps1'; Arguments = @{}; Summary = 'install the contributor toolchain' }
@@ -47,8 +99,11 @@ function Get-Usage {
     $lines = @('usage: win-env.ps1 <verb> [arguments for the script]', '')
     foreach ($name in $verbs.Keys) {
         $verb = $verbs[$name]
-        $fixed = @($verb.Arguments.Keys | ForEach-Object { '-' + $_ })
-        $target = 'tools\' + $verb.Script
+        $fixed = @($verb.Arguments.Keys | ForEach-Object {
+            if ($verb.Arguments[$_] -is [bool]) { '-' + $_ }
+            else { '-' + $_ + ' ' + $verb.Arguments[$_] }
+        })
+        $target = 'tool\' + $verb.Script
         if ($fixed.Count) { $target += ' ' + ($fixed -join ' ') }
         $lines += ('  {0,-10} {1,-36} {2}' -f $name, $target, $verb.Summary)
     }
@@ -56,7 +111,12 @@ function Get-Usage {
     $lines += ''
     $lines += 'Arguments after the verb reach the script unchanged, for example:'
     $lines += '  win-env.ps1 check -Feature terminal'
-    $lines += '  win-env.ps1 capture -Feature powertoys -Publish'
+    $lines += '  win-env.ps1 capture -SourceRoot C:\provider -Environment C:\host\environment.json -Unit advancedPaste -Document settings/paste.json'
+    $lines += ''
+    $lines += 'Detailed help (these commands do not run the target script):'
+    $lines += '  Get-Help .\windows\win-env.ps1 -Detailed'
+    $lines += '  Get-Help .\windows\tool\bootstrap.ps1 -Full'
+    $lines += '  Get-Help .\windows\tool\capture.ps1 -Examples'
     return ($lines -join [Environment]::NewLine)
 }
 
@@ -77,7 +137,7 @@ if (-not $verbs.Contains($Command)) {
 }
 
 $verb = $verbs[$Command]
-$scriptPath = Join-Path $toolsRoot $verb.Script
+$scriptPath = Join-Path $toolRoot $verb.Script
 $fixed = $verb.Arguments
 
 $global:LASTEXITCODE = 0

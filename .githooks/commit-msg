@@ -5,7 +5,8 @@
 #
 # INV repository/conventional-subject
 #
-# Entirely stack-agnostic; copy as-is.
+# The subject grammar is stack-agnostic; the closing-keyword check below is
+# this repository's.
 
 # Guards the `sed '/^[[:space:]]*$/d'` call below from Git for Windows' MSYS
 # argument conversion, which rewrites a leading-`/` argv element into a
@@ -14,6 +15,17 @@
 MSYS_NO_PATHCONV=1
 MSYS2_ARG_CONV_EXCL='*'
 export MSYS_NO_PATHCONV MSYS2_ARG_CONV_EXCL
+
+# A closing keyword is refused anywhere in the message, and before the
+# subjects Git writes itself are let through, because a merge's body is ours.
+# The grammar is the tool's; the merge gate runs the same tool over a pull
+# request's commits, which is the complete check.
+#
+# INV repository/no-closing-keyword
+closing_keywords="$(git rev-parse --show-toplevel)/tool/version-control/closing-keywords"
+if [ -x "$closing_keywords" ]; then
+  "$closing_keywords" --message "$1" || exit 1
+fi
 
 subject=$(grep -v '^#' "$1" | sed '/^[[:space:]]*$/d' | head -1)
 

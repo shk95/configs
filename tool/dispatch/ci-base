@@ -1,0 +1,34 @@
+#!/bin/sh
+# Resolve the event range before selection or work-record checks.
+# INV repository/local-gate-selects-by-effect
+set -eu
+case ${EVENT_NAME:-} in
+  pull_request)
+    case ${PR_STACK:-} in
+      ''|null) ;;
+      *) echo 'Native stacks are unsupported: trunk coverage is not proven' >&2; exit 1 ;;
+    esac
+    case ${PR_BASE_REF:-} in
+      dev|master) ;;
+      *) echo 'Only direct dev/master PRs are supported' >&2; exit 1 ;;
+    esac
+    [ "${EVENT_BASE_REF:-}" = "$PR_BASE_REF" ] || {
+      echo 'Event base differs from direct PR base; refusing layer-only coverage' >&2
+      exit 1
+    }
+    base=${PR_BASE:-}
+    ;;
+  push) base=${PUSH_BASE:-} ;;
+  *) echo 'Unsupported CI event' >&2; exit 1 ;;
+esac
+case $base in
+  ''|*[!0-9a-f]*) echo 'Invalid event base SHA' >&2; exit 1 ;;
+esac
+[ "${#base}" -eq 40 ] || { echo 'Invalid event base SHA length' >&2; exit 1; }
+case $base in
+  0000000000000000000000000000000000000000)
+    [ "$EVENT_NAME" = push ] || exit 1
+    git hash-object -t tree /dev/null
+    ;;
+  *) git rev-parse --verify "$base^{commit}" ;;
+esac

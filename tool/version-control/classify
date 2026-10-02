@@ -9,13 +9,30 @@ set -eu
 MSYS_NO_PATHCONV=1
 MSYS2_ARG_CONV_EXCL='*'
 export MSYS_NO_PATHCONV MSYS2_ARG_CONV_EXCL
+LC_ALL=C
+export LC_ALL
 
 root=$(git rev-parse --show-toplevel)
 cd "$root"
 
 usage() {
-  echo "usage: tool/version-control/classify [--staged | --range <base> <head> | --stdin | --files <path> ...]" >&2
+  echo "usage: tool/configs classify [--records] [--staged | --range <base> <head> | --stdin | --files <path> ...]" >&2
   exit 2
+}
+
+records=0
+if [ "${1:-}" = --records ]; then
+  records=1
+  shift
+fi
+# INV repository/scope-ownership
+# The same case table serves aggregate scopes and explicit path/scope records.
+emit_scope() {
+  if [ "$records" -eq 1 ]; then
+    printf '%s\t%s\n' "$path" "$1"
+  else
+    printf '%s\n' "$1"
+  fi
 }
 
 paths=$(mktemp)
@@ -50,45 +67,75 @@ case "${1:-}" in
 esac
 
 if [ ! -s "$paths" ]; then
-  echo none
+  [ "$records" -eq 1 ] || echo none
   exit 0
 fi
 
 while IFS= read -r path; do
   [ -n "$path" ] || continue
   case "$path" in
-    windows/*) echo windows ;;
-    flake.nix|flake.lock|modules/*|assets/*|.envrc|Justfile|tool/checks/*|\
-    tool/darwin/*)
-      echo unixlike
+    windows/*) emit_scope windows ;;
+    # The Unix-like domain's own tree, and the two root paths that stay
+    # outside it: direnv reads .envrc at the root, and where the Justfile
+    # belongs is a separate decision
+    # (docs/policy/decisions/unixlike/unixlike-domain-owns-its-tree.md).
+    unixlike/*|.envrc|Justfile) emit_scope unixlike ;;
+    # INV repository/scope-ownership
+    # Documents: inside each document area the scope directory, or for status
+    # and the definition of done the file named for a scope, owns what it
+    # holds, so a Unix-like decision, invariant, status file or work item is a
+    # unixlike change
+    # (docs/policy/decisions/repository/documents-classified-by-scope.md).
+    # A document outside those areas is repository's.
+    docs/policy/candidates/unixlike/*|docs/policy/decisions/unixlike/*|docs/policy/invariants/unixlike/*|\
+    docs/provisional/unixlike/*|docs/work/unixlike/*|docs/status/unixlike.md|\
+    docs/policy/definition-of-done/unixlike.md) emit_scope unixlike ;;
+    docs/policy/candidates/windows/*|docs/policy/decisions/windows/*|docs/policy/invariants/windows/*|\
+    docs/provisional/windows/*|docs/work/windows/*|docs/status/windows.md|\
+    docs/policy/definition-of-done/windows.md) emit_scope windows ;;
+    docs/policy/candidates/repository/*|docs/policy/decisions/repository/*|docs/policy/invariants/repository/*|\
+    docs/provisional/repository/*|docs/work/repository/*|docs/status/repository.md|\
+    docs/policy/definition-of-done/repository.md) emit_scope repository ;;
+    docs/policy/candidates/README.md|docs/policy/decisions/README.md|\
+    docs/policy/invariants/README.md|docs/provisional/README.md|\
+    docs/work/README.md|docs/work/roadmap.md) emit_scope repository ;;
+    # Anything else inside a document area is refused rather than read as
+    # repository's: a scope position that names no domain, a file beside an
+    # area's format contract, or a scope name in the wrong position.
+    docs/policy/candidates/*|docs/policy/decisions/*|docs/policy/invariants/*|\
+    docs/provisional/*|docs/work/*|docs/status/*|docs/policy/definition-of-done/*)
+      emit_scope unclassified
       ;;
     AGENTS.md|CLAUDE.md|CONTRIBUTING.md|README.md|LICENSE|docs/*|\
     .agents/*|.claude/*|.codex/*|.github/*|.githooks/*|.editorconfig|.gitattributes|\
-    .gitignore|tool/setup|tool/doctor.sh|tool/worktree.sh|tool/version-control/*|\
+    .gitignore|tool/configs|tool/setup|tool/doctor.sh|tool/worktree.sh|tool/work-session.sh|tool/version-control/*|\
     tool/dispatch/*)
-      echo repository
+      emit_scope repository
       ;;
-    # common/ has no arm: the change that creates the domain restores its classification, dispatch and gate together (docs/architecture.md, "Common domain").
+    # common/ has no arm: the change that creates the domain restores its classification, dispatch and gate together (docs/policy/architecture.md, "Common domain").
+    # PROV repository/classify-registry-old-roots
+    # The registries' roots before they moved under docs/, and the removed
+    # common scope's placeholder: a deletion must still classify while it sits
+    # inside a pull-request or promotion range. Dropped once the move has
+    # reached master.
+    invariants/README.md|invariants/common/.gitkeep|provisional/README.md) emit_scope repository ;;
+    invariants/unixlike/*|provisional/unixlike/*) emit_scope unixlike ;;
+    invariants/windows/*|provisional/windows/*) emit_scope windows ;;
+    invariants/repository/*|provisional/repository/*) emit_scope repository ;;
     # INV repository/scope-ownership
-    # The invariant registry (invariants/README.md is the format contract).
-    # Each scope owns the entries under its own directory, so a Windows
-    # invariant is a windows change and needs no Unix-like host to check.
-    # The removed common scope's placeholder: its deletion must still classify
-    # while it sits inside a pull-request range. Dropped when the domain returns.
-    invariants/README.md|invariants/common/.gitkeep) echo repository ;;
-    invariants/unixlike/*) echo unixlike ;;
-    invariants/windows/*) echo windows ;;
-    invariants/repository/*) echo repository ;;
-    # The provisional registry (provisional/README.md is the format
-    # contract), classified the same way and for the same reason: a scope
-    # owns the temporary measures it carries.
-    provisional/README.md) echo repository ;;
-    provisional/unixlike/*) echo unixlike ;;
-    provisional/windows/*) echo windows ;;
-    provisional/repository/*) echo repository ;;
-    *) echo unclassified ;;
+    # Historical Unix-like namespaces retained on master, plus the exact
+    # Nix editor file pending its domain-owned relocation. No new root-domain
+    # material is permitted by these history-only answers.
+    # PROV repository/classify-unixlike-old-roots
+    flake.nix|flake.lock|assets/*|modules/*|tool/checks/*|tool/darwin/*|.vscode/settings.json) emit_scope unixlike ;; # PROV repository/classify-unixlike-old-roots
+    *) emit_scope unclassified ;;
   esac
 done <"$paths" | sort -u >"$scopes"
+
+if [ "$records" -eq 1 ]; then
+  cat "$scopes"
+  exit 0
+fi
 
 for scope in unixlike windows repository unclassified; do
   if grep -qx "$scope" "$scopes"; then

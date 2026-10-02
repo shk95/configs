@@ -1,5 +1,5 @@
 ---
-description: Orient in the project and prepare a branch using the shared workflow
+description: Orient in the project and prepare a task worktree using the shared workflow
 ---
 
 Invoke `/run-version-control-workflow` in start mode with the supplied task.

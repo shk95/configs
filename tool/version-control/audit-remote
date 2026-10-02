@@ -11,6 +11,9 @@ MSYS_NO_PATHCONV=1
 MSYS2_ARG_CONV_EXCL='*'
 export MSYS_NO_PATHCONV MSYS2_ARG_CONV_EXCL
 
+# Resolved before the directory changes: the checks beside this file read the
+# repository being audited, so the fixtures run them against a throwaway one.
+audit_tools=$(CDPATH= cd -- "$(dirname -- "$0")" && pwd)
 root=$(git rev-parse --show-toplevel)
 cd "$root"
 
@@ -116,6 +119,23 @@ if [ "$merge_settings" = true ]; then
   ok "repository permits merge commits and disables squash and rebase merging"
 else
   fail "repository merge methods do not enforce merge commits only"
+fi
+
+# Closure follows the report: an execution issue whose report is done,
+# abandoned or superseded and which the remote still reports open was missed
+# by the closure workflow, or predates it. The work check owns the reading.
+# INV repository/issue-closes-from-report
+if unclosed=$("$audit_tools/work" --unclosed); then
+  if [ -n "$unclosed" ]; then
+    printf '%s\n' "$unclosed" | while IFS= read -r line; do
+      printf 'failure: execution issue is open while its report is terminal: %s\n' "$line" >&2
+    done
+    failures=$((failures + $(printf '%s\n' "$unclosed" | wc -l | tr -d ' ')))
+  else
+    ok "no execution issue is open while its report is terminal"
+  fi
+else
+  fail "the terminal reports' issues could not be read"
 fi
 
 printf 'summary: %s remote failure(s)\n' "$failures"

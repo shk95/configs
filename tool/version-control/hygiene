@@ -11,7 +11,7 @@
 # runtime state out of every domain's committed desired state. Secrets
 # already have an enforcement owner in gitleaks and are deliberately not
 # duplicated here. The other three had no enforcement owner at all, which is
-# how two absolute home paths reached docs/troubleshooting.md and stayed
+# how two absolute home paths reached docs/reference/troubleshooting.md and stayed
 # there for the document's whole history.
 #
 # The subject is the index rather than the working tree. The invariant is about
@@ -32,19 +32,20 @@
 #   4. machine-unique identifiers: GUID, MAC address, and Windows SID.
 #
 # A bare account name in free prose is not decidable lexically. It is a manual
-# invariant instead, and docs/architecture.md names its evidence and its owner
+# invariant instead, and docs/policy/architecture.md names its evidence and its owner
 # rather than letting this scanner imply coverage it does not have.
 #
 # A scanner that stores the strings it hunts matches itself, so its exclusions
 # are declared rather than incidental and are enforced in both directions, the
-# way tool/checks/payloads enforces assets/payloads.json: a declaration with no
-# file is stale. This file and its allow file are excluded by path because they
+# way unixlike/tool/checks/payloads enforces unixlike/payloads.json: a
+# declaration with no file is stale. This file and its allow file are
+# excluded by path because they
 # are the check's own machinery. Everything else is excluded one literal string
 # at a time in tool/version-control/hygiene.allow, because file-granularity
 # exclusion would retire the check on the one file that has already drifted.
 #
 # Exit 0 verified, 69 unverified, any other status failed. See
-# docs/architecture.md, "Check dispatch uses three evidence states", and
+# docs/policy/architecture.md, "Check dispatch uses three evidence states", and
 # .githooks/evidence, which is the one place that decides what each means.
 
 set -eu
@@ -64,7 +65,8 @@ MSYS2_ARG_CONV_EXCL='*'
 export MSYS_NO_PATHCONV MSYS2_ARG_CONV_EXCL
 
 # The three-state prerequisite contract, restated rather than sourced from
-# tool/checks/prerequisite: that file is `unixlike` scope, and a `repository`
+# unixlike/tool/checks/prerequisite: that file is `unixlike` scope, and a
+# `repository`
 # check must not take a dependency on a configuration domain's plane. Nothing
 # beyond a POSIX shell and Git is needed, so 69 should never occur here, but
 # the state exists so a future prerequisite reports it instead of inventing a
@@ -97,7 +99,8 @@ root=$(git rev-parse --show-toplevel)
 cd "$root"
 
 allow_file=tool/version-control/hygiene.allow
-inventory=modules/flake/inventory.nix
+# The repository-owned declaration of names allowed in desired state.
+names_file=tool/version-control/hygiene.names
 
 work=$(mktemp -d)
 trap 'rm -rf "$work"' EXIT
@@ -114,9 +117,9 @@ violation() {
 # ---------------------------------------------------------------------------
 
 # A name, in the sense of an account or host label. `$` and `{` are outside the
-# class on purpose: `/home/${user}` in modules/home-account.nix and
-# `/Users/${user}` in modules/darwin-host.nix are interpolations of a declared
-# value, not names, and do not match at all.
+# class on purpose: `/home/${user}` in unixlike/modules/foundation/home-account.nix and
+# `/Users/${user}` in unixlike/modules/platforms/darwin.nix are interpolations of
+# a declared value, not names, and do not match at all.
 name='[A-Za-z0-9._-]+'
 
 # One or two backslashes. Every windows/desired/files payload is JSON, where a
@@ -125,7 +128,7 @@ bs='\\{1,2}'
 
 # Anchoring rule. A match counts only when the character that opens the path is
 # at start-of-line or follows one of space, tab, ' " ` = ( , or :. This is not
-# cosmetic. docs/troubleshooting.md carries
+# cosmetic. docs/reference/troubleshooting.md carries
 #
 #   error: path '«git+file://...»/home/programs/<file>.nix' does not exist
 #
@@ -150,7 +153,7 @@ absolute_home="($posix_home)|($windows_home)|($unc_home)"
 # A quoted right-hand side is a literal in every language here. A bare one is
 # only a literal where the separator is not the spaced ` = ` form; after ` = ` a
 # bare token is an expression -- `user = config.identity.wsl.user` in
-# modules/home-account.nix names no account.
+# unixlike/modules/foundation/home-account.nix names no account.
 keys='(user|username|hostName|hostname|USER|USERNAME|HOSTNAME|COMPUTERNAME)'
 key_start='(^|[^A-Za-z0-9_])'
 assignment=$(printf '%s%s"?([ \t]*[=:][ \t]*("%s"|'\''%s'\'')|(=|[ \t]*:)[ \t]*%s)' \
@@ -202,7 +205,7 @@ git show ":$allow_file" 2>/dev/null |
 # violations go to be forgotten. "Matches" means the literal still occurs at
 # that path, not that the scanner would have flagged it. The two readings are
 # not equivalent, and only this one is usable: the anchoring rule above already
-# excludes docs/troubleshooting.md on its own, so under a would-have-flagged
+# excludes docs/reference/troubleshooting.md on its own, so under a would-have-flagged
 # reading the seed entry would be stale the moment it was written. Under the
 # occurrence reading it stays valid while the text is there and goes stale
 # exactly when the line is edited away, which is the forgetting this rule
@@ -267,21 +270,16 @@ scan() {
 # Declared names
 # ---------------------------------------------------------------------------
 
-# Every double-quoted string literal in the inventory. Extracting literals
-# rather than reading the attribute set is what keeps this check's requirements
-# at a POSIX shell and Git, and it is layout-independent by construction: when
-# the inventory grows host fields, their values join the allowed set with no
-# change here. It over-accepts -- `aarch64-darwin` is not a name -- and an
-# over-broad allowlist is the safe direction for an allowlist. Read from the
-# index for the same reason the allow file is.
+# The declaration is read from the index, like the scanned desired state.
+# It can shrink as host identities leave this repository. Blank lines and
+# whole-line comments are ignored; an absent or empty declaration fails closed.
 : >"$work/declared"
-git show ":$inventory" 2>/dev/null |
-  sed -n 's/.*"\([^"]*\)".*/\1/p' | sort -u >"$work/declared"
+git show ":$names_file" 2>/dev/null |
+  sed -e 's/^#.*//' -e '/^[[:space:]]*$/d' | sort -u >"$work/declared"
 
-# An empty extraction must fail rather than accept everything, so a reformat of
-# the inventory cannot silently retire this axis.
+# A missing declaration cannot silently retire this axis.
 if [ ! -s "$work/declared" ]; then
-  violation "no declared name could be extracted from $inventory; axis 2 cannot be decided"
+  violation "no declared name could be extracted from $names_file; axis 2 cannot be decided"
 fi
 
 declared() { grep -qxF -- "$1" "$work/declared"; }

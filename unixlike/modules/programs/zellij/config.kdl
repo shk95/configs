@@ -1,0 +1,526 @@
+keybinds clear-defaults=true {
+    locked {
+        bind "Ctrl g" { SwitchToMode "normal"; }
+    }
+    normal {
+        bind "Ctrl g" { SwitchToMode "locked"; }
+        bind "Ctrl p" { SwitchToMode "pane"; }
+        bind "Ctrl t" { SwitchToMode "tab"; }
+        bind "Ctrl h" { SwitchToMode "move"; }
+        bind "Ctrl r" { SwitchToMode "resize"; }
+        bind "Ctrl s" { SwitchToMode "scroll"; }
+        bind "Ctrl o" { SwitchToMode "session"; }
+        bind "Ctrl q" { Quit; }
+    }
+    pane {
+        bind "h" "left" { MoveFocus "left"; }
+        bind "j" "down" { MoveFocus "down"; }
+        bind "k" "up" { MoveFocus "up"; }
+        bind "l" "right" { MoveFocus "right"; }
+        bind "p" { SwitchFocus; }
+        bind "n" { NewPane; SwitchToMode "locked"; }
+        bind "d" { NewPane "down"; SwitchToMode "locked"; }
+        bind "r" { NewPane "right"; SwitchToMode "locked"; }
+        bind "s" { NewPane "stacked"; SwitchToMode "locked"; }
+        bind "x" { CloseFocus; SwitchToMode "locked"; }
+        bind "f" { ToggleFocusFullscreen; SwitchToMode "locked"; }
+        bind "w" { ToggleFloatingPanes; SwitchToMode "locked"; }
+        bind "e" { TogglePaneEmbedOrFloating; SwitchToMode "locked"; }
+        bind "i" { TogglePanePinned; SwitchToMode "locked"; }
+        bind "z" { TogglePaneFrames; SwitchToMode "locked"; }
+        bind "c" { SwitchToMode "renamepane"; PaneNameInput 0; }
+        bind "esc" { SwitchToMode "locked"; }
+    }
+    move {
+        bind "h" "left" { MovePane "left"; }
+        bind "j" "down" { MovePane "down"; }
+        bind "k" "up" { MovePane "up"; }
+        bind "l" "right" { MovePane "right"; }
+        bind "n" "tab" { MovePane; }
+        bind "p" { MovePaneBackwards; }
+        bind "esc" { SwitchToMode "locked"; }
+    }
+    tab {
+        bind "h" "left" { GoToPreviousTab; }
+        bind "l" "right" { GoToNextTab; }
+        bind "H" { MoveTab "left"; }
+        bind "L" { MoveTab "right"; }
+        bind "n" { NewTab; SwitchToMode "locked"; }
+        bind "x" { CloseTab; SwitchToMode "locked"; }
+        bind "r" { SwitchToMode "renametab"; TabNameInput 0; }
+        bind "s" { ToggleActiveSyncTab; SwitchToMode "locked"; }
+        bind "b" { BreakPane; SwitchToMode "locked"; }
+        bind "[" { BreakPaneLeft; SwitchToMode "locked"; }
+        bind "]" { BreakPaneRight; SwitchToMode "locked"; }
+        bind "1" { GoToTab 1; SwitchToMode "locked"; }
+        bind "2" { GoToTab 2; SwitchToMode "locked"; }
+        bind "3" { GoToTab 3; SwitchToMode "locked"; }
+        bind "4" { GoToTab 4; SwitchToMode "locked"; }
+        bind "5" { GoToTab 5; SwitchToMode "locked"; }
+        bind "6" { GoToTab 6; SwitchToMode "locked"; }
+        bind "7" { GoToTab 7; SwitchToMode "locked"; }
+        bind "8" { GoToTab 8; SwitchToMode "locked"; }
+        bind "9" { GoToTab 9; SwitchToMode "locked"; }
+        bind "tab" { ToggleTab; }
+        bind "esc" { SwitchToMode "locked"; }
+    }
+    renamepane {
+        bind "enter" "Ctrl c" { SwitchToMode "locked"; }
+        bind "esc" { UndoRenamePane; SwitchToMode "pane"; }
+    }
+    renametab {
+        bind "enter" "Ctrl c" { SwitchToMode "locked"; }
+        bind "esc" { UndoRenameTab; SwitchToMode "tab"; }
+    }
+    resize {
+        bind "h" "left" { Resize "Increase left"; }
+        bind "j" "down" { Resize "Increase down"; }
+        bind "k" "up" { Resize "Increase up"; }
+        bind "l" "right" { Resize "Increase right"; }
+        bind "H" { Resize "Decrease left"; }
+        bind "J" { Resize "Decrease down"; }
+        bind "K" { Resize "Decrease up"; }
+        bind "L" { Resize "Decrease right"; }
+        bind "+" "=" { Resize "Increase"; }
+        bind "-" { Resize "Decrease"; }
+        bind "esc" { SwitchToMode "locked"; }
+    }
+    scroll {
+        bind "j" "down" { ScrollDown; }
+        bind "k" "up" { ScrollUp; }
+        bind "d" { HalfPageScrollDown; }
+        bind "u" { HalfPageScrollUp; }
+        bind "PageDown" { PageScrollDown; }
+        bind "PageUp" { PageScrollUp; }
+        bind "s" { SwitchToMode "entersearch"; SearchInput 0; }
+        bind "Ctrl c" "esc" { ScrollToBottom; SwitchToMode "locked"; }
+    }
+    entersearch {
+        bind "enter" { SwitchToMode "search"; }
+        bind "Ctrl c" "esc" { SwitchToMode "scroll"; }
+    }
+    search {
+        bind "n" { Search "down"; }
+        bind "p" { Search "up"; }
+        bind "c" { SearchToggleOption "CaseSensitivity"; }
+        bind "w" { SearchToggleOption "Wrap"; }
+        bind "o" { SearchToggleOption "WholeWord"; }
+        bind "Ctrl c" "esc" { ScrollToBottom; SwitchToMode "locked"; }
+    }
+    session {
+        bind "d" { Detach; }
+        bind "w" {
+            LaunchOrFocusPlugin "zellij:session-manager" {
+                floating true
+                move_to_focused_tab true
+            }
+            SwitchToMode "locked";
+        }
+        bind "c" {
+            LaunchOrFocusPlugin "zellij:configuration" {
+                floating true
+                move_to_focused_tab true
+            }
+            SwitchToMode "locked";
+        }
+        bind "l" {
+            LaunchOrFocusPlugin "zellij:layout-manager" {
+                floating true
+                move_to_focused_tab true
+            }
+            SwitchToMode "locked";
+        }
+        bind "esc" { SwitchToMode "locked"; }
+    }
+}
+
+default_mode "locked"
+default_shell "zsh"
+copy_clipboard "system"
+copy_on_select true
+session_name "unixlike"
+attach_to_session true
+on_force_close "detach"
+show_startup_tips false
+show_release_notes false
+
+// Colours are named here rather than left to the host, because zellij's
+// built-in fallback palette is dark — `default_palette()` in zellij-utils is
+// literally `theme_hue: ThemeHue::Dark` — so declaring nothing keeps the pane
+// frames, tab bar and status line dark inside a light terminal. Naming a light
+// theme is no longer the guess it once was: every home
+// modules/flake/configurations.nix composes renders inside a terminal whose
+// colour scheme a file of this repository declares. WezTerm selects Modus
+// Operandi in modules/wezterm/config/appearance.lua, and the Windows domain
+// declares that scheme by copy for Windows Terminal; the latter reaches a
+// host only through Windows Apply. WezTerm has no scheme-reporting mode in
+// the pinned build, and Windows Terminal 1.23 was probed silent, so the
+// static line below selects light for them. The blocks bake literal values
+// rather than reading a host palette. Ghostty reports
+// and drives the pair itself. The premise and its reopening condition are in
+// docs/policy/decisions/unixlike/composed-homes-render-in-declared-terminals.md.
+//
+// Two settings carry it, and they do not fight. `theme_dark` and `theme_light`
+// are the terminal-driven pair: with both configured, zellij swaps palettes
+// from the host terminal's own colour-scheme report (CSI 2031 / DSR 997), and
+// with only one of them it ignores both. The plain `theme` at the end of this
+// file is the static answer for a terminal that never sends that report, and
+// it is authoritative only until one arrives, so it costs a reporting terminal
+// nothing. `modus-operandi` is the light member of the family
+// modules/wezterm/config/appearance.lua and modules/ghostty.nix select;
+// `modus-vivendi` is named as the other branch of the pair, the palette a
+// terminal reporting dark would be given, not as a theme this repository
+// selects.
+//
+// Unlike the Flexoki pair this replaces, neither half resolves against a
+// zellij built-in: the pinned zellij-utils `assets/themes/` ships no Modus
+// theme at all, and the one built-in that would defer to the terminal, `ansi`,
+// assumes a black background. So both halves are written out below, each
+// derived from its own terminal palette — the pinned nixpkgs ghostty package's
+// `share/ghostty/themes/Modus Operandi` and `Modus Vivendi`, which trace to
+// https://github.com/protesilaos/modus-themes — by one rule, recorded here so
+// a later scheme can be built the same way.
+//
+// The text, table-cell and list components are foregrounds on the page, so
+// they take the terminal foreground as `base` and the terminal background as
+// `background`, and their `_selected` variants swap in the terminal's own
+// selection colour as the background (#bdbdbd light, #5a5a5a dark) rather than
+// inventing a highlight. Their `emphasis_0` through `emphasis_3` are ANSI 9,
+// 6, 2 and 5 — four hues far enough apart to stay distinguishable from each
+// other and from `base` on either page.
+//
+// The two ribbons are filled blocks rather than foregrounds, so the rule
+// inverts there: `ribbon_selected` takes ANSI 2 as its background and
+// `ribbon_unselected` takes ANSI 8. What goes on top of them is never a third
+// accent — an accent picked to read against the page sits at the page's
+// opposite end, and dropped onto a coloured block it has nothing left to be
+// distinct from — but whichever neutral pole clears the ribbon underneath it.
+// Which pole that is has to be decided per ribbon, not per theme, because the
+// two ribbons do not always fall on the same side.
+//
+// In `modus-operandi` both are dark enough that the page colour wins
+// throughout: `base` and `emphasis_0`/`emphasis_2` are #ffffff (7.05:1 on the
+// green ribbon, 7.0:1 on the grey one) and `emphasis_1`/`emphasis_3` are the
+// selection grey #bdbdbd (3.75:1 and 3.73:1). In `modus-vivendi` the two split.
+// The green #44bc44 is bright, so that ribbon keeps `base` and the even
+// emphases on #000000 (8.52:1) with the odd ones on the selection grey #5a5a5a
+// (2.80:1). The grey #595959 is not bright: black on it reaches only 3.0:1 and
+// the selection grey lands at 1.02:1, which is not a colour so much as the
+// absence of one. That ribbon therefore takes the other pole — the foreground
+// #ffffff (7.0:1) — with ANSI 7 #a6a6a6 as its odd emphases. #a6a6a6 measures
+// 2.88:1 there and is the one value in either half that does not clear 3:1; it
+// separates two accent runs inside a ribbon rather than drawing a boundary,
+// and this palette offers no lighter neutral between #a6a6a6 and #ffffff to
+// use instead, so it is recorded rather than invented around.
+//
+// Frames are the component with a hard floor, because a frame the eye cannot
+// find is a pane boundary that is not there. `frame_selected` takes ANSI 2,
+// `frame_unselected` ANSI 8 and `frame_highlight` ANSI 9. In `modus-operandi`
+// those clear the 3:1 floor by a wide margin against the #ffffff page —
+// 7.05:1 (#006800), 7.0:1 (#595959) and 8.14:1 (#972500) by the WCAG
+// relative-luminance formula. The claim is scoped to that half rather than
+// repeated for both, because `modus-vivendi` is not as comfortable: #44bc44
+// reaches 8.52:1 and #ff7f9f 8.79:1 on black, but `frame_unselected`'s #595959
+// is exactly 3.00:1 — at the floor, not above it. That is the palette's own
+// ANSI 8 and a derivation rule does not get to invent a lighter one, so the
+// number is recorded here rather than corrected.
+//
+// The remaining components follow from the same palette: `table_title` and
+// `exit_code_success` take ANSI 2 as `base`, `exit_code_error` takes ANSI 1
+// with ANSI 3 as its `emphasis_0`, and the eight multiplayer cursors are
+// ANSI 5, 4, 6, 3, 2, 13, 1 and 11 in that order, with players 9 and 10 left
+// at 0 the way zellij's own bundled themes leave them.
+//
+// Two `background` fields have to be stated rather than left implied, because
+// a bare `0` in this file is not "unset". KDL reads it as a number and zellij
+// resolves a number to `EightBit(0)`, which is ANSI black — a value, not an
+// absence. `table_title` is painted with its own background by the table
+// component in zellij-server whenever a cell is opaque or selected, so a `0`
+// there would put a black block behind a title on a white page; both halves
+// therefore carry the page colour (255 255 255 and 0 0 0). The `exit_code_*`
+// components keep their `0`, because their ui components read only `base` and
+// `emphasis_0` and never paint that field at all: the value is inert rather
+// than wrong, and it is left as zellij's own bundled themes leave it. Frames
+// keep `0` for the same reason.
+//
+// Which terminals actually answer that query is the part to be exact about:
+// the pair is inert without an answer, and the static `theme` is what every
+// silent terminal ends up rendering.
+//
+//   Ghostty            answers — its binary carries the `[?996` / `[?997`
+//                      sequences and a `color_scheme_updates` mode, so the
+//                      pair takes over as soon as its reply lands.
+//   WezTerm            does not. The pinned build has no colour-scheme private
+//                      mode in its `DecPrivateModeCode` list at all, so the
+//                      query goes unanswered.
+//   Windows Terminal   does not either, as of 1.23.20211.0 — installed as
+//                      the package
+//                      `Microsoft.WindowsTerminal_1.23.20211.0_x64__8wekyb3d8bbwe`.
+//                      Probed on 2026-09-05 from a plain tab outside zellij,
+//                      which would otherwise intercept the reply:
+//                      `printf '\033[?996n\033[c'` came back with the DA1
+//                      answer `?61;4;6;7;14;21;22;23;24;28;32;42;52c` alone
+//                      and no `?997;1n` or `?997;2n` in front of it.
+//
+// Two of the three are silent, so the static `theme` below is what the WezTerm
+// desktops and the WSL homes receive. It lives in this file rather than in
+// modules/zellij/module.nix because every composed home now needs the same
+// line for the same reason, and this is the one place the keymap and the
+// palettes already live.
+themes {
+    modus-operandi {
+        text_unselected {
+            base 0 0 0
+            background 255 255 255
+            emphasis_0 151 37 0
+            emphasis_1 0 94 139
+            emphasis_2 0 104 0
+            emphasis_3 114 16 69
+        }
+        text_selected {
+            base 0 0 0
+            background 189 189 189
+            emphasis_0 151 37 0
+            emphasis_1 0 94 139
+            emphasis_2 0 104 0
+            emphasis_3 114 16 69
+        }
+        ribbon_selected {
+            base 255 255 255
+            background 0 104 0
+            emphasis_0 255 255 255
+            emphasis_1 189 189 189
+            emphasis_2 255 255 255
+            emphasis_3 189 189 189
+        }
+        ribbon_unselected {
+            base 255 255 255
+            background 89 89 89
+            emphasis_0 255 255 255
+            emphasis_1 189 189 189
+            emphasis_2 255 255 255
+            emphasis_3 189 189 189
+        }
+        table_title {
+            base 0 104 0
+            background 255 255 255
+            emphasis_0 151 37 0
+            emphasis_1 0 94 139
+            emphasis_2 0 104 0
+            emphasis_3 114 16 69
+        }
+        table_cell_selected {
+            base 0 0 0
+            background 189 189 189
+            emphasis_0 151 37 0
+            emphasis_1 0 94 139
+            emphasis_2 0 104 0
+            emphasis_3 114 16 69
+        }
+        table_cell_unselected {
+            base 0 0 0
+            background 255 255 255
+            emphasis_0 151 37 0
+            emphasis_1 0 94 139
+            emphasis_2 0 104 0
+            emphasis_3 114 16 69
+        }
+        list_selected {
+            base 0 0 0
+            background 189 189 189
+            emphasis_0 151 37 0
+            emphasis_1 0 94 139
+            emphasis_2 0 104 0
+            emphasis_3 114 16 69
+        }
+        list_unselected {
+            base 0 0 0
+            background 255 255 255
+            emphasis_0 151 37 0
+            emphasis_1 0 94 139
+            emphasis_2 0 104 0
+            emphasis_3 114 16 69
+        }
+        frame_selected {
+            base 0 104 0
+            background 0
+            emphasis_0 151 37 0
+            emphasis_1 0 94 139
+            emphasis_2 114 16 69
+            emphasis_3 0
+        }
+        frame_highlight {
+            base 151 37 0
+            background 0
+            emphasis_0 166 0 0
+            emphasis_1 83 26 182
+            emphasis_2 151 37 0
+            emphasis_3 151 37 0
+        }
+        frame_unselected {
+            base 89 89 89
+            background 0
+            emphasis_0 151 37 0
+            emphasis_1 0 94 139
+            emphasis_2 114 16 69
+            emphasis_3 0
+        }
+        exit_code_success {
+            base 0 104 0
+            background 0
+            emphasis_0 0 94 139
+            emphasis_1 255 255 255
+            emphasis_2 114 16 69
+            emphasis_3 0 49 169
+        }
+        exit_code_error {
+            base 166 0 0
+            background 0
+            emphasis_0 111 85 0
+            emphasis_1 0
+            emphasis_2 0
+            emphasis_3 0
+        }
+        multiplayer_user_colors {
+            player_1 114 16 69
+            player_2 0 49 169
+            player_3 0 94 139
+            player_4 111 85 0
+            player_5 0 104 0
+            player_6 83 26 182
+            player_7 166 0 0
+            player_8 136 73 0
+            player_9 0
+            player_10 0
+        }
+    }
+    modus-vivendi {
+        text_unselected {
+            base 255 255 255
+            background 0 0 0
+            emphasis_0 255 127 159
+            emphasis_1 0 211 208
+            emphasis_2 68 188 68
+            emphasis_3 254 172 208
+        }
+        text_selected {
+            base 255 255 255
+            background 90 90 90
+            emphasis_0 255 127 159
+            emphasis_1 0 211 208
+            emphasis_2 68 188 68
+            emphasis_3 254 172 208
+        }
+        ribbon_selected {
+            base 0 0 0
+            background 68 188 68
+            emphasis_0 0 0 0
+            emphasis_1 90 90 90
+            emphasis_2 0 0 0
+            emphasis_3 90 90 90
+        }
+        ribbon_unselected {
+            base 255 255 255
+            background 89 89 89
+            emphasis_0 255 255 255
+            emphasis_1 166 166 166
+            emphasis_2 255 255 255
+            emphasis_3 166 166 166
+        }
+        table_title {
+            base 68 188 68
+            background 0 0 0
+            emphasis_0 255 127 159
+            emphasis_1 0 211 208
+            emphasis_2 68 188 68
+            emphasis_3 254 172 208
+        }
+        table_cell_selected {
+            base 255 255 255
+            background 90 90 90
+            emphasis_0 255 127 159
+            emphasis_1 0 211 208
+            emphasis_2 68 188 68
+            emphasis_3 254 172 208
+        }
+        table_cell_unselected {
+            base 255 255 255
+            background 0 0 0
+            emphasis_0 255 127 159
+            emphasis_1 0 211 208
+            emphasis_2 68 188 68
+            emphasis_3 254 172 208
+        }
+        list_selected {
+            base 255 255 255
+            background 90 90 90
+            emphasis_0 255 127 159
+            emphasis_1 0 211 208
+            emphasis_2 68 188 68
+            emphasis_3 254 172 208
+        }
+        list_unselected {
+            base 255 255 255
+            background 0 0 0
+            emphasis_0 255 127 159
+            emphasis_1 0 211 208
+            emphasis_2 68 188 68
+            emphasis_3 254 172 208
+        }
+        frame_selected {
+            base 68 188 68
+            background 0
+            emphasis_0 255 127 159
+            emphasis_1 0 211 208
+            emphasis_2 254 172 208
+            emphasis_3 0
+        }
+        frame_highlight {
+            base 255 127 159
+            background 0
+            emphasis_0 255 95 89
+            emphasis_1 182 160 255
+            emphasis_2 255 127 159
+            emphasis_3 255 127 159
+        }
+        frame_unselected {
+            base 89 89 89
+            background 0
+            emphasis_0 255 127 159
+            emphasis_1 0 211 208
+            emphasis_2 254 172 208
+            emphasis_3 0
+        }
+        exit_code_success {
+            base 68 188 68
+            background 0
+            emphasis_0 0 211 208
+            emphasis_1 0 0 0
+            emphasis_2 254 172 208
+            emphasis_3 47 175 255
+        }
+        exit_code_error {
+            base 255 95 89
+            background 0
+            emphasis_0 208 188 0
+            emphasis_1 0
+            emphasis_2 0
+            emphasis_3 0
+        }
+        multiplayer_user_colors {
+            player_1 254 172 208
+            player_2 47 175 255
+            player_3 0 211 208
+            player_4 208 188 0
+            player_5 68 188 68
+            player_6 182 160 255
+            player_7 255 95 89
+            player_8 254 196 63
+            player_9 0
+            player_10 0
+        }
+    }
+}
+theme_dark "modus-vivendi"
+theme_light "modus-operandi"
+theme "modus-operandi"

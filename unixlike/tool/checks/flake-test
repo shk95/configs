@@ -1,0 +1,63 @@
+#!/bin/sh
+# Synthetic public-constructor coverage for provider-owned environment rules.
+# INV unixlike/composition-in-one-place: the public selector reaches expected
+# classes, and provider-api-test checks its rejected combinations.
+set -eu
+. "$(CDPATH= cd -- "$(dirname -- "$0")" && pwd)/prerequisite"
+require_command nix
+
+checks=$(CDPATH= cd -- "$(dirname -- "$0")" && pwd)
+repo=$(CDPATH= cd -- "$checks/../.." && pwd)
+"$checks/provider-api-test"
+"$checks/external-consumer-test"
+"$checks/contract-inspect-test"
+"$checks/standalone-readiness-test"
+
+fail() { printf 'flake fixture: %s\n' "$1" >&2; exit 1; }
+names() {
+  nix eval --raw "path:$repo#$1" --apply 'x: builtins.concatStringsSep " " (builtins.attrNames x)'
+}
+packages() {
+  nix eval --raw "path:$repo#$1" --apply 'xs: builtins.concatStringsSep " " (map (p: p.pname or p.name) xs)'
+}
+contains() { case " $1 " in *" $2 "*) return 0;; *) return 1;; esac; }
+
+[ "$(names nixosConfigurations)" = 'fixture-arm-cli fixture-cli fixture-graphical fixture-wsl' ] || fail 'NixOS examples changed'
+[ "$(names darwinConfigurations)" = fixture-mac ] || fail 'Darwin example changed'
+[ "$(names homeConfigurations)" = 'example example-wsl' ] || fail 'standalone examples changed'
+
+for fixture in fixture-cli fixture-graphical fixture-arm-cli fixture-wsl; do
+  nix eval --raw "path:$repo#nixosConfigurations.$fixture.config.system.build.toplevel.drvPath" >/dev/null
+done
+nix eval --raw "path:$repo#darwinConfigurations.fixture-mac.config.system.build.toplevel.drvPath" >/dev/null
+nix eval --raw "path:$repo#homeConfigurations.example.activationPackage.drvPath" >/dev/null
+nix eval --raw "path:$repo#homeConfigurations.example-wsl.activationPackage.drvPath" >/dev/null
+
+# INV unixlike/desktop-not-wsl: only graphical selections receive programs.
+for selector in \
+  homeConfigurations.example-wsl.config.home.packages \
+  nixosConfigurations.fixture-wsl.config.home-manager.users.example.home.packages \
+  nixosConfigurations.fixture-cli.config.home-manager.users.example.home.packages; do
+  list=$(packages "$selector")
+  for marker in wezterm noctalia xwayland-satellite; do
+    if contains "$list" "$marker"; then fail "$selector contains $marker"; fi
+  done
+done
+for selector in \
+  nixosConfigurations.fixture-graphical.config.home-manager.users.example.home.packages \
+  darwinConfigurations.fixture-mac.config.home-manager.users.example.home.packages; do
+  list=$(packages "$selector")
+  contains "$list" wezterm || fail "$selector lacks graphical marker wezterm"
+done
+for option in useWindowsDriver startMenuLaunchers; do
+  [ "$(nix eval --json "path:$repo#nixosConfigurations.fixture-wsl.config.wsl.$option")" = false ] ||
+    fail "WSL $option is enabled"
+done
+
+# The provider may supply a package once, with host opt-outs through typed
+# options. The positive and negative constructor probes live in provider-api-test.
+list=$(packages homeConfigurations.example.config.home.packages)
+contains "$list" ripgrep || fail 'common package list did not reach standalone home'
+contains "$list" codex || fail 'coding-agent default did not reach standalone home'
+
+printf '✓ synthetic public-constructor fixtures and graphical boundary\n'

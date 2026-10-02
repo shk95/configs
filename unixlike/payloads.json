@@ -1,0 +1,22 @@
+{
+  "schemaVersion": 1,
+  "payloads": [
+    { "source": "programs/karabiner/karabiner.json", "format": "json" },
+    { "source": "programs/karabiner/symbolic-hotkeys.json", "format": "json" },
+    { "source": "programs/karabiner/units.json", "format": "json" },
+    { "source": "programs/karabiner/tool", "format": "shell" },
+    { "source": "programs/powershell/profile.ps1", "format": "powershell" },
+    { "source": "programs/wezterm/config/appearance.lua", "format": "lua" },
+    { "source": "programs/wezterm/config/behavior.lua", "format": "lua" },
+    { "source": "programs/wezterm/config/bindings.lua", "format": "lua" },
+    { "source": "programs/wezterm/config/fonts.lua", "format": "lua" },
+    { "source": "programs/wezterm/config/startup.lua", "format": "lua" },
+    { "source": "programs/wezterm/fonts.json", "format": "json" },
+    { "source": "programs/wezterm/local.lua.example", "format": "lua" },
+    { "source": "programs/wezterm/platform/darwin.lua", "format": "lua" },
+    { "source": "programs/wezterm/platform/linux.lua", "format": "lua" },
+    { "source": "programs/wezterm/platform/windows.lua", "format": "lua" },
+    { "source": "programs/wezterm/wezterm.lua", "format": "lua" },
+    { "source": "programs/zellij/config.kdl", "format": "kdl" }
+  ]
+}
