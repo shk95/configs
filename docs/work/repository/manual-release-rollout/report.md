@@ -175,3 +175,24 @@ also refuses. Final 19 cases passed in 29.478s. Current-head/native Windows CI a
 delivery gates. No actual private HTTPS, seed/ref write, initializer, independent
 private review or semantic bootstrap is performed. AC1-AC6 remain pending with
 unchanged acceptance; complete write/recovery/wrapper source remains.
+
+## Initial seed and operations source, 2026-10-02
+
+Root implements the same-entry guarded source-only provisioning library: a single
+fixed seed create attempt, full ref observations, complete original root/tree/blob
+verification, credential-free original local empty-record replay, fixed Git object
+publication and operations ref creation. Lost seed/ref acknowledgements reconcile
+only through original observations; uncertain object writes fence further effects.
+A complete observer requires the preserved exact planned head. Full tree identity
+rejects hidden empty subtrees. Independent maintainer approval remains a caller
+precondition, not a digest-equality claim or a deployed operator action.
+
+Local Python 3.13: 27 disposable-Git/fake-endpoint cases passed in 67.789s,
+including lost seed/ref responses, unknown write fences, complete tree and exact
+head refusals. Independent native/current-head CI remains the delivery gate; its
+receipts belong to this increment's source PR. No actual
+private proposal, HTTPS, Contents/ref write, CLI/initializer deployment, semantic
+bootstrap, writer enablement or manual/scheduled operation is performed. AC1-AC6
+remain pending. Read-only parallel preparation identified remaining initializer
+identity/private review, production planner/refresh/object publisher and actual
+operating receipt dependencies; root owns their serial continuation.

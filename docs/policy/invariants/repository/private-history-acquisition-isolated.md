@@ -15,3 +15,8 @@ Read-only initial proposals require successful complete empty ref advertisements
 stable selected identity/default/source/runtime and the exact complete transport
 closure. Their private review digest binds original disabled record bytes and
 source identities. Recomputed equality grants no approval or publication authority.
+
+Source-only initial publication retains those guards, verifies a sole original
+root seed and exact complete child tree/commit, and replays original disabled
+records locally before publication. Unknown writes fence effects; seed/ref
+reconciliation observes only and requires the preserved expected child identity.

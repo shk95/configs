@@ -225,3 +225,34 @@ release-initial-proposal.tsv. Seed/ref writing, original seed verification, lost
 write acknowledgement reconciliation and initializer isolation remain subsequent
 source deliveries. No domain baseline is selected and all existing manual/scheduled
 acceptance bars remain unchanged.
+
+## Initial seed and operations library increment, 2026-10-02
+
+Amended 2026-10-02: within unchanged AC1-AC3, root owns the source-only
+seed/ref library after initial-proposal delivery. Retain the same authenticated
+entry/workflow/actor configuration guards. A fixed-path Contents creation is
+attempted once after exact private proposal regeneration; its response is not
+proof. Full fixed HTTPS ref observations and complete original objects must prove
+one root default commit with the sole regular seed blob and exact digest grammar.
+
+Before operations publication, construct the one-parent child locally with all
+five original disabled/stopped records and preserved seed, verify its complete
+Git tree identity, and replay through the full original loader/retained package.
+Publish fixed Git objects and create only the operations ref. Reacquire original
+objects and compare the actual head to the preserved planned commit identity.
+Any failed/unknown write fences further effects. Seed/ref lost acknowledgements
+use observation only; object-write uncertainty cannot retry or advance to a ref.
+A restarted observer needs the preserved expected head for complete reconciliation.
+No CLI, deployed initializer, private approval or semantic baseline is added.
+
+The maintainer requested parallel preparation with root retaining end-to-end
+ownership. Read-only initializer-contract, writer-gap and operating-validation
+analyses are independent inputs, not source authors or integration owners.
+Root serializes source delivery and resumes alone after these preparations.
+They identified separate initializer/target-writer identity bindings and private
+review input as a subsequent explicit design, plus production candidate planning,
+credential-free refresh and data-only original object publication gaps. Do not
+weaken the existing same-entry guard or adopt new endpoint/credential authority
+implicitly. These followups require reviewed dated contracts before implementation.
+Actual source promotion, private bootstrap/permission/isolation, domain evidence,
+manual recovery/notification and scheduled receipts remain separate gates.
