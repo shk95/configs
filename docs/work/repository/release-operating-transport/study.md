@@ -5,8 +5,10 @@ scope: repository
 status: open
 
 This source-bound template accompanies release-transport.manifest.tsv, whose exact
-file digests identify the delivered trusted transport. The source revision, actual
-approved master entry and deployment selections remain UNRESOLVED until reviewed.
+file digests identify the delivered trusted transport. Delivered source is `3bb493524c140e7090f58e911c385e0268ca0413`, with inventory
+`dc544a0d6ca9248d7c9168e278976877bbda2d19f43d722045d4d7ca45e9cf5e`.
+The actual approved master entry and deployment selections remain UNRESOLVED until
+reviewed. This delivery pin selects no bootstrap or operating connection.
 tool/version-control/release-transport-template.json is input inventory, never an approval or credential store.
 The operator preflight reports disabled and cannot execute an operating effect.
 

@@ -408,6 +408,9 @@ class TransportProof(unittest.TestCase):
         source=f.commit(f.public)
         template=f.operating.parent/'manual.json'
         shutil.copyfile(ROOT/'release-transport-template.json',template)
+        # Bind this disposable fixture's public commit, never the real delivery pin.
+        inputs=json.loads(template.read_text());inputs['transport-source']=source
+        template.write_text(json.dumps(inputs))
         command=[sys.executable,'-I','-S','-B',str(f.public/'tool/version-control/release-transport-preflight.py'),
                  'preflight','--source',source,'--template',str(template)]
         result=subprocess.run(command,capture_output=True)

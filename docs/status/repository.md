@@ -306,8 +306,8 @@ Its bootstrap proposal is unselected and its receipts remain offline assertions.
 No operating record repository is selected; manual/scheduled proof, bootstrap
 adoption, actual release and activation or Apply remain separate pending gates.
 
-Authenticated transport source is being verified separately from retained preview
-semantics (docs/policy/decisions/repository/authenticated-release-transport.md).
+Authenticated finite transport source and its unresolved-input manual template
+are verified separately from retained preview semantics (docs/policy/decisions/repository/authenticated-release-transport.md).
 Its finite library binds actual API observations and original history, while the
 operator/workflow stays disabled. A single-job writer topology is required before
 any cancellation. Operating connection/bootstrap/permissions and manual/scheduled
