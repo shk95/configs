@@ -955,3 +955,8 @@ production-map	exact	docs/policy/invariants/repository/operating-credential-qual
 production-map	exact	tool/version-control/release-credential-check.py	prod-repository-policy,prod-repository-native
 production-map	exact	tool/version-control/test-release-credential-check	prod-repository-policy,prod-repository-native
 production-map	exact	tool/version-control/test-release-credential-check.py	prod-repository-policy,prod-repository-native
+production-map	exact	.github/workflows/release-control-inspect.yml	prod-repository-policy,prod-repository-native
+production-map	exact	docs/policy/invariants/repository/release-inspection-without-authority.md	prod-repository-policy,prod-repository-native
+production-map	exact	tool/version-control/release-inspect.py	prod-repository-policy,prod-repository-native
+production-map	exact	tool/version-control/test-release-inspect	prod-repository-policy,prod-repository-native
+production-map	exact	tool/version-control/test-release-inspect.py	prod-repository-policy,prod-repository-native

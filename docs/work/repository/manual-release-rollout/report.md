@@ -89,3 +89,25 @@ intent. Root reviewed the journal-only source boundary and manifest closure.
 Native/current-head CI are separate delivery gates. AC2 remains pending: this is
 start/claim library source, not deployed orchestration, candidate planning,
 credential-free inspector/wait, bootstrap or real recovery proof.
+
+## Independent public inspection source, 2026-10-02
+
+The independent inspector/wait source uses no operating Environment, PAT, private
+connection or writer lock. It observes exact public run/attempt/source/workflow and
+sole-job metadata, checks source ancestry in a full original public checkout,
+refuses changed/foreign observations and emits no ownership/approval/certification.
+Wait has six bounded observations and at most five two-second sleeps.
+
+Thirteen isolated local Python 3.13 fixtures passed, including actual disposable
+Git ancestry/shallow/replacement refusal, runtime/actor/ref/source mismatches,
+queued/mixed/missing jobs, latest-attempt changes, finite wait and completion,
+changed job/workflow/master, HTTP header/body/privacy/redirect/pagination/size
+boundaries and workflow absence of operating secrets/Environment/lock. A local
+GET-only anonymous transport read independently observed the completed public
+qualification run 36967414759/attempt 1; this is endpoint accessibility only, not
+actual inspector workflow deployment. Native/current-head CI remains pending.
+
+Qualification dispatch against dev run 36971705741/attempt 1 completed skipped:
+sole job 110726890623 has no steps. This is actual rejection of that foreign
+ref for the deployed credential probe; it does not certify a future writer or
+all Environment isolation cases. AC3 and the operating criteria stay pending.

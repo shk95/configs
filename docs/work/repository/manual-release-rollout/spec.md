@@ -126,3 +126,10 @@ allowed. One source PR carries this bridge, fixtures, inventory hash and actual
 provisioning observations. AC1-AC6 remain pending until the full wrapper and actual
 operating receipts exist. This increment enables no workflow or operating effect;
 the unresolved bootstrap and domain evidence remain independent deployment gates.
+
+Amended 2026-10-02: the same repository increment includes AC3's independent
+credential-free public inspector/wait source, its durable invariant, source/native
+fixtures and procedure. Deployment remains a normal accepted master promotion;
+actual public inspection and rejected foreign-ref dispatch are separate receipts.
+It reads public writer/qualification metadata only and cannot claim, approve,
+cancel, wake or certify an operating cycle. No writer or schedule is enabled.

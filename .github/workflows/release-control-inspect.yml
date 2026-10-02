@@ -1,0 +1,41 @@
+name: Credential-free release run inspection
+
+on:
+  workflow_dispatch:
+    inputs:
+      run:
+        description: Exact public writer or qualification run ID
+        required: true
+        type: string
+      attempt:
+        description: Exact attempt number
+        required: true
+        default: '1'
+        type: string
+      mode:
+        description: Observe once or wait for a finite bound
+        required: true
+        default: inspect
+        type: choice
+        options: [inspect, wait]
+
+permissions:
+  contents: read
+
+jobs:
+  inspect-release-run:
+    if: github.repository == 'shk95/configs' && github.ref == 'refs/heads/master' && github.event_name == 'workflow_dispatch' && github.actor_id == '101378576'
+    runs-on: ubuntu-latest
+    timeout-minutes: 5
+    steps:
+      - uses: actions/checkout@v7
+        with:
+          ref: ${{ github.sha }}
+          fetch-depth: 0
+          persist-credentials: false
+      - name: Finite public observations without operating authority
+        env:
+          CONFIGS_INSPECT_RUN: ${{ inputs.run }}
+          CONFIGS_INSPECT_ATTEMPT: ${{ inputs.attempt }}
+          CONFIGS_INSPECT_MODE: ${{ inputs.mode }}
+        run: python3 -I -S -B tool/version-control/release-inspect.py
