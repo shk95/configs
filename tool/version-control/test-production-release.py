@@ -200,7 +200,7 @@ class Qualification(unittest.TestCase):
     def test_historical_root_is_not_live_candidate(self):
         write(self.root / "flake.nix", "historical, not a second live authority\n")
         self.candidate = self.commit("feat(unixlike): synthetic historical root")
-        self.refused("historical-path-in-candidate", proposal=True)
+        self.refused("unclassified-path", proposal=True)
 
     def test_missing_and_symlink_public_surface(self):
         path = "unixlike/api/contract.json"
@@ -346,15 +346,14 @@ class Qualification(unittest.TestCase):
                 write(self.evidence, original.replace(pair, wrong))
                 self.refused("invalid-template-pair")
 
-    def test_legacy_master_root_deletion_is_qualified_without_conversion(self):
+    def test_retired_master_root_deletion_requires_its_original_package(self):
         write(self.root / "flake.nix", "legacy master fixture\n")
         self.base = self.commit("feat(unixlike): synthetic historical master")
         (self.root / "flake.nix").unlink()
         self.candidate = self.commit("refactor(unixlike): synthetic source cutover")
         self.bootstrap()
         self.receipts()
-        value = self.accepted()
-        self.assertIn("flake.nix", {p["path"] for p in value["promotion_delta"]})
+        self.refused("unclassified-path")
 
     def test_breaking_patch_refuses_and_missing_production_rules_refuse(self):
         write(self.root / "unixlike/api/contract.json", "synthetic breaking patch\n")
