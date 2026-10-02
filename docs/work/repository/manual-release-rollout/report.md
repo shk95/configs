@@ -255,3 +255,19 @@ pre-epoch refusal precedes platform timestamp conversion. Normal full source gat
 and exact-head native Windows CI remain independent delivery receipts. AC1-AC6
 remain pending. Durable attempts, role-aware initialization, production writer and
 actual private/manual/scheduled proof remain assigned to root.
+
+## Role source delivery and original projection continuation, 2026-10-02
+
+PR #490 delivered 0371ee1d0a4cfcba34b6c013b18e8fb423b1f244. Exact-head CI
+37018435435 passed all Required checks; native Windows job 110875079998 ran
+37 cases in 186.237s successfully. Normal protected integration produced dev
+f3666bb58ad79d92f3bcccb9dd5934ea1540ff78. Post-merge CI remains a separate
+receipt. These are source/fixture/policy results, not private operating acceptance.
+
+Root prepared the dated original-event projection continuation. Implementation
+and its exact-head/native receipts remain pending. The bridge will preserve the
+original package and transcript, derive framing itself and validate global history
+before existing journal publication. Actual candidate/evidence acquisition,
+credential-free production refresh, data-only object publication, deployed writer,
+durable initializer attempts and initial enablement remain separate source steps.
+AC1-AC6 retain their pending bars; no runtime or approval is invented.

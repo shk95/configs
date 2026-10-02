@@ -330,3 +330,45 @@ publisher and finite writer. No fresh publisher may follow an uncertain previous
 attempt merely because a job failed or refs appear empty. Actual source promotion,
 independent private review, HTTPS/isolation, bootstrap/domain evidence, manual
 recovery/notification and later scheduled clock receipts remain separate gates.
+
+## Original event projection increment, 2026-10-02
+
+Amended 2026-10-02: AC1-AC6 retain their bars. Root next owns one repository
+source PR connecting original semantic event projection to the existing journal,
+after desired-review/role source delivery. Pin current dev and this reviewed plan
+revision independently. This increment supplies a trusted library bridge, not a
+production candidate/evidence collector, user event API or deployed writer.
+
+The bridge accepts only candidate, evidence, refresh-result, refresh-integrated,
+intent, retry-wait, blocker and complete events from a trusted caller. Derive
+sequence/prior/batch from original retained replay; a body cannot supply them.
+Batch-start, claim, approval, stop/resume and operation observation remain on their
+existing specialized authenticated interfaces. Preserve the pinned package/config
+and original serializer/reducer; unsupported old-package kinds refuse rather than
+using current semantics. Source/workflow/sole current job, actual owner, current
+source/operating head and fresh stop must be rechecked before and after projection.
+The caller must independently acquire observations; supplied transcript data alone
+is neither authenticated operating evidence nor an effect permission.
+
+Preserve original transcript source/check/observation history. New observations
+must extend it without rewriting prior obligations; allow only the explicitly
+reviewed current refresh view to move. Derive one immutable event plus complete
+index/transcript projection, validate the full global original history before a
+journal append, and fence a failed or outstanding proposal. A new proposal cannot
+replace an unpublished/unknown one. Journal expected-head non-force publication
+and independently observed acknowledgement remain the existing effect boundary.
+Candidate replacement must invalidate old validation/approval and refuse unknown
+old effects or publication already frozen by the original package.
+
+Fixtures cover new candidate/evidence/intent projection and journal replay,
+replacement approval invalidation, unknown/conflicting effects, stale owner/source/
+head/job/stop, framing injection, old-transcript mutation, poisoned fields, pending
+proposal reuse, projection failure fencing and original old-package behavior.
+Normal repository policy and exact-head native Git-for-Windows CI accompany the PR.
+No semantic package rewrite, new endpoint/credential/entry mode, CLI, workflow,
+private provisioning or operating enablement is added. Nix refresh continues to
+belong to the existing Unix-like utility; production execution and data-only object
+publication require their separately reviewed subsequent connection contract.
+Durable initializer attempts, bootstrap and actual manual/scheduled receipts remain
+subsequent root work. Replan on new trust/schema/effect authority instead of hiding
+it in generic event fields.
