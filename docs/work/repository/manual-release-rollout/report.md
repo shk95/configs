@@ -111,3 +111,15 @@ Qualification dispatch against dev run 36971705741/attempt 1 completed skipped:
 sole job 110726890623 has no steps. This is actual rejection of that foreign
 ref for the deployed credential probe; it does not certify a future writer or
 all Environment isolation cases. AC3 and the operating criteria stay pending.
+
+## Private-history/provisioning design review, 2026-10-02
+
+Root read the current loader and Journal at dev 5e5c3bc and the official GitHub
+Git refs/Contents plus Git fetch/config documentation cited in study.md. The dated
+amendment separates original private object acquisition from disabled initial
+records and routine journal effects. Existing acquisition/bootstrap gaps are real:
+no complete private Git object transfer or initial head currently exists. The
+narrow initialization proposal introduces no actual write, selected semantic
+baseline, permission receipt or operating authority. Source fixtures, native
+Git-for-Windows and actual accepted-source deployment still remain independent
+requirements; AC1-AC6 retain their pending states and original acceptance bars.

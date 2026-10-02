@@ -133,3 +133,56 @@ fixtures and procedure. Deployment remains a normal accepted master promotion;
 actual public inspection and rejected foreign-ref dispatch are separate receipts.
 It reads public writer/qualification metadata only and cannot claim, approve,
 cancel, wake or certify an operating cycle. No writer or schedule is enabled.
+
+## Private history and initial records pickup, 2026-10-02
+
+Amended 2026-10-02: AC1, AC2 and AC3 retain their original criteria. Root owns
+one repository source delivery after the retained-ownership/public-inspection
+prerequisite. It adds complete private Git history acquisition and a separate,
+manual provisioning path for initial disabled operating records. Routine journal
+publication, candidate execution and actual enablement remain separate boundaries.
+
+Acquire only the selected repository's operations ref through fixed GitHub HTTPS
+into a fresh bare repository. The approved entry authenticates source/actor/job and
+selected repository identity before acquisition. A minimal trusted Git/askpass
+process may receive the dedicated credential; no retained/candidate program, hook,
+checkout, submodule, user/system Git configuration, proxy, alternate, lazy fetch or
+redirect may receive it. The helper executes only approved-source code and the
+existing verified Git binary, owns disposable HOME/config/template directories,
+uses bounded execution/object/size limits, and emits only fixed public outcomes.
+It never stores a token in arguments, remotes, files, traces or artifacts. Original
+commit/object bytes and complete ancestry, remote head stability and all loader
+history checks are mandatory. REST commit metadata is not a replacement for the
+original Git object database. Failed/partial acquisition cannot reach a reducer or
+an external effect. Public retained packages remain in the full approved public
+checkout and retain their original manifest/replay boundaries.
+
+The selected operating repository was originally empty. Initial provisioning
+therefore has a separate source-bound reviewed proposal and exact digest request;
+it cannot invoke ordinary Journal with an invented parent or treat a 404 as proven
+empty history. Independently observe the selected repository/default branch and
+complete ref absence. A single fixed-path Contents PUT may create a disabled seed
+on the observed default branch, then Git-object/ref operations may create the
+operations history. The seed contains the exact reviewed proposal digest, not a
+token or generic permission claim. Verify its original root commit, complete tree,
+sole seed blob and exact contents before continuing. Reconcile an unknown seed/ref
+acknowledgement by observation; never blindly retry or overwrite existing records.
+Any foreign ref, unrelated seed, unknown observation or conflicting history stops.
+
+Initial config is disabled and fresh stop is set. The original approved package's
+serializer/reducer supplies the empty index and ledger; complete local replay
+validates proposed records before publication. Preserve approved semantic control,
+actual accepted master, transport closure, initial operating commit and proposal
+approval as distinct identities. No semantic domain baseline or release tag is
+selected by provisioning. Initial source-bound bootstrap and domain evidence must
+still receive independent maintainer review before enablement or publication.
+
+Source fixtures prove absent/existing/moving refs, narrow seed grammar and digest,
+lost responses/conflicts, disabled/stopped initial state, poisoned Git environment,
+credential-free retained subprocesses, exact full original history, corrupt,
+shallow/replaced/alternate/promisor graphs, timeout and object/size bounds. Native
+Git-for-Windows dispatch is required separately. Actual deployed credential/ref
+isolation, initial writes and later manual cycle remain affected-dispatch gates.
+No provisioning or acquisition executes merely because this amendment is reviewed.
+If the documented API cannot initialize the empty repository as proposed, return
+to planning rather than changing endpoints or using broad gh credentials.
