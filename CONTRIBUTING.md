@@ -470,6 +470,15 @@ Read qualification does not prove Contents/PR/Actions write authority, secret/re
 isolation or operating enablement; verify those separately before the manual cycle
 (`docs/policy/decisions/repository/authenticated-release-transport.md`).
 
+The source-only retained event bridge accepts observations from a trusted caller;
+it supplies no production collector or operator event submission interface. The
+caller preserves prior transcript obligations, supplies a matching preview context
+and reloads independently observed original history between finite steps. Do not
+replace a failed/pending proposal or retry an uncertain journal write through a
+fresh library instance. Preserve its private attempted identity and reconcile under
+the separately reviewed recovery contract before another effect. Full prospective
+local replay is source validation, not a remote or operating receipt.
+
 ## Agent roles and handoff
 
 Use the project skills under .agents/skills/. An unspecified "work on X"
@@ -1215,7 +1224,7 @@ The private-history acquisition library has no operator CLI or enabled workflow.
 Its fixture is part of `tool/configs test` and the native Git-for-Windows CI lane.
 Source proof uses disposable repositories and synthetic credentials; it cannot
 certify real HTTPS/permission or provisioning behavior. Read-only transport
-preflight recognizes exact historical five-file and current six-file inventories.
+preflight recognizes exact historical five/six-file and current seven-file inventories.
 Keep seed/ref publication, reviewed private bootstrap and actual initializer/writer
 isolation separate from the disabled original-package empty-record projection.
 

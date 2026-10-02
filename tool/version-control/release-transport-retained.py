@@ -263,8 +263,115 @@ class Snapshot:
         T.need(op['state'] in {'intent','unknown'},'completed-or-conflicting-operation')
         return {'id':operation,'digest':T.digest(T.canonical(op['payload'])),'head':self.head}
 
+    def proposal_context(self,state):
+        """Fresh actual entry/owner/head/stop; caller data supplies none of these."""
+        T.Entry(self.api,self.entry.trusted,self.entry.runtime)
+        runtime=self.entry.runtime
+        jobs=self.api.jobs(runtime['run'],runtime['attempt'])
+        T.need(len(jobs)==1 and jobs[0].get('id')==runtime['job'],'nonisolated-proposal-job')
+        T.need(self.api.ref('heads/master')==self.source
+               and self.api.ref('heads/operations',self.api.operating)==self.head==self.expected,'moving-proposal-head')
+        owner=state['owner']
+        T.need(owner and all(int(owner[k])==runtime[k] for k in ('run','attempt','job')),'foreign-proposal-owner')
+        self.owner_target(owner)
+        candidate=state['candidate'] or state.get('refresh')
+        T.need(runtime['candidate']==(T.digest(T.canonical(candidate)) if candidate else '0'*64),'stale-proposal-candidate')
+        tree=self.api.tree(self.api.commit(self.head,self.api.operating)['tree'],self.api.operating)
+        T.need(tree.get('control/stop.tsv',())[:2]==('100644','blob'),'missing-proposal-stop')
+        T.need(not self.validate_stop(self.api.blob(tree['control/stop.tsv'][2],self.api.operating),self.head),
+               'stopped-proposal')
+
+    def validate_prospective(self,changes):
+        """Owned local copy; full replay is validation, never a remote receipt."""
+        with tempfile.TemporaryDirectory(dir=self.scratch,prefix='proposal-replay-') as folder:
+            root=Path(folder);repo=root/'objects.git';empty=root/'empty';empty.mkdir()
+            L.verify_graphs(self.operating,[self.head])
+            # Local pack plumbing only. No clone/fetch/URL, alternate or hook.
+            packed=L.git(self.operating,'-c','pack.threads=1','-c','pack.windowMemory=8m',
+                'pack-objects','--stdout','--revs',data=(self.head+'\n').encode())
+            T.need(len(packed)<=128*1024*1024,'proposal-object-bound')
+            L.git(root,'init','--bare','--template='+str(empty),str(repo))
+            L.git(repo,'index-pack','--stdin','--strict',data=packed)
+            index=root/'index'
+            env=L.runtime_environment(os.environ)
+            env.update(GIT_CONFIG_NOSYSTEM='1',GIT_CONFIG_GLOBAL=os.devnull,
+                GIT_NO_REPLACE_OBJECTS='1',GIT_NO_LAZY_FETCH='1',GIT_GRAFT_FILE=os.devnull,
+                GIT_ALLOW_PROTOCOL='',GIT_TERMINAL_PROMPT='0',GIT_INDEX_FILE=str(index),
+                GIT_AUTHOR_NAME=self.tagger['name'],GIT_AUTHOR_EMAIL=self.tagger['email'],
+                GIT_COMMITTER_NAME=self.tagger['name'],GIT_COMMITTER_EMAIL=self.tagger['email'],
+                GIT_AUTHOR_DATE=self.tagger['date'],GIT_COMMITTER_DATE=self.tagger['date'])
+            def local(*args,data=None):
+                result=subprocess.run(['git','--no-replace-objects','-c','core.hooksPath='+str(empty),
+                    '-c','core.fsmonitor=false','-c','gc.auto=0','-C',str(repo),*args],
+                    input=data,env=env,capture_output=True,timeout=30)
+                T.need(result.returncode==0 and len(result.stdout)<=T.MAX_BODY,'proposal-local-git-refused')
+                return result.stdout.decode('ascii').strip()
+            local('read-tree',self.head)
+            for path,data in sorted(changes.items()):
+                oid=local('hash-object','-w','--stdin',data=data)
+                T.need(oid==T.git_object('blob',data),'proposal-local-blob-mismatch')
+                local('update-index','--add','--cacheinfo','100644,'+oid+','+path)
+            tree=local('write-tree')
+            head=local('commit-tree',tree,'-p',self.head,data=b'release operating record\n')
+            source=T.document(changes['current/transcript.json'])['source'][-1]
+            request_fields={k:str(source[k]) for k in ('actor','run','attempt','ref','candidate')}
+            request_fields['mode']='preview'
+            request=root/'request.tsv';request.write_bytes(L.encode_index(request_fields))
+            transcript=root/'transcript.json';transcript.write_bytes(changes['current/transcript.json'])
+            replay=root/'replay';replay.mkdir()
+            L.global_preview({'operating':repo,'bundle_repository':self.bundle,
+                'request':request,'transcript':transcript},self.assertion,head,replay)
+
+    def propose_event(self,fields,transcript):
+        """Trusted library caller only; this does not authenticate supplied data."""
+        T.need(not getattr(self,'proposal_fenced',False) and self.pending_changes is None,'outstanding-proposal')
+        try:
+            T.need(self.entry.runtime['mode'] in {'start','wake'} and type(fields) is dict
+                and fields.get('kind') in {'candidate','evidence','refresh-result','refresh-integrated',
+                    'intent','retry-wait','blocker','complete'}
+                and not {'sequence','prior','batch'} & set(fields),'unsupported-proposal-event')
+            before=self.project();self.proposal_context(before['state'])
+            old=T.document((self.batch/'transcript.json').read_bytes())
+            transcript=copy.deepcopy(transcript)
+            T.need(type(transcript) is dict and set(old)<=set(transcript)<=set(old)|{'refresh','protection'},'changed-transcript-shape')
+            T.need(len(T.canonical(transcript))<=T.MAX_BODY,'proposal-transcript-bound')
+            if 'refresh' in transcript and 'refresh' not in old:
+                T.need(type(transcript['refresh']) is dict and set(transcript['refresh'])=={'revisions','current'}
+                    and type(transcript['refresh']['revisions']) is list,'invalid-new-refresh-view')
+            if 'protection' in transcript and 'protection' not in old:
+                T.need(type(transcript['protection']) is dict,'invalid-new-protection-view')
+            for key in old:
+                if key in {'source','checks'}:
+                    T.need(type(transcript[key]) is list and transcript[key][:len(old[key])]==old[key],
+                           'rewritten-transcript-history')
+                elif key=='observations':
+                    T.need(type(transcript[key]) is dict and all(transcript[key].get(k)==v for k,v in old[key].items()),
+                           'rewritten-transcript-observation')
+                elif key=='refresh':
+                    T.need(type(transcript[key]) is dict and set(transcript[key])=={'revisions','current'}
+                        and type(transcript[key]['revisions']) is list
+                        and transcript[key]['revisions'][:len(old[key]['revisions'])]==old[key]['revisions'],
+                        'rewritten-refresh-history')
+                else:T.need(transcript[key]==old[key],'rewritten-transcript-binding')
+            sequence=int(before['state']['sequence'])+1
+            T.need(sequence<10**12,'proposal-sequence-bound')
+            event=copy.deepcopy(fields)
+            event.update(sequence=str(sequence),prior=before['prior'],batch=before['state']['batch'])
+            raw=self.encode_event(event);path='history/%012d.tsv'%sequence
+            (self.batch/path).write_bytes(raw);(self.batch/'transcript.json').write_bytes(T.canonical(transcript))
+            changes=self.projected_changes(path,raw,transcript)
+            self.validate_prospective(changes);self.proposal_context(before['state'])
+            self.pending_changes=changes
+            self.proposal_binding=tuple(sorted((p,T.digest(d)) for p,d in changes.items()))
+            self.proposal_before=before['state']
+            return changes
+        except BaseException:
+            self.proposal_fenced=True
+            raise
+
     def claim(self):
         """Propose one authenticated owner transition; never cancel another run."""
+        T.need(not getattr(self,'proposal_fenced',False) and self.pending_changes is None,'outstanding-proposal')
         T.need(self.entry.runtime['mode']=='start','wrong-claim-entry')
         T.need(self.api.ref('heads/operations',self.api.operating)==self.head,'moving-claim-head')
         stop=L.singletons(L.record_blob(self.operating,self.head,'control/stop.tsv')[1],
@@ -357,14 +464,22 @@ class Snapshot:
         return fields['stop']=='1'
 
     def validate_changes(self,changes):
+        T.need(not getattr(self,'proposal_fenced',False),'failed-proposal')
         T.need(changes==self.pending_changes or changes=={'current/index.tsv':L.record_blob(self.operating,self.head,'current/index.tsv')[1]},'unprojected-record-changes')
+        if getattr(self,'proposal_binding',None) is not None:
+            T.need(tuple(sorted((p,T.digest(d)) for p,d in changes.items()))==self.proposal_binding,'changed-proposal-bytes')
+            self.proposal_context(self.proposal_before)
+            self.validate_prospective(changes)
+            self.proposal_context(self.proposal_before)
 
     def accept_changes(self,changes,head):
         self.expected=self.head=head
         self.state=self.project()['state']
         self.pending_changes=None
+        self.proposal_binding=None
 
     def observation(self,plan,state,remote):
+        T.need(not getattr(self,'proposal_fenced',False) and self.pending_changes is None,'outstanding-proposal')
         T.need(state in {'applied','absent'},'unconfirmed-observation')
         op=self.state['operations'][plan['id']];payload=op['payload'];kind=op['kind']
         if kind=='merge':target={'merged':True,'commit':remote,'parents':[payload['master'],payload['dev']],'tree':payload['tree'],'source':payload['dev']}
@@ -396,6 +511,7 @@ class Snapshot:
 
     def transition(self, request):
         """Authenticated approval/stop/resume; exact old reducer keeps its gates."""
+        T.need(not getattr(self,'proposal_fenced',False) and self.pending_changes is None,'outstanding-proposal')
         self.entry.request(request)
         mode=request['mode'];T.need(mode in {'approve','stop','resume'},'unsupported-transition')
         previous=self.project();state=previous['state']

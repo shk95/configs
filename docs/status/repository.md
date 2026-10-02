@@ -320,8 +320,8 @@ fixtures certify no actual operating cycle.
 
 The private-history library now has source-only original Git acquisition and a
 verified original-package disabled empty-record projection. Its explicit current
-transport inventory has six files; historical five-file source inspection remains
-supported. Source fixtures do not establish actual HTTPS, initial seed/ref writes,
+transport inventory has seven files; historical five/six-file source inspection
+remains supported. Source fixtures do not establish actual HTTPS, initial seed/ref writes,
 bootstrap adoption, permissions or a deployed writer. Those operating gates remain
 pending (docs/policy/decisions/repository/authenticated-release-transport.md).
 
@@ -343,3 +343,10 @@ binds separate source roles; writer remains disabled and no initializer workflow
 is installed. Original-source timestamp reconstruction does not persist an attempt
 or certify cross-run recovery. Actual role-aware initialization, production writer
 and operating evidence remain pending.
+
+The retained source bridge can project ordinary original events into the existing
+journal, with full global replay and per-instance failed/pending proposal and
+uncertain-write fences. Original candidate replacement still requires reconciled
+effects and invalidates prior approval. Production candidate/evidence collection,
+refresh preparation/object publication, finite writer, durable initializer attempts
+and initial enablement are absent; actual operating criteria remain pending.
