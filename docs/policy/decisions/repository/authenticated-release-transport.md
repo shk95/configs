@@ -58,3 +58,22 @@ against the official GitHub REST documentation for workflow runs, Git refs, Git
 objects, check runs and pull-request merge. This decision reconsiders only the future
 transport boundary of release-controller-preview-boundary.md; it preserves that
 preview contract and authorizes no actual operating effect or host change.
+
+## Read-only credential qualification
+
+Amended 2026-10-02: allow a separate master-only, maintainer-only, single-job
+credential qualification workflow to receive the dedicated Environment token and
+selected private locator/identity. This is a provisioning probe, not the routine
+credential-free inspector/wait execution or a writer. It checks actual run/attempt,
+actor, source, workflow/job, private repository and protection using bounded GET
+requests. It refuses changed attempts/source, mixed jobs and unexpected access to
+secret metadata. Its fixed HTTPS host cannot redirect and has no write primitive.
+
+Check-run accessibility on the public provider is tested without authentication;
+no selectable Checks grant is needed for that observation. Successful qualification
+proves read accessibility and the observed denial only, not write permissions,
+Environment isolation, bootstrap adoption, domain evidence or live enablement.
+The public preflight and existing source writer workflows remain inert. Deployment
+of the probe still requires normal accepted master source, and actual observations
+remain separate from source fixture proof. Source stays pinned to the running SHA;
+candidate scripts/artifacts/caches never execute with its token.

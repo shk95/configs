@@ -451,6 +451,25 @@ delivery remains manual evidence. Source promotion, operating provisioning/selec
 bootstrap adoption, dispatch/cancel/ref/merge/tag and enablement require their separate
 R-manual authorization and receipts. Host activation/Apply remain independent.
 
+### Operating credential read check
+
+After normal acceptance of the credential-check source on master, run
+`gh workflow run release-credential-check.yml --ref master`, then inspect that exact
+run and attempt. The single master/maintainer job uses the release-control
+Environment's CONFIGS_RELEASE_TOKEN, CONFIGS_RELEASE_OPERATING_REPOSITORY and
+CONFIGS_RELEASE_OPERATING_REPOSITORY_ID. Store the token directly through GitHub's
+Environment settings; neither local gh credentials nor candidate data supply it.
+The probe pins checkout to github.sha with persisted checkout credentials disabled.
+
+It checks actual source/run/workflow/job, selected private numeric identity,
+protection and public check accessibility through GET only. Public check-run reads
+are anonymous, so an unavailable Checks selector does not require a broader token.
+Unexpected secret-metadata access, foreign/moving identities, unavailable reads,
+redirects and incomplete jobs refuse with no private response in the log.
+Read qualification does not prove Contents/PR/Actions write authority, secret/ref
+isolation or operating enablement; verify those separately before the manual cycle
+(`docs/policy/decisions/repository/authenticated-release-transport.md`).
+
 ## Agent roles and handoff
 
 Use the project skills under .agents/skills/. An unspecified "work on X"

@@ -6,4 +6,4 @@ file	tool/version-control/release-control-package/main.py	3f6139b8fea46ed13be76a
 file	tool/version-control/release-control-package/records.py	4ef933d8d8ed496ff1d304533177def70cc244c0e6eb352a2f4d8e16e5b352f7
 file	tool/version-control/release-preview	b710946b4e3db046ceca161e5dd3c7cc54e79fbab4183db1f167ac4b34f13106
 file	tool/version-control/release-preview.awk	7ef74f174a466f212d47ba113609919892a5bea366fbcb1903f13703a6fa1bbf
-file	tool/version-control/release-preview.rules	77ad969db8bbc0288a02bfe1e88837a6fe02fc3f278395a4b066aeeed83e03f8
+file	tool/version-control/release-preview.rules	d7f43253f3a86b7243b09681250e101fadc770342c95749fe772b6fb824c416e

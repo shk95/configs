@@ -100,3 +100,17 @@ gate, silently migrate old batches or restore a retired publisher.
 | AC4 | A real manual cycle joins or creates only qualified refresh candidates, admits exact checked source, and reconciles actual promotion/tag identities with complete required domain and template evidence. | affected dispatch, review |
 | AC5 | Actual stop/resume, lost acknowledgement, record conflict and partial publication recover without duplicate effects, foreign cancellation, changed versions or weakened old obligations; notification delivery is observed separately. | fixtures, affected dispatch, review |
 | AC6 | Source-bound manual receipts answer the parent report's applicable criteria and establish a reviewed scheduled pickup with enablement still dependent on successful manual proof. | review |
+| AC7 | A separate finite read-only credential qualification source binds actual runtime, source, workflow/job, selected private identity and protection, refuses foreign/moving observations and secret-metadata access, leaks no private values, and never claims mutation permission or operating enablement. | fixtures, policy checks, review |
+
+## Credential qualification source pickup, 2026-10-02
+
+Amended 2026-10-02: AC3's actual deployment criteria remain unchanged. Before
+wrapper deployment, one coherent repository source delivery implements AC7's
+separate single-job provisioning probe, source fixtures, native fixture dispatch
+and procedure. Unlike the routine inspector/wait entry, this finite GET-only probe
+receives the Environment credential to test its actual read accessibility. It is
+not an executor and creates no record, PR, tag, cancellation or dispatch itself.
+The accepted deployment-boundary amendment precedes actual execution. Root owns
+this source lane; its pickup base and reviewed plan revision are separately pinned.
+Actual token/isolation observations remain AC3 affected-dispatch evidence and do
+not follow from AC7 fixtures. All other parent/child criteria retain their bars.

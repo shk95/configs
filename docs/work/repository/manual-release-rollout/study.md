@@ -25,7 +25,8 @@ identity in the private setup inventory and the protected Environment.
 | Contents | Read/write for immutable Git objects/records, exact refs and source/merge inspection. |
 | Pull requests | Read/write for complete candidate lookup, exact creation and protected merge. |
 | Actions | Read/write for authenticated run/job observations, explicitly bounded dispatch and sole-owner cancellation. |
-| Checks and Commit statuses | Read-only for exact source-bound required evidence. |
+| Checks | No token selection prerequisite for public provider check-run reads; the qualification probe explicitly queries them anonymously. Actual evidence binding remains required. |
+| Commit statuses | Read-only for exact source-bound required evidence; public accessibility does not certify write authority. |
 | Administration | Read-only for actual branch protection; no protection mutation through the operating credential. |
 | Metadata | GitHub's required read access. |
 | Other permissions | None initially; no Issues, Secrets, Environments or Workflows write. New endpoint requirements return to review. |
@@ -35,6 +36,8 @@ the selected repository list is not per-repository privilege separation. Existin
 credentials are administrative setup authority only, never the operating token.
 The permission inventory was checked against GitHub's official REST permission map:
 https://docs.github.com/en/rest/authentication/permissions-required-for-fine-grained-personal-access-tokens
+The public check-run exception is documented at
+https://docs.github.com/en/rest/checks/runs#list-check-runs-for-a-git-reference
 
 Environment preparation alone does not prove job isolation. The deployed wrapper
 must first establish exact workflow/job/source provenance and rejected foreign-ref
@@ -50,3 +53,8 @@ Keep inspector and candidate work credential-free and revalidate complete candid
 data before publication. Publish and review that source before normal promotion.
 The final deployment pins are determined by the actual accepted source, not by this
 planning revision or the earlier unselected bootstrap proposal.
+
+Before that delivery, the finite credential probe runs only from accepted master
+source using release-control, the dedicated token and locator, and the private
+numeric identity in CONFIGS_RELEASE_OPERATING_REPOSITORY_ID. This is read-only
+provisioning evidence, not an operating wrapper or a selected bootstrap.

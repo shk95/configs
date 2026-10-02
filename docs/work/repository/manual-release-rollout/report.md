@@ -19,8 +19,23 @@ Its actual access, denial and expiry behavior remain unverified. The legacy Wind
 capture-publish issue was disposed as superseded because the current Windows status
 explicitly retires that flow; no old native scenario was newly claimed.
 
-All child criteria remain pending. Parent manual0/14 and scheduled0/5 remain
+All operating child criteria remain pending. Parent manual0/14 and scheduled0/5 remain
 pending; the successful source CI cannot replace actual operating evidence.
+
+## Credential qualification source, 2026-10-02
+
+The user stored the dedicated token directly. Metadata inspection confirmed its
+presence; no token value is retrievable and no actual token request is claimed.
+The separate source probe has only fixed-host GET requests and binds observed run,
+source, actor, workflow and sole job before reading required protection/check data.
+The public Checks observation is anonymous; Checks is not a token selection
+prerequisite. A denial probe reads only repository secret metadata, never values.
+Output carries public source/run plus fixed booleans, not private identities.
+
+Sixteen local Python 3.13 fixtures passed, with fake endpoints only. Native Windows
+and final policy CI evidence will be recorded before source delivery is Ready.
+Actual probe execution awaits accepted master source; no private operating record,
+wrapper, bootstrap, mutation permission, dispatch or enablement is certified here.
 
 ## Acceptance
 
@@ -32,3 +47,4 @@ pending; the successful source CI cannot replace actual operating evidence.
 | AC4 | pending | |
 | AC5 | pending | |
 | AC6 | pending | |
+| AC7 | pending | Local 16 source fixtures passed; policy review and native CI pending. |

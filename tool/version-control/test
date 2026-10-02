@@ -5571,5 +5571,7 @@ git -C "$authoring_root" worktree add -q -b fix/repository-pinned "$authoring_pi
 
 # INV repository/authenticated-release-transport
 "$root/tool/version-control/test-release-transport"
+# INV repository/operating-credential-qualification
+"$root/tool/version-control/test-release-credential-check"
 
 echo "version-control fixtures passed"
