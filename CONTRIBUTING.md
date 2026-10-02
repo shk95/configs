@@ -567,6 +567,22 @@ rewrite their history. Effect-based CI changes and domain efficiency work are
 separate follow-ups. Keep post-merge validation until equivalence with the
 actual integrated result is proved; a prior PR success is insufficient.
 
+## Inspect a public release run
+
+After normal master acceptance, use the independent credential-free workflow:
+`gh workflow run release-control-inspect.yml --ref master -f run=<public-run-id> -f attempt=<attempt> -f mode=inspect`.
+Use `mode=wait` for six bounded observations, not a background service. The selected
+writer or credential-qualification run must use the maintainer's master source
+in the current accepted public history and the exact latest attempt.
+
+Inspect the workflow's own exact source/attempt and its fixed public receipt.
+Incomplete/mixed/foreign or moving observations refuse. Queued work and an expired
+wait are nonterminal observations. Completion grants no owner, approval or
+cancellation authority; the trusted writer independently verifies old-package
+history and actual terminal ownership. This workflow receives no operating
+Environment, token, private connection or writer concurrency. It does not enable
+an operating cycle.
+
 ## Promote dev to master
 
 Promotion is a deliberate source-acceptance operation, not a release. The only
