@@ -10,3 +10,8 @@ Only a disposable bare repository is returned. Original graph validation and fre
 remote head checks precede retained replay. Partial, poisoned or moving observations
 refuse without exposing private diagnostics. Source fixtures are not live permission,
 bootstrap or operating evidence.
+
+Read-only initial proposals require successful complete empty ref advertisements,
+stable selected identity/default/source/runtime and the exact complete transport
+closure. Their private review digest binds original disabled record bytes and
+source identities. Recomputed equality grants no approval or publication authority.

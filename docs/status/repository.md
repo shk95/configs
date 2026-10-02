@@ -324,3 +324,9 @@ transport inventory has six files; historical five-file source inspection remain
 supported. Source fixtures do not establish actual HTTPS, initial seed/ref writes,
 bootstrap adoption, permissions or a deployed writer. Those operating gates remain
 pending (docs/policy/decisions/repository/authenticated-release-transport.md).
+
+Read-only initial proposal source binds complete empty Git ref observations,
+selected default branch, exact source/transport/original package and disabled record
+identities to private review bytes and a regenerated digest. It supplies no approval
+or seed/ref effect. Actual private HTTPS, initializer, provisioning and full manual
+writer/recovery gates remain pending (INV repository/private-history-acquisition-isolated).

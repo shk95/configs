@@ -158,3 +158,20 @@ fixture could not unlink a read-only loose Git object before injecting corruptio
 The fixture now clears that attribute on its owned fetched receiver, unlinks the
 object and writes a separate corrupt object. Production acquisition is unchanged;
 native Windows success still requires the corrected head's independent CI receipt.
+
+## Read-only initial proposal source, 2026-10-02
+
+Root picked up dev b95443f and the published reviewed plan independently. The
+library observes authenticated selected metadata/default branch and complete fixed
+HTTPS Git refs twice around credential-free original-package disabled projection.
+Canonical private proposal bytes bind exact source/transport/package assertions,
+public/private identities, runtime configuration and five record content/blob
+identities. Requested digest review independently regenerates the full proposal;
+equal bytes supply fixed seed grammar only, never approval or a write effect.
+
+Nineteen local Python 3.13 fixtures passed, including native disposable Git full-ref
+advertisement and incomplete-closure refusal. Configuration workflow/actor widening
+also refuses. Final 19 cases passed in 29.478s. Current-head/native Windows CI are independent
+delivery gates. No actual private HTTPS, seed/ref write, initializer, independent
+private review or semantic bootstrap is performed. AC1-AC6 remain pending with
+unchanged acceptance; complete write/recovery/wrapper source remains.
