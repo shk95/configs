@@ -5564,5 +5564,7 @@ git -C "$authoring_root" worktree add -q -b fix/repository-pinned "$authoring_pi
 # INV repository/operating-credential-qualification
 "$root/tool/version-control/test-release-credential-check"
 "$root/tool/version-control/test-release-inspect"
+# INV repository/private-history-acquisition-isolated
+"$root/tool/version-control/test-release-operating-history"
 
 echo "version-control fixtures passed"

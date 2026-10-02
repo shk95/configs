@@ -707,3 +707,7 @@ production-map	exact	docs/policy/invariants/repository/release-inspection-withou
 production-map	exact	tool/version-control/release-inspect.py	prod-repository-policy,prod-repository-native
 production-map	exact	tool/version-control/test-release-inspect	prod-repository-policy,prod-repository-native
 production-map	exact	tool/version-control/test-release-inspect.py	prod-repository-policy,prod-repository-native
+production-map	exact	tool/version-control/release-operating-history.py	prod-repository-policy,prod-repository-native
+production-map	exact	tool/version-control/test-release-operating-history	prod-repository-policy,prod-repository-native
+production-map	exact	tool/version-control/test-release-operating-history.py	prod-repository-policy,prod-repository-native
+production-map	exact	docs/policy/invariants/repository/private-history-acquisition-isolated.md	prod-repository-policy,prod-repository-native

@@ -94,3 +94,24 @@ logs/artifacts/cache reads or candidate execution. Old/moving attempts, source,
 workflow/job identity, unknown pages and mixed jobs refuse. Trusted writer takeover
 must independently reconcile actual authenticated terminal evidence and old-package
 history. This change does not enable the writer or adopt operating bootstrap.
+
+## Original private Git acquisition
+
+Amended 2026-10-02: a trusted acquisition helper may pass the dedicated operating
+credential only to a fixed GitHub HTTPS Git process and its approved askpass code.
+It authenticates the approved entry and selected private repository before fetch,
+owns a fresh bare repository and disposable configuration, bounds time/output/disk,
+and refuses moving, shallow, alternate, grafted, replaced or incomplete objects.
+No checkout, hook, submodule, proxy, redirect, ambient credential/configuration or
+candidate program is allowed. It stores no credential in arguments, files or Git
+configuration and returns only verified original private objects to the retained
+loader. Retained subprocesses continue to receive the credential-free environment.
+
+The current transport inventory explicitly adds
+`tool/version-control/release-operating-history.py` as its sixth file. Historical
+five-file transport inspection and eight-file semantic packages remain exact;
+this acquisition does not substitute a current reducer or rewrite old objects.
+A disabled initial-record proposal uses the verified original package's empty
+projection, remains source-bound and selects no domain semantic baseline. Actual
+seed/ref publication, provisioning workflow, reviewed private proposal and complete
+manual/scheduled operating evidence remain separate unfinished deliveries.

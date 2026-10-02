@@ -317,3 +317,10 @@ writer/inspector orchestration remains disabled. The bridge has source-only dura
 start/claim proposals through original retained packages. Bootstrap, write
 permissions, actual isolation and manual/scheduled proof remain unresolved; source
 fixtures certify no actual operating cycle.
+
+The private-history library now has source-only original Git acquisition and a
+verified original-package disabled empty-record projection. Its explicit current
+transport inventory has six files; historical five-file source inspection remains
+supported. Source fixtures do not establish actual HTTPS, initial seed/ref writes,
+bootstrap adoption, permissions or a deployed writer. Those operating gates remain
+pending (docs/policy/decisions/repository/authenticated-release-transport.md).

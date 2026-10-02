@@ -108,7 +108,7 @@ class Api:
 
     def call(self, repository, method, suffix, body=None, statuses=(200,)):
         need(repository in {PUBLIC, self.operating}, 'foreign-repository')
-        need(isinstance(suffix, str) and suffix.startswith('/') and not any(c in suffix for c in '\r\n#')
+        need(isinstance(suffix, str) and (suffix.startswith('/') or (suffix=='' and method=='GET')) and not any(c in suffix for c in '\r\n#')
              and '..' not in suffix and '://' not in suffix, 'invalid-endpoint')
         code, headers, raw = self.channel.request(method, '/repos/' + repository + suffix, body)
         need(not any(k.lower() == 'location' for k in headers), 'redirect-refused')
@@ -156,6 +156,9 @@ class Api:
             expected = 'https://api.github.com/repos/' + repository + suffix + '?' + query + 'per_page=100&page=' + str(page + 1)
             need(next_links == [expected] and len(rows) == 100, 'foreign-or-truncated-pagination')
         raise Refusal('pagination-bound')
+
+    def repository(self, repository):
+        return self.get('',repository)
 
     def ref(self, ref, repository=PUBLIC):
         need(re.fullmatch(r'heads/(master|dev|operations|feature/unixlike-refresh-[a-f0-9]{64})|tags/(unixlike|windows)-v[1-9][0-9]*\.[0-9]+\.[0-9]+', ref), 'unsupported-ref')

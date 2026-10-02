@@ -123,3 +123,32 @@ narrow initialization proposal introduces no actual write, selected semantic
 baseline, permission receipt or operating authority. Source fixtures, native
 Git-for-Windows and actual accepted-source deployment still remain independent
 requirements; AC1-AC6 retain their pending states and original acceptance bars.
+
+## Original private-history library source, 2026-10-02
+
+Root picked up source at dev/plan revision 124ed99. The new helper composes the
+retained bridge's exact transport/loader instances, reauthenticates entry and sole
+job, freshly binds selected private identity and both public/private heads, and
+acquires only operations over fixed HTTPS into an owned bare repository. Git and
+askpass alone receive the dedicated token, with isolated configuration, no checkout,
+hooks/submodules/proxy/redirects, and finite time/output/disk/file bounds. Token data
+is not put in command arguments, files, Git configuration, diagnostics or retained
+child environments. Partial, moving and poisoned original object graphs refuse.
+
+Thirteen local Python 3.13 fixtures passed. Actual local Git askpass invocation and
+local file-transfer substitution supply native POSIX Git proof without HTTPS or
+real credentials. The resulting original bare objects successfully replay through
+the original package/Snapshot. Negative cases cover ambient configuration/proxy/
+trace/credentials, wrong private identity, mixed jobs, malformed credentials,
+wrong/moving refs, shallow/alternate/promisor/graft/replacement/corrupt graphs,
+foreign askpass paths, time/output/disk limits, changed latest attempt, exact five-/six-file read-only preflight and enabled initial config refusal.
+The original package supplies sequence-zero empty index/ledger with disabled config
+and fresh stop=1, selecting no domain baseline. No API write is performed.
+
+The current transport closure explicitly adds its sixth file. Read-only preflight
+recognizes exact historical five-file and current six-file inventories; old semantic
+packages/objects remain unchanged. Full source gates and exact-head native Windows
+CI remain delivery requirements. Actual HTTPS, seed/ref publication, independent
+private proposal review, initializer/workflow isolation, mutation permissions,
+bootstrap adoption and manual/scheduled operating proof are still missing. This
+increment does not complete AC1-AC6 or a deployed trusted wrapper.

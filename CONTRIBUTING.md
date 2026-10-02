@@ -1208,3 +1208,13 @@ Branch protection on `dev` and `master` requires the stable `Required checks`
 job. That job fails unless classification and secret scanning pass and every
 selected domain job succeeds. Conditional domain job names are deliberately
 not branch-protection contexts because unselected domains are skipped.
+
+## Private operating-history source verification
+
+The private-history acquisition library has no operator CLI or enabled workflow.
+Its fixture is part of `tool/configs test` and the native Git-for-Windows CI lane.
+Source proof uses disposable repositories and synthetic credentials; it cannot
+certify real HTTPS/permission or provisioning behavior. Read-only transport
+preflight recognizes exact historical five-file and current six-file inventories.
+Keep seed/ref publication, reviewed private bootstrap and actual initializer/writer
+isolation separate from the disabled original-package empty-record projection.
