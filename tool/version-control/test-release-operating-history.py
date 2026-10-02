@@ -468,4 +468,16 @@ class HistoryProof(unittest.TestCase):
         with self.assertRaises(H.T.Refusal):self.history.publish_initial(proposal,digest,*inputs)
         self.assertEqual(len(self.provision_calls),count)
 
+    def test_invalid_original_replay_prevents_seed_write_too(self):
+        proposal,digest,inputs,server=self.provisioning_receiver()
+        original=self.history.disabled_records;calls=[0]
+        def late(*args):
+            records=original(*args);calls[0]+=1
+            if calls[0]==2:records['current/index.tsv']=b'format\t1\n'
+            return records
+        with patch.object(self.history,'disabled_records',late),self.assertRaises(ValueError):
+            self.history.create_seed(proposal,digest,*inputs)
+        self.assertEqual(self.provision_calls,[])
+        self.assertFalse(getattr(self.history,'initial_pending',False))
+
 if __name__=='__main__':unittest.main()

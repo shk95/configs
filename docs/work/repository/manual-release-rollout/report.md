@@ -187,7 +187,7 @@ A complete observer requires the preserved exact planned head. Full tree identit
 rejects hidden empty subtrees. Independent maintainer approval remains a caller
 precondition, not a digest-equality claim or a deployed operator action.
 
-Local Python 3.13: 27 disposable-Git/fake-endpoint cases passed in 67.789s,
+Initial local Python 3.13: 27 disposable-Git/fake-endpoint cases passed in 67.789s,
 including lost seed/ref responses, unknown write fences, complete tree and exact
 head refusals. Independent native/current-head CI remains the delivery gate; its
 receipts belong to this increment's source PR. No actual
@@ -196,3 +196,14 @@ bootstrap, writer enablement or manual/scheduled operation is performed. AC1-AC6
 remain pending. Read-only parallel preparation identified remaining initializer
 identity/private review, production planner/refresh/object publisher and actual
 operating receipt dependencies; root owns their serial continuation.
+
+Final source also performs complete prospective original-record replay before the
+seed write, then rebinds the exact private review and full absence observations.
+The prospective local commit is validation only, never original remote history.
+Every object write reauthenticates source/runtime and full refs; a malformed
+original projection refuses before even the seed creation attempt.
+
+Final local Python 3.13: 28 cases passed in 85.743s after pre-seed replay was
+added. Unknown publication retains its private planned identity in the library
+instance. Durable cross-run attempt receipt handling remains part of the future
+initializer; this library has no deployed rerun or unattended recovery authority.

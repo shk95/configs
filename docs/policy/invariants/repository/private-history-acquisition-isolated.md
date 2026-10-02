@@ -20,3 +20,7 @@ Source-only initial publication retains those guards, verifies a sole original
 root seed and exact complete child tree/commit, and replays original disabled
 records locally before publication. Unknown writes fence effects; seed/ref
 reconciliation observes only and requires the preserved expected child identity.
+
+The library fence is per-instance and cannot certify cross-run recovery; the
+deployed caller must preserve private attempt identity before effects and refuse
+blind retry after replacing an instance.

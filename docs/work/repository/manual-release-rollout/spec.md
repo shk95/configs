@@ -230,8 +230,10 @@ acceptance bars remain unchanged.
 
 Amended 2026-10-02: within unchanged AC1-AC3, root owns the source-only
 seed/ref library after initial-proposal delivery. Retain the same authenticated
-entry/workflow/actor configuration guards. A fixed-path Contents creation is
-attempted once after exact private proposal regeneration; its response is not
+entry/workflow/actor configuration guards. Complete prospective original-record replay precedes even the seed write; its
+local validation commit is never remote history proof. A fixed-path Contents
+creation is attempted once after exact private proposal regeneration and renewed
+full absence observations; its response is not
 proof. Full fixed HTTPS ref observations and complete original objects must prove
 one root default commit with the sole regular seed blob and exact digest grammar.
 
@@ -256,3 +258,8 @@ weaken the existing same-entry guard or adopt new endpoint/credential authority
 implicitly. These followups require reviewed dated contracts before implementation.
 Actual source promotion, private bootstrap/permission/isolation, domain evidence,
 manual recovery/notification and scheduled receipts remain separate gates.
+
+Amended 2026-10-02: AC1-AC3 retain their bars. The library's pending fence is
+per-instance only. Future initializer design must persist the exact private attempt
+identity before effects and reject a fresh publish after an uncertain prior run.
+A new instance, failed Actions job or empty ref observation cannot authorize retry.

@@ -1,4 +1,4 @@
-"""Trusted private Git acquisition and disabled proposals; no deployed writer CLI."""
+"""Trusted original history and disabled provisioning; no deployed writer CLI."""
 # INV repository/authenticated-release-transport
 # INV repository/private-history-acquisition-isolated
 import base64
@@ -419,11 +419,48 @@ class GitHistory:
                 'request':request,'transcript':transcript},L.approved(approved),head,scratch)
             T.need(result=={'outcome':'stopped','proposed':0},'unsafe-initial-replay')
 
+    def _initial_date(self):
+        date=self.entry.api.run(self.entry.runtime['run'],self.entry.runtime['attempt']).get('run_started_at')
+        T.need(isinstance(date,str) and re.fullmatch(r'\d{4}-\d\d-\d\dT\d\d:\d\d:\d\dZ',date),'missing-initial-time')
+        return date
+
+    def _local_initial(self,records,parent,date):
+        """Prospective local bytes only; never substitute these for remote proof."""
+        index=self.scratch/'initial.index'
+        env=dict(self.base,GIT_INDEX_FILE=str(index),GIT_AUTHOR_NAME='Release controller',
+            GIT_AUTHOR_EMAIL='release-controller@example.invalid',GIT_COMMITTER_NAME='Release controller',
+            GIT_COMMITTER_EMAIL='release-controller@example.invalid')
+        env.update(GIT_AUTHOR_DATE=date,GIT_COMMITTER_DATE=date)
+        self.run(['-C',str(self.repo),'read-tree']+([parent] if parent else ['--empty']),env)
+        rows=[]
+        for path,data in sorted(records.items()):
+            # Local stdin is bounded original data, never a credential.
+            result=subprocess.run([self.git]+self.options+['-C',str(self.repo),'hash-object','-w','--stdin'],
+                input=data,env=self.base,capture_output=True,timeout=30)
+            T.need(result.returncode==0,'initial-local-blob-refused')
+            blob=result.stdout.decode().strip();T.need(blob==T.git_object('blob',data),'initial-local-blob-mismatch')
+            self.run(['-C',str(self.repo),'update-index','--add','--cacheinfo','100644',blob,path],env)
+            rows.append({'path':path,'mode':'100644','type':'blob','sha':blob})
+        tree=self.run(['-C',str(self.repo),'write-tree'],env,True).decode().strip();T.sha(tree)
+        message=b'disabled release initial records\n'
+        result=subprocess.run([self.git]+self.options+['-C',str(self.repo),'commit-tree',tree]+(['-p',parent] if parent else []),
+            input=message,env=env,capture_output=True,timeout=30)
+        T.need(result.returncode==0,'initial-local-commit-refused')
+        planned=result.stdout.decode().strip();T.sha(planned)
+        T.need(tree==initial_tree(records),'initial-local-tree-mismatch')
+        return tree,planned,rows
+
     def create_seed(self,proposal,requested_digest,bundle,approved,config,token):
         """One creation attempt. Library caller must supply independent approval."""
         T.need(not getattr(self,'initial_pending',False),'initial-write-fenced')
         seed=self.review_initial(proposal,requested_digest,bundle,approved,config,token)
         value=self._initial_context(proposal,requested_digest)
+        records=self.disabled_records(bundle,approved,config)
+        records[SEED_PATH]=seed
+        _,prospective,_=self._local_initial(records,None,self._initial_date())
+        self._replay_initial(bundle,approved,prospective)
+        # Rebind all review/absence observations after full prospective replay.
+        self.review_initial(proposal,requested_digest,bundle,approved,config,token)
         # Mark pending before the call. A failed observation keeps this object
         # fenced; a later execution may only use observe_initial to reconcile.
         self.initial_pending=True
@@ -441,46 +478,31 @@ class GitHistory:
         T.need(not getattr(self,'initial_pending',False),'initial-write-fenced')
         observed=self.observe_initial(proposal,requested_digest,bundle,approved,config,token)
         seed=observed['seed'];records=self.disabled_records(bundle,approved,config)
-        # Construct and replay the full proposed child locally before any write.
-        index=self.scratch/'initial.index'
-        env=dict(self.base,GIT_INDEX_FILE=str(index),GIT_AUTHOR_NAME='Release controller',
-            GIT_AUTHOR_EMAIL='release-controller@example.invalid',GIT_COMMITTER_NAME='Release controller',
-            GIT_COMMITTER_EMAIL='release-controller@example.invalid')
-        date=self.entry.api.run(self.entry.runtime['run'],self.entry.runtime['attempt']).get('run_started_at')
-        T.need(isinstance(date,str) and re.fullmatch(r'\d{4}-\d\d-\d\dT\d\d:\d\d:\d\dZ',date),'missing-initial-time')
-        env.update(GIT_AUTHOR_DATE=date,GIT_COMMITTER_DATE=date)
-        self.run(['-C',str(self.repo),'read-tree',seed],env)
-        rows=[]
-        for path,data in sorted(records.items()):
-            # Local stdin is bounded original data, never a credential.
-            result=subprocess.run([self.git]+self.options+['-C',str(self.repo),'hash-object','-w','--stdin'],
-                input=data,env=self.base,capture_output=True,timeout=30)
-            T.need(result.returncode==0,'initial-local-blob-refused')
-            blob=result.stdout.decode().strip();T.need(blob==T.git_object('blob',data),'initial-local-blob-mismatch')
-            self.run(['-C',str(self.repo),'update-index','--add','--cacheinfo','100644',blob,path],env)
-            rows.append({'path':path,'mode':'100644','type':'blob','sha':blob})
-        tree=self.run(['-C',str(self.repo),'write-tree'],env,True).decode().strip();T.sha(tree)
-        message=b'disabled release initial records\n'
-        result=subprocess.run([self.git]+self.options+['-C',str(self.repo),'commit-tree',tree,'-p',seed],
-            input=message,env=env,capture_output=True,timeout=30)
-        T.need(result.returncode==0,'initial-local-commit-refused')
-        planned=result.stdout.decode().strip();T.sha(planned)
+        date=self._initial_date()
+        local_records=dict(records)
+        local_records[SEED_PATH]=('format\t1\nproposal\t'+requested_digest+'\n').encode()
+        tree,planned,rows=self._local_initial(local_records,seed,date)
+        rows=[row for row in rows if row['path']!=SEED_PATH]
         self._replay_initial(bundle,approved,planned)
         self._initial_context(proposal,requested_digest)
         T.need(self._initial_git(token,['ls-remote','--refs','@url'],True)==observed['refs'],'moving-initial-refs')
+        # Private recovery identity. A future wrapper must preserve it in its
+        # independently reviewed private attempt receipt before calling effects.
+        self.initial_expected=planned
         self.initial_pending=True
         api=self.entry.api
+        def write(suffix,body):
+            self._initial_context(proposal,requested_digest)
+            T.need(self._initial_git(token,['ls-remote','--refs','@url'],True)==observed['refs'],'moving-initial-refs')
+            return api.call(api.operating,'POST',suffix,body,(201,))
         for row in rows:
             data=records[row['path']]
-            response,_=api.call(api.operating,'POST','/git/blobs',
-                {'content':base64.b64encode(data).decode(),'encoding':'base64'},(201,))
+            response,_=write('/git/blobs',{'content':base64.b64encode(data).decode(),'encoding':'base64'})
             T.need(response.get('sha')==row['sha'],'initial-blob-mismatch')
-        response,_=api.call(api.operating,'POST','/git/trees',
-            {'base_tree':L.git(self.repo,'rev-parse',seed+'^{tree}').decode().strip(),'tree':rows},(201,))
+        response,_=write('/git/trees',{'base_tree':L.git(self.repo,'rev-parse',seed+'^{tree}').decode().strip(),'tree':rows})
         T.need(response.get('sha')==tree,'initial-tree-mismatch')
         tagger={'name':'Release controller','email':'release-controller@example.invalid','date':date}
-        response,_=api.call(api.operating,'POST','/git/commits',
-            {'message':message.decode(),'tree':tree,'parents':[seed],'author':tagger,'committer':tagger},(201,))
+        response,_=write('/git/commits',{'message':'disabled release initial records\n','tree':tree,'parents':[seed],'author':tagger,'committer':tagger})
         T.need(response.get('sha')==planned,'initial-commit-mismatch')
         self._initial_context(proposal,requested_digest)
         T.need(self._initial_git(token,['ls-remote','--refs','@url'],True)==observed['refs'],'moving-initial-refs')
