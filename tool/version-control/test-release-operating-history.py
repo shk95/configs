@@ -193,4 +193,117 @@ class HistoryProof(unittest.TestCase):
         self.fake.head=self.head
         with self.assertRaises(H.T.Refusal):self.acquire(lambda:setattr(self.fake,'attempt',2))
 
+    def proposal_inputs(self):
+        import hashlib,shutil
+        f=self.fixture.fixture
+        for name in H.TRANSPORT_FILES:
+            target=f.public/name;target.parent.mkdir(parents=True,exist_ok=True)
+            shutil.copyfile(ROOT.parents[1]/name,target)
+        manifest=f.public/'tool/version-control/release-transport.manifest.tsv'
+        manifest.write_text('format\t1\n'+''.join('file\t'+name+'\t'+hashlib.sha256((f.public/name).read_bytes()).hexdigest()+'\n' for name in H.TRANSPORT_FILES))
+        F.F.run_git(f.public,'add','.')
+        F.F.run_git(f.public,'commit','-qm','chore(repository): fixture initial proposal source')
+        source=F.F.run_git(f.public,'rev-parse','HEAD')
+        self.fake.source=source;self.fixture.trusted['source']=source;self.fixture.runtime['source']=source
+        entry=H.T.Entry(self.api,self.fixture.trusted,self.fixture.runtime)
+        self.history=H.GitHistory(entry,22);self.addCleanup(self.history.close)
+        self.fake.responses[('GET','/repos/fixture/operating')]=self.fake.response(
+            {'id':22,'private':True,'full_name':'fixture/operating','default_branch':'main'})
+        return (f.public,F.F.encode(dict(f.packages['3'],master=source)),H.L.encode_index(dict(F.F.CONFIG,enabled='0')),'fixture-token')
+
+    def test_initial_proposal_binds_original_source_records_and_private_review_digest(self):
+        import json
+        inputs=self.proposal_inputs();calls=[]
+        original=self.history.run
+        def absent(args,env,capture=False):
+            if 'CONFIGS_ACQUIRE_TOKEN' not in env:return original(args,env,capture)
+            self.assertEqual(args,['ls-remote','--refs','https://x-access-token@github.com/fixture/operating.git'])
+            calls.append(args);return b''
+        with patch.object(self.history,'run',absent):
+            proposal=self.history.initial_proposal(*inputs)
+            seed=self.history.review_initial(proposal,H.T.digest(proposal),*inputs)
+        value=json.loads(proposal)
+        self.assertEqual(seed,('format\t1\nproposal\t'+H.T.digest(proposal)+'\n').encode())
+        self.assertEqual(value['default-branch'],'main');self.assertFalse(value['enabled'])
+        self.assertIsNone(value['semantic-baseline']);self.assertEqual(len(value['records']),5)
+        self.assertEqual(value['source'],self.fixture.trusted['source'])
+        self.assertEqual(len(calls),4)
+        self.assertFalse(any(method!='GET' for method,_,_ in self.fake.calls))
+        self.assertNotIn(b'fixture-token',proposal)
+
+    def test_initial_ref_absence_never_follows_a_404_or_foreign_ref(self):
+        inputs=self.proposal_inputs()
+        for output in (b'a'*40+b'\trefs/tags/foreign\n',b'unknown',b'\n'):
+            with patch.object(self.history,'run',return_value=output),self.assertRaises(H.T.Refusal):
+                self.history.initial_proposal(*inputs)
+        with patch.object(self.history,'run',side_effect=H.T.Refusal('private-git-refused')),self.assertRaises(H.T.Refusal):
+            self.history.initial_proposal(*inputs)
+        self.fake.responses[('GET','/repos/fixture/operating')]=self.fake.response({},404)
+        with patch.object(self.history,'run') as run,self.assertRaises(H.T.Refusal):
+            self.history.initial_proposal(*inputs)
+        run.assert_not_called()
+
+    def test_initial_moving_refs_default_branch_and_runtime_refuse(self):
+        inputs=self.proposal_inputs()
+        with patch.object(self.history,'run',side_effect=[b'',b'a'*40+b'\trefs/heads/main\n']),self.assertRaises(H.T.Refusal):
+            self.history.initial_proposal(*inputs)
+        def moving(args,env,capture=False):
+            self.fake.responses[('GET','/repos/fixture/operating')]=self.fake.response(
+                {'id':22,'private':True,'full_name':'fixture/operating','default_branch':'other'})
+            return b''
+        with patch.object(self.history,'run',moving),self.assertRaises(H.T.Refusal):
+            self.history.initial_proposal(*inputs)
+        self.fake.attempt=2
+        with patch.object(self.history,'run') as run,self.assertRaises(H.T.Refusal):self.history.initial_proposal(*inputs)
+        run.assert_not_called()
+
+    def test_review_recomputes_config_actor_source_and_exact_bytes(self):
+        import json
+        inputs=self.proposal_inputs()
+        with patch.object(self.history,'run',return_value=b''):
+            proposal=self.history.initial_proposal(*inputs)
+            with self.assertRaises(H.T.Refusal):self.history.review_initial(proposal,'0'*64,*inputs)
+            value=json.loads(proposal);value['actor']=99
+            changed=H.T.canonical(value)
+            for altered in (changed,proposal+b'\n'):
+                with self.assertRaises(H.T.Refusal):self.history.review_initial(altered,H.T.digest(altered),*inputs)
+            changed_config=inputs[2].replace(b'checks\t',b'checks\tforeign-')
+            with self.assertRaises(H.T.Refusal):
+                self.history.review_initial(proposal,H.T.digest(proposal),inputs[0],inputs[1],changed_config,inputs[3])
+            for key,value in (('workflow','99'),('actors','3,99')):
+                fields=dict(F.F.CONFIG,enabled='0');fields[key]=value
+                with self.subTest(key=key),self.assertRaises(H.T.Refusal):
+                    self.history.initial_proposal(inputs[0],inputs[1],H.L.encode_index(fields),inputs[3])
+
+    def test_incomplete_transport_and_unsupported_default_refuse_before_git_transport(self):
+        inputs=self.proposal_inputs()
+        for branch in ('operations','feature/other','main..other',''):
+            self.fake.responses[('GET','/repos/fixture/operating')]=self.fake.response(
+                {'id':22,'private':True,'full_name':'fixture/operating','default_branch':branch})
+            with patch.object(self.history,'run') as run,self.assertRaises(H.T.Refusal):self.history.initial_proposal(*inputs)
+            run.assert_not_called()
+        self.fake.responses[('GET','/repos/fixture/operating')]=self.fake.response(
+            {'id':22,'private':True,'full_name':'fixture/operating','default_branch':'main'})
+        public=inputs[0];manifest=public/'tool/version-control/release-transport.manifest.tsv'
+        manifest.write_bytes(b'\n'.join(manifest.read_bytes().splitlines()[:-1])+b'\n')
+        F.F.run_git(public,'add','.');F.F.run_git(public,'commit','-qm','chore(repository): fixture incomplete closure')
+        source=F.F.run_git(public,'rev-parse','HEAD')
+        self.fake.source=source;self.fixture.trusted['source']=source;self.fixture.runtime['source']=source
+        self.history.entry=H.T.Entry(self.api,self.fixture.trusted,self.fixture.runtime)
+        with patch.object(self.history,'run') as run,self.assertRaises(H.T.Refusal):self.history.initial_proposal(*inputs)
+        run.assert_not_called()
+
+    def test_native_full_ref_advertisement_distinguishes_empty_from_any_ref(self):
+        repo=self.history.scratch/'empty-advertisement.git'
+        self.history.run(['init','--bare','--template='+str(self.history.empty),str(repo)],self.history.base)
+        env=dict(self.history.base,GIT_ALLOW_PROTOCOL='file')
+        command=[self.history.git]+self.history.options+['-c','protocol.file.allow=always']
+        result=subprocess.run(command+['ls-remote','--refs',str(repo)],env=env,capture_output=True,timeout=30)
+        self.assertEqual(result.returncode,0);self.assertEqual(result.stdout,b'')
+        subprocess.run(command+['-C',str(repo),'fetch','--no-tags',str(self.fixture.fixture.operating),
+            self.head+':refs/tags/foreign'],env=env,check=True,stdout=subprocess.DEVNULL,stderr=subprocess.DEVNULL,timeout=30)
+        result=subprocess.run(command+['ls-remote','--refs',str(repo)],env=env,capture_output=True,timeout=30)
+        self.assertEqual(result.returncode,0)
+        self.assertEqual(result.stdout,(self.head+'\trefs/tags/foreign\n').encode())
+
 if __name__=='__main__':unittest.main()

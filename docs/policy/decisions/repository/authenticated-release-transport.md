@@ -115,3 +115,21 @@ A disabled initial-record proposal uses the verified original package's empty
 projection, remains source-bound and selects no domain semantic baseline. Actual
 seed/ref publication, provisioning workflow, reviewed private proposal and complete
 manual/scheduled operating evidence remain separate unfinished deliveries.
+
+## Private initial proposal review
+
+Amended 2026-10-02: before initial seed publication, the isolated acquisition
+helper may observe the selected repository's complete ref advertisement through
+its existing fixed GitHub HTTPS/askpass credential boundary. Only successful empty
+full advertisements repeated around credential-free original-package projection
+are absent-ref observations. Failed/404, existing or moving observations refuse.
+This is not an atomic reservation, bootstrap approval or write receipt.
+
+Canonical private proposal bytes bind observed source, repository identities/default
+branch, complete transport closure, exact original package assertion,
+Environment/workflow/job/actor and disabled/stopped record identities. Review
+requires exact requested digest and fresh byte-for-byte recomputation; equality
+never grants maintainer approval. No private proposal is emitted to public logs or
+artifacts and no request selects an endpoint or seed path. The fixed seed grammar
+binds only its proposal digest. Seed/ref effects, initializer deployment, actual
+permissions and independent approval remain separate gates.

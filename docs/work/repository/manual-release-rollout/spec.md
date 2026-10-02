@@ -198,3 +198,30 @@ complete provisioning path. Fixed-path seed/ref publication, private proposal
 review, initialization workflow and actual HTTPS/permission/isolation proof remain
 subsequent source/operating obligations. AC1-AC6 retain their original criteria and
 pending states; no source-only projection selects a semantic bootstrap baseline.
+
+## Initial proposal library increment, 2026-10-02
+
+Amended 2026-10-02: within unchanged AC1-AC3, root owns a read-only initial
+proposal source increment before seed/ref publication. Independently authenticate
+selected private identity, actual sole job and accepted master, then observe the
+default branch and full Git ref advertisement twice around original-package
+projection. A successful empty advertisement is an absence observation; 404,
+failed Git, any ref, changed default/source/runtime or unsupported branch refuses.
+Empty observations are not atomic reservations or permission receipts.
+
+Canonical private review bytes bind verified complete six-file transport manifest,
+exact approved package assertion bytes, source, public/private numeric identities,
+Environment/workflow/job/actor, observed default branch, fixed seed path,
+operations ref and all five disabled/stopped record hashes, Git blob identities
+and sizes. A separately authenticated later review rerun recomputes the same
+bindings; no run identifier freezes the proposal. Exact requested digest and
+byte-for-byte regeneration are required, never an assertion of independent
+maintainer approval. Private proposal bytes stay outside public source/logs/artifacts.
+
+One repository PR carries this library, source/native fixtures and report. No CLI,
+workflow, Contents PUT, Git object/ref publication or operating enablement is added.
+The fixed seed grammar is format=1 and proposal=<64 lowercase hex digest> at
+release-initial-proposal.tsv. Seed/ref writing, original seed verification, lost
+write acknowledgement reconciliation and initializer isolation remain subsequent
+source deliveries. No domain baseline is selected and all existing manual/scheduled
+acceptance bars remain unchanged.

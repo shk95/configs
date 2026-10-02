@@ -26,6 +26,10 @@ MAX_OUTPUT=1024*1024
 MAX_DISK=128*1024*1024
 MAX_FILES=20000
 TIMEOUT=120
+TRANSPORT_FILES=tuple(sorted('tool/version-control/'+name for name in (
+    'release-control-loader.py','release-transport','release-transport.py',
+    'release-transport-retained.py','release-transport-preflight.py','release-operating-history.py')))
+SEED_PATH='release-initial-proposal.tsv'
 
 ASKPASS='''import os,sys
 prompt=sys.argv[1] if len(sys.argv)==2 else ''
@@ -79,6 +83,7 @@ class GitHistory:
         value=self.entry.api.repository(self.entry.api.operating)
         T.need(type(value.get('id')) is int and value.get('id')==self.repository_id and value.get('private') is True
                and value.get('full_name')==self.entry.api.operating,'wrong-private-repository')
+        return value
 
     def close(self):
         self.temporary.cleanup()
@@ -184,6 +189,87 @@ class GitHistory:
                and api.ref('heads/operations',api.operating)==head
                and api.ref('heads/master')==self.entry.trusted['source'],'moving-acquisition-context')
         return self.repo
+
+    def initial_proposal(self,bundle,approved,config,token):
+        """Private review bytes only. No seed, ref, bootstrap or approval effect."""
+        T.need(isinstance(token,str) and token and token.isascii()
+               and not any(c.isspace() or ord(c)<33 or ord(c)==127 for c in token),'invalid-acquisition-credential')
+        api=self.entry.api
+        def context():
+            T.Entry(api,self.entry.trusted,self.entry.runtime)
+            metadata=self.private_identity()
+            jobs=api.jobs(self.entry.runtime['run'],self.entry.runtime['attempt'])
+            T.need(len(jobs)==1 and jobs[0].get('id')==self.entry.runtime['job']
+                   and api.ref('heads/master')==self.entry.trusted['source'],'moving-proposal-context')
+            branch=metadata.get('default_branch')
+            # A conservative supported subset; an unsupported default requires
+            # replanning, never a request-supplied branch or URL.
+            T.need(isinstance(branch,str) and re.fullmatch(r'[A-Za-z0-9_-][A-Za-z0-9_-]{0,99}',branch)
+                   and branch!='operations','unsupported-initial-default')
+            return branch
+        branch=context()
+        source=self.entry.trusted['source']
+        L.verify_graphs(bundle,[source])
+        manifest=L.git(bundle,'show',source+':tool/version-control/release-transport.manifest.tsv')
+        rows=manifest.decode('ascii').splitlines()
+        T.need(manifest.endswith(b'\n') and rows and rows[0]=='format\t1','invalid-initial-transport')
+        names=[]
+        for row in rows[1:]:
+            fields=row.split('\t')
+            T.need(len(fields)==3 and fields[0]=='file' and fields[1] in TRANSPORT_FILES
+                   and re.fullmatch('[a-f0-9]{64}',fields[2]),'invalid-initial-transport')
+            names.append(fields[1])
+            T.need(T.digest(L.git(bundle,'show',source+':'+fields[1]))==fields[2],'initial-transport-mismatch')
+        T.need(tuple(names)==TRANSPORT_FILES,'incomplete-initial-transport')
+        # Full refs advertisement, not an API 404, establishes this observation.
+        # Git owns the same isolated credential boundary as original acquisition.
+        helper=self.scratch/'askpass.py';helper.write_text(ASKPASS)
+        launcher=self.scratch/'askpass.sh'
+        def quote(value):return "'"+value.replace("'","'\\''")+"'"
+        launcher.write_text('#!/bin/sh\nexec '+quote(sys.executable)+' -I -S -B '+quote(str(helper))+' "$@"\n')
+        launcher.chmod(0o700)
+        url='https://x-access-token@github.com/'+api.operating+'.git'
+        env=dict(self.base,GIT_ALLOW_PROTOCOL='https',GIT_ASKPASS=str(launcher),
+                 CONFIGS_ACQUIRE_TOKEN=token,CONFIGS_ACQUIRE_URL=url)
+        try:
+            T.need(self.run(['ls-remote','--refs',url],env,capture=True)==b'','existing-initial-refs')
+            records=self.disabled_records(bundle,approved,config)
+            fields=L.singletons(config,{'enabled','public-repository','repository','operating-repository',
+                'operating-ref','workflow','actors','checks','protocol'})
+            T.need(fields['workflow']==str(self.entry.trusted['workflow'])
+                   and sorted(map(int,fields['actors'].split(',')))==sorted(self.entry.trusted['actors']),
+                   'foreign-initial-configuration')
+            # Detect refs appearing while the original package is projected.
+            T.need(self.run(['ls-remote','--refs',url],env,capture=True)==b'','moving-initial-refs')
+        finally:
+            env.pop('CONFIGS_ACQUIRE_TOKEN',None)
+        T.need(context()==branch,'moving-initial-default')
+        value={'kind':'disabled-initial-proposal','format':1,'source':source,
+            'transport-manifest':T.digest(manifest),'approved':L.approved(approved),
+            'approval-bytes':T.digest(approved),'public-repository':T.PUBLIC,
+            'public-repository-id':self.entry.trusted['repository-id'],
+            'operating-repository':api.operating,'operating-repository-id':self.repository_id,
+            'default-branch':branch,'operations-ref':'refs/heads/operations',
+            'environment':self.entry.trusted['environment'],'workflow':self.entry.trusted['workflow'],
+            'workflow-path':self.entry.trusted['workflow-path'],'job-name':self.entry.trusted['job-name'],
+            'actor':self.entry.runtime['actor'],'seed-path':SEED_PATH,
+            'actors':sorted(self.entry.trusted['actors']),
+            'records':{name:{'digest':T.digest(data),'blob':T.git_object('blob',data),
+                             'size':len(data)} for name,data in sorted(records.items())},
+            'enabled':False,'semantic-baseline':None}
+        proposal=T.canonical(value)
+        T.need(len(proposal)<=MAX_OUTPUT,'initial-proposal-bound')
+        return proposal
+
+    def review_initial(self,proposal,requested_digest,bundle,approved,config,token):
+        """Recompute every binding. Digest matching is not maintainer approval."""
+        T.need(type(proposal) is bytes and len(proposal)<=MAX_OUTPUT
+               and isinstance(requested_digest,str) and re.fullmatch('[a-f0-9]{64}',requested_digest)
+               and T.digest(proposal)==requested_digest,'wrong-initial-review-digest')
+        actual=self.initial_proposal(bundle,approved,config,token)
+        T.need(actual==proposal,'changed-initial-proposal')
+        # Only the digest grammar can be handed to a future fixed-path seed writer.
+        return ('format\t1\nproposal\t'+requested_digest+'\n').encode('ascii')
 
     def disabled_records(self,bundle,approved,config):
         """Original-package empty projection only; no seed/ref or baseline adoption."""
