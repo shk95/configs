@@ -58,3 +58,35 @@ Before that delivery, the finite credential probe runs only from accepted master
 source using release-control, the dedicated token and locator, and the private
 numeric identity in CONFIGS_RELEASE_OPERATING_REPOSITORY_ID. This is read-only
 provisioning evidence, not an operating wrapper or a selected bootstrap.
+
+## Private history and empty-repository boundary, 2026-10-02
+
+At dev 5e5c3bc, Journal requires an existing operations head and Snapshot requires
+complete local original Git objects. The published ownership/inspector increment
+still supplies neither private transfer nor initial records. REST commit metadata
+alone cannot be assumed to reproduce arbitrary original signed commit bytes.
+Choose a separate narrowly isolated trusted Git acquisition process, with the
+credential boundary reviewed before source implementation and no worktree checkout.
+
+GitHub's Git references documentation explicitly refuses creating a ref in an
+empty repository, even when the object exists:
+https://docs.github.com/en/rest/git/refs#create-a-reference
+The Contents API documents create-file PUT, an optional branch parameter, fixed
+file contents and Contents write permission:
+https://docs.github.com/en/rest/repos/contents#create-or-update-file-contents
+This supports a separate narrow initialization proposal. Actual empty-repository
+behavior and lost-ack reconciliation must be observed on accepted deployed source;
+the documentation does not establish an actual permission or bootstrap receipt.
+
+Git acquisition must suppress ambient configuration/credentials, templates, hooks,
+redirects/proxies, external protocols, alternates, shallow/promisor/lazy fetching
+and replacement/graft interpretations. Original Git object identity and verified
+complete history remain loader inputs; no REST-based synthetic history conversion
+is accepted. The Git documentation supplies the fetch/config mechanisms:
+https://git-scm.com/docs/git-fetch
+https://git-scm.com/docs/git-config
+
+Root reviewed these source/design constraints against the current loader/Journal
+and official API/Git documents. AC1-AC6 remain pending; the private connection,
+bootstrap proposal digest, operating source pins and permission receipts remain
+private unresolved deployment inputs. No initial seed or record was written.

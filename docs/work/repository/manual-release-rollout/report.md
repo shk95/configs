@@ -52,3 +52,15 @@ wrapper, bootstrap, mutation permission, dispatch or enablement is certified her
 | AC5 | pending | |
 | AC6 | pending | |
 | AC7 | verified | Fixtures: 16 local Python 3.13 fake-endpoint cases; policy checks: normal 8140a29 source commit full suite and registry/secret checks passed; review: root examined exact workflow/GET-only client and privacy boundary at 8140a29. Actual token/ref/isolation proof remains AC3, with native/current-head CI a separate Ready gate. |
+
+## Private-history/provisioning design review, 2026-10-02
+
+Root read the current loader and Journal at dev 5e5c3bc and the official GitHub
+Git refs/Contents plus Git fetch/config documentation cited in study.md. The dated
+amendment separates original private object acquisition from disabled initial
+records and routine journal effects. Existing acquisition/bootstrap gaps are real:
+no complete private Git object transfer or initial head currently exists. The
+narrow initialization proposal introduces no actual write, selected semantic
+baseline, permission receipt or operating authority. Source fixtures, native
+Git-for-Windows and actual accepted-source deployment still remain independent
+requirements; AC1-AC6 retain their pending states and original acceptance bars.
