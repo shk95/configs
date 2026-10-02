@@ -133,3 +133,26 @@ never grants maintainer approval. No private proposal is emitted to public logs 
 artifacts and no request selects an endpoint or seed path. The fixed seed grammar
 binds only its proposal digest. Seed/ref effects, initializer deployment, actual
 permissions and independent approval remain separate gates.
+
+## Source-only initial publication
+
+Amended 2026-10-02: the trusted history library may implement the previously
+reviewed fixed Contents seed and Git object/operations-ref sequence while preserving
+its current authenticated entry/configuration guards. No deployed entry or actual
+approval is introduced. The seed binds the privately reviewed digest; complete
+original root/tree/sole-blob verification, not REST response metadata, proves it.
+Original disabled records undergo full local retained replay before any seed
+write and again before child publication.
+The child preserves the seed and is compared by complete tree and exact commit
+identity after original acquisition. A pending write fences all further attempts;
+lost seed/ref responses use observation only and unknown object writes do not retry.
+A restarted reconciliation requires its preserved expected commit. This source
+cannot independently review a private proposal, select a baseline or enable a writer.
+
+The fixed Contents creation and Git-ref initialization limitations follow the
+GitHub REST documentation for repository contents and Git references. Creating a
+ref requires an initialized repository; the fixed seed is not a generic bypass.
+
+The current library fence is per-instance; a future initializer must durably
+preserve private attempt identity before effects. A fresh instance or failed job
+is no retry authority. Cross-run orchestration is not certified by this library.

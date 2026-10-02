@@ -306,4 +306,178 @@ class HistoryProof(unittest.TestCase):
         self.assertEqual(result.returncode,0)
         self.assertEqual(result.stdout,(self.head+'\trefs/tags/foreign\n').encode())
 
+    def provisioning_receiver(self):
+        import base64
+        inputs=self.proposal_inputs()
+        server=self.history.scratch/'provisioning-server.git'
+        self.history.run(['init','--bare','--template='+str(self.history.empty),str(server)],self.history.base)
+        self.fake.operating=server
+        original_run=self.history.run;original_request=self.fake.request
+        self.provision_flags={};self.provision_calls=[]
+        def run(args,env,capture=False):
+            if 'CONFIGS_ACQUIRE_TOKEN' not in env:return original_run(args,env,capture)
+            local=[str(server) if arg=='https://x-access-token@github.com/fixture/operating.git' else arg for arg in args]
+            result=subprocess.run([self.history.git]+self.history.options+['-c','protocol.file.allow=always']+local,
+                env=dict(self.history.base,GIT_ALLOW_PROTOCOL='file'),capture_output=True,timeout=30)
+            H.T.need(result.returncode==0,'fixture-private-git-refused')
+            return result.stdout if capture else b''
+        def request(method,path,body):
+            if method=='GET':
+                result=original_request(method,path,body)
+                if path=='/repos/shk95/configs/actions/runs/4/attempts/1':
+                    value=H.T.document(result[2]);value['run_started_at']='2026-10-02T00:00:00Z'
+                    return self.fake.response(value)
+                return result
+            self.provision_calls.append((method,path,body))
+            if self.provision_flags.get('no-effect'):raise H.T.Unknown('fixture-lost-write')
+            if method=='PUT':
+                self.assertEqual(path,'/repos/fixture/operating/contents/'+H.SEED_PATH)
+                self.assertEqual(set(body),{'message','branch','content'});self.assertEqual(body['branch'],'main')
+                data=base64.b64decode(body['content'])
+                blob=H.L.git(server,'hash-object','-w','--stdin',data=data).decode().strip()
+                tree=H.L.git(server,'mktree',data=('100644 blob '+blob+'\t'+H.SEED_PATH+'\n').encode()).decode().strip()
+                env=dict(self.history.base,GIT_AUTHOR_NAME='Fixture',GIT_AUTHOR_EMAIL='fixture@example.invalid',
+                    GIT_COMMITTER_NAME='Fixture',GIT_COMMITTER_EMAIL='fixture@example.invalid')
+                result=subprocess.run([self.history.git,'-C',str(server),'commit-tree',tree],
+                    input=body['message'].encode(),env=env,capture_output=True,check=True)
+                head=result.stdout.decode().strip()
+                H.L.git(server,'update-ref','refs/heads/main',head)
+                result=self.fake.response({'commit':{'sha':head}},201)
+                if self.provision_flags.get('lose-seed'):raise H.T.Unknown('fixture-lost-seed')
+                return result
+            if path=='/repos/fixture/operating/git/commits':
+                env=dict(self.history.base)
+                for kind,field in (('AUTHOR','author'),('COMMITTER','committer')):
+                    for suffix,key in (('NAME','name'),('EMAIL','email'),('DATE','date')):
+                        env['GIT_'+kind+'_'+suffix]=body[field][key]
+                result=subprocess.run([self.history.git,'-C',str(server),'commit-tree',body['tree'],'-p',body['parents'][0]],
+                    input=body['message'].encode(),env=env,capture_output=True,check=True)
+                return self.fake.response({'sha':result.stdout.decode().strip()},201)
+            if path=='/repos/fixture/operating/git/refs':
+                self.assertEqual(body['ref'],'refs/heads/operations')
+                H.L.git(server,'update-ref','refs/heads/operations',body['sha'],'0'*40)
+                self.fake.head=body['sha']
+                if self.provision_flags.get('lose-ref'):raise H.T.Unknown('fixture-lost-ref')
+                return self.fake.response({'ref':body['ref'],'object':{'type':'commit','sha':body['sha']}},201)
+            return original_request(method,path,body)
+        self.run_patch=patch.object(self.history,'run',run);self.run_patch.start();self.addCleanup(self.run_patch.stop)
+        self.request_patch=patch.object(self.fake,'request',request);self.request_patch.start();self.addCleanup(self.request_patch.stop)
+        proposal=self.history.initial_proposal(*inputs)
+        return proposal,H.T.digest(proposal),inputs,server
+
+    def test_initial_seed_and_operations_are_original_verified_disabled_and_replayed(self):
+        proposal,digest,inputs,server=self.provisioning_receiver()
+        seed=self.history.create_seed(proposal,digest,*inputs)
+        self.assertIsNone(seed['head'])
+        result=self.history.publish_initial(proposal,digest,*inputs)
+        self.assertNotEqual(result['head'],result['seed'])
+        self.assertFalse(self.history.initial_pending)
+        self.assertEqual(H.L.git(server,'rev-list','--count',result['head']).strip(),b'2')
+        self.assertEqual(len([x for x in self.provision_calls if x[0]=='PUT']),1)
+        before=len(self.provision_calls)
+        self.history.observe_initial(proposal,digest,*inputs,complete=True,expected_head=result['head'])
+        self.assertEqual(len(self.provision_calls),before)
+        with self.assertRaises(H.T.Refusal):self.history.publish_initial(proposal,digest,*inputs)
+        self.assertEqual(len(self.provision_calls),before)
+
+    def test_lost_seed_and_ref_acknowledgements_reconcile_without_repeated_writes(self):
+        proposal,digest,inputs,server=self.provisioning_receiver()
+        self.provision_flags.update({'lose-seed':True,'lose-ref':True})
+        self.history.create_seed(proposal,digest,*inputs)
+        self.history.publish_initial(proposal,digest,*inputs)
+        self.assertEqual(len([x for x in self.provision_calls if x[0]=='PUT']),1)
+        self.assertEqual(len([x for x in self.provision_calls if x[1].endswith('/git/refs')]),1)
+
+    def test_unknown_unobserved_seed_fences_and_never_retries(self):
+        proposal,digest,inputs,server=self.provisioning_receiver()
+        self.provision_flags['no-effect']=True
+        with self.assertRaises(H.T.Refusal):self.history.create_seed(proposal,digest,*inputs)
+        self.assertTrue(self.history.initial_pending);self.assertEqual(len(self.provision_calls),1)
+        with self.assertRaises(H.T.Refusal):self.history.create_seed(proposal,digest,*inputs)
+        with self.assertRaises(H.T.Refusal):self.history.publish_initial(proposal,digest,*inputs)
+        self.assertEqual(len(self.provision_calls),1)
+
+    def test_foreign_seed_objects_refs_and_changed_review_refuse_without_followup_writes(self):
+        proposal,digest,inputs,server=self.provisioning_receiver()
+        seed=self.history.create_seed(proposal,digest,*inputs)['seed']
+        before=len(self.provision_calls)
+        H.L.git(server,'update-ref','refs/tags/foreign',seed)
+        with self.assertRaises(H.T.Refusal):self.history.observe_initial(proposal,digest,*inputs)
+        H.L.git(server,'update-ref','-d','refs/tags/foreign')
+        with self.assertRaises(H.T.Refusal):self.history.observe_initial(proposal+b'\n',digest,*inputs)
+        env=dict(self.history.base,GIT_AUTHOR_NAME='Fixture',GIT_AUTHOR_EMAIL='fixture@example.invalid',
+            GIT_COMMITTER_NAME='Fixture',GIT_COMMITTER_EMAIL='fixture@example.invalid')
+        tree=H.L.git(server,'rev-parse',seed+'^{tree}').decode().strip()
+        child=subprocess.run([self.history.git,'-C',str(server),'commit-tree',tree,'-p',seed],
+            input=b'foreign\n',env=env,capture_output=True,check=True).stdout.decode().strip()
+        H.L.git(server,'update-ref','refs/heads/main',child)
+        with self.assertRaises(H.T.Refusal):self.history.observe_initial(proposal,digest,*inputs)
+        self.assertEqual(len(self.provision_calls),before)
+
+    def test_invalid_original_local_replay_prevents_all_operations_writes(self):
+        proposal,digest,inputs,server=self.provisioning_receiver()
+        self.history.create_seed(proposal,digest,*inputs)
+        before=len(self.provision_calls)
+        original=self.history.disabled_records
+        def invalid(*args):
+            records=original(*args);records['current/index.tsv']=b'format\t1\n';return records
+        # Preserve proposal regeneration; corrupt only the subsequent local child.
+        calls=[0]
+        def late(*args):
+            calls[0]+=1
+            return original(*args) if calls[0]==1 else invalid(*args)
+        with patch.object(self.history,'disabled_records',late),self.assertRaises(ValueError):
+            self.history.publish_initial(proposal,digest,*inputs)
+        self.assertEqual(len(self.provision_calls),before)
+
+    def test_complete_tree_rejects_hidden_empty_subtree(self):
+        proposal,digest,inputs,server=self.provisioning_receiver()
+        seed=self.history.create_seed(proposal,digest,*inputs)['seed']
+        empty=H.L.git(server,'mktree',data=b'').decode().strip()
+        original=H.L.git(server,'ls-tree',seed)
+        tree=H.L.git(server,'mktree',data=b'040000 tree '+empty.encode()+b'\tforeign\n'+original).decode().strip()
+        env=dict(self.history.base,GIT_AUTHOR_NAME='Fixture',GIT_AUTHOR_EMAIL='fixture@example.invalid',
+            GIT_COMMITTER_NAME='Fixture',GIT_COMMITTER_EMAIL='fixture@example.invalid')
+        root=subprocess.run([self.history.git,'-C',str(server),'commit-tree',tree],input=b'foreign root\n',
+            env=env,capture_output=True,check=True).stdout.decode().strip()
+        H.L.git(server,'update-ref','refs/heads/main',root)
+        H.L.git(self.history.repo,'update-ref','-d','refs/heads/initial-seed')
+        before=len(self.provision_calls)
+        with self.assertRaisesRegex(H.T.Refusal,'foreign-initial-seed'):
+            self.history.observe_initial(proposal,digest,*inputs)
+        self.assertEqual(len(self.provision_calls),before)
+
+    def test_complete_observation_requires_preserved_exact_head(self):
+        proposal,digest,inputs,server=self.provisioning_receiver()
+        self.history.create_seed(proposal,digest,*inputs)
+        result=self.history.publish_initial(proposal,digest,*inputs)
+        before=len(self.provision_calls)
+        with self.assertRaises(H.T.Refusal):self.history.observe_initial(proposal,digest,*inputs,complete=True)
+        with self.assertRaisesRegex(H.T.Refusal,'conflicting-initial-head'):
+            self.history.observe_initial(proposal,digest,*inputs,complete=True,expected_head='a'*40)
+        self.assertEqual(len(self.provision_calls),before)
+
+    def test_unknown_object_write_fences_ref_creation_and_retry(self):
+        proposal,digest,inputs,server=self.provisioning_receiver()
+        self.history.create_seed(proposal,digest,*inputs)
+        self.provision_flags['no-effect']=True
+        with self.assertRaises(H.T.Unknown):self.history.publish_initial(proposal,digest,*inputs)
+        count=len(self.provision_calls)
+        self.assertTrue(self.history.initial_pending)
+        self.assertFalse(any(x[1].endswith('/git/refs') for x in self.provision_calls))
+        with self.assertRaises(H.T.Refusal):self.history.publish_initial(proposal,digest,*inputs)
+        self.assertEqual(len(self.provision_calls),count)
+
+    def test_invalid_original_replay_prevents_seed_write_too(self):
+        proposal,digest,inputs,server=self.provisioning_receiver()
+        original=self.history.disabled_records;calls=[0]
+        def late(*args):
+            records=original(*args);calls[0]+=1
+            if calls[0]==2:records['current/index.tsv']=b'format\t1\n'
+            return records
+        with patch.object(self.history,'disabled_records',late),self.assertRaises(ValueError):
+            self.history.create_seed(proposal,digest,*inputs)
+        self.assertEqual(self.provision_calls,[])
+        self.assertFalse(getattr(self.history,'initial_pending',False))
+
 if __name__=='__main__':unittest.main()

@@ -330,3 +330,8 @@ selected default branch, exact source/transport/original package and disabled re
 identities to private review bytes and a regenerated digest. It supplies no approval
 or seed/ref effect. Actual private HTTPS, initializer, provisioning and full manual
 writer/recovery gates remain pending (INV repository/private-history-acquisition-isolated).
+
+The source-only initial provisioning library adds guarded seed creation, complete
+original seed/tree/child verification and observation-only acknowledgement
+reconciliation. Deployed initializer/private review, full writer/refresh and actual
+operating bootstrap/manual/scheduled evidence remain pending.

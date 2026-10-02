@@ -1218,3 +1218,19 @@ certify real HTTPS/permission or provisioning behavior. Read-only transport
 preflight recognizes exact historical five-file and current six-file inventories.
 Keep seed/ref publication, reviewed private bootstrap and actual initializer/writer
 isolation separate from the disabled original-package empty-record projection.
+
+The source-only provisioning library retains the existing authenticated entry
+configuration guards. Before any seed/ref invocation, its caller must independently
+review the private proposal and retain its exact digest outside public logs/artifacts.
+Digest regeneration checks identity; it does not supply that review. A seed Contents
+creation is attempted once, then original Git objects and complete refs establish
+the result. All five disabled/stopped records undergo local original-package replay before
+the seed write and again before an operations child is published. A pending/unknown write refuses further
+effects. Recover by observation only, retaining the exact planned child identity
+for complete reconciliation; never rerun a failed publication as a blind retry.
+There is still no deployed provisioning command or writer. Actual private review,
+HTTPS/permissions, bootstrap and enabled execution remain independent gates.
+
+The library fence is per-instance. A future initializer must durably preserve its
+private attempt identity before effects; replacing the instance or rerunning a failed
+job does not authorize publication. Cross-run receipt handling is not deployed.
