@@ -207,3 +207,20 @@ Final local Python 3.13: 28 cases passed in 85.743s after pre-seed replay was
 added. Unknown publication retains its private planned identity in the library
 instance. Durable cross-run attempt receipt handling remains part of the future
 initializer; this library has no deployed rerun or unattended recovery authority.
+
+## Initial seed delivery and role continuation plan, 2026-10-02
+
+PR #488 delivered the guarded source library at 48dcb63072b1ca8d5e82846453b1f4c473169263.
+Exact-head CI 37006360958 passed; native Windows job 110835511987 ran all 28 cases
+in 233.872s successfully. Normal protected integration produced dev
+b61a4c670b758861e643c09380e8555451c3dd9f; post-merge CI 37009274154 and work closure
+37009274156 passed. These are source/native fixture and policy receipts, not private
+HTTPS, actual initialization or operating acceptance. AC1-AC6 remain pending.
+
+Root prepared the dated desired-proposal/distinct-role continuation contract from
+that accepted source. The next coherent source increment binds desired private
+review inputs separately from authenticated initializer and writer identities,
+preserves old proposal/transport readers and reconstructs new planned commits from
+an original-source timestamp. Implementation and its exact-head/native receipts
+remain pending. No private input is invented, no runtime Entry is simulated for an
+operator, and no deployed wrapper or durable cross-run effect authority is claimed.
