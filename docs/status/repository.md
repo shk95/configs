@@ -335,3 +335,11 @@ The source-only initial provisioning library adds guarded seed creation, complet
 original seed/tree/child verification and observation-only acknowledgement
 reconciliation. Deployed initializer/private review, full writer/refresh and actual
 operating bootstrap/manual/scheduled evidence remain pending.
+
+
+The desired-review source library distinguishes unauthenticated format-2 private
+assertions from legacy authenticated format-1 effects. A seventh transport file
+binds separate source roles; writer remains disabled and no initializer workflow
+is installed. Original-source timestamp reconstruction does not persist an attempt
+or certify cross-run recovery. Actual role-aware initialization, production writer
+and operating evidence remain pending.

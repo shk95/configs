@@ -156,3 +156,31 @@ ref requires an initialized repository; the fixed seed is not a generic bypass.
 The current library fence is per-instance; a future initializer must durably
 preserve private attempt identity before effects. A fresh instance or failed job
 is no retry authority. Cross-run orchestration is not certified by this library.
+
+## Desired review and distinct source roles
+
+Amended 2026-10-02: credential-free preparation may verify original public
+transport/package bytes and project a desired disabled private proposal. Such
+format-2 bytes explicitly carry authenticated=false and desired identity assertions;
+they grant neither runtime entry nor independent approval. Legacy format-1
+regeneration and publication keep their original same-entry contract. Desired
+format-2 bytes cannot enter those effects.
+
+The exact current transport inventory includes release-operating-roles.json as its
+seventh file. Its canonical declarations bind separate initializer and writer
+paths/jobs/Environments/actor sets. Current writer declaration describes only the
+disabled writer-preflight job with no Environment. The initializer declaration is
+future source: absence of its original workflow blob refuses actual role observation.
+Metadata must independently bind current numeric workflow identity to its fixed
+filename and complete accepted-source blob. A declaration or metadata/blob match
+never proves deployed job/credential/endpoint isolation. No enabled workflow, new
+credential, endpoint class or initializer mode is installed by this library.
+
+Desired projection uses the initializer actor in the stopped record and only the
+writer actor set/workflow in disabled config. New planned child identities use the
+original source committer epoch expressed in UTC; original source identity binds
+that epoch, not a current run's clock. Pure reconstruction never proves a remote
+commit or persists a durable effect receipt. Original five/six-file preflight and
+semantic packages remain readable without reinterpretation. Durable private attempt
+handling, role-aware entry, actual initializer and operating approval remain required
+before new-format effects can be implemented.
