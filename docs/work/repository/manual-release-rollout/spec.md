@@ -186,3 +186,15 @@ isolation, initial writes and later manual cycle remain affected-dispatch gates.
 No provisioning or acquisition executes merely because this amendment is reviewed.
 If the documented API cannot initialize the empty repository as proposed, return
 to planning rather than changing endpoints or using broad gh credentials.
+
+## Private acquisition library increment, 2026-10-02
+
+Amended 2026-10-02: within AC1-AC3, root first delivers the isolated original Git
+acquisition library and verified original-package disabled-record projection,
+including its reviewed six-file transport closure, compatibility inspection and
+native fixture dispatch. The implementation composes the bridge's exact transport
+and loader instances. This is a coherent source increment, not an enabled entry or
+complete provisioning path. Fixed-path seed/ref publication, private proposal
+review, initialization workflow and actual HTTPS/permission/isolation proof remain
+subsequent source/operating obligations. AC1-AC6 retain their original criteria and
+pending states; no source-only projection selects a semantic bootstrap baseline.

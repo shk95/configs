@@ -11,7 +11,8 @@ import sys
 
 FILES=tuple('tool/version-control/'+name for name in (
  'release-control-loader.py','release-transport','release-transport.py',
- 'release-transport-retained.py','release-transport-preflight.py'))
+ 'release-transport-retained.py','release-transport-preflight.py','release-operating-history.py'))
+INVENTORIES={tuple(sorted(FILES)),tuple(sorted(name for name in FILES if not name.endswith('/release-operating-history.py')))}
 FIELDS={'format','transport-source','transport-manifest','operating-repository','operating-ref',
  'environment','connection','repository-id','workflow-id','workflow-path','job-name','actors',
  'approved-master','approved-control','approved-manifest','bootstrap-record','public-evidence',
@@ -39,7 +40,7 @@ def main():
             if kind!='file' or not re.fullmatch('[a-f0-9]{64}',expected):raise ValueError()
             data=subprocess.check_output(command+['show',args.source+':'+name],stderr=subprocess.DEVNULL,env=env)
             if hashlib.sha256(data).hexdigest()!=expected:raise ValueError()
-        if names!=sorted(FILES):raise ValueError()
+        if tuple(names) not in INVENTORIES:raise ValueError()
         def unique(pairs):
             result={}
             for key,value in pairs:

@@ -113,6 +113,7 @@ jobs:
           tool/version-control/test-release-transport
           tool/version-control/test-release-credential-check
           tool/version-control/test-release-inspect
+          tool/version-control/test-release-operating-history
           tool/version-control/test-retired-capture
 
   unix:
