@@ -4,6 +4,7 @@ date: 2026-10-01
 scope: repository
 status: approved
 review-by: 2026-10-15
+issue: #477
 
 ## Outcome and ownership
 
@@ -97,3 +98,19 @@ source completion cannot imply provisioning or enablement.
 | AC4 | Approval/wakeup/stop/resume/timeout/cancel/notification interfaces refuse wrong authority or foreign jobs and preserve fresh stop and old package obligations. | review, fixtures, policy checks, affected dispatch |
 | AC5 | Disabled source/workflow delivery passes isolated Linux/native Windows fake transport proof, documents exact permission and recovery prerequisites, and cannot be mistaken for real operating evidence. | review, fixtures, policy checks, affected dispatch |
 | AC6 | A source-bound manual rollout template names unresolved connection/bootstrap/protection inputs, expected effects and fail-closed prerequisites while actual manual/scheduled parent acceptance stays pending. | review, policy checks |
+
+## Source pickup clarification, 2026-10-01
+
+Root owns this implementation at issue #477, pinned from dev eaf3a394cdf007031d7a5191a6f47287626d1ba3
+and independently reviewed plan revision 970147ef93ca975514fde81555afa1abf18962ff.
+The transport inventory is separate trusted glue; the eight-file retained semantic
+closure and historical protocol1/2/3 implementations remain exact. No live CLI or
+provisioned wrapper is delivered: the operator offers source/template preflight,
+and the tested finite library is the future approved wrapper's interface.
+
+Amended 2026-10-01 AC4, AC5: the actual cancel endpoint is run-wide, so source
+refuses any mixed-job run. A future writer must be its run's sole job; independent
+inspection/wait work runs separately. Fresh exact attempt/job inventories and
+confirmed termination remain required. This narrows supported topology rather than
+waiving foreign-job refusal or claiming an atomic API guard. Disabled workflow
+source, unresolved-input template and fake endpoint proof cannot enable operation.

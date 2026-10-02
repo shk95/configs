@@ -406,6 +406,51 @@ default branch, so the watcher does nothing until this file reaches `master`
 through the next promotion; before that its shell body is run by hand with
 `DRY_RUN=1`.
 
+### Disabled authenticated transport source
+
+`tool/configs release-transport preflight --source <full-reviewed-source-sha>
+--template <manual-inputs.json>` verifies the separate transport source manifest
+and reports unresolved input names. It is read-only and always reports disabled;
+there is no executing/live command flag. `tool/configs doctor repository` and a
+functional `CONFIGS_CONTROLLER_PYTHON` remain prerequisites. `tool/configs test`
+exercises real disposable Git plus fake endpoint proof on Linux and native Git for
+Windows; this does not establish live permissions or production certification.
+
+The future reviewed master/Environment wrapper supplies trusted runtime event and
+bootstrap inputs independently of candidate/request payloads. Match exact source,
+ref, workflow, actor, current run/attempt/job, complete original history and required
+check/workflow/tool blobs. Never pass its token to retained code or candidate code.
+There is no provisioned wrapper, selected connection or enabled workflow yet.
+The library sequence is authenticated Entry, verified retained Snapshot and Journal,
+then one projected operation through Executor. A future wrapper attaches that Entry
+as the HTTPS channel gate only after its independent Environment/bootstrap review.
+Start/claim/planning and bounded wait orchestration remain wrapper responsibilities;
+this source consumes complete durably projected intents. Cancellation is restricted
+to the authenticated entry's own sole job/run; a separate inspector observes terminal
+state before a later writer can recover. Never use an arbitrary owner DTO to cancel.
+
+An outstanding batch keeps its original immutable configuration even when current
+configuration disables new work. Independently observe each owner's actual master
+run source within approved public history; a later loader does not replace an old
+semantic package. Fresh stop and credential revocation remain live exceptions.
+
+Before every effect, confirm durable intent and fresh stop. Unknown write response
+requires observation/reconciliation, not retry; reload full authenticated history
+on changed operating head. Conflicting ref/tag/PR identities fence further effects.
+After promotion, unexpected actual parents/tree stop publication without auto-undo.
+Observe missing tag objects/refs independently and retain successful immutable ones.
+
+GitHub cancel is run-wide: refuse a run containing anything except its exact owner
+job. Provision writer, wait and inspector into separate runs and serialize reruns
+before operating rollout. Recheck attempt/job identities before and after cancel;
+202 or a timeout is not termination or takeover permission. Fresh stop can fence new
+requests but cannot atomically undo an in-flight external write. Reconcile it first.
+
+Actions failure is an authenticated alert-source receipt; actual user notification
+delivery remains manual evidence. Source promotion, operating provisioning/selection,
+bootstrap adoption, dispatch/cancel/ref/merge/tag and enablement require their separate
+R-manual authorization and receipts. Host activation/Apply remain independent.
+
 ## Agent roles and handoff
 
 Use the project skills under .agents/skills/. An unspecified "work on X"

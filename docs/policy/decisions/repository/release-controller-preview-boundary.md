@@ -58,3 +58,8 @@ The source work is described in `docs/work/repository/release-controller/spec.md
 Its parent retains affected-domain and live manual/scheduled obligations. A later
 operating proposal must be reviewed separately rather than turning a preview flag
 into permission to mutate.
+
+2026-10-01: authenticated-release-transport.md adopts a separate trusted transport
+source inventory and credential-free bridge. This preview still emits no external
+effects and every old semantic package remains exact. The new operator interface
+is disabled preflight; actual operating selection/provisioning remains separate.

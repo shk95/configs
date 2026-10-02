@@ -116,7 +116,7 @@ def _extract_verified(repo, assertion, target):
 CONTEXT_FIELDS = ("start", "batch", "master", "control", "manifest", "approval", "protocol",
                   "config-commit", "config", "transcript-commit", "transcript")
 PROJECTION_FIELDS = {"sequence", "prior", "batch", "generation", "stage", "state-digest"}
-STAGES = {"empty", "active", "candidate", "validated", "approved", "promoted", "publishing", "waiting", "blocked", "complete"}
+STAGES = {"empty", "active", "candidate", "validated", "approved", "promoted", "publishing", "waiting", "blocked", "complete", "stopped"}
 
 
 def table(data):
