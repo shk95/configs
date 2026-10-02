@@ -950,3 +950,8 @@ production-map	exact	tool/version-control/release-transport-preflight.py	prod-re
 production-map	exact	tool/version-control/release-transport.manifest.tsv	prod-repository-policy,prod-repository-native
 production-map	exact	tool/version-control/test-release-transport	prod-repository-policy,prod-repository-native
 production-map	exact	tool/version-control/test-release-transport.py	prod-repository-policy,prod-repository-native
+production-map	exact	.github/workflows/release-credential-check.yml	prod-repository-policy,prod-repository-native
+production-map	exact	docs/policy/invariants/repository/operating-credential-qualification.md	prod-repository-policy,prod-repository-native
+production-map	exact	tool/version-control/release-credential-check.py	prod-repository-policy,prod-repository-native
+production-map	exact	tool/version-control/test-release-credential-check	prod-repository-policy,prod-repository-native
+production-map	exact	tool/version-control/test-release-credential-check.py	prod-repository-policy,prod-repository-native

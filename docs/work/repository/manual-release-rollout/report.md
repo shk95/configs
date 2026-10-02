@@ -19,8 +19,27 @@ Its actual access, denial and expiry behavior remain unverified. The legacy Wind
 capture-publish issue was disposed as superseded because the current Windows status
 explicitly retires that flow; no old native scenario was newly claimed.
 
-All child criteria remain pending. Parent manual0/14 and scheduled0/5 remain
+All operating child criteria remain pending. Parent manual0/14 and scheduled0/5 remain
 pending; the successful source CI cannot replace actual operating evidence.
+
+## Credential qualification source, 2026-10-02
+
+The user stored the dedicated token directly. Metadata inspection confirmed its
+presence; no token value is retrievable and no actual token request is claimed.
+The separate source probe has only fixed-host GET requests and binds observed run,
+source, actor, workflow and sole job before reading required protection/check data.
+The public Checks observation is anonymous; Checks is not a token selection
+prerequisite. A denial probe reads only repository secret metadata, never values.
+Output carries public source/run plus fixed booleans, not private identities.
+
+Sixteen local Python 3.13 fixtures passed, with fake endpoints only. Normal source
+commit policy checks passed: full fixtures, hygiene, domain reads, design citations,
+work records, 82 invariants, provisional registry and secret scan. The source commit
+is 8140a29; root reviewed the fixed GET-only boundary and private-free outputs at
+that revision. Native Windows/current-head CI remain separate delivery gates and
+are recorded on the source PR before it is Ready.
+Actual probe execution awaits accepted master source; no private operating record,
+wrapper, bootstrap, mutation permission, dispatch or enablement is certified here.
 
 ## Acceptance
 
@@ -32,3 +51,4 @@ pending; the successful source CI cannot replace actual operating evidence.
 | AC4 | pending | |
 | AC5 | pending | |
 | AC6 | pending | |
+| AC7 | verified | Fixtures: 16 local Python 3.13 fake-endpoint cases; policy checks: normal 8140a29 source commit full suite and registry/secret checks passed; review: root examined exact workflow/GET-only client and privacy boundary at 8140a29. Actual token/ref/isolation proof remains AC3, with native/current-head CI a separate Ready gate. |
