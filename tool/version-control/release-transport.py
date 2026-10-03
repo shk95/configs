@@ -75,11 +75,14 @@ class Https:
         need(isinstance(token, str) and token and not any(c.isspace() for c in token), 'invalid-credential')
         self.__token = token
 
+    def authorized_write(self, method, path, body):
+        return (type(self.gate) is Entry and self.gate.authenticated
+                and self.gate.api.channel is self)
+
     def request(self, method, path, body):
         need(method in {'GET', 'POST', 'PATCH', 'PUT'} and path.startswith('/repos/')
              and not any(c in path for c in '\r\n#') and len(path) < 2048, 'invalid-endpoint')
-        need(method == 'GET' or (type(self.gate) is Entry and self.gate.authenticated
-             and self.gate.api.channel is self), 'missing-master-entry')
+        need(method == 'GET' or self.authorized_write(method,path,body), 'missing-master-entry')
         connection = http.client.HTTPSConnection('api.github.com', timeout=30,
                                                 context=ssl.create_default_context())
         try:

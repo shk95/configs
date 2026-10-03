@@ -1,6 +1,7 @@
 #!/bin/sh
 # INV repository/private-history-acquisition-isolated
 # INV repository/authenticated-release-transport
+# INV repository/initializer-attempt-custody
 # INV repository/fixture-git-isolation
 set -eu
 MSYS_NO_PATHCONV=1
@@ -15,5 +16,8 @@ if ! "$python" -I -S -c 'import sys; assert sys.version_info >= (3,9)' >/dev/nul
   exit 1
 fi
 script="$tools/test-release-operating-history.py"
+if command -v cygpath >/dev/null 2>&1; then script=$(cygpath -m "$script"); fi
+"$python" -I -S -B "$script"
+script="$tools/test-release-initialize.py"
 if command -v cygpath >/dev/null 2>&1; then script=$(cygpath -m "$script"); fi
 exec "$python" -I -S -B "$script"

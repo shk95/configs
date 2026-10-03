@@ -12,10 +12,11 @@ import sys
 FILES=tuple('tool/version-control/'+name for name in (
  'release-control-loader.py','release-transport','release-transport.py',
  'release-transport-retained.py','release-transport-preflight.py','release-operating-history.py',
- 'release-operating-roles.json'))
-LEGACY_SIX=tuple(name for name in FILES if not name.endswith('/release-operating-roles.json'))
+ 'release-operating-roles.json','release-initialize.py'))
+LEGACY_SEVEN=tuple(name for name in FILES if not name.endswith('/release-initialize.py'))
+LEGACY_SIX=tuple(name for name in LEGACY_SEVEN if not name.endswith('/release-operating-roles.json'))
 LEGACY_FIVE=tuple(name for name in LEGACY_SIX if not name.endswith('/release-operating-history.py'))
-INVENTORIES={tuple(sorted(FILES)),tuple(sorted(LEGACY_SIX)),tuple(sorted(LEGACY_FIVE))}
+INVENTORIES={tuple(sorted(FILES)),tuple(sorted(LEGACY_SEVEN)),tuple(sorted(LEGACY_SIX)),tuple(sorted(LEGACY_FIVE))}
 FIELDS={'format','transport-source','transport-manifest','operating-repository','operating-ref',
  'environment','connection','repository-id','workflow-id','workflow-path','job-name','actors',
  'approved-master','approved-control','approved-manifest','bootstrap-record','public-evidence',

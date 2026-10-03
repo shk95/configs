@@ -4,7 +4,6 @@ date: 2026-10-03
 scope: repository
 status: approved
 review-by: 2026-10-17
-issue: #479
 
 ## Assignment and dependency
 
@@ -120,3 +119,11 @@ An uncertain previous initialization with no exact original proof remains pendin
 this work does not invent permission to complete it. Actual master promotion,
 private review/certificate provisioning, HTTPS/isolation, bootstrap, manual recovery
 and future scheduled evidence retain their separate authorization/evidence gates.
+
+## Execution linkage correction, 2026-10-03
+
+This source child is a standalone plan under parent execution #479, not the owner
+of that operating issue's completion. Its terminal source report must not close
+#479 while parent operating criteria remain pending. The optional issue header is
+therefore omitted; parent references and root assignment above remain unchanged.
+All six criteria and their required lanes retain the reviewed wording.

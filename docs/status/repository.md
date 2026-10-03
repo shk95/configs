@@ -320,7 +320,7 @@ fixtures certify no actual operating cycle.
 
 The private-history library now has source-only original Git acquisition and a
 verified original-package disabled empty-record projection. Its explicit current
-transport inventory has seven files; historical five/six-file source inspection
+transport inventory has eight files; historical five/six/seven-file source inspection
 remains supported. Source fixtures do not establish actual HTTPS, initial seed/ref writes,
 bootstrap adoption, permissions or a deployed writer. Those operating gates remain
 pending (docs/policy/decisions/repository/authenticated-release-transport.md).
@@ -339,8 +339,8 @@ operating bootstrap/manual/scheduled evidence remain pending.
 
 The desired-review source library distinguishes unauthenticated format-2 private
 assertions from legacy authenticated format-1 effects. A seventh transport file
-binds separate source roles; writer remains disabled and no initializer workflow
-is installed. Original-source timestamp reconstruction does not persist an attempt
+binds separate source roles; writer remains disabled; the finite initializer source workflow now exists but has
+not been promoted, dispatched or provisioned with a private attempt certificate. Original-source timestamp reconstruction does not persist an attempt
 or certify cross-run recovery. Actual role-aware initialization, production writer
 and operating evidence remain pending.
 
@@ -350,3 +350,11 @@ uncertain-write fences. Original candidate replacement still requires reconciled
 effects and invalidates prior approval. Production candidate/evidence collection,
 refresh preparation/object publication, finite writer, durable initializer attempts
 and initial enablement are absent; actual operating criteria remain pending.
+
+Finite initializer source now binds an independently observed initializer role to
+one private exact-run certificate. Later-run/rerun publication and incomplete-seed
+resumption refuse; original read-only reconciliation reconstructs the deterministic
+child from its acquired seed parent. There is no certificate issuer or selected
+actual authorization. Private review/custody, Environment isolation, source master
+promotion, dispatch/initial records, bootstrap and operating writer/manual/scheduled
+proof remain pending (INV repository/initializer-attempt-custody).

@@ -208,3 +208,39 @@ stop/resume and operation-observation interfaces keep their own authority.
 No deployed collector, workflow, CLI, endpoint, credential or semantic package
 change is introduced. Production refresh, object publication, durable initializer
 attempts, bootstrap and actual manual/scheduled evidence remain separate gates.
+
+## Private one-shot initializer custody
+
+Amended 2026-10-03: adopt a finite manual-only, single-job initializer source and
+separate actual initializer Entry. Publishing requires the fixed private Environment
+certificate CONFIGS_RELEASE_INITIAL_ATTEMPT for exactly one original source,
+workflow/run/attempt=1 and initializer actor. A pure private attempt constructor
+produces review assertions, never a certificate issuer or independent approval.
+Source/runtime/role observations remain independently necessary; the original
+desired format-2 proposal cannot enter legacy format-1 publication.
+
+The operator retains the exact reviewed packet outside public source before any
+actual effect. A later run or rerun cannot publish with its predecessor certificate;
+missing old run metadata, empty refs and failed jobs cannot create new authority.
+One fresh-repository invocation attempts the original fixed seed/object/ref sequence
+once. Prior incomplete seeds remain pending. Lost seed/ref acknowledgements require
+original observation; uncertain object responses fence publication. Read-only observe
+uses the same privately reviewed original construction and independently acquired
+seed parent to reconstruct the exact deterministic child without reading or trusting
+a surviving prior run row. It issues or rotates no authorization and resumes no write.
+
+The eighth explicit transport file is release-initialize.py; historical five/six/
+seven-file preflight inventories and original eight-file semantic packages remain
+supported unchanged. Actual role metadata and original workflow blobs bind separate
+initializer and disabled writer jobs. The initializer source workflow is master/
+maintainer/manual-only, one job, finite timeout and job-level concurrency without
+cancellation. Token/private packet reach only this trusted step and isolated Git;
+retained packages, candidate code, inspector/wait, logs and artifacts receive none.
+
+Normal source integration does not authorize master promotion, private independent
+review/certificate custody, Environment provisioning, dispatch or private records.
+Actual selected-source acceptance, role/ref/permission/isolation review and preserved
+prior-attempt disposition are maintainer gates. A new publishing certificate after
+an incomplete attempt requires separately reviewed recovery, which this increment
+neither supplies nor automates. Writer, bootstrap and parent manual/scheduled
+acceptance remain disabled/pending.
