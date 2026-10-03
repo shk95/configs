@@ -1308,3 +1308,24 @@ implicit certificate migration. A new certificate/recovery path requires review 
 disposition; this source supplies no issuer or automatic continuation.
 Writer remains disabled; source/native fixture evidence and actual operating,
 bootstrap, manual/scheduled and host activation or Apply stay separate.
+
+### Observed candidate evidence source boundary
+
+The trusted retained library's Snapshot.propose_evidence() accepts no caller row
+or transcript. Before use, independently review and provision its exact selected
+requirements and acquire complete original public candidate objects. Collection
+rebinds current master/dev, reconstructs their expected tree in an owned
+credential-free bare copy, and independently observes successful check/run/latest
+attempt/job/workflow and original workflow/tool blob identities. The trust set
+remains a deployment input, not a token permission receipt or a tool-execution
+claim. Missing objects, incomplete trust, conflicts and changing observations refuse.
+
+The collector preserves old transcript rows and original replay semantics;
+publication rechecks the observations through the existing private journal. This
+is library source only: no collector CLI, writer workflow or live action is added.
+Use the existing transport fixture entry for source/native proof. Production
+candidate qualification, credential-free refresh, data-only object publication
+and finite writer connection remain subsequent work, followed by actual private
+bootstrap/permissions/manual proof. See the accepted decision
+docs/policy/decisions/repository/authenticated-release-transport.md
+§ Independently observed retained evidence.

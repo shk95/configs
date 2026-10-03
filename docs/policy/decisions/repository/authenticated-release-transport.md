@@ -244,3 +244,33 @@ prior-attempt disposition are maintainer gates. A new publishing certificate aft
 an incomplete attempt requires separately reviewed recovery, which this increment
 neither supplies nor automates. Writer, bootstrap and parent manual/scheduled
 acceptance remain disabled/pending.
+
+## Independently observed retained evidence
+
+Amended 2026-10-03: the original retained bridge may acquire an existing
+candidate's evidence through a no-argument collector. Its explicit reviewed
+Snapshot requirements must cover the selected ids exactly once; an asserted
+requirement or supplied row is no observed check receipt. Bind successful unique
+check/run/latest attempt/job/numeric workflow identity, actual public/head
+repository, job URL/name and exact regular workflow/tool source blobs. Read the
+complete receipt set again around projection and immediately before journal
+publication; moving, failed or foreign observations refuse.
+
+Actual current dev/master refs and their original locally verified Git objects
+bind the expected promotion tree. Local pack/strict object validation and merge
+plumbing use an owned bare repository, bounded sizes/time, no checkout, candidate
+program, hook, custom merge driver, remote transport or credential environment.
+The tree is prospective validation only, never an actual merge receipt.
+
+Derive original evidence rows from those observations and the retained candidate's
+exact source/rules/tool tuple; append only missing rows, preserve all historical
+transcript obligations and use the original selected package's full global replay.
+Existing source/owner/head/job/stop and proposal/journal fences remain mandatory.
+No network effect or new semantic schema belongs to collection; original journal
+publication is still the separate guarded effect boundary.
+
+The existing transport closure and GET endpoint classes suffice. This does not
+select the production candidate/baselines, authenticate arbitrary tool execution
+from a job name, provision the reviewed trust set, add a writer/CLI/workflow, execute
+refresh, publish candidate objects, bootstrap or certify actual operating evidence.
+Those production and private/manual/scheduled connections remain independent gates.

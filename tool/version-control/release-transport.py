@@ -270,6 +270,7 @@ class Entry:
         receipts = []
         for requirement in requirements:
             need(set(requirement) == {'id', 'name', 'app', 'workflow', 'job', 'tool', 'source', 'attempt', 'run', 'workflow-path', 'workflow-blob', 'tool-path', 'tool-blob'}, 'invalid-check-requirement')
+            for key in ('app','workflow','job','attempt','run'):number(requirement[key])
             matches = [c for c in checks if c.get('name') == requirement['name'] and c.get('app', {}).get('id') == requirement['app']]
             need(len(matches) == 1, 'ambiguous-required-check')
             check = matches[0]
@@ -277,24 +278,34 @@ class Entry:
                  and check.get('conclusion') == 'success', 'stale-or-failed-check')
             run = self.api.run(requirement['run'], requirement['attempt'])
             latest = self.api.get('/actions/runs/' + str(requirement['run']))
-            need(latest.get('run_attempt') == requirement['attempt'] and run.get('head_sha') == head
-                 and run.get('workflow_id') == requirement['workflow']
+            need(latest.get('id') == requirement['run'] and latest.get('run_attempt') == requirement['attempt']
+                 and latest.get('head_sha') == head and run.get('head_sha') == head
+                 and run.get('repository', {}).get('id') == self.trusted['repository-id']
+                 and run.get('head_repository', {}).get('id') == self.trusted['repository-id']
+                 and run.get('event') in {'push','pull_request','workflow_dispatch'}
+                 and latest.get('workflow_id') == run.get('workflow_id') == requirement['workflow']
+                 and latest.get('status') == run.get('status')
+                 and latest.get('conclusion') == run.get('conclusion')
+                 and latest.get('event') == run.get('event')
                  and run.get('status') == 'completed' and run.get('conclusion') == 'success', 'untrusted-check-run')
             jobs = self.api.jobs(requirement['run'], requirement['attempt'])
             matched = [j for j in jobs if j.get('id') == requirement['job']]
             need(len(matched) == 1 and matched[0].get('head_sha') == head
+                 and matched[0].get('run_id') == requirement['run'] and matched[0].get('name') == requirement['name']
                  and matched[0].get('status') == 'completed' and matched[0].get('conclusion') == 'success'
-                 and check.get('details_url') == matched[0].get('html_url'), 'unbound-check-job')
+                 and check.get('details_url') == matched[0].get('html_url')
+                 == 'https://github.com/'+PUBLIC+'/actions/runs/'+str(requirement['run'])+'/job/'+str(requirement['job']), 'unbound-check-job')
             need(sha(requirement['source']) == head and requirement['tool'], 'unbound-tool-source')
             workflow = self.api.get('/actions/workflows/' + str(number(requirement['workflow'])))
-            need(workflow.get('path') == requirement['workflow-path'], 'untrusted-check-definition')
+            need(workflow.get('id') == requirement['workflow'] and workflow.get('path') == requirement['workflow-path'], 'untrusted-check-definition')
             tree = self.api.tree(self.api.commit(head)['tree'])
             for path_key, blob_key in (('workflow-path','workflow-blob'), ('tool-path','tool-blob')):
                 path = requirement[path_key]; blob = sha(requirement[blob_key])
-                need(path in tree and tree[path][1:] == ('blob', blob), 'unbound-check-tool-blob')
+                need(path in tree and tree[path][1:] == ('blob', blob)
+                     and tree[path][0] in ({'100644'} if path_key=='workflow-path' else {'100644','100755'}), 'unbound-check-tool-blob')
                 self.api.blob(blob) # independently rehash actual authenticated bytes
 
-            receipts.append(dict(requirement, head=head, tree=merge_tree, check=check['id']))
+            receipts.append(dict(requirement, head=head, tree=merge_tree, check=number(check.get('id'))))
         return receipts
 
     def owner_terminal(self, owner):

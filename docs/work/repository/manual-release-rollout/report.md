@@ -299,3 +299,20 @@ independent. AC1-AC6 remain pending; production collection/refresh/object publis
 finite writer, durable initializer attempts/bootstrap and actual private/manual/
 scheduled operation remain root's continuation work. No actual operating receipt
 is inferred from these local fixtures.
+
+## Observed candidate evidence source continuation, 2026-10-03
+
+Initializer #494 delivered final head 9ed90c6 through normal protected dev merge
+6c4244b. Its exact-head CI 37121120229 passed; post-merge CI 37122700362 is a
+separate receipt and remains pending at this source pickup. Root subsequently
+pinned that current dev independently from observed-evidence plan be8d463.
+
+PR #495 connects a no-argument collector for an existing retained candidate's
+actual check/run/latest-attempt/job/workflow/tool metadata and prospective original
+merge tree to the original evidence event. Local transport 72 cases passed in
+271.793s; final normal hooks/native delivery are separate. Detailed child evidence
+is in docs/work/repository/observed-release-evidence/report.md. This does not
+select the production candidate/baselines, provision reviewed requirements, acquire
+original objects live, execute refresh, publish candidate objects or deploy a
+writer. Parent manual AC1-AC6 and scheduled bars remain pending; root owns their
+serial continuation. No operating effect or enablement is performed.

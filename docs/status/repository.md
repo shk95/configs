@@ -358,3 +358,17 @@ child from its acquired seed parent. There is no certificate issuer or selected
 actual authorization. Private review/custody, Environment isolation, source master
 promotion, dispatch/initial records, bootstrap and operating writer/manual/scheduled
 proof remain pending (INV repository/initializer-attempt-custody).
+
+## Observed retained evidence source
+
+The trusted retained bridge has a no-argument source collector for an existing
+candidate's independently observed checks. It binds current refs/original objects
+and prospective promotion tree, exact selected reviewed requirements and actual
+check/run/latest-attempt/job/workflow/tool blobs before original projection and
+journal publication. Its eight-file transport inventory and original semantic
+packages remain unchanged in membership. This is source functionality; production
+candidate planning/qualification, credential-free refresh, object publication and
+finite writer orchestration still lack their complete operating connection.
+No actual private initialization, bootstrap or manual/scheduled proof follows
+from its fixtures (docs/policy/decisions/repository/authenticated-release-transport.md
+§ Independently observed retained evidence).

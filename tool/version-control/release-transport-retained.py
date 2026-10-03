@@ -322,6 +322,99 @@ class Snapshot:
             L.global_preview({'operating':repo,'bundle_repository':self.bundle,
                 'request':request,'transcript':transcript},self.assertion,head,replay)
 
+    def public_merge_tree(self,candidate):
+        """Original object data only; merge plumbing owns a credential-free bare copy."""
+        heads=[T.sha(candidate[k]) for k in ('master','dev')]
+        T.need(L.git(self.bundle,'rev-parse','--show-object-format').strip()==b'sha1'
+            and L.git(self.bundle,'rev-parse','--is-shallow-repository').strip()==b'false',
+            'incomplete-candidate-objects')
+        L.verify_graphs(self.bundle,heads)
+        for head in heads:
+            raw=L.git(self.bundle,'cat-file','commit',head)
+            T.need(T.git_object('commit',raw)==head,'corrupt-candidate-commit')
+            header=raw.split(b'\n\n',1)[0].decode('utf-8').splitlines()
+            trees=[row[5:] for row in header if row.startswith('tree ')]
+            parents=[row[7:] for row in header if row.startswith('parent ')]
+            observed=self.api.commit(head)
+            T.need(trees==[observed['tree']] and parents==observed['parents'],'unbound-candidate-commit')
+        packed=L.git(self.bundle,'-c','pack.threads=1','-c','pack.windowMemory=8m',
+                     'pack-objects','--stdout','--revs',data=('\n'.join(heads)+'\n').encode())
+        T.need(len(packed)<=128*1024*1024,'candidate-object-bound')
+        with tempfile.TemporaryDirectory(dir=self.scratch,prefix='candidate-tree-') as folder:
+            root=Path(folder);repo=root/'objects.git';empty=root/'empty';empty.mkdir()
+            env=L.runtime_environment(os.environ)
+            env.update(GIT_CONFIG_NOSYSTEM='1',GIT_CONFIG_GLOBAL=os.devnull,
+                GIT_NO_REPLACE_OBJECTS='1',GIT_NO_LAZY_FETCH='1',GIT_GRAFT_FILE=os.devnull,
+                GIT_ALLOW_PROTOCOL='',GIT_TERMINAL_PROMPT='0',GIT_ATTR_NOSYSTEM='1')
+            def local(*args,data=None):
+                result=subprocess.run(['git','--no-replace-objects','-c','core.hooksPath='+str(empty),
+                    '-c','core.fsmonitor=false','-c','core.attributesFile='+os.devnull,'-c','gc.auto=0',
+                    '-C',str(root),*args],input=data,env=env,capture_output=True,timeout=30)
+                T.need(result.returncode==0 and len(result.stdout)<=T.MAX_BODY,'candidate-merge-refused')
+                return result.stdout
+            local('init','--bare','--template='+str(empty),str(repo))
+            local('-C',str(repo),'index-pack','--stdin','--strict',data=packed)
+            local('-C',str(repo),'fsck','--no-dangling','--no-reflogs','--no-progress',*heads)
+            tree=local('-C',str(repo),'merge-tree','--write-tree','--no-messages',*heads).decode('ascii').strip()
+            return T.sha(tree)
+
+    def evidence_context(self,candidate,requirements):
+        T.need(T.canonical(self.requirements)==requirements,'changed-evidence-trust-set')
+        state=self.project()['state']
+        T.need(state['candidate']==candidate,'changed-evidence-candidate')
+        self.proposal_context(state)
+        T.need(self.api.ref('heads/master')==candidate['master']
+            and self.api.ref('heads/dev')==candidate['dev'],'moving-evidence-source')
+        T.need(self.public_merge_tree(candidate)==candidate['tree'],'wrong-candidate-merge-tree')
+        T.need(self.api.ref('heads/master')==candidate['master']
+            and self.api.ref('heads/dev')==candidate['dev'],'moving-evidence-source')
+
+    def collected_evidence(self,candidate,requirements):
+        self.evidence_context(candidate,requirements)
+        receipts=self.entry.evidence(candidate['dev'],candidate['tree'],self.requirements)
+        self.evidence_context(candidate,requirements)
+        return receipts
+
+    def propose_evidence(self):
+        """No supplied rows: independently acquire a reviewed candidate's exact checks."""
+        T.need(not getattr(self,'proposal_fenced',False) and self.pending_changes is None,'outstanding-proposal')
+        try:
+            state=self.project()['state'];candidate=copy.deepcopy(state['candidate'])
+            T.need(candidate and state['stage']=='candidate','no-candidate-awaiting-evidence')
+            selected=candidate['selected'].split(',')
+            T.need(self.requirements and len(self.requirements)==len(selected)
+                and len(set(selected))==len(selected)
+                and {r['id'] for r in self.requirements}==set(selected),'incomplete-evidence-trust-set')
+            requirements=T.canonical(self.requirements)
+            receipts=self.collected_evidence(candidate,requirements)
+            rows=[[r['id']]+[candidate[k] for k in ('dev','master','tree','rules','tool')]
+                +['verified',str(r['run']),str(r['attempt']),str(r['job']),r['tool']]
+                for r in sorted(receipts,key=lambda r:r['id'])]
+            transcript=T.document((self.batch/'transcript.json').read_bytes())
+            for row in rows:
+                count=transcript['checks'].count(row)
+                T.need(count<=1,'ambiguous-retained-evidence')
+                if not count:transcript['checks'].append(row)
+            T.need(self.collected_evidence(candidate,requirements)==receipts,'moving-evidence-receipts')
+            changes=self.propose_event({'kind':'evidence','evidence':rows,
+                'evidence-digest':T.digest(T.canonical(rows))},transcript)
+            self.evidence_binding=(candidate,requirements,copy.deepcopy(receipts))
+            self.validate_collected_evidence()
+            return changes
+        except BaseException:
+            self.proposal_fenced=True
+            raise
+
+    def validate_collected_evidence(self):
+        binding=getattr(self,'evidence_binding',None)
+        if binding is None:return
+        try:
+            candidate,requirements,receipts=binding
+            T.need(self.collected_evidence(candidate,requirements)==receipts,'moving-evidence-receipts')
+        except BaseException:
+            self.proposal_fenced=True
+            raise
+
     def propose_event(self,fields,transcript):
         """Trusted library caller only; this does not authenticate supplied data."""
         T.need(not getattr(self,'proposal_fenced',False) and self.pending_changes is None,'outstanding-proposal')
@@ -471,12 +564,14 @@ class Snapshot:
             self.proposal_context(self.proposal_before)
             self.validate_prospective(changes)
             self.proposal_context(self.proposal_before)
+            self.validate_collected_evidence()
 
     def accept_changes(self,changes,head):
         self.expected=self.head=head
         self.state=self.project()['state']
         self.pending_changes=None
         self.proposal_binding=None
+        self.evidence_binding=None
 
     def observation(self,plan,state,remote):
         T.need(not getattr(self,'proposal_fenced',False) and self.pending_changes is None,'outstanding-proposal')
