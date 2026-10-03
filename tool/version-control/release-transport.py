@@ -352,6 +352,7 @@ class Journal:
         self.pending = False
 
     def publish(self, changes):
+        need(not self.pending, 'unreconciled-record-write')
         Entry(self.api, self.snapshot.entry.trusted, self.snapshot.entry.runtime)
         need(isinstance(changes, dict) and changes and all(type(v) is bytes for v in changes.values()), 'invalid-record-change')
         need(self.api.ref('heads/operations', self.api.operating) == self.expected, 'competing-record-writer')
@@ -362,6 +363,9 @@ class Journal:
         # The verified retained projector validates full prior history and each new
         # exact event/index/context before Git objects or a ref can be published.
         self.snapshot.validate_changes(changes)
+        # Any object/ref effect can become unknown. This instance cannot retry;
+        # an independently reconciled original history is a separate obligation.
+        self.pending = True
         tree_rows = []
         for path, data in sorted(changes.items()):
             blob = git_object('blob', data)
@@ -398,6 +402,7 @@ class Journal:
         self.expected, self.commit = commit, actual
         self.entries = self.api.tree(tree, self.api.operating)
         self.snapshot.accept_changes(changes, commit)
+        self.pending = False
         return commit
 
 

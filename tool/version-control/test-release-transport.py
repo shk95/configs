@@ -457,6 +457,180 @@ class TransportProof(unittest.TestCase):
         self.fake.responses[('GET',path)]=self.fake.response(value)
         self.assertEqual(self.entry.notification(4,1)['delivery'],'unverified')
 
+    def proposal_candidate(self):
+        return dict(F.CANDIDATE,kind='candidate',**{'candidate-generation':'2'})
+
+    def proposal_transcript(self,snapshot):
+        return T.document((snapshot.batch/'transcript.json').read_bytes())
+
+    def reconciled_proposal_snapshot(self):
+        snapshot=self.snapshot();plan=snapshot.plan(F.X)
+        changes=snapshot.observation(plan,'absent',None)
+        T.Journal(self.api,snapshot,self.fake.head).publish(changes)
+        self.fake.calls.clear()
+        return self.snapshot()
+
+    def candidate_transcript(self,snapshot):
+        transcript=self.proposal_transcript(snapshot)
+        candidate={k:v for k,v in self.proposal_candidate().items() if k!='kind'}
+        transcript['source'].append(F.transcript('preview',candidate)['source'][0])
+        return transcript
+
+    def test_general_candidate_refuses_unreconciled_effect(self):
+        snapshot=self.snapshot()
+        with self.assertRaises(T.Refusal):
+            snapshot.propose_event(self.proposal_candidate(),self.candidate_transcript(snapshot))
+        self.assertTrue(snapshot.proposal_fenced)
+        self.assertFalse(any(m!='GET' for m,_,_ in self.fake.calls))
+
+    def test_general_candidate_projection_preserves_original_history_and_invalidates_approval(self):
+        snapshot=self.reconciled_proposal_snapshot();before=copy.deepcopy(snapshot.state)
+        old={p.name:p.read_bytes() for p in (self.fixture.operating/'history').iterdir()}
+        changes=snapshot.propose_event(self.proposal_candidate(),self.candidate_transcript(snapshot))
+        self.assertTrue(before['approval'])
+        event=F.parse(next(v for p,v in changes.items() if p.startswith('history/')),'event')
+        self.assertEqual(event['sequence'],str(int(before['sequence'])+1))
+        self.assertEqual(event['batch'],before['batch'])
+        self.assertFalse(any(m!='GET' for m,_,_ in self.fake.calls))
+        journal=T.Journal(self.api,snapshot,self.fake.head);journal.publish(changes)
+        restored=self.snapshot()
+        self.assertEqual(restored.state['candidate']['candidate-generation'],'2')
+        self.assertEqual(restored.state['stage'],'candidate')
+        self.assertIsNone(restored.state['approval']);self.assertEqual(restored.state['evidence'],[])
+        for name,data in old.items():self.assertEqual((self.fixture.operating/'history'/name).read_bytes(),data)
+
+    def test_general_candidate_then_evidence_uses_original_package_and_full_global_replay(self):
+        snapshot=self.reconciled_proposal_snapshot()
+        changes=snapshot.propose_event(self.proposal_candidate(),self.candidate_transcript(snapshot))
+        T.Journal(self.api,snapshot,self.fake.head).publish(changes)
+        self.entry=T.Entry(self.api,self.trusted,dict(self.runtime,candidate=T.digest(T.canonical(snapshot.state['candidate']))))
+        restored=self.snapshot()
+        fields={'kind':'evidence','evidence':[F.EVIDENCE],'evidence-digest':T.digest(T.canonical([F.EVIDENCE]))}
+        changes=restored.propose_event(fields,self.proposal_transcript(restored))
+        T.Journal(self.api,restored,self.fake.head).publish(changes)
+        final=self.snapshot();self.assertEqual(final.state['stage'],'validated');self.assertIsNone(final.state['approval'])
+
+    def test_general_intent_is_derived_and_published_before_any_public_effect(self):
+        snapshot=self.snapshot()
+        payload={'repository':T.PUBLIC,'head':'dev','base':'master','dev':F.D,'master':F.H,'body-operation':'2'*64}
+        event=F.effect('pr',payload,op_id='2'*64)
+        fields={k:v for k,v in event.items() if k not in {'sequence','prior','batch'}}
+        changes=snapshot.propose_event(fields,self.proposal_transcript(snapshot))
+        T.Journal(self.api,snapshot,self.fake.head).publish(changes)
+        self.assertEqual(snapshot.state['operations']['2'*64]['state'],'intent')
+        self.assertFalse(any(m!='GET' and p.startswith('/repos/shk95/configs/') for m,p,_ in self.fake.calls))
+
+    def test_general_candidate_refuses_unknown_effect(self):
+        f=self.fixture;supplied=T.document((f.operating/'current/transcript.json').read_bytes())
+        unknown={'status':'unknown','target':{},'complete':True}
+        payload=T.document(f.events[-1]['payload'].encode())
+        supplied['observations'][F.X]=[unknown]
+        f.append(F.effect('pr',payload,'unknown',unknown))
+        projection=F.engine.index(F.engine.reduce(f.events,F.CONFIG,supplied),F.digest(F.encode(f.events[-1])))
+        f.final=dict(row.split('\t') for row in projection.decode().splitlines()[1:])
+        f.ledger[-1]['projection']=F.digest(projection)
+        (f.operating/'current/transcript.json').write_bytes(F.canonical(supplied))
+        f.save();self.fake.head=f.head
+        snapshot=self.snapshot();self.fake.calls.clear()
+        self.assertEqual(snapshot.state['operations'][F.X]['state'],'unknown')
+        with self.assertRaises(T.Refusal):
+            snapshot.propose_event(self.proposal_candidate(),self.candidate_transcript(snapshot))
+        self.assertFalse(any(m!='GET' for m,_,_ in self.fake.calls))
+
+    def test_general_candidate_refuses_frozen_publication(self):
+        snapshot=self.reconciled_proposal_snapshot()
+        payload={'repository':T.PUBLIC,'number':'17','dev':F.D,'master':F.H,'tree':F.T}
+        event=F.effect('merge',payload,op_id='3'*64)
+        fields={k:v for k,v in event.items() if k not in {'sequence','prior','batch'}}
+        changes=snapshot.propose_event(fields,self.proposal_transcript(snapshot))
+        T.Journal(self.api,snapshot,self.fake.head).publish(changes)
+        snapshot=self.snapshot();plan=snapshot.plan('3'*64)
+        changes=snapshot.observation(plan,'applied',F.T)
+        T.Journal(self.api,snapshot,self.fake.head).publish(changes)
+        snapshot=self.snapshot();self.fake.calls.clear()
+        self.assertTrue(snapshot.state['frozen'])
+        with self.assertRaises(T.Refusal):
+            snapshot.propose_event(self.proposal_candidate(),self.candidate_transcript(snapshot))
+        self.assertFalse(any(m!='GET' for m,_,_ in self.fake.calls))
+
+    def test_general_projection_rechecks_after_local_projection(self):
+        snapshot=self.snapshot();original=snapshot.projected_changes
+        def move(*args):
+            changes=original(*args);self.fake.head='b'*40;return changes
+        snapshot.projected_changes=move
+        with self.assertRaises(T.Refusal):
+            snapshot.propose_event({'kind':'refresh-result','payload':T.canonical({'status':'noop'}).decode()},
+                                   self.proposal_transcript(snapshot))
+        self.assertTrue(snapshot.proposal_fenced)
+        self.assertFalse(any(m!='GET' for m,_,_ in self.fake.calls))
+
+    def test_general_projection_uses_retained_package_after_new_source(self):
+        f=self.fixture;old=f.packages['3']['master']
+        (f.public/'tool/version-control/release-control-package/engine.py').write_text('raise RuntimeError("unapproved current semantics")')
+        later=f.commit(f.public);f.packages['3']=dict(f.packages['3'],master=later)
+        self.fake.source=later;self.trusted['source']=later;self.runtime['source']=later
+        self.entry=T.Entry(self.api,self.trusted,self.runtime)
+        snapshot=self.snapshot();self.assertEqual(snapshot.owner_source,old)
+        fields={'kind':'refresh-result','payload':T.canonical({'status':'noop'}).decode()}
+        changes=snapshot.propose_event(fields,self.proposal_transcript(snapshot))
+        T.Journal(self.api,snapshot,self.fake.head).publish(changes)
+        self.assertEqual(self.snapshot().state['refresh-stage'],'noop')
+
+    def test_general_projection_refuses_framing_injection_and_specialized_authority(self):
+        for change in ({'sequence':'1'},{'prior':'0'*64},{'batch':'0'*64},{'kind':'approval'},
+                       {'kind':'claim'},{'kind':'observation'},{'kind':'stop-observed'},{'kind':'unknown'}):
+            snapshot=self.snapshot()
+            with self.subTest(change=change),self.assertRaises(T.Refusal):
+                snapshot.propose_event(dict(self.proposal_candidate(),**change),self.proposal_transcript(snapshot))
+            self.assertTrue(snapshot.proposal_fenced)
+        self.assertFalse(any(m!='GET' for m,_,_ in self.fake.calls))
+
+    def test_general_projection_preserves_original_transcript_bindings(self):
+        for key in ('source','checks','owner','observations','protection'):
+            snapshot=self.snapshot();transcript=self.proposal_transcript(snapshot)
+            transcript[key]=[] if key in {'source','checks'} else {'foreign':'private'}
+            with self.subTest(key=key),self.assertRaises(T.Refusal):snapshot.propose_event(self.proposal_candidate(),transcript)
+        self.assertFalse(any(m!='GET' for m,_,_ in self.fake.calls))
+
+    def test_general_projection_rechecks_actual_owner_head_job_and_stop(self):
+        for failure in ('owner','source','head','job','stop','candidate'):
+            snapshot=self.snapshot();old_source=self.fake.source;old_head=self.fake.head
+            if failure=='owner':snapshot.entry.runtime['run']=6
+            elif failure=='source':self.fake.source='b'*40
+            elif failure=='head':self.fake.head='b'*40
+            elif failure=='job':self.fake.jobs_extra=[{'id':99,'name':'foreign'}]
+            elif failure=='stop':self.fake.stop=True
+            else:snapshot.entry.runtime['candidate']='0'*64
+            with self.subTest(failure=failure),self.assertRaises((T.Refusal,ValueError)):
+                snapshot.propose_event(self.proposal_candidate(),self.proposal_transcript(snapshot))
+            self.fake.source=old_source;self.fake.head=old_head;self.fake.jobs_extra=[];self.fake.stop=False
+            snapshot.entry.runtime.update(self.runtime)
+        self.assertFalse(any(m!='GET' for m,_,_ in self.fake.calls))
+
+    def test_general_projection_fences_pending_or_failed_proposal_and_changed_bytes(self):
+        snapshot=self.reconciled_proposal_snapshot();transcript=self.candidate_transcript(snapshot)
+        changes=snapshot.propose_event(self.proposal_candidate(),transcript)
+        with self.assertRaises(T.Refusal):snapshot.propose_event(self.proposal_candidate(),transcript)
+        with self.assertRaises(T.Refusal):snapshot.claim()
+        with self.assertRaises(T.Refusal):snapshot.observation(snapshot.plan(F.X),'absent',None)
+        with self.assertRaises(T.Refusal):snapshot.transition({})
+        changes['current/index.tsv']+=b'poisoned\n'
+        with self.assertRaises(T.Refusal):T.Journal(self.api,snapshot,self.fake.head).publish(changes)
+        self.assertFalse(any(m!='GET' for m,_,_ in self.fake.calls))
+        snapshot=self.snapshot()
+        with self.assertRaises(T.Refusal):snapshot.propose_event(dict(self.proposal_candidate(),unknown='value'),self.proposal_transcript(snapshot))
+        with self.assertRaises(T.Refusal):snapshot.propose_event(self.proposal_candidate(),self.proposal_transcript(snapshot))
+
+    def test_unknown_record_object_fences_the_same_journal_before_retry(self):
+        snapshot=self.reconciled_proposal_snapshot();changes=snapshot.propose_event(self.proposal_candidate(),self.candidate_transcript(snapshot))
+        journal=T.Journal(self.api,snapshot,self.fake.head)
+        self.fake.fail[('POST','/repos/fixture/operating/git/blobs')]=T.Unknown('unknown-write')
+        with self.assertRaises(T.Unknown):journal.publish(changes)
+        self.assertTrue(journal.pending);calls=len(self.fake.calls)
+        with self.assertRaises(T.Refusal):journal.publish(changes)
+        self.assertEqual(len(self.fake.calls),calls)
+        self.assertFalse(any(m!='GET' and p.startswith('/repos/shk95/configs/') for m,p,_ in self.fake.calls))
+
     def test_claim_joins_same_owner_without_a_record(self):
         snapshot=self.snapshot()
         self.assertEqual(snapshot.claim(),{})

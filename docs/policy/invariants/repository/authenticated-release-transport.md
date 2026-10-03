@@ -12,3 +12,9 @@ semantic packages. Exact original history and semantic projections are checked b
 the retained loader. Fixture endpoint responses are explicitly synthetic. The
 operator preflight and source workflows stay disabled; real deployment and actual
 permission, protection and notification delivery require separate operating proof.
+
+Generic retained proposals derive framing, preserve prior transcript obligations
+and undergo complete prospective global replay before journal publication. Fresh
+entry/owner/head/job/stop observations bind proposal and publication. Failed or
+outstanding proposals and uncertain journal writes fence further proposals/retries
+within the instance; source tests do not certify durable cross-run recovery.

@@ -271,3 +271,31 @@ before existing journal publication. Actual candidate/evidence acquisition,
 credential-free production refresh, data-only object publication, deployed writer,
 durable initializer attempts and initial enablement remain separate source steps.
 AC1-AC6 retain their pending bars; no runtime or approval is invented.
+
+## Original event projection bridge, 2026-10-03
+
+Root picked up dev 8fa5680173a3dbd1b2570aa406ccdbf634fef24a independently from
+reviewed plan 38b3a2e545df2b1dd9acf303482fbaa95c13847c. The source-only bridge
+derives framing for the reviewed finite ordinary event set, uses only the pinned
+original serializer/reducer and preserves prior transcript obligations. Full global
+replay runs in an owned local prospective Git copy before journal publication.
+Actual source/sole job/owner/head/stop are rechecked around validation. Mutable
+proposal bytes are digest-bound; failed/pending proposals also block specialized
+replacement. An uncertain private journal write fences the journal instance.
+
+Local Python 3.13 transport suite passed all 59 cases in 155.106s before the final
+publication-side fresh-context recheck was added; normal commit/push gates will
+verify that final addition. New cases cover candidate/evidence/intent publication,
+original approval invalidation, unreconciled/unknown/frozen effects, original
+transcript and framing refusal, changed bytes, before/after context changes,
+uncertain object-write retry refusal and retained semantics despite a later source
+with different package bytes. Source workflows and semantic packages are unchanged.
+Work pairing, all 84 invariant declarations and design citations pass.
+
+PR #490 post-merge CI 37020789770 and closure 37020789910 succeeded. Projection
+plan #491 exact-head CI 37022363219, post-merge CI 37024159596 and closure
+37024159613 succeeded. Final source/native Windows delivery receipts remain
+independent. AC1-AC6 remain pending; production collection/refresh/object publishing,
+finite writer, durable initializer attempts/bootstrap and actual private/manual/
+scheduled operation remain root's continuation work. No actual operating receipt
+is inferred from these local fixtures.
