@@ -10,7 +10,7 @@ status: pending
 | AC1 | verified | Local disposable Git checks actual original source refs/objects, clean divergent merge, conflict and corrupt/missing object refusal; isolated credential-free merge helper and transport suite 72 cases passed. |
 | AC2 | verified | Exact selected requirements and check/run/latest-attempt/job/workflow/regular source blobs are independently observed; foreign/failed/ambiguous/missing and changed receipts refuse in local 72-case transport suite. |
 | AC3 | verified | Original transcript rows preserved, observed evidence projected and published through original full replay; before/after-projection receipt changes, original stop record and publication-time checks/source/head/trust changes refuse before effects. Local transport 72 passed. |
-| AC4 | verified | Historical preflight/source cases and original package replay pass. Root reviewed exact eight-file source inventory digest 666048c36d5429178710f7b952eae7f7aa09d5ca3c9d3dfc55a28ac18104bbdc, isolated Git/no-driver/no-credential child and no new entry/endpoint/workflow; no actual operating claim. |
+| AC4 | verified | Historical preflight/source cases and original package replay pass. Root reviewed exact eight-file source inventory digest 54287a85373adf99cac0ade0fcaa16aa177620e5b13503e92597db40fbdef3dd, isolated Git/no-driver/no-credential child and no new entry/endpoint/workflow; no actual operating claim. |
 | AC5 | pending | |
 
 ## Planning, 2026-10-03
@@ -63,3 +63,20 @@ finite writer and actual private/manual/scheduled evidence remain separate
 continuation work. No master promotion, private initialization/approval/certificate,
 secret/Environment change, dispatch, actual journal/seed/ref/bootstrap, enabled
 writer/schedule, tag, activation, Apply or cleanup occurred.
+
+## Qualified public Checks boundary, 2026-10-03
+
+Initial source commit 442f06e passed normal full commit gates, including all
+72 transport cases, original history and initializer suites. Further delivery
+review found that the existing actual credential probe qualified public Checks
+anonymously; the collector now omits Authorization only on that exact public
+GET class. Private/protection/runtime reads and writes retain authentication.
+This is the existing permission boundary, not a new Checks grant or endpoint.
+A mocked fixed HTTPS connection checks omitted/public and retained/private/
+protection/runtime headers with no actual credential or network call.
+
+Actual public GitHub metadata for prior source run 37121120229/attempt1 and
+Windows job 111197294790 matches the expected public/head repository identities,
+pull_request event, numeric workflow and exact job URL/name shape. These are
+read-only metadata observations, not an actual collector or operating execution.
+The final source/native delivery remains independently pending under AC5.

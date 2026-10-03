@@ -274,3 +274,9 @@ select the production candidate/baselines, authenticate arbitrary tool execution
 from a job name, provision the reviewed trust set, add a writer/CLI/workflow, execute
 refresh, publish candidate objects, bootstrap or certify actual operating evidence.
 Those production and private/manual/scheduled connections remain independent gates.
+
+Public provider check-run GETs retain the previously qualified anonymous read
+boundary: their fixed public endpoint receives no Authorization header. Private
+reads, protection/runtime observations and guarded writes retain authentication.
+No Checks token grant is inferred or added. This uses the existing endpoint and
+TLS/pagination limits, not a new credential or discovery mechanism.

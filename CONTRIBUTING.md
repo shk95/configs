@@ -1329,3 +1329,7 @@ and finite writer connection remain subsequent work, followed by actual private
 bootstrap/permissions/manual proof. See the accepted decision
 docs/policy/decisions/repository/authenticated-release-transport.md
 § Independently observed retained evidence.
+
+Public provider check-run observations use anonymous fixed-host GET, as in the
+actual qualification probe; the dedicated token needs no new Checks selection.
+Other authenticated endpoint classes keep their existing credential boundary.

@@ -86,10 +86,13 @@ class Https:
         connection = http.client.HTTPSConnection('api.github.com', timeout=30,
                                                 context=ssl.create_default_context())
         try:
-            connection.request(method, path, body=None if body is None else canonical(body), headers={
-                'Authorization': 'Bearer ' + self.__token,
+            headers={'Authorization': 'Bearer ' + self.__token,
                 'Accept': 'application/vnd.github+json', 'X-GitHub-Api-Version': VERSION,
-                'Content-Type': 'application/json', 'User-Agent': 'configs-release-transport'})
+                'Content-Type': 'application/json', 'User-Agent': 'configs-release-transport'}
+            # Public Checks were qualified anonymously; no Checks token grant.
+            if method=='GET' and re.fullmatch('/repos/'+PUBLIC+r'/commits/[a-f0-9]{40}/check-runs(?:\?per_page=100&page=[1-9][0-9]*)?',path):
+                del headers['Authorization']
+            connection.request(method, path, body=None if body is None else canonical(body), headers=headers)
             response = connection.getresponse()
             data = response.read(MAX_BODY + 1)
             need(len(data) <= MAX_BODY, 'oversize-response')

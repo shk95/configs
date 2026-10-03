@@ -984,4 +984,21 @@ class ObservedEvidenceProof(unittest.TestCase):
         self.no_writes()
 
 
+class PublicChecksBoundaryProof(unittest.TestCase):
+    def test_only_public_check_reads_omit_the_dedicated_token(self):
+        from unittest import mock
+        connection=mock.Mock();response=connection.getresponse.return_value
+        response.status=200;response.getheaders.return_value=[];response.read.return_value=b'{}'
+        channel=T.Https('fixture-only-credential')
+        with mock.patch.object(T.http.client,'HTTPSConnection',return_value=connection):
+            for suffix in ('','?per_page=100&page=1','?per_page=100&page=20'):
+                channel.request('GET','/repos/'+T.PUBLIC+'/commits/'+F.D+'/check-runs'+suffix,None)
+                self.assertNotIn('Authorization',connection.request.call_args.kwargs['headers'])
+            for path in ('/repos/'+T.PUBLIC+'/actions/runs/8',
+                '/repos/'+T.PUBLIC+'/branches/dev/protection',
+                '/repos/fixture/operating/commits/'+F.D+'/check-runs?per_page=100&page=1'):
+                channel.request('GET',path,None)
+                self.assertEqual(connection.request.call_args.kwargs['headers']['Authorization'],
+                                 'Bearer fixture-only-credential')
+
 if __name__=='__main__':unittest.main()
