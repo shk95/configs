@@ -184,3 +184,27 @@ commit or persists a durable effect receipt. Original five/six-file preflight an
 semantic packages remain readable without reinterpretation. Durable private attempt
 handling, role-aware entry, actual initializer and operating approval remain required
 before new-format effects can be implemented.
+
+## Original event projection before journal publication
+
+Amended 2026-10-03: the trusted retained bridge may propose candidate, evidence,
+refresh-result, refresh-integrated, intent, retry-wait, blocker and complete events.
+Only the original selected serializer/reducer decides their meaning. The bridge
+derives sequence/prior/batch, preserves prior transcript obligations and validates
+the full global original history in an owned, credential-free prospective Git copy
+before existing journal publication. A local prospective child is no remote receipt.
+The trusted caller must independently acquire new observations and supply their
+matching original preview context; a transcript does not authenticate itself.
+
+Fresh actual entry, sole job, source/head, owner and stop observations bind both
+sides of proposal validation and are rechecked at publication. An outstanding or
+failed proposal cannot be replaced by generic or specialized proposal methods;
+mutable returned bytes are bound by their original digests. An uncertain journal
+object/ref write fences that journal before any retry. These are per-instance
+fences, not durable cross-run initialization or operating certification.
+Candidate replacement retains the original refusal for unreconciled or frozen
+effects and invalidates prior evidence/approval. Specialized start/claim, approval,
+stop/resume and operation-observation interfaces keep their own authority.
+No deployed collector, workflow, CLI, endpoint, credential or semantic package
+change is introduced. Production refresh, object publication, durable initializer
+attempts, bootstrap and actual manual/scheduled evidence remain separate gates.
