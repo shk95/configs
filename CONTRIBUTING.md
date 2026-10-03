@@ -1271,6 +1271,10 @@ to the accepted master-only initializer job and its privately retained Environme
 certificate. It is not a local provisioning command. Do not dispatch its source
 workflow or configure its secrets merely because source checks passed.
 
+GitHub's [deployment review contract](https://docs.github.com/en/actions/how-tos/deploy/configure-and-manage-deployments/review-deployments)
+keeps Environment secrets unavailable until the pending job is approved. Verify
+this actual pre-job ordering independently; source topology does not establish it.
+
 Before the separate actual initialization decision, the maintainer:
 
 1. Normally accepts the exact source through dev-to-master promotion and checks
@@ -1280,10 +1284,14 @@ Before the separate actual initialization decision, the maintainer:
    source date, fixed author/message and exact tree construction. Preserve the pure
    format-1 attempt packet and its digest in a private mode-0600 file. No packet
    belongs in Git, public requests, logs, artifacts or chat.
-3. Selects one actual current initializer run/attempt=1 for private review; bind its
-   numeric source/workflow/run/actor without replacing values with later observations.
-   Store that exact packet directly as CONFIGS_RELEASE_INITIAL_ATTEMPT only after
-   review. Do not use broad gh credentials as the operating token.
+3. Establishes and verifies an operator-controlled pre-job Environment hold before
+   authorizing dispatch of the chosen initialize run. That exact run remains waiting
+   without its sole job receiving secrets while numeric source/workflow/run/attempt=1/
+   actor are independently reviewed and bound. Store the exact reviewed packet as
+   CONFIGS_RELEASE_INITIAL_ATTEMPT before releasing the same run. If this hold and
+   secret-read ordering cannot be established, do not dispatch; no automatic issuer
+   or later run substitution is available. Do not use broad gh credentials as the
+   operating token.
 4. Verifies actual master-only Environment restriction, sole-job isolation, serialized
    operator reruns and dedicated endpoint permissions/secret-rotation denial. Matching
    source or workflow metadata is not proof of these deployed properties.
@@ -1294,7 +1302,9 @@ An incomplete or uncertain earlier attempt is not a fresh publishing pickup. Use
 only the separate observe action to classify absent, pending or exact initialized
 original history; it cannot retry, mint/rotate a certificate or adopt bootstrap.
 Deleted run metadata and observed absence grant no authority. Conflicting records
-refuse. A new certificate/recovery path requires review of preserved prior-attempt
+refuse. Both actions require the certificate's original source to remain current
+master; later-source reconciliation is a separate reviewed recovery contract, not
+implicit certificate migration. A new certificate/recovery path requires review of preserved prior-attempt
 disposition; this source supplies no issuer or automatic continuation.
 Writer remains disabled; source/native fixture evidence and actual operating,
 bootstrap, manual/scheduled and host activation or Apply stay separate.

@@ -75,3 +75,20 @@ unchanged; this standalone plan retains the parent reference. Post-merge CI
 37111882952 attempt 2 succeeded on actual #492 merge 1b59a3e, including native
 Windows job 111175710398. Original cancellation is not used as evidence.
 Current-head source push/native delivery and AC6 remain pending.
+
+## Native delivery repair, 2026-10-03
+
+CI 37116154236 at a619ff9 passed Linux governance, Unix-like hosts, Windows desired
+state and policy scans. Native Windows passed controller 22, credential 24,
+transport 59, inspection 16/13 and original history 37 cases, then failed the
+initializer CLI fixture on CRLF versus LF output. The refused output and exit
+status were correct; the fixture now compares one exact bounded line after normal
+platform line splitting, still refusing extra output. No production guard or source
+module changes. AC6 remains pending until repaired current-head native proof.
+
+The operator procedure now explicitly requires an independently verified pre-job
+Environment hold before selecting/reviewing/storing the exact-run certificate.
+Official GitHub deployment review docs establish the secret-access ordering; actual
+release-control metadata currently has master-only branch policy and no reviewer
+hold. No setting or secret was changed. Both actions retain the fixed-source gate;
+later-source reconciliation is separate reviewed recovery, not implicit migration.

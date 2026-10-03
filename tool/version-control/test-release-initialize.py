@@ -203,11 +203,11 @@ class InitializerProof(unittest.TestCase):
         self.assertIn('fetch-depth: 0',raw);self.assertIn('persist-credentials: false',raw)
         result=subprocess.run([__import__('sys').executable,'-I','-S','-B',str(ROOT/'release-initialize.py'),
             'initialize','--action','initialize'],env=H.credential_free(__import__('os').environ),capture_output=True)
-        self.assertEqual(result.returncode,1);self.assertEqual(result.stderr,b'initializer: refused\n')
+        self.assertEqual(result.returncode,1);self.assertEqual(result.stderr.splitlines(),[b'initializer: refused'])
         result=subprocess.run([__import__('sys').executable,'-I','-S','-B',str(ROOT/'release-initialize.py'),
             'initialize','--action','private-marker','--certificate','private-marker'],
             env=H.credential_free(__import__('os').environ),capture_output=True)
-        self.assertEqual(result.returncode,1);self.assertEqual(result.stderr,b'initializer: refused\n')
+        self.assertEqual(result.returncode,1);self.assertEqual(result.stderr.splitlines(),[b'initializer: refused'])
         self.assertFalse(self.writes)
         channel=I.InitialHttps('fixture-token');channel.gate=self.history.entry
         with patch.object(self.api,'channel',channel),patch.object(channel,'request',side_effect=self.fake.request):
