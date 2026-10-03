@@ -1,7 +1,7 @@
 # Finite initializer attempt-custody report
 kind: report
 spec: docs/work/repository/initializer-attempt-custody/spec.md
-status: pending
+status: done
 
 ## Acceptance
 
@@ -11,8 +11,8 @@ status: pending
 | AC2 | verified | Actual distinct initializer API entry and fixed Environment packet reject missing/body/changed/later-run/rerun/role/job/source substitutions; initializer positive/negative fixtures passed. Actual custody remains a maintainer gate. |
 | AC3 | verified | Original fixed seed/object/ref path replays prospective disabled history before writes; one invocation, lost seed/ref observation and unknown-object fencing fixtures passed; no live write. |
 | AC4 | verified | Original seed/child reconciliation classifies absent/pending/initialized and refuses foreign refs; deleted-old-run and incomplete-seed/new-run refusal fixtures passed with no publication. |
-| AC5 | verified | Explicit initializer CLI and manual single-job source workflow, exact eight-file inventory and historical five/six/seven readers pass local fixtures and policy review; local affected dispatch selects repository, Unix-like and Windows suites; native execution remains pending under AC6. |
-| AC6 | pending | Normal source/native delivery receipts pending; parent manual/scheduled bars unchanged. |
+| AC5 | verified | Explicit initializer CLI and manual single-job source workflow, exact eight-file inventory and historical five/six/seven readers pass local fixtures and policy review; local affected dispatch selects repository, Unix-like and Windows suites; native Git-for-Windows execution passed under AC6. |
+| AC6 | verified | Normal commit/push gates passed; repaired exact-head CI 37119672950 passed all affected jobs and Required checks, including native Windows job 111193207155 with original history 37 and initializer 12 cases. Parent manual/scheduled bars remain unchanged. |
 
 ## Initial planning, 2026-10-03
 
@@ -92,3 +92,25 @@ Official GitHub deployment review docs establish the secret-access ordering; act
 release-control metadata currently has master-only branch policy and no reviewer
 hold. No setting or secret was changed. Both actions retain the fixed-source gate;
 later-source reconciliation is separate reviewed recovery, not implicit migration.
+
+## Repaired source and native delivery, 2026-10-03
+
+Draft PR #494 source head bc925121753fbc90ca8e85aca2e218713986ea53 passed
+CI 37119672950 with Linux policy, Unix-like hosts, Windows desired state, policy
+scans and Required checks all successful. Native Windows job 111193207155 passed
+controller 22 in 227.533s, credential 24 in 94.917s, transport 59 in 312.112s,
+original history 37 in 212.363s and initializer 12 in 377.560s. The previously
+failed CRLF fixture now passes on actual Windows. Production source bytes did not
+change in that repair; source inventory hashes remain exact.
+
+Normal repair commit/push hooks passed all affected fixtures; final local push
+history 37 in 99.943s, initializer 12 in 226.067s and transport 59 in 126.400s.
+History audit reported 0 warnings and 0 failures. This completes the six child
+source/fixture/delivery criteria, including no-claim review. The final report-only
+head still requires its own normal hooks/current-head checks before Ready.
+
+No master promotion, actual private certificate/proposal approval, secret or
+Environment modification, initializer dispatch, private seed/ref/bootstrap, writer
+enablement or manual/scheduled operation was performed. Parent #479 remains open;
+manual AC1-AC6 and scheduled acceptance are not completed by this child report.
+Existing linked worktrees, ignored checkpoints and recovery data are retained.
