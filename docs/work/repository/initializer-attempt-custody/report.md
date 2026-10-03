@@ -11,7 +11,7 @@ status: pending
 | AC2 | verified | Actual distinct initializer API entry and fixed Environment packet reject missing/body/changed/later-run/rerun/role/job/source substitutions; initializer positive/negative fixtures passed. Actual custody remains a maintainer gate. |
 | AC3 | verified | Original fixed seed/object/ref path replays prospective disabled history before writes; one invocation, lost seed/ref observation and unknown-object fencing fixtures passed; no live write. |
 | AC4 | verified | Original seed/child reconciliation classifies absent/pending/initialized and refuses foreign refs; deleted-old-run and incomplete-seed/new-run refusal fixtures passed with no publication. |
-| AC5 | verified | Explicit initializer CLI and manual single-job source workflow, exact eight-file inventory and historical five/six/seven readers pass local fixtures and policy review; affected native dispatch pending under AC6. |
+| AC5 | verified | Explicit initializer CLI and manual single-job source workflow, exact eight-file inventory and historical five/six/seven readers pass local fixtures and policy review; local affected dispatch selects repository, Unix-like and Windows suites; native execution remains pending under AC6. |
 | AC6 | pending | Normal source/native delivery receipts pending; parent manual/scheduled bars unchanged. |
 
 ## Initial planning, 2026-10-03
@@ -65,3 +65,13 @@ artifacts; the writer stays disabled. Semantic packages and legacy format-1 effe
 are unchanged. Private operator custody/review/permission/Environment/isolation,
 master promotion, live dispatch/records/bootstrap and every parent manual/scheduled
 criterion remain separate unresolved gates. AC6 and this report remain pending.
+
+## Source delivery preparation and parent linkage, 2026-10-03
+
+Source commit 8d54440 passed normal full commit gates. The optional child-spec
+issue header was corrected because a terminal source-only report must not close
+the still-pending parent #479. The original six criteria/lanes and assignment are
+unchanged; this standalone plan retains the parent reference. Post-merge CI
+37111882952 attempt 2 succeeded on actual #492 merge 1b59a3e, including native
+Windows job 111175710398. Original cancellation is not used as evidence.
+Current-head source push/native delivery and AC6 remain pending.
