@@ -1,7 +1,7 @@
 # Observed candidate evidence source report
 kind: report
 spec: docs/work/repository/observed-release-evidence/spec.md
-status: pending
+status: done
 
 ## Acceptance
 
@@ -11,7 +11,7 @@ status: pending
 | AC2 | verified | Exact selected requirements and check/run/latest-attempt/job/workflow/regular source blobs are independently observed; foreign/failed/ambiguous/missing and changed receipts refuse in local 72-case transport suite. |
 | AC3 | verified | Original transcript rows preserved, observed evidence projected and published through original full replay; before/after-projection receipt changes, original stop record and publication-time checks/source/head/trust changes refuse before effects. Local transport 72 passed. |
 | AC4 | verified | Historical preflight/source cases and original package replay pass. Root reviewed exact eight-file source inventory digest 54287a85373adf99cac0ade0fcaa16aa177620e5b13503e92597db40fbdef3dd, isolated Git/no-driver/no-credential child and no new entry/endpoint/workflow; no actual operating claim. |
-| AC5 | pending | |
+| AC5 | verified | Implementation head 13a35d04cab5f85e32755c748661d5e2089268c9 passed CI 37127863960 and Required checks. Original Windows job 111216802606 passed transport 73, history 37 and initializer 12; normal source commit/push gates passed. Root reviewed bounded source and private-free prose. Remaining parent production/operating gates stay pending. |
 
 ## Planning, 2026-10-03
 
@@ -80,3 +80,31 @@ Windows job 111197294790 matches the expected public/head repository identities,
 pull_request event, numeric workflow and exact job URL/name shape. These are
 read-only metadata observations, not an actual collector or operating execution.
 The final source/native delivery remains independently pending under AC5.
+
+## Delivery evidence, 2026-10-04
+
+On resumption, the original implementation head remained
+13a35d04cab5f85e32755c748661d5e2089268c9 and dev remained 6c4244b.
+[Implementation CI 37127863960](https://github.com/shk95/configs/actions/runs/37127863960)
+completed successfully, including Ubuntu repository fixtures, scans and Required
+checks. The actual native Git-for-Windows job
+[111216802606](https://github.com/shk95/configs/actions/runs/37127863960/job/111216802606)
+passed transport 73 in 563.792s, original history 37 in 211.289s and initializer
+12 in 396.178s. These complete the source/native delivery evidence, including the
+anonymous public Checks boundary fixture added after the earlier 72-case result.
+Initializer post-merge CI 37122700362 was separately confirmed successful before
+this source lane was suspended.
+
+Root reviewed the complete source diff and report prose for scope, bare account
+names, private connection/credential/runtime material and unsupported operating
+claims. Authoring remains in the dedicated linked worktree. Current branch
+protection requires strict Required checks and resolved conversations; no reviews
+or unresolved conversations were present at this observation. This report update
+creates a new delivery head whose Required checks must pass before Ready/admission;
+the original implementation receipts above do not substitute for that new gate.
+
+All five child criteria are source/fixture/review complete. Parent #479 remains
+open: production candidate qualification, credential-free refresh, data-only
+public object publication, finite writer, actual private setup/bootstrap and
+manual/scheduled receipts are still pending. No master promotion, operating
+mutation, host deployment or recovery-data cleanup is included.
