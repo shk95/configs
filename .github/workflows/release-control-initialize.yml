@@ -1,0 +1,38 @@
+name: Finite private operating initializer
+
+on:
+  workflow_dispatch:
+    inputs:
+      action:
+        description: One reviewed initialization attempt or read-only reconciliation
+        required: true
+        type: choice
+        default: observe
+        options: [observe, initialize]
+
+permissions:
+  contents: read
+
+jobs:
+  initialize-operating-records:
+    if: github.repository == 'shk95/configs' && github.ref == 'refs/heads/master' && github.event_name == 'workflow_dispatch' && github.actor_id == '101378576'
+    runs-on: ubuntu-latest
+    environment: release-control
+    timeout-minutes: 15
+    concurrency:
+      group: release-control-initializer
+      cancel-in-progress: false
+    steps:
+      - uses: actions/checkout@v7
+        with:
+          ref: ${{ github.sha }}
+          fetch-depth: 0
+          persist-credentials: false
+      - name: Finite privately reviewed initialization or observation
+        env:
+          CONFIGS_RELEASE_TOKEN: ${{ secrets.CONFIGS_RELEASE_TOKEN }}
+          CONFIGS_RELEASE_OPERATING_REPOSITORY: ${{ secrets.CONFIGS_RELEASE_OPERATING_REPOSITORY }}
+          CONFIGS_RELEASE_OPERATING_REPOSITORY_ID: ${{ secrets.CONFIGS_RELEASE_OPERATING_REPOSITORY_ID }}
+          CONFIGS_RELEASE_INITIAL_ATTEMPT: ${{ secrets.CONFIGS_RELEASE_INITIAL_ATTEMPT }}
+          CONFIGS_INITIAL_ACTION: ${{ inputs.action }}
+        run: tool/configs release-transport initialize --action "$CONFIGS_INITIAL_ACTION"

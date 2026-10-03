@@ -11,6 +11,9 @@ if ! "$python" -I -S -c 'import sys; assert sys.version_info >= (3,9)' >/dev/nul
   [ "${REQUIRE_NATIVE:-0}" != 1 ] && exit 69
   exit 1
 fi
-script="$tools/release-transport-preflight.py"
+case "${1:-}" in
+  initialize) script="$tools/release-initialize.py" ;;
+  *) script="$tools/release-transport-preflight.py" ;;
+esac
 if command -v cygpath >/dev/null 2>&1; then script=$(cygpath -m "$script"); fi
 exec "$python" -I -S -B "$script" "$@"

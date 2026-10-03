@@ -411,7 +411,8 @@ through the next promotion; before that its shell body is run by hand with
 `tool/configs release-transport preflight --source <full-reviewed-source-sha>
 --template <manual-inputs.json>` verifies the separate transport source manifest
 and reports unresolved input names. It is read-only and always reports disabled;
-there is no executing/live command flag. `tool/configs doctor repository` and a
+preflight has no executing/live flag. The separate finite initializer has the
+private custody gate documented below. `tool/configs doctor repository` and a
 functional `CONFIGS_CONTROLLER_PYTHON` remain prerequisites. `tool/configs test`
 exercises real disposable Git plus fake endpoint proof on Linux and native Git for
 Windows; this does not establish live permissions or production certification.
@@ -1251,7 +1252,8 @@ The current transport library can prepare desired private review bytes without a
 credential or runtime Entry. Desired identities are unauthenticated assertions;
 format-2 proposals explicitly preserve that distinction and cannot be submitted to
 legacy format-1 publication. Keep returned private bytes outside public source,
-Actions logs and artifacts. No deployed CLI or initializer workflow is supplied.
+Actions logs and artifacts. The finite initializer source below supplies a distinct entry; desired projection
+by itself supplies no deployed authority.
 
 The source role declaration currently describes a disabled writer-preflight job
 without an Environment and a future initializer. Missing original initializer
@@ -1260,3 +1262,39 @@ never certifies deployment or credentials. Stable prospective child identities u
 original source time, while legacy proposals retain their original date contract.
 Do not wrap either library as an unattended retry: durable private attempts and
 independent review must precede any future new-format effects.
+
+### Finite initializer source and private custody gate
+
+`tool/configs release-transport preflight` remains read-only. The additional
+`tool/configs release-transport initialize --action observe|initialize` is restricted
+to the accepted master-only initializer job and its privately retained Environment
+certificate. It is not a local provisioning command. Do not dispatch its source
+workflow or configure its secrets merely because source checks passed.
+
+Before the separate actual initialization decision, the maintainer:
+
+1. Normally accepts the exact source through dev-to-master promotion and checks
+   original transport/package/role/workflow bytes and current master identity.
+2. Independently reviews private desired proposal/configuration/approval bytes,
+   selected actual repository/workflow/actor/default branch, stopped/disabled records,
+   source date, fixed author/message and exact tree construction. Preserve the pure
+   format-1 attempt packet and its digest in a private mode-0600 file. No packet
+   belongs in Git, public requests, logs, artifacts or chat.
+3. Selects one actual current initializer run/attempt=1 for private review; bind its
+   numeric source/workflow/run/actor without replacing values with later observations.
+   Store that exact packet directly as CONFIGS_RELEASE_INITIAL_ATTEMPT only after
+   review. Do not use broad gh credentials as the operating token.
+4. Verifies actual master-only Environment restriction, sole-job isolation, serialized
+   operator reruns and dedicated endpoint permissions/secret-rotation denial. Matching
+   source or workflow metadata is not proof of these deployed properties.
+5. Authorizes the finite initialize action separately. Preserve original private
+   attempt/records and exact seed/child receipts; public output is a bounded enum.
+
+An incomplete or uncertain earlier attempt is not a fresh publishing pickup. Use
+only the separate observe action to classify absent, pending or exact initialized
+original history; it cannot retry, mint/rotate a certificate or adopt bootstrap.
+Deleted run metadata and observed absence grant no authority. Conflicting records
+refuse. A new certificate/recovery path requires review of preserved prior-attempt
+disposition; this source supplies no issuer or automatic continuation.
+Writer remains disabled; source/native fixture evidence and actual operating,
+bootstrap, manual/scheduled and host activation or Apply stay separate.

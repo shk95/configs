@@ -165,7 +165,7 @@ class HistoryProof(unittest.TestCase):
             self.history=H.GitHistory(self.entry,22);self.addCleanup(self.history.close)
             with self.subTest(kind=kind),self.assertRaises((H.T.Refusal,ValueError)):
                 self.acquire(lambda:poison(kind))
-    def test_read_only_preflight_accepts_exact_five_six_and_seven_file_history(self):
+    def test_read_only_preflight_accepts_exact_five_six_seven_and_eight_file_history(self):
         import hashlib,json,shutil,sys
         preflight=load('history_preflight','release-transport-preflight.py')
         public=self.fixture.fixture.public
@@ -173,7 +173,7 @@ class HistoryProof(unittest.TestCase):
             target=public/name;target.parent.mkdir(parents=True,exist_ok=True)
             shutil.copyfile(ROOT.parents[1]/name,target)
         manifest=public/'tool/version-control/release-transport.manifest.tsv'
-        for names in (preflight.FILES,preflight.LEGACY_SIX,preflight.LEGACY_FIVE):
+        for names in (preflight.FILES,preflight.LEGACY_SEVEN,preflight.LEGACY_SIX,preflight.LEGACY_FIVE):
             manifest.write_text('format\t1\n'+''.join('file\t'+name+'\t'+hashlib.sha256((public/name).read_bytes()).hexdigest()+'\n' for name in sorted(names)))
             if len(names)==5:(public/'tool/version-control/release-operating-history.py').unlink()
             F.F.run_git(public,'add','.')

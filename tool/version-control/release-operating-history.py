@@ -31,8 +31,9 @@ TIMEOUT=120
 TRANSPORT_FILES=tuple(sorted('tool/version-control/'+name for name in (
     'release-control-loader.py','release-transport','release-transport.py',
     'release-transport-retained.py','release-transport-preflight.py','release-operating-history.py',
-    'release-operating-roles.json')))
-LEGACY_TRANSPORT_FILES=tuple(name for name in TRANSPORT_FILES if not name.endswith('/release-operating-roles.json'))
+    'release-operating-roles.json','release-initialize.py')))
+LEGACY_SEVEN=tuple(name for name in TRANSPORT_FILES if not name.endswith('/release-initialize.py'))
+LEGACY_TRANSPORT_FILES=tuple(name for name in LEGACY_SEVEN if not name.endswith('/release-operating-roles.json'))
 ROLE_PATH='tool/version-control/release-operating-roles.json'
 SEED_PATH='release-initial-proposal.tsv'
 
@@ -49,7 +50,7 @@ def source_transport(bundle,source,roles_required=False):
                and re.fullmatch('[a-f0-9]{64}',fields[2]),'invalid-initial-transport')
         names.append(fields[1])
         T.need(T.digest(L.git(bundle,'show',source+':'+fields[1]))==fields[2],'initial-transport-mismatch')
-    inventories=(TRANSPORT_FILES,) if roles_required else (TRANSPORT_FILES,LEGACY_TRANSPORT_FILES)
+    inventories=(TRANSPORT_FILES,LEGACY_SEVEN) if roles_required else (TRANSPORT_FILES,LEGACY_SEVEN,LEGACY_TRANSPORT_FILES)
     T.need(tuple(names) in inventories,'incomplete-initial-transport')
     return manifest
 
@@ -227,6 +228,9 @@ class GitHistory:
         self.private_identity()
         jobs=entry.api.jobs(entry.runtime['run'],entry.runtime['attempt'])
         T.need(len(jobs)==1 and jobs[0].get('id')==entry.runtime['job'],'nonisolated-acquisition-job')
+        self._storage()
+
+    def _storage(self):
         self.temporary=tempfile.TemporaryDirectory(prefix='release-private-history-')
         self.scratch=Path(self.temporary.name)
         self.scratch.chmod(0o700)
