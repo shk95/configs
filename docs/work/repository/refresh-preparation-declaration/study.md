@@ -150,3 +150,77 @@ delete/recreate; quotas; lost blob/tree/commit/ref response; replay historical o
 packages unchanged. Native delivery remains independent. Actual private endpoint
 permissions/protection/write receipts, custody and Environment hold are separate
 operating gates; source fixtures/commit history cannot certify them.
+
+
+## Two-digest staging alternative, root review pending
+
+# Two-digest declaration envelope review
+Observed 2026-10-04; proposed contract only, no source/operating adoption.
+
+## Feasibility
+
+D0(body) before dispatch and D1(envelope) after runtime observation avoids the
+run-ID/digest self-reference. Same finite writer, one sole job and existing writer
+concurrency is compatible with the intended ownership model. Domain review of D1
+covers both exact declaration and staging custody; no declaration artifact required.
+Numeric job metadata alone does not bind body: fixed original run-name displaying
+D0 plus independently verified workflow/source binds the preexisting canonical body.
+
+Current release-control-writer.yml is disabled preflight-only, permissions empty,
+job writer-preflight, no run-name, Environment or body input. Entry checks exact
+source/ref/event/workflow/actor/run/latest attempt/sole job but not display_title;
+runtime keyset is exact and includes no declaration digest. Journal rejects new
+review paths and current projector requires semantic event/transcript. This proposal
+requires explicit new current source adoption; existing CLI implements none of it.
+
+## Exact grammar to settle
+
+Recommend input declaration-body-digest optional string, empty for ordinary modes;
+require nonzero lowercase 64hex whenever staging is requested. Run-name expression
+must produce fixed literal `release-control:<mode>:declaration:<D0>` for staging,
+and a fixed distinct ordinary title for empty digest. Validate mode enum and entire
+API display_title, never substring/prefix/derived job output. Verify original workflow
+blob binds this exact expression, single input and sole job. No unsupported control
+characters/interpolation or display truncation accepted. Input metadata is not read
+from run API: only exact fixed display_title is the observation contract.
+
+Envelope strict keys format/body/body-digest/staging; format integer 1. Body follows
+exact reviewed schema and canonical hash D0. Staging strict keys controller-source,
+workflow,actor,run,attempt,job,batch,generation,operating-parent; numeric identities
+strict positive integers, attempt exactly 1, generation original reducer integer,
+public source/parent exact 40hex and batch 64hex. Specify workflow numeric ID versus
+path explicitly (recommend numeric ID with original source-bound workflow path/blob
+in role policy). No child introduction commit is embedded. Hash complete canonical
+envelope as D1 and retain at review/declarations/<D1>.json. Reject extra keys,
+canonical encoding drift, changed D0/display_title or stale parent/generation.
+
+Parent must be current acquired private head immediately before atomic Journal
+stage, with unchanged original index/projection and full fresh owner/source/job/
+stop/preparation bindings. If head moves, rebuild only after explicit fresh revalidation;
+a changed envelope creates new D1 requiring new domain review, never migrate approval.
+Body hosted private transfer must provide exact canonical D0 verification inside
+trusted wrapper before stage; provision source contract and actual custody separately.
+No current local packet/CLI fixture establishes that transfer.
+
+## Observation and recovery blockers
+
+Read-only observer verifies unique original introducing commit, absent parent path,
+exact child envelope/index projection and no unrelated leaf change; every later
+transition preserves packet bytes/mode/path. Replay original parent state and compare
+its batch/generation/owner to staging custody. Independently verify original numeric
+run/attempt/job/actor/source/workflow and exact D0 title against retained envelope.
+Live staging requires running sole job; historical observer must separately permit
+terminal original job with expected timestamps, not construct current writer Entry
+from a completed run. Deleted/missing/moved run evidence refuses; no invented custody.
+
+The future source plan must define partial object/ref write fencing and durable
+observer result binding. Unknown acknowledgement: same instance cannot retry;
+reconcile exact original introduction first. Absent receipt or terminal earlier run
+alone grants no retry/takeover authority. Domain review D1 must independently bind
+exact successful reviewer run/job/Environment/approving numeric reviewer/comment;
+actual pre-job hold/protection remains separate operating evidence.
+
+No second writer workflow/job is introduced. Missing canonical body, invalid digest,
+unsupported original runtime/review API, stale owner/parent, quota excess or absent
+actual custody refuses finitely. D0/D1 contract does not authorize private writes,
+bootstrap, dispatch, credential provisioning or source implementation by itself.
