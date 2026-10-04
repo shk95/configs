@@ -113,3 +113,20 @@ Carrier staging/publication, authenticated transition selection, loader interfac
 aggregate quotas and unknown-response recovery remain unresolved prerequisites.
 Source/native, transport custody/API and actual private/manual/scheduled proof are
 separate. No source assignment follows this design amendment alone.
+
+## Native attribute profile clarification, 2026-10-04
+
+Actual disposable macOS Git 2.55.0 review found that bare merge-tree without an
+explicit attribute source ignores repository binary declarations. The initial
+supported profile therefore sets GIT_ATTR_SOURCE to the independently verified
+previous/ours commit, forces merge.renormalize=false, and admits only byte-identical
+.gitattributes path/mode/blob inventories across previous, base and merge-base.
+Attribute evolution returns to planning. Preserve supported original built-in
+attributes, including the built-in binary spelling; user macros remain unsupported.
+Do not normalize operand blobs silently or disable original attributes wholesale.
+
+An exploratory merge.renormalize=true run aborted inside Git on bare text/eol data;
+that profile is unsupported. Any abort, nonzero result or extra output refuses.
+The default-false isolated profile with explicit original attribute source passed
+tiny clean/novel-object and attribute fixtures. Source/native Windows/Linux,
+executable closure, bounded stress and actual private/public receipts remain pending.
