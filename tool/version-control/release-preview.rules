@@ -90,6 +90,7 @@ production-map	exact	.github/workflows/release-control-inspect.yml	prod-reposito
 production-map	exact	.github/workflows/release-control-writer.yml	prod-repository-policy,prod-repository-native
 production-map	exact	.github/workflows/release-control.yml	prod-repository-policy,prod-repository-native
 production-map	exact	.github/workflows/release-credential-check.yml	prod-repository-policy,prod-repository-native
+production-map	exact	.github/workflows/release-production-review.yml	prod-repository-policy,prod-repository-native
 production-map	exact	.github/workflows/work-closure.yml	prod-repository-policy,prod-repository-native
 production-map	exact	.github/workflows/zellij-upstream-5500.yml	prod-repository-policy,prod-repository-native
 production-map	exact	.gitignore	prod-repository-policy
@@ -191,6 +192,7 @@ production-map	exact	docs/policy/decisions/repository/release-annotation-states-
 production-map	exact	docs/policy/decisions/repository/release-controller-preview-boundary.md	prod-repository-policy
 production-map	exact	docs/policy/decisions/repository/retired-capture-publication.md	prod-repository-policy
 production-map	exact	docs/policy/decisions/repository/single-flake-host-consumers.md	prod-repository-policy
+production-map	exact	docs/policy/decisions/repository/typed-production-receipt-custody.md	prod-repository-policy,prod-repository-native
 production-map	exact	docs/policy/decisions/repository/windows-ci-consumes-domain-runtime.md	prod-repository-policy
 production-map	exact	docs/policy/decisions/repository/work-planned-and-verified-in-documents.md	prod-repository-policy
 production-map	exact	docs/policy/decisions/unixlike/amd-apu-desktop-uses-labelled-luks-btrfs.md	prod-unixlike-documentation
@@ -283,6 +285,7 @@ production-map	exact	docs/policy/invariants/repository/release-tag-contract.md	p
 production-map	exact	docs/policy/invariants/repository/required-checks-gate.md	prod-repository-policy
 production-map	exact	docs/policy/invariants/repository/retired-capture-publication.md	prod-repository-policy
 production-map	exact	docs/policy/invariants/repository/scope-ownership.md	prod-repository-policy
+production-map	exact	docs/policy/invariants/repository/typed-production-receipt-custody.md	prod-repository-policy,prod-repository-native
 production-map	exact	docs/policy/invariants/repository/windows-ci-runtime-bound.md	prod-repository-policy
 production-map	exact	docs/policy/invariants/repository/work-spec-has-report.md	prod-repository-policy
 production-map	exact	docs/policy/invariants/repository/worker-checkpoint.md	prod-repository-policy
@@ -517,6 +520,8 @@ production-map	exact	tool/version-control/release-operating-roles.json	prod-repo
 production-map	exact	tool/version-control/release-preview	prod-repository-policy,prod-repository-native
 production-map	exact	tool/version-control/release-preview.awk	prod-repository-policy,prod-repository-native
 production-map	exact	tool/version-control/release-preview.rules	prod-repository-policy,prod-repository-native
+production-map	exact	tool/version-control/release-production-receipt.py	prod-repository-policy,prod-repository-native
+production-map	exact	tool/version-control/release-production-review-policy.json	prod-repository-policy,prod-repository-native
 production-map	exact	tool/version-control/release-transport	prod-repository-policy,prod-repository-native
 production-map	exact	tool/version-control/release-transport-preflight.py	prod-repository-policy,prod-repository-native
 production-map	exact	tool/version-control/release-transport-retained.py	prod-repository-policy,prod-repository-native
@@ -527,6 +532,8 @@ production-map	exact	tool/version-control/require-linked-worktree	prod-repositor
 production-map	exact	tool/version-control/required-checks	prod-repository-policy,prod-repository-native
 production-map	exact	tool/version-control/session-test	prod-repository-policy,prod-repository-native
 production-map	exact	tool/version-control/test	prod-repository-policy,prod-repository-native
+production-map	exact	tool/version-control/test-production-receipt	prod-repository-policy,prod-repository-native
+production-map	exact	tool/version-control/test-production-receipt.py	prod-repository-policy,prod-repository-native
 production-map	exact	tool/version-control/test-production-release	prod-repository-policy,prod-repository-native
 production-map	exact	tool/version-control/test-production-release.py	prod-repository-policy,prod-repository-native
 production-map	exact	tool/version-control/test-refresh-candidate-nix	prod-repository-policy,prod-repository-native

@@ -365,8 +365,8 @@ The trusted retained bridge has a no-argument source collector for an existing
 candidate's independently observed checks. It binds current refs/original objects
 and prospective promotion tree, exact selected reviewed requirements and actual
 check/run/latest-attempt/job/workflow/tool blobs before original projection and
-journal publication. Its eight-file transport inventory and original semantic
-packages remain unchanged in membership. This is source functionality; production
+journal publication. Its initial eight-file transport inventory and original semantic
+packages are retained as historical source. This is source functionality; production
 candidate planning/qualification, credential-free refresh, object publication and
 finite writer orchestration still lack their complete operating connection.
 No actual private initialization, bootstrap or manual/scheduled proof follows
@@ -385,3 +385,21 @@ candidate checkout reaches the qualifier child. See the source report at
 Required review/template provenance and source-only impact that the original
 candidate format cannot represent refuse. Tag publication plans, production refresh,
 object publishing, writer and actual operating receipts remain pending.
+
+## Typed production receipt source
+
+Optional typed library inputs now separate independently trusted producer/review
+authority from packet claims. Original content-addressed private packets, exact
+public approved digest comments, original source/run/job/Environment observations
+and delivered template ancestry/pair assertions project the existing evidence
+schema. Exact production runtimes are not inferred from Actions metadata; native
+execution and override compatibility remain independently reviewed assertions.
+Current transport membership is ten files, retaining explicit original five/six/
+seven/eight-file memberships. See the delivery report at
+docs/work/repository/typed-production-receipt-source/report.md.
+
+The review workflow remains statically disabled. Actual enabled accepted source,
+numeric setup/hold/reviewer policy, private packet publication, genuine native and
+template records, bootstrap, manual/scheduled operation and source promotion remain
+unperformed gates. Generated declaration variants, preparation/object connection
+and finite writer are subsequent source work.
