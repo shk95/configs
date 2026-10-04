@@ -1,7 +1,7 @@
 # Report: observed retained release candidate source
 kind: report
 spec: docs/work/repository/observed-release-candidate/spec.md
-status: pending
+status: done
 
 ## Pickup, 2026-10-04
 
@@ -19,7 +19,18 @@ receipt is supplied. All criteria remain pending at pickup.
 | AC2 | verified | Real retained production diagnostics cover exact selected trust/tools, observed receipts, mixed structural refusal, unsupported review provenance, no-op and source-only refusal. Full local fixtures and policy checks passed. |
 | AC3 | verified | Original candidate/evidence replay and replacement fixtures passed, proving generation increment, preserved history and approval/evidence invalidation. Full local fixtures and policy checks passed. |
 | AC4 | verified | Input/source/receipt and publication-time movement fixtures refuse before effects. A journal head change refuses before snapshot validation and leaves the pending proposal blocking reuse. Full local fixtures and policy checks passed. |
-| AC5 | pending | Normal source commit hooks passed, including 86 transport tests, 22 production qualification, 24 controller, 16 credential, 13 inspector, 37 history and 12 initializer tests plus preview, policy and secret scans. Exact-head native Windows CI and final delivery checks pending; no actual operating proof. |
+| AC5 | verified | Normal source commit/push hooks passed, including 86 transport tests, 22 production qualification, 24 controller, 16 credential, 13 inspector, 37 history and 12 initializer tests plus preview, policy and secret scans. Exact source/report head 42249ad40fc7630328bfe5dd41be371d3ddc3676 passed Linux, native Windows and Required checks in CI run 37170422914; no actual operating proof. |
+
+## Exact-head source delivery, 2026-10-04
+
+[CI run 37170422914](https://github.com/shk95/configs/actions/runs/37170422914)
+validated head 42249ad40fc7630328bfe5dd41be371d3ddc3676.
+The [native Git for Windows job](https://github.com/shk95/configs/actions/runs/37170422914/job/111342121530)
+completed successfully at 2026-10-04T02:49:45Z; Linux policy and the Required
+aggregate also passed. This closes the bounded source criteria. The report-only
+delivery commit still requires fresh exact-head admission checks before Ready and
+integration. Native CI fixture success is separate from actual host/runtime,
+private custody, baseline adoption, production writer and operating proof.
 
 ## Source implementation and remaining production gates, 2026-10-04
 
