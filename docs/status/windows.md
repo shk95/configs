@@ -158,14 +158,20 @@ Sources:
   https://learn.microsoft.com/en-us/powershell/windows/module-compatibility
 - Windows Terminal product repository — https://github.com/microsoft/terminal
 
-## `.wslconfig` prerequisites
+## Historical `.wslconfig` prerequisites and evidence
 
-The two existing build variants suffice for the declared policy (#198):
+Provider `.wslconfig` management is retired under
+`../policy/decisions/windows/host-generation-owns-selection.md`; Windows 11 is
+outside the current initial client support contract. The following records preserve
+legacy helper behavior and its unverified observations, not a currently offered
+feature or a native evidence prerequisite for the current provider.
+
+The two legacy build variants implemented the policy recorded in #198:
 `files/wsl/mirrored-networking.wslconfig` at build >=22621 and
 `files/wsl/nat-networking.wslconfig` below it, including Windows 11 build
 22000. The latter declares only memory reclamation, not an explicit NAT
 mode. Application versions validate content; they do not select a third
-payload. This table describes the four managed keys and their DNS dependency.
+payload. This table records the four formerly managed keys and their DNS dependency.
 
 | Key | Accepted section | Minimum WSL application | Windows/dependency condition |
 | --- | --- | --- | --- |
@@ -175,7 +181,7 @@ payload. This table describes the four managed keys and their DNS dependency.
 | `autoMemoryReclaim=gradual` | `[experimental]` | 2.0.0 | Both build variants; not Windows 11-only |
 | `dnsTunneling` (dependency) | `[wsl2]`; legacy `[experimental]` | 2.0.5 for `[wsl2]`; 2.0.0 for `[experimental]` | Build >=22621; independent of mirrored selection |
 
-Sources: [current configuration reference](https://learn.microsoft.com/en-us/windows/wsl/wsl-config),
+Historical sources: [configuration reference](https://learn.microsoft.com/en-us/windows/wsl/wsl-config),
 [WSL 2.0.0 release](https://github.com/microsoft/WSL/releases/tag/2.0.0),
 [the accompanying September 2023 documentation of the dependent options](https://github.com/MicrosoftDocs/WSL/commit/7d8758bf79c76d424582e8758dbc04b42118b369),
 and [2.0.5 section promotion, retaining legacy aliases](https://github.com/microsoft/WSL/releases/tag/2.0.5).
@@ -183,7 +189,7 @@ The 2.0.0 boundary for the dependent options comes from that release's
 accompanying documentation, not a claim that today's section layout existed
 in every older application release.
 
-Capture and read-only support reporting check the known key/section gates.
+Legacy capture and read-only support reporting checked the known key/section gates.
 An absent or legacy `wsl.exe --version` response leaves application evidence
 unknown. Capture refuses it for an application-gated key, including when the
 file matches already; ordinary memory/processor tuning alone needs no assumed
@@ -199,23 +205,26 @@ continuations remain outside the existing INI validator's grammar.
 Case-insensitive names/values, quoted scalars, unquoted `#` comments and
 first-occurrence precedence across aliases follow the
 [WSL configuration parser](https://github.com/microsoft/WSL/blob/master/src/shared/configfile/configfile.cpp).
-The existing INI syntax validator and Text comparison remain in place; this
-check does not reformat or silently remove a key. Network and DNS runtime
+The legacy INI syntax validator and Text comparison did not reformat or silently
+remove a key. Network and DNS runtime
 behavior remain unverified even when all documentary prerequisites pass.
-The current reference documents NAT-to-VirtioProxy fallback since 2.3.25 and
-bridged deprecation since 2.4.5; neither changes source selection here.
+The cited reference recorded NAT-to-VirtioProxy fallback since 2.3.25 and
+bridged deprecation since 2.4.5; neither changed the legacy source selection.
 
 The lower side was observed for #198 on Windows 10 build 19044.7663 with
 WSL application 2.7.13.0 and PowerShell 7.6.5: the native preview selected the
 lower source and preserved host tuning; read-only check reported file drift
 separately from the supported prerequisites. Both desired payloads and the
-host file were unchanged. Native evidence for the >=22621 mirrored file
-remains owned by #121; mocks cannot close it. #198 adds prerequisite checks,
-not a WSL update, restart, firewall change or a change to Apply triggers.
+host file were unchanged. Native evidence for the >=22621 mirrored file was
+never observed in #121; mocks did not supply it. That historical gap remains
+unverified, but retirement supersedes its pickup as current provider work. #198
+added prerequisite checks, not a WSL update, restart, firewall change or a change
+to Apply triggers.
 
-The `.wslconfig` runtime effect is permanently unverifiable on this host:
-only the deployed file's content and its agreement with the host's Windows
-build can ever be checked
+The historical `.wslconfig` runtime effect was not verified on the observed host:
+the legacy domain checked only the deployed file's content and its agreement with
+the host's Windows build, without restarting WSL. Retirement provides no new file
+or runtime evidence
 (`docs/policy/decisions/windows/wslconfig-selected-by-windows-build.md`).
 
 Two hygiene gaps touch Windows payloads: a bare account name in free prose
