@@ -27,6 +27,16 @@ been performed. All criteria remain pending.
 
 ## Acceptance
 
+## Independent preparation amendment, 2026-10-04
+
+Root assigns current-dev source preparation to the same isolated lane under the
+dated amendment. The initial merge-before-pickup assumption delayed independent
+files unnecessarily; no unmerged prerequisite source is imported. Final inventory,
+manifest, local/native delivery and Ready remain gated on integrated prerequisites.
+Actual preparation results will be recorded separately; all criteria remain pending.
+
+## Acceptance
+
 | ID | State | Evidence |
 | --- | --- | --- |
 | AC1 | pending | |

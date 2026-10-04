@@ -47,6 +47,19 @@ workflow enablement, operating dispatch, schedule, activation, Apply or cleanup.
 
 ## Acceptance
 
+Amended 2026-10-04, AC1-AC4: the initial merge-before-pickup ordering is
+superseded for independent source preparation only. Root may implement current-dev
+exact maps, independent tracked-inventory fixtures and current manifest hashing
+without importing, stacking or copying unmerged prerequisite source. Keep Draft
+and all final acceptance pending until observed candidate, refresh/object planning
+and production-receipt-custody planning are integrated. At root's final inventory
+update, incorporate actual merged dev, review every actual tracked path including
+the child pair, add any missing exact maps and recompute the current manifest.
+Revalidate local, native Windows and Required evidence at the final delivery head.
+Do not guess future paths or weaken existing criteria, historical compatibility
+or operating boundaries. Independent read-only review confirmed this preparation
+has no prerequisite source-code dependency or native-stack requirement.
+
 | ID | Criterion | Required lanes |
 | --- | --- | --- |
 | AC1 | Every actual current tracked candidate path, including this child plan/report, has reviewed exact production coverage with its existing correct ownership and obligations; unknown future paths still refuse. | fixtures, policy checks, review |
