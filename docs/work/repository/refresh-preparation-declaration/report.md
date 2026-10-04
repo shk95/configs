@@ -86,3 +86,17 @@ Producer/native isolation, exact trusted runtime admission, private input transf
 deterministic auxiliary proposal metadata and loader/Journal implementation still
 require accepted source interfaces before executable pickup. Synthetic service
 fixtures and source review cannot certify actual Environment protection or hold.
+
+
+## Independent declaration-observer source lane accepted, 2026-10-04
+
+Root reviewed and accepted the dated B1–B4 full D1 parser/fixed Unix-like DOMAIN observer contract. Exact nested body/envelope/staging/declarations, original-source adapter, fixed eight-key policy and pure workflow renderer, bounded API reobservation and DATA-only output are specified. Protocol4 preserves the original selected AWK list grammar; protocol5 uses its explicitly adopted sorted contract. B may execute independently after actual #505 and reviewed amendment delivery, in parallel with public4 when assigned.
+
+B1–B4 remain pending implementation/current-head delivery. No importing consumer, workflow publication/enablement, original private introduction, successful staging, operating approval or effect follows from this plan. All enclosing acceptance criteria remain pending and must not be upgraded by the independent source outcome.
+
+
+## Auxiliary staging source contract accepted, 2026-10-04
+
+Root accepted the dated C1–C4 StageInvocation/current-candidate/D0 bridge, deterministic job-start-based unsigned raw child, full packet-only/selected-original ancestry validator and one-shot read-only recovery contract. Claim and declaration publication require independently verified REMOTE identity and LOCAL rawclosure hydration/full replay before advancing or clearing pending. Actual B and public4 hydration source deliveries are dependencies; original5 stays separately gated.
+
+C1–C4 remain pending implementation and current-head source evidence. No claim, packet, private object/ref, operating approval, workflow activation or effect was executed. Enclosing acceptance remains pending. Library quotas consume tighter enclosing budgets, and recovery of an old introducing child never replaces a later actual current head.
