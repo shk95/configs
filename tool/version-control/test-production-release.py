@@ -197,6 +197,40 @@ class Qualification(unittest.TestCase):
         self.candidate = self.commit("feat(unixlike): synthetic unmapped")
         self.refused("mapping-review-needed", proposal=True)
 
+    def actual_inventory(self):
+        # Inventory comes from Git, independently of the mapping rules under test.
+        inventory = subprocess.check_output(
+            ["git", "ls-files", "-z"], cwd=TOOLS.parent.parent)
+        self.assertTrue(inventory.endswith(b"\0"))
+        paths = inventory[:-1].decode("utf-8").split("\0")
+        for path in self.root.iterdir():
+            if path.name != ".git":
+                if path.is_dir():
+                    shutil.rmtree(path)
+                else:
+                    path.unlink()
+        for path in paths:
+            write(self.root / path, "Synthetic tracked inventory; never operating evidence.\n")
+        write(self.root / "tool/version-control/release-preview.rules", RULES)
+        self.base = self.commit("docs(repository): synthetic actual tracked inventory")
+        self.candidate = self.rules = self.base
+        self.assertEqual(self.git("ls-files", "-z"), inventory)
+
+    def test_actual_tracked_inventory_has_exact_production_coverage(self):
+        self.actual_inventory()
+        code, value = self.preview(proposal=True)
+        self.assertEqual(code, 0, value.get("reasons", value))
+        self.assertFalse(value["selected"])
+        self.assertFalse(value["production_certification"])
+
+    def test_actual_tracked_inventory_refuses_removed_exact_mapping(self):
+        self.actual_inventory()
+        path = ".github/workflows/release-control-initialize.yml"
+        self.rules_change(lambda rules: "\n".join(
+            row for row in rules.splitlines()
+            if not row.startswith("production-map\texact\t" + path + "\t")) + "\n")
+        self.refused("mapping-review-needed", proposal=True)
+
     def test_historical_root_is_not_live_candidate(self):
         write(self.root / "flake.nix", "historical, not a second live authority\n")
         self.candidate = self.commit("feat(unixlike): synthetic historical root")
