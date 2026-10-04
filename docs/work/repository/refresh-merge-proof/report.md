@@ -87,3 +87,10 @@ caller JSON authority. This is contract preparation, not original5 source delive
 Complete closure verification/loader ingress and fixed role/native scenario source
 adoption remain pickup gates. No Linux runtime qualification, actual review/private
 packet, initialization, dispatch or effect was performed; acceptance remains pending.
+
+
+## Complete computational ingress contract adoption, 2026-10-04
+
+Root accepted the dated AC1/AC2 complete-closure inventory and host-owned provider contract after read-only pickup review against actual dev ca90ef2 and plan72d7399. Exact directory/file membership, canonical digest and finite limits, PREHOST/PRECHILD/POSTCOMPUTE consistency under one120-second deadline and fixed runtime materialization now resolve those computational pickup decisions. Earlier computational SOURCE-blocker wording is superseded by this amendment; missing original5 parsing, selected nine-file helper and loader implementation remain execution work.
+
+RuntimeAdmission is wholly later transport5 and unavailable here. Actual Linux hashes, dependency completeness, immutable provisioning, native scenarios, fixed runtime role and hard resource/service isolation remain separate unqualified source-adoption/operating gates. Archive member counts inform conservative source bounds only and do not prove fit or qualification. No source5 implementation, operating packet, approval, initialization, dispatch or effect occurred. AC1–3 remain pending implementation and required delivery evidence.
