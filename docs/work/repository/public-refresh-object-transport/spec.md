@@ -104,3 +104,33 @@ never manufacture signature headers for a preserved gitlink commit from API JSON
 Ordinary original base commit/root/unixlike tree/before-lock closure has the original
 raw data required by this contract. Supporting other dependency custody returns to
 planning; it does not add a payload field or weaker observation implicitly.
+
+## Original private publication materialization amendment, 2026-10-04
+
+Amended 2026-10-04: AC1 fresh Journal ordering and AC2 restart/continued publication
+also require explicit delivery of the independently verified private child into
+the owned original local Git database. Source inspection found Journal API writes
+do not hydrate it, while existing fake API and Snapshot share one object store.
+A successful first local batch projection does not prove subsequent original
+head/context/graph reads can continue on a real separate acquired database.
+
+Retain or independently derive the exact bounded prospective private blob/tree/
+commit closure from authenticated original parent, frozen changes and fixed
+source-observed tagger. Match complete deterministic child identity to independent
+remote object/ref observations. Import only those hash-verified expected bytes into
+the owned original local ODB, with isolated bounded Git plumbing and no checkout,
+network, arbitrary API reconstructed commit or candidate code. Verify full new
+parent/tree/hash/graph and original replay before logical Journal/Snapshot head
+advance and clearing pending bindings. StartPlan initial publication needs the
+same boundary. Preserve original parent and unrelated original objects.
+
+Failure after remote publication keeps pending/fence and permits only separately
+authorized read-only original acquisition/reconciliation; it creates no rollback,
+ref retry or implicit next effect. Cover two sequential publications plus start-to-
+Snapshot continuation using genuinely distinct REMOTE API and LOCAL acquired bare
+stores without hardlinks/alternates. Assert REMOTE changes do not mutate LOCAL
+before explicit delivery. Negative fixtures cover missing/corrupt retained objects,
+remote metadata/hash mismatch, local disk/output/deadline failure, moving refs and
+lost acknowledgement. Report source/native proof separately from actual HTTPS,
+private permissions and operating receipt. This same-scope source correction is
+part of the public4 bridge prerequisite, not a new authority or recovery policy.
