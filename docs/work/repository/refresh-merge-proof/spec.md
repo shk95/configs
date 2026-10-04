@@ -130,3 +130,23 @@ that profile is unsupported. Any abort, nonzero result or extra output refuses.
 The default-false isolated profile with explicit original attribute source passed
 tiny clean/novel-object and attribute fixtures. Source/native Windows/Linux,
 executable closure, bounded stress and actual private/public receipts remain pending.
+
+## Preparation identity clarification, 2026-10-04
+
+Required-base preparation runs on the independently computed complete merge tree T,
+not a future merge commit whose timestamp depends on that job's completion. A
+separate versioned required5 receipt binds input-kind=computed-merge-tree, T,
+previous/base/unique merge-base, original carrier/runtime profile and independently
+approved utility/producer source identities. Original1–4 receipt/candidate semantics
+remain unchanged. Exact receipt grammar and path-Nix source-metadata support still
+require review; this clarification does not assign implementation.
+
+Observe actual successful producer completion and its timestamp after the job ends;
+a producer cannot author its own future completed-at into its artifact. Then form
+canonical merge commit M with tree T and ordered parents previous/base, and final
+head H with parent M. Candidate source=parent=M; before-lock is the literal merged
+lock from T, not the base operand lock. Compare H's complete tree to T with only
+the lock replacement. Preparation consumption excludes M/H, batch, transient writer
+identity, construction digest and operation IDs, preventing hash/time cycles.
+Controller source, utility source, producer source and candidate source remain
+separate explicit identities. Missing or changed bindings refuse.
