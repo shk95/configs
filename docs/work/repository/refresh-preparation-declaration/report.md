@@ -100,3 +100,10 @@ B1–B4 remain pending implementation/current-head delivery. No importing consum
 Root accepted the dated C1–C4 StageInvocation/current-candidate/D0 bridge, deterministic job-start-based unsigned raw child, full packet-only/selected-original ancestry validator and one-shot read-only recovery contract. Claim and declaration publication require independently verified REMOTE identity and LOCAL rawclosure hydration/full replay before advancing or clearing pending. Actual B and public4 hydration source deliveries are dependencies; original5 stays separately gated.
 
 C1–C4 remain pending implementation and current-head source evidence. No claim, packet, private object/ref, operating approval, workflow activation or effect was executed. Enclosing acceptance remains pending. Library quotas consume tighter enclosing budgets, and recovery of an old introducing child never replaces a later actual current head.
+
+
+## Initial data reader source contract accepted, 2026-10-04
+
+Root accepted dated A1–A4 data-only initial repository/receipt/inventory/archive validation. Exact original whole-repository fingerprint remains distinct from the utility Unix-like-relative map and from required5 input-tree T. Finite raw tree/blob/path/mode/materialization bounds and streamed ZIP structure are specified without changing receipt17/archive3 or utility semantics. Actual inspected ca90 Git tree had no symlink/gitlink entries; historical prototype counts support finite-bound rationale only, not a qualified producer snapshot.
+
+Read-only public artifact listings returned zero eligible samples; actual ZIP uploader compatibility was not proved. Source reader fixtures must exercise supported streamed variants, while runtime/action/bootstrap/producer/binary custody and real operating evidence remain separate. A1–A4 and all enclosing criteria remain pending implementation/current-head delivery. No utility, producer, private packet, workflow or effect was run.
