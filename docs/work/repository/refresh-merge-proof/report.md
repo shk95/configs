@@ -77,3 +77,13 @@ Linux/Windows native proof, admitted operating profile, authenticated original
 carrier, source5 fixture/delivery or public/private API effect is claimed.
 AC1–3 and source pickup remain pending final contract review and actual source
 evidence; the prototype supplies feasibility only.
+
+## Runtime ingress boundary review, 2026-10-04
+
+Root reviewed the computational Backend versus runtime-role custody interface.
+The dated specification now separates original computational replay from actual
+trusted operating admission, preserves wire schemas/no-merge behavior, and refuses
+caller JSON authority. This is contract preparation, not original5 source delivery.
+Complete closure verification/loader ingress and fixed role/native scenario source
+adoption remain pickup gates. No Linux runtime qualification, actual review/private
+packet, initialization, dispatch or effect was performed; acceptance remains pending.

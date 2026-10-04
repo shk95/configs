@@ -551,3 +551,58 @@ its independently provisioned public/source-approval/profile/closure tuple and
 verification interface must be accepted before implementation. This plan invents
 no runtime workflow/role or numeric trust identity. Later actual Linux/native
 closure, domain reviewer/Environment and API grants are separate operating gates.
+
+## Computational replay and operating runtime admission clarification, 2026-10-04
+
+Amended 2026-10-04: AC1/AC2 distinguish computational replay from actual operating
+runtime admission. Root accepts this boundary for the source contract; it does not
+assign original5 implementation or certify an actual runtime. Exact complete-closure
+verification and trusted-host/loader wiring, fixed runtime-role adoption and the
+remaining original5 interfaces require concrete pickup review. No new event/context
+column, wire boolean or topology is introduced.
+
+A pure ProfileAnchor validates canonical original config10/envelope/source approval,
+full digest equality and unique immutable original provenance. It carries data only.
+An independent programmer/provisioner authenticates the owned descriptor origin and
+rehashes the actual executable and complete accepted dependency closure before
+constructing the computational Backend. A matching manifest profile scalar or a
+caller-selected descriptor does not supply this ingress. Missing or mismatched
+required5 ingress refuses; old1–4 and initial5 no-merge sentinel behavior remain literal.
+
+The anchored helper computes the complete bounded merge and novel object result.
+Its internal ComputationalMergeProof may bind profile/carrier/tree/object identities;
+it grants no qualified, approved, accepted operating or publication flag. Keep the
+selected original5 replay stdout grammar and 4096-byte limit unchanged. Offline and
+prospective replay verify computational original facts without fabricating live
+Environment/reviewer state. Source fixtures may use explicitly synthetic anchors
+and programmer-owned native backends; they do not certify the anchor's claimed
+operating platform or production closure.
+
+Trusted transport separately observes the uniquely introduced original runtime
+packet, exact subject/source approval and fixed source-policy runtime role through
+the explicitly adopted typed custody observer. It combines that observation with
+current independently verified realization into an in-process RuntimeAdmission.
+No public constructor/deserializer from view JSON, approved:true, packet kind or
+source approval alone grants this capability. Opaque Python state only marks a
+trusted programmer boundary; it is not OS attestation or protection from hostile
+code in the same interpreter. Candidate/retained computation remains credential-free.
+
+Before proposing an accepted operating refresh result or effect, trusted transport
+requires matching runtime admission, independently observed preparation and full
+DOMAIN D1, then refreshes current source/job/owner/generation/head/stop guards.
+Historical computational replay does not pretend to reauthorize current operation.
+A serialized audit receipt remains data and must be independently observed at
+operating admission. Public/default required5 CLI refuses without independent
+computational ingress; runtime/view files convey location/provenance data and never
+create operating approval. No production fixture/trusted=true bypass is added.
+
+Proposed exact runtime-native coverage is five sorted scenario IDs:
+attributes-lock-preservation, clean-required-merge, finite-refusal,
+isolated-configuration, runtime-identity. A successful refusal harness may report
+exit0 only when its raw records retain the expected command failures. These IDs and
+runtime-role packet specialization still require explicit source adoption. Actual
+Linux2.55.0 realization, complete closure, scenario execution, review/Environment,
+original private custody and hard resource isolation remain separate operating gates.
+The standalone raw computation library's observed scratch refusal is not a filesystem
+quota qualification. No accepted operating event, API write or source5 pickup follows
+from this clarification alone.
