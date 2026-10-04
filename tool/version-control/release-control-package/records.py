@@ -127,7 +127,7 @@ def parse(data, kind):
         if key == "classification":
             require(value in {"patch", "minor", "major"}, "unsupported-classification")
         if key == "protocol":
-            require(value == "3", "unsupported-protocol")
+            require(value == "4", "unsupported-protocol")
         if key == "time":
             require(re.fullmatch(r"\d{4}-\d\d-\d\dT\d\d:\d\d:\d\dZ", value) is not None, "invalid-time")
             try:
@@ -167,7 +167,7 @@ def parse(data, kind):
                 identity(row[6])
             else:
                 identity(row[0]); identity(row[2]); decimal(row[3])
-                require(row[1] in {"record", "pr", "merge", "tag-object", "tag-ref", "cancel", "refresh-branch", "refresh-pr"}, "unsupported-operation")
+                require(row[1] in {"record", "pr", "merge", "tag-object", "tag-ref", "cancel", "refresh-object", "refresh-branch", "refresh-pr"}, "unsupported-operation")
                 require(row[4] in {"intent", "observed", "unknown", "conflict"}, "invalid-operation-state")
                 require(row[5] == "-" or re.fullmatch(r"[0-9a-f]{40}|[1-9][0-9]*", row[5]) is not None, "invalid-remote-identity")
                 if row[6] != "-":
