@@ -21,3 +21,19 @@ and credential boundaries. No source lane is assigned from an unresolved design.
 | AC2 | pending | One immutable-object intent per blob/tree/commit proposed; exact next-protocol schema, bounds and restart/reconciliation contract remain to review. |
 | AC3 | pending | Ordered compatibility planning precedes refresh/object/writer pickup. No durable policy/source adoption or operating receipt is claimed. |
 | AC4 | pending | Original fixture emits no Release-* trailers; domain-owned source-bound declaration/custody design must be accepted before generated commit construction and production source pickup. |
+
+## Bounded semantic design settlement, 2026-10-04
+
+Initial-only protocol 4 schema now includes original raw base/path trees/before-lock,
+complete lock-only comparison, non-self-referential construction and topological
+object IDs. Original replay preparation consumption output supports global
+cross-batch uniqueness without reinterpreting old packages. Existing observation-only
+recovery precedes takeover; no new claim-before-reconcile authority is needed.
+These are reviewed design results, not implemented source or API proof.
+
+AC2's initial-object design is settled for source pickup through refresh-object-protocol;
+required-base merge proof remains explicitly pending under refresh-merge-proof.
+AC1 preparation/download/provenance implementation and actual deployment remain
+pending. AC3 durable adoption/source/native evidence and AC4 exact domain declaration
+custody remain pending. Actual REST canonicalization success is an operating receipt
+gate; source must enforce strict expected hashes and refuse mismatch before refs.
