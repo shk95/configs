@@ -39,3 +39,15 @@ not treat a ref response as proof of all object effects. See
 [Git database API guide](https://docs.github.com/en/rest/guides/using-the-rest-api-to-interact-with-your-git-database).
 Actual API permissions, Environment isolation and source acceptance remain distinct
 operating gates, not conclusions drawn from those endpoint descriptions.
+
+## Independent plan review and unresolved exact schema, 2026-10-04
+
+Independent review found no blocking defect in this pending planning return. Before
+source pickup, bind an already completed preparation run to the later claimed writer
+batch with exact source/base, unique consumption and stale/duplicate-result refusal.
+A run completed before claim is not itself ownership of the eventual writer batch.
+
+Restart also needs an explicit owner/decision procedure after object GET. Exact
+verified bytes may become an observed success; unavailable/404 must not silently
+become confirmed absence or authority for another POST. A new instance or run creates
+no retry permission. These unresolved contracts keep AC1/AC2 pending.
