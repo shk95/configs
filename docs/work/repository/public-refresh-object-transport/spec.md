@@ -87,3 +87,20 @@ or cleanup is assigned. Replan for new package schema, custody, endpoint or orig
 | AC1 | Original protocol4 intents produce only fixed exact bounded public object requests, with dependency and durable-intent ordering and fresh effect guards. | fixtures, policy checks, review |
 | AC2 | Independent complete typed observations reconstruct exact identities; qualified absence, lost effects, mismatch, restart/takeover and object-before-ref rules preserve original fences. | fixtures, policy checks, review |
 | AC3 | Explicit current endpoint/permission/closure adoption preserves historical semantics; normal local/native/current-head source delivery is separate from actual API and operating evidence. | fixtures, policy checks, affected dispatch, review |
+
+## Source pickup clarification, 2026-10-04
+
+Independent source inventory review identified current transport readers that are
+insufficient for this contract: credentialed object GET, recursive journal-tree
+reads and reduced commit JSON cannot serve as the complete anonymous typed proof.
+Implement separate fixed anonymous readers and original4 observation shapes; keep
+journal readers and original historical transport unchanged. Current4 admission
+must cover disabled projection, embedded approval/config/attempt packet, bootstrap,
+StartPlan events and context selection, not only the current loader allowlist.
+
+An original dependency without sufficient authenticated literal data to reconstruct
+its exact identity is unsupported and refuses before public POST. In particular,
+never manufacture signature headers for a preserved gitlink commit from API JSON.
+Ordinary original base commit/root/unixlike tree/before-lock closure has the original
+raw data required by this contract. Supporting other dependency custody returns to
+planning; it does not add a payload field or weaker observation implicitly.

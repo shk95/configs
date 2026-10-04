@@ -28,3 +28,13 @@ This is planned source verification, not an observed production initialization.
 | AC1 | pending | Source prerequisites and fixed request boundary planned; not implemented. |
 | AC2 | pending | Exact object and absence/recovery contract planned; fixtures and source remain pending. |
 | AC3 | pending | Durable adoption/current closure/local/native delivery and actual operating proof remain separate. |
+
+## Independent source inventory review, 2026-10-04
+
+Read-only review compared reviewed plan f5e32cd with actual dev 32f4e75 and semantic
+source 12a40cad without importing or executing unmerged transport source. The dated
+clarification identifies dedicated anonymous direct readers, exact original4
+observation targets and full serialization adoption. Insufficient original dependency
+custody finitely refuses; signed gitlink metadata is never invented. This records
+pickup design only. All acceptance remains pending prerequisite integration and
+actual source/local/native delivery.
