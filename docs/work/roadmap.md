@@ -75,8 +75,12 @@ unmet acceptance. Deferred host outcomes below remain deferred.
 
 Record-maintenance issues are inspected against actual evidence and current
 support boundaries. A complete report or removed feature does not authorize
-restoring old behavior. The upstream watcher #176 and Windows native evidence
-#121 are separate residual records, not prerequisites for the manual controller.
+restoring old behavior. The upstream watcher #176 was resolved from its existing
+operating evidence. Windows mirrored-file evidence #121 was superseded by Windows
+11 support exclusion and retirement of provider `.wslconfig`; its historical
+missing observation remains unverified. Neither record is a prerequisite or current
+pickup for the manual controller. Reintroducing retired Windows support needs a
+later support decision.
 
 Standalone work does not need a roadmap row. The planner maintains priorities,
 dependencies and disposition here; PR state remains on GitHub. Completion needs

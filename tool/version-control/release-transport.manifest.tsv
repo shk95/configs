@@ -1,5 +1,5 @@
 format	1
-file	tool/version-control/release-control-loader.py	a77199ac7169628e78de7bc6b4e682fa54ab32c13115336f4a00c14536b7ad1c
+file	tool/version-control/release-control-loader.py	573b6ada0a6a666110cbc4ade8b54b634b1f66bb18009cf6e35047d37afe5163
 file	tool/version-control/release-initialize.py	a9d2df2bc4850ef1a337d5d9bf9437cbdfaca4e03252babc4065e691fd87f511
 file	tool/version-control/release-operating-history.py	4cd236d69d5d7e9b8aef93d89ef4ca6deb3254996329c2b9642a8ef69eb013a7
 file	tool/version-control/release-operating-roles.json	eb7459391fbc2ae5ab8dfeeeb1f3293ce93553b28dd2805e8adff5687923a679

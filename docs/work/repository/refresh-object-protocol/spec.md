@@ -4,6 +4,7 @@ date: 2026-10-04
 scope: repository
 status: approved
 review-by: 2026-10-18
+issue: #502
 
 ## Assignment and inputs
 

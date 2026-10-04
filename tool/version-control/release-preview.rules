@@ -178,6 +178,7 @@ production-map	exact	docs/policy/decisions/repository/fixture-tags-name-proven-i
 production-map	exact	docs/policy/decisions/repository/github-agent-workflow.md	prod-repository-policy
 production-map	exact	docs/policy/decisions/repository/hooks-run-under-git-for-windows.md	prod-repository-policy
 production-map	exact	docs/policy/decisions/repository/hygiene-tool-owns-enforcement.md	prod-repository-policy
+production-map	exact	docs/policy/decisions/repository/immutable-refresh-object-semantics.md	prod-repository-policy,prod-repository-native
 production-map	exact	docs/policy/decisions/repository/invariant-registry-created.md	prod-repository-policy
 production-map	exact	docs/policy/decisions/repository/linked-worktrees-own-change-authoring.md	prod-repository-policy
 production-map	exact	docs/policy/decisions/repository/local-gate-selects-by-effect.md	prod-repository-policy
@@ -258,6 +259,7 @@ production-map	exact	docs/policy/invariants/repository/hygiene-home-paths.md	pro
 production-map	exact	docs/policy/invariants/repository/hygiene-machine-identity.md	prod-repository-policy
 production-map	exact	docs/policy/invariants/repository/hygiene-prose-account-name.md	prod-repository-policy
 production-map	exact	docs/policy/invariants/repository/hygiene-runtime-state.md	prod-repository-policy
+production-map	exact	docs/policy/invariants/repository/immutable-refresh-object-semantics.md	prod-repository-policy,prod-repository-native
 production-map	exact	docs/policy/invariants/repository/initializer-attempt-custody.md	prod-repository-policy,prod-repository-native
 production-map	exact	docs/policy/invariants/repository/issue-closes-from-report.md	prod-repository-policy
 production-map	exact	docs/policy/invariants/repository/local-gate-selects-by-effect.md	prod-repository-policy
@@ -378,12 +380,18 @@ production-map	exact	docs/work/repository/provider-documentation-alignment/spec.
 production-map	exact	docs/work/repository/provider-release-contract/report.md	prod-repository-policy
 production-map	exact	docs/work/repository/provider-release-contract/spec.md	prod-repository-policy
 production-map	exact	docs/work/repository/provider-release-contract/study.md	prod-repository-policy
+production-map	exact	docs/work/repository/public-refresh-object-transport/report.md	prod-repository-policy
+production-map	exact	docs/work/repository/public-refresh-object-transport/spec.md	prod-repository-policy
 production-map	exact	docs/work/repository/refresh-candidate/report.md	prod-repository-policy
 production-map	exact	docs/work/repository/refresh-candidate/spec.md	prod-repository-policy
 production-map	exact	docs/work/repository/refresh-merge-proof/report.md	prod-repository-policy
 production-map	exact	docs/work/repository/refresh-merge-proof/spec.md	prod-repository-policy
+production-map	exact	docs/work/repository/refresh-merge-proof/study.md	prod-repository-policy
 production-map	exact	docs/work/repository/refresh-object-protocol/report.md	prod-repository-policy
 production-map	exact	docs/work/repository/refresh-object-protocol/spec.md	prod-repository-policy
+production-map	exact	docs/work/repository/refresh-preparation-declaration/report.md	prod-repository-policy
+production-map	exact	docs/work/repository/refresh-preparation-declaration/spec.md	prod-repository-policy
+production-map	exact	docs/work/repository/refresh-preparation-declaration/study.md	prod-repository-policy
 production-map	exact	docs/work/repository/release-control-history/report.md	prod-repository-policy
 production-map	exact	docs/work/repository/release-control-history/spec.md	prod-repository-policy
 production-map	exact	docs/work/repository/release-controller/report.md	prod-repository-policy

@@ -51,7 +51,7 @@ def approved(data):
     result = dict(lines[1:])
     if len(result) != len(lines) - 1 or set(result) != {"public-repository", "master", "control", "manifest", "approval", "protocol"}:
         raise ValueError("invalid-approval-assertion")
-    if result["public-repository"] != "shk95/configs" or result["protocol"] not in {"1", "2", "3"}:
+    if result["public-repository"] != "shk95/configs" or result["protocol"] not in {"1", "2", "3", "4"}:
         raise ValueError("unsupported-approval-protocol")
     for key, size in (("master", 40), ("control", 40), ("manifest", 64), ("approval", 64)):
         if not re.fullmatch(r"[0-9a-f]{%d}" % size, result[key]) or result[key] == "0" * size:
@@ -168,14 +168,14 @@ from pathlib import Path
 sys.path.insert(0,sys.argv[1])
 import records,engine
 root=Path(sys.argv[2]); protocol=sys.argv[3]; before=int(sys.argv[4]); prior=sys.argv[5]
-assert protocol in {'1','2','3'}
+assert protocol in {'1','2','3','4'}
 config=records.parse(records.read(root/'config/operating.tsv'),'config')
 approved=records.parse(records.read(root/'approved.tsv'),'approved')
 from adapter import document
 transcript=document(records.read(root/'transcript.json'))
 assert config['protocol']==protocol and approved['protocol']==protocol
 assert config['enabled']!='1' or (config['actors']!='-' and config['checks']!='-')
-if protocol=='3':
+if protocol in {'3','4'}:
  import main
  result=main.replay(root,transcript,approved,before,prior)
 else:
@@ -200,7 +200,7 @@ def replay_package(package, batch, protocol, before, prior):
     if process.returncode or len(process.stdout) > 4096:
         raise ValueError("retained-replay-refusal")
     result = json.loads(process.stdout)
-    if (not isinstance(result, dict) or set(result) != {"projection", "stage", "proposed"}
+    if (not isinstance(result, dict) or set(result) != ({"projection", "stage", "proposed", "preparations"} if protocol == "4" else {"projection", "stage", "proposed"})
             or result["stage"] not in STAGES or type(result["proposed"]) is not int or result["proposed"] < 0):
         raise ValueError("invalid-retained-projection")
     projection = base64.b64decode(result["projection"], validate=True)
@@ -210,11 +210,34 @@ def replay_package(package, batch, protocol, before, prior):
     identity(fields["prior"], 64); identity(fields["batch"], 64); identity(fields["state-digest"], 64)
     if any(not re.fullmatch(r"0|[1-9][0-9]*", fields[key]) for key in ("sequence", "generation")):
         raise ValueError("invalid-retained-count")
+    if protocol == '4':
+        values=result['preparations']
+        if not isinstance(values,list) or len(values)>16:
+            raise ValueError('invalid-preparation-replay-count')
+        seen=set()
+        for value in values:
+            if not isinstance(value,dict) or set(value)!={'digest','batch'}:
+                raise ValueError('invalid-preparation-replay-output')
+            identity(value['digest'],64); identity(value['batch'],64)
+            if value['batch']!=fields['batch'] or value['digest'] in seen:
+                raise ValueError('unbound-preparation-replay-output')
+            seen.add(value['digest'])
     return projection, fields, result
 
 
 def object_digest(kind, data):
     return hashlib.sha1(kind.encode("ascii") + b" " + str(len(data)).encode("ascii") + b"\0" + data).hexdigest()
+
+
+def consume_preparations(result, batch, consumed):
+    # INV repository/immutable-refresh-object-semantics
+    # Only called after exact original protocol-4 replay validation.
+    for value in result['preparations']:
+        if value['batch'] != batch:
+            raise ValueError('unbound-preparation-consumption')
+        previous=consumed.setdefault(value['digest'],value['batch'])
+        if previous!=value['batch']:
+            raise ValueError('cross-batch-preparation-consumption')
 
 
 def verify_graphs(repo, heads):
@@ -336,7 +359,7 @@ def global_preview(paths, assertion, head, scratch):
             identity(c[key])
         for key in ("batch", "manifest", "approval"):
             identity(c[key], 64)
-        if c["protocol"] not in {"1", "2", "3"}:
+        if c["protocol"] not in {"1", "2", "3", "4"}:
             raise ValueError("unsupported-context-protocol")
         if (c["transcript-commit"] == "-") != (c["transcript"] == "-"):
             raise ValueError("partial-transcript-context")
@@ -382,13 +405,14 @@ def global_preview(paths, assertion, head, scratch):
         public_heads.add(assertion["master"])
     verify_graphs(paths["bundle_repository"], public_heads)
     ledger, final_fields, last_result, selected = [], None, None, None
+    preparations = {}
     for ordinal, ((before, events, completed), context) in enumerate(zip(envelopes, contexts)):
         first = events[0][2]
         if context["start"] != str(before + 1) or any(first.get(k) != context[v] for k, v in
                 (("batch", "batch"), ("control", "control"), ("manifest", "manifest"),
                  ("approval-provenance", "approval"), ("config", "config"), ("protocol", "protocol"))):
             raise ValueError("retained-context-binding-mismatch")
-        if context["protocol"] == "3" and (first.get("approved-master") != context["master"] or first.get("config-commit") != context["config-commit"]):
+        if context["protocol"] in {"3", "4"} and (first.get("approved-master") != context["master"] or first.get("config-commit") != context["config-commit"]):
             raise ValueError("missing-protocol-three-bindings")
         git(repo, "merge-base", "--is-ancestor", context["config-commit"], head)
         cfg_blob, config = record_blob(repo, context["config-commit"], "config/operating.tsv")
@@ -423,6 +447,8 @@ def global_preview(paths, assertion, head, scratch):
         projection, fields, result = replay_package(package, batch, context["protocol"], before, boundary_prior)
         if fields["sequence"] != str(before + len(events)) or fields["prior"] != hashlib.sha256(events[-1][1]).hexdigest() or fields["batch"] != context["batch"]:
             raise ValueError("wrong-global-semantic-projection")
+        if context['protocol']=='4':
+            consume_preparations(result,context['batch'],preparations)
         if completed and (result["stage"] != "complete" or result["proposed"] != 0):
             raise ValueError("structural-completion-not-semantic")
         ledger.append({"context": context, "projection": hashlib.sha256(projection).hexdigest()})
@@ -457,7 +483,7 @@ def global_preview(paths, assertion, head, scratch):
     package, batch, approval, before, boundary_prior = selected
     (batch / "request.tsv").write_bytes(paths["request"].read_bytes())
     arguments = [str(batch), str(batch / "transcript.json"), str(batch / "request.tsv"), str(batch / "approved.tsv")]
-    if approval["protocol"] == "3":
+    if approval["protocol"] in {"3", "4"}:
         arguments = ["--preview-range"] + arguments + [str(before), boundary_prior]
     result = subprocess.run([sys.executable, "-I", "-S", "-B", str(package / ROOT / "main.py")] + arguments,
                             timeout=15 * 60, capture_output=True, env=runtime_environment(os.environ))
