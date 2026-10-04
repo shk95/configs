@@ -25,6 +25,7 @@ def module(name, path):
     return result
 
 T = module('configs_release_transport', ROOT / 'release-transport.py')
+R = module('configs_production_receipt', ROOT / 'release-production-receipt.py')
 L = module('configs_release_loader', ROOT / 'release-control-loader.py')
 
 DRIVER = r'''
@@ -177,7 +178,7 @@ class StartPlan:
 
 class Snapshot:
     """A whole-history verified, source-bound projector with no credentials."""
-    def __init__(self, entry, bundle, operating, approved, head, tagger, requirements, *, qualification=None):
+    def __init__(self, entry, bundle, operating, approved, head, tagger, requirements, *, qualification=None, receipts=None):
         self.entry, self.api = entry, entry.api
         T.need(type(entry) is T.Entry and entry.authenticated, 'missing-entry')
         self.source = entry.trusted['source']
@@ -189,6 +190,8 @@ class Snapshot:
                and __import__('re').fullmatch(r'\d{4}-\d\d-\d\dT\d\d:\d\d:\d\dZ',tagger['date']), 'unfixed-record-tagger')
         self.tagger, self.requirements = dict(tagger), copy.deepcopy(requirements)
         self.qualification=self.qualification_bytes=qualification
+        T.need(receipts is None or type(receipts) is R.Collector, 'invalid-typed-receipt-collector')
+        self.receipts=receipts
         self.temporary = tempfile.TemporaryDirectory(prefix='release-transport-retained-')
         self.scratch = Path(self.temporary.name)
         self.bundle, self.operating = Path(bundle), Path(operating)
@@ -502,6 +505,17 @@ class Snapshot:
         fields['checks']=[{k:v for k,v in row.items() if k not in {'state','reference'}} for row in value['checks']]
         return T.canonical(fields)
 
+    def typed_collect(self,comparison,baseline,checks,historical=None):
+        try:
+            return self.receipts.collect(self,comparison,baseline,checks,historical)
+        except R.T.Refusal as error:
+            raise T.Refusal(error.args[0]) from None
+
+    def candidate_receipts(self,comparison,baseline,checks):
+        if self.receipts is None:
+            return self.entry.evidence(comparison['dev'],comparison['tree'],self.requirements),None,[]
+        return self.typed_collect(comparison,baseline,checks)
+
     def propose_candidate(self):
         """Derive selection, observe receipts and qualify; accept no supplied event."""
         T.need(not getattr(self,'proposal_fenced',False) and self.pending_changes is None,'outstanding-proposal')
@@ -513,22 +527,26 @@ class Snapshot:
             code,diagnostic=self.candidate_preview(comparison,baseline,roots,b'format\t1\n')
             if code==0 and diagnostic.get('decision')=='no-op':return {}
             T.need(code==1 and diagnostic.get('decision')=='refusal'
-                and diagnostic.get('reasons')==['missing-required-evidence'],'candidate-qualification-refusal')
+                and (diagnostic.get('reasons')==['missing-required-evidence'] or
+                     (self.receipts is not None and set(diagnostic.get('reasons',[]))=={'missing-required-evidence','missing-template-pair'})),
+                'candidate-qualification-refusal')
             decision=self.candidate_decision(diagnostic);checks=diagnostic['checks']
             ids=[r.get('id') for r in checks]
             T.need(all(isinstance(i,str) and __import__('re').fullmatch('[a-z0-9][a-z0-9-]*',i) for i in ids)
-                and ids==sorted(set(ids)) and {r['id'] for r in self.requirements}==set(ids)
-                and len(self.requirements)==len(ids),'incomplete-candidate-trust-set')
+                and ids==sorted(set(ids)) and (self.receipts is not None or
+                ({r['id'] for r in self.requirements}==set(ids) and len(self.requirements)==len(ids))),'incomplete-candidate-trust-set')
             required={r['id']:r for r in self.requirements}
-            T.need(all(r.get('lane')!='review' and r.get('requiredness')=='required'
+            T.need(self.receipts is not None or all(r.get('lane')!='review' and r.get('requiredness')=='required'
                 and r.get('expected_tool')==required[r['id']]['tool'] for r in checks),'unsupported-candidate-check')
-            receipts=self.entry.evidence(comparison['dev'],comparison['tree'],self.requirements)
+            receipts,pair,binding=self.candidate_receipts(comparison,baseline,checks)
             rows=[['evidence',r['id'],comparison['dev'],comparison['master'],comparison['tree'],self.control,
                 r['tool'],'verified','https://github.com/'+T.PUBLIC+'/actions/runs/'+str(r['run'])+'/job/'+str(r['job'])]
                 for r in sorted(receipts,key=lambda r:r['id'])]
             evidence=b'format\t1\n'+b''.join(('\t'.join(row)+'\n').encode('utf-8') for row in rows)
+            if pair is not None:
+                evidence+=('\t'.join(['template-pair','unixlike',pair['repository'],pair['revision'],pair['provider'],'delivered','verified'])+'\n').encode('utf-8')
             self.candidate_context(comparison,before)
-            T.need(self.entry.evidence(comparison['dev'],comparison['tree'],self.requirements)==receipts,'moving-candidate-receipts')
+            T.need(self.candidate_receipts(comparison,baseline,checks)==(receipts,pair,binding),'moving-candidate-receipts')
             code,final=self.candidate_preview(comparison,baseline,roots,evidence)
             T.need(code==0 and final.get('decision')=='candidate' and final.get('reasons')==[]
                 and self.candidate_decision(final)==decision
@@ -553,7 +571,7 @@ class Snapshot:
                 repository=str(self.entry.trusted['repository-id']),workflow=str(self.entry.trusted['workflow']),event='workflow_dispatch')
             transcript['source'].append(request)
             changes=self.propose_event(dict(candidate,kind='candidate'),transcript)
-            self.candidate_binding=(copy.deepcopy(comparison),copy.deepcopy(before),copy.deepcopy(receipts))
+            self.candidate_binding=(copy.deepcopy(comparison),copy.deepcopy(before),copy.deepcopy((receipts,pair,binding,checks)))
             self.validate_collected_candidate()
             return changes
         except (ValueError,TypeError,KeyError,IndexError,OSError,subprocess.SubprocessError) as error:
@@ -568,9 +586,10 @@ class Snapshot:
         binding=getattr(self,'candidate_binding',None)
         if binding is None:return
         try:
-            comparison,before,receipts=binding
-            self.candidate_context(comparison,before)
-            T.need(self.entry.evidence(comparison['dev'],comparison['tree'],self.requirements)==receipts,
+            comparison,before,saved=binding
+            receipts,pair,observation,checks=saved
+            baseline,_=self.candidate_context(comparison,before)
+            T.need(self.candidate_receipts(comparison,baseline,checks)==(receipts,pair,observation),
                 'moving-candidate-receipts')
             self.candidate_context(comparison,before)
         except BaseException:
@@ -590,7 +609,17 @@ class Snapshot:
 
     def collected_evidence(self,candidate,requirements):
         self.evidence_context(candidate,requirements)
-        receipts=self.entry.evidence(candidate['dev'],candidate['tree'],self.requirements)
+        if self.receipts is None:
+            receipts=self.entry.evidence(candidate['dev'],candidate['tree'],self.requirements)
+        else:
+            baseline=self.qualification_input()
+            T.need(T.digest(baseline)==candidate['baselines'],'changed-evidence-baseline')
+            checks=self.typed_checks(candidate,baseline)
+            T.need([r['id'] for r in checks]==candidate['selected'].split(','),'changed-evidence-producer-set')
+            transcript=T.document((self.batch/'transcript.json').read_bytes())
+            typed={p['id'] for p in self.receipts.producers if p['kind']!='actions'}
+            old=[r for r in transcript['checks'] if r[0] in typed and r[1:6]==[candidate[k] for k in ('dev','master','tree','rules','tool')]]
+            receipts,_,_=self.typed_collect({k:candidate[k] for k in ('dev','master','tree')},baseline,checks,old or None)
         self.evidence_context(candidate,requirements)
         return receipts
 
@@ -601,9 +630,8 @@ class Snapshot:
             state=self.project()['state'];candidate=copy.deepcopy(state['candidate'])
             T.need(candidate and state['stage']=='candidate','no-candidate-awaiting-evidence')
             selected=candidate['selected'].split(',')
-            T.need(self.requirements and len(self.requirements)==len(selected)
-                and len(set(selected))==len(selected)
-                and {r['id'] for r in self.requirements}==set(selected),'incomplete-evidence-trust-set')
+            T.need(len(set(selected))==len(selected) and (self.receipts is not None or
+                (self.requirements and len(self.requirements)==len(selected) and {r['id'] for r in self.requirements}==set(selected))),'incomplete-evidence-trust-set')
             requirements=T.canonical(self.requirements)
             receipts=self.collected_evidence(candidate,requirements)
             rows=[[r['id']]+[candidate[k] for k in ('dev','master','tree','rules','tool')]
@@ -898,13 +926,34 @@ class Snapshot:
                and T.digest(api.blob(old['unixlike/flake.lock'][2]))==p['before-lock'],'wrong-lock-bytes')
         if p['previous']!='-':T.need(parent['parents']==[p['previous'],p['base']],'wrong-refresh-update-parents')
 
+    def typed_checks(self,candidate,baseline):
+        roots=self.qualification_objects(baseline)
+        _,diagnostic=self.candidate_preview({k:candidate[k] for k in ('dev','master','tree')},baseline,roots,b'format\t1\n')
+        checks=diagnostic.get('checks')
+        T.need(type(checks) is list and [r['id'] for r in checks]==candidate['selected'].split(','),'changed-typed-qualifier-selection')
+        return checks
+
+    def verify_typed_evidence(self):
+        candidate=self.state['candidate'];baseline=self.qualification_input()
+        T.need(T.digest(baseline)==candidate['baselines'],'changed-evidence-baseline')
+        checks=self.typed_checks(candidate,baseline)
+        typed={p['id'] for p in self.receipts.producers if p['kind']!='actions'}
+        historical=[r for r in self.state['evidence'] if r[0] in typed]
+        receipts,_,_=self.typed_collect({k:candidate[k] for k in ('dev','master','tree')},baseline,checks,historical or None)
+        rows=[[r['id']]+[candidate[k] for k in ('dev','master','tree','rules','tool')]+['verified',str(r['run']),str(r['attempt']),str(r['job']),r['tool']] for r in receipts]
+        T.need(rows==self.state['evidence'],'changed-typed-evidence')
+
     def verify_merge(self,p,entry):
         candidate=self.state['candidate'];T.need(candidate and all(candidate[k]==p[k] for k in ('dev','master','tree')),'stale-merge-context')
-        entry.evidence(p['dev'],p['tree'],self.requirements)
+        if self.receipts is None:
+            entry.evidence(p['dev'],p['tree'],self.requirements)
+        else:
+            self.verify_typed_evidence()
         # Exact API checks do not authenticate arbitrary job-reported tool strings.
         # Reviewed requirements bind trusted workflow/source/tool blobs; R-manual
         # must provision that trust set before this source can be used live.
-        T.need(self.requirements and {r['id'] for r in self.requirements}==set(candidate['selected'].split(',')),'incomplete-public-evidence')
+        T.need((self.receipts is not None and {p['id'] for p in self.receipts.producers}==set(candidate['selected'].split(','))) or
+               (self.requirements and {r['id'] for r in self.requirements}==set(candidate['selected'].split(','))),'incomplete-public-evidence')
         approval=self.state['approval']
         if candidate['approval-required']=='1' or candidate['classification']=='major' or candidate['migrations']!='-':
             T.need(approval and int(approval['actor']) in entry.trusted['actors'],'missing-exact-approval')
@@ -918,6 +967,7 @@ class Snapshot:
                    and run.get('repository',{}).get('id')==entry.trusted['repository-id'],'untrusted-approval-source')
 
     def verify_publication(self,p,api):
+        if self.receipts is not None:self.verify_typed_evidence()
         merges=[o for o in self.state['operations'].values() if o['kind']=='merge' and o['state']=='observed']
         T.need(len(merges)==1 and self.state['frozen'],'publication-before-promotion')
         op=merges[0];actual=api.commit(op['remote'])

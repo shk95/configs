@@ -308,3 +308,12 @@ Git-blob digests remain separate checks. Existing serializer/reducer/global repl
 preserve replacement, old-effect fencing and approval invalidation. This bounded
 candidate/evidence precursor supplies no future immutable tag publication plan,
 production refresh, writer workflow or actual operating acceptance.
+
+## Typed production receipt custody
+
+Amended 2026-10-04: use the independent typed transport boundary in
+typed-production-receipt-custody.md for source-bound review/native/template
+assertions. Fixed public anonymous review/Environment and template identity/ref
+GETs grant no token scope, approval write or packet publication authority.
+Original semantic rows and old packages retain their own meaning. Actual source
+acceptance, independent setup/review and operating receipts remain separate gates.

@@ -28,12 +28,11 @@ MAX_OUTPUT=1024*1024
 MAX_DISK=128*1024*1024
 MAX_FILES=20000
 TIMEOUT=120
-TRANSPORT_FILES=tuple(sorted('tool/version-control/'+name for name in (
-    'release-control-loader.py','release-transport','release-transport.py',
-    'release-transport-retained.py','release-transport-preflight.py','release-operating-history.py',
-    'release-operating-roles.json','release-initialize.py')))
-LEGACY_SEVEN=tuple(name for name in TRANSPORT_FILES if not name.endswith('/release-initialize.py'))
-LEGACY_TRANSPORT_FILES=tuple(name for name in LEGACY_SEVEN if not name.endswith('/release-operating-roles.json'))
+LEGACY_FIVE=tuple(sorted("tool/version-control/"+name for name in ('release-control-loader.py', 'release-transport', 'release-transport.py', 'release-transport-retained.py', 'release-transport-preflight.py')))
+LEGACY_TRANSPORT_FILES=tuple(sorted("tool/version-control/"+name for name in ('release-control-loader.py', 'release-transport', 'release-transport.py', 'release-transport-retained.py', 'release-transport-preflight.py', 'release-operating-history.py')))
+LEGACY_SEVEN=tuple(sorted("tool/version-control/"+name for name in ('release-control-loader.py', 'release-transport', 'release-transport.py', 'release-transport-retained.py', 'release-transport-preflight.py', 'release-operating-history.py', 'release-operating-roles.json')))
+LEGACY_EIGHT=tuple(sorted("tool/version-control/"+name for name in ('release-control-loader.py', 'release-transport', 'release-transport.py', 'release-transport-retained.py', 'release-transport-preflight.py', 'release-operating-history.py', 'release-operating-roles.json', 'release-initialize.py')))
+TRANSPORT_FILES=tuple(sorted("tool/version-control/"+name for name in ('release-control-loader.py', 'release-transport', 'release-transport.py', 'release-transport-retained.py', 'release-transport-preflight.py', 'release-operating-history.py', 'release-operating-roles.json', 'release-initialize.py', 'release-production-receipt.py', 'release-production-review-policy.json')))
 ROLE_PATH='tool/version-control/release-operating-roles.json'
 SEED_PATH='release-initial-proposal.tsv'
 
@@ -50,7 +49,7 @@ def source_transport(bundle,source,roles_required=False):
                and re.fullmatch('[a-f0-9]{64}',fields[2]),'invalid-initial-transport')
         names.append(fields[1])
         T.need(T.digest(L.git(bundle,'show',source+':'+fields[1]))==fields[2],'initial-transport-mismatch')
-    inventories=(TRANSPORT_FILES,LEGACY_SEVEN) if roles_required else (TRANSPORT_FILES,LEGACY_SEVEN,LEGACY_TRANSPORT_FILES)
+    inventories=(TRANSPORT_FILES,LEGACY_EIGHT,LEGACY_SEVEN) if roles_required else (TRANSPORT_FILES,LEGACY_EIGHT,LEGACY_SEVEN,LEGACY_TRANSPORT_FILES,LEGACY_FIVE)
     T.need(tuple(names) in inventories,'incomplete-initial-transport')
     return manifest
 
