@@ -46,17 +46,18 @@ class Repository:
         self.path = Path(path); self.path.mkdir()
         git(self.path,'init','--initial-branch=main')
         git(self.path,'config','user.name','Fixture'); git(self.path,'config','user.email','fixture@example.invalid')
-        (self.path/'shared').write_text('first\nsecond\nthird\n')
-        (self.path/'lock').write_text('old lock\n')
+        # Git object expectations bind literal LF bytes on every native host.
+        (self.path/'shared').write_bytes(b'first\nsecond\nthird\n')
+        (self.path/'lock').write_bytes(b'old lock\n')
         if attributes is not None:
             (self.path/'.gitattributes').write_bytes(attributes)
-            (self.path/'sample.dat').write_text('first\nsecond\nthird\n')
+            (self.path/'sample.dat').write_bytes(b'first\nsecond\nthird\n')
         self.ancestor = self.commit('ancestor')
         git(self.path,'checkout','-b','previous')
-        (self.path/'lock').write_text('new lock\n')
+        (self.path/'lock').write_bytes(b'new lock\n')
         self.previous = self.commit('previous')
         git(self.path,'checkout','main')
-        (self.path/'base-only').write_text('base addition\n')
+        (self.path/'base-only').write_bytes(b'base addition\n')
         self.base = self.commit('base')
     def commit(self,message):
         git(self.path,'add','--all');git(self.path,'commit','-m',message)
@@ -103,10 +104,10 @@ class Computation(unittest.TestCase):
         self.assertIn('base-only',result['inventory'])
     def test_text_merge_rename_mode_and_empty_tree(self):
         repo=self.repository
-        git(repo.path,'checkout','previous');(repo.path/'shared').write_text('FIRST\nsecond\nthird\n')
+        git(repo.path,'checkout','previous');(repo.path/'shared').write_bytes(b'FIRST\nsecond\nthird\n')
         git(repo.path,'add','--all');git(repo.path,'update-index','--chmod=+x','shared')
         git(repo.path,'commit','-m','previous edit');repo.previous=git(repo.path,'rev-parse','HEAD').strip().decode()
-        git(repo.path,'checkout','--force','main');(repo.path/'shared').write_text('first\nsecond\nTHIRD\n')
+        git(repo.path,'checkout','--force','main');(repo.path/'shared').write_bytes(b'first\nsecond\nTHIRD\n')
         git(repo.path,'mv','base-only','renamed');repo.base=repo.commit('base edit')
         result=self.proof();self.assertEqual(result['tree'],repo.expected())
         self.assertEqual(result['inventory']['shared'][0],'100755')
@@ -117,8 +118,8 @@ class Computation(unittest.TestCase):
         repo=Repository(Path(self.tmp.name)/'attrs',b'*.dat binary\nshared text eol=lf\nbase-only text=auto eol=crlf\n')
         raw,chunks=carrier(repo.objects(),repo.roots())
         self.assertEqual(M.verify_merge(raw,chunks,self.backend)['tree'],repo.expected())
-        git(repo.path,'checkout','previous');(repo.path/'sample.dat').write_text('FIRST\nsecond\nthird\n');repo.previous=repo.commit('binary one')
-        git(repo.path,'checkout','main');(repo.path/'sample.dat').write_text('first\nsecond\nTHIRD\n');repo.base=repo.commit('binary two')
+        git(repo.path,'checkout','previous');(repo.path/'sample.dat').write_bytes(b'FIRST\nsecond\nthird\n');repo.previous=repo.commit('binary one')
+        git(repo.path,'checkout','main');(repo.path/'sample.dat').write_bytes(b'first\nsecond\nTHIRD\n');repo.base=repo.commit('binary two')
         raw,chunks=carrier(repo.objects(),repo.roots())
         with self.assertRaises(M.Refusal):M.verify_merge(raw,chunks,self.backend)
     def test_real_empty_snapshot_and_result_closure(self):
@@ -186,7 +187,7 @@ class Computation(unittest.TestCase):
                     b'*.x working-tree-encoding=UTF-16\n',b'*.x text -text\n',b'*.x binary eol=lf\n'):
             with self.assertRaises(M.Refusal):M.parse_attributes(raw)
         repo=Repository(Path(self.tmp.name)/'evolution',b'* text\n')
-        git(repo.path,'checkout','main');(repo.path/'.gitattributes').write_text('* binary\n');repo.base=repo.commit('changed attrs')
+        git(repo.path,'checkout','main');(repo.path/'.gitattributes').write_bytes(b'* binary\n');repo.base=repo.commit('changed attrs')
         raw,chunks=carrier(repo.objects(),repo.roots())
         with self.assertRaises(M.Refusal):M.verify_merge(raw,chunks,self.backend)
     def test_every_declared_bound_has_finite_excess(self):
@@ -226,11 +227,11 @@ class Computation(unittest.TestCase):
             self.assertTrue(M.snapshots(objects,commits,roots,budget))
     def test_complete_novel_raw_bytes_over_budget_refuses(self):
         repo=self.repository
-        git(repo.path,'checkout','main');(repo.path/'shared').write_text('start\n'+'m'*525000+'\nend\n')
+        git(repo.path,'checkout','main');(repo.path/'shared').write_bytes(b'start\n'+b'm'*525000+b'\nend\n')
         repo.ancestor=repo.commit('large ancestor')
         git(repo.path,'checkout','-B','previous',repo.ancestor)
-        (repo.path/'shared').write_text('START\n'+'m'*525000+'\nend\n');repo.previous=repo.commit('large previous')
-        git(repo.path,'checkout','main');(repo.path/'shared').write_text('start\n'+'m'*525000+'\nEND\n');repo.base=repo.commit('large base')
+        (repo.path/'shared').write_bytes(b'START\n'+b'm'*525000+b'\nend\n');repo.previous=repo.commit('large previous')
+        git(repo.path,'checkout','main');(repo.path/'shared').write_bytes(b'start\n'+b'm'*525000+b'\nEND\n');repo.base=repo.commit('large base')
         with self.assertRaises(M.Refusal):self.proof()
 
     def test_expanded_input_bytes_boundary_and_excess_precede_native(self):

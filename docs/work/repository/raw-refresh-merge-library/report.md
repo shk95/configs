@@ -162,3 +162,20 @@ After the callback,24 library tests passed10.490 seconds and31 current semantic
 tests passed41.856 seconds. Normal assembly commit/push and exact-head native CI
 remain required. Report remains pending; final report publication waits for
 observed repaired native proof and the later actual #505/#507 integration update.
+
+## Dated literal fixture input repair, 2026-10-05
+
+Actual assembled head412dbf36d56bc3dd919ff8b606ccd6ebe6e8d01d CI37209295331
+passed Ubuntu policy but failed Windows policy111457025586:24 tests ran31.165s,
+with two failed exact blob assertions. The previous readonly cleanup failures no
+longer occurred. Independently hashing `new lock\r\n` and
+`FIRST\r\nsecond\r\nTHIRD\r\n` reproduced both observed unexpected OIDs exactly.
+Python text-mode fixture writes translated LF on Windows, whereas assertions
+correctly required literal LF object identities.
+
+Git payload fixture writes now use explicit bytes for the intended LF inputs,
+including attribute and output-limit scenarios. Assertions and production
+computation remain unchanged. This repairs fixture construction without admitting
+newline normalization into the provider. Repaired current-head native checks
+remain required; the historical failure is not a Windows pass. AC2/AC3 and the
+report remain pending.
