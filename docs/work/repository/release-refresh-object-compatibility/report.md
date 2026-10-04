@@ -37,3 +37,8 @@ AC1 preparation/download/provenance implementation and actual deployment remain
 pending. AC3 durable adoption/source/native evidence and AC4 exact domain declaration
 custody remain pending. Actual REST canonicalization success is an operating receipt
 gate; source must enforce strict expected hashes and refuse mismatch before refs.
+
+Final independent closure review confirmed that current transport inventory hashes
+the loader. Root therefore also serializes current transport manifest updates;
+semantic delivery changes only its loader hash with unchanged membership and runs
+transport/historical-reader fixtures. Neither worker edits a shared manifest.

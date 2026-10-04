@@ -25,6 +25,14 @@ Do not edit release-transport.py, release-transport-retained.py, their inventory
 workflows, shared parent decision or other source lanes. Root owns later transport
 connection under a separate child after this source contract is delivered.
 
+Ownership amendment, 2026-10-04: root also exclusively owns the current
+release-transport.manifest.tsv, which includes the loader. Semantic callback
+rehashes that changed loader with unchanged current transport membership; it adds
+no transport endpoint/effect authority. Supply changed/added paths to root and
+run transport/historical-reader fixtures after closure returns. The typed worker
+supplies its independently reviewed new current membership in its own callback;
+original historical memberships stay explicit and immutable. No AC changes.
+
 Independent preparation can use current dev without importing mapping source.
 Before Ready, root's actual prerequisite integration update incorporates completed
 production-map closure and revalidates actual inventory/eight-file hashes. Keep
