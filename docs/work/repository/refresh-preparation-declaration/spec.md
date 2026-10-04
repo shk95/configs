@@ -108,6 +108,34 @@ Environment protection/reviewer hold, packet custody/bootstrap and manual/schedu
 operation remain independent gates. No dispatch, API mutation, secret, source promotion,
 release, schedule, activation, Apply or cleanup is assigned.
 
+## Dated clarification, 2026-10-04: receipt source and literal identities
+
+The preparation receipt's source names the accepted producer controller source;
+its base names the independently observed target snapshot. For initial protocol 4,
+candidate source=base=parent and previous='-'. Never copy producer source into the
+candidate source field. The producer observes its actual numeric sole job ID while
+running; it cannot assert that job's future completion. The consumer independently
+observes completed successful run/job, latest attempt 1 and artifact custody.
+
+Use original package canonical JSON (UTF8, sorted keys, compact separators, no
+newline). The source fingerprint hashes the complete original repository regular
+leaf map, POSIX path to [SHA256(literal bytes), integer permission bits], including
+lock and utilities; reject unsupported symlinks/gitlinks. The utility manifest
+hashes the exact admitted original utility path map to [Git mode string, raw SHA256].
+Lock identities hash literal bytes, with mode 420 or 493 retained unchanged.
+Input inventory is the actual utility metadata result, not an invented lock-only
+graph. Full-source enumeration and inventory quotas still need source review.
+
+Private declaration staging uses two proposed identities: D0 hashes the canonical
+body before dispatch; D1 hashes the complete body plus independently observed
+original source/runtime/owner/generation/parent envelope. The exact fixed staging
+title must bind D0 and domain approval must bind D1. A completed original-run
+observer is separate from current live Entry. Unique immutable packet introduction
+may reconcile an acknowledgement read-only; absent/unknown never authorizes a retry.
+Private body introduction/ownership, exact envelope/title schema, deterministic
+proposal metadata and traversal bounds remain unresolved. These clarifications
+do not make source pickup ready or authorize any private write.
+
 ## Acceptance
 
 | ID | Criterion | Required lanes |

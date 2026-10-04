@@ -42,7 +42,11 @@ https://github.com/actions/python-versions/releases/tag/3.13.16-36805956071
 Asset https://github.com/actions/python-versions/releases/download/3.13.16-36805956071/python-3.13.16-linux-24.04-x64.tar.gz
 Official GitHub release API asset size 102730838, digest
 sha256:d6f5f504043400592e9dcf368ba262c64d998608646cc22281b5a75beecbc872.
-Asset digest observed from primary API, not independently downloaded/hashed here.
+Asset digest was first observed from the primary API. Later on 2026-10-04 the
+102730838-byte archive was independently downloaded and SHA256 matched that digest.
+Its 9338-member inventory was read without extraction/installation/execution;
+bin/python3.13 SHA256 is
+329d378575992732511d75b3bd675cb91b3c65f3082783cd97ccb14f0ecd5a74.
 
 Fixed setup-python source ece7cb06caefa5fff74198d8649806c4678c61a1 supports manifest
 resolution of exact 3.13.16. Set python-version 3.13.16, architecture x64, check-latest
