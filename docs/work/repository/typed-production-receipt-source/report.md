@@ -66,6 +66,24 @@ All 610 staged tracked paths are covered; work 59/55 pairs, registry 86 and stag
 diff checks passed at callback. Complete final fixtures/hooks/native delivery remain
 independent.
 
+## Required integration update, 2026-10-04
+
+Published source e0c0310fbfcffab24a2ef4c7aa9059cc08a46b5d remains Draft #505.
+After actual mapping #499 integration, fetched origin/dev is
+1e2c79b5bd86553ce2e6626ade5ac09297fe2354. The normal no-rewrite merge received root-owned resolution of rules and semantic
+manifest conflicts. Root verified the exact map union over 619 actual tracked
+paths, current eight-file semantic hashes and unchanged ten-file transport
+membership/hashes; original historical five/six/seven/eight memberships remain
+untouched. Staged work 63/59, invariants 86/0 pending/0 untagged and diff passed. Typed source bytes
+and literal historical memberships are unchanged. Initial source CI37184624816
+passed Ubuntu policy, Unix-like and Windows desired-state and repository scan;
+native Windows policy remains in progress, so no complete exact-head result is
+claimed. After returned closure, actual-inventory production 24 tests passed in 86.593s,
+typed 17 in 9.439s, original closure/seed recovery two in 18.669s and candidate/
+evidence replay/fence two in 51.495s. The merge message passed commit-msg
+validation before normal hooks. Final merged source/report head requires fresh
+normal hooks and CI.
+
 ## Acceptance
 
 | ID | State | Evidence |

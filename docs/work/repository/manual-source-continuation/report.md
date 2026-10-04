@@ -23,3 +23,23 @@ is supplied. Parent acceptance remains pending.
 | AC3 | pending | |
 | AC4 | pending | |
 | AC5 | pending | |
+
+## Candidate source pickup and compatibility return, 2026-10-04
+
+Root owns observed-release-candidate source pickup from dev 978f999 and parent
+planning revision 019d9d7. Candidate source commit 10bc656 and local verification
+report commit 42249ad have passed normal pre-commit gates; remote delivery/current-head
+native checks remain pending in that lane. Its candidate/evidence precursor supplies
+no release object plan, baseline adoption or actual operating receipt.
+
+Independent inspection also found seventeen actual tracked paths absent from
+production exact maps and a fixture that built its inventory from those same maps.
+A separate exact-map/new-semantic-manifest increment must independently validate
+actual tracked inventory. Refresh/object/writer pickup returns to the compatibility
+child's reviewed endpoint/effect/isolation contract. Parent AC1-AC5 remain pending.
+
+Independent follow-up found generated lock commits also need exact source-bound
+Unix-like release declarations; the current preparation fixture supplies no
+Release-* trailers. The compatibility child's dated AC4 preserves this domain-owned
+review/custody gate before commit/object construction. No automatic patch/compatible
+or source-only conversion is authorized by fixed Git metadata.
