@@ -748,3 +748,9 @@ production-map	exact	docs/work/repository/refresh-merge-proof/study.md	prod-repo
 production-map	exact	docs/work/repository/refresh-preparation-declaration/spec.md	prod-repository-policy
 production-map	exact	docs/work/repository/refresh-preparation-declaration/report.md	prod-repository-policy
 production-map	exact	docs/work/repository/refresh-preparation-declaration/study.md	prod-repository-policy
+production-map	exact	tool/version-control/release-merge-proof.py	prod-repository-policy,prod-repository-native
+production-map	exact	tool/version-control/test-release-merge-proof	prod-repository-policy,prod-repository-native
+production-map	exact	tool/version-control/test-release-merge-proof.py	prod-repository-policy,prod-repository-native
+production-map	exact	docs/policy/invariants/repository/raw-merge-computation-read-only.md	prod-repository-policy,prod-repository-native
+production-map	exact	docs/work/repository/raw-refresh-merge-library/spec.md	prod-repository-policy
+production-map	exact	docs/work/repository/raw-refresh-merge-library/report.md	prod-repository-policy

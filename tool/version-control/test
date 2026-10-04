@@ -621,6 +621,12 @@ for preview_path in release-preview release-preview.awk release-preview.rules te
   done
 done
 # INV repository/local-gate-selects-by-effect
+for merge_path in release-merge-proof.py test-release-merge-proof test-release-merge-proof.py; do
+  for merge_stage in commit push ci; do
+    expect_units 'repository:fixtures' "$merge_stage" "$(printf 'M\ttool/version-control/%s' "$merge_path")"
+  done
+done
+# INV repository/local-gate-selects-by-effect
 for refresh_path in release-control release-control-loader.py release-control-package/engine.py test-release-control.py test-refresh-candidate-nix.py; do
   expect_units 'repository:fixtures
 unixlike:suite' ci "$(printf 'M\ttool/version-control/%s' "$refresh_path")"
@@ -5567,4 +5573,7 @@ git -C "$authoring_root" worktree add -q -b fix/repository-pinned "$authoring_pi
 # INV repository/private-history-acquisition-isolated
 "$root/tool/version-control/test-release-operating-history"
 
+
+# INV repository/raw-merge-computation-read-only
+"$root/tool/version-control/test-release-merge-proof"
 echo "version-control fixtures passed"
