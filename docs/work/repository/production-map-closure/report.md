@@ -5,7 +5,7 @@ status: pending
 
 ## Planning pickup gate, 2026-10-04
 
-Root prepared this plan from dev978f999c827ea78e3d33462bec928b53f1c4b046. The
+Root prepared this plan from dev 978f999c827ea78e3d33462bec928b53f1c4b046. The
 observed candidate source and refresh/object compatibility planning deliveries must
 merge before implementation. The worker records fresh execution dev and reviewed
 plan revision independently then; the current planning base is not that future
