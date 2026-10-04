@@ -25,8 +25,6 @@ retained semantics. Stage the spec/report before git ls-files -z inventory colle
 so the child documents are included. No source change or new package adoption has
 been performed. All criteria remain pending.
 
-## Acceptance
-
 ## Independent preparation amendment, 2026-10-04
 
 Root assigns current-dev source preparation to the same isolated lane under the
@@ -34,6 +32,21 @@ dated amendment. The initial merge-before-pickup assumption delayed independent
 files unnecessarily; no unmerged prerequisite source is imported. Final inventory,
 manifest, local/native delivery and Ready remain gated on integrated prerequisites.
 Actual preparation results will be recorded separately; all criteria remain pending.
+
+Independent preparation adds seventeen reviewed exact maps from the current task
+Git inventory, including this child pair. Work documents require policy evidence;
+initializer workflow/invariant/source/roles/tests require policy and native evidence.
+Two independent actual-inventory regressions exercise the original production
+preview: complete coverage succeeds without certification, and removal of the
+initializer workflow's exact map refuses. Existing future unknown-path negatives
+remain. The complete production suite passed 24 tests in 67.307 seconds; retained
+controller compatibility passed 24 tests in 41.635 seconds.
+
+Independent read-only review found no concrete defect, no unmapped current path
+and exact current eight-file manifest hashes. Only the rules digest changed in
+that manifest; historical packages, protocols, loader and transport manifest are
+untouched. This is preparation evidence, not final integrated inventory or native
+delivery acceptance. All AC rows remain pending until their final gates pass.
 
 ## Acceptance
 
