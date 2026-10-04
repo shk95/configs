@@ -742,3 +742,9 @@ production-map	exact	docs/work/repository/release-refresh-object-compatibility/s
 production-map	exact	docs/work/repository/release-refresh-object-compatibility/study.md	prod-repository-policy
 production-map	exact	docs/work/repository/typed-production-receipt-source/report.md	prod-repository-policy
 production-map	exact	docs/work/repository/typed-production-receipt-source/spec.md	prod-repository-policy
+production-map	exact	docs/work/repository/public-refresh-object-transport/spec.md	prod-repository-policy
+production-map	exact	docs/work/repository/public-refresh-object-transport/report.md	prod-repository-policy
+production-map	exact	docs/work/repository/refresh-merge-proof/study.md	prod-repository-policy
+production-map	exact	docs/work/repository/refresh-preparation-declaration/spec.md	prod-repository-policy
+production-map	exact	docs/work/repository/refresh-preparation-declaration/report.md	prod-repository-policy
+production-map	exact	docs/work/repository/refresh-preparation-declaration/study.md	prod-repository-policy
