@@ -1,0 +1,22 @@
+name: Production receipt review custody
+run-name: review:${{ inputs.packet_digest }}
+on:
+  workflow_dispatch:
+    inputs:
+      packet_digest:
+        description: SHA256 of the independently reviewed private canonical packet
+        required: true
+        type: string
+permissions: {}
+jobs:
+  review-production-receipt:
+    if: false
+    runs-on: ubuntu-latest
+    environment: release-production-review
+    timeout-minutes: 5
+    steps:
+      - name: Validate public digest only
+        env:
+          PACKET_DIGEST: ${{ inputs.packet_digest }}
+        shell: bash
+        run: '[[ "$PACKET_DIGEST" =~ ^[a-f0-9]{64}$ ]]'

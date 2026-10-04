@@ -1336,6 +1336,17 @@ Other authenticated endpoint classes keep their existing credential boundary.
 
 ### Observed candidate qualification source boundary
 
+Optional typed production inputs are library inputs, separately provisioned from
+packet claims. Review exact source/tool/producer obligations and numeric deployment
+authority before supplying them. Serialize private packet/index maintenance with
+the writer, retain original content-addressed packets and completed initialization,
+and independently review native execution and template/provider compatibility.
+Public review receives only the canonical digest. The source review workflow is
+statically disabled; actual accepted-source enablement, Environment hold/reviewer
+policy, approval, bootstrap and operation require their separate operating gates.
+No source fixture proves those effects or turns matching output into native truth.
+See docs/policy/decisions/repository/typed-production-receipt-custody.md.
+
 The retained library's optional `qualification` argument is canonical format-1
 JSON bytes. Its exact keys are `format`, `control`, `manifest`, `baselines`,
 `baselines-digest`, `requirements-digest` and `binding`. `baselines` is strict

@@ -1262,4 +1262,64 @@ class PublicChecksBoundaryProof(unittest.TestCase):
                 self.assertEqual(connection.request.call_args.kwargs['headers']['Authorization'],
                                  'Bearer fixture-only-credential')
 
+class TypedCandidateProof(unittest.TestCase):
+    # INV repository/typed-production-receipt-custody
+    # INV repository/authenticated-release-transport
+    # INV repository/fixture-git-isolation
+    def setUp(self):
+        self.o=ObservedCandidateProof();self.addCleanup(self.o.doCleanups)
+        def reviewed(rules):
+            root=self.o.fixture.public
+            (root/B.R.PATH).parent.mkdir(parents=True,exist_ok=True)
+            (root/B.R.PATH).write_bytes(B.R.workflow(True))
+            (root/B.R.POLICY_PATH).write_bytes(T.canonical(B.R.POLICY))
+            return rules.replace('ugate\tunixlike\tfixtures','ugate\tunixlike\treview')
+        self.o.setUp(reviewed);o=self.o;f=o.fixture;o.requirements=[]
+        a={'format':1,'source':o.master,'public-repository-id':1,'review-workflow-id':72,
+            'review-workflow-path':B.R.PATH,'review-workflow-blob':F.run_git(f.public,'rev-parse',o.master+':'+B.R.PATH),
+            'review-job':B.R.JOB,'review-environment-id':74,'review-environment':B.R.ENVIRONMENT,'reviewer':B.R.REVIEWER}
+        p=[{'id':'ugate','kind':'review','domain':'unixlike','lane':'review','tool':'fixture-tool'}]
+        self.a=a;self.p=p
+        probe=o.snapshot();_,diag=probe.candidate_preview({'dev':o.dev,'master':o.master,'tree':o.tree},o.baseline,
+            probe.qualification_objects(o.baseline),b'format\t1\n')
+        c=B.R.Collector(T.canonical(a),T.canonical(p),public=None)
+        scope=c.scope(probe,{'dev':o.dev,'master':o.master,'tree':o.tree},o.baseline,diag['checks'])
+        packet={'format':1,'scope':scope,'authority':{'source':o.master,'workflow-blob':a['review-workflow-blob'],
+            'workflow-path':B.R.PATH,'job':B.R.JOB,'environment':B.R.ENVIRONMENT,'public-repository-id':1,
+            'workflow-id':72,'environment-id':74,'reviewer':B.R.REVIEWER},
+            'claims':[dict(p[0],source=o.dev,records=['reviewed'],statement='Reviewed synthetic public contract.')],
+            'raw-records':[{'id':'reviewed','kind':'review','source':o.dev,'platform':None,'tool':'fixture-tool',
+                'command':[],'lane':'review','result':'verified','content':base64.b64encode(b'synthetic original review').decode(),
+                'sha256':T.digest(b'synthetic original review')}],'template-pair':None}
+        digest=T.digest(T.canonical(packet));path=f.operating/('review/packets/'+digest+'.json');path.parent.mkdir(parents=True,exist_ok=True);path.write_bytes(T.canonical(packet))
+        (f.operating/'review/production-index.json').write_bytes(T.canonical({'format':1,'scope-digest':T.digest(T.canonical(scope)),
+            'entries':[{'id':'ugate','packet':digest,'run':71,'attempt':1,'job':75}]}))
+        F.run_git(f.operating,'add','.');F.run_git(f.operating,'commit','-qm','fixture private reviewed packet')
+        o.fake.head=F.run_git(f.operating,'rev-parse','HEAD');F.run_git(f.operating,'update-ref','refs/heads/operations',o.fake.head)
+        helper=load('typed_fixture_helpers',ROOT/'test-production-receipt.py')
+        self.public=helper.FakePublic(o.master,a['review-workflow-blob'],digest)
+        for route in ('/actions/runs/71','/actions/runs/71/attempts/1'):
+            self.public.values[route]['repository']['id']=1;self.public.values[route]['head_repository']['id']=1
+        self.c=B.R.Collector(T.canonical(a),T.canonical(p),public=self.public)
+    def snapshot(self):
+        o=self.o;f=o.fixture
+        s=B.Snapshot(o.entry,f.public,f.operating,F.encode(f.packages['3']),o.fake.head,
+            {'name':'Release controller','email':'release-controller@example.invalid','date':'2026-10-01T00:00:00Z'},
+            o.requirements,qualification=o.qualification(),receipts=self.c)
+        self.addCleanup(s.close);return s
+    def test_typed_candidate_evidence_original_global_replay(self):
+        o=self.o;s=self.snapshot();changes=s.propose_candidate();o.no_writes()
+        T.Journal(o.api,s,o.fake.head).publish(changes)
+        o.runtime.update(mode='wake',candidate=T.digest(T.canonical(s.state['candidate'])))
+        o.entry=T.Entry(o.api,o.trusted,o.runtime)
+        s=self.snapshot();T.Journal(o.api,s,o.fake.head).publish(s.propose_evidence())
+        self.assertEqual(s.state['stage'],'validated');self.assertEqual(s.state['evidence'][0][7:10],['71','1','75'])
+        self.assertEqual(self.snapshot().state['stage'],'validated')
+    def test_pending_custody_movement_fences_journal(self):
+        o=self.o;s=self.snapshot();changes=s.propose_candidate()
+        self.public.values['/actions/runs/71/approvals'][0]['comment']='review:'+'b'*64
+        with self.assertRaises((T.Refusal,B.R.T.Refusal)):
+            T.Journal(o.api,s,o.fake.head).publish(changes)
+        o.no_writes()
+
 if __name__=='__main__':unittest.main()

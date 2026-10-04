@@ -179,3 +179,26 @@ computation remain unchanged. This repairs fixture construction without admittin
 newline normalization into the provider. Repaired current-head native checks
 remain required; the historical failure is not a Windows pass. AC2/AC3 and the
 report remain pending.
+
+## Actual prerequisite assembly, 2026-10-05
+
+Root resumed the preserved lane, observed the historical Windows failure above,
+and committed the literal-input repair as da45622e38084d102c9f1797634f1c6b540bb502
+through normal full hooks. Repaired local 24 fixtures passed in 10.229s; full production 24,
+semantic 31, transport 86, history 37, initializer 12 and policy checks passed. Local
+evidence does not replace the pending repaired Windows lane.
+
+Planning PR #507 entered actual dev at 028503bf1aa6829e30908bee989b05bbc2d878a2
+after exact-head Required checks. Root performed one required strict-base update
+from that actual integrated source, including #505. Only the current semantic
+manifest rules hash conflicted; the automatically merged mapping union is retained
+and every current manifest member is rehashed and verified. Semantic inventory
+remains 8; current transport inventory is 10 due to #505's explicitly adopted typed
+receipt/policy pair. Historical transport 5/6/7/8 and original semantic packages
+are not rewritten. The standalone helper is not imported or added to either
+current manifest. This supersedes the previous assembly's current transport 8
+description, which predates #505.
+
+Repaired assembled-head normal commit/push, native Linux/Windows and Required
+checks remain delivery gates. AC2/AC3 and this report remain pending. No runtime
+qualification, original5 adoption, public/private effect or operating proof follows.

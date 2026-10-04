@@ -1,0 +1,18 @@
+#!/bin/sh
+# INV repository/typed-production-receipt-custody
+# INV repository/fixture-git-isolation
+set -eu
+MSYS_NO_PATHCONV=1
+MSYS2_ARG_CONV_EXCL='*'
+export MSYS_NO_PATHCONV MSYS2_ARG_CONV_EXCL
+tools=$(CDPATH= cd -- "$(dirname -- "$0")" && pwd)
+. "$tools/fixture-git-environment.sh"
+python=${CONFIGS_CONTROLLER_PYTHON:-python3}
+if ! "$python" -I -S -c 'import sys; assert sys.version_info >= (3,9)' >/dev/null 2>&1; then
+  echo 'typed receipt fixtures: functional Python >=3.9 unavailable' >&2
+  [ "${REQUIRE_NATIVE:-0}" != 1 ] && exit 69
+  exit 1
+fi
+script="$tools/test-production-receipt.py"
+if command -v cygpath >/dev/null 2>&1; then script=$(cygpath -m "$script"); fi
+exec "$python" -I -S -B "$script"
