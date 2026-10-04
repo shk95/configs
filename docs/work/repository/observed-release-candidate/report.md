@@ -15,11 +15,11 @@ receipt is supplied. All criteria remain pending at pickup.
 
 | ID | State | Evidence |
 | --- | --- | --- |
-| AC1 | pending | ObservedCandidateProof binds immutable input, original semantic/bootstrap objects and isolated credential-free execution; independent contract review found no concrete defect. Full local and exact-head delivery checks pending. |
-| AC2 | pending | Real retained production diagnostics cover exact selected trust/tools, observed receipts, mixed structural refusal, unsupported review provenance, no-op and source-only refusal. Full local and exact-head delivery checks pending. |
-| AC3 | pending | Original candidate/evidence replay passed; focused replacement test passed and proves generation increment, preserved history and approval/evidence invalidation. Full local and exact-head delivery checks pending. |
-| AC4 | pending | Input/source/receipt and publication-time movement fixtures refuse before effects; focused publication guard test passed. A journal head change refuses before snapshot validation and leaves the pending proposal blocking reuse. Full local and exact-head delivery checks pending. |
-| AC5 | pending | Working-tree spec/report validation and whitespace checks pass. Full repository gates and exact-head native Windows CI pending; no actual operating proof. |
+| AC1 | verified | ObservedCandidateProof binds immutable input, original semantic/bootstrap objects and isolated credential-free execution; independent contract review found no concrete defect. Full local fixtures and repository policy checks passed at source commit 10bc656. |
+| AC2 | verified | Real retained production diagnostics cover exact selected trust/tools, observed receipts, mixed structural refusal, unsupported review provenance, no-op and source-only refusal. Full local fixtures and policy checks passed. |
+| AC3 | verified | Original candidate/evidence replay and replacement fixtures passed, proving generation increment, preserved history and approval/evidence invalidation. Full local fixtures and policy checks passed. |
+| AC4 | verified | Input/source/receipt and publication-time movement fixtures refuse before effects. A journal head change refuses before snapshot validation and leaves the pending proposal blocking reuse. Full local fixtures and policy checks passed. |
+| AC5 | pending | Normal source commit hooks passed, including 86 transport tests, 22 production qualification, 24 controller, 16 credential, 13 inspector, 37 history and 12 initializer tests plus preview, policy and secret scans. Exact-head native Windows CI and final delivery checks pending; no actual operating proof. |
 
 ## Source implementation and remaining production gates, 2026-10-04
 
