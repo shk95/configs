@@ -372,3 +372,16 @@ finite writer orchestration still lack their complete operating connection.
 No actual private initialization, bootstrap or manual/scheduled proof follows
 from its fixtures (docs/policy/decisions/repository/authenticated-release-transport.md
 § Independently observed retained evidence).
+
+## Observed retained candidate qualification source
+
+The bounded retained bridge now derives production candidate selection from its
+original qualifier, acquires exact reviewed successful check metadata and derives
+candidate fields through the original replay. Literal baseline and semantic/trust
+inputs remain independently reviewed assertions, with original tag/record/source
+object observations and publication-time freshness checks. No credential or
+candidate checkout reaches the qualifier child. See the source report at
+`docs/work/repository/observed-release-candidate/report.md` for delivery evidence.
+Required review/template provenance and source-only impact that the original
+candidate format cannot represent refuse. Tag publication plans, production refresh,
+object publishing, writer and actual operating receipts remain pending.

@@ -984,6 +984,267 @@ class ObservedEvidenceProof(unittest.TestCase):
         self.no_writes()
 
 
+class ObservedCandidateProof(unittest.TestCase):
+    """Original production CLI and real disposable objects; synthetic API receipts only."""
+    # INV repository/authenticated-release-transport
+    # INV repository/production-release-qualification
+    # INV repository/fixture-git-isolation
+    def setUp(self,rules_transform=None):
+        self.fixture=F.GlobalHistoryProof();self.fixture.setUp();self.addCleanup(self.fixture.doCleanups)
+        f=self.fixture
+        F.run_git(f.public,'checkout','-q','dev')
+        (f.public/'seed').rename(f.public/'README.md')
+        rules=('format\t1\nproduction\t1\n'
+            'production-check\tgate\trepository\tpolicy-checks\trequired\t-\tfixture-tool\n'
+            'production-check\tugate\tunixlike\tfixtures\trequired\t-\tfixture-tool\n'
+            'production-check\twgate\twindows\tfixtures\trequired\t-\tfixture-tool\n'
+            'production-check\tnot-selected\tunixlike\tfixtures\trequired\t-\tfixture-tool\n'
+            'production-domain\tunixlike\tugate\nproduction-domain\twindows\twgate\n'
+            'production-template\tunixlike\tshk95/configs-host-template\tugate\tnot-selected\n'
+            'production-map\texact\tREADME.md\tgate\nproduction-map\tprefix\ttool/version-control/\tgate\n'
+            'production-map\tprefix\t.github/\tgate\nproduction-map\tprefix\tunixlike/\tugate\n')
+        if rules_transform is not None:rules=rules_transform(rules)
+        (f.public/'tool/version-control/release-preview.rules').write_text(rules)
+        workflow=f.public/'.github/workflows/ci.yml';workflow.parent.mkdir(parents=True,exist_ok=True)
+        workflow.write_text('name: Fixture data only\n')
+        manifest=f.public/F.loader.MANIFEST
+        lines=manifest.read_text().splitlines()
+        manifest.write_text('\n'.join([lines[0]]+['\t'.join(row[:2]+[T.digest((f.public/row[1]).read_bytes())])
+            for line in lines[1:] for row in [line.split('\t')]])+'\n')
+        F.run_git(f.public,'add','.');F.run_git(f.public,'commit','-qm','fixture reviewed production rules')
+        F.run_git(f.public,'checkout','-q','master');F.run_git(f.public,'merge','--no-ff','-qm','fixture reviewed control','dev')
+        self.master=F.run_git(f.public,'rev-parse','HEAD')
+        f.packages['3']=dict(f.packages['3'],control=self.master,master=self.master,manifest=T.digest(manifest.read_bytes()))
+        self.baseline_source=F.run_git(f.public,'rev-parse',self.master+'^2')
+        annotation=f'Release-Format: 1\nDomain: unixlike\nVersion: 1.0.0\nSource: {self.baseline_source}\n'
+        F.run_git(f.public,'tag','-a','unixlike-v1.0.0',self.baseline_source,'-F','-',data=annotation.encode())
+        self.tag=F.run_git(f.public,'rev-parse','refs/tags/unixlike-v1.0.0')
+        self.baseline=f'format\t1\nsemantic\tunixlike\t1.0.0\tunixlike-v1.0.0\t{self.tag}\n'.encode()
+        F.run_git(f.public,'checkout','-q','dev')
+        source=f.public/'unixlike/api/contract.json';source.parent.mkdir(parents=True,exist_ok=True)
+        source.write_text('Synthetic contract data; no execution.\n')
+        F.run_git(f.public,'add','.');F.run_git(f.public,'commit','-qm',
+            'feat(unixlike): synthetic contract change\n\nRelease-Format: 1\nRelease-Domain: unixlike\n'
+            'Release-Impact: patch\nRelease-Contracts: ugate\nRelease-Compatibility: compatible\n'
+            'Release-Rationale: Synthetic fixture.\nRelease-Migration: none\n')
+        self.dev=F.run_git(f.public,'rev-parse','HEAD');self.tree=F.run_git(f.public,'rev-parse','HEAD^{tree}')
+        config=F.CONFIG
+        try:
+            F.CONFIG=dict(config,checks='gate,ugate,wgate')
+            f.transcript_file.write_bytes(F.canonical(F.transcript('preview',candidate=None)))
+            f.add_batch('3',F.X,False);f.save()
+        finally:F.CONFIG=config
+        self.fake=Fake(f.public,f.operating,self.master);self.fake.dev=self.dev
+        self.api=T.Api(self.fake,'fixture/operating')
+        self.runtime={'repository':T.PUBLIC,'ref':'refs/heads/master','event':'workflow_dispatch','run':4,'attempt':1,
+            'job':5,'actor':3,'source':self.master,'environment':'fixture-controller','mode':'start','candidate':F.Z}
+        self.trusted={'source':self.master,'workflow':2,'workflow-path':'.github/workflows/release-control-writer.yml',
+            'repository-id':1,'actors':[3],'environment':'fixture-controller','job-name':'writer'}
+        self.entry=T.Entry(self.api,self.trusted,self.runtime)
+        self.requirements=[{'id':name,'name':'Required checks','app':15368,'workflow':7,'job':9,'tool':'fixture-tool',
+            'source':self.dev,'attempt':1,'run':8,'workflow-path':'.github/workflows/ci.yml',
+            'workflow-blob':F.run_git(f.public,'rev-parse',self.dev+':.github/workflows/ci.yml'),
+            'tool-path':'tool/version-control/release-preview',
+            'tool-blob':F.run_git(f.public,'rev-parse',self.dev+':tool/version-control/release-preview')}
+            for name in ['ugate']]
+        self.run={'id':8,'run_attempt':1,'head_sha':self.dev,'head_branch':'dev','event':'push','workflow_id':7,
+            'repository':{'id':1},'head_repository':{'id':1},'status':'completed','conclusion':'success'}
+        self.job={'id':9,'run_id':8,'name':'Required checks','head_sha':self.dev,'status':'completed',
+            'conclusion':'success','html_url':'https://github.com/shk95/configs/actions/runs/8/job/9'}
+        self.check={'id':10,'name':'Required checks','app':{'id':15368},'head_sha':self.dev,'status':'completed',
+            'conclusion':'success','details_url':self.job['html_url']}
+        ObservedEvidenceProof.bind_metadata(self)
+        raw=subprocess.run(['git','-C',str(f.public),'cat-file','tag',self.tag],capture_output=True,check=True).stdout.decode('utf-8')
+        header,_,message=raw.partition('\n\n')
+        import re
+        from datetime import datetime,timezone
+        tagger=re.fullmatch(r'tagger (.+) <(.+)> ([0-9]+) ([+-][0-9]{4})',header.splitlines()[3])
+        value={'sha':self.tag,'tag':'unixlike-v1.0.0','object':{'sha':self.baseline_source,'type':'commit'},
+            'message':message,'tagger':{'name':tagger[1],'email':tagger[2],
+            'date':datetime.fromtimestamp(int(tagger[3]),timezone.utc).strftime('%Y-%m-%dT%H:%M:%SZ')}}
+        self.fake.responses[('GET','/repos/'+T.PUBLIC+'/git/tags/'+self.tag)]=self.fake.response(value)
+        self.fake.calls.clear()
+
+    def qualification(self,**change):
+        body={'format':1,'control':self.master,'manifest':self.fixture.packages['3']['manifest'],
+            'baselines':base64.b64encode(self.baseline).decode(),'baselines-digest':T.digest(self.baseline),
+            'requirements-digest':T.digest(T.canonical(self.requirements))}
+        body.update(change)
+        return T.canonical(dict(body,binding=T.digest(T.canonical(body))))
+
+    def snapshot(self,qualification=True):
+        f=self.fixture
+        s=B.Snapshot(self.entry,f.public,f.operating,F.encode(f.packages['3']),self.fake.head,
+            {'name':'Release controller','email':'release-controller@example.invalid','date':'2026-10-01T00:00:00Z'},
+            self.requirements,qualification=self.qualification() if qualification else None)
+        self.addCleanup(s.close);return s
+
+    def no_writes(self):self.assertFalse(any(m!='GET' for m,_,_ in self.fake.calls))
+
+    def test_original_production_candidate_then_existing_evidence_full_replay(self):
+        snapshot=self.snapshot();old=T.document((snapshot.batch/'transcript.json').read_bytes())
+        changes=snapshot.propose_candidate();self.no_writes()
+        event=F.parse(next(v for p,v in changes.items() if p.startswith('history/')),'event')
+        self.assertEqual((event['dev'],event['master'],event['tree']),(self.dev,self.master,self.tree))
+        self.assertEqual(event['classification'],'patch');self.assertEqual(event['versions'],'unixlike:1.0.1')
+        self.assertEqual(event['rules'],T.digest((snapshot.package/'tool/version-control/release-preview.rules').read_bytes()))
+        self.assertEqual(event['tool'],self.fixture.packages['3']['manifest'])
+        self.assertEqual(event['baselines'],T.digest(self.baseline));self.assertEqual(event['selected'],'ugate')
+        self.assertNotIn('release',event)
+        proposed=T.document(changes['current/transcript.json']);self.assertEqual(proposed['checks'],old['checks'])
+        self.assertEqual(proposed['source'][:-1],old['source']);self.assertEqual(set(proposed),set(old))
+        head=T.Journal(self.api,snapshot,self.fake.head).publish(changes)
+        self.assertIsNone(snapshot.candidate_binding)
+        candidate=snapshot.state['candidate'];self.runtime['candidate']=T.digest(T.canonical(candidate))
+        self.entry=T.Entry(self.api,self.trusted,self.runtime)
+        restored=self.snapshot();self.assertEqual(restored.head,head);self.assertEqual(restored.state['stage'],'candidate')
+        evidence=restored.propose_evidence();T.Journal(self.api,restored,self.fake.head).publish(evidence)
+        self.assertEqual(self.snapshot().state['stage'],'validated')
+
+    def test_observed_replacement_preserves_history_and_invalidates_actual_approval(self):
+        s=self.snapshot();T.Journal(self.api,s,self.fake.head).publish(s.propose_candidate())
+        self.runtime['candidate']=T.digest(T.canonical(s.state['candidate']))
+        self.entry=T.Entry(self.api,self.trusted,self.runtime)
+        s=self.snapshot();T.Journal(self.api,s,self.fake.head).publish(s.propose_evidence())
+        self.runtime['mode']='approve';self.entry=T.Entry(self.api,self.trusted,self.runtime)
+        s=self.snapshot();request={k:self.runtime[k] for k in ('mode','actor','run','attempt','ref','candidate')}
+        T.Journal(self.api,s,self.fake.head).publish(s.transition(request))
+        self.assertIsNotNone(s.state['approval'])
+        old={p.name:p.read_bytes() for p in (self.fixture.operating/'history').iterdir()}
+        self.runtime['mode']='wake';self.entry=T.Entry(self.api,self.trusted,self.runtime)
+        s=self.snapshot();T.Journal(self.api,s,self.fake.head).publish(s.propose_candidate())
+        self.assertEqual(s.state['promotion-generation'],'2');self.assertIsNone(s.state['approval'])
+        self.assertEqual(s.state['evidence'],[])
+        for name,raw in old.items():self.assertEqual((self.fixture.operating/'history'/name).read_bytes(),raw)
+
+    def test_missing_custody_bad_binding_and_changed_baseline_refuse(self):
+        s=self.snapshot(False)
+        with self.assertRaises(T.Refusal):s.propose_candidate()
+        for change in ({'baselines-digest':F.Z},{'requirements-digest':F.Z},{'manifest':F.Z}):
+            with self.subTest(change=change):
+                s=self.snapshot();s.qualification=s.qualification_bytes=self.qualification(**change)
+                with self.assertRaises(T.Refusal):s.propose_candidate()
+        self.no_writes()
+
+    def test_original_baseline_tag_api_mismatch_refuses(self):
+        key=('GET','/repos/'+T.PUBLIC+'/git/tags/'+self.tag)
+        value=T.document(self.fake.responses[key][2]);value['object']['sha']=self.dev
+        self.fake.responses[key]=self.fake.response(value)
+        with self.assertRaises(T.Refusal):self.snapshot().propose_candidate()
+        self.no_writes()
+
+    def test_missing_duplicate_extra_or_wrong_tool_trust_refuses(self):
+        original=copy.deepcopy(self.requirements)
+        for values in ([],original*2,[dict(original[0],id='foreign')],[dict(original[0],tool='foreign-tool')]):
+            with self.subTest(values=values):
+                self.requirements=values
+                with self.assertRaises(T.Refusal):self.snapshot().propose_candidate()
+        self.no_writes()
+
+    def test_failed_or_changed_actual_receipts_refuse(self):
+        for field,value in (('conclusion','failure'),('run_attempt',2),('head_sha',self.master)):
+            with self.subTest(field=field):
+                run=dict(self.run,**{field:value})
+                self.fake.responses[('GET','/repos/'+T.PUBLIC+'/actions/runs/8')]=self.fake.response(run)
+                with self.assertRaises(T.Refusal):self.snapshot().propose_candidate()
+        self.no_writes()
+
+    def test_publishing_rechecks_actual_receipts_and_fences(self):
+        s=self.snapshot();changes=s.propose_candidate()
+        self.run['run_attempt']=2;ObservedEvidenceProof.bind_metadata(self)
+        with self.assertRaises(T.Refusal):T.Journal(self.api,s,self.fake.head).publish(changes)
+        self.assertTrue(s.proposal_fenced);self.no_writes()
+
+    def test_publication_rechecks_changed_input_and_stop(self):
+        for reason in ('input','source','stop'):
+            with self.subTest(reason=reason):
+                s=self.snapshot();changes=s.propose_candidate()
+                if reason=='input':s.qualification=b'{}'
+                elif reason=='source':self.fake.dev=self.master
+                else:
+                    f=self.fixture;(f.operating/'control/stop.tsv').write_bytes(F.encode(dict(F.STOP,stop='1')))
+                    self.fake.head=f.commit(f.operating)
+                with self.assertRaises(T.Refusal):T.Journal(self.api,s,s.head).publish(changes)
+                if reason!='stop':self.assertTrue(s.proposal_fenced)
+                self.assertIsNotNone(s.pending_changes);self.no_writes()
+                if reason=='source':self.fake.dev=self.dev
+                if reason=='stop':break
+
+    def test_source_only_impact_refuses_and_actual_noop_is_empty(self):
+        self.fake.dev=self.master
+        self.assertEqual(self.snapshot().propose_candidate(),{})
+        self.no_writes()
+        F.run_git(self.fixture.public,'checkout','-q',self.master)
+        (self.fixture.public/'README.md').write_text('source-only change\n')
+        F.run_git(self.fixture.public,'add','README.md');F.run_git(self.fixture.public,'commit','-qm','fixture source only')
+        self.dev=self.fake.dev=F.run_git(self.fixture.public,'rev-parse','HEAD')
+        self.requirements=[dict(self.requirements[0],id='gate',source=self.dev)]
+        self.run['head_sha']=self.job['head_sha']=self.check['head_sha']=self.dev
+        ObservedEvidenceProof.bind_metadata(self)
+        with self.assertRaisesRegex(T.Refusal,'unrepresentable-candidate-impact'):self.snapshot().propose_candidate()
+        self.no_writes()
+
+    def test_mixed_structural_refusal_and_unsupported_review_cannot_qualify(self):
+        for transform,reason in (
+            (lambda rules:rules.replace('ugate\tnot-selected','ugate\tunknown-trigger'),'candidate-qualification-refusal'),
+            (lambda rules:rules.replace('ugate\tunixlike\tfixtures','ugate\tunixlike\treview'),'unsupported-candidate-check')):
+            with self.subTest(reason=reason):
+                self.doCleanups();self.setUp(transform)
+                with self.assertRaisesRegex(T.Refusal,reason):self.snapshot().propose_candidate()
+                self.no_writes()
+
+    def test_final_selection_or_version_change_refuses_before_projection(self):
+        from unittest.mock import patch
+        for field in ('checks','domains'):
+            with self.subTest(field=field):
+                s=self.snapshot();preview=s.candidate_preview
+                def changed(*args):
+                    code,value=preview(*args)
+                    if code==0:
+                        if field=='checks':value['checks'][0]['id']='foreign'
+                        else:value['domains'][0]['next_version']='9.0.0'
+                    return code,value
+                with patch.object(s,'candidate_preview',changed),self.assertRaisesRegex(T.Refusal,'changed-candidate-qualification'):
+                    s.propose_candidate()
+                self.no_writes()
+
+    def test_original_bootstrap_record_binding_and_corruption_refuse(self):
+        f=self.fixture;record=f.public/'records/bootstrap.tsv';record.parent.mkdir()
+        raw=f'format\t1\ndomain\tunixlike\nsource\t{self.dev}\nversion\t1.0.0\ncontracts\tugate\n'.encode()
+        record.write_bytes(raw);F.run_git(f.public,'add','records/bootstrap.tsv')
+        F.run_git(f.public,'commit','-qm','fixture separate reviewed record')
+        head=F.run_git(f.public,'rev-parse','HEAD')
+        self.baseline=f'format\t1\nbootstrap\tunixlike\t{self.dev}\t{head}\trecords/bootstrap.tsv\n'.encode()
+        s=self.snapshot();roots=s.qualification_objects(s.qualification_input())
+        self.assertIn(head,roots);self.assertIn(self.dev,roots)
+        # Independent record binding works; this package supplies no bootstrap review lane.
+        with self.assertRaises(T.Refusal):s.propose_candidate()
+        blob=F.run_git(f.public,'rev-parse',head+':records/bootstrap.tsv')
+        value={'sha':blob,'encoding':'base64','content':base64.b64encode(raw+b'foreign').decode()}
+        self.fake.responses[('GET','/repos/'+T.PUBLIC+'/git/blobs/'+blob)]=self.fake.response(value)
+        with self.assertRaises(T.Refusal):self.snapshot().propose_candidate()
+        self.no_writes()
+
+    def test_owned_original_preview_does_not_execute_candidate_or_inherit_credentials(self):
+        s=self.snapshot();comparison={'dev':self.dev,'master':self.master,'tree':self.tree}
+        baseline,roots=s.candidate_context(comparison,s.state)
+        import os
+        from unittest.mock import patch
+        calls=[];run=B.subprocess.run
+        def observed(command,**kwargs):
+            if command[0]=='sh':
+                env=kwargs['env'];self.assertNotIn('GH_TOKEN',env);self.assertNotIn('GIT_CONFIG_COUNT',env)
+                self.assertFalse((Path(kwargs['cwd'])/'unixlike').exists())
+                calls.append(command)
+            return run(command,**kwargs)
+        before=F.run_git(self.fixture.public,'status','--porcelain')
+        with patch.dict(os.environ,{'GH_TOKEN':'synthetic-sentinel','GIT_CONFIG_COUNT':'1','GIT_CONFIG_KEY_0':'alias.foo','GIT_CONFIG_VALUE_0':'!false'}),patch.object(B.subprocess,'run',observed):
+            code,value=s.candidate_preview(comparison,baseline,roots,b'format\t1\n')
+        self.assertEqual(code,1);self.assertEqual(value['reasons'],['missing-required-evidence'])
+        self.assertEqual(len(calls),1);self.assertEqual(F.run_git(self.fixture.public,'status','--porcelain'),before)
+        self.no_writes()
+
+
 class PublicChecksBoundaryProof(unittest.TestCase):
     def test_only_public_check_reads_omit_the_dedicated_token(self):
         from unittest import mock

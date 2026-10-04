@@ -83,3 +83,13 @@ No host activation, Windows Apply, deferred host work or cleanup is assigned.
 | AC3 | Public object publication accepts data only, binds complete original bytes/hashes/parents/tree and durable intent before effects, and fences unknown acknowledgements or moving refs/stop without forced publication or hidden endpoint authority. | fixtures, policy checks, review |
 | AC4 | One finite trusted writer connects original start/claim/candidate/evidence/approval/intent/effect/reconciliation with fresh actual role/job/source/owner/head/stop, preserving old semantics, isolation and approval invalidation. | fixtures, policy checks, affected dispatch, review |
 | AC5 | All coherent increments pass exact-head native/source delivery and record separate actual private/bootstrap/manual/scheduled gates; the source report cannot certify or close parent operating acceptance. | fixtures, policy checks, affected dispatch, review |
+
+## Dated pickup amendment, 2026-10-04
+
+Amended 2026-10-04: independent source review established that production preparation needs a separate
+run/runner and an explicit bounded data handoff; the original refresh-branch effect
+cannot encode public object creation or partial/unknown object acknowledgements.
+Root returns refresh/object/writer pickup to compatibility planning in
+release-refresh-object-compatibility/spec.md. AC1-AC5 above remain unchanged.
+Candidate source and exact production-map closure may proceed independently; no
+unresolved endpoint, new effect or credential boundary is hidden inside them.
