@@ -177,7 +177,7 @@ class StartPlan:
 
 class Snapshot:
     """A whole-history verified, source-bound projector with no credentials."""
-    def __init__(self, entry, bundle, operating, approved, head, tagger, requirements):
+    def __init__(self, entry, bundle, operating, approved, head, tagger, requirements, *, qualification=None):
         self.entry, self.api = entry, entry.api
         T.need(type(entry) is T.Entry and entry.authenticated, 'missing-entry')
         self.source = entry.trusted['source']
@@ -188,6 +188,7 @@ class Snapshot:
                and tagger['email'] == 'release-controller@example.invalid'
                and __import__('re').fullmatch(r'\d{4}-\d\d-\d\dT\d\d:\d\d:\d\dZ',tagger['date']), 'unfixed-record-tagger')
         self.tagger, self.requirements = dict(tagger), copy.deepcopy(requirements)
+        self.qualification=self.qualification_bytes=qualification
         self.temporary = tempfile.TemporaryDirectory(prefix='release-transport-retained-')
         self.scratch = Path(self.temporary.name)
         self.bundle, self.operating = Path(bundle), Path(operating)
@@ -232,6 +233,7 @@ class Snapshot:
         contexts=L.table(L.record_blob(self.operating,self.head,'current/batches.tsv')[1])
         context=dict(zip(L.CONTEXT_FIELDS,contexts[-1][1:]));self.before=int(context['start'])-1
         self.protocol=context['protocol'];self.owner_source=context['master']
+        self.control=context['control'];self.manifest=context['manifest']
         events=sorted((self.batch/'history').iterdir())
         framing=L.singletons(events[0].read_bytes(),set()) if not events else dict((r[0],r[1]) for r in L.table(events[0].read_bytes()) if len(r)==2)
         self.boundary=framing['prior']
@@ -357,6 +359,223 @@ class Snapshot:
             local('-C',str(repo),'fsck','--no-dangling','--no-reflogs','--no-progress',*heads)
             tree=local('-C',str(repo),'merge-tree','--write-tree','--no-messages',*heads).decode('ascii').strip()
             return T.sha(tree)
+
+    def qualification_input(self):
+        """A pinned review assertion, never proof that a maintainer adopted it."""
+        raw=self.qualification
+        T.need(type(raw) is bytes and raw==self.qualification_bytes,'changed-qualification-input')
+        value=T.document(raw)
+        T.need(type(value) is dict and set(value)=={'format','control','manifest','baselines',
+            'baselines-digest','requirements-digest','binding'} and type(value['format']) is int
+            and value['format']==1,'invalid-qualification-input')
+        T.need(value['control']==self.control and value['manifest']==self.manifest,
+            'foreign-qualification-package')
+        body={k:v for k,v in value.items() if k!='binding'}
+        T.need(T.digest(T.canonical(body))==value['binding'],'unbound-qualification-input')
+        try:baseline=base64.b64decode(value['baselines'],validate=True)
+        except (ValueError,TypeError):raise T.Refusal('invalid-qualification-baselines') from None
+        T.need(0<len(baseline)<=T.MAX_BODY and T.digest(baseline)==value['baselines-digest']
+            and T.digest(T.canonical(self.requirements))==value['requirements-digest'],
+            'changed-qualification-bytes')
+        return baseline
+
+    def original_public_commit(self,head):
+        raw=L.git(self.bundle,'cat-file','commit',T.sha(head))
+        T.need(len(raw)<=T.MAX_BODY and T.git_object('commit',raw)==head,'corrupt-qualification-commit')
+        headers=raw.split(b'\n\n',1)[0].decode('utf-8').splitlines()
+        trees=[v[5:] for v in headers if v.startswith('tree ')]
+        parents=[v[7:] for v in headers if v.startswith('parent ')]
+        actual=self.api.commit(head)
+        T.need(trees==[actual['tree']] and parents==actual['parents'],'unbound-qualification-commit')
+        return actual
+
+    def qualification_objects(self,baseline):
+        """Original baseline and semantic bytes bound to existing finite GETs."""
+        import re
+        from datetime import datetime,timezone
+        roots=[self.control]
+        control=self.original_public_commit(self.control)
+        entries=self.api.tree(control['tree'])
+        for name in sorted(L.FILES|{L.MANIFEST}):
+            metadata=L.git(self.bundle,'ls-tree',self.control,'--',name).decode('ascii').strip().split()
+            T.need(len(metadata)==4 and metadata[:2] in (['100644','blob'],['100755','blob'])
+                and metadata[3]==name and entries.get(name)==(metadata[0],'blob',metadata[2]),
+                'unbound-qualification-package-blob')
+            raw=L.git(self.bundle,'cat-file','blob',metadata[2])
+            T.need(len(raw)<=T.MAX_BODY and T.git_object('blob',raw)==metadata[2]
+                and self.api.blob(metadata[2])==raw,'corrupt-qualification-package-blob')
+            if name!=L.MANIFEST:
+                T.need((self.package/name).read_bytes()==raw,'changed-extracted-qualifier')
+            else:T.need(T.digest(raw)==self.manifest,'changed-qualification-manifest')
+        rows=L.table(baseline)
+        T.need(rows,'missing-qualification-baseline')
+        seen=set()
+        for row in rows:
+            T.need(len(row)==5 and row[1] in {'unixlike','windows'} and row[1] not in seen,
+                'invalid-qualification-baseline')
+            seen.add(row[1]);kind,domain,value,target,reference=row
+            if kind=='semantic':
+                tag=T.sha(reference);raw=L.git(self.bundle,'cat-file','tag',tag)
+                T.need(len(raw)<=T.MAX_BODY and T.git_object('tag',raw)==tag,'corrupt-baseline-tag')
+                header,separator,message=raw.partition(b'\n\n')
+                T.need(separator,'invalid-baseline-tag')
+                fields=header.decode('utf-8').splitlines()
+                T.need(len(fields)==4 and fields[1]=='type commit' and fields[2]=='tag '+target,
+                    'unsupported-baseline-tag')
+                head=T.sha(fields[0].removeprefix('object '))
+                match=re.fullmatch(r'tagger ([^<>\n]+) <([^<>\n]+)> ([0-9]+) ([+-][0-9]{4})',fields[3])
+                T.need(match,'unsupported-baseline-tagger')
+                date=datetime.fromtimestamp(int(match[3]),timezone.utc).strftime('%Y-%m-%dT%H:%M:%SZ')
+                actual=self.api.get('/git/tags/'+tag)
+                T.need(actual.get('sha')==tag and actual.get('tag')==target
+                    and actual.get('object',{}).get('type')=='commit'
+                    and actual['object'].get('sha')==head and actual.get('message')==message.decode('utf-8')
+                    and actual.get('tagger')=={'name':match[1],'email':match[2],'date':date},
+                    'unbound-baseline-tag')
+                self.original_public_commit(head);roots.extend([head,tag])
+            elif kind=='bootstrap':
+                self.original_public_commit(T.sha(value))
+                commit=self.original_public_commit(T.sha(target))
+                tree=self.api.tree(commit['tree'])
+                T.need(reference in tree and tree[reference][:2]==('100644','blob'),'unbound-bootstrap-record')
+                blob=tree[reference][2];raw=L.git(self.bundle,'show',target+':'+reference)
+                T.need(len(raw)<=T.MAX_BODY and T.git_object('blob',raw)==blob
+                    and self.api.blob(blob)==raw,'corrupt-bootstrap-record')
+                roots.extend([value,target])
+            else:raise T.Refusal('unsupported-qualification-baseline')
+        return sorted(set(roots))
+
+    def candidate_context(self,comparison,before):
+        baseline=self.qualification_input()
+        self.proposal_context(before)
+        T.need(self.api.ref('heads/master')==comparison['master']
+            and self.api.ref('heads/dev')==comparison['dev'],'moving-candidate-source')
+        roots=self.qualification_objects(baseline)
+        T.need(self.public_merge_tree(comparison)==comparison['tree'],'moving-candidate-tree')
+        T.need(self.api.ref('heads/master')==comparison['master']
+            and self.api.ref('heads/dev')==comparison['dev'],'moving-candidate-source')
+        self.proposal_context(before)
+        return baseline,roots
+
+    def candidate_preview(self,comparison,baseline,roots,evidence):
+        """Run only verified original tools against an owned no-checkout object copy."""
+        heads=sorted(set(roots+[comparison['dev'],comparison['master']]))
+        L.verify_graphs(self.bundle,[h for h in heads if L.git(self.bundle,'cat-file','-t',h).strip()==b'commit'])
+        packed=L.git(self.bundle,'-c','pack.threads=1','-c','pack.windowMemory=8m',
+            'pack-objects','--stdout','--revs',data=('\n'.join(heads)+'\n').encode())
+        T.need(len(packed)<=128*1024*1024,'qualification-object-bound')
+        with tempfile.TemporaryDirectory(dir=self.scratch,prefix='candidate-preview-') as folder:
+            root=Path(folder);repo=root/'source';empty=root/'empty';empty.mkdir()
+            L.git(root,'init','--template='+str(empty),str(repo))
+            L.git(repo,'index-pack','--stdin','--strict',data=packed)
+            baseline_path=root/'baselines.tsv';baseline_path.write_bytes(baseline)
+            evidence_path=root/'evidence.tsv';evidence_path.write_bytes(evidence)
+            env=L.runtime_environment(os.environ)
+            env.update(GIT_CONFIG_NOSYSTEM='1',GIT_CONFIG_GLOBAL=os.devnull,
+                GIT_NO_REPLACE_OBJECTS='1',GIT_NO_LAZY_FETCH='1',GIT_GRAFT_FILE=os.devnull,
+                GIT_ALLOW_PROTOCOL='',GIT_TERMINAL_PROMPT='0',GIT_ATTR_NOSYSTEM='1',LC_ALL='C')
+            result=subprocess.run(['sh',(self.package/'tool/version-control/release-preview').as_posix(),
+                '--production','--master',comparison['master'],'--candidate',comparison['dev'],
+                '--rules',self.control,'--baselines',baseline_path.as_posix(),
+                '--evidence',evidence_path.as_posix(),'--json'],cwd=repo,env=env,
+                capture_output=True,timeout=120)
+            T.need(result.returncode in {0,1} and len(result.stdout)<=T.MAX_BODY,'qualification-preview-unavailable')
+            value=T.document(result.stdout)
+            T.need(type(value) is dict and type(value.get('format')) is int and value['format']==1
+                and value.get('qualification')=='offline-production' and value.get('production_certification') is False
+                and value.get('evidence_authority')=='asserted-offline'
+                and value.get('master')==comparison['master'] and value.get('candidate')==comparison['dev']
+                and value.get('merge_tree')==comparison['tree'] and value.get('rules')==self.control,
+                'unbound-production-preview')
+            rules=(self.package/'tool/version-control/release-preview.rules').read_bytes()
+            engine=(self.package/'tool/version-control/release-preview').read_bytes()+(self.package/'tool/version-control/release-preview.awk').read_bytes()
+            T.need(value.get('rules_digest')==T.git_object('blob',rules)
+                and value.get('baselines_digest')==T.git_object('blob',baseline)
+                and value.get('engine_digest')==T.git_object('blob',engine)
+                and value.get('classifier_digest')==T.git_object('blob',(self.package/'tool/version-control/classify').read_bytes())
+                and value.get('evidence_digest')==T.git_object('blob',evidence),'changed-production-preview-tools')
+            return result.returncode,value
+
+    def candidate_decision(self,value):
+        fields={k:copy.deepcopy(v) for k,v in value.items() if k not in {'decision','reasons','evidence_digest','checks'}}
+        T.need(type(value.get('checks')) is list and value['checks'],'empty-candidate-selection')
+        fields['checks']=[{k:v for k,v in row.items() if k not in {'state','reference'}} for row in value['checks']]
+        return T.canonical(fields)
+
+    def propose_candidate(self):
+        """Derive selection, observe receipts and qualify; accept no supplied event."""
+        T.need(not getattr(self,'proposal_fenced',False) and self.pending_changes is None,'outstanding-proposal')
+        try:
+            before=self.project()['state'];self.proposal_context(before)
+            comparison={'dev':self.api.ref('heads/dev'),'master':self.api.ref('heads/master')}
+            comparison['tree']=self.public_merge_tree(comparison)
+            baseline,roots=self.candidate_context(comparison,before)
+            code,diagnostic=self.candidate_preview(comparison,baseline,roots,b'format\t1\n')
+            if code==0 and diagnostic.get('decision')=='no-op':return {}
+            T.need(code==1 and diagnostic.get('decision')=='refusal'
+                and diagnostic.get('reasons')==['missing-required-evidence'],'candidate-qualification-refusal')
+            decision=self.candidate_decision(diagnostic);checks=diagnostic['checks']
+            ids=[r.get('id') for r in checks]
+            T.need(all(isinstance(i,str) and __import__('re').fullmatch('[a-z0-9][a-z0-9-]*',i) for i in ids)
+                and ids==sorted(set(ids)) and {r['id'] for r in self.requirements}==set(ids)
+                and len(self.requirements)==len(ids),'incomplete-candidate-trust-set')
+            required={r['id']:r for r in self.requirements}
+            T.need(all(r.get('lane')!='review' and r.get('requiredness')=='required'
+                and r.get('expected_tool')==required[r['id']]['tool'] for r in checks),'unsupported-candidate-check')
+            receipts=self.entry.evidence(comparison['dev'],comparison['tree'],self.requirements)
+            rows=[['evidence',r['id'],comparison['dev'],comparison['master'],comparison['tree'],self.control,
+                r['tool'],'verified','https://github.com/'+T.PUBLIC+'/actions/runs/'+str(r['run'])+'/job/'+str(r['job'])]
+                for r in sorted(receipts,key=lambda r:r['id'])]
+            evidence=b'format\t1\n'+b''.join(('\t'.join(row)+'\n').encode('utf-8') for row in rows)
+            self.candidate_context(comparison,before)
+            T.need(self.entry.evidence(comparison['dev'],comparison['tree'],self.requirements)==receipts,'moving-candidate-receipts')
+            code,final=self.candidate_preview(comparison,baseline,roots,evidence)
+            T.need(code==0 and final.get('decision')=='candidate' and final.get('reasons')==[]
+                and self.candidate_decision(final)==decision
+                and all(r.get('state')=='verified' for r in final['checks']),'changed-candidate-qualification')
+            releases=[r for r in final['domains'] if r.get('next_version') is not None]
+            impacts={'patch':1,'minor':2,'major':3}
+            T.need(releases and all(r.get('impact') in impacts and r.get('domain') in {'unixlike','windows'}
+                for r in releases),'unrepresentable-candidate-impact')
+            versions=','.join(r['domain']+':'+r['next_version'] for r in sorted(releases,key=lambda r:r['domain']))
+            migrations=sorted({p for r in releases for p in r['migrations']})
+            candidate=dict(comparison,**{'candidate-generation':str(int(before['promotion-generation'])+1),
+                'rules':T.digest((self.package/'tool/version-control/release-preview.rules').read_bytes()),
+                'tool':self.manifest,'baselines':T.digest(baseline),'selected':','.join(ids),
+                'classification':max((r['impact'] for r in releases),key=impacts.get),
+                'versions':versions,'migrations':','.join(migrations) or '-',
+                'approval-required':'1' if final['approval_reasons'] else '0'})
+            transcript=T.document((self.batch/'transcript.json').read_bytes())
+            runtime=self.entry.runtime
+            request={k:str(runtime[k]) for k in ('actor','run','attempt','ref')}
+            # Original replay request framing; actual start/wake is checked independently.
+            request.update(mode='preview',candidate=T.digest(T.canonical(candidate)),
+                repository=str(self.entry.trusted['repository-id']),workflow=str(self.entry.trusted['workflow']),event='workflow_dispatch')
+            transcript['source'].append(request)
+            changes=self.propose_event(dict(candidate,kind='candidate'),transcript)
+            self.candidate_binding=(copy.deepcopy(comparison),copy.deepcopy(before),copy.deepcopy(receipts))
+            self.validate_collected_candidate()
+            return changes
+        except (ValueError,TypeError,KeyError,IndexError,OSError,subprocess.SubprocessError) as error:
+            self.proposal_fenced=True
+            if isinstance(error,T.Refusal):raise
+            raise T.Refusal('candidate-observation-unavailable') from None
+        except BaseException:
+            self.proposal_fenced=True
+            raise
+
+    def validate_collected_candidate(self):
+        binding=getattr(self,'candidate_binding',None)
+        if binding is None:return
+        try:
+            comparison,before,receipts=binding
+            self.candidate_context(comparison,before)
+            T.need(self.entry.evidence(comparison['dev'],comparison['tree'],self.requirements)==receipts,
+                'moving-candidate-receipts')
+            self.candidate_context(comparison,before)
+        except BaseException:
+            self.proposal_fenced=True
+            raise
 
     def evidence_context(self,candidate,requirements):
         T.need(T.canonical(self.requirements)==requirements,'changed-evidence-trust-set')
@@ -565,6 +784,7 @@ class Snapshot:
             self.validate_prospective(changes)
             self.proposal_context(self.proposal_before)
             self.validate_collected_evidence()
+            self.validate_collected_candidate()
 
     def accept_changes(self,changes,head):
         self.expected=self.head=head
@@ -572,6 +792,7 @@ class Snapshot:
         self.pending_changes=None
         self.proposal_binding=None
         self.evidence_binding=None
+        self.candidate_binding=None
 
     def observation(self,plan,state,remote):
         T.need(not getattr(self,'proposal_fenced',False) and self.pending_changes is None,'outstanding-proposal')

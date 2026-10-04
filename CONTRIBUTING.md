@@ -1333,3 +1333,32 @@ docs/policy/decisions/repository/authenticated-release-transport.md
 Public provider check-run observations use anonymous fixed-host GET, as in the
 actual qualification probe; the dedicated token needs no new Checks selection.
 Other authenticated endpoint classes keep their existing credential boundary.
+
+### Observed candidate qualification source boundary
+
+The retained library's optional `qualification` argument is canonical format-1
+JSON bytes. Its exact keys are `format`, `control`, `manifest`, `baselines`,
+`baselines-digest`, `requirements-digest` and `binding`. `baselines` is strict
+base64 of the original UTF-8 TSV. The two digest fields are SHA256 of literal
+baseline bytes and canonical reviewed requirement JSON. `binding` is SHA256 of
+canonical JSON with that field omitted. Pin control and the original semantic
+manifest separately. A binding verifies content equality and authenticates no
+private review; retain the reviewed original input independently before operation.
+
+`Snapshot.propose_candidate()` takes no event or evidence row. It observes original
+public sources/baselines, derives selection using the original qualifier's empty
+evidence diagnostic, obtains the exact reviewed successful API receipts and reruns
+qualification. It returns only a retained candidate journal proposal, or an empty
+result for no-op; journal publication repeats the complete guards. Missing/moving
+input, any structural refusal, unsupported review/template receipt or source-only
+classification refuses. Exact job/workflow/tool binding is not independent proof
+of an unobservable native action or human review.
+
+This source library has no enabled writer or operator dispatch entry. It neither
+selects an initial baseline nor publishes a semantic release. Candidate versions
+have no generated `release` object rows yet; tag intent and final completion remain
+refused until the later reviewed publication-plan connection. Run
+`tool/configs doctor repository` and the narrow transport fixtures with an existing
+functional controller Python for source checks. Actual source acceptance, private
+custody/bootstrap, permissions/isolation and manual/scheduled receipts remain
+separate operating prerequisites.

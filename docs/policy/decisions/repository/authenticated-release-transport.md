@@ -280,3 +280,31 @@ boundary: their fixed public endpoint receives no Authorization header. Private
 reads, protection/runtime observations and guarded writes retain authentication.
 No Checks token grant is inferred or added. This uses the existing endpoint and
 TLS/pagination limits, not a new credential or discovery mechanism.
+
+## Independently qualified retained candidate
+
+The trusted bridge derives a candidate with the exact retained production qualifier,
+never a caller's classification/version/event or supplied successful evidence row.
+An immutable reviewed-input envelope binds original control/semantic manifest,
+literal baseline bytes and the selected requirement set. Its hash binds bytes; it
+is no maintainer approval, bootstrap adoption or deployed custody proof.
+Original baseline tag/record objects and source commits are separately bound to
+actual public observations. Current tag-ref movement cannot substitute another
+annotation for the pinned baseline object.
+
+Selection discovery uses a complete production diagnostic only when missing
+required evidence is its sole refusal. Exact selected trust/tool coverage and
+successful original check/run/latest-attempt/job/workflow/tool observations feed
+the final qualifier. Unknown mapping, defects, unsupported review/template
+provenance, no-op and unrepresentable source-only impact do not produce candidates.
+The child owns its no-checkout object copy and runs only verified semantic source
+without credentials or ambient Git routing/configuration. Complete observations
+are repeated before original projection and before journal publication.
+
+The original candidate event binds rules to the SHA256 of literal verified rules
+bytes, tool to the SHA256 of the complete exact semantic manifest bytes, and
+baselines to the SHA256 of literal baseline TSV. The qualifier's independent
+Git-blob digests remain separate checks. Existing serializer/reducer/global replay
+preserve replacement, old-effect fencing and approval invalidation. This bounded
+candidate/evidence precursor supplies no future immutable tag publication plan,
+production refresh, writer workflow or actual operating acceptance.
