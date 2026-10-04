@@ -3,6 +3,24 @@ kind: report
 spec: docs/work/repository/provider-release-contract/spec.md
 status: pending
 
+## Current continuation reconciliation, 2026-10-04
+
+The 2026-10-01 no-operating-repository checkpoint is historical. The manual
+rollout report records a separately selected and created private repository,
+Environment preparation and bounded actual credential-read qualification on
+2026-10-02. See docs/work/repository/manual-release-rollout/report.md.
+Initializer custody and observed retained evidence child reports are source-complete;
+these deliveries do not complete this parent's operating acceptance.
+
+The maintainer selected parallel read-only preparation of status, production
+candidate/refresh/publication and private operating verification, with root owning
+continuation. Shared implementation and protected integration remain serialized.
+Production candidate qualification, credential-free refresh, data-only object
+publication and finite writer connection precede final source promotion and
+actual private custody/provisioning/bootstrap/manual receipts. Successful manual
+proof precedes scheduled enablement and clock/recovery/notification receipts.
+All existing acceptance criteria and pending rows remain unchanged.
+
 ## Sequential continuation planning, 2026-10-01
 
 The maintainer selected sequential non-deferred continuation. See the dated
