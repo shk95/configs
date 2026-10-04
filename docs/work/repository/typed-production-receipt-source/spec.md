@@ -25,6 +25,15 @@ commit. Resume only after root returns that closure; do not edit those two files
 Root also owns shared docs/status/repository.md and CONTRIBUTING.md updates; leave
 implementation-specific proposed wording in your report for serialized adoption.
 
+Ownership amendment, 2026-10-04: root also exclusively owns
+release-transport.manifest.tsv because it hashes the semantic worker's loader.
+The typed worker edits inventory readers/schema source and supplies explicit new
+current membership and immutable original five/six/seven/eight-file memberships
+at the same frozen closure callback. Do not derive historical membership by
+excluding names from an enlarged current list. Root computes and reviews current
+membership/hashes; the worker runs transport/historical-reader fixtures afterwards.
+No acceptance criterion or actual operating authority changes.
+
 ## Outcome
 
 Deliver canonical bounded packet/index readers from verified original private bare

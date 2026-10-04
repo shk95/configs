@@ -53,6 +53,11 @@ statically disabled. Actual Environment IDs/hold, approval, packet/index mainten
 genuine native/template evidence, baseline adoption and all manual/scheduled
 operations remain separate unperformed gates. No source implementation is delivered.
 
+Final closure review also verified that the transport manifest hashes the loader.
+Root's serialized callback therefore owns the current transport manifest too;
+the typed worker supplies explicit current and original historical membership.
+New typed files must never leak into old memberships through derived exclusions.
+
 ## Acceptance
 
 | ID | State | Evidence |
