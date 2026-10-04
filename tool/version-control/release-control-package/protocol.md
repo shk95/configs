@@ -1,4 +1,4 @@
-# Inert controller protocol 3
+# Inert controller protocol 4
 
 This package implements the repository's preview boundary. Its launcher accepts
 only `preview --fixture-inputs` and local inputs; no live transport exists.
@@ -6,8 +6,8 @@ Approval/protection/check observations are supplied synthetic assertions. They
 are never production authentication. The retained loader validates package
 identity and approved merge shape, not the truth of an approval-file author.
 
-The stable loader supports explicit approved protocols 1, 2 and 3 only. This
-current package accepts protocol 3; protocols 1 and 2 execute their exact retained
+The stable loader supports explicit approved protocols 1, 2, 3 and 4 only. This
+current package accepts protocol 4; protocols 1, 2 and 3 execute their exact retained
 historical eight blobs, serializer, reducer and main. Old records are never
 rewritten and a mismatched or unknown semantic protocol refuses. TSV format 1
 and the eight manifest paths stay unchanged; semantic protocol is separate.
@@ -15,7 +15,7 @@ and the eight manifest paths stay unchanged; semantic protocol is separate.
 An approved assertion is strict TSV1 with public-repository, master, control,
 manifest, approval and protocol singletons. The literal public repository is
 shk95/configs; control and master are full SHA-1 commits, manifest and approval
-are SHA-256 identities, current protocol is 3. Control must be a two-parent merge reachable
+are SHA-256 identities, current protocol is 4. Control must be a two-parent merge reachable
 from the asserted master. The exact approved control is selected explicitly;
 mere ancestor reachability does not select a different commit. Manifest rows are
 `file<TAB>constant-path<TAB>sha256`, sorted with exactly the loader's executing
@@ -42,10 +42,11 @@ the only padded counter. Exhaustion refuses. Pinned config blob identity is boun
 in batch-start; the caller supplies those pinned bytes, while stop is read anew.
 There is no private storage transport in this lane.
 
-This reader handles one supplied synthetic outstanding-batch envelope. Completion
-is terminal; a second batch-start or any later event refuses. Global repeated
-history slicing and cross-batch retained configuration/package selection are not
-implemented, and remain parent source/live obligations.
+Each original reader handles one supplied batch range. Completion is terminal;
+a second batch-start or any later event refuses. The stable loader slices complete
+global history and selects each exact retained configuration/package independently.
+Protocol 4 adds validated original preparation consumption output to that global
+check; this is source-only data validation, never operating enablement.
 
 Each event has sequence, kind, prior-event digest and batch identity plus exactly
 the kind-specific fields declared in records.py. Evidence, release and operation
@@ -228,3 +229,27 @@ previously absent archival transcript identities once. Fixed source/config and
 already completed archival selection cannot be repointed, even to identical
 bytes at another commit. Read-only log traversal explicitly disables local
 external diff/text conversion, signature and notes execution/display settings.
+
+## Protocol 4 immutable refresh objects
+
+Current refresh contexts add construction to the original six fields. Construction
+has format/inputs/originals/objects/digest, with canonical base64 raw objects and
+original preparation digest. It accepts only previous='-' and parent=base. Hash
+complete originals, preserve all non-lock entries and derive exactly lock blob,
+unixlike tree, root tree and fixed unsigned commit. Original dependency descriptors
+name type/sha; operation payload adds original generated dependency IDs afterwards.
+Construction digest excludes itself and op IDs.
+
+refresh-object payload keys: repository, batch, refresh, construction, object-type,
+object, raw, dependencies. The payload proposes only fixed public Git object POSTs;
+no HTTP occurs here. Original reducer requires exact next payload, observed prior
+objects, complete object closure before branch/PR and existing uncertainty fences.
+Present object observation keys are object-type/object/raw-digest/dependencies/
+construction; absent keys are exact object-type/object. Data-only observations
+remain offline assertions until authenticated transport proves exact typed reads.
+
+Original replay adds preparations[] digest/batch pairs from accepted refresh-result
+events only. Maximum distinct preparations is 16 and complete serialized replay
+output remains <=4096 bytes. Global original replay rejects cross-batch consumption
+without rewriting earlier packages. None of this adopts initial semantic baselines,
+declarations, preparation credentials or operating publication.

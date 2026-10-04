@@ -144,3 +144,21 @@ bounds or executing membership changed. Added real readonly cleanup and hardlink
 fixtures, typed symlink/foreign/writable negatives, single retry denial and primary
 refusal retention. Local24-case and current-head native results follow delivery;
 AC2/AC3 remain pending until repaired exact-head CI succeeds.
+
+## Dated required conflict update, 2026-10-04
+
+Published395efb4bc27572734d45c9eab1e1a58ea970ff60 completed normal commit/push
+hooks, including24 library tests, but no pull_request CI was created: GitHub
+reported actual conflict after #504 integrated devca90ef2fc457286abaebe50ded8244d4e70d5e31.
+This is not a native pass. Root assigned the necessary actual conflict update;
+explicit HTTPS fetch pinned that exact dev and merged it without importing
+unmerged source. Only shared rules/current semantic manifest conflicted. Root
+resolved the mapping union and rehashed the current semantic/transport closures;
+both retain eight members and the standalone helper is not imported or included.
+Own library, fixture and CI bytes are unchanged from395. Current rules SHA256 is
+661ad6f394760e71082f4c5cbf348d03935947230a7f6d4abd3d82492de0b6da.
+
+After the callback,24 library tests passed10.490 seconds and31 current semantic
+tests passed41.856 seconds. Normal assembly commit/push and exact-head native CI
+remain required. Report remains pending; final report publication waits for
+observed repaired native proof and the later actual #505/#507 integration update.
