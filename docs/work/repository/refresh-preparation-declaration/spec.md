@@ -91,7 +91,12 @@ unsupported/ambiguous evidence refuses. No declaration artifact/download is intr
 
 construct_observed_refresh(snapshot, preparation, declaration_receipt) composes only
 original protocol 4 data construction after fresh source/dev/owner/generation/job/stop
-checks. Changed bindings invalidate declaration. Journal proposal/public object effects
+checks. Changed reviewed body, preparation/data/base/utility/rules/package scope or
+invalid original staging/review custody makes the declaration ineligible. A valid
+later owner claim, generation advance or descendant private-head update preserves
+the immutable declaration; original staging bindings are verified at introduction,
+while current owner/source/head/stop/effect authority is independently verified.
+Never rewrite D1 or migrate its approval. Journal proposal/public object effects
 remain existing separately reviewed interfaces. Missing custody yields finite blocker,
 including scheduled wakeups. No automatic review or publishing fallback.
 

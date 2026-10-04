@@ -59,3 +59,10 @@ bin/python3.13 SHA256 is
 329d378575992732511d75b3bd675cb91b3c65f3082783cd97ccb14f0ecd5a74.
 No archive content was installed or executed. Hosted runtime/isolation and every
 implementation criterion remain pending.
+
+Finite-invocation review distinguishes original staging custody from current effect
+authority. A successful historical stage and independent domain review can precede
+a later owner claim without rewriting D1. If construction changes the immutable
+dispatch candidate digest, that invocation exits; the next invocation authenticates
+the exact new digest and current generation before effects. This is a proposed
+source interface, not executed staging/review/claim or operating proof.
