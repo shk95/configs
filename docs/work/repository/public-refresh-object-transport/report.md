@@ -38,3 +38,19 @@ observation targets and full serialization adoption. Insufficient original depen
 custody finitely refuses; signed gitlink metadata is never invented. This records
 pickup design only. All acceptance remains pending prerequisite integration and
 actual source/local/native delivery.
+
+
+## Original private publication delivery review, 2026-10-04
+
+Root and a read-only reviewer confirmed a continuation gap in the retained
+Journal: API-created private child objects are not delivered to the owned local
+original database before later head/context/graph reads. Existing fake API and
+Snapshot share one object store and mask this difference. This is source inspection,
+not an actual private API failure or operating receipt.
+
+The dated spec amendment includes deterministic prospective raw-object retention,
+complete remote identity comparison, bounded local import/original replay before
+logical acceptance, and pending/fence preservation after local failure. Distinct
+REMOTE/LOCAL two-publication and start-continuation fixtures are required at source
+pickup. No source correction or native fixture for this gap is delivered by this
+planning amendment; all ACs remain pending. It introduces no retry/rollback authority.

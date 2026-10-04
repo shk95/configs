@@ -66,3 +66,44 @@ a later owner claim without rewriting D1. If construction changes the immutable
 dispatch candidate digest, that invocation exits; the next invocation authenticates
 the exact new digest and current generation before effects. This is a proposed
 source interface, not executed staging/review/claim or operating proof.
+
+
+## Root domain-observer contract review, 2026-10-04
+
+Root reviewed a concrete run-scoped Environment approval predicate against the
+typed production receipt source and official workflow-run endpoint semantics.
+The dated amendment fixes independent domain authority/reference/output DTOs,
+D1 title versus comment prefixes, latest attempt 1/sole job and stable numeric
+reviewer/Environment observations. It expressly excludes undocumented numeric
+deployment/job joins and unobserved hold timing. No actual domain approval,
+role provisioning, packet or API effect is claimed. AC1–4 remain pending.
+
+Full D0/D1 envelope content, unique immutable single-parent packet introduction,
+original staging success and later current authority are separately bound.
+Finite R1 staging, completed review, R2 construction and R3 effect continuation
+cannot fake future completion or mutate one run's immutable candidate digest.
+Producer/native isolation, exact trusted runtime admission, private input transfer,
+deterministic auxiliary proposal metadata and loader/Journal implementation still
+require accepted source interfaces before executable pickup. Synthetic service
+fixtures and source review cannot certify actual Environment protection or hold.
+
+
+## Independent declaration-observer source lane accepted, 2026-10-04
+
+Root reviewed and accepted the dated B1–B4 full D1 parser/fixed Unix-like DOMAIN observer contract. Exact nested body/envelope/staging/declarations, original-source adapter, fixed eight-key policy and pure workflow renderer, bounded API reobservation and DATA-only output are specified. Protocol4 preserves the original selected AWK list grammar; protocol5 uses its explicitly adopted sorted contract. B may execute independently after actual #505 and reviewed amendment delivery, in parallel with public4 when assigned.
+
+B1–B4 remain pending implementation/current-head delivery. No importing consumer, workflow publication/enablement, original private introduction, successful staging, operating approval or effect follows from this plan. All enclosing acceptance criteria remain pending and must not be upgraded by the independent source outcome.
+
+
+## Auxiliary staging source contract accepted, 2026-10-04
+
+Root accepted the dated C1–C4 StageInvocation/current-candidate/D0 bridge, deterministic job-start-based unsigned raw child, full packet-only/selected-original ancestry validator and one-shot read-only recovery contract. Claim and declaration publication require independently verified REMOTE identity and LOCAL rawclosure hydration/full replay before advancing or clearing pending. Actual B and public4 hydration source deliveries are dependencies; original5 stays separately gated.
+
+C1–C4 remain pending implementation and current-head source evidence. No claim, packet, private object/ref, operating approval, workflow activation or effect was executed. Enclosing acceptance remains pending. Library quotas consume tighter enclosing budgets, and recovery of an old introducing child never replaces a later actual current head.
+
+
+## Initial data reader source contract accepted, 2026-10-04
+
+Root accepted dated A1–A4 data-only initial repository/receipt/inventory/archive validation. Exact original whole-repository fingerprint remains distinct from the utility Unix-like-relative map and from required5 input-tree T. Finite raw tree/blob/path/mode/materialization bounds and streamed ZIP structure are specified without changing receipt17/archive3 or utility semantics. Actual inspected ca90 Git tree had no symlink/gitlink entries; historical prototype counts support finite-bound rationale only, not a qualified producer snapshot.
+
+Read-only public artifact listings returned zero eligible samples; actual ZIP uploader compatibility was not proved. Source reader fixtures must exercise supported streamed variants, while runtime/action/bootstrap/producer/binary custody and real operating evidence remain separate. A1–A4 and all enclosing criteria remain pending implementation/current-head delivery. No utility, producer, private packet, workflow or effect was run.
