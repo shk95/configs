@@ -66,3 +66,23 @@ a later owner claim without rewriting D1. If construction changes the immutable
 dispatch candidate digest, that invocation exits; the next invocation authenticates
 the exact new digest and current generation before effects. This is a proposed
 source interface, not executed staging/review/claim or operating proof.
+
+
+## Root domain-observer contract review, 2026-10-04
+
+Root reviewed a concrete run-scoped Environment approval predicate against the
+typed production receipt source and official workflow-run endpoint semantics.
+The dated amendment fixes independent domain authority/reference/output DTOs,
+D1 title versus comment prefixes, latest attempt 1/sole job and stable numeric
+reviewer/Environment observations. It expressly excludes undocumented numeric
+deployment/job joins and unobserved hold timing. No actual domain approval,
+role provisioning, packet or API effect is claimed. AC1–4 remain pending.
+
+Full D0/D1 envelope content, unique immutable single-parent packet introduction,
+original staging success and later current authority are separately bound.
+Finite R1 staging, completed review, R2 construction and R3 effect continuation
+cannot fake future completion or mutate one run's immutable candidate digest.
+Producer/native isolation, exact trusted runtime admission, private input transfer,
+deterministic auxiliary proposal metadata and loader/Journal implementation still
+require accepted source interfaces before executable pickup. Synthetic service
+fixtures and source review cannot certify actual Environment protection or hold.

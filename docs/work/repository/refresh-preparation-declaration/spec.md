@@ -267,3 +267,100 @@ Accepted controller source, utility source and candidate base are separate ident
 The observer must bind them explicitly; original protocol4 candidate source equals
 its base/parent and must not be silently replaced with controller master source.
 Current declaration field names need this mapping settled before source pickup.
+
+
+## Domain review and finite staging contract amendment, 2026-10-04
+
+Amended 2026-10-04: AC3 uses the exact run-scoped Environment approval
+relation below, not an undocumented numeric deployment-to-job relation. AC4
+separates immutable historical staging from each later live effect invocation.
+This reviewed source contract provides no actual reviewer provisioning, hold,
+packet introduction, workflow dispatch, runtime qualification or API effect.
+The remaining producer/runtime and auxiliary implementation gates still apply.
+
+For this Unix-like refresh child the domain is exactly unixlike. An independently
+trusted role authority has exactly format, domain, public-repository,
+public-repository-id, source, role-policy-path, role-policy-blob,
+review-workflow-path, review-workflow-blob, review-workflow-id, review-job-name,
+review-environment-name, review-environment-id, dispatch-actors, reviewers,
+reviewer-policy. Format is integer 1; repository is shk95/configs with numeric
+identity 1330390069. Source and blobs are full lowercase Git identities. Numeric
+IDs are strict positive integers. Actor/reviewer lists are sorted unique,
+nonempty, at most 16 independently provisioned numeric identities;
+reviewer-policy is any-one. The fixed workflow/job/Environment names are the
+single recommended contract above. Source-owned role policy at
+`tool/version-control/release-refresh-role-policy.json` binds the fixed contract;
+independently provisioned private numeric role data must agree with that contract.
+No caller packet, generic production role or agent identity selects this authority.
+Missing provisioning refuses; overlapping actor/reviewer identities are not an
+implicit self-review prohibition. Other domains need their own explicit adoption.
+
+A review lookup reference is exactly {format,domain,source,workflow,run,attempt,job},
+format 1 and attempt 1; it is only a lookup hint. Compute expected D1 independently
+from complete canonical retained bytes. Review references remain outside D1.
+Normalized observer output is exactly {format,kind,domain,declaration,source,
+workflow,run,attempt,job,reviewer,environment,observation-digest,binding}; kind is
+domain-declaration, environment has exactly {id,name}, declaration is D1, and
+binding is run-scoped-environment-approval. The observation digest commits to
+canonical original API observations; it never supplies approval authority.
+
+Authenticate original policy/workflow Git bytes and accepted source ancestry.
+Require the exact enabled manual-only source variant, one fixed job, fixed
+Environment, permissions {}, digest-only input and no private connection or
+writer credential. Observe both latest run and attempt 1 with exact repository,
+source, master branch, workflow_dispatch, independently allowed actor and triggering
+actor, completed/success state and workflow identity/path. Both display titles
+must equal release-declaration:<D1>. The run-addressed approvals endpoint must
+return exactly one approved record, one exact numeric Environment, an independently
+allowed numeric reviewer and exact comment declaration:<D1>. These two prefixes
+are different; title equality with the comment would be incorrect.
+
+Read Environment ID/name and the complete bounded attempt-1 job list. Require one
+successful completed fixed-name job bound to that run/source and exact numeric
+hint, with the fixed public job URL. Reobserve latest run, approvals and Environment
+after collecting all observations; movement, reruns, extra jobs/approvals,
+rejections, bypass, foreign IDs, missing metadata, redirects or unavailable reads
+refuse. Raw service DTO may contain extra documented fields; internal DTO keysets
+and every required binding are exact. Use only the fixed anonymous read channel,
+with no writer-token fallback or automatic dispatch/retry.
+
+This relation means the service returns approval at the run-addressed endpoint
+for the fixed Environment declared by independently authenticated sole-job source.
+It does not claim a separately observed numeric deployment-to-attempt/job join,
+approval timestamp, initial pre-job hold, hold duration or actual protection setup.
+Those require separate operator evidence. Official endpoint semantics are in
+[workflow runs REST](https://docs.github.com/en/rest/actions/workflow-runs?apiVersion=2026-03-10).
+Do not manufacture a stronger relation from deployment SHA/ref or log URLs.
+
+D0 hashes the exact canonical body already specified. D1 hashes an envelope with
+exact keys {format,body,body-digest,staging}, format 1 and body-digest D0. Staging
+has exactly {controller-source,workflow,actor,run,attempt,job,batch,generation,
+operating-parent}; it binds the live staging source/sole job and original parent
+owner/batch/generation. Fixed staging title is
+release-control:stage-declaration:<D0>. Retain a single regular 100644 packet at
+review/declarations/<D1>.json, atomically with byte-identical current/index.tsv
+and no semantic event, transcript, context or config change. Packet is at most
+64 KiB; at most 256 retained packets/16 MiB packet bytes and existing acquisition
+limits apply. No caller introducing-commit field or self-hash anchor is added.
+
+Derive exactly one original single-parent introduction from authenticated complete
+private history: absent in parent, exact packet in child, original index and all
+other leaves unchanged. Verify original parent through its own selected package,
+with body package/protocol and original owner bindings; check immutability through
+every later transition. Historical stage run/job must actually finish successfully
+under the original source/role/title and attempt 1. Current owner_terminal proves
+termination only and cannot substitute for this successful staging predicate.
+Unknown publication reconciles exact deterministic original proposal read-only;
+absent, conflict or unavailable acknowledgement supplies no automatic retry.
+Deterministic proposal metadata and the exact auxiliary loader/Journal interface
+still require their reviewed implementation contract.
+
+The finite sequence is R1 live owner stages D1 -> R1 actually succeeds -> domain
+review observes D1 -> R2 fresh Entry reconciles/claims and constructs -> R2 exits
+when candidate digest changes -> R3 starts with the new digest/current claim and
+public effect intent. Original staging generation, accepted refresh-result carrier
+generation and current effect-row generation are separate identities. Normal
+later claims preserve historical custody; changed reviewed data/body/package
+requires a fresh declaration. Initial protocol4/5 and required construction5 keep
+their separately versioned payload/receipt grammars; this observer adds no fields
+to original initial construction and migrates no old batch.
