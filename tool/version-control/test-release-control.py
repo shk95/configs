@@ -16,7 +16,15 @@ import zlib
 
 TOOLS = Path(__file__).resolve().parent
 WRAPPER = (TOOLS / "release-control").as_posix()
-sys.path.insert(0, str(TOOLS / "release-control-package"))
+# Actual reviewed protocol-3 package, never current source relabeled historical.
+PROTOCOL_THREE_SOURCE = '1e635ffd9722354eb6768f0452a0c845ec124236'
+HISTORICAL = tempfile.TemporaryDirectory(prefix='original-protocol-three-')
+HISTORICAL_ROOT = Path(HISTORICAL.name)
+for relative in ('main.py','records.py','engine.py','adapter.py'):
+    data=subprocess.run(['git','-C',str(TOOLS.parent.parent),'show',
+         PROTOCOL_THREE_SOURCE+':tool/version-control/release-control-package/'+relative],capture_output=True,check=True).stdout
+    (HISTORICAL_ROOT/relative).write_bytes(data)
+sys.path.insert(0, str(HISTORICAL_ROOT))
 from records import Refusal, blob_identity, canonical, digest, encode, history, parse, require
 import engine
 import adapter
@@ -24,6 +32,10 @@ import adapter
 spec = importlib.util.spec_from_file_location("loader", TOOLS / "release-control-loader.py")
 loader = importlib.util.module_from_spec(spec)
 spec.loader.exec_module(loader)
+
+def historical_bytes(name):
+    return subprocess.run(['git','-C',str(TOOLS.parent.parent),'show',PROTOCOL_THREE_SOURCE+':'+name],capture_output=True,check=True).stdout
+
 
 H = "a" * 40
 D = "b" * 40
@@ -172,7 +184,7 @@ class ControllerProof(unittest.TestCase):
             for name in loader.FILES:
                 path = root / name
                 path.parent.mkdir(parents=True, exist_ok=True)
-                shutil.copyfile(TOOLS.parent.parent / name, path)
+                path.write_bytes(historical_bytes(name))
                 if (TOOLS.parent.parent / name).stat().st_mode & 0o111:
                     path.chmod(0o755)
             def manifest():
@@ -278,7 +290,7 @@ class ControllerProof(unittest.TestCase):
             self.assertEqual(run_git(root, "rev-parse", "HEAD"), newer)
             self.refuse(loader.extract, root, dict(approved, control=original), Path(directory) / "ancestor")
             self.refuse(loader.extract, root, dict(approved, manifest=Y), Path(directory) / "tamper")
-            self.refuse(loader.approved, encode(dict(approved, protocol="4")))
+            self.refuse(loader.approved, encode(dict(approved, protocol="5")))
             self.refuse(loader.approved, encode(dict(approved, **{"public-repository": "fixture/other"})))
             # Missing closure entry, even with its newly asserted manifest digest, refuses.
             raw = (root / loader.MANIFEST).read_bytes().splitlines(keepends=True)
@@ -811,8 +823,8 @@ class ControllerProof(unittest.TestCase):
             middle = run_git(repo, "rev-parse", "HEAD")
             run_git(repo, "checkout", "-q", "dev")
             for name in loader.FILES:
-                shutil.copyfile(TOOLS.parent.parent / name, repo / name)
-            shutil.copyfile(TOOLS.parent.parent / loader.MANIFEST, repo / loader.MANIFEST)
+                (repo/name).write_bytes(historical_bytes(name))
+            (repo/loader.MANIFEST).write_bytes(historical_bytes(loader.MANIFEST))
             new_manifest = digest((repo / loader.MANIFEST).read_bytes())
             run_git(repo, "add", "."); run_git(repo, "commit", "-qm", "fixture protocol two")
             run_git(repo, "checkout", "-q", "master"); run_git(repo, "merge", "--no-ff", "-qm", "fixture protocol two promotion", "dev")
@@ -890,9 +902,9 @@ state=engine.reduce(events,value['config'],value['transcript'])
                 # Mislabeled semantic package cannot consume a different protocol.
                 (operating / "config/operating.tsv").write_bytes(encode(dict(CONFIG, protocol="3" if protocol == "1" else "1")))
                 self.assertNotEqual(subprocess.run(command, capture_output=True).returncode, 0)
-                approved_file.write_bytes(encode(dict(approval, protocol="4")))
+                approved_file.write_bytes(encode(dict(approval, protocol="5")))
                 self.assertNotEqual(subprocess.run(command, capture_output=True).returncode, 0)
-                self.refuse(loader.approved, encode(dict(approval, protocol="4")))
+                self.refuse(loader.approved, encode(dict(approval, protocol="5")))
             self.assertEqual(run_git(repo, "rev-parse", "HEAD"), newer)
 
 
@@ -1008,7 +1020,7 @@ class GlobalHistoryProof(unittest.TestCase):
         self.commit(self.public)
         self.packages = {}
         for protocol, source in [('1','24cf09b5efbb4db821210632da8b44dcb822a337'),
-                                 ('2','7f43ec3b49243d10b0ea3d75272d8cd4c6ff3d7f'), ('3',None)]:
+                                 ('2','7f43ec3b49243d10b0ea3d75272d8cd4c6ff3d7f'), ('3',PROTOCOL_THREE_SOURCE)]:
             if protocol == '1':
                 run_git(self.public, 'checkout', '-qb', 'dev')
             else:
@@ -1322,6 +1334,212 @@ sys.stdout.buffer.write(engine.index(state,last))
                 grafts.unlink()
                 result=self.invoke()
                 self.assertEqual(result.returncode,0,result.stderr)
+
+# INV repository/immutable-refresh-object-semantics
+# INV repository/fixture-git-isolation
+saved_modules={name:sys.modules.get(name) for name in ('records','adapter','engine')}
+for name in saved_modules: sys.modules.pop(name,None)
+sys.path.insert(0,str(TOOLS/'release-control-package'))
+import records as current_records
+import adapter as current_adapter
+import engine as current_engine
+sys.path.pop(0)
+for name,value in saved_modules.items():
+    if value is not None: sys.modules[name]=value
+    else: sys.modules.pop(name,None)
+
+
+class ImmutableRefreshObjects(unittest.TestCase):
+    # INV repository/immutable-refresh-object-semantics
+    def setUp(self):
+        self.tmp=tempfile.TemporaryDirectory(prefix='refresh-object-fixture-')
+        self.addCleanup(self.tmp.cleanup)
+        self.repo=Path(self.tmp.name)
+        run_git(self.repo,'init','-q','-b','dev')
+        run_git(self.repo,'config','user.name','Fixture')
+        run_git(self.repo,'config','user.email','fixture@example.invalid')
+        run_git(self.repo,'config','core.hooksPath',str(self.repo/'no-hooks'))
+        (self.repo/'unixlike').mkdir()
+        self.before=b'{"nodes":{"root":{"inputs":{}}},"root":"root","version":7}\n'
+        self.after=b'{"nodes":{"root":{"inputs":{"example":"example"}},"example":{"locked":{"rev":"new"}}},"root":"root","version":7}\n'
+        (self.repo/'unixlike/flake.lock').write_bytes(self.before)
+        (self.repo/'unixlike/kept').write_bytes(b'preserved\n')
+        (self.repo/'kept').write_bytes(b'root preserved\n')
+        run_git(self.repo,'add','.')
+        run_git(self.repo,'commit','-qm','fixture base')
+        base=run_git(self.repo,'rev-parse','HEAD')
+        raw=subprocess.run(['git','-C',str(self.repo),'cat-file','commit',base],capture_output=True,check=True).stdout
+        # Valid signed original data, exact hash; no signature authenticity claim.
+        header,message=raw.split(b'\n\n',1)
+        raw=header+b'\ngpgsig -----BEGIN PGP SIGNATURE-----\n fixture\n -----END PGP SIGNATURE-----\n\n'+message
+        base=self.object('commit',raw)['sha']
+        root=run_git(self.repo,'rev-parse','HEAD^{tree}')
+        subtree=run_git(self.repo,'rev-parse','HEAD:unixlike')
+        before=run_git(self.repo,'rev-parse','HEAD:unixlike/flake.lock')
+        originals=[self.object('commit',raw)]+[self.read_object(kind,sha) for kind,sha in [('tree',root),('tree',subtree),('blob',before)]]
+        blob=self.object('blob',self.after)
+        old_sub=current_adapter.tree_entries(self.raw(originals[2]))
+        sub=self.object('tree',current_adapter.encode_tree([(m,n,blob['sha'] if n==b'flake.lock' else s) for m,n,s in old_sub]))
+        old_root=current_adapter.tree_entries(self.raw(originals[1]))
+        tree=self.object('tree',current_adapter.encode_tree([(m,n,sub['sha'] if n==b'unixlike' else s) for m,n,s in old_root]))
+        self.message=b'chore(unixlike-deps): refresh reviewed inputs\n\nRelease-Format: 1\nRelease-Domain: unixlike\nRelease-Impact: patch\nRelease-Contracts: unixlike-api\nRelease-Compatibility: compatible\nRelease-Rationale: Reviewed fixture declarations\nRelease-Migration: none\n'
+        actor=b'Release controller <release-controller@example.invalid> 1791085275 +0000'
+        headraw=b'tree '+tree['sha'].encode()+b'\nparent '+base.encode()+b'\nauthor '+actor+b'\ncommitter '+actor+b'\n\n'+self.message
+        commit=self.object('commit',headraw)
+        candidate={'batch':X,'source':base,'base':base,'parent':base,'head':commit['sha'],'tree':tree['sha'],
+          'before-lock':digest(self.before),'lock':digest(self.after),'utility-source':H,'utility-manifest':X,
+          'source-fingerprint':Y,'previous':'-','branch':adapter.refresh_branch(X)}
+        objects=[blob,sub,tree,commit]
+        for obj in objects:
+            if obj['type']=='blob': deps=[]
+            elif obj['type']=='tree': deps=[('tree' if m==b'40000' else 'blob',s) for m,n,s in current_adapter.tree_entries(self.raw(obj))]
+            else: deps=[('tree',tree['sha']),('commit',base)]
+            obj['dependencies']=[{'type':kind,'sha':sha} for kind,sha in sorted(set(deps))]
+        inputs={k:candidate[k] for k in ('batch','source','base','previous','before-lock','lock','utility-source','utility-manifest','source-fingerprint')}
+        inputs['preparation']=Y
+        construction={'format':1,'inputs':inputs,'originals':originals,'objects':objects}
+        construction['digest']=digest(canonical(construction))
+        self.candidate=candidate
+        self.context={'prepared':candidate,'proof':{'head-parents':[base],'merge-parents':[],
+           'changed':['unixlike/flake.lock'],'before-lock':candidate['before-lock'],'lock':candidate['lock'],
+           'before-mode':0o644,'mode':0o644},'current-dev':base,
+           'branch':{'batch':X,'branch':candidate['branch'],'head':'-'},'checks':None,'integration':None,'construction':construction}
+        self.config=dict(CONFIG,protocol='4')
+        self.events=[start(),event('claim',**OWNER),event('refresh-result',payload=canonical({'status':'changed','candidate':candidate}).decode())]
+        self.events[0]['protocol']='4'
+        self.proof=transcript();self.proof['refresh']={'revisions':[self.context],'current':self.context}
+
+    def raw(self,obj): return __import__('base64').b64decode(obj['raw'])
+    def object(self,kind,raw):
+        sha=subprocess.run(['git','-C',str(self.repo),'hash-object','-w','-t',kind,'--stdin'],input=raw,capture_output=True,check=True).stdout.decode().strip()
+        return {'type':kind,'sha':sha,'raw':__import__('base64').b64encode(raw).decode()}
+    def read_object(self,kind,sha):
+        raw=subprocess.run(['git','-C',str(self.repo),'cat-file',kind,sha],capture_output=True,check=True).stdout
+        return self.object(kind,raw)
+    def plans(self): return current_adapter.refresh_construction(self.context,self.candidate)
+    def reduce(self):
+        events=copy.deepcopy(self.events);prior=Z
+        for i,item in enumerate(events,1):
+            item.update(sequence=str(i),prior=prior)
+            raw=current_records.encode(item);current_records.parse(raw,'event');prior=digest(raw)
+        return current_engine.reduce(events,self.config,self.proof)
+    def refusal(self,fn,*args): self.assertRaises(current_records.Refusal,fn,*args)
+    def refresh_digest(self):
+        c=self.context['construction'];c['digest']=digest(canonical({k:c[k] for k in ('format','inputs','originals','objects')}))
+    def observe(self,oid,payload,status='present'):
+        target={'object-type':payload['object-type'],'object':payload['object']}
+        if status=='present': target.update({'raw-digest':digest(__import__('base64').b64decode(payload['raw'])),
+            'dependencies':current_adapter.document(payload['dependencies'].encode()),'construction':payload['construction']})
+        observed={'status':status,'target':target,'complete':True}
+        self.proof['observations'].setdefault(oid,[]).append(observed)
+        self.events.append(event('observation',payload=canonical(payload).decode(),operation=[[oid,'refresh-object',digest(canonical(payload)),OWNER['generation'],
+          'observed' if status=='present' else 'intent' if status=='absent' else 'unknown',payload['object'] if status=='present' else '-',digest(canonical(observed))]]))
+    def intent(self,oid,payload):
+        self.events.append(event('intent',payload=canonical(payload).decode(),operation=[[oid,'refresh-object',digest(canonical(payload)),OWNER['generation'],'intent','-','-']]))
+
+    def test_exact_git_raw_signed_base_and_deterministic_payloads(self):
+        plans=self.plans();self.assertEqual(plans,self.plans());self.assertEqual(len(plans),4)
+        for oid,payload in plans:
+            self.intent(oid,payload);self.observe(oid,payload)
+            self.assertEqual(self.reduce()['operations'][oid]['remote'],payload['object'])
+            request=current_adapter.operation('refresh-object',payload)
+            self.assertEqual(request['method'],'POST');self.assertTrue(request['path'].startswith('/repos/shk95/configs/git/'))
+        self.assertEqual(self.reduce()['preparations'],[{'digest':Y,'batch':X}])
+        branch=dict(self.candidate,repository='shk95/configs')
+        self.events.append(effect('refresh-branch',branch,op_id=current_adapter.refresh_operation_id('refresh-branch',branch)));self.reduce()
+
+    def test_contamination_hash_and_original_graph_refuse(self):
+        variants=[]
+        p=copy.deepcopy(self.context);p['construction']['format']=True;variants.append(p)
+        p=copy.deepcopy(self.context);p['construction']['originals'].pop();variants.append(p)
+        p=copy.deepcopy(self.context);p['construction']['originals'].append(p['construction']['originals'][0]);variants.append(p)
+        p=copy.deepcopy(self.context);p['construction']['objects'][1]['raw']='AA==';variants.append(p)
+        p=copy.deepcopy(self.context);p['construction']['objects'][3]['dependencies']=[];variants.append(p)
+        for p in variants:
+            p['construction']['digest']=digest(canonical({k:p['construction'][k] for k in ('format','inputs','originals','objects')}))
+            self.refusal(current_adapter.refresh_construction,p,self.candidate)
+        header=b'tree '+self.candidate['tree'].encode()+b'\n orphan\n\nmessage\n'
+        self.refusal(current_adapter.commit_headers,header)
+        self.refusal(current_adapter.commit_headers,b'tree '+H.encode()+b'\ntree '+H.encode()+b'\n\nmessage\n')
+
+    def test_order_ref_guard_unknown_absent_retry_and_old_generation(self):
+        plans=self.plans();oid,payload=plans[0]
+        self.intent(*plans[1]);self.refusal(self.reduce);self.events.pop()
+        branch=dict(self.candidate,repository='shk95/configs');self.events.append(effect('refresh-branch',branch,op_id=current_adapter.refresh_operation_id('refresh-branch',branch)));self.refusal(self.reduce);self.events.pop()
+        self.intent(oid,payload);self.observe(oid,payload,'unknown');self.reduce()
+        self.intent(*plans[1]);self.refusal(self.reduce);self.events.pop()
+        self.observe(oid,payload,'absent');self.reduce()
+        self.intent(oid,payload);self.observe(oid,payload);self.reduce()
+        self.proof['owner']={'owner':OWNER,'latest-attempt':'1','jobs':{'5':'terminal'},'complete':True,'status':'terminal'}
+        self.events.append(event('claim',**dict(OWNER,generation='2',run='10',job='11')));self.reduce()
+
+    def test_consistent_hash_contamination_and_stop_refuse(self):
+        p=copy.deepcopy(self.context)
+        obj=p['construction']['objects'][1]
+        entries=current_adapter.tree_entries(self.raw(obj))
+        changed=current_adapter.encode_tree([(m,n,H if n==b'kept' else sha) for m,n,sha in entries])
+        new=self.object('tree',changed);new['dependencies']=obj['dependencies']
+        p['construction']['objects'][1]=new
+        p['construction']['digest']=digest(canonical({k:p['construction'][k] for k in ('format','inputs','originals','objects')}))
+        self.refusal(current_adapter.refresh_construction,p,self.candidate)
+        self.events.append(event('stop-observed',revision='1',reason='fixture'))
+        self.intent(*self.plans()[0]);self.refusal(self.reduce)
+
+    def test_generated_declarations_and_unsigned_header_are_exact(self):
+        obj=self.context['construction']['objects'][-1];raw=self.raw(obj)
+        for changed in (raw.replace(b'Release controller',b'Other controller'),raw.replace(b'Release-Impact: patch',b'Release-Impact: unknown'),
+             raw.replace(b'Release-Compatibility: compatible',b'Release-Compatibility: unknown'),raw.replace(b'+0000',b'+0900'),
+             raw.replace(b'\n\nchore',b'\ngpgsig bad\n\nchore'),raw.replace(b'Release-Format: 1\n',b'')):
+            self.refusal(current_adapter.generated_commit,changed,self.candidate['tree'],self.candidate['base'])
+
+    def test_original_replay_output_and_cross_batch_consumption(self):
+        root=Path(self.tmp.name)/'batch'
+        for name in ('config','control','history','current'): (root/name).mkdir(parents=True)
+        config=current_records.encode(self.config)
+        (root/'config/operating.tsv').write_bytes(config)
+        (root/'control/stop.tsv').write_bytes(current_records.encode(STOP))
+        self.events[0]['config']=current_records.blob_identity(config)
+        prior=Z
+        for i,item in enumerate(self.events,1):
+            item.update(sequence=str(i),prior=prior)
+            raw=current_records.encode(item);prior=digest(raw)
+            (root/'history'/('%012d.tsv'%i)).write_bytes(raw)
+        approved={'public-repository':'shk95/configs','master':H,'control':H,'manifest':X,'approval':X,'protocol':'4'}
+        (root/'approved.tsv').write_bytes(current_records.encode(approved))
+        (root/'transcript.json').write_bytes(current_records.canonical(self.proof))
+        projection,fields,result=loader.replay_package(TOOLS.parent.parent,root,'4',0,Z)
+        self.assertEqual(result['preparations'],[{'digest':Y,'batch':X}])
+        from unittest.mock import patch
+        from types import SimpleNamespace
+        variants=[dict(result,preparations=[{'digest':Y,'batch':Z}]),
+                  dict(result,preparations=[{'digest':Y,'batch':X}]*2),
+                  dict(result,preparations=[{'digest':Y,'batch':X,'extra':'no'}]),
+                  dict(result,preparations=[{'digest':Y,'batch':X}]*17)]
+        for bad in variants:
+            fake=SimpleNamespace(returncode=0,stdout=canonical(bad))
+            with patch.object(loader.subprocess,'run',return_value=fake):
+                self.assertRaises(ValueError,loader.replay_package,TOOLS.parent.parent,root,'4',0,Z)
+        with patch.object(loader.subprocess,'run',return_value=SimpleNamespace(returncode=0,stdout=b' '*4097)):
+            self.assertRaises(ValueError,loader.replay_package,TOOLS.parent.parent,root,'4',0,Z)
+
+        consumed={};loader.consume_preparations(result,X,consumed)
+        loader.consume_preparations(result,X,consumed)
+        other={'preparations':[{'digest':Y,'batch':Z}]}
+        self.assertRaises(ValueError,loader.consume_preparations,other,Z,consumed)
+        self.assertRaises(ValueError,loader.consume_preparations,result,Z,{})
+
+    def test_initial_only_bounds_unused_revision_and_protocol(self):
+        c=copy.deepcopy(self.candidate);c['previous']=H
+        self.refusal(current_adapter.refresh_construction,self.context,c)
+        p=copy.deepcopy(self.context);p['construction']['objects'][0]['raw']='A'*(1024*1024+4)
+        self.refusal(current_adapter.refresh_construction,p,self.candidate)
+        unused=copy.deepcopy(self.context);unused['construction']['inputs']['preparation']=X; unused['prepared']['head']=D
+        self.proof['refresh']['revisions'].append(unused)
+        self.assertEqual(self.reduce()['preparations'],[{'digest':Y,'batch':X}])
+        self.events.append(event('refresh-result',payload=canonical({'status':'changed','candidate':self.candidate}).decode()))
+        self.assertEqual(len(self.reduce()['preparations']),1)
+        self.refusal(current_records.parse,encode(CONFIG),'config')
+        current_records.parse(current_records.encode(self.config),'config')
 
 if __name__ == "__main__":
     unittest.main()

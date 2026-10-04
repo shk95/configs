@@ -9,12 +9,19 @@ import sys
 sys.path.insert(0, str(Path(__file__).resolve().parent))
 from records import Refusal, parse, read
 from adapter import document
-from engine import preview, project_range
+from engine import preview, project_range, reduce
 
 
 def replay(directory, transcript, approved, before, prior):
     projection, stage, pending = project_range(directory, transcript, approved, before, prior)
-    return {"projection": base64.b64encode(projection).decode("ascii"), "stage": stage, "proposed": pending}
+    from records import history
+    events,_=history(Path(directory)/'history',before,prior)
+    config=parse(read(Path(directory)/'config/operating.tsv'),'config')
+    result={"projection": base64.b64encode(projection).decode("ascii"), "stage": stage, "proposed": pending,
+            'preparations':reduce(events,config,transcript)['preparations']}
+    from records import require
+    require(len(json.dumps(result,sort_keys=True).encode())<=4096, 'preparation-replay-output-bound')
+    return result
 
 
 def main():

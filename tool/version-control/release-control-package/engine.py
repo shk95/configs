@@ -6,7 +6,8 @@ import subprocess
 from pathlib import Path
 from records import blob_identity, canonical, decimal, digest, encode, history, identifiers, parse, read, require
 from adapter import (authenticate, document, operation, reconcile, remote_identity, takeover,
-                     REFRESH_FIELDS, refresh_candidate, refresh_context, refresh_operation_id)
+                     REFRESH_FIELDS, refresh_candidate, refresh_context, refresh_operation_id,
+                     refresh_construction)
 
 
 def retained_replay(source_repository, control, master, candidate, baselines, evidence):
@@ -41,7 +42,8 @@ def initial():
             "releases": [], "stopped": False, "sequence": "0", "control": None,
             "retry": 0, "publication-payloads": {}, "stop-revision": "0",
             "frozen": False, "publication-stage": None, "refresh": None,
-            "refresh-stage": "absent", "refresh-integrations": [], "promotion-generation": "0"}
+            "refresh-stage": "absent", "refresh-integrations": [], "promotion-generation": "0",
+            "preparations": []}
 
 
 def candidate_digest(candidate):
@@ -49,7 +51,7 @@ def candidate_digest(candidate):
 
 
 CANDIDATE_EFFECTS = {"pr", "merge", "tag-object", "tag-ref"}
-REFRESH_EFFECTS = {"refresh-branch", "refresh-pr"}
+REFRESH_EFFECTS = {"refresh-object", "refresh-branch", "refresh-pr"}
 
 
 def publication_ref_id(release):
@@ -126,7 +128,11 @@ def reduce(events, config, transcript):
                 require(set(result) == {"status", "candidate"}, "invalid-changed-refresh")
                 candidate = refresh_candidate(result["candidate"])
                 require(candidate["batch"] == state["batch"], "wrong-refresh-batch")
-                refresh_context(transcript, candidate)
+                context=refresh_context(transcript, candidate)
+                preparation={'digest':context['construction']['inputs']['preparation'],'batch':state['batch']}
+                if preparation not in state['preparations']:
+                    require(len(state['preparations'])<16, 'preparation-replay-count-bound')
+                    state['preparations'].append(preparation)
                 old = state["refresh"]
                 if old == candidate:
                     state["sequence"] = event["sequence"]
@@ -210,9 +216,19 @@ def reduce(events, config, transcript):
                     require(previous["candidate"] == bound_candidate, "changed-operation-candidate")
                     require(previous["refresh"] == bound_refresh, "changed-operation-refresh")
                 if op_kind in REFRESH_EFFECTS:
-                    require(state["refresh"] and {k: payload[k] for k in REFRESH_FIELDS} == state["refresh"], "stale-refresh-payload")
-                    require(op_id == refresh_operation_id(op_kind, payload), "changed-fixed-refresh-operation")
+                    require(state['refresh'], 'missing-refresh-candidate')
                     context = refresh_context(transcript, state["refresh"], checks=op_kind == "refresh-pr")
+                    object_plans=refresh_construction(context,state['refresh'])
+                    if op_kind=='refresh-object':
+                        remaining=[(oid,p) for oid,p in object_plans if not (oid in state['operations'] and state['operations'][oid]['state']=='observed')]
+                        require(remaining and remaining[0]==(op_id,payload), 'wrong-next-refresh-object')
+                        for dep in document(payload['dependencies'].encode()):
+                            if dep['operation']!='-':
+                                prerequisite=state['operations'].get(dep['operation'])
+                                require(prerequisite and prerequisite['state']=='observed' and prerequisite['remote']==dep['sha'], 'unobserved-object-dependency')
+                    else:
+                        require({k:payload[k] for k in REFRESH_FIELDS}==state['refresh'] and op_id==refresh_operation_id(op_kind,payload), 'changed-fixed-refresh-operation')
+                        require(all(oid in state['operations'] and state['operations'][oid]['state']=='observed' and state['operations'][oid]['payload']==p for oid,p in object_plans), 'refresh-ref-before-object-closure')
                     if op_kind == "refresh-pr":
                         branches = [o for o in state["operations"].values() if o["kind"] == "refresh-branch" and o["refresh"] == bound_refresh and o["state"] == "observed"]
                         require(len(branches) == 1 and context["branch"]["head"] == payload["head"], "pr-before-current-owned-branch")
@@ -285,7 +301,7 @@ def reduce(events, config, transcript):
                     state.update(frozen=True, **{"publication-stage": "promoted"})
                 if result == "applied" and op_kind.startswith("tag"):
                     state["publication-stage"] = "publishing"
-                if result == "applied" and op_kind in REFRESH_EFFECTS:
+                if result == "applied" and op_kind in {'refresh-branch','refresh-pr'}:
                     state["refresh-stage"] = "branch-ready" if op_kind == "refresh-branch" else "ready"
                 if result in {"unknown", "conflict"}:
                     state["stage"] = "blocked"
