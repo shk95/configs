@@ -151,6 +151,10 @@ class Computation(unittest.TestCase):
             with self.subTest(key=key),self.assertRaises(M.Refusal):M.verify_merge(M.canonical(changed),chunks,self.backend)
         with self.assertRaises(M.Refusal):M._json(b'{"format":1,"format":1}')
         with self.assertRaises(M.Refusal):M._json(b'{"x":NaN}')
+        # Valid-size JSON still needs finite refusal for Python's digit guard
+        # and overflow-to-infinity before exact manifest-field validation.
+        with self.assertRaises(M.Refusal):M._json(b'{"raw-bytes":'+b'1'*5000+b'}')
+        with self.assertRaises(M.Refusal):M._json(b'{"raw-bytes":1e999}')
         with self.assertRaises(M.Refusal):M._json(b'['*2000+b'0'+b']'*2000)
     def test_missing_unused_incorrect_and_multiple_base_graphs(self):
         objects=self.repository.objects();del objects[self.repository.ancestor]

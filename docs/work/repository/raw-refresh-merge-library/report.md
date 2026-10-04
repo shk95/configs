@@ -109,3 +109,15 @@ manifest remains eight entries with only its rules digest updated. Transport
 manifest remains byte-identical and no historical package was changed. Suite
 success banner follows the new child suite. Policy/fullhook and remote exact-head
 Linux/Windows evidence are the remaining delivery gates.
+
+## Dated finite JSON refusal repair, 2026-10-04
+
+After initial cf7f30bbf94a72b56ceec480bc0a38d235fd8f00 publication, direct
+bounded malformed-input probes reproduced plain ValueError for a5000-digit JSON
+integer and1e999. Both inputs fit the manifest byte cap but Python's integer digit
+guard/canonical nonfinite rejection escaped Refusal conversion. Root approved the
+minimal repair: preserve existing Refusal categories and convert other ValueError
+to finite invalid-JSON refusal. Two negative assertions exercise these exact cases.
+No schema, bounds, maps or executing membership changes. Initial CI37200349415 is
+historical; repaired source requires its own normal hooks/push and exact-head CI
+before Ready. Report stays pending.

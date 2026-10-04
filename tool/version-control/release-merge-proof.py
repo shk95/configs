@@ -69,7 +69,9 @@ def _json(raw):
                 stack.extend((child,depth+1) for child in item)
         require(canonical(value) == raw, 'noncanonical JSON')
         return value
-    except (UnicodeError, json.JSONDecodeError, OverflowError, TypeError, RecursionError) as exc:
+    except Refusal:
+        raise
+    except (ValueError, OverflowError, TypeError, RecursionError) as exc:
         raise Refusal('invalid JSON') from exc
 
 class Backend:
