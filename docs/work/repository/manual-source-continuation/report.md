@@ -37,3 +37,9 @@ production exact maps and a fixture that built its inventory from those same map
 A separate exact-map/new-semantic-manifest increment must independently validate
 actual tracked inventory. Refresh/object/writer pickup returns to the compatibility
 child's reviewed endpoint/effect/isolation contract. Parent AC1-AC5 remain pending.
+
+Independent follow-up found generated lock commits also need exact source-bound
+Unix-like release declarations; the current preparation fixture supplies no
+Release-* trailers. The compatibility child's dated AC4 preserves this domain-owned
+review/custody gate before commit/object construction. No automatic patch/compatible
+or source-only conversion is authorized by fixed Git metadata.

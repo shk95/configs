@@ -74,3 +74,19 @@ initializer, master promotion, release, schedule, activation, Apply or cleanup.
 | AC1 | Exact separate-run preparation/data handoff and credential/OS boundaries are specified, including independent provenance and bounded data acceptance; every unresolved download/endpoint authority is explicit and prevents source pickup. | review |
 | AC2 | New semantic object effects bind exact bytes/hashes/dependencies and durable intent, independent observation and lost-response/restart handling before ref/PR effects without changing historical protocol semantics. | review |
 | AC3 | Durable decisions/invariants, package/loader/dispatch/fixture changes and ordered same-scope source increments are enumerated with evidence and replan gates; parent acceptance remains unchanged and pending. | policy checks, review |
+| AC4 | Exact generated-lock release declarations and domain review custody bind base, before/after lock and original utility/rules/package; missing or changed declarations block finite manual/scheduled writer pickup without invented impact or compatibility. | review |
+
+## Dated release declaration pickup amendment
+
+Amended 2026-10-04: AC4 adds a required design gate alongside AC1-AC3. The
+preparation fixture's chore(unixlike-deps) subject is not a production declaration.
+The Unix-like domain decision owner must review exact base, before/after lock,
+utility source and original rules/package, and supply Release-Format, Release-Domain,
+Release-Impact, Release-Contracts, Release-Compatibility, Release-Rationale and
+Release-Migration with explicit custody binding. Writer construction serializes
+reviewed declarations; fixed Git metadata does not authorize semantic judgement.
+A changed base/lock/rules invalidates the declaration. Exact promotion approval
+cannot substitute for missing trailers. Do not turn unsupported source-only/none
+into patch or default dependency changes to compatible. Without an accepted narrow
+automation policy, manual/scheduled writer records its finite blocker/refusal and
+terminates pending domain review. No automatic publishing fallback is introduced.

@@ -51,3 +51,36 @@ Restart also needs an explicit owner/decision procedure after object GET. Exact
 verified bytes may become an observed success; unavailable/404 must not silently
 become confirmed absence or authority for another POST. A new instance or run creates
 no retry permission. These unresolved contracts keep AC1/AC2 pending.
+
+## Data-origin delegation and attempt provenance review, 2026-10-04
+
+Official artifact downloads use an API-returned expiring Location. A future explicit
+contract may delegate one credential-free data GET to that exact API-returned public
+HTTPS URL, with no caller URL, second redirect, credential forwarding or signed-URL
+logging; DNS and actual connection address, TLS, port and byte/ZIP limits need
+positive and negative fixtures. That is a new authority to adopt, not a conclusion
+from the existing fixed-host/no-redirect decision. No download host is guessed.
+
+Artifact metadata binds a run but does not itself name uploader job/run attempt or
+prove utility execution. A proposed first source contract supports only a pinned
+sole-job completed attempt=1 and unambiguous artifact identity, with independently
+observed run/job/source/tool and an explicitly adopted output contract. Reruns,
+missing provenance, replacement or moving metadata refuse. Digest binds archive
+bytes, not semantic correctness or operating certification. Exact acceptance remains
+pending, including unique later-batch consumption.
+
+## Generated lock declaration gap, 2026-10-04
+
+The actual test-refresh-candidate-nix.py prepare fixture commits only a
+chore(unixlike-deps) subject. Production preview requires seven Release-* trailers;
+missing trailers or unknown compatibility refuse. The flake.lock exact mapping
+selects prod-unixlike-api and its related contract/template/evidence obligations.
+Neither fixed author/time nor later promotion approval invents those declarations.
+
+The required order is literal lock result, source-bound Unix-like domain release
+review, deterministic message/object construction, then explicit object publication.
+Reviewed impact/contracts/compatibility/rationale/migration bind exact lock/base/
+utility/rules/package and change invalidates review. Unsupported none/source-only
+needs its own compatibility plan. Scheduled dependency refresh has no implicit
+patch/compatible authority; absent an accepted narrow automation policy it prepares
+and waits for review rather than publishing. This gate is now explicit pending AC4.

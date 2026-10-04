@@ -20,3 +20,4 @@ and credential boundaries. No source lane is assigned from an unresolved design.
 | AC1 | pending | Separate-run topology identified; exact data download/redirect authority and deployed isolation have not been accepted. |
 | AC2 | pending | One immutable-object intent per blob/tree/commit proposed; exact next-protocol schema, bounds and restart/reconciliation contract remain to review. |
 | AC3 | pending | Ordered compatibility planning precedes refresh/object/writer pickup. No durable policy/source adoption or operating receipt is claimed. |
+| AC4 | pending | Original fixture emits no Release-* trailers; domain-owned source-bound declaration/custody design must be accepted before generated commit construction and production source pickup. |
