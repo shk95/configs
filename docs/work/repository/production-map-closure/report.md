@@ -1,7 +1,7 @@
 # Report: exact production inventory coverage
 kind: report
 spec: docs/work/repository/production-map-closure/spec.md
-status: pending
+status: done
 
 ## Planning pickup gate, 2026-10-04
 
@@ -50,26 +50,32 @@ delivery acceptance. All AC rows remain pending until their final gates pass.
 
 ## Final integrated inventory update, 2026-10-04
 
-Root fetched actual dev32f4e75a87f8d56b39668bcda7ed500ab7fad5c4 after candidate
+Root fetched actual dev 32f4e75a87f8d56b39668bcda7ed500ab7fad5c4 after candidate
 and both planning deliveries integrated, and normally merged it into this lane
-at969651437af5b92842031462fa633beb47f24d11. The independently collected Git
-inventory contains612 tracked paths. Fourteen newly integrated repository work
+at 969651437af5b92842031462fa633beb47f24d11. The independently collected Git
+inventory contains 612 tracked paths. Fourteen newly integrated repository work
 documents needed exact prod-repository-policy maps; each was reviewed as repository
 work documentation. Current eight-file hashes were recomputed; only the rules
 digest changed. Original retained package, protocol and loader remain untouched.
 
-The final production suite passed24 tests in71.678 seconds and retained controller
-compatibility passed24 tests in43.166 seconds. Earlier preparation headbe23db1
-also passed native Windows job111354156952 and Required111359499966 in
-CI37174480022, but that proof is not promoted to this changed final head.
-Normal local/policy, final exact-head native/Required delivery and report closure
-remain pending. No bootstrap, new-package adoption or actual operation is certified.
+The final production suite passed 24 tests in 71.678 seconds and retained controller
+compatibility passed 24 tests in 43.166 seconds. Earlier preparation head be23db1
+also passed native Windows job 111354156952 and Required 111359499966 in
+CI 37174480022, but that proof is not promoted to this changed final head.
+Final source commit c4c7a5281f6b4e42ac18630af03aca950993b15c passed normal
+commit and HTTPS push hooks. The push verified production qualification (24 tests),
+controller compatibility (24), transport (86), credential inspection (16), worker
+inspection (13), original history (37) and initializer (12), with zero audit
+warnings or failures. Exact source-head CI 37181291578 passed Linux policy, classification, scans,
+Unix-like evaluation, native Git for Windows release-preview policy and Required
+checks. This source delivery proves inventory and retained compatibility only;
+actual new-package adoption and operating evidence remain separate. No bootstrap, new-package adoption or actual operation is certified.
 
 ## Acceptance
 
 | ID | State | Evidence |
 | --- | --- | --- |
-| AC1 | pending | |
-| AC2 | pending | |
-| AC3 | pending | |
-| AC4 | pending | |
+| AC1 | verified | Actual 612-path Git inventory, 31 reviewed new exact maps; production 24-test suite and independent review. |
+| AC2 | verified | Actual tracked-inventory positive and removed-map negative fixtures; existing unknown-path refusal preserved. |
+| AC3 | verified | Exact current eight-file manifest, rules digest only; retained controller, transport and original-history fixtures pass. |
+| AC4 | verified | Normal commit/push policy and exact source-head CI 37181291578 native Windows and Required pass; no operating adoption performed. |
