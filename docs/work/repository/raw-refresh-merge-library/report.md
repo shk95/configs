@@ -121,3 +121,26 @@ to finite invalid-JSON refusal. Two negative assertions exercise these exact cas
 No schema, bounds, maps or executing membership changes. Initial CI37200349415 is
 historical; repaired source requires its own normal hooks/push and exact-head CI
 before Ready. Report stays pending.
+
+## Dated Windows owned-object cleanup repair, 2026-10-04
+
+Initial cf7 source CI37200349415 Linux policy succeeded; Windows job111430601917
+failed after20 library tests/27.101 seconds with five successful-computation paths
+refusing cleanup. Actual logs show shutil.rmtree/os.unlink WinError5 on fresh owned
+odb/objects/<two hex>/<38 hex> loose objects, rather than a merge/canary failure.
+The private-free log is retained at /tmp/configs-509-cf7-windows-job.log. This is
+historical failing native evidence, not a delivery pass. Intermediate8990 source
+preserves the separately reproduced JSON repair and completed normal commit/push.
+
+Root approved one Windows-only readonly cleanup retry after successful owned
+process cleanup. Exact owned-root object ancestry must be ordinary directories;
+the exact loose-object leaf must be regular, readonly, single-link and have no
+reparse attribute. Foreign/escaped paths, symlinks/reparse points, writable or
+multiple-hardlink files and other errors refuse. One chmod plus one unlink retry
+does not suppress any subsequent denial. Unknown cleanup keeps retained_scratch
+and preserves the original computation refusal as its cause. Ordinary POSIX
+cleanup and failed process-group retention are unchanged. No maps, schema,
+bounds or executing membership changed. Added real readonly cleanup and hardlink
+fixtures, typed symlink/foreign/writable negatives, single retry denial and primary
+refusal retention. Local24-case and current-head native results follow delivery;
+AC2/AC3 remain pending until repaired exact-head CI succeeds.

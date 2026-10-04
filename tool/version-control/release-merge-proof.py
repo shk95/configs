@@ -8,6 +8,7 @@ import queue
 import re
 import shutil
 import signal
+import stat
 import subprocess
 import sys
 import tempfile
@@ -531,6 +532,36 @@ def novel_result(native, tree, objects, budget):
     return inventory, ordered
 
 
+def _readonly_object_retry(directory, function, path, error):
+    """One Windows retry for an owned Git loose object's readonly bit only."""
+    root, leaf = Path(directory), Path(path)
+    if sys.platform != 'win32' or function is not os.unlink or not isinstance(error, PermissionError) or getattr(error,'winerror',None) != 5:
+        raise error
+    try:
+        relative = leaf.relative_to(root)
+    except ValueError:
+        raise error
+    if not root.is_absolute() or not re.fullmatch(r'odb/objects/[0-9a-f]{2}/[0-9a-f]{38}',relative.as_posix()):
+        raise error
+    for ancestor in (root,root/'odb',root/'odb'/'objects',leaf.parent):
+        metadata = ancestor.lstat()
+        if not stat.S_ISDIR(metadata.st_mode) or getattr(metadata,'st_file_attributes',0) & 0x400:
+            raise error
+    metadata = leaf.lstat()
+    if not stat.S_ISREG(metadata.st_mode) or metadata.st_mode & stat.S_IWRITE or metadata.st_nlink != 1 or getattr(metadata,'st_file_attributes',0) & 0x400:
+        raise error
+    os.chmod(leaf,stat.S_IREAD | stat.S_IWRITE,follow_symlinks=False)
+    function(path)
+
+def _remove_scratch(directory, primary=None):
+    try:
+        shutil.rmtree(directory,onexc=lambda function,path,error:
+                      _readonly_object_retry(directory,function,path,error))
+    except OSError as exc:
+        refusal = Refusal('owned scratch cleanup unavailable',directory)
+        refusal.add_note(str(exc))
+        raise refusal from (primary if primary is not None else exc)
+
 def verify_merge(manifest_bytes, chunks, trusted_backend):
     require(type(trusted_backend) is Backend,'programmer-owned backend capability required')
     budget = Budget()
@@ -564,7 +595,4 @@ def verify_merge(manifest_bytes, chunks, trusted_backend):
                 'inventory':inventory, 'objects':novel}
     finally:
         if getattr(sys.exc_info()[1],'retained_scratch',None) != directory and (native is None or not native.cleanup_failed):
-            try:
-                shutil.rmtree(directory)
-            except OSError as exc:
-                raise Refusal('owned scratch cleanup unavailable',directory) from exc
+            _remove_scratch(directory,sys.exc_info()[1])

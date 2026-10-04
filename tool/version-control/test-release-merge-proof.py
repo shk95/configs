@@ -7,6 +7,7 @@ import importlib.util
 import os
 from pathlib import Path
 import shutil
+import stat
 import subprocess
 import sys
 import tempfile
@@ -262,6 +263,75 @@ class Computation(unittest.TestCase):
             if branch=='previous':repo.previous=head
             else:repo.base=head
         with self.assertRaises(M.Refusal):self.proof()
+
+class Cleanup(unittest.TestCase):
+    # INV repository/raw-merge-computation-read-only
+    def leaf(self,root):
+        path=Path(root)/'odb'/'objects'/'ab'/('c'*38)
+        path.parent.mkdir(parents=True);path.write_bytes(b'owned object')
+        return path
+    def denial(self):
+        error=PermissionError('Windows readonly object');error.winerror=5
+        return error
+    def test_owned_readonly_object_one_retry(self):
+        with tempfile.TemporaryDirectory() as root:
+            leaf=self.leaf(root);leaf.chmod(stat.S_IREAD)
+            with patch.object(M.sys,'platform','win32'):
+                M._readonly_object_retry(root,os.unlink,str(leaf),self.denial())
+            self.assertFalse(leaf.exists())
+        # Native Windows rmtree must actually encounter and remove readonly files.
+        root=tempfile.mkdtemp();leaf=self.leaf(root);leaf.chmod(stat.S_IREAD)
+        try:
+            M._remove_scratch(root)
+            self.assertFalse(Path(root).exists())
+        finally:
+            if leaf.exists():leaf.chmod(stat.S_IREAD | stat.S_IWRITE)
+            shutil.rmtree(root,ignore_errors=True)
+    def test_foreign_writable_and_symlink_objects_never_retry(self):
+        with tempfile.TemporaryDirectory() as root,tempfile.TemporaryDirectory() as foreign:
+            leaf=self.leaf(root);outside=Path(foreign)/'object';outside.write_bytes(b'foreign')
+            outside.chmod(stat.S_IREAD)
+            try:
+                with patch.object(M.sys,'platform','win32'),patch.object(M.os,'chmod') as chmod:
+                    for target in (outside,leaf,leaf.parent/'..'/leaf.parent.name/leaf.name):
+                        with self.subTest(path=str(target)),self.assertRaises(PermissionError):
+                            M._readonly_object_retry(root,os.unlink,str(target),self.denial())
+                    chmod.assert_not_called()
+                leaf.chmod(stat.S_IREAD)
+                original=Path.lstat
+                def symlink_metadata(path):
+                    value=original(path)
+                    if path==symlink_target:
+                        values=list(value);values[0]=stat.S_IFLNK | stat.S_IREAD
+                        return os.stat_result(values)
+                    return value
+                for symlink_target in (leaf,leaf.parent):
+                    with patch.object(M.sys,'platform','win32'),patch.object(Path,'lstat',symlink_metadata),patch.object(M.os,'chmod') as chmod,self.assertRaises(PermissionError):
+                        M._readonly_object_retry(root,os.unlink,str(leaf),self.denial())
+                    chmod.assert_not_called()
+                self.assertEqual(outside.read_bytes(),b'foreign')
+                alias=Path(foreign)/'alias';os.link(leaf,alias)
+                with patch.object(M.sys,'platform','win32'),patch.object(M.os,'chmod') as chmod,self.assertRaises(PermissionError):
+                    M._readonly_object_retry(root,os.unlink,str(leaf),self.denial())
+                chmod.assert_not_called();self.assertEqual(leaf.stat().st_nlink,2)
+                if os.name!='nt':alias.unlink()
+            finally:
+                outside.chmod(stat.S_IREAD | stat.S_IWRITE);leaf.chmod(stat.S_IREAD | stat.S_IWRITE)
+    def test_retry_denial_is_not_success_or_unbounded_retry(self):
+        with tempfile.TemporaryDirectory() as root:
+            leaf=self.leaf(root);leaf.chmod(stat.S_IREAD)
+            original=M.os.chmod
+            with patch.object(M.sys,'platform','win32'),patch.object(M.os,'chmod',wraps=original) as chmod,patch.object(M.os,'unlink',side_effect=PermissionError('still denied')) as unlink,self.assertRaises(PermissionError):
+                M._readonly_object_retry(root,unlink,str(leaf),self.denial())
+            self.assertEqual(chmod.call_count,1);self.assertEqual(unlink.call_count,1)
+            self.assertTrue(leaf.exists())
+    def test_unknown_cleanup_retains_scratch_and_original_refusal(self):
+        with tempfile.TemporaryDirectory() as root:
+            primary=M.Refusal('original computation refusal')
+            with patch.object(M.shutil,'rmtree',side_effect=PermissionError('unknown cleanup')),self.assertRaises(M.Refusal) as caught:
+                M._remove_scratch(root,primary)
+            self.assertEqual(caught.exception.retained_scratch,root)
+            self.assertIs(caught.exception.__cause__,primary);self.assertTrue(Path(root).exists())
 
 class Isolation(unittest.TestCase):
     # INV repository/fixture-git-isolation
