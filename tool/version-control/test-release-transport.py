@@ -51,7 +51,7 @@ class Fake:
                 return self.response({},202)
             status='completed' if getattr(self,'terminal',False) or run!=4 else 'in_progress'
             return self.response({'id':run,'run_attempt':attempt,'head_sha':head,'head_branch':'master','event':'workflow_dispatch',
-                       'workflow_id':2,'repository':{'id':1},'actor':{'id':3},'triggering_actor':{'id':3},
+                       'workflow_id':2,'repository':{'id':1},'head_repository':{'id':1},'actor':{'id':3},'triggering_actor':{'id':3},
                        'status':status,'conclusion':'success' if status=='completed' else None})
         if route=='/actions/workflows/2':return self.response({'id':2,'path':'.github/workflows/release-control-writer.yml'})
         if route=='/pulls' and method=='GET':return self.response(self.pulls)
@@ -777,5 +777,228 @@ class StartProof(unittest.TestCase):
         self.assertEqual(sum(m=='PATCH' for m,_,_ in self.fake.calls),1)
         self.assertIsNone(plan.pending_changes)
         with self.assertRaises(T.Refusal):plan.validate_changes({'current/index.tsv':b'invented'})
+
+class ObservedEvidenceProof(unittest.TestCase):
+    """Original candidate objects plus observed receipts; no HTTP or real credential."""
+    snapshot=TransportProof.snapshot
+    reconciled_proposal_snapshot=TransportProof.reconciled_proposal_snapshot
+
+    def setUp(self):
+        TransportProof.setUp(self)
+        f=self.fixture
+        workflow=f.public/'.github/workflows/ci.yml';workflow.parent.mkdir(parents=True,exist_ok=True)
+        workflow.write_text('name: Fixture data only\n')
+        F.run_git(f.public,'add','.github/workflows/ci.yml');F.run_git(f.public,'commit','-qm','fixture candidate')
+        self.dev=F.run_git(f.public,'rev-parse','HEAD');self.tree=F.run_git(f.public,'rev-parse','HEAD^{tree}')
+        self.fake.dev=self.dev
+        self.requirements=[dict(self.requirements[0],source=self.dev,workflow=7,
+            **{'workflow-path':'.github/workflows/ci.yml',
+               'workflow-blob':F.run_git(f.public,'rev-parse','HEAD:.github/workflows/ci.yml')})]
+        self.run={'id':8,'run_attempt':1,'head_sha':self.dev,'head_branch':'dev','event':'push',
+            'workflow_id':7,'repository':{'id':1},'head_repository':{'id':1},'status':'completed','conclusion':'success'}
+        self.job={'id':9,'run_id':8,'name':'Required checks','head_sha':self.dev,
+            'status':'completed','conclusion':'success','html_url':'https://github.com/shk95/configs/actions/runs/8/job/9'}
+        self.check={'id':10,'name':'Required checks','app':{'id':15368},'head_sha':self.dev,
+            'status':'completed','conclusion':'success','details_url':self.job['html_url']}
+        self.bind_metadata()
+        base=self.reconciled_proposal_snapshot()
+        self.prepare(base)
+        self.fake.calls.clear()
+
+    def bind_metadata(self):
+        def response(suffix,value):self.fake.responses[('GET','/repos/shk95/configs'+suffix)]=self.fake.response(value)
+        response('/actions/runs/8',self.run);response('/actions/runs/8/attempts/1',self.run)
+        response('/actions/runs/8/attempts/1/jobs?per_page=100&page=1',{'total_count':1,'jobs':[self.job]})
+        response('/actions/workflows/7',{'id':7,'path':'.github/workflows/ci.yml'})
+        response('/commits/'+self.dev+'/check-runs?per_page=100&page=1',{'total_count':1,'check_runs':[self.check]})
+
+    def prepare(self,snapshot=None,**change):
+        snapshot=snapshot or self.snapshot()
+        candidate=dict(F.CANDIDATE,dev=self.dev,master=self.fake.source,tree=self.tree,
+                       **{'candidate-generation':str(int(snapshot.state['promotion-generation'])+1)})
+        candidate.update(change)
+        transcript=T.document((snapshot.batch/'transcript.json').read_bytes())
+        transcript['source'].append(F.transcript('preview',candidate)['source'][0])
+        changes=snapshot.propose_event(dict(candidate,kind='candidate'),transcript)
+        T.Journal(self.api,snapshot,self.fake.head).publish(changes)
+        self.runtime['candidate']=T.digest(T.canonical(candidate))
+        self.entry=T.Entry(self.api,self.trusted,self.runtime)
+        self.candidate=candidate
+        return self.snapshot()
+
+    def no_writes(self):self.assertFalse(any(method!='GET' for method,_,_ in self.fake.calls))
+
+    def test_observed_rows_preserve_transcript_and_publish_original_history(self):
+        snapshot=self.snapshot();old=T.document((snapshot.batch/'transcript.json').read_bytes())
+        changes=snapshot.propose_evidence();new=T.document(changes['current/transcript.json'])
+        self.assertEqual(new['checks'][:len(old['checks'])],old['checks'])
+        self.assertEqual(new['source'],old['source']);self.assertEqual(new['observations'],old['observations'])
+        row=new['checks'][-1]
+        self.assertEqual(row,['gate',self.dev,self.fake.source,self.tree,F.X,F.X,'verified','8','1','9','fixture-tool'])
+        self.no_writes()
+        head=T.Journal(self.api,snapshot,self.fake.head).publish(changes)
+        restored=self.snapshot();self.assertEqual(restored.head,head);self.assertEqual(restored.state['stage'],'validated')
+        self.assertEqual(restored.state['evidence'],[row]);self.assertIsNone(snapshot.evidence_binding)
+
+    def test_actual_clean_divergent_merge_and_conflict_refusal(self):
+        f=self.fixture;master=self.fake.source;dev=self.dev
+        F.run_git(f.public,'checkout','-q',master)
+        (f.public/'independent.txt').write_text('separate original side\n')
+        F.run_git(f.public,'add','independent.txt');F.run_git(f.public,'commit','-qm','fixture other side')
+        other=F.run_git(f.public,'rev-parse','HEAD')
+        expected=F.run_git(f.public,'merge-tree','--write-tree','--no-messages',other,dev)
+        self.assertEqual(self.snapshot().public_merge_tree({'master':other,'dev':dev}),expected)
+        F.run_git(f.public,'checkout','-q',master)
+        workflow=f.public/'.github/workflows/ci.yml';workflow.parent.mkdir(parents=True,exist_ok=True)
+        workflow.write_text('conflicting addition\n');F.run_git(f.public,'add','.github/workflows/ci.yml')
+        F.run_git(f.public,'commit','-qm','fixture conflict');conflict=F.run_git(f.public,'rev-parse','HEAD')
+        with self.assertRaises(T.Refusal):self.snapshot().public_merge_tree({'master':conflict,'dev':dev})
+        self.no_writes()
+
+    def test_wrong_tree_unavailable_original_objects_and_api_parent_mismatch(self):
+        snapshot=self.prepare(tree=F.T);self.fake.calls.clear()
+        with self.assertRaises(T.Refusal):snapshot.propose_evidence()
+        self.no_writes()
+        with self.assertRaises((T.Refusal,ValueError)):snapshot.public_merge_tree({'master':self.fake.source,'dev':F.D})
+        self.fake.responses[('GET','/repos/shk95/configs/git/commits/'+self.dev)]=self.fake.response(
+            {'sha':self.dev,'tree':{'sha':self.tree},'parents':[]})
+        with self.assertRaises(T.Refusal):self.snapshot().public_merge_tree(self.candidate)
+
+    def test_selected_trust_requires_exact_unique_requirements(self):
+        for requirements in ([],self.requirements*2,[dict(self.requirements[0],id='foreign')]):
+            self.requirements=requirements;snapshot=self.snapshot();self.fake.calls.clear()
+            with self.subTest(requirements=requirements),self.assertRaises(T.Refusal):snapshot.propose_evidence()
+            self.no_writes()
+
+    def test_failed_foreign_latest_attempt_and_job_observations_refuse(self):
+        original=(copy.deepcopy(self.run),copy.deepcopy(self.job),copy.deepcopy(self.check))
+        for target,key,value in [('run','repository',{'id':99}),('run','head_repository',{'id':99}),
+            ('run','event','pull_request_target'),('run','run_attempt',2),('run','head_sha',F.D),
+            ('job','name','other-job'),('job','run_id',80),('job','conclusion','failure'),
+            ('job','html_url','https://invalid.example/job'),('check','conclusion','failure')]:
+            self.run,self.job,self.check=copy.deepcopy(original);getattr(self,target)[key]=value
+            self.bind_metadata();snapshot=self.snapshot();self.fake.calls.clear()
+            with self.subTest(target=target,key=key),self.assertRaises(T.Refusal):snapshot.propose_evidence()
+            self.no_writes()
+
+    def test_ambiguous_missing_workflow_or_wrong_tool_blobs_refuse(self):
+        suffix='/commits/'+self.dev+'/check-runs?per_page=100&page=1'
+        self.fake.responses[('GET','/repos/shk95/configs'+suffix)]=self.fake.response(
+            {'total_count':2,'check_runs':[self.check,dict(self.check,id=11)]})
+        with self.assertRaises(T.Refusal):self.snapshot().propose_evidence()
+        self.bind_metadata()
+        self.fake.responses[('GET','/repos/shk95/configs/actions/workflows/7')]=self.fake.response({'id':70,'path':'.github/workflows/ci.yml'})
+        with self.assertRaises(T.Refusal):self.snapshot().propose_evidence()
+        self.bind_metadata();self.requirements[0]['tool-blob']=F.H
+        with self.assertRaises(T.Refusal):self.snapshot().propose_evidence()
+        self.no_writes()
+
+    def test_child_receives_no_credentials_ambient_git_or_merge_driver(self):
+        from unittest import mock
+        import os
+        actual=B.subprocess.run;children=[]
+        def checked(command,**kwargs):
+            if 'merge-tree' in command:
+                children.append(kwargs['env'])
+                self.assertNotIn('CONFIGS_RELEASE_TOKEN',kwargs['env']);self.assertNotIn('GH_TOKEN',kwargs['env'])
+                self.assertNotIn('GIT_CONFIG_COUNT',kwargs['env']);self.assertEqual(kwargs['env']['GIT_ALLOW_PROTOCOL'],'')
+                self.assertIn('core.attributesFile='+os.devnull,command)
+            return actual(command,**kwargs)
+        with mock.patch.dict(os.environ,{'CONFIGS_RELEASE_TOKEN':'fixture-only','GH_TOKEN':'fixture-only',
+            'GIT_CONFIG_COUNT':'1','GIT_CONFIG_KEY_0':'merge.fixture.driver','GIT_CONFIG_VALUE_0':'invalid-command'}),            mock.patch.object(B.subprocess,'run',side_effect=checked):
+            self.snapshot().propose_evidence()
+        self.assertTrue(children);self.no_writes()
+
+    def test_conflicting_candidate_cannot_invoke_ambient_or_repository_merge_driver(self):
+        from unittest import mock
+        import os,shlex
+        f=self.fixture;marker=f.public.parent/'driver-ran'
+        F.run_git(f.public,'checkout','-q',self.fake.source)
+        (f.public/'.gitattributes').write_text('shared.txt merge=fixture\n')
+        (f.public/'shared.txt').write_text('original\n')
+        F.run_git(f.public,'add','.gitattributes','shared.txt');F.run_git(f.public,'commit','-qm','fixture base')
+        base=F.run_git(f.public,'rev-parse','HEAD')
+        (f.public/'shared.txt').write_text('left\n');F.run_git(f.public,'add','shared.txt')
+        F.run_git(f.public,'commit','-qm','fixture left');left=F.run_git(f.public,'rev-parse','HEAD')
+        F.run_git(f.public,'checkout','-q',base)
+        (f.public/'shared.txt').write_text('right\n');F.run_git(f.public,'add','shared.txt')
+        F.run_git(f.public,'commit','-qm','fixture right');right=F.run_git(f.public,'rev-parse','HEAD')
+        driver=shlex.quote(sys.executable.replace('\\','/'))+' -c '+shlex.quote(
+            'from pathlib import Path; Path('+repr(str(marker))+').write_text("unexpected")')
+        F.run_git(f.public,'config','merge.fixture.driver',driver)
+        with mock.patch.dict(os.environ,{'GIT_CONFIG_COUNT':'1','GIT_CONFIG_KEY_0':'merge.fixture.driver','GIT_CONFIG_VALUE_0':driver}),            self.assertRaises(T.Refusal):self.snapshot().public_merge_tree({'master':left,'dev':right})
+        self.assertFalse(marker.exists());self.no_writes()
+
+    def test_corrupt_original_candidate_object_refuses_before_effect(self):
+        import stat
+        f=self.fixture
+        snapshot=self.snapshot()
+        location=Path(F.run_git(f.public,'rev-parse','--git-path','objects/'+self.dev[:2]+'/'+self.dev[2:]))
+        if not location.is_absolute():location=f.public/location
+        location.chmod(stat.S_IRUSR|stat.S_IWUSR);location.unlink();location.write_bytes(b'corrupt fixture object')
+        self.fake.calls.clear()
+        with self.assertRaises((T.Refusal,ValueError)):snapshot.propose_evidence()
+        self.no_writes()
+
+    def test_moving_receipts_fence_after_complete_collection(self):
+        from unittest import mock
+        for when in (2,3):
+            snapshot=self.snapshot();actual=snapshot.entry.evidence;count=0
+            def moving(*args):
+                nonlocal count
+                result=actual(*args);count+=1
+                if count==when:result[0]['check']=11
+                return result
+            with self.subTest(when=when),mock.patch.object(snapshot.entry,'evidence',side_effect=moving),self.assertRaises(T.Refusal):snapshot.propose_evidence()
+            with self.assertRaises(T.Refusal):snapshot.propose_evidence()
+            self.no_writes()
+
+    def test_fresh_publication_rechecks_failed_checks_and_source(self):
+        for failure in ('checks','dev','operating-head','requirements'):
+            self.bind_metadata();self.fake.dev=self.dev
+            snapshot=self.snapshot();changes=snapshot.propose_evidence()
+            journal=T.Journal(self.api,snapshot,self.fake.head);self.fake.calls.clear()
+            old_head=self.fake.head
+            if failure=='checks':
+                self.check['conclusion']='failure';self.bind_metadata()
+            elif failure=='dev':self.fake.dev=F.D
+            elif failure=='operating-head':self.fake.head=F.D
+            else:snapshot.requirements[0]['tool']='changed-tool'
+            with self.subTest(failure=failure),self.assertRaises(T.Refusal):journal.publish(changes)
+            self.no_writes();self.check['conclusion']='success';self.fake.head=old_head
+
+    def test_original_remote_stop_record_refuses_collection(self):
+        f=self.fixture
+        (f.operating/'control/stop.tsv').write_bytes(F.encode(dict(F.STOP,stop='1')))
+        f.commit(f.operating);self.fake.head=F.run_git(f.operating,'rev-parse','HEAD')
+        snapshot=self.snapshot();self.fake.calls.clear()
+        with self.assertRaises(T.Refusal):snapshot.propose_evidence()
+        self.no_writes()
+
+    def test_collector_refuses_outstanding_mutated_proposal_and_retained_rows(self):
+        snapshot=self.snapshot();changes=snapshot.propose_evidence()
+        with self.assertRaises(T.Refusal):snapshot.propose_evidence()
+        changes['current/transcript.json']+=b' '
+        self.fake.calls.clear()
+        with self.assertRaises(T.Refusal):T.Journal(self.api,snapshot,self.fake.head).publish(changes)
+        self.no_writes()
+
+
+class PublicChecksBoundaryProof(unittest.TestCase):
+    def test_only_public_check_reads_omit_the_dedicated_token(self):
+        from unittest import mock
+        connection=mock.Mock();response=connection.getresponse.return_value
+        response.status=200;response.getheaders.return_value=[];response.read.return_value=b'{}'
+        channel=T.Https('fixture-only-credential')
+        with mock.patch.object(T.http.client,'HTTPSConnection',return_value=connection):
+            for suffix in ('','?per_page=100&page=1','?per_page=100&page=20'):
+                channel.request('GET','/repos/'+T.PUBLIC+'/commits/'+F.D+'/check-runs'+suffix,None)
+                self.assertNotIn('Authorization',connection.request.call_args.kwargs['headers'])
+            for path in ('/repos/'+T.PUBLIC+'/actions/runs/8',
+                '/repos/'+T.PUBLIC+'/branches/dev/protection',
+                '/repos/fixture/operating/commits/'+F.D+'/check-runs?per_page=100&page=1'):
+                channel.request('GET',path,None)
+                self.assertEqual(connection.request.call_args.kwargs['headers']['Authorization'],
+                                 'Bearer fixture-only-credential')
 
 if __name__=='__main__':unittest.main()
