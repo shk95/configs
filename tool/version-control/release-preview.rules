@@ -728,3 +728,17 @@ production-map	exact	docs/work/repository/production-map-closure/spec.md	prod-re
 production-map	exact	tool/version-control/release-initialize.py	prod-repository-policy,prod-repository-native
 production-map	exact	tool/version-control/release-operating-roles.json	prod-repository-policy,prod-repository-native
 production-map	exact	tool/version-control/test-release-initialize.py	prod-repository-policy,prod-repository-native
+production-map	exact	docs/work/repository/observed-release-candidate/report.md	prod-repository-policy
+production-map	exact	docs/work/repository/observed-release-candidate/spec.md	prod-repository-policy
+production-map	exact	docs/work/repository/production-receipt-custody/report.md	prod-repository-policy
+production-map	exact	docs/work/repository/production-receipt-custody/spec.md	prod-repository-policy
+production-map	exact	docs/work/repository/production-receipt-custody/study.md	prod-repository-policy
+production-map	exact	docs/work/repository/refresh-merge-proof/report.md	prod-repository-policy
+production-map	exact	docs/work/repository/refresh-merge-proof/spec.md	prod-repository-policy
+production-map	exact	docs/work/repository/refresh-object-protocol/report.md	prod-repository-policy
+production-map	exact	docs/work/repository/refresh-object-protocol/spec.md	prod-repository-policy
+production-map	exact	docs/work/repository/release-refresh-object-compatibility/report.md	prod-repository-policy
+production-map	exact	docs/work/repository/release-refresh-object-compatibility/spec.md	prod-repository-policy
+production-map	exact	docs/work/repository/release-refresh-object-compatibility/study.md	prod-repository-policy
+production-map	exact	docs/work/repository/typed-production-receipt-source/report.md	prod-repository-policy
+production-map	exact	docs/work/repository/typed-production-receipt-source/spec.md	prod-repository-policy

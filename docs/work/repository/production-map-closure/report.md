@@ -48,6 +48,23 @@ that manifest; historical packages, protocols, loader and transport manifest are
 untouched. This is preparation evidence, not final integrated inventory or native
 delivery acceptance. All AC rows remain pending until their final gates pass.
 
+## Final integrated inventory update, 2026-10-04
+
+Root fetched actual dev32f4e75a87f8d56b39668bcda7ed500ab7fad5c4 after candidate
+and both planning deliveries integrated, and normally merged it into this lane
+at969651437af5b92842031462fa633beb47f24d11. The independently collected Git
+inventory contains612 tracked paths. Fourteen newly integrated repository work
+documents needed exact prod-repository-policy maps; each was reviewed as repository
+work documentation. Current eight-file hashes were recomputed; only the rules
+digest changed. Original retained package, protocol and loader remain untouched.
+
+The final production suite passed24 tests in71.678 seconds and retained controller
+compatibility passed24 tests in43.166 seconds. Earlier preparation headbe23db1
+also passed native Windows job111354156952 and Required111359499966 in
+CI37174480022, but that proof is not promoted to this changed final head.
+Normal local/policy, final exact-head native/Required delivery and report closure
+remain pending. No bootstrap, new-package adoption or actual operation is certified.
+
 ## Acceptance
 
 | ID | State | Evidence |
