@@ -4,10 +4,10 @@ spec: docs/work/repository/refresh-object-protocol/spec.md
 status: pending
 
 Root assigned semantic source continuation to candidate_plan after integrated
-observed candidate and planning prerequisites. Execution base and reviewed plan
-will be pinned independently at pickup. No semantic source is authored by this
-planning delivery. Object transport, preparation consumption/custody and actual
-public API effects remain separate; source worker may not edit shared transport.
+observed candidate and planning prerequisites. The worker independently pinned
+execution base and reviewed plan as recorded below and delivered semantic source
+in Draft PR #504. Object transport, preparation consumption/custody and actual
+public API effects remain separate; this source does not adopt public object effects.
 
 ## Acceptance
 
@@ -16,7 +16,7 @@ public API effects remain separate; source worker may not edit shared transport.
 | AC1 | verified | Complete initial-only original raw closure, exact generated declarations and deterministic identities pass seven current real-Git fixture families in the complete 31-test controller suite; source policy/closure checked. Operating authenticity is separate. |
 | AC2 | verified | Complete controller fixtures prove next object/dependency/ref ordering, uncertainty/absent retry, old-generation recovery/takeover and stop; 86 retained transport fixtures preserve existing recovery without adding object transport authority. |
 | AC3 | verified | Original protocols1/2/3 use literal historical package blobs; current replay/global uniqueness and malformed output refusal pass. Root serialized exact maps, eight-file semantic closure and unchanged-eight transport closure; all 22 production and 86 historical transport tests pass. |
-| AC4 | pending | Complete local controller31, production22 and transport86 suites pass. Normal commit/push and exact-head native CI remain pending; actual mapping integration is a Ready prerequisite. No public API/producer/declaration/writer proof. |
+| AC4 | pending | Complete local controller31, production22 and transport86 suites pass. Original source commit/push and exact-head native CI passed. Actual mapping prerequisite integrated; required-base merge update, root closure and final-head validation remain pending before Ready. No public API/producer/declaration/writer proof. |
 
 The 2026-10-04 amendment narrows AC1/AC2's first delivery to previous='-' and
 parent=base, adds complete original-data proof and original replay preparation
@@ -50,3 +50,25 @@ registry (86 registered, zero pending/untagged) and staged diff checks passed.
 These disposable/synthetic source results authenticate no real producer, declaration
 or API effect. Native current-head evidence and normal remote delivery remain
 pending; required-base merge remains assigned to its non-deferred follow-up.
+
+## Original source delivery and required dependency update, 2026-10-04
+
+Draft PR #504 delivered source 12a40cad5a7f7264d3dc21800a2063dbaec6f6a5
+through normal commit and HTTPS push hooks. Full repository fixtures and audit
+passed with zero warnings/failures. The first SSH push lost its connection; its
+partial local push run was stopped and is incomplete evidence. The successful
+normal HTTPS retry repeated all required checks. Original source-head CI
+37182527410 passed, including native Windows policy job111377819146 and
+Required checks job111384140270. These results belong to that exact source head,
+not a future merge/report head.
+
+Root integrated mapping prerequisite #499 into actual dev
+1e2c79b5bd86553ce2e6626ade5ac09297fe2354. Worker fetched that exact base and
+started the requested normal merge. Root resolved classifier rules and semantic
+manifest conflicts against exact tracked inventory and retained package ownership. No executing source bytes
+changed during this update. Root verified actual614 tracked paths, work63/59 and invariant86 zero pending/untagged.
+Worker verified unchanged semantic8/transport8 membership and exact hashes, staged
+diff checks and no unresolved merges. Narrow actual-assembly production24 (88.406s),
+controller31 (64.753s) and retained transport/recovery/start59 (176.369s) passed.
+Normal merge commit/push and its final-head native CI remain pending. PR remains Draft; no actual public object
+API, private bootstrap, release/promotion or operating proof follows this delivery.
