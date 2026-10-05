@@ -1,7 +1,7 @@
 # Report: bounded raw refresh merge computation library
 kind: report
 spec: docs/work/repository/raw-refresh-merge-library/spec.md
-status: pending
+status: done
 
 ## Planning preparation, 2026-10-04
 
@@ -20,9 +20,9 @@ runtime/transport/manual/scheduled gates remain pending.
 
 | ID | State | Evidence |
 | --- | --- | --- |
-| AC1 | verified | Root-reviewed exact carrier/DAG/snapshot validator; twenty local fixtures and actualgraph source-only feasibility below. |
-| AC2 | pending | Local native computation, streaming/deadline/scratch and exact graph result verified; affected exact-head Linux/Windows CI pending. |
-| AC3 | pending | Separate source-only outcome planned; policy/native delivery and future original5 adoption remain independent gates. |
+| AC1 | verified | Root-reviewed exact carrier/DAG/snapshot validator; final 24 local/native fixtures and actualgraph source-only feasibility below. |
+| AC2 | verified | Local native computation, streaming/deadline/scratch and exact graph result; assembled source89 passed Linux and Windows native fixtures in CI37248534488 below. |
+| AC3 | verified | Standalone source dispatch, shared surface mappings, unchanged executing membership and normal publication; assembled source89 passed all Required checks. Final report head is separately admitted below. |
 
 ## Dated review repair, 2026-10-04
 
@@ -202,3 +202,29 @@ description, which predates #505.
 Repaired assembled-head normal commit/push, native Linux/Windows and Required
 checks remain delivery gates. AC2/AC3 and this report remain pending. No runtime
 qualification, original5 adoption, public/private effect or operating proof follows.
+
+## Repaired assembled source native proof, 2026-10-05
+
+Normal assembly commit89eb4eae60a806b67dbc29d18f9bdaa01ff65321 has parents
+da45622e38084d102c9f1797634f1c6b540bb502 and
+028503bf1aa6829e30908bee989b05bbc2d878a2, tree
+788036f4e356294a4ec61f2ec12b8a6ba3e6b908. Normal HTTPS push
+passed full hooks; the preserved worktree has no pending assembly merge.
+
+Exact source-head CI [37248534488](https://github.com/shk95/configs/actions/runs/37248534488)
+completed successfully, including Required checks and policy/scan, Unix-like and
+Windows desired-state lanes. Actual library fixtures in
+[Linux111571239311](https://github.com/shk95/configs/actions/runs/37248534488/job/111571239311)
+passed24 tests in3.324s with Git2.55.0;
+[Windows111571239359](https://github.com/shk95/configs/actions/runs/37248534488/job/111571239359)
+passed24 tests in28.999s with Git2.55.0.windows.5. Both use declared
+Python3.13.15. The observed Windows literal blob assertions now pass; historical
+failed heads remain recorded above.
+
+Root reviewed the source-only outcome and AC1–AC3 are verified. This report's
+publication and final admission head must pass its own current Required checks
+before Ready or integration; the source native result is pinned to89 and cannot
+be silently attributed to another head. Source-only report completion does not
+complete parent #479 or admit production backend/helpers/library isolation, hard
+quota, original5 loading/config9, acquisition/transport, public publication,
+private custody, runtime, activation or operating qualification.
