@@ -7,7 +7,7 @@ status: pending
 
 | ID | State | Evidence |
 | --- | --- | --- |
-| AC1 | pending | |
-| AC2 | pending | |
-| AC3 | pending | |
-| AC4 | pending | |
+| AC1 | pending | Evaluation: provider API 71 constructor cases and external-consumer fixtures passed locally. Selected native build and final remote CI remain separate endpoint gates. |
+| AC2 | verified | Fixtures/evaluation: darwin-capture-test and karabiner-entry-test passed, including finite defaults, strict JSON/path, stale and atomic preservation, generated mkDarwin fixture, and retired publication no-effect checks. No actual host capture or activation. |
+| AC3 | verified | Fixtures: refresh-inputs-test passed actual local Nix repositories, byte/mode/stale guards, read-only inventory and explicit selection preserving nonselected inputs; unknown, alias and duplicate selections refused. Automatic selection is exactly four declared inputs. |
+| AC4 | verified | Fixtures: eval-coverage-test exercises eval-build directly; test wrapper invokes refresh, capture and retired-entry suites once before the core. The eight coverage cases no longer multiply independent suites into nine runs. |

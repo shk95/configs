@@ -58,9 +58,10 @@ def snapshot(root):
             for path in root.rglob("*") if path.is_file()}
 
 
-def invoke(root, *, env=ENV, success=True, check=False):
+def invoke(root, *, env=ENV, success=True, check=False, selected=None):
     before = snapshot(root)
     result = run(str(root / "tool/refresh-inputs"), *( ["--check"] if check else []),
+                 *([part for name in selected for part in ("--input", name)] if selected is not None else []),
                  env=env, success=success)
     after = snapshot(root)
     assert {key: value for key, value in before.items() if key != "flake.lock"} == {
@@ -105,6 +106,17 @@ with tempfile.TemporaryDirectory(prefix="refresh-fixtures-") as temporary:
     assert own(root, "a") != original_a and own(root, "b") != original_b
     assert json.loads(invoke(root, check=True).stdout.splitlines()[0])["selected"] == ["a", "b"]
     print("PASS direct default refresh and read-only inventory")
+
+    # INV unixlike/provider-input-refresh-bounded: narrower explicit selection.
+    before_a, before_b = own(root, "a"), own(root, "b")
+    for path in (a, b):
+        (path / "payload").write_text("explicit selection\n")
+        commit(path)
+    invoke(root, selected=["a"])
+    assert own(root, "a") != before_a and own(root, "b") == before_b
+    for names in (["missing"], ["alias"], ["a", "a"]):
+        invoke(root, selected=names, success=False)
+    print("PASS explicit input selection preserves others and refuses unknown/alias/duplicates")
 
     # New direct input is selected without a tool/config allowlist change.
     source = root / "flake.nix"

@@ -1,0 +1,7 @@
+{
+  "previous": "unixlike-v2026.08.31",
+  "version": "1.0.0",
+  "summary": "Recover the external provider and host-owned configuration boundary.",
+  "compatibility": "breaking",
+  "migration": "Keep old provider pins until the host adopts the public consumer API; capture writes host originals."
+}
