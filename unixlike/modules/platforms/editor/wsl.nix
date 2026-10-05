@@ -4,7 +4,7 @@
 # while Home Manager owns the user-facing Neovim package and configuration;
 # modules/platforms/editor/darwin.nix is the same declaration for the Darwin layer.
 _: {
-  modules.nixos.wsl = {
+  modules.nixos.environment = {
     lib,
     pkgs,
     ...

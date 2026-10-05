@@ -2,7 +2,8 @@
 
 date: 2026-09-23
 scope: unixlike
-status: accepted
+status: superseded
+superseded-by: docs/policy/decisions/unixlike/public-environment-host-boundary.md
 reopen-when: A second optional profile needs different selection semantics or a machine cannot state its required classes without a host-specific exception.
 source: docs/work/unixlike/host-selected-machine-profiles/spec.md § Decisions
 

@@ -4,17 +4,17 @@
   lib,
   ...
 }: let
-  vmHost = config.identity.nixosHosts.fixture-vm;
-  testUser = vmHost.user;
+  testUser = "example";
   home = config.modules.homeManager;
-  inherit (config.identity) gitName gitEmail;
+  gitName = "Example";
+  gitEmail = "example@example.invalid";
 in {
   perSystem = {
     pkgs,
     system,
     ...
   }:
-    lib.optionalAttrs (system == vmHost.system) {
+    lib.optionalAttrs (system == "x86_64-linux") {
       checks.graphical-runtime = pkgs.testers.runNixOSTest {
         name = "configs-graphical-runtime";
 
@@ -25,11 +25,23 @@ in {
         nodes.machine = {pkgs, ...}: {
           imports = [
             inputs.home-manager.nixosModules.home-manager
-            config.modules.nixos.shared
+            config.modules.nixos.environment
             config.modules.nixos.graphical
+            ({lib, ...}: {
+              options.providerIdentity.user = lib.mkOption {
+                type = lib.types.str;
+                readOnly = true;
+              };
+              config.providerIdentity.user = testUser;
+            })
           ];
 
-          host = vmHost // {name = "graphical-test";};
+          networking.hostName = "fixture-desktop";
+          boot.loader.grub.enable = false;
+          fileSystems."/" = {
+            device = "/dev/disk/by-label/fixture";
+            fsType = "ext4";
+          };
 
           home-manager = {
             useGlobalPkgs = true;

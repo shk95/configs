@@ -2,7 +2,8 @@
 
 date: 2026-09-24
 scope: unixlike
-status: accepted
+status: superseded
+superseded-by: docs/policy/decisions/unixlike/public-environment-host-boundary.md
 source: docs/work/unixlike/host-provider-api/spec.md § Provider owns the policy, consumer owns the instance
 
 `configs` exports `lib.mkNixos`, `lib.mkDarwin`, and `lib.mkHome`. A consumer

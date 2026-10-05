@@ -1,10 +1,7 @@
 {
   # tool/checks/eval-coverage-test: one flavour exporting one configuration
-  # that instantiates. It targets a platform no host in the inventory has, so
-  # the check evaluates it and never builds it on any host this repository
-  # runs on; a platform an inventory host shares would be built there, and
-  # the builder below cannot succeed. tool/checks/test must report it and
-  # exit 0.
+  # that instantiates. It targets a foreign platform, so the check evaluates
+  # but never builds it here. Explicitly selecting it must fail.
   description = "eval-coverage fixture: one configuration";
   outputs = _: {
     homeConfigurations.probe = {

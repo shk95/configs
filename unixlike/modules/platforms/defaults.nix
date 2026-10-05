@@ -1,10 +1,6 @@
-_: {
-  modules.darwin.system = {config, ...}: let
-    user = config.providerIdentity.user;
-  in {
-    # Add ability to used TouchID for sudo authentication
-    security.pam.services.sudo_local.touchIdAuth = true;
-
+{lib, ...}: let
+  contract = import ../../api/contract.nix;
+  environment = {
     # Set your time zone.
     time.timeZone = "Asia/Seoul";
 
@@ -19,9 +15,7 @@ _: {
     #
     ###################################################################################
     system = {
-      stateVersion = 6;
-
-      primaryUser = user;
+      stateVersion = contract.compatibilityDefaults.nixDarwin;
 
       defaults = {
         # ".GlobalPreferences" = {
@@ -261,4 +255,8 @@ _: {
       };
     };
   };
+in {
+  # Lower the native definitions, not the deferred class's merge priority:
+  # other provider fragments still compose, and ordinary host options win.
+  modules.darwin.environment = lib.mapAttrsRecursive (_: value: lib.mkDefault value) environment;
 }
