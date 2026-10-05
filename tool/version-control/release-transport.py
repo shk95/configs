@@ -562,6 +562,11 @@ class Executor:
         # credential-free child. A request cannot introduce arbitrary operations.
         kind, payload, intent = self.snapshot.authorize(plan, self.entry)
         need(kind in {'refresh-object', 'refresh-branch', 'refresh-pr', 'pr', 'merge', 'tag-object', 'tag-ref', 'cancel'}, 'unsupported-effect')
+        if kind=='refresh-object':
+            try:self.snapshot.object_attempt(plan)
+            except (ValueError,OSError,__import__('subprocess').SubprocessError):
+                self.unknown=True
+                raise Unknown('original-object-recovery-required') from None
         sha(self.snapshot.source); need(not self.stopped(), 'fresh-stop')
         try:
             state, remote = self.reconcile(kind, payload)

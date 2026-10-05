@@ -98,3 +98,23 @@ bytes from fc2e1ab, with no current helper inserted into that historical source.
 The current original protocol4 disabled history suite passed 37 cases, followed by
 12 initializer cases. All use disposable original Git and synthetic API responses;
 normal full-hook verification and remote/native current-head delivery remain pending.
+
+
+## Restart admission causal repair, 2026-10-05
+
+Source commit 4dd9a057e83eeda1aae5955ec154fe792b9c857b passed normal full
+commit/push hooks and reached Draft PR #514. Its full suite included transport104,
+controller31, history37, initializer12 and merge24 plus policy scans. A subsequent
+separate causal reopen fixture reproduced a real gap: an unobserved attempted
+publication was still an intent, so a new Executor could repeat POST. This was a
+synthetic service/disposable Git failure, not an actual operating failure.
+
+The current4-only transport repair admits a write only from an original latest
+intent added by that exact private head. The existing no-event child records an
+attempt boundary; a reopened child requires explicit observation-only recovery.
+Repeated intent also needs qualified absence plus a later original takeover
+generation. No semantic schema or old protocol is reinterpreted. Three causal cases
+passed in 54.420 seconds: restarted attempted intent refusal, same-generation retry
+refusal after qualified absence, and actual original4 terminal owner/reconciliation/
+generation2 takeover/explicit retry. Complete normal-hook and remote native proof
+for this repaired source remains pending; #514 stays Draft and all ACs stay pending.

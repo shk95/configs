@@ -1545,6 +1545,57 @@ class PublicObjectProof(unittest.TestCase):
         self.assertFalse(self.fake.refresh_heads)
         with self.assertRaises(T.Refusal):self.executor.perform(plan)
 
+    def test_new_instance_cannot_retry_unobserved_durable_attempt(self):
+        oid,payload=self.plans[0];plan=self.intent(oid,payload)
+        key=('POST','/repos/shk95/configs/git/blobs')
+        self.fake.responses[key]=self.fake.response({'sha':payload['object']},201)
+        with self.assertRaises(T.Unknown):self.executor.perform(plan)
+        self.fake.responses.pop(key)
+        f=self.fixture;restored=B.Snapshot(self.entry,f.public,self.local,F.encode(f.packages['4']),self.snapshot.head,self.snapshot.tagger,[])
+        self.addCleanup(restored.close)
+        resumed=T.Executor(self.entry,T.Journal(self.api,restored,restored.head),restored,public_read=self.fake)
+        before=sum(m=='POST' and p.startswith('/repos/shk95/configs/git/') for m,p,_ in self.fake.calls)
+        with self.assertRaises(T.Unknown):resumed.perform(restored.plan(oid))
+        self.assertTrue(resumed.unknown)
+        self.assertEqual(sum(m=='POST' and p.startswith('/repos/shk95/configs/git/') for m,p,_ in self.fake.calls),before)
+
+    def test_absence_does_not_grant_same_generation_retry(self):
+        oid,payload=self.plans[0];plan=self.intent(oid,payload)
+        self.journal.publish({'current/index.tsv':B.L.record_blob(self.local,self.snapshot.head,'current/index.tsv')[1]})
+        self.executor.recover(self.snapshot.plan(oid))
+        self.assertEqual(self.snapshot.state['operations'][oid]['observation']['status'],'absent')
+        plan=self.intent(oid,payload)
+        before=sum(m=='POST' and p.startswith('/repos/shk95/configs/git/') for m,p,_ in self.fake.calls)
+        with self.assertRaises(T.Unknown):self.executor.perform(plan)
+        self.assertEqual(sum(m=='POST' and p.startswith('/repos/shk95/configs/git/') for m,p,_ in self.fake.calls),before)
+
+    def test_current4_terminal_takeover_reconciles_before_explicit_retry(self):
+        oid,payload=self.plans[0];self.intent(oid,payload)
+        self.journal.publish({'current/index.tsv':B.L.record_blob(self.local,self.snapshot.head,'current/index.tsv')[1]})
+        value={'id':10,'run_attempt':1,'head_sha':self.fake.source,'head_branch':'master','event':'workflow_dispatch',
+            'workflow_id':2,'repository':{'id':1},'actor':{'id':3},'triggering_actor':{'id':3},'status':'in_progress'}
+        for path in ('/actions/runs/10','/actions/runs/10/attempts/1'):
+            self.fake.responses[('GET','/repos/shk95/configs'+path)]=self.fake.response(value)
+        job={'id':11,'name':'writer','run_id':10,'head_sha':self.fake.source,'status':'in_progress'}
+        self.fake.responses[('GET','/repos/shk95/configs/actions/runs/10/attempts/1/jobs?per_page=100&page=1')]=self.fake.response({'total_count':1,'jobs':[job]})
+        entry=T.Entry(self.api,self.trusted,dict(self.entry.runtime,run=10,job=11,mode='start'))
+        f=self.fixture;restored=B.Snapshot(entry,f.public,self.local,F.encode(f.packages['4']),self.snapshot.head,self.snapshot.tagger,[])
+        self.addCleanup(restored.close)
+        journal=T.Journal(self.api,restored,restored.head);resumed=T.Executor(entry,journal,restored,public_read=self.fake)
+        with self.assertRaises(T.Refusal):restored.claim()
+        self.fake.terminal=True;self.fake.terminal_jobs=True
+        path='/repos/shk95/configs/actions/runs/4/attempts/1'
+        old=T.document(self.fake.responses[('GET',path)][2]);old['status']='completed'
+        self.fake.responses[('GET',path)]=self.fake.response(old)
+        resumed.recover(restored.plan(oid))
+        self.assertEqual(restored.state['owner']['run'],'4')
+        journal.publish(restored.claim())
+        self.assertEqual(restored.state['generation'],'2');self.assertEqual(restored.state['owner']['run'],'10')
+        fields={'kind':'intent','payload':T.canonical(payload).decode(),'operation':[[oid,'refresh-object',T.digest(T.canonical(payload)),'2','intent','-','-']]}
+        journal.publish(restored.propose_event(fields,T.document(restored.original_transcript)))
+        self.assertEqual(resumed.perform(restored.plan(oid)),'applied')
+        self.assertEqual(restored.state['operations'][oid]['state'],'observed')
+
 class TypedPublicProof(unittest.TestCase):
     # INV repository/public-refresh-object-transport
     # INV repository/fixture-git-isolation

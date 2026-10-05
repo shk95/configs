@@ -991,6 +991,44 @@ class Snapshot:
         T.need(result.returncode==0 and 0<len(result.stdout)<=T.MAX_BODY,'retained-serializer-refusal')
         return result.stdout
 
+    def object_attempt(self, plan):
+        """Current4 write admission, derived only from retained original history."""
+        T.need(self.protocol=='4' and self.pending_changes is None
+            and not getattr(self,'proposal_fenced',False),'unavailable-original-attempt')
+        state=self.project()['state'];op=state['operations'].get(plan['id'])
+        T.need(op and op['kind']=='refresh-object' and op['state']=='intent','unbound-original-object-attempt')
+        path='history/%012d.tsv'%int(state['sequence'])
+        latest=L.record_blob(self.operating,self.head,path)[1]
+        fields={row[0]:row[1] for row in L.table(latest) if len(row)==2}
+        operations=[row[1:] for row in L.table(latest) if row[0]=='operation']
+        T.need(fields.get('kind')=='intent' and len(operations)==1
+            and operations[0][:4]==[plan['id'],'refresh-object',plan['digest'],state['generation']],
+            'original-object-recovery-required')
+        # A verified no-event child is the durable attempted-publication boundary.
+        # Reopening it does not grant another write, even if its target is absent.
+        original=O.commit_fields(L.git(self.operating,'cat-file','commit',self.head))
+        T.need(len(original['parents'])==1 and
+            L.git(self.operating,'diff-tree','--no-commit-id','--name-status','--no-ext-diff','--no-textconv','--no-renames','-r',
+                original['parents'][0],self.head,'--',path)==('A\t'+path+'\n').encode(),
+            'original-attempt-already-published')
+        intents=[];absence=None;total=0;deadline=__import__('time').monotonic()+30
+        events=sorted((self.batch/'history').iterdir());T.need(len(events)<=20000,'original-attempt-event-bound')
+        for event in events:
+            size=event.stat().st_size;total+=size
+            T.need(size<=T.MAX_BODY and total<=128*1024*1024 and __import__('time').monotonic()<deadline,'original-attempt-data-bound')
+            rows=L.table(event.read_bytes());single={r[0]:r[1] for r in rows if len(r)==2}
+            matched=[r[1:] for r in rows if r[0]=='operation' and r[1]==plan['id']]
+            if not matched:continue
+            T.need(len(matched)==1,'ambiguous-original-attempt');row=matched[0]
+            if single['kind']=='observation' and row[4]=='intent' and row[5]=='-' and row[6]!='-':
+                absence=row[3]
+            elif single['kind']=='intent':
+                if intents:
+                    T.need(absence==intents[-1] and int(row[3])>int(intents[-1]),
+                        'object-retry-without-qualified-takeover')
+                intents.append(row[3]);absence=None
+        T.need(intents and intents[-1]==state['generation'],'missing-current-original-intent')
+
     def object_material(self, payload):
         T.need(self.protocol=='4','object-effect-requires-original4')
         driver="import json,sys;sys.path.insert(0,sys.argv[1]);import adapter;print(json.dumps(adapter.operation('refresh-object',json.load(sys.stdin)),sort_keys=True))"

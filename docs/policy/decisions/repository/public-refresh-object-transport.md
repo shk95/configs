@@ -43,6 +43,18 @@ This is disabled source capability. Actual API, permissions, bootstrap, native
 operation, release and host deployment remain independent gates. The work report
 records source and fixture proof without certifying those operating gates.
 
+## Durable current4 attempt admission
+
+A current4 object write requires a latest original intent newly added by the
+exact retained private head. Before effects, the existing no-event Journal child
+publishes the attempted-write boundary. Reopening a child whose intent already
+existed in its parent grants observation-only recovery, not another POST. A repeated
+intent also requires a qualified original absence observation and a later generation
+whose original terminal-owner takeover was replayed. Same-generation replacement
+intent cannot clear an attempted effect fence. Admission reads bounded verified
+original frames and private ancestry; it adds no record or semantic package schema.
+Original protocol1/2/3 interpretation remains unchanged.
+
 ## Source
 
 Reviewed work: docs/work/repository/public-refresh-object-transport/spec.md.
