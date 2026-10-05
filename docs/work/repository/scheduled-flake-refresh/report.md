@@ -1,7 +1,8 @@
 # Report: daily provider refresh before promotion
 kind: report
 spec: docs/work/repository/scheduled-flake-refresh/spec.md
-status: pending
+status: superseded
+superseded-by: docs/work/repository/minimal-reconstruction/spec.md
 
 ## Current controller alignment, 2026-09-28
 
@@ -42,8 +43,8 @@ implementation and live evidence remains pending; no row is verified here.
 
 | ID | State | Evidence |
 | --- | --- | --- |
-| AC1 | pending | |
-| AC2 | pending | |
-| AC3 | pending | |
-| AC4 | pending | |
-| AC5 | pending | |
+| AC1 | unmet | Superseded by the bounded reconstruction; no operating proof claimed. |
+| AC2 | unmet | Superseded by the bounded reconstruction; no operating proof claimed. |
+| AC3 | unmet | Superseded by the bounded reconstruction; no operating proof claimed. |
+| AC4 | unmet | Superseded by the bounded reconstruction; no operating proof claimed. |
+| AC5 | unmet | Superseded by the bounded reconstruction; no operating proof claimed. |

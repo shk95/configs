@@ -2,9 +2,13 @@
 kind: study
 date: 2026-09-27
 scope: repository
-status: open
+status: superseded
+superseded-by: docs/work/repository/minimal-reconstruction/spec.md
 
-## Current handoff: resume here, 2026-09-28
+## Historical handoff, 2026-09-28
+
+2026-10-05: this study is superseded by the minimal reconstruction.
+Its controller continuation is not active work or inherited acceptance.
 
 ### Latest five-work reconciliation checkpoint
 

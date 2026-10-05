@@ -1,7 +1,8 @@
 # Report: provider release contract
 kind: report
 spec: docs/work/repository/provider-release-contract/spec.md
-status: pending
+status: superseded
+superseded-by: docs/work/repository/minimal-reconstruction/spec.md
 
 ## Cross-work reconciliation, 2026-09-28
 
@@ -209,17 +210,17 @@ this planning acceptance is not build, native runtime or deployment evidence.
 
 | ID | State | Evidence |
 | --- | --- | --- |
-| AC1 | pending | |
-| AC14 | pending | |
-| AC2 | pending | |
-| AC3 | pending | |
-| AC4 | pending | |
-| AC5 | pending | |
-| AC6 | pending | |
-| AC7 | pending | |
-| AC8 | pending | |
-| AC9 | pending | |
-| AC10 | pending | |
-| AC11 | pending | |
-| AC12 | pending | |
-| AC13 | pending | |
+| AC1 | unmet | Superseded by the bounded reconstruction; no operating proof claimed. |
+| AC14 | unmet | Superseded by the bounded reconstruction; no operating proof claimed. |
+| AC2 | unmet | Superseded by the bounded reconstruction; no operating proof claimed. |
+| AC3 | unmet | Superseded by the bounded reconstruction; no operating proof claimed. |
+| AC4 | unmet | Superseded by the bounded reconstruction; no operating proof claimed. |
+| AC5 | unmet | Superseded by the bounded reconstruction; no operating proof claimed. |
+| AC6 | unmet | Superseded by the bounded reconstruction; no operating proof claimed. |
+| AC7 | unmet | Superseded by the bounded reconstruction; no operating proof claimed. |
+| AC8 | unmet | Superseded by the bounded reconstruction; no operating proof claimed. |
+| AC9 | unmet | Superseded by the bounded reconstruction; no operating proof claimed. |
+| AC10 | unmet | Superseded by the bounded reconstruction; no operating proof claimed. |
+| AC11 | unmet | Superseded by the bounded reconstruction; no operating proof claimed. |
+| AC12 | unmet | Superseded by the bounded reconstruction; no operating proof claimed. |
+| AC13 | unmet | Superseded by the bounded reconstruction; no operating proof claimed. |
