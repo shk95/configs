@@ -2,6 +2,7 @@
 kind: spec
 date: 2026-10-04
 scope: repository
+issue: #508
 status: approved
 review-by: 2026-10-18
 

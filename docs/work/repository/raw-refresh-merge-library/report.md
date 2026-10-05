@@ -228,3 +228,14 @@ be silently attributed to another head. Source-only report completion does not
 complete parent #479 or admit production backend/helpers/library isolation, hard
 quota, original5 loading/config9, acquisition/transport, public publication,
 private custody, runtime, activation or operating qualification.
+
+## Execution issue binding repair, 2026-10-05
+
+Source PR #509 integrated into actual dev79f53ae931fb1c624c48fd805797dd3893e66981
+after final source-head Required checks. Its tree equals the admitted head;
+postmerge CI is separately observed. Work closure37255541677 succeeded with
+zero closures because the spec header omitted the required execution issue.
+Bind the existing #508 in that header so the terminal report participates in
+normal report-driven closure. Acceptance criteria, computational source and
+all native/runtime/operating evidence distinctions are unchanged. This is
+metadata repair; closure is verified after the actual protected dev push.
