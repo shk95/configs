@@ -973,7 +973,9 @@ remote evidence. A remote CI result requires no report-only follow-up commit.
 
 The one-time reconstruction adopted the verified endpoint and published the
 independent 1.0.0 tags. Its temporary CI range has been retired. Ordinary
-pushes and PRs use their actual event range. Initial publication, when
+dev pushes and PRs use their actual event range. master is verified by its
+checked promotion PR and the actual merge parents/tree; duplicate master push
+CI is not run. Initial publication, when
 bootstrapping a repository, reads the explicit bootstrap source and requires
 Environment review; remove the bootstrap variable after both tags are confirmed.
 No further promotion precedes their completion. A normal promotion records
