@@ -25,9 +25,9 @@ candidate, refreshes it only if necessary and asks GitHub to merge after fresh
 checks. No local queue, PR-state labels, central database or integration lock.
 Local notes are ignored checkpoints, not remote-state caches.
 
-The legacy human commit --publish and Windows capture operations retain their
-explicitly confirmed publication behavior. Agent workers do not invoke them
-for delivery. A later change to these human interfaces requires their owning
+The human commit --publish operation retains its explicitly confirmed
+publication behavior. Windows host-original capture performs no publication.
+Agent workers use the ordinary delivery procedure. A later change to these human interfaces requires their owning
 scope's contract and tests; no behavior is removed merely because agent roles
 have different authority.
 

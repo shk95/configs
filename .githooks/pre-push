@@ -82,9 +82,8 @@ if selected windows:desired-state || selected windows:tests; then
   # happens to expose. A Unix-like host — including WSL, where `pwsh.exe` is
   # also reachable through Windows interop — runs the checks under its own
   # native `pwsh`: unixlike/modules/programs/powershell/module.nix installs one into
-  # every home this repository configures, the suite's WIN_ENV_E2E cases
-  # self-skip there, and the windows-latest CI job remains the native gate
-  # for what a Linux pwsh cannot exercise. Reaching for `pwsh.exe` over WSL
+  # every home this repository configures, and windows-latest CI remains
+  # the native gate for Windows management behavior. Reaching for `pwsh.exe` over WSL
   # interop instead runs an
   # unsigned script from \\wsl.localhost\... under Windows' own execution
   # policy, which refuses it (SecurityError) for reasons that have nothing to
@@ -103,7 +102,7 @@ if selected windows:desired-state || selected windows:tests; then
     *)
       if command -v pwsh >/dev/null 2>&1; then
         windows_pwsh=pwsh
-        echo "· running the Windows checks under this host's own pwsh (not pwsh.exe); WIN_ENV_E2E cases self-skip here and the windows-latest CI job remains the native gate for them"
+        echo "· running the Windows checks under this host's own pwsh (not pwsh.exe); windows-latest CI remains the native gate for Windows management behavior"
       fi
       ;;
   esac

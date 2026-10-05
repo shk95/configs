@@ -17,11 +17,4 @@ already contains and never the current branch, `dev` or `master`. "Never
 a commit on `dev`" has no assertion of its own: it follows from the helper
 branching before it commits whenever it stands on `dev`, and the case run
 from `dev` after a publish would meet the helper's own "dev is not at
-origin/dev" refusal if that were ever false. The
-Windows capture flow follows the same rule under
-`windows/capture-publishes-through-dev`; the two are copies by the
-copy-over-sharing rule and may diverge.
-
-2026-10-05: the former Windows capture publication contract is historical.
-The next Windows domain change will replace provider publication with
-host-original capture; this prerequisite removes the obsolete cross-scope reference.
+origin/dev" refusal if that were ever false. The Windows host-original capture does not publish provider Git history.

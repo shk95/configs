@@ -600,6 +600,37 @@ For reusable storage-class development, `unixlike/tool/install-plan` and
 `install-vm-test` use synthetic provider fixtures. Their disposable VM proof
 validates the provider layout and installer wiring, not a private disk.
 
+### Capture Darwin host documents
+
+Pin one reviewed full provider commit for preview and Save. On the target Mac,
+use the delivered app with explicit host-owned documents and existing destination
+parents. Paths must be absolute and canonical, outside provider source/store,
+application directories and observed originals; the proposal must be a new file.
+
+```sh
+nix run 'github:shk95/configs/<full-commit>?dir=unixlike#darwin-capture' -- \
+  preview --unit karabiner --document /host-repository/settings/karabiner.json \
+  --unit symbolic-hotkeys --document /host-repository/settings/hotkeys.json \
+  --output /private-preview-directory/proposal.json
+nix run 'github:shk95/configs/<same-full-commit>?dir=unixlike#darwin-capture' -- \
+  save --preview /private-preview-directory/proposal.json
+```
+
+Review the mode-600 private proposal's readers, destinations, complete settings
+and source transitions before explicitly requesting Save. Save validates the
+bound tool/schema, rereads inputs and targets, and recomputes the proposal; stale
+or inconsistent state refuses. Each replacement is atomic, but multiple documents
+are not one transaction. After refusal or partial Save, preserve completed
+results and preview the actual current state again before another review/Save.
+See `unixlike/tool/darwin-capture/README.md` for the delivered document contract.
+
+Saving documents does not connect them to a consumer, publish provider changes,
+apply application settings or activate a host. Consumer connection is separately
+reviewed, and activation requires an explicit request. The retired repository
+`capture karabiner` publication invocation refuses without observing the host or
+changing Git; it never redirects to Save. The historical domain projection tool,
+`just karabiner-check` and `just karabiner-test` remain independently available.
+
 ## Windows changes
 
 Windows declarations, payloads, checks, and Apply logic live inside `windows/`
@@ -656,63 +687,19 @@ desired-state change while a host's chosen set is not. Report which selection
 produced any `-Check` or Apply evidence, because a check that passed under a
 minimal selection says nothing about the features it excluded.
 
-A change made in an application's own UI moves back into desired state with
-`.\windows\win-env.ps1 capture`, run from a linked task worktree on the
-Windows host. Run `bash tool/configs worktree new windows-capture-settings feature`
-from the primary clone to create it from `origin/dev` before writing. The primary clone
-may run `capture -WhatIf` to inspect the proposed diff and may resume a
-publish with no new payload change. A writing run in the primary clone
-refuses before switching branches, staging, or editing a payload. Capture
-reads the managed targets and writes only
-this repository's payloads — a JSON payload pretty-printed to this
-repository's two-space style — and ends at one confirmation before committing.
-Preview it with `-WhatIf` first. It restates the guards of
-`tool/version-control/commit` rather than calling it, including its branch
-rule: it refuses on `master`, on a dirty index, and on a payload that already
-has uncommitted changes, and never bypasses a hook. On `dev` it branches to
-`feature/windows-capture-<feature>` from a freshly fetched `origin/dev` (or a
-name given with `-Branch`) before it commits, reported in the plan before the
-`[y/N]`, so a capture run on `dev` never leaves a commit on that protected
-branch; on any other branch the commit stays there. Read its refusals rather
-than working around them, and read the hook output under its commit: Git for
-Windows runs the POSIX hooks natively, but a clone that has not set
-`core.hooksPath` runs none of them.
+A change made in an application's UI can be previewed through
+`windows/win-env.ps1 capture -SourceRoot <provider-checkout> -Environment <environment-file> -Unit <id>`.
+First capture requires `-Document <relative-file>`; later capture uses its
+existing connection. SourceRoot is a clean provider checkout, while Environment
+is the host declaration path. Adding `-Save` explicitly writes complete host-owned
+originals. Regenerate the selected environment before Check or Apply.
+See `windows/examples/README.md` for the declaration format and examples.
+Capture does not modify provider source or perform Git publication. Publish
+provider source edits through the ordinary topic-branch and pull-request flow.
 
-Add `-Publish` and that same confirmation pushes the branch, opens one pull
-request against `dev`, arms auto-merge and prints the pull-request URL. It is
-the Windows copy of `--publish` above and behaves the same way: it never waits
-on CI and never merges, a rejected push leaves every commit local on the named
-branch, and nothing retries with a bypass. It requires `gh` authenticated for
-github.com and `Allow auto-merge` on in the repository settings, and refuses
-before writing anything if either is missing, if a pull request from the same
-branch is open against another base, or if the remote already has the branch
-the run would create; a pull request already open against `dev` from that
-branch is armed unchanged. It pushes a branch rather than a commit, so it
-lists whatever the branch already carries beyond `dev` before the `[y/N]`.
-`-WhatIf -Publish` prints the branch, the title, the body and every command
-and writes nothing. Promotion to `master` and release remain the flows above.
-
-A capture's commit makes the host read as unchanged, so a rerun after a publish
-that did not finish captures nothing. With `-Publish` that run resumes the
-publish instead of stopping at "Nothing to capture": on a topic branch whose
-every commit beyond `origin/dev` has the subject capture gives its commits and
-changes only `windows/desired/**`, one confirmation (`Publish these commits?
-[y/N]`) pushes the branch unless `origin` already has it at that commit, opens
-or reuses the pull request against `dev`, and arms auto-merge. A branch whose
-push was rejected, one pushed by hand with no pull request, and one whose
-auto-merge was never armed all finish this way; run it on that branch. Any
-other commit on the branch refuses the run, so push it and open the pull
-request yourself. It never resumes on `dev` or `master`, and on `dev` it names
-a local `feature/windows-capture-<feature>` branch that still carries commits.
-The detached-HEAD, staged-change and uncommitted-payload refusals still apply.
-The resumed pull request says its commits came from an earlier run, and when
-nothing was pushed it says no pre-push hook ran rather than showing hook
-output.
-
-The local test verb leaves out the Pester cases that run `capture.ps1` end to
-end in a child PowerShell, and says which ones it skipped. Set
-`WIN_ENV_E2E=1` to run them; the `windows-latest` CI job does, so the merge
-gate covers them and a local push stays quick.
+The native Windows suite exercises host-original generation and capture in
+disposable fixtures. Foreign-host PowerShell results are fixture evidence;
+hosted native Windows checks remain the management-runtime gate.
 
 ## Common changes
 

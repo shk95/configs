@@ -36,12 +36,13 @@ are revised for the new owner before work resumes.
 
 ## Current priorities
 
-No active roadmap priority is assigned. Deferred outcomes remain deferred until
-the maintainer selects the next work.
-
-Standalone work does not need a roadmap row. The planner maintains priorities,
-dependencies and disposition here; PR state remains on GitHub. Completion needs
-the maintainer's acceptance and a report reference, not a copied merged flag.
+2026-10-05: the maintainer selected fixed-base reconstruction from a886934.
+The active entry is `repository/minimal-reconstruction/spec.md`: preserve old
+work, recover required domain features, remove observed CI waste, connect
+bounded automated releases, validate the endpoint and then review cutover.
+The previous operating/controller continuation is frozen, not completed.
+Domain verification lives in the linked Unix-like and Windows reports.
+Host-specific deferred outcomes remain separate from provider reconstruction.
 
 ## Deferred outcomes
 
