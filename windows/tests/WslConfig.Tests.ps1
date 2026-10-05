@@ -8,13 +8,13 @@ Describe 'WSL capture prerequisites' {
     # INV windows/support-boundary-named
     # INV windows/check-exit-contract
     BeforeAll {
-        $originalRoot = Join-Path $windowsRoot 'desired'
-        $manifest = Get-WinEnvManifest -Path (Join-Path $originalRoot 'manifest.json')
-        $wsl = $manifest.ManagedFiles | Where-Object Id -eq 'wslConfig'
-        $upperSource = $wsl.Sources[0].Source
-        $lowerSource = $wsl.Sources[1].Source
-        $upperText = Get-Content (Join-Path $originalRoot $upperSource) -Raw
-        $lowerText = Get-Content (Join-Path $originalRoot $lowerSource) -Raw
+        # Historical source-policy helpers remain testable on synthetic files;
+        # the current provider no longer offers host-global WSL configuration.
+        $upperSource = 'files/wsl/mirrored-networking.wslconfig'
+        $lowerSource = 'files/wsl/nat-networking.wslconfig'
+        $upperText = "[wsl2]`nnetworkingMode=Mirrored`n`n[experimental]`nhostAddressLoopback=true`nautoMemoryReclaim=Gradual`nbestEffortDnsParsing=true`n"
+        $lowerText = "[experimental]`nautoMemoryReclaim=Gradual`n"
+        $wsl = @{ Id='wslConfig'; Feature='wsl'; Parser='Ini'; Compare='Text'; Sources=@(@{MinimumBuild=22621;Source=$upperSource},@{Source=$lowerSource}) }
         $wslRoot = Join-Path $TestDrive 'desired'
         [void](New-Item -ItemType Directory (Join-Path $wslRoot 'files/wsl') -Force)
         $wsl.Target = Join-Path $TestDrive '.wslconfig'

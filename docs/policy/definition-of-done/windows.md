@@ -18,12 +18,17 @@ file, which every change owes.
       only and reports the rest as not selected, never as verified.
 - [ ] The Windows build the observation ran on is named beside it, and each
       item of the Windows 10 support boundary table in `docs/status/windows.md` is
-      reported in its boundary state — unverified below the boundary, never
+      reported in its boundary state — unverified below the boundary when included,
+      visibly excluded when outside the generation contract, never
       verified there (INV windows/support-boundary-named).
 - [ ] Missing native tooling is reported as unverified rather than valid, and
       reaches its caller as exit status 69 rather than as a failure.
 - [ ] Apply is run only when explicitly requested, followed by another
       read-only check.
+- [ ] Capture previews selected/enabled host originals; explicit synthetic Save
+      evidence names per-file failure/retry outcomes and verifies app, provider
+      and generated targets remain unchanged. Real host-original Save requires
+      separate authorization (INV windows/capture-owns-host-originals).
 - [ ] A `windows-v...` tag is assigned only after required native evidence is
       available.
 - [ ] The source change lives in `windows/desired/`, `windows/src/`, Windows

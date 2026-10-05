@@ -65,7 +65,7 @@ Since #241, `capture -Publish` on a run that found no drift resumes an earlier
 capture's unfinished publish from the topic branch that carries it, for
 single-parent commits with the capture subject that change only
 `windows/desired/**`, and refuses anything else
-(`INV windows/capture-publishes-through-dev`). Module-level fixtures cover the
+(`windows/capture-publishes-through-dev`). Module-level fixtures cover the
 branch and commit rules and the resumed pull-request body; the `WIN_ENV_E2E`
 cases cover a resumed run. The suite's module-level fixtures now capture what
 the functions they drive print, and run their `-WhatIf` cases in a runspace
