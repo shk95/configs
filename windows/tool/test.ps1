@@ -16,13 +16,14 @@ Requires the pinned Pester version to be installed. Missing Pester becomes exit
 PS> .\windows\win-env.ps1 test
 
 Read-only with respect to host desired state. Runs all locally available tests;
-publish end-to-end cases are skipped unless WIN_ENV_E2E is exactly 1.
+capture fixtures use synthetic host originals; capture performs no Git publication.
 
 .EXAMPLE
-PS> $env:WIN_ENV_E2E = '1'; .\windows\win-env.ps1 test -RequireNativeTooling
+PS> .\windows\win-env.ps1 test -RequireNativeTooling
 
-Runs the full capture publish fixtures used by CI and requires the pinned
-Pester tool. The end-to-end cases operate on isolated test repositories.
+Runs the Windows fixture suite used by CI and requires the pinned Pester tool.
+Capture cases use synthetic host originals and test recoverable Save operations;
+no provider publication or actual host Apply occurs.
 
 .NOTES
 Requires Pester 5.7.1. Exit 0 means the suite passed, exit 69
@@ -85,8 +86,8 @@ Import-Module -FullyQualifiedName @{
 . (Join-Path $PSScriptRoot 'isolate-git.ps1')
 
 # Every script below windows/ must parse before the suite runs. The suite
-# imports the module and drives the entry points, but the end-to-end capture
-# cases are skipped without WIN_ENV_E2E, so a syntax error in capture.ps1
+# imports the module and drives the entry points. Runtime-specific cases may
+# be skipped on a foreign host, so a syntax error
 # would otherwise reach CI unseen. This step sits after the Pester gate so a
 # host without Pester still exits 69 rather than reporting a parse result as
 # the suite's; a parse error is a failure of the tools, exit 1.

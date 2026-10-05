@@ -2,11 +2,17 @@
 
 date: 2026-08-30
 scope: windows
-status: accepted
+status: superseded
+superseded-by: docs/policy/decisions/windows/host-capture-owns-originals.md
 issue: #73
 issue: #77
 source: 9f1e8ce:docs/status.md § Capture moves a host change into desired state
 source: 9f1e8ce:docs/status.md § A JsonSubset payload is captured by projection
+
+2026-09-30: The provider-writing capture/publication flow below is historical.
+`host-capture-owns-originals.md` replaces it with explicit version1 host-original
+preview/Save and no Git mutation. Earlier published evidence remains historical;
+it is not a current capture interface or a required resumed-publish observation.
 
 Every direction between this repository and a Windows host ran one way until
 now. `bootstrap.ps1 -Check` reported `<id> settings` drift and Apply overwrote
