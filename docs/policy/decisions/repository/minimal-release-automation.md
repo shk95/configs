@@ -39,7 +39,10 @@ for the automated writer. Domain release never adopts or applies host state.
 ## Verification cost
 
 Keep local/fixture proof with source and remote CI proof in Actions/PR checks.
-No follow-up report-only push is needed to copy a successful CI result. Remove
+No follow-up report-only push is needed to copy a successful CI result.
+Keep dev push CI for coordinator reentry. master uses its fully checked PR and
+actual merge identity instead of another full push CI. Publication resumes
+from ordinary schedule/manual/related CI events if its writer is interrupted. Remove
 retired suites and the confirmed ninefold independent-suite repetition before
 considering any more precise check selector. Fixture failure coverage and actual
 normal-path operating evidence are distinct; no live failure-experiment project.

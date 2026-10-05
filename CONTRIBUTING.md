@@ -929,8 +929,10 @@ remote evidence. A remote CI result requires no report-only follow-up commit.
 
 The one-time reconstruction adopted the verified endpoint and published the
 independent 1.0.0 tags. Its temporary CI range has been retired. Ordinary
-pushes and PRs use their actual event range. The initial publication path is retired. Normal automation requires the
-existing domain tags. A normal promotion records
+dev pushes and PRs use their actual event range. master is verified by its
+checked promotion PR and the actual merge parents/tree; duplicate master push
+CI is not run. The initial publication path is retired. Normal automation
+requires existing domain tags. A normal promotion records
 actual M's parents/tree against the checked PR, then publishes only its changed domains.
 A rerun reads existing remote tags, confirms targets and required annotation,
 and creates only missing tags. It never overwrites or requires a newly created
