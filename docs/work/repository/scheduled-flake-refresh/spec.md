@@ -5,6 +5,13 @@ scope: repository
 status: approved
 review-by: 2026-10-10
 
+## Superseded operating direction
+
+2026-10-05: this work's operating design is frozen. The active replacement is
+`docs/work/repository/minimal-reconstruction/spec.md`; historical criteria and
+unmet evidence remain below. Private records, controller custody and AC12 as a
+whole are not pickup obligations of the replacement.
+
 ## Current controller alignment
 
 Amended 2026-09-28 (cross-work reconciliation): AC1/AC4/AC5 use the latest

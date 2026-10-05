@@ -70,3 +70,12 @@ all suites. This amends the ownership-only condition in the opening paragraph,
 not the runtime guarantees of a selected suite. Internal suite optimization and
 safe removal of PR/push repetition remain separate work; a successful PR is
 not evidence for a changed integration tree.
+
+2026-09-29: U1's public provider contract removes personal machine outputs
+from `configs`. The earlier `CHECKS_BUILD_ALL=1` tag requirement above is
+superseded: Unix-like release evidence now selects native synthetic outputs by
+affected public contract and architecture, records exact selections and gaps,
+and refuses missing or failed selected builds. The required Unix-like CI job
+keeps evaluation of all exported configurations and representative native
+builds; private machine builds and activation remain consumer evidence. This
+does not add a hosted runner or weaken a selected check.

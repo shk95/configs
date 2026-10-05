@@ -1,5 +1,17 @@
 # Current state: repository
 
+## Reconstruction in progress
+
+The accepted reconstruction starts at a886934 on one isolated assembly branch.
+Old dev/master are preserved by remote archive/reconstruction-20261005-dev and
+archive/reconstruction-20261005-master; local unfinished states have a verified
+bundle/file archive. Existing release workflows are disabled during assembly.
+Shared dev/master and their protections have not been replaced.
+Current outcomes and evidence are in
+`docs/work/repository/minimal-reconstruction/report.md`. Earlier observations
+below describe old source and do not add operating acceptance to this work.
+
+
 This file states what is observably true of the repository scope today: hosts and
 classes in use, schema and version facts, and open conditions. Every decision
 is recorded under `docs/policy/decisions/`; the model those decisions implement
