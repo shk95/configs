@@ -199,3 +199,24 @@ After actual provider assembly and literal migration correction, local observer
 17 fixtures passed10.167s and current semantic31 fixtures passed96.851s. These
 precede final normal assembly hooks and current-head native CI; no approval or
 operating qualification is inferred from them.
+
+## Final provider source assembly and issue metadata, 2026-10-05
+
+Normal assembly b4cac8d3fe1bd2b22c61918f7499b99da27c2894 has parents
+9974cf127d60be002abf6dec138da70d89626ce5 and
+79f53ae931fb1c624c48fd805797dd3893e66981, tree
+9ad017d47d26568649a2248ebd3fc0dd686e6d3b. All final source hooks passed:
+production24/90.718s, semantic31/52.645s, transport88/561.955s, receipt17/10.181s,
+observer17/4.257s, history37/127.998s, initializer12/313.957s and raw library24/
+12.408s, plus policy/scans and89 registered invariants with0pending/0untagged.
+The prior message-only rejection used an unsupported merge type; it committed
+nothing and preserved source/index. This valid fix type reran normal full hooks
+without bypass and tested the same source bytes.
+
+Actual metadata PR #512 then entered devab142557bdacccd439e54318b0bac04b53998bd4
+with unchanged computational source. Its postCI37259388902 and report closure
+37259388845 succeeded; execution #508 closed with report-linked comment5987565588.
+Root performs the required current-base docs-only merge after the source assembly;
+there is no source/rules/manifest conflict or new importing consumer. Current B
+source publication, exact-head native proof and final admission remain pending;
+all enclosing AC1–AC4 stay pending.
