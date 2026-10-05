@@ -1,0 +1,121 @@
+#!/bin/sh
+# Independent public mkDarwin consumer; no template checkout or activation.
+# INV unixlike/host-written-payload-projected
+set -eu
+. "$(CDPATH= cd -- "$(dirname -- "$0")" && pwd)/prerequisite"
+require_command nix jq
+domain=$(CDPATH= cd -- "$(dirname -- "$0")/../.." && pwd -P)
+work=$(mktemp -d)
+work=$(CDPATH= cd -- "$work" && pwd -P)
+trap 'rm -rf "$work"' EXIT
+cat > "$work/karabiner.json" <<'JSON'
+{"formatVersion":1,"source":"host","settings":{"global":{"check_for_updates":false,"show_in_menu_bar":false},"profiles":[{"name":"Synthetic consumer","selected":true}]}}
+JSON
+cat > "$work/hotkeys.json" <<'JSON'
+{"formatVersion":1,"source":"host","settings":{"AppleSymbolicHotKeys":{"60":{"enabled":false,"value":{"type":"standard","parameters":[65535,79,8388608]}},"61":{"enabled":false,"value":{"type":"standard","parameters":[32,49,786432]}}}}}
+JSON
+printf '%s\n' '{"formatVersion":1,"source":"configs","settings":{"dormant":{"invalidActiveShape":null}}}' > "$work/configs.json"
+printf '%s\n' '{"formatVersion":1,"source":"host","settings":{"global":{},"profiles":[]}}' > "$work/invalid.json"
+printf '%s\n' '{"formatVersion":1,"source":"configs","settings":{"a":1,"\u0061":2}}' > "$work/duplicate.json"
+printf '%s\n' '{"formatVersion":1,"source":"configs","settings":{"recovery":{"min":-9223372036854775808,"max":9223372036854775807,"nested":[true,false,null,"\u0001","\n"]}}}' > "$work/boundary.json"
+printf '%s\n' '{"formatVersion":1,"source":"host","settings":{"global":{"check_for_updates":false},"profiles":[{"name":"Main\u0000","selected":true}]}}' > "$work/nul-name.json"
+printf '%s\n' '{"formatVersion":1,"source":"host","settings":{"global":{"check_for_updates":false,"nested":{"\u0000key":true}},"profiles":[{"name":"Main","selected":true}]}}' > "$work/nul-key.json"
+printf '%s\n' '{"formatVersion":1,"source":"configs","settings":{"recovery":[9223372036854775808]}}' > "$work/positive-overflow.json"
+printf '%s\n' '{"formatVersion":1,"source":"configs","settings":{"recovery":[-9223372036854775809]}}' > "$work/negative-overflow.json"
+cat > "$work/flake.nix" <<EOF
+{
+  inputs.configs.url = "path:$domain";
+  inputs.nixpkgs.follows = "configs/nixpkgs";
+  outputs = {configs, ...}: let
+    make = capture: selected: configs.lib.mkDarwin {
+      system = "aarch64-darwin";
+      user = "example";
+      git = {name = "Example"; email = "example@example.invalid";};
+      systemModules = [{
+        networking.hostName = "fixture-mac";
+        system.primaryUser = "example";
+        users.users.example.home = "/Users/" + "example";
+        homebrew.casks = if selected then ["karabiner-elements"] else [];
+      }];
+      homeModules = [{providerDarwin.capture = capture;}];
+    };
+    absent = builtins.toPath "$work/never-read.json";
+  in {
+    darwinConfigurations = {
+      defaults = make {} true;
+      host = make {
+        karabiner.settingsDocument = ./karabiner.json;
+        symbolicHotkeys.settingsDocument = ./hotkeys.json;
+      } true;
+      configs = make {karabiner.settingsDocument = ./configs.json;} true;
+      boundary = make {karabiner.settingsDocument = ./boundary.json;} true;
+      disabled = make {
+        karabiner = {enable = false; settingsDocument = absent;};
+        symbolicHotkeys = {enable = false; settingsDocument = absent;};
+      } true;
+      onlyKarabiner = make {symbolicHotkeys = {enable = false; settingsDocument = absent;};} true;
+      onlyHotkeys = make {karabiner = {enable = false; settingsDocument = absent;};} true;
+      unselected = make {karabiner.settingsDocument = absent; symbolicHotkeys.settingsDocument = absent;} false;
+      invalid = make {karabiner.settingsDocument = ./invalid.json;} true;
+      duplicate = make {karabiner.settingsDocument = ./duplicate.json;} true;
+      nulName = make {karabiner.settingsDocument = ./nul-name.json;} true;
+      nulKey = make {karabiner.settingsDocument = ./nul-key.json;} true;
+      positiveOverflow = make {karabiner.settingsDocument = ./positive-overflow.json;} true;
+      negativeOverflow = make {karabiner.settingsDocument = ./negative-overflow.json;} true;
+    };
+  };
+}
+EOF
+# The disposable consumer alone receives a lock; provider inputs are unchanged.
+nix flake lock --quiet "path:$work"
+activation() {
+  nix eval --raw "path:$work#darwinConfigurations.$1.config.home-manager.users.example.home.activation.karabinerDesiredState.data"
+}
+for case in defaults host configs boundary onlyKarabiner onlyHotkeys; do
+  activation "$case" > "$work/$case.activation"
+  grep -Fq 'adapter.py apply' "$work/$case.activation"
+  nix eval --raw "path:$work#darwinConfigurations.$case.config.system.build.toplevel.drvPath" >/dev/null
+done
+grep -Fq -- '--unit karabiner' "$work/defaults.activation"
+grep -Fq -- '--unit symbolic-hotkeys' "$work/defaults.activation"
+grep -Fq 'karabiner-host-settings.json' "$work/host.activation"
+grep -Fq 'symbolic-hotkeys-host-settings.json' "$work/host.activation"
+if grep -Fq 'karabiner-host-settings.json' "$work/configs.activation"; then
+  echo 'configs source did not return to provider defaults' >&2
+  exit 1
+fi
+if grep -Fq -- '--unit symbolic-hotkeys' "$work/onlyKarabiner.activation"; then exit 1; fi
+if grep -Fq -- '--unit karabiner' "$work/onlyHotkeys.activation"; then exit 1; fi
+for case in disabled unselected; do
+  nix eval --json "path:$work#darwinConfigurations.$case.config.home-manager.users.example.home.activation" \
+    --apply 'entries: builtins.hasAttr "karabinerDesiredState" entries' | jq -e '. == false' >/dev/null
+  nix eval --raw "path:$work#darwinConfigurations.$case.config.system.build.toplevel.drvPath" >/dev/null
+done
+for case in invalid duplicate; do
+  if activation "$case" > "$work/refusal" 2>&1; then
+    echo "invalid active $case document evaluated" >&2
+    exit 1
+  fi
+  grep -Fq 'Darwin capture:' "$work/refusal"
+done
+for case in nulName nulKey positiveOverflow negativeOverflow; do
+  if activation "$case" > "$work/refusal" 2>&1; then
+    echo "Nix-unrepresentable $case document evaluated" >&2
+    exit 1
+  fi
+  grep -Eq 'Darwin capture:|outside of Nix integer range|null byte|NUL' "$work/refusal"
+done
+if [ "${1:-}" = --build ]; then
+  [ "$(uname -s)" = Darwin ] || { echo '· unavailable: synthetic Darwin build requires macOS' >&2; exit 69; }
+  nix build --no-link --print-out-paths "path:$work#darwinConfigurations.host.config.system.build.toplevel"
+  nix build --no-link --print-out-paths "path:$work#darwinConfigurations.defaults.config.system.build.toplevel"
+  # Prove the default artifact remains the exact corrected provider rendering.
+  default_karabiner=$(sed -n 's/.*--unit karabiner --settings \([^ ]*karabiner.json\).*/\1/p' "$work/defaults.activation")
+  [ -n "$default_karabiner" ]
+  cmp "$default_karabiner" "$domain/modules/programs/karabiner/karabiner.json"
+  # The selected system includes the regenerated host-document artifacts.
+  for file in $(sed -n 's/.*--settings \([^ ]*host-settings.json\).*/\1/p' "$work/host.activation"); do
+    jq -e 'type == "object"' "$file" >/dev/null
+  done
+fi
+echo '✓ independent mkDarwin defaults/host/configs/disabled/unselected/invalid documents'

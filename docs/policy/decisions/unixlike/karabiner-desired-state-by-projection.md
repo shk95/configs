@@ -114,3 +114,71 @@ rewritten. The `INV unixlike/generated-config-key-in-schema` item is observed
 in that form: Karabiner runs a file whose declared members are the payload's
 own bytes. A load provoked by an activation that does rewrite the file has
 not been observed, because no activation has yet had a reason to write.
+
+## Host-document ownership transfer, 2026-09-30
+
+The version-1 managed units declare ownership in
+`unixlike/modules/programs/karabiner/units.json`: Karabiner global/profiles are
+required whole parents, and symbolic hotkey entries60/61 are required whole
+entries. Missing required data, null deletion, empty profiles and unsupported
+app-normalized shapes refuse. Optional nested absence removes that member by
+whole-parent replacement; arrays never merge by identity. Runtime siblings stay
+outside the finite unit. Hosts own arbitrary extension compatibility.
+
+Home Manager exposes enable/settingsDocument per unit under providerDarwin.capture.
+Existing final selected-app/appSettings gates remain. Disabled units do not read
+documents or apply. Null documents use defaults; explicit host source replaces
+the unit, while configs source restores provider defaults and preserves dormant
+object-valued recovery data. Factory reset and entry deletion are unsupported;
+hotkey enabled=false is the supported disable operation.
+
+The pinned darwin-capture app previews and saves explicitly selected host-owned
+documents. Proposal schema/tool binding and current reader/target re-observation
+provide consistency, not author authentication. Inputs and targets are prepared
+before writing; per-document private atomic replacement reports truthful partial
+completion without rollback or a multi-file transaction. Consumer connection,
+Git publication and application remain separate actions. The permanent native
+check/apply adapter and module consumption use the same finite declaration and
+validation/projection engine as capture.
+
+The prior capture-in-commit-helper rationale describes the still-existing legacy
+provider-payload protocol. Its exact project options/markers, executable and
+root caller fixtures remain compatibility enforcement until separate repository
+retirement. They are not redirected to Save or claimed as new contract consumers.
+Adding a mandatory new dependency to the legacy executable was rejected because
+the actual root fixture copies only the historical executable/payloads. A new
+permanent module adapter avoids breaking that boundary without a temporary
+fallback, parallel ignore list, discovery registry or cross-domain dependency.
+Earlier #177/#178/#183 observations retain their original source and runtime
+limits. Provider delivery never implies private host adoption or activation.
+
+## Legacy publication entry retirement, 2026-10-01
+
+`just karabiner-capture` is a permanent explicit refusal. It accepts obsolete
+argument spellings only to refuse them, never interpolates those arguments,
+and does not invoke a reader, commit helper, new capture CLI or Save. Removing
+the recipe would also prevent publication, but the retained refusal gives old
+callers a clear route to the pinned preview/review/save instructions in
+`unixlike/tool/darwin-capture/README.md`. Explicit host-owned document destinations
+and a reviewed proposal are required; a legacy invocation cannot choose them.
+This refusal is final behavior rather than a temporary redirect.
+
+The delivered host-document engine and module enforce one finite whole-unit
+ownership declaration, with runtime siblings excluded and active/dormant data
+validated for Python/Nix representation. Consumer connection, Git publication
+and host activation are separately chosen. `karabiner-check` and
+`karabiner-test` retain their historical provider-payload comparison contract;
+the legacy executable/project options/markers/check/apply and payloads remain
+unchanged. They are not new host-document contract consumers.
+
+The invariant's root fixture locator is detached now while its actual tag/block
+and repository caller remain intact until the separate repository retirement.
+Active engine/module/capture/consumer and retained domain projection enforcement
+stay registered; no coverage is moved or invented. The dated #177/#178/#183
+source, round-trip, generation34 and native observations above remain historical.
+The delivered U2 corrected rendering has separately reviewed exact16.3 parser,
+source-built native migration and installed16.3 synthetic CLI startup/save/reread
+proof after explicit current-Mac permission. Earlier three sandbox loader failures
+remain distinct; native success does not claim sandbox isolation, GUI/driver/input
+events, consumer adoption or host activation. Entry retirement changes no rendered
+settings and requires no new application execution.

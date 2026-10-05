@@ -63,7 +63,7 @@ three.
 
 The class written for the UTM guest reaches `vm` unchanged: the entry's
 account without a tracked password, key-only sshd on 22, the firewall that
-opens that port alone (`INV unixlike/headless-key-only`). If the guest needs
+opens that port alone (`unixlike/headless-key-only`). If the guest needs
 something the class does not give, the class is changed for every host of it
 or the need is a fact about VMware and belongs in `nixos.vmware`; the class
 gains no parameter for one host.
@@ -130,6 +130,11 @@ condition of
 This work does not make that judgement. The `repository` increment that
 records the end puts the judgement on the roadmap, before the next order.
 
+Amended 2026-09-29: AC2 retains its historical headless guest expectation,
+but the former `unixlike/headless-key-only` registry entry is retired as U1 moves
+machine access policy to the host consumer. The criterion now names the
+historical rule without claiming it remains a provider-owned invariant.
+
 ## Increments
 
 1. This spec and its report.
@@ -152,7 +157,7 @@ records the end puts the judgement on the roadmap, before the next order.
 | ID | Criterion | Required lanes |
 | --- | --- | --- |
 | AC1 | `nixosConfigurations.vm` evaluates with the `nixos.vmware` and `nixos.headless` classes and the `home.shared` home; `modules/host/placeholder.nix` no longer defines `vmware`; the toplevel derivations of every other NixOS output, the standalone home and the Darwin system are unchanged. | evaluation |
-| AC2 | On `vm`, the properties of `INV unixlike/headless-key-only` hold and each violation is refused, proved by the fixture that proves them for `utm`, run over both hosts; channels are off; the VMware guest tools are enabled in their headless form. | evaluation |
+| AC2 | On `vm`, the properties of `unixlike/headless-key-only` hold and each violation is refused, proved by the fixture that proves them for `utm`, run over both hosts; channels are off; the VMware guest tools are enabled in their headless form. | evaluation |
 | AC3 | No graphical program reaches the `vm` home, and no feature file names the host. | evaluation |
 | AC4 | No machine-unique identifier and no generated hardware configuration is tracked for the guest; the hygiene scan passes. A decision record under `docs/policy/decisions/unixlike/` states the hypervisor choice and what was rejected, and the records check passes. | evaluation |
 | AC5 | The `vm` toplevel builds on the x86_64 host. | build |

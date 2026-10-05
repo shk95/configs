@@ -2,7 +2,8 @@
 
 date: 2026-09-23
 scope: unixlike
-status: accepted
+status: superseded
+superseded-by: docs/policy/decisions/unixlike/public-environment-host-boundary.md
 issue: #341
 reopen-when: A supported installer can accept a typed disk identity without committing a machine-specific identifier or generating a wrapper configuration.
 source: docs/work/unixlike/installation-and-deployment/spec.md § Let each host class own its storage layout

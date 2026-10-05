@@ -1,0 +1,178 @@
+#!/usr/bin/env python3
+"""Read-only system prerequisites for a declared standalone mkHome selection.
+
+The declaration is produced by the current trusted host or written explicitly.
+This command never evaluates a candidate, changes a host, or authorizes activation.
+Run contract-inspect separately to compare provider input compatibility.
+"""
+
+import argparse
+import json
+import os
+import platform
+import pwd
+import shutil
+import subprocess
+import sys
+from pathlib import Path
+
+
+def command_output(argv):
+    try:
+        result = subprocess.run(argv, capture_output=True, text=True, timeout=5)
+    except (OSError, subprocess.TimeoutExpired):
+        return None
+    return result.stdout if result.returncode == 0 else None
+
+
+def collect_facts(user, home):
+    release = {}
+    try:
+        for line in Path("/etc/os-release").read_text().splitlines():
+            if "=" in line and not line.startswith("#"):
+                key, value = line.split("=", 1)
+                release[key] = value.strip().strip('"')
+    except OSError:
+        pass
+    try:
+        account = pwd.getpwnam(user)
+        account_home = account.pw_dir
+        same_user = os.getuid() == account.pw_uid
+    except KeyError:
+        account_home = None
+        same_user = False
+    conf = home / ".config" / "nix" / "nix.conf"
+    return {
+        "system": platform.system(),
+        "machine": platform.machine(),
+        "kernel": platform.release(),
+        "osId": release.get("ID"),
+        "osVersion": release.get("VERSION_ID"),
+        "accountHome": account_home,
+        "sameUser": same_user,
+        "homeExists": home.is_dir(),
+        "homeWritable": os.access(home, os.W_OK | os.X_OK),
+        "nixVersion": command_output(["nix", "--version"]) if shutil.which("nix") else None,
+        "locales": command_output(["locale", "-a"]) if shutil.which("locale") else None,
+        "nixConfKind": "symlink" if conf.is_symlink() else "file" if conf.exists() else "absent",
+    }
+
+
+def check(selected, facts):
+    conditions = []
+
+    def add(name, status, detail, guidance=None):
+        item = {"id": name, "status": status, "detail": detail}
+        if guidance:
+            item["guidance"] = guidance
+        conditions.append(item)
+
+    if facts["system"] == "Linux" and facts["machine"] == "x86_64":
+        add("target-platform", "satisfied", "native x86_64 Linux")
+    else:
+        add("target-platform", "missing", "standalone mkHome currently supports x86_64-linux")
+
+    if facts["osId"] == "ubuntu" and facts["osVersion"] == "26.04":
+        add("os-baseline", "satisfied", "Ubuntu 26.04 LTS reference baseline")
+    else:
+        add("os-baseline", "unknown", "no verified standalone reference for this OS release")
+
+    if facts["accountHome"] is None:
+        add("account-home", "missing", "declared account is absent", "Create/select the account through host administration.")
+    elif facts["accountHome"] != selected["homeDirectory"] or not facts["homeExists"]:
+        add("account-home", "missing", "declared home differs from the account or is absent",
+            "Pass the actual account home directory to mkHome.")
+    elif not facts["sameUser"]:
+        add("account-home", "unknown", "readiness ran as a different account")
+    elif not facts["homeWritable"]:
+        add("account-home", "missing", "the account cannot write its home directory")
+    else:
+        add("account-home", "satisfied", "declared account and writable home agree")
+
+    if facts["nixVersion"] is None:
+        add("nix-cli", "missing", "Nix CLI is unavailable", "Install Nix through the host's chosen method.")
+    else:
+        add("nix-cli", "satisfied", "Nix CLI responds; version alone does not prove daemon readiness")
+
+    locales = facts["locales"]
+    if locales is None:
+        add("locale", "unknown", "locale archive could not be inspected")
+    elif any("".join(c for c in item.lower() if c.isalnum()) == "enusutf8" for item in locales.splitlines()):
+        add("locale", "satisfied", "provider default en_US.UTF-8 is available")
+    else:
+        add("locale", "missing", "provider default en_US.UTF-8 is absent",
+            "Generate the locale with host OS tooling or override the provider default deliberately.")
+
+    kind = facts["nixConfKind"]
+    if kind == "absent":
+        add("nix-conf-target", "satisfied", "standalone Home Manager target path is free")
+    elif kind == "file":
+        add("nix-conf-target", "missing", "an existing file may block Home Manager's nix.conf link",
+            "Review/backup the file; use NIX_CONFIG for first-switch flakes without writing the target path.")
+    else:
+        add("nix-conf-target", "unknown", "an existing symlink needs ownership inspection")
+
+    if selected["wsl"]:
+        if "microsoft" in facts["kernel"].lower() or "wsl" in facts["kernel"].lower():
+            add("wsl-kernel", "satisfied", "kernel identifies WSL")
+        else:
+            add("wsl-kernel", "missing", "WSL adaptation was selected outside a WSL kernel")
+
+    if selected["graphical"]:
+        add("graphical-system", "unknown", "desktop session, portal, audio and seat services are host-owned",
+            "Verify the selected graphical system services and native session before activation.")
+    if selected["homeModules"]:
+        add("host-modules", "unknown", "host home modules may override the inspected defaults",
+            "Evaluate final candidate configuration with those modules.")
+
+    statuses = {item["status"] for item in conditions}
+    summary = "missing" if "missing" in statuses else "unknown" if "unknown" in statuses else "satisfied"
+    return {"scope": "read-only-prerequisites", "summary": summary,
+            "selection": {"wsl": selected["wsl"], "graphical": selected["graphical"]},
+            "conditions": conditions}
+
+
+def main():
+    parser = argparse.ArgumentParser(description=__doc__)
+    parser.add_argument("--declaration", type=Path, required=True, help="trusted host JSON declaration")
+    args = parser.parse_args()
+    declaration = json.loads(args.declaration.read_text())
+    if declaration.get("constructor") != "mkHome" or not isinstance(declaration.get("inputs"), dict):
+        raise ValueError("standalone readiness requires a mkHome host declaration")
+    inputs = declaration["inputs"]
+    user = inputs.get("user")
+    directory = inputs.get("homeDirectory")
+    if not isinstance(user, str) or not isinstance(directory, str) or not directory.startswith("/"):
+        raise ValueError("mkHome declaration requires user and absolute homeDirectory")
+    if "systemModules" in inputs or "homeModules" in inputs:
+        raise ValueError("module contents cannot be serialized in declared inputs")
+    env = inputs.get("environment", {})
+    if not isinstance(env, dict) or any(k not in ("wsl", "graphical") or type(v) is not bool for k, v in env.items()):
+        raise ValueError("environment accepts only boolean wsl and graphical selections")
+    contract_file = Path(os.environ.get(
+        "CONFIGS_UNIXLIKE_CONTRACT",
+        Path(__file__).resolve().parents[1] / "api" / "contract.json",
+    ))
+    contract = json.loads(contract_file.read_text())
+    if contract.get("formatVersion") != 1 or "mkHome" not in contract.get("entryPoints", {}):
+        raise ValueError("unsupported local mkHome contract")
+    if inputs.get("system") not in contract["constraints"]["mkHome"]["systems"]:
+        raise ValueError("declared system is outside the standalone mkHome contract")
+    defaults = contract["entryPoints"]["mkHome"]["inputs"]["environment"]["defaults"]
+    wsl = env.get("wsl", defaults["wsl"])
+    graphical = env.get("graphical", defaults["graphicalWhenWsl"] if wsl else defaults["graphicalOtherwise"])
+    if wsl and graphical:
+        raise ValueError("environment.graphical cannot be true when environment.wsl is true")
+    selected = {"homeDirectory": directory, "wsl": wsl, "graphical": graphical,
+                "homeModules": declaration.get("homeModules", False)}
+    if type(selected["homeModules"]) is not bool:
+        raise ValueError("homeModules presence flag must be boolean")
+    print(json.dumps(check(selected, collect_facts(user, Path(directory))), indent=2, sort_keys=True))
+
+
+if __name__ == "__main__":
+    try:
+        main()
+    except (OSError, ValueError, KeyError, TypeError, json.JSONDecodeError) as exc:
+        print(f"standalone-readiness: {exc}", file=sys.stderr)
+        sys.exit(2)

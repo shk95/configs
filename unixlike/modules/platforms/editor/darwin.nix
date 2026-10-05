@@ -3,7 +3,7 @@
 # store path keeps the command available to the system while Home Manager owns
 # the normal user-facing Neovim package and configuration.
 _: {
-  modules.darwin.system = {
+  modules.darwin.environment = {
     lib,
     pkgs,
     ...
