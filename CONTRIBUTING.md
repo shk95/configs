@@ -927,7 +927,10 @@ them. Do not change version or evidence after CI merely to certify that CI.
 Write local/fixture evidence with the source; use current Actions/PR checks for
 remote evidence. A remote CI result requires no report-only follow-up commit.
 
-Initial publication sets `CONFIGS_RELEASE_BOOTSTRAP_SOURCE` to verified N and
+Before the one-time shared-ref replacement, set
+`CONFIGS_RELEASE_BOOTSTRAP_SOURCE` to verified N: the temporary CI entry uses it
+only for the exact recorded old dev/master tips entering N. Other pushes keep
+the ordinary range. Initial publication reads that N and
 requires Environment review; it reads both declarations even without a merge
 parent. Remove that variable after both tags are confirmed. No further
 promotion precedes their completion. A normal promotion records actual M's

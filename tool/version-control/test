@@ -656,6 +656,21 @@ if (EVENT_NAME=push PUSH_BASE=bad event_base) >/dev/null 2>&1; then
   echo 'CI accepted an invalid event SHA' >&2; exit 1
 fi
 
+# PROV repository/reconstruction-ci: a closed one-time cutover range.
+fixed_base=a886934736f701e85ab5c79fba58b155218d99d1
+for endpoint in \
+  dev:fc2e1abdfc64ad3f2cc8156c49bc54f256c284ef \
+  master:c98ce7d9edd34f08c4e6df68ec3bd22f0b22ae0b; do
+  result=$(EVENT_NAME=push EVENT_REF=refs/heads/${endpoint%%:*} \
+    PUSH_BASE=${endpoint#*:} PUSH_SHA=$event_sha RECONSTRUCTION_SOURCE=$event_sha event_base)
+  [ "$result" = "$fixed_base" ] || { echo 'cutover fixed base was not selected' >&2; exit 1; }
+done
+for ref in refs/heads/dev refs/heads/master refs/heads/feature/unixlike-other; do
+  result=$(EVENT_NAME=push EVENT_REF=$ref PUSH_BASE=$event_sha \
+    PUSH_SHA=$event_sha RECONSTRUCTION_SOURCE=$event_sha event_base)
+  [ "$result" = "$event_sha" ] || { echo 'ordinary push gained a cutover exception' >&2; exit 1; }
+done
+
 # INV repository/local-gate-selects-by-effect
 # Codex project paths select no local units; the hooks' unconditional scans
 # still apply. A similar unknown prefix stays refused, while changes to the
