@@ -3,6 +3,7 @@
 Driver text is trusted transport glue. It imports only the manifest-verified
 package selected by the existing global-history loader; no candidate code runs.
 """
+# INV repository/public-refresh-object-transport
 # INV repository/authenticated-release-transport
 import base64
 import copy
@@ -25,6 +26,7 @@ def module(name, path):
     return result
 
 T = module('configs_release_transport', ROOT / 'release-transport.py')
+O = T.O
 R = module('configs_production_receipt', ROOT / 'release-production-receipt.py')
 L = module('configs_release_loader', ROOT / 'release-control-loader.py')
 
@@ -64,6 +66,7 @@ class StartPlan:
         date=run.get('run_started_at')
         T.need(isinstance(date,str) and __import__('re').fullmatch(
                r'\d{4}-\d\d-\d\dT\d\d:\d\d:\d\dZ',date),'missing-start-time')
+        O.date_epoch(date)
         self.tagger={'name':'Release controller','email':'release-controller@example.invalid','date':date}
         self.bundle,self.operating=Path(bundle),Path(operating)
         self.temporary=tempfile.TemporaryDirectory(prefix='release-start-plan-')
@@ -78,9 +81,10 @@ class StartPlan:
         self.temporary.cleanup()
 
     def build(self, approved, date):
+        self.approved = approved
         assertion=L.approved(approved)
         T.need(assertion['master']==self.entry.trusted['source']
-               and assertion['protocol']=='3','unapproved-new-batch-package')
+               and assertion['protocol']=='4','unapproved-new-batch-package')
         T.need(L.git(self.operating,'rev-parse',self.head).decode().strip()==self.head,
                'missing-operating-objects')
         actual=self.api.commit(self.head,self.api.operating)
@@ -94,7 +98,7 @@ class StartPlan:
                and cfg['workflow']==str(self.entry.trusted['workflow'])
                and cfg['operating-repository']==self.api.operating and cfg['operating-ref']=='operations'
                and str(self.entry.runtime['actor']) in cfg['actors'].split(',')
-               and cfg['checks']!='-' and cfg['protocol']=='3','unbound-start-configuration')
+               and cfg['checks']!='-' and cfg['protocol']==assertion['protocol'],'unbound-start-configuration')
         stop=L.singletons(L.record_blob(self.operating,self.head,'control/stop.tsv')[1],
                          {'stop','revision','reason','operator'})
         T.need(stop['stop']=='0','stopped-new-batch')
@@ -134,7 +138,7 @@ class StartPlan:
         (self.batch/'transcript.json').write_bytes(T.canonical(transcript))
         first={'sequence':str(before+1),'kind':'batch-start','prior':prior,'batch':batch_id,
             'control':assertion['control'],'manifest':assertion['manifest'],'approval-provenance':assertion['approval'],
-            'config':cfg_blob,'protocol':'3','day':date[:10],'run':str(self.entry.runtime['run']),
+            'config':cfg_blob,'protocol':assertion['protocol'],'day':date[:10],'run':str(self.entry.runtime['run']),
             'attempt':str(self.entry.runtime['attempt']),'time':date,'approved-master':assertion['master'],'config-commit':self.head}
         raw=self.encode_event(first)
         changes={'history/%012d.tsv'%(before+1):raw}
@@ -150,7 +154,7 @@ class StartPlan:
         projected=T.document(result.stdout)
         simple=base64.b64decode(projected['index'],validate=True)
         context={'start':str(before+1),'batch':batch_id,'master':assertion['master'],'control':assertion['control'],
-            'manifest':assertion['manifest'],'approval':assertion['approval'],'protocol':'3','config-commit':self.head,
+            'manifest':assertion['manifest'],'approval':assertion['approval'],'protocol':assertion['protocol'],'config-commit':self.head,
             'config':cfg_blob,'transcript-commit':'-','transcript':'-'}
         ledger.append({'context':context,'projection':T.digest(simple)})
         fields=L.singletons(simple,L.PROJECTION_FIELDS)
@@ -171,6 +175,14 @@ class StartPlan:
                'unprojected-start-changes')
         T.need(self.api.ref('heads/master')==self.entry.trusted['source']
                and self.api.ref('heads/operations',self.api.operating)==self.head,'moving-start-head')
+        return self.validate_prospective(changes)
+
+    def validate_prospective(self, changes):
+        self.assertion = L.approved(self.approved)
+        return Snapshot.validate_prospective(self, changes)
+
+    def hydrate(self, prospective, changes):
+        return Snapshot.hydrate(self, prospective, changes)
 
     def accept_changes(self, changes, head):
         self.expected=self.head=head
@@ -188,6 +200,7 @@ class Snapshot:
         T.need(set(tagger) == {'name','email','date'} and tagger['name'] == 'Release controller'
                and tagger['email'] == 'release-controller@example.invalid'
                and __import__('re').fullmatch(r'\d{4}-\d\d-\d\dT\d\d:\d\d:\d\dZ',tagger['date']), 'unfixed-record-tagger')
+        O.date_epoch(tagger['date'])
         self.tagger, self.requirements = dict(tagger), copy.deepcopy(requirements)
         self.qualification=self.qualification_bytes=qualification
         T.need(receipts is None or type(receipts) is R.Collector, 'invalid-typed-receipt-collector')
@@ -288,12 +301,16 @@ class Snapshot:
 
     def validate_prospective(self,changes):
         """Owned local copy; full replay is validation, never a remote receipt."""
+        deadline=__import__('time').monotonic()+900
         with tempfile.TemporaryDirectory(dir=self.scratch,prefix='proposal-replay-') as folder:
             root=Path(folder);repo=root/'objects.git';empty=root/'empty';empty.mkdir()
             L.verify_graphs(self.operating,[self.head])
             # Local pack plumbing only. No clone/fetch/URL, alternate or hook.
-            packed=L.git(self.operating,'-c','pack.threads=1','-c','pack.windowMemory=8m',
-                'pack-objects','--stdout','--revs',data=(self.head+'\n').encode())
+            packed=O.bounded_git(self.operating,['-c','pack.threads=1','-c','pack.windowMemory=8m',
+                'pack-objects','--quiet','--stdout','--revs'],L.runtime_environment(os.environ)|{
+                'GIT_CONFIG_NOSYSTEM':'1','GIT_CONFIG_GLOBAL':os.devnull,'GIT_ALLOW_PROTOCOL':'',
+                'GIT_NO_REPLACE_OBJECTS':'1','GIT_NO_LAZY_FETCH':'1','GIT_GRAFT_FILE':os.devnull},
+                data=(self.head+'\n').encode(),limit=128*1024*1024,deadline=deadline)
             T.need(len(packed)<=128*1024*1024,'proposal-object-bound')
             L.git(root,'init','--bare','--template='+str(empty),str(repo))
             L.git(repo,'index-pack','--stdin','--strict',data=packed)
@@ -305,12 +322,10 @@ class Snapshot:
                 GIT_AUTHOR_NAME=self.tagger['name'],GIT_AUTHOR_EMAIL=self.tagger['email'],
                 GIT_COMMITTER_NAME=self.tagger['name'],GIT_COMMITTER_EMAIL=self.tagger['email'],
                 GIT_AUTHOR_DATE=self.tagger['date'],GIT_COMMITTER_DATE=self.tagger['date'])
+            def raw_local(*args,data=None,limit=T.MAX_BODY):
+                return O.bounded_git(repo,list(args),env,data=data,limit=limit,deadline=deadline)
             def local(*args,data=None):
-                result=subprocess.run(['git','--no-replace-objects','-c','core.hooksPath='+str(empty),
-                    '-c','core.fsmonitor=false','-c','gc.auto=0','-C',str(repo),*args],
-                    input=data,env=env,capture_output=True,timeout=30)
-                T.need(result.returncode==0 and len(result.stdout)<=T.MAX_BODY,'proposal-local-git-refused')
-                return result.stdout.decode('ascii').strip()
+                return raw_local(*args,data=data).decode('ascii').strip()
             local('read-tree',self.head)
             for path,data in sorted(changes.items()):
                 oid=local('hash-object','-w','--stdin',data=data)
@@ -318,14 +333,65 @@ class Snapshot:
                 local('update-index','--add','--cacheinfo','100644,'+oid+','+path)
             tree=local('write-tree')
             head=local('commit-tree',tree,'-p',self.head,data=b'release operating record\n')
-            source=T.document(changes['current/transcript.json'])['source'][-1]
+            transcript_bytes=changes.get('current/transcript.json',L.record_blob(self.operating,self.head,'current/transcript.json')[1])
+            source=T.document(transcript_bytes)['source'][-1]
             request_fields={k:str(source[k]) for k in ('actor','run','attempt','ref','candidate')}
             request_fields['mode']='preview'
             request=root/'request.tsv';request.write_bytes(L.encode_index(request_fields))
-            transcript=root/'transcript.json';transcript.write_bytes(changes['current/transcript.json'])
+            transcript=root/'transcript.json';transcript.write_bytes(transcript_bytes)
             replay=root/'replay';replay.mkdir()
             L.global_preview({'operating':repo,'bundle_repository':self.bundle,
                 'request':request,'transcript':transcript},self.assertion,head,replay)
+            names=local('rev-list','--objects',head,'^'+self.head).splitlines()
+            T.need(len(names)<=20000,'prospective-object-count')
+            objects=[];total=0
+            for row in names:
+                identity=T.sha(row.split()[0]);kind=local('cat-file','-t',identity)
+                size=int(local('cat-file','-s',identity))
+                T.need(kind in {'blob','tree','commit'} and 0<=size<=T.MAX_BODY,'prospective-object-size')
+                total+=size;T.need(total<=128*1024*1024,'prospective-closure-bound')
+                raw=raw_local('cat-file',kind,identity,limit=max(1,size))
+                T.need(len(raw)==size and T.git_object(kind,raw)==identity,'prospective-object-identity')
+                objects.append((kind,identity,raw))
+            self.prospective={'parent':self.head,'head':head,'tree':tree,'objects':tuple(objects),
+                'changes':tuple(sorted((p,T.digest(d)) for p,d in changes.items()))}
+            return self.prospective
+
+    def hydrate(self, prospective, changes):
+        """Only retained hash-verified originals, no remote fetch or checkout."""
+        T.need(prospective is self.prospective and prospective['parent']==self.head
+            and prospective['changes']==tuple(sorted((p,T.digest(d)) for p,d in changes.items())),
+            'changed-prospective-delivery')
+        objects=prospective['objects'];T.need(type(objects) is tuple and 1<=len(objects)<=20000,'delivery-object-count')
+        total=0;seen=set();deadline=__import__('time').monotonic()+900
+        env=L.runtime_environment(os.environ)|{'GIT_CONFIG_NOSYSTEM':'1','GIT_CONFIG_GLOBAL':os.devnull,
+            'GIT_ALLOW_PROTOCOL':'','GIT_NO_REPLACE_OBJECTS':'1','GIT_NO_LAZY_FETCH':'1','GIT_GRAFT_FILE':os.devnull}
+        for kind,identity,raw in objects:
+            T.sha(identity);T.need(kind in {'blob','tree','commit'} and type(raw) is bytes
+                and len(raw)<=T.MAX_BODY and identity not in seen
+                and T.git_object(kind,raw)==identity,'corrupt-retained-delivery')
+            seen.add(identity);total+=len(raw);T.need(total<=128*1024*1024,'delivery-byte-bound')
+        T.need(prospective['head'] in seen,'missing-retained-child')
+        for kind,identity,raw in objects:
+            actual=O.bounded_git(self.operating,['hash-object','-t',kind,'-w','--stdin'],env,
+                data=raw,limit=128,deadline=deadline).decode().strip()
+            T.need(actual==identity,'local-delivery-identity')
+        L.verify_graphs(self.operating,[prospective['head']])
+        raw=L.git(self.operating,'cat-file','commit',prospective['head'])
+        fields=O.commit_fields(raw)
+        T.need(T.git_object('commit',raw)==prospective['head'] and fields['tree']==prospective['tree']
+            and fields['parents']==[self.head],'local-child-parent')
+        source=T.document(changes.get('current/transcript.json',
+            L.record_blob(self.operating,self.head,'current/transcript.json')[1]))['source'][-1]
+        with tempfile.TemporaryDirectory(dir=self.scratch,prefix='delivery-replay-') as directory:
+            root=Path(directory);request=root/'request';transcript=root/'transcript'
+            request.write_bytes(L.encode_index(dict({k:str(source[k]) for k in
+                ('actor','run','attempt','ref','candidate')},mode='preview')))
+            transcript.write_bytes(changes.get('current/transcript.json',
+                L.record_blob(self.operating,self.head,'current/transcript.json')[1]))
+            L.global_preview({'operating':self.operating,'bundle_repository':self.bundle,
+                'request':request,'transcript':transcript},self.assertion,prospective['head'],root)
+        return prospective['head']
 
     def public_merge_tree(self,candidate):
         """Original object data only; merge plumbing owns a credential-free bare copy."""
@@ -343,7 +409,7 @@ class Snapshot:
             observed=self.api.commit(head)
             T.need(trees==[observed['tree']] and parents==observed['parents'],'unbound-candidate-commit')
         packed=L.git(self.bundle,'-c','pack.threads=1','-c','pack.windowMemory=8m',
-                     'pack-objects','--stdout','--revs',data=('\n'.join(heads)+'\n').encode())
+                     'pack-objects','--quiet','--stdout','--revs',data=('\n'.join(heads)+'\n').encode())
         T.need(len(packed)<=128*1024*1024,'candidate-object-bound')
         with tempfile.TemporaryDirectory(dir=self.scratch,prefix='candidate-tree-') as folder:
             root=Path(folder);repo=root/'objects.git';empty=root/'empty';empty.mkdir()
@@ -465,7 +531,7 @@ class Snapshot:
         heads=sorted(set(roots+[comparison['dev'],comparison['master']]))
         L.verify_graphs(self.bundle,[h for h in heads if L.git(self.bundle,'cat-file','-t',h).strip()==b'commit'])
         packed=L.git(self.bundle,'-c','pack.threads=1','-c','pack.windowMemory=8m',
-            'pack-objects','--stdout','--revs',data=('\n'.join(heads)+'\n').encode())
+            'pack-objects','--quiet','--stdout','--revs',data=('\n'.join(heads)+'\n').encode())
         T.need(len(packed)<=128*1024*1024,'qualification-object-bound')
         with tempfile.TemporaryDirectory(dir=self.scratch,prefix='candidate-preview-') as folder:
             root=Path(folder);repo=root/'source';empty=root/'empty';empty.mkdir()
@@ -806,17 +872,22 @@ class Snapshot:
     def validate_changes(self,changes):
         T.need(not getattr(self,'proposal_fenced',False),'failed-proposal')
         T.need(changes==self.pending_changes or changes=={'current/index.tsv':L.record_blob(self.operating,self.head,'current/index.tsv')[1]},'unprojected-record-changes')
+        prospective=None
         if getattr(self,'proposal_binding',None) is not None:
             T.need(tuple(sorted((p,T.digest(d)) for p,d in changes.items()))==self.proposal_binding,'changed-proposal-bytes')
             self.proposal_context(self.proposal_before)
-            self.validate_prospective(changes)
+            prospective=self.validate_prospective(changes)
             self.proposal_context(self.proposal_before)
             self.validate_collected_evidence()
             self.validate_collected_candidate()
 
+        return prospective if prospective is not None else self.validate_prospective(changes)
+
     def accept_changes(self,changes,head):
+        state=self.project()['state']
         self.expected=self.head=head
-        self.state=self.project()['state']
+        self.state=state
+        if 'current/transcript.json' in changes:self.original_transcript=changes['current/transcript.json']
         self.pending_changes=None
         self.proposal_binding=None
         self.evidence_binding=None
@@ -826,7 +897,10 @@ class Snapshot:
         T.need(not getattr(self,'proposal_fenced',False) and self.pending_changes is None,'outstanding-proposal')
         T.need(state in {'applied','absent'},'unconfirmed-observation')
         op=self.state['operations'][plan['id']];payload=op['payload'];kind=op['kind']
-        if kind=='merge':target={'merged':True,'commit':remote,'parents':[payload['master'],payload['dev']],'tree':payload['tree'],'source':payload['dev']}
+        if kind=='refresh-object':target={'object-type':payload['object-type'],'object':payload['object'],
+            'raw-digest':T.digest(O.raw_base64(payload['raw'])),
+            'dependencies':T.document(payload['dependencies'].encode()),'construction':payload['construction']}
+        elif kind=='merge':target={'merged':True,'commit':remote,'parents':[payload['master'],payload['dev']],'tree':payload['tree'],'source':payload['dev']}
         elif kind=='refresh-branch':target={'candidate':{k:v for k,v in payload.items() if k!='repository'}}
         elif kind=='refresh-pr':
             context=T.document(self.original_transcript)['refresh']['current']
@@ -837,10 +911,12 @@ class Snapshot:
         elif kind=='tag-ref':target=payload
         else:target=payload
         if state=='absent':
-            target=({'batch':payload['batch'],'branch':payload['branch'],'head':payload['previous']} if kind=='refresh-branch' else {})
+            target=({'object-type':payload['object-type'],'object':payload['object']} if kind=='refresh-object' else {'batch':payload['batch'],'branch':payload['branch'],'head':payload['previous']} if kind=='refresh-branch' else {})
         observed={'status':'present' if state=='applied' else 'absent','target':target,'complete':True}
         transcript=T.document((self.batch/'transcript.json').read_bytes())
         transcript['observations'].setdefault(plan['id'],[]).append(observed)
+        if kind=='refresh-branch' and state=='applied':
+            transcript['refresh']['current']['branch']['head']=payload['head']
         (self.batch/'transcript.json').write_bytes(T.canonical(transcript))
         previous=self.project(); sequence=int(previous['state']['sequence'])+1
         event={'sequence':str(sequence),'kind':'observation','prior':previous['prior'],'batch':self.state['batch'],
@@ -914,6 +990,45 @@ class Snapshot:
                input=T.canonical(fields),env=L.runtime_environment(os.environ),capture_output=True,timeout=30)
         T.need(result.returncode==0 and 0<len(result.stdout)<=T.MAX_BODY,'retained-serializer-refusal')
         return result.stdout
+
+    def object_material(self, payload):
+        T.need(self.protocol=='4','object-effect-requires-original4')
+        driver="import json,sys;sys.path.insert(0,sys.argv[1]);import adapter;print(json.dumps(adapter.operation('refresh-object',json.load(sys.stdin)),sort_keys=True))"
+        result=subprocess.run([sys.executable,'-I','-S','-B','-c',driver,str(self.package/L.ROOT)],
+            input=T.canonical(payload),env=L.runtime_environment(os.environ),capture_output=True,timeout=30)
+        T.need(result.returncode==0 and len(result.stdout)<=T.MAX_BODY,'original-object-serializer')
+        request=T.document(result.stdout)
+        T.need(set(request)=={'api-version','method','path','body','payload-digest'} and
+            request['api-version']==T.VERSION and request['method']=='POST' and
+            request['path']=='/repos/'+T.PUBLIC+'/git/'+payload['object-type']+'s' and
+            request['payload-digest']==T.digest(T.canonical(payload)),'unbound-original-object-request')
+        raw=O.raw_base64(payload['raw'])
+        T.need(O.oid(payload['object-type'],raw)==payload['object'],'object-raw-identity')
+        transcript=T.document(self.original_transcript)
+        construction=transcript['refresh']['current']['construction']
+        T.need(construction['digest']==payload['construction'],'foreign-object-construction')
+        originals={row['type']:(row['sha'],O.raw_base64(row['raw'])) for row in construction['originals']}
+        return request,raw,originals
+
+    def object_dependencies(self, payload, reader):
+        state=self.project()['state'];request,raw,originals=self.object_material(payload)
+        deps=T.document(payload['dependencies'].encode())
+        T.need(type(deps) is list and len(deps)<=4096,'object-dependency-bound')
+        for dep in deps:
+            kind,identity,operation=dep['type'],dep['sha'],dep['operation']
+            if operation!='-':
+                prior=state['operations'].get(operation)
+                T.need(prior and prior['kind']=='refresh-object' and prior['state']=='observed'
+                    and prior['payload']['object-type']==kind and prior['payload']['object']==identity,
+                    'unobserved-generated-dependency')
+                expected=O.raw_base64(prior['payload']['raw']);generated=kind=='commit'
+            else:
+                size=int(L.git(self.bundle,'cat-file','-s',identity))
+                T.need(0<=size<=O.MAX_RAW,'unsupported-original-dependency')
+                # Independently acquired public originals only; no API reconstruction.
+                expected=L.git(self.bundle,'cat-file',kind,identity);generated=False
+            T.need(reader.prove(kind,identity,expected,generated),'unavailable-object-dependency')
+        return request
 
     def verify_refresh(self,p,api):
         T.need(api.ref('heads/dev')==p['base'],'stale-refresh-base')

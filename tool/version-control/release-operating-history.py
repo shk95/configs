@@ -32,7 +32,8 @@ LEGACY_FIVE=tuple(sorted("tool/version-control/"+name for name in ('release-cont
 LEGACY_TRANSPORT_FILES=tuple(sorted("tool/version-control/"+name for name in ('release-control-loader.py', 'release-transport', 'release-transport.py', 'release-transport-retained.py', 'release-transport-preflight.py', 'release-operating-history.py')))
 LEGACY_SEVEN=tuple(sorted("tool/version-control/"+name for name in ('release-control-loader.py', 'release-transport', 'release-transport.py', 'release-transport-retained.py', 'release-transport-preflight.py', 'release-operating-history.py', 'release-operating-roles.json')))
 LEGACY_EIGHT=tuple(sorted("tool/version-control/"+name for name in ('release-control-loader.py', 'release-transport', 'release-transport.py', 'release-transport-retained.py', 'release-transport-preflight.py', 'release-operating-history.py', 'release-operating-roles.json', 'release-initialize.py')))
-TRANSPORT_FILES=tuple(sorted("tool/version-control/"+name for name in ('release-control-loader.py', 'release-transport', 'release-transport.py', 'release-transport-retained.py', 'release-transport-preflight.py', 'release-operating-history.py', 'release-operating-roles.json', 'release-initialize.py', 'release-production-receipt.py', 'release-production-review-policy.json')))
+LEGACY_TEN=tuple(sorted("tool/version-control/"+name for name in ('release-control-loader.py', 'release-transport', 'release-transport.py', 'release-transport-retained.py', 'release-transport-preflight.py', 'release-operating-history.py', 'release-operating-roles.json', 'release-initialize.py', 'release-production-receipt.py', 'release-production-review-policy.json')))
+TRANSPORT_FILES=tuple(sorted("tool/version-control/"+name for name in ('release-control-loader.py', 'release-transport', 'release-transport.py', 'release-transport-retained.py', 'release-transport-preflight.py', 'release-operating-history.py', 'release-operating-roles.json', 'release-initialize.py', 'release-production-receipt.py', 'release-production-review-policy.json', 'release-public-objects.py')))
 ROLE_PATH='tool/version-control/release-operating-roles.json'
 SEED_PATH='release-initial-proposal.tsv'
 
@@ -49,7 +50,7 @@ def source_transport(bundle,source,roles_required=False):
                and re.fullmatch('[a-f0-9]{64}',fields[2]),'invalid-initial-transport')
         names.append(fields[1])
         T.need(T.digest(L.git(bundle,'show',source+':'+fields[1]))==fields[2],'initial-transport-mismatch')
-    inventories=(TRANSPORT_FILES,LEGACY_EIGHT,LEGACY_SEVEN) if roles_required else (TRANSPORT_FILES,LEGACY_EIGHT,LEGACY_SEVEN,LEGACY_TRANSPORT_FILES,LEGACY_FIVE)
+    inventories=(TRANSPORT_FILES,LEGACY_TEN,LEGACY_EIGHT,LEGACY_SEVEN) if roles_required else (TRANSPORT_FILES,LEGACY_TEN,LEGACY_EIGHT,LEGACY_SEVEN,LEGACY_TRANSPORT_FILES,LEGACY_FIVE)
     T.need(tuple(names) in inventories,'incomplete-initial-transport')
     return manifest
 
@@ -191,11 +192,13 @@ def disabled_projection(bundle,approved,config,source,repository_id,operating,op
     """Pure original projection; caller owns role and observed-identity validation."""
     T.number(operator);T.number(repository_id)
     assertion=L.approved(approved)
-    T.need(assertion['master']==source and assertion['protocol']=='3',
+    current_inventory=tuple(row.split('\t')[1] for row in source_transport(bundle,source).decode().splitlines()[1:])
+    protocol='4' if current_inventory==TRANSPORT_FILES else '3'
+    T.need(assertion['master']==source and assertion['protocol']==protocol,
            'unbound-initial-package')
     fields=L.singletons(config,{'enabled','public-repository','repository','operating-repository',
         'operating-ref','workflow','actors','checks','protocol'})
-    T.need(fields['enabled']=='0' and fields['protocol']=='3' and fields['public-repository']==T.PUBLIC
+    T.need(fields['enabled']=='0' and fields['protocol']==protocol and fields['public-repository']==T.PUBLIC
            and fields['repository']==str(repository_id)
            and fields['operating-repository']==operating and fields['operating-ref']=='operations'
            and re.fullmatch(r'[1-9][0-9]*',fields['workflow'])

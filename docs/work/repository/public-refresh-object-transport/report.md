@@ -54,3 +54,47 @@ logical acceptance, and pending/fence preservation after local failure. Distinct
 REMOTE/LOCAL two-publication and start-continuation fixtures are required at source
 pickup. No source correction or native fixture for this gap is delivered by this
 planning amendment; all ACs remain pending. It introduces no retry/rollback authority.
+
+
+## Source implementation and local pickup, 2026-10-05
+
+Root picked up execution issue #513 in the dedicated
+feature/repository-public4-object-transport linked worktree at origin/dev
+fc2e1abdfc64ad3f2cc8156c49bc54f256c284ef. Reviewed plan revision
+5d423fa3b3e9afcef3fc11dfbccf2e0ec39d5b06 remained separate from that source base.
+The branch implements original selected-adapter blob/tree/commit requests,
+anonymous complete typed proof and qualified absence, exact prospective private
+child retention, original LOCAL import/replay before logical acceptance, and
+explicit current protocol4/eleven-file closure adoption. Original semantic
+membership stays eight files; rules hashes are adopted explicitly. Historical
+protocol1/2/3 sources and transport five/six/seven/eight/ten memberships stay literal.
+
+Narrow local causal validation passed 11 StartProof cases and 9 typed/public-object
+cases before the final added acknowledgement/qualification adversarial cases.
+These prove distinct REMOTE/LOCAL two publications, start-to-Snapshot hydration,
+corrupt retained delivery and disk refusal fences, private metadata rejection,
+ordered four object effects before branch creation, exact restart replay, lost POST
+response and observation-only restart reconciliation. Signed original data is
+structurally compared, without a signature authenticity claim. Tests use synthetic
+fixed service responses and disposable Git only.
+
+The local runtime is Git 2.55.0 and Python 3.13.16 on macOS. Earlier broad runs
+identified old fixture adoption and a manifest changed during the run; these are
+not passing current source evidence. Final normal-hook full fixture/policy proof,
+exact remote-head native CI and delivery remain pending. AC1/AC2/AC3 remain pending
+until those required lanes are recorded. Actual API writes/credentials/operating,
+source promotion, releases and host activation/Apply are unperformed.
+
+
+## Coverage repair and current original initialization proof, 2026-10-05
+
+The first normal source commit was refused by the exact tracked-inventory
+production coverage fixture: the new decision/invariant paths lacked explicit
+mappings. Those paths now select repository policy/native checks, and that positive
+inventory fixture passed without weakening its negative coverage case. The staged
+registry passed with 90 registered invariants and zero pending or untagged units.
+Six narrow typed/legacy cases passed, including actual original ten-file preflight
+bytes from fc2e1ab, with no current helper inserted into that historical source.
+The current original protocol4 disabled history suite passed 37 cases, followed by
+12 initializer cases. All use disposable original Git and synthetic API responses;
+normal full-hook verification and remote/native current-head delivery remain pending.

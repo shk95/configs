@@ -403,3 +403,11 @@ numeric setup/hold/reviewer policy, private packet publication, genuine native a
 template records, bootstrap, manual/scheduled operation and source promotion remain
 unperformed gates. Generated declaration variants, preparation/object connection
 and finite writer are subsequent source work.
+
+
+Public4 transport source work (2026-10-05) explicitly adopts the eleventh transport
+helper and protocol 4 initialization/new-batch records. Historical ten-file membership
+above describes its delivery point and remains supported as an exact legacy input.
+Independent public object proof and private original LOCAL delivery are under source
+verification in docs/work/repository/public-refresh-object-transport/report.md; no
+actual API/operating acceptance or source promotion follows from these changes.

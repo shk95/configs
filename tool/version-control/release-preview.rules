@@ -769,3 +769,6 @@ production-map	exact	windows/tools/setup-dev.ps1	prod-windows-native,prod-window
 production-map	exact	windows/tools/setup.ps1	prod-windows-native,prod-windows-generation
 production-map	exact	windows/tools/test.ps1	prod-windows-native,prod-windows-generation
 production-map	exact	windows/win-env.ps1	prod-windows-native,prod-windows-generation
+production-map	exact	tool/version-control/release-public-objects.py	prod-repository-policy,prod-repository-native
+production-map	exact	docs/policy/decisions/repository/public-refresh-object-transport.md	prod-repository-policy,prod-repository-native
+production-map	exact	docs/policy/invariants/repository/public-refresh-object-transport.md	prod-repository-policy,prod-repository-native

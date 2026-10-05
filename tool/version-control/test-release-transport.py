@@ -25,7 +25,7 @@ class Fake:
         self.public,self.operating,self.source=public,operating,source
         self.head=F.run_git(operating,'rev-parse','HEAD') if (operating/'.git').exists() else None
         self.calls=[];self.pulls=[];self.fail={};self.mutate={};self.responses={};self.jobs_extra=[];self.attempt=1
-        self.master=F.H;self.dev=F.D;self.stop=False
+        self.master=F.H;self.dev=F.D;self.stop=False;self.refresh_heads={}
 
     def response(self,value,status=200,headers=None):return status,headers or {},T.canonical(value)
 
@@ -53,6 +53,7 @@ class Fake:
             return self.response({'id':run,'run_attempt':attempt,'head_sha':head,'head_branch':'master','event':'workflow_dispatch',
                        'workflow_id':2,'repository':{'id':1},'head_repository':{'id':1},'actor':{'id':3},'triggering_actor':{'id':3},
                        'status':status,'conclusion':'success' if status=='completed' else None})
+        if route=='':return self.response({'id':1330390069,'full_name':T.PUBLIC,'private':False})
         if route=='/actions/workflows/2':return self.response({'id':2,'path':'.github/workflows/release-control-writer.yml'})
         if route=='/pulls' and method=='GET':return self.response(self.pulls)
         if route=='/pulls' and method=='POST':
@@ -71,35 +72,58 @@ class Fake:
             return self.response({'total_count':1,'check_runs':[{'id':10,'name':'Required checks','app':{'id':15368},'head_sha':F.D,
                 'status':'completed','conclusion':'success','details_url':'https://github.com/shk95/configs/actions/runs/8/job/9'}]})
         root=self.operating if repo=='fixture/operating' else self.public
+        if route.startswith('/git/matching-refs/heads/'):
+            name=route.split('/git/matching-refs/heads/',1)[1]
+            return self.response([{'ref':'refs/heads/'+name,'object':{'type':'commit','sha':self.refresh_heads[name]}}] if name in self.refresh_heads else [])
+        if route=='/git/refs' and method=='POST':
+            name=body['ref'].removeprefix('refs/heads/');self.refresh_heads[name]=body['sha']
+            return self.response({'ref':body['ref'],'object':{'type':'commit','sha':body['sha']}},201)
         if route=='/git/ref/heads/operations':return self.response({'ref':'refs/heads/operations','object':{'type':'commit','sha':self.head}})
         if route=='/git/ref/heads/master':return self.response({'ref':'refs/heads/master','object':{'type':'commit','sha':self.source}})
         if route=='/git/ref/heads/dev':return self.response({'ref':'refs/heads/dev','object':{'type':'commit','sha':self.dev}})
         if route.startswith('/git/commits/'):
             oid=route.rsplit('/',1)[1]
-            raw=F.run_git(root,'cat-file','-p',oid).splitlines()
-            return self.response({'sha':oid,'tree':{'sha':raw[0][5:]},'parents':[{'sha':v[7:]} for v in raw if v.startswith('parent ')]})
+            result=subprocess.run(['git','-C',str(root),'cat-file','commit',oid],capture_output=True)
+            if result.returncode:return self.response({},404)
+            raw=result.stdout
+            fields=B.O.commit_fields(raw)
+            return self.response(dict(fields,sha=oid,tree={'sha':fields['tree']},parents=[{'sha':v} for v in fields['parents']]))
         if route.startswith('/git/trees/'):
             oid=route.rsplit('/',1)[1]
-            raw=F.run_git(root,'ls-tree','-r','-t',oid).splitlines();rows=[]
+            result=subprocess.run(['git','-C',str(root),'ls-tree',*(['-r','-t'] if parts.query else []),oid],capture_output=True)
+            if result.returncode:return self.response({},404)
+            raw=result.stdout.decode().strip().splitlines();rows=[]
             for line in raw:
                 metadata,path=line.split('\t');mode,kind,blob=metadata.split();rows.append({'path':path,'mode':mode,'type':kind,'sha':blob})
             return self.response({'sha':oid,'truncated':False,'tree':rows})
         if route.startswith('/git/blobs/'):
-            oid=route.rsplit('/',1)[1];raw=subprocess.run(['git','-C',str(root),'cat-file','blob',oid],capture_output=True,check=True).stdout
-            return self.response({'sha':oid,'encoding':'base64','content':base64.b64encode(raw).decode()})
+            oid=route.rsplit('/',1)[1];result=subprocess.run(['git','-C',str(root),'cat-file','blob',oid],capture_output=True)
+            if result.returncode:return self.response({},404)
+            raw=result.stdout
+            return self.response({'sha':oid,'encoding':'base64','content':base64.b64encode(raw).decode(),'size':len(raw)})
         if route=='/git/blobs' and method=='POST':
             raw=base64.b64decode(body['content']);oid=F.run_git(root,'hash-object','-w','--stdin',data=raw)
+            if repo==T.PUBLIC and getattr(self,'lose_object',False):raise T.Unknown('fixture lost object response')
             return self.response({'sha':oid},201)
         if route=='/git/trees' and method=='POST':
             index=root.parent/'transport.index'
             env=__import__('os').environ.copy();env['GIT_INDEX_FILE']=str(index)
+            if 'base_tree' not in body:
+                rows=b''.join((row['mode']+' '+row['type']+' '+row['sha']+'\t'+row['path']).encode()+b'\0' for row in body['tree'])
+                oid=subprocess.check_output(['git','-C',str(root),'mktree','-z'],input=rows,env=env).decode().strip()
+                return self.response({'sha':oid},201)
             subprocess.run(['git','-C',str(root),'read-tree',body['base_tree']],env=env,check=True,capture_output=True)
             for row in body['tree']:
                 subprocess.run(['git','-C',str(root),'update-index','--add','--cacheinfo',row['mode'],row['sha'],row['path']],env=env,check=True,capture_output=True)
             oid=subprocess.check_output(['git','-C',str(root),'write-tree'],env=env).decode().strip()
             return self.response({'sha':oid},201)
         if route=='/git/commits' and method=='POST':
-            oid=F.run_git(root,'commit-tree',body['tree'],'-p',body['parents'][0],data=body['message'].encode())
+            env=__import__('os').environ.copy()
+            for kind in ('author','committer'):
+                for field in ('name','email','date'):env['GIT_'+kind.upper()+'_'+field.upper()]=body[kind][field]
+            args=['git','-C',str(root),'commit-tree',body['tree']]
+            for parent in body['parents']:args+=['-p',parent]
+            oid=subprocess.check_output(args,input=body['message'].encode(),env=env).decode().strip()
             return self.response({'sha':oid},201)
         if route=='/git/refs/heads/operations' and method=='PATCH':
             if body['force'] is not False:return self.response({},422)
@@ -669,16 +693,57 @@ class TransportProof(unittest.TestCase):
         self.assertEqual(snapshot.claim(),{})
         self.assertEqual(public_writes,sum(m!='GET' and p.startswith('/repos/shk95/configs/') for m,p,_ in self.fake.calls))
 
+def adopt_current4(f):
+    """Copy current actual package as 4; never relabel historical 3 blobs."""
+    F.run_git(f.public,'checkout','-q','dev')
+    for name in sorted(B.L.FILES):
+        path=f.public/name;path.parent.mkdir(parents=True,exist_ok=True)
+        path.write_bytes((ROOT.parents[1]/name).read_bytes())
+        if name in ('tool/version-control/classify','tool/version-control/release-preview'):
+            F.run_git(f.public,'add',name);F.run_git(f.public,'update-index','--chmod=+x',name)
+    manifest=b'format\t1\n'+b''.join(('file\t'+name+'\t'+T.digest((f.public/name).read_bytes())+'\n').encode() for name in sorted(B.L.FILES))
+    (f.public/B.L.MANIFEST).write_bytes(manifest)
+    F.run_git(f.public,'add','.');F.run_git(f.public,'commit','-qm','fixture current protocol4 source')
+    F.run_git(f.public,'checkout','-q','master');F.run_git(f.public,'merge','--no-ff','-qm','fixture promotion4','dev')
+    source=F.run_git(f.public,'rev-parse','HEAD')
+    for approval in f.packages.values():approval['master']=source
+    f.packages['4']={'public-repository':T.PUBLIC,'control':source,'master':source,
+        'manifest':T.digest(manifest),'approval':F.X,'protocol':'4'}
+
+class LegacyTenProof(unittest.TestCase):
+    # INV repository/authenticated-release-transport
+    # INV repository/fixture-git-isolation
+    def test_original_ten_file_source_preflight_remains_literal(self):
+        import tempfile
+        preflight=load('legacy_ten_inventory',ROOT/'release-transport-preflight.py')
+        source='fc2e1abdfc64ad3f2cc8156c49bc54f256c284ef'
+        with tempfile.TemporaryDirectory(prefix='original-ten-transport-') as folder:
+            repo=Path(folder);F.run_git(repo,'init','-q','-b','master')
+            F.run_git(repo,'config','user.name','Fixture');F.run_git(repo,'config','user.email','fixture@example.invalid')
+            for name in preflight.LEGACY_TEN+('tool/version-control/release-transport.manifest.tsv',):
+                path=repo/name;path.parent.mkdir(parents=True,exist_ok=True)
+                path.write_bytes(B.L.git(ROOT.parents[1],'show',source+':'+name))
+            F.run_git(repo,'add','.');F.run_git(repo,'commit','-qm','fixture literal original ten transport')
+            head=F.run_git(repo,'rev-parse','HEAD');template=repo/'inputs.json'
+            value=T.document((ROOT/'release-transport-template.json').read_bytes())
+            value['transport-source']=head;value['transport-manifest']=T.digest((repo/'tool/version-control/release-transport.manifest.tsv').read_bytes())
+            template.write_bytes(T.canonical(value))
+            result=subprocess.run([sys.executable,'-I','-S','-B',str(repo/'tool/version-control/release-transport-preflight.py'),
+                'preflight','--source',head,'--template',str(template)],capture_output=True)
+            self.assertEqual(result.returncode,0,result.stderr)
+            self.assertFalse(T.document(result.stdout)['enabled'])
+            self.assertFalse((repo/'tool/version-control/release-public-objects.py').exists())
+
 class StartProof(unittest.TestCase):
     # INV repository/authenticated-release-transport
     # INV repository/fixture-git-isolation
     def setUp(self):
         self.fixture=F.GlobalHistoryProof();self.fixture.setUp();self.addCleanup(self.fixture.doCleanups)
-        f=self.fixture
-        (f.operating/'config/operating.tsv').write_bytes(F.encode(F.CONFIG))
+        f=self.fixture;adopt_current4(f)
+        (f.operating/'config/operating.tsv').write_bytes(F.encode(dict(F.CONFIG,protocol='4')))
         (f.operating/'current/transcript.json').write_bytes(F.canonical(F.transcript('preview',candidate=None)))
         (f.operating/'current/batches.tsv').write_bytes(b'format\t1\n')
-        fields=dict(F.loader.singletons(F.engine.index(F.engine.initial(),F.Z),F.loader.PROJECTION_FIELDS),
+        fields=dict(F.loader.singletons(F.current_engine.index(F.current_engine.initial(),F.Z),F.loader.PROJECTION_FIELDS),
                     **{'index-kind':'global-1','ledger-digest':F.digest(F.canonical([]))})
         (f.operating/'current/index.tsv').write_bytes(F.encode(fields))
         self.head=f.commit(f.operating)
@@ -686,7 +751,11 @@ class StartProof(unittest.TestCase):
 
     def connect(self):
         f=self.fixture
-        self.fake=Fake(f.public,f.operating,f.packages['3']['master'])
+        import tempfile
+        owned=tempfile.TemporaryDirectory(prefix='start-local-original-');self.addCleanup(owned.cleanup)
+        self.local=Path(owned.name)/'objects.git'
+        F.run_git(f.public,'clone','--bare','--no-local',str(f.operating),str(self.local))
+        self.fake=Fake(f.public,f.operating,f.packages['4']['master'])
         self.api=T.Api(self.fake,'fixture/operating')
         self.runtime={'repository':T.PUBLIC,'ref':'refs/heads/master','event':'workflow_dispatch',
             'run':4,'attempt':1,'job':5,'actor':3,'source':self.fake.source,'environment':'fixture-controller',
@@ -701,7 +770,7 @@ class StartProof(unittest.TestCase):
 
     def start(self):
         f=self.fixture
-        plan=B.StartPlan(self.entry,f.public,f.operating,F.encode(f.packages['3']),self.head)
+        plan=B.StartPlan(self.entry,f.public,self.local,F.encode(f.packages['4']),self.head)
         self.addCleanup(plan.close)
         return plan
 
@@ -710,13 +779,13 @@ class StartProof(unittest.TestCase):
         self.assertEqual(F.run_git(f.operating,'rev-parse','HEAD'),before)
         self.assertFalse(any(m!='GET' for m,_,_ in self.fake.calls))
         changes=plan.pending_changes
-        first=F.parse(changes['history/000000000001.tsv'],'event')
-        claim=F.parse(changes['history/000000000002.tsv'],'event')
+        first=dict((r[0],r[1]) for r in B.L.table(changes['history/000000000001.tsv']) if len(r)==2)
+        claim=dict((r[0],r[1]) for r in B.L.table(changes['history/000000000002.tsv']) if len(r)==2)
         self.assertEqual(first['kind'],'batch-start');self.assertEqual(first['config-commit'],self.head)
         self.assertEqual(claim['operating-head'],self.head);self.assertEqual(claim['generation'],'1')
         self.assertEqual(claim['prior'],F.digest(changes['history/000000000001.tsv']))
         journal=T.Journal(self.api,plan,self.head);result=journal.publish(changes)
-        snapshot=B.Snapshot(self.entry,f.public,f.operating,F.encode(f.packages['3']),result,plan.tagger,[])
+        snapshot=B.Snapshot(self.entry,f.public,self.local,F.encode(f.packages['4']),result,plan.tagger,[])
         self.addCleanup(snapshot.close)
         self.assertEqual(snapshot.state['stage'],'active');self.assertEqual(snapshot.state['owner']['job'],'5')
         self.assertFalse(any(p.endswith('/pulls') for _,p,_ in self.fake.calls))
@@ -724,12 +793,13 @@ class StartProof(unittest.TestCase):
     def test_completed_old_protocols_keep_literal_history_and_original_ledgers(self):
         f=self.fixture
         f.add_batch('1',F.X,True);f.add_batch('3',F.Y,True);f.save()
-        self.head=f.head
+        (f.operating/'config/operating.tsv').write_bytes(F.encode(dict(F.CONFIG,protocol='4')))
+        self.head=f.commit(f.operating)
         self.connect()
         old={p.name:p.read_bytes() for p in (f.operating/'history').iterdir()}
         plan=self.start();self.assertIn('history/000000000007.tsv',plan.pending_changes)
         result=T.Journal(self.api,plan,self.head).publish(plan.pending_changes)
-        snapshot=B.Snapshot(self.entry,f.public,f.operating,F.encode(f.packages['3']),result,plan.tagger,[])
+        snapshot=B.Snapshot(self.entry,f.public,self.local,F.encode(f.packages['4']),result,plan.tagger,[])
         self.addCleanup(snapshot.close)
         self.assertEqual(snapshot.state['stage'],'active')
         for name,data in old.items():self.assertEqual((f.operating/'history'/name).read_bytes(),data)
@@ -742,12 +812,12 @@ class StartProof(unittest.TestCase):
 
     def test_disabled_stopped_and_wrong_configuration_refuse_before_write(self):
         f=self.fixture
-        for changed in ({'enabled':'0'},{'workflow':'99'},{'actors':'99'},{'protocol':'2'}):
-            (f.operating/'config/operating.tsv').write_bytes(F.encode(dict(F.CONFIG,**changed)))
+        for changed in ({'enabled':'0'},{'workflow':'99'},{'actors':'99'},{'protocol':'2'},{'protocol':'3'}):
+            (f.operating/'config/operating.tsv').write_bytes(F.encode(dict(dict(F.CONFIG,protocol='4'),**changed)))
             self.head=f.commit(f.operating);self.connect()
             with self.subTest(changed=changed),self.assertRaises(T.Refusal):self.start()
             self.assertFalse(any(m!='GET' for m,_,_ in self.fake.calls))
-        (f.operating/'config/operating.tsv').write_bytes(F.encode(F.CONFIG))
+        (f.operating/'config/operating.tsv').write_bytes(F.encode(dict(F.CONFIG,protocol='4')))
         (f.operating/'control/stop.tsv').write_bytes(F.encode(dict(F.STOP,stop='1')))
         self.head=f.commit(f.operating);self.connect()
         with self.assertRaises(T.Refusal):self.start()
@@ -777,6 +847,56 @@ class StartProof(unittest.TestCase):
         self.assertEqual(sum(m=='PATCH' for m,_,_ in self.fake.calls),1)
         self.assertIsNone(plan.pending_changes)
         with self.assertRaises(T.Refusal):plan.validate_changes({'current/index.tsv':b'invented'})
+
+    def test_distinct_stores_deliver_before_two_publications(self):
+        f=self.fixture;plan=self.start();journal=T.Journal(self.api,plan,self.head)
+        self.assertNotEqual(self.local.resolve(),f.operating.resolve())
+        result=journal.publish(plan.pending_changes)
+        self.assertEqual(F.run_git(self.local,'cat-file','-t',result),'commit')
+        snapshot=B.Snapshot(self.entry,f.public,self.local,F.encode(f.packages['4']),result,plan.tagger,[])
+        self.addCleanup(snapshot.close)
+        second=T.Journal(self.api,snapshot,result)
+        child=second.publish({'current/index.tsv':B.L.record_blob(self.local,result,'current/index.tsv')[1]})
+        self.assertNotEqual(child,result)
+        self.assertEqual(F.run_git(self.local,'cat-file','-t',child),'commit')
+        self.assertEqual(snapshot.head,child);self.assertFalse(second.pending)
+        self.assertFalse((self.local/'objects/info/alternates').exists())
+
+    def test_local_delivery_failure_preserves_pending_and_original_head(self):
+        from unittest.mock import patch
+        plan=self.start();journal=T.Journal(self.api,plan,self.head)
+        with patch.object(plan,'hydrate',side_effect=OSError('fixture disk refusal')):
+            with self.assertRaises(T.Unknown):journal.publish(plan.pending_changes)
+        self.assertTrue(journal.pending);self.assertEqual(journal.expected,self.head)
+        self.assertEqual(plan.head,self.head);self.assertIsNotNone(plan.pending_changes)
+        self.assertNotEqual(self.fake.head,self.head)
+        with self.assertRaises(T.Refusal):journal.publish(plan.pending_changes)
+
+    def test_remote_metadata_mismatch_fences_before_ref(self):
+        plan=self.start();prospective=plan.validate_changes(plan.pending_changes)
+        raw=next(raw for kind,sha,raw in prospective['objects'] if sha==prospective['head'])
+        fields=B.O.commit_fields(raw);fields['author']=dict(fields['author'],name='unexpected actor')
+        self.fake.responses[('POST','/repos/fixture/operating/git/commits')]=self.fake.response({'sha':prospective['head']},201)
+        self.fake.responses[('GET','/repos/fixture/operating/git/commits/'+prospective['head'])]=self.fake.response(fields)
+        journal=T.Journal(self.api,plan,self.head)
+        with self.assertRaises(T.Refusal):journal.publish(plan.pending_changes)
+        self.assertTrue(journal.pending);self.assertEqual(plan.head,self.head)
+        self.assertFalse(any(m=='PATCH' for m,_,_ in self.fake.calls))
+
+    def test_corrupt_retained_blob_cannot_clear_pending_after_remote_delivery(self):
+        from unittest.mock import patch
+        plan=self.start();original=plan.validate_changes
+        def corrupt(changes):
+            prospective=original(changes)
+            rows=list(prospective['objects'])
+            for i,(kind,sha,raw) in enumerate(rows):
+                if kind=='blob':rows[i]=(kind,sha,raw+b'corrupt');break
+            prospective['objects']=tuple(rows);return prospective
+        journal=T.Journal(self.api,plan,self.head)
+        with patch.object(plan,'validate_changes',side_effect=corrupt):
+            with self.assertRaises(T.Unknown):journal.publish(plan.pending_changes)
+        self.assertTrue(journal.pending);self.assertEqual(plan.head,self.head)
+        self.assertNotEqual(self.fake.head,self.head)
 
 class ObservedEvidenceProof(unittest.TestCase):
     """Original candidate objects plus observed receipts; no HTTP or real credential."""
@@ -1321,5 +1441,157 @@ class TypedCandidateProof(unittest.TestCase):
         with self.assertRaises((T.Refusal,B.R.T.Refusal)):
             T.Journal(o.api,s,o.fake.head).publish(changes)
         o.no_writes()
+
+class PublicObjectProof(unittest.TestCase):
+    # INV repository/public-refresh-object-transport
+    # INV repository/fixture-git-isolation
+    connect=StartProof.connect
+    start=StartProof.start
+    def setUp(self):
+        StartProof.setUp(self)
+        self.original=F.ImmutableRefreshObjects();self.original.setUp();self.addCleanup(self.original.doCleanups)
+        f=self.fixture;o=self.original
+        # Transfer only disposable original fixture objects, without alternates.
+        packed=subprocess.check_output(['git','-C',str(o.repo),'pack-objects','--quiet','--stdout','--revs'],input=(o.candidate['base']+'\n').encode())
+        subprocess.run(['git','-C',str(f.public),'index-pack','--stdin'],input=packed,capture_output=True,check=True)
+        plan=self.start();head=T.Journal(self.api,plan,self.head).publish(plan.pending_changes)
+        self.snapshot=B.Snapshot(self.entry,f.public,self.local,F.encode(f.packages['4']),head,plan.tagger,[])
+        self.addCleanup(self.snapshot.close)
+        batch=self.snapshot.state['batch'];o.candidate['batch']=batch;o.candidate['branch']=F.current_adapter.refresh_branch(batch)
+        o.context['branch']['batch']=batch;o.context['branch']['branch']=o.candidate['branch']
+        o.context['construction']['inputs']['batch']=batch;o.refresh_digest()
+        transcript=T.document(self.snapshot.original_transcript)
+        transcript['refresh']={'revisions':[o.context],'current':o.context}
+        transcript['protection']=copy.deepcopy(F.PROTECTION)
+        transcript['source'].append(dict(transcript['source'][-1],candidate=T.digest(T.canonical(o.candidate)),mode='preview'))
+        fields={'kind':'refresh-result','payload':T.canonical({'status':'changed','candidate':o.candidate}).decode()}
+        T.Journal(self.api,self.snapshot,head).publish(self.snapshot.propose_event(fields,transcript))
+        self.entry.runtime['candidate']=T.digest(T.canonical(o.candidate))
+        self.plans=o.plans();self.journal=T.Journal(self.api,self.snapshot,self.snapshot.head)
+        self.executor=T.Executor(self.entry,self.journal,self.snapshot,public_read=self.fake)
+
+    def intent(self,oid,payload):
+        fields={'kind':'intent','payload':T.canonical(payload).decode(),'operation':[[oid,'refresh-object',T.digest(T.canonical(payload)),
+            '1','intent','-','-']]}
+        self.journal.publish(self.snapshot.propose_event(fields,T.document(self.snapshot.original_transcript)))
+        return self.snapshot.plan(oid)
+
+    def test_four_original_effects_then_restart_replay(self):
+        for oid,payload in self.plans:
+            plan=self.intent(oid,payload)
+            self.assertEqual(self.executor.perform(plan),'applied')
+            raw=B.O.raw_base64(payload['raw'])
+            self.assertEqual(subprocess.check_output(['git','-C',str(self.fake.public),'cat-file',payload['object-type'],payload['object']]),raw)
+            self.assertEqual(self.snapshot.state['operations'][oid]['state'],'observed')
+        branch=dict(self.original.candidate,repository=T.PUBLIC)
+        oid=F.current_adapter.refresh_operation_id('refresh-branch',branch)
+        fields={'kind':'intent','payload':T.canonical(branch).decode(),'operation':[[oid,'refresh-branch',T.digest(T.canonical(branch)),'1','intent','-','-']]}
+        self.journal.publish(self.snapshot.propose_event(fields,T.document(self.snapshot.original_transcript)))
+        self.fake.dev=branch['base']
+        self.assertEqual(self.executor.perform(self.snapshot.plan(oid)),'applied')
+        self.assertEqual(self.fake.refresh_heads[branch['branch']],branch['head'])
+        f=self.fixture
+        restored=B.Snapshot(self.entry,f.public,self.local,F.encode(f.packages['4']),self.snapshot.head,self.snapshot.tagger,[])
+        self.addCleanup(restored.close)
+        self.assertEqual(restored.state,self.snapshot.state)
+        calls=[(m,p) for m,p,_ in self.fake.calls if m=='POST' and p.startswith('/repos/shk95/configs/git/')]
+        self.assertEqual([p.rsplit('/',1)[1] for _,p in calls],['blobs','trees','trees','commits','refs'])
+        self.assertFalse(any('recursive' in p for m,p,_ in self.fake.calls if m=='GET' and p.startswith('/repos/shk95/configs/git/trees/') and '?' not in p))
+
+    def test_missing_prerequisite_and_unknown_read_refuse_before_public_write(self):
+        with self.assertRaises(T.Refusal):self.snapshot.object_dependencies(self.plans[1][1],B.O.Reader(self.fake))
+        branch=dict(self.original.candidate,repository=T.PUBLIC)
+        oid=F.current_adapter.refresh_operation_id('refresh-branch',branch)
+        fields={'kind':'intent','payload':T.canonical(branch).decode(),'operation':[[oid,'refresh-branch',T.digest(T.canonical(branch)),'1','intent','-','-']]}
+        with self.assertRaises(T.Refusal):self.snapshot.propose_event(fields,T.document(self.snapshot.original_transcript))
+        oid,payload=self.plans[1]
+        with self.assertRaises(T.Refusal):self.intent(oid,payload)
+        self.assertFalse(any(m=='POST' and p.startswith('/repos/shk95/configs/git/') for m,p,_ in self.fake.calls))
+
+    def test_masked_404_fences_without_write_or_retry(self):
+        oid,payload=self.plans[0];plan=self.intent(oid,payload)
+        self.fake.responses[('GET','/repos/shk95/configs')]=self.fake.response({},404)
+        with self.assertRaises(T.Unknown):self.executor.perform(plan)
+        self.assertTrue(self.executor.unknown)
+        with self.assertRaises(T.Refusal):self.executor.perform(plan)
+        self.assertFalse(any(m=='POST' and p.startswith('/repos/shk95/configs/git/') for m,p,_ in self.fake.calls))
+
+    def test_lost_post_response_is_independently_proved_once(self):
+        oid,payload=self.plans[0];plan=self.intent(oid,payload);self.fake.lose_object=True
+        self.assertEqual(self.executor.perform(plan),'applied')
+        self.assertEqual(sum(m=='POST' and p=='/repos/shk95/configs/git/blobs' for m,p,_ in self.fake.calls),1)
+        self.assertEqual(self.snapshot.state['operations'][oid]['state'],'observed')
+
+    def test_restart_reconciles_original_intent_without_repeating_post(self):
+        from unittest.mock import patch
+        oid,payload=self.plans[0];plan=self.intent(oid,payload)
+        with patch.object(self.snapshot,'observation',side_effect=T.Refusal('fixture interrupted observation')):
+            with self.assertRaises(T.Unknown):self.executor.perform(plan)
+        self.assertTrue(self.executor.unknown)
+        f=self.fixture;restored=B.Snapshot(self.entry,f.public,self.local,F.encode(f.packages['4']),self.snapshot.head,self.snapshot.tagger,[])
+        self.addCleanup(restored.close);journal=T.Journal(self.api,restored,restored.head)
+        resumed=T.Executor(self.entry,journal,restored,public_read=self.fake)
+        before=sum(m=='POST' and p.startswith('/repos/shk95/configs/git/') for m,p,_ in self.fake.calls)
+        resumed.recover(restored.plan(oid))
+        self.assertEqual(restored.state['operations'][oid]['state'],'observed')
+        self.assertEqual(sum(m=='POST' and p.startswith('/repos/shk95/configs/git/') for m,p,_ in self.fake.calls),before)
+
+    def test_post_ack_without_independent_object_proof_fences(self):
+        oid,payload=self.plans[0];plan=self.intent(oid,payload)
+        self.fake.responses[('POST','/repos/shk95/configs/git/blobs')]=self.fake.response({'sha':payload['object']},201)
+        with self.assertRaises(T.Unknown):self.executor.perform(plan)
+        self.assertTrue(self.executor.unknown)
+        self.assertEqual(self.snapshot.state['operations'][oid]['state'],'intent')
+        self.assertFalse(self.fake.refresh_heads)
+        with self.assertRaises(T.Refusal):self.executor.perform(plan)
+
+class TypedPublicProof(unittest.TestCase):
+    # INV repository/public-refresh-object-transport
+    # INV repository/fixture-git-isolation
+    def setUp(self):
+        self.fixture=F.ImmutableRefreshObjects();self.fixture.setUp();self.addCleanup(self.fixture.doCleanups)
+        self.fake=Fake(self.fixture.repo,self.fixture.repo,F.H)
+        self.reader=B.O.Reader(self.fake)
+    def test_original_signed_commit_and_exact_direct_trees(self):
+        for row in self.fixture.context['construction']['originals']:
+            self.assertTrue(self.reader.prove(row['type'],row['sha'],self.fixture.raw(row)))
+        self.assertTrue(all('?' not in p for _,p,_ in self.fake.calls))
+    def test_generated_commit_and_strict_date_roundtrip(self):
+        row=self.fixture.context['construction']['objects'][-1]
+        self.assertTrue(self.reader.prove('commit',row['sha'],self.fixture.raw(row),True))
+        for date in ('2026-02-30T00:00:00Z','2026-10-04T00:00:00+00:00','2026-10-04T24:00:00Z'):
+            with self.subTest(date=date),self.assertRaises(B.O.Refusal):B.O.date_epoch(date)
+        with self.assertRaises(B.O.Refusal):B.O.commit_fields(self.fixture.raw(row).replace(b'+0000',b'+0900'),True)
+    def test_wrong_typed_complete_proof_is_not_absence(self):
+        for row in self.fixture.context['construction']['originals']:
+            path='/repos/shk95/configs/git/'+row['type']+'s/'+row['sha']
+            _,_,raw=self.fake.request('GET',path,None);value=T.document(raw)
+            variants=[dict(value,sha='f'*40)]
+            if row['type']=='blob':variants+=[dict(value,size=True),dict(value,content='AA==')]
+            elif row['type']=='tree':variants+=[dict(value,truncated=True),dict(value,tree=value['tree'][:-1])]
+            else:variants+=[dict(value,message='wrong'),dict(value,parents=[{'sha':F.H}])]
+            for changed in variants:
+                self.fake.responses[('GET',path)]=self.fake.response(changed)
+                with self.subTest(kind=row['type'],changed=changed),self.assertRaises(B.O.Refusal):self.reader.prove(row['type'],row['sha'],self.fixture.raw(row))
+            self.fake.responses.pop(('GET',path))
+    def test_status_redirect_base64_and_plumbing_bounds(self):
+        row=self.fixture.context['construction']['originals'][-1];path='/repos/shk95/configs/git/blobs/'+row['sha']
+        for status,headers in ((403,{}),(429,{}),(500,{}),(302,{'location':'https://foreign.invalid'}),(200,{'link':'next'})):
+            self.fake.responses[('GET',path)]=(status,headers,b'{}')
+            with self.assertRaises(B.O.Refusal):self.reader.prove('blob',row['sha'],self.fixture.raw(row))
+        for raw in ('AA=','AB==','AA==\r\n'):
+            with self.assertRaises(B.O.Refusal):B.O.raw_base64(raw)
+        with self.assertRaises(B.O.Refusal):B.O.bounded_git(self.fixture.repo,['cat-file','blob',row['sha']],B.L.runtime_environment(__import__('os').environ),limit=1)
+
+    def test_qualified_absence_and_moving_identity_are_distinct(self):
+        original=self.fixture.context['construction']['originals'][-1]
+        target=b'not created remote original';sha=B.O.oid('blob',target)
+        reference=(original['sha'],self.fixture.raw(original))
+        self.assertFalse(self.reader.qualified('blob',sha,target,reference))
+        path='/repos/shk95/configs/git/blobs/'+sha
+        self.fake.mutate[('GET',path)]=lambda:self.fake.responses.update({('GET','/repos/shk95/configs'):self.fake.response({'id':2,'full_name':T.PUBLIC,'private':False})})
+        with self.assertRaises(B.O.Refusal):B.O.Reader(self.fake).qualified('blob',sha,target,reference)
+        for method,path,body in (('POST','/repos/shk95/configs/git/blobs',{}),('GET','/repos/foreign/repo',None),('GET','/repos/shk95/configs/git/trees/'+F.H+'?recursive=0',None)):
+            with self.assertRaises(B.O.Refusal):B.O.Anonymous().request(method,path,body)
 
 if __name__=='__main__':unittest.main()

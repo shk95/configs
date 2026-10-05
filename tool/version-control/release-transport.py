@@ -3,14 +3,20 @@
 This module has no CLI or enabled workflow. Its injectable API is exercised only
 in isolated fixtures until a reviewed operating connection is provisioned.
 """
+# INV repository/public-refresh-object-transport
 # INV repository/authenticated-release-transport
 import base64
 import hashlib
 import http.client
 import json
+import importlib.util
+from pathlib import Path
 import re
 import ssl
 from urllib.parse import urlencode
+
+_spec = importlib.util.spec_from_file_location('public_object_transport', Path(__file__).with_name('release-public-objects.py'))
+O = importlib.util.module_from_spec(_spec); _spec.loader.exec_module(O)
 
 PUBLIC = 'shk95/configs'
 VERSION = '2026-03-10'
@@ -379,20 +385,30 @@ class Journal:
                 need(path not in self.entries, 'immutable-record-rewrite')
         # The verified retained projector validates full prior history and each new
         # exact event/index/context before Git objects or a ref can be published.
-        self.snapshot.validate_changes(changes)
+        prospective = self.snapshot.validate_changes(changes)
+        need(type(prospective) is dict and prospective['parent']==self.expected, 'missing-prospective-child')
         # Any object/ref effect can become unknown. This instance cannot retry;
         # an independently reconciled original history is a separate obligation.
         self.pending = True
+        def fresh():
+            Entry(self.api, self.snapshot.entry.trusted, self.snapshot.entry.runtime)
+            need(self.api.ref('heads/master')==self.snapshot.entry.trusted['source'] and
+                self.api.ref('heads/operations',self.api.operating)==self.expected,'record-authority-moved')
+            jobs=self.api.jobs(self.snapshot.entry.runtime['run'],self.snapshot.entry.runtime['attempt'])
+            need(len(jobs)==1 and jobs[0].get('id')==self.snapshot.entry.runtime['job'],'nonisolated-record-job')
         tree_rows = []
         for path, data in sorted(changes.items()):
             blob = git_object('blob', data)
+            fresh()
             response, _ = self.api.call(self.api.operating, 'POST', '/git/blobs',
                                        {'content': base64.b64encode(data).decode(), 'encoding': 'base64'}, (201,))
             need(response.get('sha') == blob, 'record-blob-mismatch')
             tree_rows.append({'path': path, 'mode': '100644', 'type': 'blob', 'sha': blob})
+        fresh()
         response, _ = self.api.call(self.api.operating, 'POST', '/git/trees',
                                    {'base_tree': self.commit['tree'], 'tree': tree_rows}, (201,))
         tree = sha(response.get('sha'))
+        need(tree==prospective['tree'],'prospective-tree-mismatch')
         observed_tree = self.api.tree(tree, self.api.operating)
         expected_leaves = {k:v for k,v in self.entries.items() if v[1] == 'blob'}
         expected_leaves.update({k:('100644', 'blob', git_object('blob', v)) for k,v in changes.items()})
@@ -401,13 +417,26 @@ class Journal:
         # cannot choose a mutable record identity or an external author.
         fields = {'message': 'release operating record\n', 'tree': tree, 'parents': [self.expected],
                   'author': self.snapshot.tagger, 'committer': self.snapshot.tagger}
+        fresh()
         response, _ = self.api.call(self.api.operating, 'POST', '/git/commits', fields, (201,))
         commit = sha(response.get('sha'))
+        need(commit==prospective['head'],'prospective-commit-mismatch')
+        original=next(raw for kind,identity,raw in prospective['objects'] if kind=='commit' and identity==commit)
+        expected_fields=O.commit_fields(original)
+        observed_fields=self.api.get('/git/commits/'+commit,self.api.operating)
+        need(observed_fields.get('message')==expected_fields['message'] and
+            all(type(observed_fields.get(k)) is dict and
+                {name:observed_fields[k].get(name) for name in ('name','email','date')}==expected_fields[k]
+                for k in ('author','committer')),'record-commit-metadata')
+        verification=observed_fields.get('verification')
+        need(verification is None or type(verification) is dict and
+             verification.get('signature') is None and verification.get('payload') is None,'record-signature')
         actual = self.api.commit(commit, self.api.operating)
         need(actual['parents'] == [self.expected] and actual['tree'] == tree, 'wrong-record-parent')
         # Fresh expected head plus a single-parent child and force=false means a
         # competing sibling cannot fast-forward to this record. It is not API CAS.
         need(self.api.ref('heads/operations', self.api.operating) == self.expected, 'record-head-moved')
+        fresh()
         try:
             self.api.call(self.api.operating, 'PATCH', '/git/refs/heads/operations', {'sha': commit, 'force': False})
         except Unknown:
@@ -416,19 +445,27 @@ class Journal:
         if observed != commit:
             self.pending = True
             raise Unknown('unknown-or-conflicting-record-head')
+        try:
+            need(self.snapshot.hydrate(prospective,changes)==commit,'unconfirmed-local-delivery')
+            Entry(self.api,self.snapshot.entry.trusted,self.snapshot.entry.runtime)
+            need(self.api.ref('heads/operations',self.api.operating)==commit and
+                self.api.ref('heads/master')==self.snapshot.entry.trusted['source'],'moving-delivered-head')
+            self.snapshot.accept_changes(changes, commit)
+        except (ValueError, OSError, __import__('subprocess').SubprocessError):
+            raise Unknown('local-delivery-fenced') from None
         self.expected, self.commit = commit, actual
-        self.entries = self.api.tree(tree, self.api.operating)
-        self.snapshot.accept_changes(changes, commit)
+        self.entries = observed_tree
         self.pending = False
         return commit
 
 
 class Executor:
     """One durable intent and authenticated reconciliation at a time."""
-    def __init__(self, entry, journal, snapshot):
+    def __init__(self, entry, journal, snapshot, *, public_read=None):
         need(type(entry) is Entry and entry.authenticated, 'missing-entry')
         self.entry, self.api, self.journal, self.snapshot = entry, entry.api, journal, snapshot
         self.unknown = False
+        self.public_read = O.Reader(public_read)
 
     def stopped(self):
         head = self.api.ref('heads/operations', self.api.operating)
@@ -454,6 +491,17 @@ class Executor:
         return number(value.get('number'))
 
     def reconcile(self, kind, payload):
+        if kind=='refresh-object':
+            try:
+                request,raw,originals=self.snapshot.object_material(payload)
+                self.snapshot.object_dependencies(payload,self.public_read)
+                reference=originals.get(payload['object-type'])
+                need(reference is not None,'unsupported-absence-reference')
+                present=self.public_read.qualified(payload['object-type'],payload['object'],raw,
+                    reference,payload['object-type']=='commit')
+                return ('applied',payload['object']) if present else ('absent',None)
+            except (ValueError,UnicodeError,KeyError,TypeError) as exc:
+                raise Refusal('unavailable-public-object-proof') from exc
         if kind in {'refresh-pr', 'pr'}:
             head, base = (payload['branch'], 'dev') if kind == 'refresh-pr' else ('dev', 'master')
             values = self.pulls(head, base)
@@ -513,9 +561,14 @@ class Executor:
         # Snapshot is independently produced by exact retained-code replay in a
         # credential-free child. A request cannot introduce arbitrary operations.
         kind, payload, intent = self.snapshot.authorize(plan, self.entry)
-        need(kind in {'refresh-branch', 'refresh-pr', 'pr', 'merge', 'tag-object', 'tag-ref', 'cancel'}, 'unsupported-effect')
+        need(kind in {'refresh-object', 'refresh-branch', 'refresh-pr', 'pr', 'merge', 'tag-object', 'tag-ref', 'cancel'}, 'unsupported-effect')
         sha(self.snapshot.source); need(not self.stopped(), 'fresh-stop')
-        state, remote = self.reconcile(kind, payload)
+        try:
+            state, remote = self.reconcile(kind, payload)
+        except Refusal:
+            if kind != 'refresh-object':raise
+            self.unknown = True
+            raise Unknown('initial-reconciliation-fenced') from None
         if state == 'applied':
             self.journal.publish(self.snapshot.observation(plan, state, remote))
             return state
@@ -523,14 +576,23 @@ class Executor:
         self.journal.publish(intent)
         need(not self.stopped(), 'stop-before-effect')
         Entry(self.api, self.entry.trusted, self.entry.runtime)
+        fresh_plan=dict(plan,head=self.snapshot.head)
+        fresh_kind,fresh_payload,_=self.snapshot.authorize(fresh_plan,self.entry)
+        need(fresh_kind==kind and fresh_payload==payload,'effect-payload-moved')
         try:
             if kind == 'cancel':
                 result = self.entry.cancel(payload)
                 need(result == 'terminal', 'unconfirmed-termination')
             else:
                 method, suffix, body, statuses = self.request(kind, payload)
+                Entry(self.api,self.entry.trusted,self.entry.runtime)
+                latest_kind,latest_payload,_=self.snapshot.authorize(dict(plan,head=self.snapshot.head),self.entry)
+                need(latest_kind==kind and latest_payload==payload and not self.stopped() and
+                     self.api.ref('heads/master')==self.entry.trusted['source'] and
+                     self.api.ref('heads/operations',self.api.operating)==self.journal.expected,'effect-authority-moved')
                 try:
-                    self.api.call(PUBLIC, method, suffix, body, statuses)
+                    response,_=self.api.call(PUBLIC, method, suffix, body, statuses)
+                    if kind=='refresh-object':need(type(response) is dict and response.get('sha')==payload['object'],'object-ack-mismatch')
                 except Unknown:
                     pass
         except Refusal:
@@ -540,12 +602,18 @@ class Executor:
             state, remote = self.reconcile(kind, payload)
             need(state == 'applied', 'effect-not-confirmed')
             self.journal.publish(self.snapshot.observation(plan, state, remote))
-        except Refusal:
+        except (ValueError,OSError,__import__('subprocess').SubprocessError):
             self.unknown = True
             raise Unknown('reconciliation-required') from None
         return state
 
     def request(self, kind, p):
+        if kind=='refresh-object':
+            try:
+                request=self.snapshot.object_dependencies(p,self.public_read)
+                return 'POST',request['path'].removeprefix('/repos/'+PUBLIC),request['body'],(201,)
+            except (ValueError,UnicodeError,KeyError,TypeError) as exc:
+                raise Refusal('unavailable-object-prerequisites') from exc
         if kind == 'refresh-branch':
             need(re.fullmatch('feature/unixlike-refresh-[a-f0-9]{64}', p['branch']), 'wrong-refresh-branch')
             commit = self.api.commit(p['head'])

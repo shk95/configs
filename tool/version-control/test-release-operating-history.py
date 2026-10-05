@@ -119,9 +119,8 @@ class HistoryProof(unittest.TestCase):
         with patch.object(H,'MAX_OUTPUT',1),self.assertRaises(H.T.Refusal):
             self.history.run(['--version'],self.history.base,capture=True)
     def test_disabled_initial_projection_uses_original_package_and_selects_no_baseline(self):
-        f=self.fixture.fixture
-        config=H.L.encode_index(dict(F.F.CONFIG,enabled='0'))
-        records=self.history.disabled_records(f.public,F.F.encode(f.packages['3']),config)
+        bundle,approved,config,_=self.proposal_inputs()
+        records=self.history.disabled_records(bundle,approved,config)
         self.assertEqual(H.L.singletons(records['control/stop.tsv'],{'stop','revision','reason','operator'})['stop'],'1')
         index=H.L.singletons(records['current/index.tsv'],H.L.PROJECTION_FIELDS|{'index-kind','ledger-digest'})
         self.assertEqual(index['sequence'],'0');self.assertEqual(index['stage'],'empty')
@@ -129,7 +128,7 @@ class HistoryProof(unittest.TestCase):
         self.assertFalse(any('baseline' in path or path.startswith('history/') for path in records))
         self.assertFalse(any(method!='GET' for method,_,_ in self.fake.calls))
         with self.assertRaises(H.T.Refusal):
-            self.history.disabled_records(f.public,F.F.encode(f.packages['3']),F.F.encode(F.F.CONFIG))
+            self.history.disabled_records(bundle,approved,F.F.encode(F.F.CONFIG))
     def test_actual_git_askpass_binding_is_native_and_refuses_foreign_paths(self):
         self.acquire()
         env=dict(self.history.base,GIT_ASKPASS=str(self.history.scratch/'askpass.sh'),
@@ -196,6 +195,7 @@ class HistoryProof(unittest.TestCase):
     def proposal_inputs(self):
         import hashlib,shutil
         f=self.fixture.fixture
+        F.adopt_current4(f)
         for name in H.TRANSPORT_FILES:
             target=f.public/name;target.parent.mkdir(parents=True,exist_ok=True)
             shutil.copyfile(ROOT.parents[1]/name,target)
@@ -209,7 +209,7 @@ class HistoryProof(unittest.TestCase):
         self.history=H.GitHistory(entry,22);self.addCleanup(self.history.close)
         self.fake.responses[('GET','/repos/fixture/operating')]=self.fake.response(
             {'id':22,'private':True,'full_name':'fixture/operating','default_branch':'main'})
-        return (f.public,F.F.encode(dict(f.packages['3'],master=source)),H.L.encode_index(dict(F.F.CONFIG,enabled='0')),'fixture-token')
+        return (f.public,F.F.encode(dict(f.packages['4'],master=source)),H.L.encode_index(dict(F.F.CONFIG,enabled='0',protocol='4')),'fixture-token')
 
     def desired_inputs(self):
         import hashlib,json
@@ -404,7 +404,7 @@ class HistoryProof(unittest.TestCase):
             with self.assertRaises(H.T.Refusal):
                 self.history.review_initial(proposal,H.T.digest(proposal),inputs[0],inputs[1],changed_config,inputs[3])
             for key,value in (('workflow','99'),('actors','3,99')):
-                fields=dict(F.F.CONFIG,enabled='0');fields[key]=value
+                fields=dict(F.F.CONFIG,enabled='0',protocol='4');fields[key]=value
                 with self.subTest(key=key),self.assertRaises(H.T.Refusal):
                     self.history.initial_proposal(inputs[0],inputs[1],H.L.encode_index(fields),inputs[3])
 

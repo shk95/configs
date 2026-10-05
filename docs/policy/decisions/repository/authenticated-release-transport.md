@@ -317,3 +317,10 @@ assertions. Fixed public anonymous review/Environment and template identity/ref
 GETs grant no token scope, approval write or packet publication authority.
 Original semantic rows and old packages retain their own meaning. Actual source
 acceptance, independent setup/review and operating receipts remain separate gates.
+
+
+## Public immutable object transport and local delivery
+
+Amended 2026-10-05: adopt the current public object proof and original LOCAL
+delivery contract in public-refresh-object-transport.md. Historical transport
+inventories and semantic packages retain their exact earlier meaning.
