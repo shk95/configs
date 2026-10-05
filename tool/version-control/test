@@ -5569,6 +5569,8 @@ git -C "$authoring_root" worktree add -q -b fix/repository-pinned "$authoring_pi
 "$root/tool/version-control/test-release-transport"
 # INV repository/typed-production-receipt-custody
 "$root/tool/version-control/test-production-receipt"
+# INV repository/domain-declaration-observation
+"$root/tool/version-control/test-domain-declaration"
 # INV repository/operating-credential-qualification
 "$root/tool/version-control/test-release-credential-check"
 "$root/tool/version-control/test-release-inspect"
