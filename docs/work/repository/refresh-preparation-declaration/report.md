@@ -173,3 +173,29 @@ The completed local repository suite passed production24/66.111s, semantic31/
 114.617s and initializer12/277.572s, plus policy and isolation fixtures. Its observer
 run precedes the final deadline correction; the independent final17/4.306s above
 proves that repair. Final staged normal hooks and remote CI remain delivery gates.
+
+## Literal migration data and actual provider assembly, 2026-10-05
+
+Root's final original grammar review found an additional colon/backslash filename
+portability ban not required by this data-only canonical relative docs/ parser.
+Remove that stronger projection and preserve both literal examples; explicit
+absolute/dot/dotdot/empty/control refusals remain. This is syntax DATA, not proof
+that an original migration blob exists or is eligible for construction/runtime.
+No packet path is materialized or executed by the parser.
+
+Published B source9974cf127d60be002abf6dec138da70d89626ce5 completed normal full
+commit and HTTPS push hooks and became Draft PR #511. Actual #509 entered dev
+79f53ae931fb1c624c48fd805797dd3893e66981 after final source-head CI37251959574
+passed all Required checks, Linux raw library24/3.681s and Windows24/29.116s.
+Root resolves the actual shared semantic manifest conflict by retaining both
+source mapping sets and rehashing the current eight-member semantic closure.
+Current transport ten-member bytes remain identical and verified. Neither
+standalone library is imported or included. Future execution-issue metadata
+registration is still unmerged and is not imported into this assembly.
+Final source/narrow/full normal hooks and exact-head delivery remain pending;
+B1–B4 and all enclosing AC1–AC4 remain pending.
+
+After actual provider assembly and literal migration correction, local observer
+17 fixtures passed10.167s and current semantic31 fixtures passed96.851s. These
+precede final normal assembly hooks and current-head native CI; no approval or
+operating qualification is inferred from them.

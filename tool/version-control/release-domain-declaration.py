@@ -165,8 +165,7 @@ def parse_full_d1(raw, expected_digest, original_scope, original_rules):
          d['Release-Compatibility'] in ('compatible', 'breaking'), 'declaration values')
     migration = d['Release-Migration']
     need(migration == 'none' or (migration.startswith('docs/') and
-         all(part not in ('', '.', '..') for part in migration.split('/')) and
-         not any(c in migration for c in ('\\', ':'))), 'migration path')
+         all(part not in ('', '.', '..') for part in migration.split('/'))), 'migration path')
     need(d['Release-Rationale'] and (d['Release-Compatibility'] != 'breaking' or
          (d['Release-Impact'] == 'major' and migration != 'none')), 'breaking/rationale')
     contracts = d['Release-Contracts'].split(',')

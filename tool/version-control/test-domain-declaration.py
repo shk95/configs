@@ -169,6 +169,9 @@ class Declaration(unittest.TestCase):
             ('Release-Migration','docs/./a'), ('Release-Migration','docs//a'), ('Release-Migration','docs/a/')]:
             value = envelope(); value['body']['declarations'][name] = bad
             with self.subTest(name=name,bad=bad), self.assertRaises(D.Refusal): parsed(value)
+        for migration in ('docs/notes/colon:name.md', r'docs/notes/back\slash.md'):
+            value = envelope(); value['body']['declarations']['Release-Migration'] = migration
+            self.assertEqual(parsed(value).envelope['body']['declarations']['Release-Migration'], migration)
         value = envelope(); value['body']['declarations'].update({'Release-Compatibility':'breaking'})
         with self.assertRaises(D.Refusal): parsed(value)
         value['body']['declarations'].update({'Release-Impact':'major', 'Release-Migration':'docs/policy/change.md'})
