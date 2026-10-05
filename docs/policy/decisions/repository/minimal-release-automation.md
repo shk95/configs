@@ -34,3 +34,15 @@ Afterward normal dev-to-master PR/merge promotion applies again.
 The assembly CI entry is temporary and registered. This exception does not
 allow general hook bypass, routine direct master edits or protection bypass
 for the automated writer. Domain release never adopts or applies host state.
+
+## Verification cost
+
+Keep local/fixture proof with source and remote CI proof in Actions/PR checks.
+No follow-up report-only push is needed to copy a successful CI result. Remove
+retired suites and the confirmed ninefold independent-suite repetition before
+considering any more precise check selector. Fixture failure coverage and actual
+normal-path operating evidence are distinct; no live failure-experiment project.
+
+Future tags use domain SemVer fixed by source declarations. Preserve the exact
+two historical tag objects and their old target across the one-time cutover;
+this is a closed historical exception, not a calendar-tag allocation policy.

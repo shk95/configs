@@ -449,3 +449,9 @@ change. Domain tags and evidence requirements are defined in
 
 No activation or Apply is a routine check. Perform either only deliberately on
 the matching host.
+
+Scheduled releases use domain-owned SemVer declarations and the standard
+GitHub PR/CI/Environment path. Initial Unix-like and Windows versions are
+independently 1.0.0. Automatic refresh changes only four permitted inputs; host
+adoption and deployment remain explicit. See CONTRIBUTING.md, "Bounded scheduled
+release", for setup, the 05/06/07 schedule and original-SHA recovery.

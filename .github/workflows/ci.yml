@@ -2,7 +2,7 @@ name: CI
 
 on:
   push:
-    branches: [master, dev]
+    branches: [master, dev, feature/repository-reconstruction] # PROV repository/reconstruction-ci
   pull_request:
     branches: [master, dev]
 
@@ -36,6 +36,7 @@ jobs:
           EVENT_BASE_REF: ${{ github.base_ref }}
           PR_STACK: ${{ toJSON(github.event.pull_request.stack) }}
           PUSH_BASE: ${{ github.event.before }}
+          EVENT_REF: ${{ github.ref }}
         run: |
           base=$(tool/dispatch/ci-base)
           echo "base=$base" >>"$GITHUB_OUTPUT"
@@ -312,3 +313,14 @@ jobs:
       - uses: actions/checkout@v7
       - name: Enforce scoped results
         run: tool/version-control/required-checks
+      - name: Record the tested source
+        if: success()
+        env:
+          CI_BASE: ${{ needs.classify.outputs.base }}
+        run: python3 .github/scripts/ci-source.py
+      - uses: actions/upload-artifact@v7
+        if: success()
+        with:
+          name: ci-source
+          path: ${{ runner.temp }}/source.json
+          retention-days: 90

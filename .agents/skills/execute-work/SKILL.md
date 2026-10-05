@@ -30,8 +30,9 @@ Use a stable runtime session ID when available. Never invent a resume ID.
 
 Make the coherent same-scope change; internal steps may branch conceptually
 without producing separate PRs. Run narrow relevant checks before broader
-checks and preserve unavailable versus failed evidence. Record actual evidence
-in the report with the change that produced it. Do not change planner-owned
+checks and preserve unavailable versus failed evidence. Record actual local/fixture evidence
+in the report with the change that produced it. Remote CI results remain in
+Actions/PR checks; do not make another report-only commit to record them. Do not change planner-owned
 priorities opportunistically.
 
 Commit and push the feature branch. Prefer an early Draft PR after the first

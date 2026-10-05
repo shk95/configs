@@ -18,7 +18,14 @@ case ${EVENT_NAME:-} in
     }
     base=${PR_BASE:-}
     ;;
-  push) base=${PUSH_BASE:-} ;;
+  push)
+    # PROV repository/reconstruction-ci: validate the whole fixed assembly.
+    if [ "${EVENT_REF:-}" = refs/heads/feature/repository-reconstruction ]; then
+      base=a886934736f701e85ab5c79fba58b155218d99d1 # PROV repository/reconstruction-ci
+    else
+      base=${PUSH_BASE:-}
+    fi
+    ;;
   *) echo 'Unsupported CI event' >&2; exit 1 ;;
 esac
 case $base in

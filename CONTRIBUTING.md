@@ -127,9 +127,9 @@ the evidence in `docs/policy/definition-of-done/`.
 
 Use independent release tags:
 
-- `unixlike-vYYYY.MM.DD`, with `.N` for another release that day;
-- `windows-vYYYY.MM.DD`, with `.N` for another release that day;
-- `common-vYYYY.MM.DD`, with `.N` for another release that day.
+- `unixlike-vMAJOR.MINOR.PATCH`;
+- `windows-vMAJOR.MINOR.PATCH`;
+- `common-vMAJOR.MINOR.PATCH`, only when common material exists.
 
 Keep `unixlike/flake.lock` refreshes in dedicated `chore(unixlike-deps)`
 commits. A domain tag certifies only the named domain even though the commit
@@ -935,3 +935,58 @@ Branch protection on `dev` and `master` requires the stable `Required checks`
 job. That job fails unless classification and secret scanning pass and every
 selected domain job succeeds. Conditional domain job names are deliberately
 not branch-protection contexts because unselected domains are skipped.
+
+## Bounded scheduled release
+
+Keep `.github/workflows/release.yml` off until the reconstruction endpoint,
+branch policies, credentials and notification delivery have been checked.
+`CONFIGS_RELEASE_ENABLED=1` enables manual operation and CI continuation. Keep
+`CONFIGS_RELEASE_SCHEDULE_ENABLED` off during that verification, then set it to
+`1` to enable schedules. Both start off. Configure `release-control` for accepted
+master writer jobs without an extra approval requirement, and `release-approval`
+for master with required maintainer review. Approval jobs hold no writer
+concurrency or writer secret; candidate execution holds no writer credential.
+
+Reuse an equivalent existing `CONFIGS_RELEASE_TOKEN` Environment secret, or set
+`CONFIGS_RELEASE_APP_ID` and `CONFIGS_RELEASE_APP_PRIVATE_KEY` for a GitHub App
+installation on this repository. The writer needs Contents and Pull requests
+write plus Actions/Checks read, Workflows write when promoting workflow changes,
+and normal protected merges. It must not bypass
+Required checks. Do not use the default token to author automatic PRs: it can
+leave their CI awaiting approval. Platform authentication and Environment
+behavior: [GitHub token](https://docs.github.com/en/actions/concepts/security/github_token),
+[Environment protection](https://docs.github.com/en/actions/reference/workflows-and-actions/deployments-and-environments).
+
+05:00 Asia/Seoul refreshes only nixpkgs, home-manager, nix-darwin and nixos-wsl.
+06:00 opens promotion; until 07:00 pending refresh releases the runner. After
+07:00 current integrated dev may proceed, with its own matching Required checks
+and needed review. CI completion resumes the same bounded path. Schedules may
+be delayed by GitHub; no timer or guarantee of a missed-run recovery is added.
+
+Prepare a changed domain's `release.json` before promotion: exact previous tag,
+new version, change description, compatibility and migration text. A patch
+refresh writes only its fixed declaration and lock. Human Unix-like changes
+pending since the previous release prevent an automatic patch from relabeling
+them. Do not change version or evidence after CI merely to certify that CI.
+Write local/fixture evidence with the source; use current Actions/PR checks for
+remote evidence. A remote CI result requires no report-only follow-up commit.
+
+Initial publication sets `CONFIGS_RELEASE_BOOTSTRAP_SOURCE` to verified N and
+requires Environment review; it reads both declarations even without a merge
+parent. Remove that variable after both tags are confirmed. No further
+promotion precedes their completion. A normal promotion records actual M's
+parents/tree against the checked PR, then publishes only its changed domains.
+A rerun reads existing remote tags, confirms targets and required annotation,
+and creates only missing tags. It never overwrites or requires a newly created
+tag object to have the old object's ID.
+
+If master moved and the original M cannot be determined, stop. Dispatch the
+workflow with `source` set to the original full SHA, using PR/Actions records
+as the human reference; Environment review is required again. Do not substitute
+current master for that source. Failed workflow notifications and Environment
+review requests are the initial alerts; verify actual maintainer delivery at
+live enablement. Full duplicate suppression is not a completion condition.
+
+Read-only diagnosis: `tool/configs release inspect` (returns disabled when off).
+The workflow calls the guarded `advance`, `refresh-pr` and reviewed `publish`
+operations. Those never activate a host or run Windows Apply.

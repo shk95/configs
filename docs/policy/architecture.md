@@ -544,13 +544,19 @@ inspect. Readiness and deployment are domain-scoped rather than repository-wide.
 - `dev` integrates reviewed source changes.
 - `master` contains accepted repository history; it is not proof that every
   domain at that commit was deployed.
-- `unixlike-vYYYY.MM.DD[.N]` identifies a validated Unix-like release.
-- `windows-vYYYY.MM.DD[.N]` identifies a validated Windows release.
-- `common-vYYYY.MM.DD[.N]` identifies a validated common release.
+- `unixlike-vMAJOR.MINOR.PATCH` identifies a validated Unix-like release.
+- `windows-vMAJOR.MINOR.PATCH` identifies a validated Windows release.
+- `common-vMAJOR.MINOR.PATCH` identifies a validated common release.
 
 A tag certifies only its named domain. Unrelated files present at the same Git
 commit do not acquire that certification. Evidence is recorded and reported
 per domain.
+
+Release inputs live in each releasing domain's `release.json`: previous basis,
+exact SemVer, summary, compatibility and migration text. Unix-like and Windows
+start independently at 1.0.0; no common release is introduced. CI and approval
+state stay in GitHub. The exact two 2026.08.31 tag objects remain historical
+exceptions to new-master reachability after reconstruction.
 
 Release tags are annotated and immutable. A release target must be reachable
 from `master`, but it need not be the newest commit when a domain intentionally
@@ -578,7 +584,8 @@ mutable one would be the more visible of the pair
 Commit subjects on the integration branches are Conventional Commits, and a
 `unixlike/flake.lock` refresh is its own commit: the first keeps history
 readable by tools that group by type, the second keeps a change that moves
-every Unix-like derivation hash separable from the source change beside it
+every Unix-like derivation hash separable from the source change beside it.
+Only its fixed patch publication declaration may accompany an automatic refresh
 (`INV repository/conventional-subject`, `INV repository/flake-lock-isolated`).
 
 Source flows one way from topic branches through `dev` into `master`.
