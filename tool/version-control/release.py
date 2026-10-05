@@ -243,16 +243,9 @@ def patch_version(previous):
 
 def inspect(now=None):
     master, dev = git('rev-parse', 'origin/master'), git('rev-parse', 'origin/dev')
-    bootstrap = os.environ.get('CONFIGS_RELEASE_BOOTSTRAP_SOURCE', '')
-    if bootstrap:
-        if not SHA.fullmatch(bootstrap):
-            raise ValueError('invalid bootstrap source')
-        pending = [d for d in DOMAINS if tag_state(d, bootstrap, declaration(bootstrap, d)) == 'missing']
-        if pending:
-            return {'action': 'publish', 'source': bootstrap, 'base': master, 'head': bootstrap, 'approval': True}
     for domain in DOMAINS:
         if latest(domain) is None:
-            raise ValueError('initial publication needs an explicit bootstrap source')
+            raise ValueError('initial domain tags must exist before normal automation')
     pending = [d for d in planned(master) if tag_state(d, master, declaration(master, d)) == 'missing']
     if pending:
         return {'action': 'publish', 'source': master, 'base': master, 'head': master, 'approval': False}
@@ -320,8 +313,7 @@ def write_guard():
 def publish(source):
     source = git('rev-parse', '--verify', f'{source}^{{commit}}')
     git('merge-base', '--is-ancestor', source, 'origin/master')
-    bootstrap = source == os.environ.get('CONFIGS_RELEASE_BOOTSTRAP_SOURCE')
-    domains = list(DOMAINS) if bootstrap else planned(source)
+    domains = planned(source)
     if not domains:
         raise ValueError('source is not an identified promotion publication')
     missing = [d for d in domains if tag_state(d, source, declaration(source, d)) == 'missing']
@@ -329,12 +321,8 @@ def publish(source):
         return
     parents = git('show', '-s', '--format=%P', source).split()
     tree = git('rev-parse', f'{source}^{{tree}}')
-    if bootstrap:
-        base = os.environ.get('CONFIGS_RECONSTRUCTION_BASE', 'a886934736f701e85ab5c79fba58b155218d99d1')
-        verified = checked(base, source, tree, 'push')
-    else:
-        prs = api(f'commits/{source}/pulls')
-        verified = len(parents) == 2 and any(pr['merged_at'] and pr['base']['ref'] == 'master' and pr['head']['ref'] == 'dev' and pr['head']['repo']['full_name'] == repository() and pr['merge_commit_sha'] == source for pr in prs) and checked(parents[0], parents[1], tree, 'pull_request')
+    prs = api(f'commits/{source}/pulls')
+    verified = len(parents) == 2 and any(pr['merged_at'] and pr['base']['ref'] == 'master' and pr['head']['ref'] == 'dev' and pr['head']['repo']['full_name'] == repository() and pr['merge_commit_sha'] == source for pr in prs) and checked(parents[0], parents[1], tree, 'pull_request')
     if not verified:
         raise ValueError('publication lacks matching Required checks for its actual source tree')
     for domain in missing:
@@ -516,7 +504,7 @@ def main():
             write_guard()
             if args.operation == 'publish':
                 if not args.approved:
-                    raise ValueError('explicit source recovery/bootstrap requires Environment review')
+                    raise ValueError('explicit source recovery requires Environment review')
                 publish(args.source)
             elif args.operation == 'refresh-pr':
                 print(json.dumps(refresh_pr(args.base, args.lock)))

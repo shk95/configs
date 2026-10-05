@@ -31,7 +31,8 @@ separate cutover review. The intended one-time adoption sets both dev/master
 to that source with explicit expected-old-ref checks and protection restoration.
 Afterward normal dev-to-master PR/merge promotion applies again.
 
-The temporary assembly CI entry is now registered for the one-time adoption. This exception does not
+The assembly CI entry was temporary and registered for the one-time adoption.
+This exception does not
 allow general hook bypass, routine direct master edits or protection bypass
 for the automated writer. Domain release never adopts or applies host state.
 

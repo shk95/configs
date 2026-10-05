@@ -35,7 +35,7 @@ class ReleaseFixtures(unittest.TestCase):
         self.tmp = tempfile.TemporaryDirectory()
         self.cwd = os.getcwd()
         os.chdir(self.tmp.name)
-        self.env = patch.dict(os.environ, {'GITHUB_REPOSITORY': 'fixture/configs', 'CONFIGS_RELEASE_BOOTSTRAP_SOURCE': '',
+        self.env = patch.dict(os.environ, {'GITHUB_REPOSITORY': 'fixture/configs',
                                           'GIT_CONFIG_GLOBAL': os.devnull, 'GIT_CONFIG_NOSYSTEM': '1'})
         self.env.start()
         r.git('init', '-q', '-b', 'master')
@@ -168,25 +168,40 @@ class ReleaseFixtures(unittest.TestCase):
             with self.assertRaises(ValueError):
                 r.advance(self.head, 'f' * 40, approved=True)
 
+    def promotion(self):
+        self.write('windows/release.json', {'previous': 'windows-v1.0.0', 'version': '1.0.1',
+                   'summary': 'Windows change', 'compatibility': 'patch', 'migration': ''})
+        head = self.commit('feat(windows): update fixture')
+        r.git('checkout', '-q', '--detach', self.base)
+        r.git('merge', '--no-ff', '-q', head, '-m', 'Merge fixture promotion')
+        source = r.git('rev-parse', 'HEAD')
+        r.git('update-ref', 'refs/remotes/origin/master', source)
+        return source
+
     def test_partial_publication_precedes_next_promotion(self):
-        with patch.dict(os.environ, {'CONFIGS_RELEASE_BOOTSTRAP_SOURCE': self.head}), patch.object(r, 'tag_state', side_effect=['done', 'missing']):
+        source = self.promotion()
+        with patch.object(r, 'tag_state', side_effect=['done', 'missing']):
             action = r.inspect()
         self.assertEqual(action['action'], 'publish')
-        self.assertEqual(action['source'], self.head)
-        self.assertTrue(action['approval'])
+        self.assertEqual(action['source'], source)
+        self.assertFalse(action['approval'])
 
     def test_partial_publish_creates_only_missing_tag(self):
-        r.git('update-ref', 'refs/remotes/origin/master', self.head)
+        source = self.promotion()
         calls = []
         def fake(path, data=None, **kwargs):
+            if path.startswith('commits/'):
+                return [{'merged_at': '2026-10-06T00:00:00Z', 'base': {'ref': 'master'},
+                         'head': {'ref': 'dev', 'repo': {'full_name': 'fixture/configs'}},
+                         'merge_commit_sha': source}]
             calls.append((path, data))
             return {'sha': 'f' * 40}
-        with patch.dict(os.environ, {'CONFIGS_RELEASE_BOOTSTRAP_SOURCE': self.head}), patch.object(r, 'tag_state', side_effect=['done', 'missing', 'done']), patch.object(r, 'checked', return_value=True), patch.object(r, 'api', side_effect=fake):
-            r.publish(self.head)
+        with patch.object(r, 'tag_state', side_effect=['done', 'missing', 'done']), patch.object(r, 'checked', return_value=True), patch.object(r, 'api', side_effect=fake):
+            r.publish(source)
         self.assertEqual([path for path, _ in calls], ['git/tags', 'git/refs'])
-        self.assertEqual(calls[0][1]['tag'], 'windows-v1.0.0')
-        self.assertEqual(calls[0][1]['object'], self.head)
-        self.assertEqual(calls[1][1]['ref'], 'refs/tags/windows-v1.0.0')
+        self.assertEqual(calls[0][1]['tag'], 'windows-v1.0.1')
+        self.assertEqual(calls[0][1]['object'], source)
+        self.assertEqual(calls[1][1]['ref'], 'refs/tags/windows-v1.0.1')
 
     def test_lost_source_stops_instead_of_searching_history(self):
         with patch.object(r, 'api', return_value=[]), patch.object(r, 'tag_state', return_value='done'):
