@@ -16,3 +16,7 @@ after the maintainer installed a host by hand, a roadmap row that records an
 end — has the same path list as the one this rule removes, so a path check
 would refuse both or neither. A change with no spec is outside the
 statement: its evidence is its pull request's body.
+
+Remote CI evidence lives in current Actions/PR checks and is referenced as that
+external source. It does not require a report-only follow-up push. Source
+reports carry local/fixture proof and state the remote gate honestly.

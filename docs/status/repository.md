@@ -6,7 +6,11 @@ The accepted reconstruction starts at a886934 on one isolated assembly branch.
 Old dev/master are preserved by remote archive/reconstruction-20261005-dev and
 archive/reconstruction-20261005-master; local unfinished states have a verified
 bundle/file archive. Existing release workflows are disabled during assembly.
-Shared dev/master and their protections have not been replaced.
+Shared dev/master and their protections have not been replaced. Domain recovery
+source and the bounded standard GitHub automation are assembled; manual and
+schedule enablement both start off. The four automatic inputs and initial
+independent 1.0.0 declarations are fixed. Local source/API fixtures and the
+independent source review precede exact-endpoint CI.
 Current outcomes and evidence are in
 `docs/work/repository/minimal-reconstruction/report.md`. Earlier observations
 below describe old source and do not add operating acceptance to this work.
