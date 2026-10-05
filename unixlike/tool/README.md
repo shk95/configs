@@ -45,3 +45,7 @@ partial file visibility, but is not a power-loss durability guarantee.
 
 No commit, push, schedule, release, host lock update or activation is performed.
 Review a resulting provider lock and publish it separately from tool source.
+
+Select independent inputs explicitly with repeated `refresh-inputs --input NAME`.
+Automatic releases use the four names in `automatic-refresh-inputs.json`; local
+default refresh retains its independently selected, non-excluded input set.

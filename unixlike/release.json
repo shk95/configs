@@ -1,0 +1,7 @@
+{
+  "previous": "unixlike-v2026.08.31",
+  "version": "1.0.0",
+  "summary": "Typed Unix-like constructors, environment selection and host-owned app configuration.",
+  "compatibility": "breaking",
+  "migration": "Adopt the constructor inputs and native host modules explicitly; save captured settings to host documents."
+}

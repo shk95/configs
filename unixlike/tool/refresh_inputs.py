@@ -64,7 +64,7 @@ def source_snapshot(root, ignored):
     return result
 
 
-def refresh(root, check=False):
+def refresh(root, check=False, requested=None):
     lock_path = root / "flake.lock"
     config_path = root / "flake-refresh-exclusions.json"
     # An atomic directory claim serializes cooperating invocations without a
@@ -101,8 +101,15 @@ def refresh(root, check=False):
                 if not isinstance(direct[name], str):
                     raise ValueError(f"cannot exclude a follows alias: {name}")
                 own_source(baseline, name)
-            selected = sorted(name for name, edge in direct.items()
-                              if isinstance(edge, str) and name not in excluded)
+            independent = {name for name, edge in direct.items() if isinstance(edge, str)}
+            if requested is not None:
+                names = set(requested)
+                if not names or len(names) != len(requested) or not names <= independent or names & excluded:
+                    raise ValueError("selection must name distinct non-excluded independent inputs")
+                excluded |= independent - names
+                for name in excluded:
+                    own_source(baseline, name)
+            selected = sorted(independent - excluded)
             print(json.dumps({"independent": sorted(name for name, edge in direct.items()
                                                     if isinstance(edge, str)),
                               "follows": {name: edge for name, edge in direct.items()
@@ -150,10 +157,11 @@ def refresh(root, check=False):
 def main():
     parser = argparse.ArgumentParser(description=__doc__)
     parser.add_argument("--check", action="store_true", help="offline read-only current input inventory")
+    parser.add_argument("--input", action="append", help="refresh only this independent input; repeat to select more")
     args = parser.parse_args()
     root = Path(__file__).resolve().parent.parent
     try:
-        print(refresh(root, args.check))
+        print(refresh(root, args.check, args.input))
     except (ValueError, OSError, KeyError, TypeError) as error:
         print(f"refresh-inputs: {error}", file=sys.stderr)
         return 1
