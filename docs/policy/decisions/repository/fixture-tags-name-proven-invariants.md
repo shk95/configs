@@ -16,7 +16,7 @@ architecture sentences and five entries now hold the
 rules: `INV windows/external-profile-blocks-preserved`,
 `INV windows/subset-owns-declared-keys`,
 `INV windows/selection-closed-and-explicit`, `INV windows/font-state-total`
-and `INV windows/capture-publishes-through-dev`, each tagged on the case
+and `windows/capture-publishes-through-dev`, each tagged on the case
 that exercises its statement; a ninth unit's payload-declared-once case
 names `INV windows/feature-owns-every-item`, which it already proved. Two
 units were deleted rather than tagged — `version gate`, a semantic-version
@@ -50,3 +50,6 @@ suite that is everything before the `commit mas add/remove` banner: the
 index and `GIT_DIR` guards, the gate, promotion, evidence and flake cases,
 the pwsh detection cases and the brew/cask half of the commit-helper cases,
 most already tagged but unchecked; a follow-up may give that span banners.
+
+2026-10-05: the former Windows capture publication contract is historical.
+Current capture writes host-owned originals and does not publish provider Git history.
