@@ -174,6 +174,7 @@ production-map	exact	docs/policy/decisions/repository/ci-evidence-without-hosted
 production-map	exact	docs/policy/decisions/repository/commit-marks-a-judgement-point.md	prod-repository-policy
 production-map	exact	docs/policy/decisions/repository/design-documents-outside-the-authority-model.md	prod-repository-policy
 production-map	exact	docs/policy/decisions/repository/documents-classified-by-scope.md	prod-repository-policy
+production-map	exact	docs/policy/decisions/repository/domain-declaration-observation.md	prod-repository-policy,prod-repository-native
 production-map	exact	docs/policy/decisions/repository/fixture-tags-name-proven-invariants.md	prod-repository-policy
 production-map	exact	docs/policy/decisions/repository/github-agent-workflow.md	prod-repository-policy
 production-map	exact	docs/policy/decisions/repository/hooks-run-under-git-for-windows.md	prod-repository-policy
@@ -247,6 +248,7 @@ production-map	exact	docs/policy/invariants/repository/change-authoring-in-linke
 production-map	exact	docs/policy/invariants/repository/conventional-subject.md	prod-repository-policy
 production-map	exact	docs/policy/invariants/repository/design-outside-authority.md	prod-repository-policy
 production-map	exact	docs/policy/invariants/repository/document-index-generated.md	prod-repository-policy
+production-map	exact	docs/policy/invariants/repository/domain-declaration-observation.md	prod-repository-policy,prod-repository-native
 production-map	exact	docs/policy/invariants/repository/evidence-three-states.md	prod-repository-policy
 production-map	exact	docs/policy/invariants/repository/fixture-git-isolation.md	prod-repository-policy
 production-map	exact	docs/policy/invariants/repository/fixtures-name-invariants.md	prod-repository-policy
@@ -513,6 +515,7 @@ production-map	exact	tool/version-control/release-control-package/manifest.tsv	p
 production-map	exact	tool/version-control/release-control-package/protocol.md	prod-repository-policy,prod-repository-native
 production-map	exact	tool/version-control/release-control-package/records.py	prod-repository-policy,prod-repository-native
 production-map	exact	tool/version-control/release-credential-check.py	prod-repository-policy,prod-repository-native
+production-map	exact	tool/version-control/release-domain-declaration.py	prod-repository-policy,prod-repository-native
 production-map	exact	tool/version-control/release-initialize.py	prod-repository-policy,prod-repository-native
 production-map	exact	tool/version-control/release-inspect.py	prod-repository-policy,prod-repository-native
 production-map	exact	tool/version-control/release-operating-history.py	prod-repository-policy,prod-repository-native
@@ -522,6 +525,7 @@ production-map	exact	tool/version-control/release-preview.awk	prod-repository-po
 production-map	exact	tool/version-control/release-preview.rules	prod-repository-policy,prod-repository-native
 production-map	exact	tool/version-control/release-production-receipt.py	prod-repository-policy,prod-repository-native
 production-map	exact	tool/version-control/release-production-review-policy.json	prod-repository-policy,prod-repository-native
+production-map	exact	tool/version-control/release-refresh-role-policy.json	prod-repository-policy,prod-repository-native
 production-map	exact	tool/version-control/release-transport	prod-repository-policy,prod-repository-native
 production-map	exact	tool/version-control/release-transport-preflight.py	prod-repository-policy,prod-repository-native
 production-map	exact	tool/version-control/release-transport-retained.py	prod-repository-policy,prod-repository-native
@@ -532,6 +536,8 @@ production-map	exact	tool/version-control/require-linked-worktree	prod-repositor
 production-map	exact	tool/version-control/required-checks	prod-repository-policy,prod-repository-native
 production-map	exact	tool/version-control/session-test	prod-repository-policy,prod-repository-native
 production-map	exact	tool/version-control/test	prod-repository-policy,prod-repository-native
+production-map	exact	tool/version-control/test-domain-declaration	prod-repository-policy,prod-repository-native
+production-map	exact	tool/version-control/test-domain-declaration.py	prod-repository-policy,prod-repository-native
 production-map	exact	tool/version-control/test-production-receipt	prod-repository-policy,prod-repository-native
 production-map	exact	tool/version-control/test-production-receipt.py	prod-repository-policy,prod-repository-native
 production-map	exact	tool/version-control/test-production-release	prod-repository-policy,prod-repository-native

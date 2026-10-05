@@ -107,3 +107,69 @@ C1–C4 remain pending implementation and current-head source evidence. No claim
 Root accepted dated A1–A4 data-only initial repository/receipt/inventory/archive validation. Exact original whole-repository fingerprint remains distinct from the utility Unix-like-relative map and from required5 input-tree T. Finite raw tree/blob/path/mode/materialization bounds and streamed ZIP structure are specified without changing receipt17/archive3 or utility semantics. Actual inspected ca90 Git tree had no symlink/gitlink entries; historical prototype counts support finite-bound rationale only, not a qualified producer snapshot.
 
 Read-only public artifact listings returned zero eligible samples; actual ZIP uploader compatibility was not proved. Source reader fixtures must exercise supported streamed variants, while runtime/action/bootstrap/producer/binary custody and real operating evidence remain separate. A1–A4 and all enclosing criteria remain pending implementation/current-head delivery. No utility, producer, private packet, workflow or effect was run.
+
+## Independent B source pickup and local evidence, 2026-10-05
+
+Root is sole owner under execution #510. Pickup base is independently pinned to
+028503bf1aa6829e30908bee989b05bbc2d878a2 (actual #505 and #507 source).
+The unchanged reviewed plan has last-change revision
+e46bb4dd384819163ba3d1c62edb80e628a8982d and content blob
+c9a696a190e504f59c4be719f9117b5b422a7f87, recorded separately at pickup. No competing B PR or writer was found. This outcome
+implements only the accepted full D1 parser and independent fixed domain observer;
+all enclosing AC1–AC4 remain pending.
+
+The standalone library preserves complete canonical envelope/body/staging and
+original package bindings. Its host-local original_scope object has exactly
+source, rules-digest, protocol and manifest; lookup and authority use original
+canonical bytes. Returned envelope and observation data are immutable. A bounded
+programmer-owned OriginalSource reader verifies literal Git hashes, one accepted
+ancestry witness and fixed policy/workflow membership without running Git,
+fetching, importing packet code or using a private connection. Reader origin and
+accepted source-approval custody are independent host premises, not constructor
+or JSON authentication. Each invocation owns one source/service deadline.
+
+The fixed eight-key policy and pure enabled/disabled workflow renderer are source
+verification data only; no workflow file or consuming import is introduced.
+Separate title release-declaration:D1 and comment declaration:D1, positive numeric
+provisioning, attempt 1, sole successful job and full bounded reobservation are
+verified through synthetic GETs. Actual introduction, staging success, source
+approval, hold and current effect eligibility remain unverified.
+
+| B criterion | State | Evidence |
+| --- | --- | --- |
+| B1 | pending | Full parser and literal protocol 4/5 distinction implemented; local bidirectional fixtures pass, final source/policy gates pending. |
+| B2 | pending | Fixed source/role renderer, hash/ancestry/membership and bounded synthetic run observation implemented; final review/native gates pending. |
+| B3 | pending | Immutable DATA-only returns and JSON/default/refusal fixtures; no write/dispatch/import or acceptance capability. Final review pending. |
+| B4 | pending | Actual prerequisites integrated; isolated source/worktree initialized. Shared mapping, policy, normal publication and exact-head native delivery remain pending. |
+
+Seventeen local fixture units passed in 3.713 seconds before the final invocation
+budget refinement. They include every nested missing/unknown key, original bytes
+and digest errors, contract/migration/format/control limits, fixed provisioning,
+API identity/movement/ambiguous review, job pagination/count/redirect boundaries,
+original signed headers and unsupported modes, source unavailability, complete
+4096-commit ancestry versus 4097 refusal, 32-GET boundary and shared source/service
+deadline. Test helper repairs preserve malformed missing-body/digest inputs rather
+than silently regenerating them. These are source/disposable/synthetic evidence,
+not actual review, public API success, private custody or native qualification.
+
+Final local parser review rejects C1 control characters and Unicode line/paragraph
+separators as well as ASCII controls. The seventeen fixture units passed again in
+3.916 seconds after this correction and invocation-local budget refinement.
+Existing production receipt fixtures separately passed seventeen units in8.899
+seconds. Six explicit source surface mappings and repository/native dispatch
+are wired; the semantic manifest retains eight members with only its rules hash
+updated. The ten-member transport manifest is byte-identical, and no consumer
+imports the new observer or policy. Full fixture and remote source gates remain
+pending; these local results do not upgrade native or operating evidence.
+
+The invocation deadline now starts before the observer revalidates parsed bytes.
+A controlled clock fixture exhausts the900-second budget during revalidation and
+proves refusal before source/service reads; all17 local units passed4.306s after
+this final correction. The full suite begun before that correction is recorded
+separately; normal final source hooks must test the corrected final bytes.
+
+The completed local repository suite passed production24/66.111s, semantic31/
+42.397s, transport88/454.907s, receipt17/8.943s, observer17/3.819s, history37/
+114.617s and initializer12/277.572s, plus policy and isolation fixtures. Its observer
+run precedes the final deadline correction; the independent final17/4.306s above
+proves that repair. Final staged normal hooks and remote CI remain delivery gates.
