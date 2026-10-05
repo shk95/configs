@@ -37,6 +37,8 @@ jobs:
           PR_STACK: ${{ toJSON(github.event.pull_request.stack) }}
           PUSH_BASE: ${{ github.event.before }}
           EVENT_REF: ${{ github.ref }}
+          PUSH_SHA: ${{ github.sha }} # PROV repository/reconstruction-ci
+          RECONSTRUCTION_SOURCE: ${{ vars.CONFIGS_RELEASE_BOOTSTRAP_SOURCE }} # PROV repository/reconstruction-ci
         run: |
           base=$(tool/dispatch/ci-base)
           echo "base=$base" >>"$GITHUB_OUTPUT"

@@ -10,4 +10,7 @@ decision: docs/policy/decisions/repository/minimal-release-automation.md § One-
 owner: repository maintainer
 
 The exception adds one push branch and one fixed range, not a general bypass.
+For the single cutover it also admits only the two recorded old tips to the
+verified bootstrap SHA supplied through the one-time GitHub variable. Other
+pushes retain their ordinary before..head range.
 Retire its workflow branch and ci-base conditional together after cutover.
