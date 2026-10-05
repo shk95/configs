@@ -220,3 +220,54 @@ Root performs the required current-base docs-only merge after the source assembl
 there is no source/rules/manifest conflict or new importing consumer. Current B
 source publication, exact-head native proof and final admission remain pending;
 all enclosing AC1–AC4 stay pending.
+
+## Independent B source verification, 2026-10-05
+
+The independently deliverable B source outcome is reviewed against the unchanged
+B1–B4 contract. Overall AC1–AC4 and all producer/initial-reader/staging/construction
+work remain pending. Historical planning readiness statements above describe their
+recorded revisions; the dated independent B assignment and source outcome supersede
+only their B pickup restriction.
+
+Exact assembled source is 5ccac14a59dea6ad7a995841607aae822748959b, including actual
+provider #509 and metadata #512 base ab142557bdacccd439e54318b0bac04b53998bd4.
+Normal full HTTPS pre-push passed production24/68.270s, semantic31/40.372s,
+transport88/452.773s, typed receipt17/7.970s, observer17/3.286s,
+history37/105.550s, initializer12/244.881s and raw library24/11.348s.
+History audit reported zero warnings and failures. All source bytes were published
+without history rewrite or hook bypass.
+
+Source review confirms the full original canonical body/envelope/staging and seven
+fields, exact package/rules binding, literal protocol4 order versus adopted
+protocol5 order, bounded original source membership/ancestry, fixed independently
+provisioned role policy and source workflow rendering, distinct title/comment
+prefixes, sole attempt1 successful job, bounded GET reobservation and immutable
+DATA-only output. Bidirectional fixtures prove malformed/moving/unavailable inputs
+refuse; constructor/JSON/current-generation substitutions provide no acceptance
+capability. Production receipt defaults are unchanged. Current semantic closure
+retains eight members with its exact rules hash; transport retains ten unchanged
+members. Neither standalone observer nor raw provider is imported or adopted.
+
+Native source fixture receipts for this exact source are recorded below. These use
+disposable Git objects and synthetic API observations, never actual domain review,
+source approval, packet introduction, staging, Environment hold, hosted producer
+isolation, runtime qualification or current effect eligibility. A rendered workflow
+is verified as original data; no workflow file is published or enabled.
+
+CI [37264790955](https://github.com/shk95/configs/actions/runs/37264790955)
+binds this exact source and completed successfully. Linux repository
+job111619219165 passed observer17/1.210s on Python3.13.15 and Git2.55.0;
+Windows native job111619219214 passed observer17/7.683s on Python3.13.15
+and Git2.55.0.windows.5. Required checks job111626500579 succeeded.
+Selected Unix-like, Windows desired-state and repository scan jobs also passed.
+Native fixture execution is distinct from actual producer/runtime qualification.
+
+| B criterion | State | Evidence |
+| --- | --- | --- |
+| B1 | verified | Full canonical parser and exact original scope/rules retain literal original data; native/local bidirectional grammar, nested keyset, digest/type/encoding/control/quota and protocol4/5 fixtures pass. |
+| B2 | verified | Source review and bidirectional native fixtures verify fixed source/role policy, membership/ancestry, independent provisioning, title/comment relation, sole run/job and bounded reobservation; all actual source/hold/approval custody remains an independent premise. |
+| B3 | verified | Reviewed immutable DATA-only interfaces and negative fixtures refuse default/JSON/opaque/current-generation authority substitutions; no importing consumer, write, dispatch or effect interface is introduced. |
+| B4 | verified | Actual #505/#507 prerequisites, root shared closure, normal source delivery, exact-source native Linux/Windows fixtures and Required checks passed in CI37264790955. Final report-head admission is independently checked before Ready; no consumer manifest adoption or operating evidence follows. |
+
+The overall report status stays pending. B source availability does not complete
+any enclosing preparation/producer/staging/construction acceptance criterion.
