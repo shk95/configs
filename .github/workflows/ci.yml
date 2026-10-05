@@ -116,6 +116,7 @@ jobs:
           tool/version-control/test-release-inspect
           tool/version-control/test-release-operating-history
           tool/version-control/test-retired-capture
+          tool/version-control/test-release-merge-proof
 
   unix:
     name: Flake and Unix-like hosts

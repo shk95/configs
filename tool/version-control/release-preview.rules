@@ -277,6 +277,7 @@ production-map	exact	docs/policy/invariants/repository/promotion-source.md	prod-
 production-map	exact	docs/policy/invariants/repository/provisional-registry-coverage.md	prod-repository-policy
 production-map	exact	docs/policy/invariants/repository/publish-through-dev.md	prod-repository-policy
 production-map	exact	docs/policy/invariants/repository/pull-request-spans-an-evidence-lane.md	prod-repository-policy
+production-map	exact	docs/policy/invariants/repository/raw-merge-computation-read-only.md	prod-repository-policy,prod-repository-native
 production-map	exact	docs/policy/invariants/repository/registry-coverage.md	prod-repository-policy
 production-map	exact	docs/policy/invariants/repository/release-control-preview-only.md	prod-repository-policy
 production-map	exact	docs/policy/invariants/repository/release-inspection-without-authority.md	prod-repository-policy,prod-repository-native
@@ -382,6 +383,8 @@ production-map	exact	docs/work/repository/provider-release-contract/spec.md	prod
 production-map	exact	docs/work/repository/provider-release-contract/study.md	prod-repository-policy
 production-map	exact	docs/work/repository/public-refresh-object-transport/report.md	prod-repository-policy
 production-map	exact	docs/work/repository/public-refresh-object-transport/spec.md	prod-repository-policy
+production-map	exact	docs/work/repository/raw-refresh-merge-library/report.md	prod-repository-policy
+production-map	exact	docs/work/repository/raw-refresh-merge-library/spec.md	prod-repository-policy
 production-map	exact	docs/work/repository/refresh-candidate/report.md	prod-repository-policy
 production-map	exact	docs/work/repository/refresh-candidate/spec.md	prod-repository-policy
 production-map	exact	docs/work/repository/refresh-merge-proof/report.md	prod-repository-policy
@@ -515,6 +518,7 @@ production-map	exact	tool/version-control/release-control-package/records.py	pro
 production-map	exact	tool/version-control/release-credential-check.py	prod-repository-policy,prod-repository-native
 production-map	exact	tool/version-control/release-initialize.py	prod-repository-policy,prod-repository-native
 production-map	exact	tool/version-control/release-inspect.py	prod-repository-policy,prod-repository-native
+production-map	exact	tool/version-control/release-merge-proof.py	prod-repository-policy,prod-repository-native
 production-map	exact	tool/version-control/release-operating-history.py	prod-repository-policy,prod-repository-native
 production-map	exact	tool/version-control/release-operating-roles.json	prod-repository-policy,prod-repository-native
 production-map	exact	tool/version-control/release-preview	prod-repository-policy,prod-repository-native
@@ -545,6 +549,8 @@ production-map	exact	tool/version-control/test-release-credential-check.py	prod-
 production-map	exact	tool/version-control/test-release-initialize.py	prod-repository-policy,prod-repository-native
 production-map	exact	tool/version-control/test-release-inspect	prod-repository-policy,prod-repository-native
 production-map	exact	tool/version-control/test-release-inspect.py	prod-repository-policy,prod-repository-native
+production-map	exact	tool/version-control/test-release-merge-proof	prod-repository-policy,prod-repository-native
+production-map	exact	tool/version-control/test-release-merge-proof.py	prod-repository-policy,prod-repository-native
 production-map	exact	tool/version-control/test-release-operating-history	prod-repository-policy,prod-repository-native
 production-map	exact	tool/version-control/test-release-operating-history.py	prod-repository-policy,prod-repository-native
 production-map	exact	tool/version-control/test-release-preview	prod-repository-policy,prod-repository-native
