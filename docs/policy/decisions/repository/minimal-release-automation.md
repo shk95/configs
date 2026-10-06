@@ -31,14 +31,18 @@ separate cutover review. The intended one-time adoption sets both dev/master
 to that source with explicit expected-old-ref checks and protection restoration.
 Afterward normal dev-to-master PR/merge promotion applies again.
 
-The assembly CI entry is temporary and registered. This exception does not
+The assembly CI entry was temporary and registered for the one-time adoption.
+This exception does not
 allow general hook bypass, routine direct master edits or protection bypass
 for the automated writer. Domain release never adopts or applies host state.
 
 ## Verification cost
 
 Keep local/fixture proof with source and remote CI proof in Actions/PR checks.
-No follow-up report-only push is needed to copy a successful CI result. Remove
+No follow-up report-only push is needed to copy a successful CI result.
+Keep dev push CI for coordinator reentry. master uses its fully checked PR and
+actual merge identity instead of another full push CI. Publication resumes
+from ordinary schedule/manual/related CI events if its writer is interrupted. Remove
 retired suites and the confirmed ninefold independent-suite repetition before
 considering any more precise check selector. Fixture failure coverage and actual
 normal-path operating evidence are distinct; no live failure-experiment project.

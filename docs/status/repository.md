@@ -2,19 +2,26 @@
 
 ## Reconstruction in progress
 
-The accepted reconstruction starts at a886934 on one isolated assembly branch.
-Old dev/master are preserved by remote archive/reconstruction-20261005-dev and
-archive/reconstruction-20261005-master; local unfinished states have a verified
-bundle/file archive. Existing release workflows are disabled during assembly.
-Shared dev/master and their protections have not been replaced. Domain recovery
-source and the bounded standard GitHub automation are assembled; manual and
-schedule enablement both start off. The four automatic inputs and initial
-independent 1.0.0 declarations are fixed. Local source/API fixtures and the
-independent source review precede exact-endpoint CI.
-Current outcomes and evidence are in
-`docs/work/repository/minimal-reconstruction/report.md`. Earlier observations
-below describe old source and do not add operating acceptance to this work.
+The reconstruction adopted verified source
+98ba4ef4c23282f9b478897e736d64f256d430c4 into both dev/master. Their original
+protections were restored. Old shared history remains on
+archive/reconstruction-20261005-dev and archive/reconstruction-20261005-master,
+and unfinished work has a verified local bundle/file archive. The two historical
+tag objects and consumer pins were preserved. Unix-like and Windows each
+published an immutable 1.0.0 tag at the adopted source, after maintainer
+Environment review. This certifies provider evidence, not host adoption or Apply.
 
+The bounded release writer uses release-control on master; release-approval
+requires maintainer review. Manual operation and CI continuation are enabled.
+Schedule enablement is still off pending normal-path and notification checks.
+Only nixpkgs, home-manager, nix-darwin and nixos-wsl may refresh automatically.
+The assembly CI exception is retired; ordinary event-range CI applies.
+
+Current outcomes are in docs/work/repository/minimal-reconstruction/report.md.
+Remote execution evidence stays in Actions and tag annotations. Domain reports
+written before publication are source/fixture checkpoints, not a requirement to
+repeat or copy successful remote CI. Earlier observations below describe old
+source and do not add operating acceptance to this work.
 
 This file states what is observably true of the repository scope today: hosts and
 classes in use, schema and version facts, and open conditions. Every decision

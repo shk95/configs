@@ -19,22 +19,7 @@ case ${EVENT_NAME:-} in
     base=${PR_BASE:-}
     ;;
   push)
-    # PROV repository/reconstruction-ci: validate the whole fixed assembly.
-    if [ "${EVENT_REF:-}" = refs/heads/feature/repository-reconstruction ]; then
-      base=a886934736f701e85ab5c79fba58b155218d99d1 # PROV repository/reconstruction-ci
-    elif [ -n "${RECONSTRUCTION_SOURCE:-}" ] && [ "${PUSH_SHA:-}" = "$RECONSTRUCTION_SOURCE" ]; then
-      # PROV repository/reconstruction-ci: only the exact preserved old tips
-      # may enter the already checked bootstrap endpoint with the fixed range.
-      case "${EVENT_REF:-}:${PUSH_BASE:-}" in
-        refs/heads/dev:fc2e1abdfc64ad3f2cc8156c49bc54f256c284ef|refs/heads/master:c98ce7d9edd34f08c4e6df68ec3bd22f0b22ae0b)
-          printf '%s\n' a886934736f701e85ab5c79fba58b155218d99d1 # PROV repository/reconstruction-ci
-          exit 0
-          ;;
-        *) base=${PUSH_BASE:-} ;;
-      esac
-    else
-      base=${PUSH_BASE:-}
-    fi
+    base=${PUSH_BASE:-}
     ;;
   *) echo 'Unsupported CI event' >&2; exit 1 ;;
 esac
