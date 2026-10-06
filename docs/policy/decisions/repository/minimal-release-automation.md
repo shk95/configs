@@ -21,6 +21,19 @@ original source is lost, stop and require an explicit SHA. Past AC12 is not
 inherited in full; private journals, retained object transport, approval
 receipts, global fencing and complete notification deduplication are excluded.
 
+## Manual operation
+
+2026-10-06: provide one dispatch-only manual release using the same bounded
+release operations. An explicit manual request omits clock and daily-cycle
+scheduling choices only. One workflow refreshes permitted inputs, waits a
+bounded time for current checks, integrates and prepares the exact promotion,
+then performs separately reviewed publication. Approval holds no writer
+credential or writer concurrency. Active manual runs make scheduled release
+inspection wait; candidates are still rechecked immediately before writes.
+Current GitHub PRs/checks/tags and job outputs suffice: no persistent cycle
+record, label, comment command or new service is adopted. Manual execution
+proves release operation separately from the scheduler's trigger delivery.
+
 ## One-time reconstruction
 
 The maintainer authorized fixed a886934 pickup and one multi-scope assembly
