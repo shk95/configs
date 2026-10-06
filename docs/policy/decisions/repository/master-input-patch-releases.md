@@ -18,6 +18,10 @@ enters master through a checked PR and merge commit; no direct commit or
 protection bypass is introduced. Windows is not read or published by this lane.
 A future Windows patch path requires its own explicit design and checks.
 
+Master Unix-like configuration source must match its current published release
+before input patching. An accepted but unpublished general change is never
+relabelled as an automatic patch, even if its declaration was left unchanged.
+
 General development remains topic-to-dev-to-master and its version declaration
 and publication are developer-owned. Before promotion, dev incorporates input
 patch history already accepted on master through an ordinary reviewed dev PR.

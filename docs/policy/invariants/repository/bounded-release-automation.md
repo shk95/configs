@@ -1,5 +1,5 @@
 id: repository/bounded-release-automation
-statement: Automatic and manual input patch writes use current master and only the Unix-like permitted input boundary, match current source and successful checks without development promotion or Windows publication, separate candidate execution from writer credentials, preserve immutable tags, and confirm ambiguous remote writes before continuing.
+statement: Automatic and manual input patch writes use current master with already-published Unix-like configuration source and only the permitted input boundary, match current source and successful checks without development promotion or Windows publication, separate candidate execution from writer credentials, preserve immutable tags, and confirm ambiguous remote writes before continuing.
 rationale: docs/policy/architecture.md § Version control and releases
 enforced-by: tool tool/version-control/release.py
 enforced-by: fixture tool/version-control/test-release.py

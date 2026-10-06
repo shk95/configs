@@ -410,6 +410,21 @@ class ReleaseFixtures(unittest.TestCase):
             self.assertFalse(remote.prs[0]['merged'])
             self.assertEqual(remote.remote_git('rev-parse','refs/heads/master'),advanced)
 
+    def test_unpublished_master_development_cannot_be_relabelled_patch(self):
+        r.git('checkout','-q','--detach',self.base)
+        Path('unixlike/general-config').write_text('Accepted but not released development.')
+        general=self.commit('feat(unixlike): unreleased master development')
+        r.git('update-ref','refs/remotes/origin/master',general)
+        with patch.object(r,'tag_state',return_value='done'):
+            with self.assertRaisesRegex(ValueError,'unpublished Unix-like source'):
+                r.inspect(manual=True,start=True)
+            lock=json.loads(json.dumps(self.lock));lock['nodes']['n']['locked']['rev']='next'
+            self.write('.git/manual-lock.json',lock)
+            with patch.object(r,'api') as writer:
+                with self.assertRaisesRegex(ValueError,'unpublished Unix-like source'):
+                    r.refresh_pr(general,'.git/manual-lock.json')
+                writer.assert_not_called()
+
     def test_tampered_actual_merge_is_not_a_patch(self):
         Path('tampered-merge-content').write_text('Not in the checked patch.')
         altered=self.commit('docs(repository): tampered merge fixture')

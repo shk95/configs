@@ -228,6 +228,20 @@ def manual_active():
                for status in ('queued', 'in_progress', 'waiting', 'pending', 'requested'))
 
 
+def require_published_base(base):
+    value = declaration(base, 'unixlike')
+    prior = tag_name('unixlike', value)
+    if prior != latest('unixlike'):
+        raise ValueError('finish the current Unix-like publication before refreshing')
+    target = git('rev-parse', f'{prior}^{{commit}}')
+    if tag_state('unixlike', target, value) != 'done':
+        raise ValueError('finish the current Unix-like publication before refreshing')
+    git('merge-base', '--is-ancestor', target, base)
+    if subprocess.call(['git', 'diff', '--quiet', target, base, '--', 'unixlike', '.envrc', 'Justfile']):
+        raise ValueError('master has unpublished Unix-like source; publish its development release first')
+    return prior
+
+
 def inspect(manual=False, start=False):
     if not manual and manual_active():
         return {'action': 'wait', 'reason': 'manual input patch is active'}
@@ -235,11 +249,11 @@ def inspect(manual=False, start=False):
     value = declaration(master, 'unixlike')
     if latest('unixlike') is None:
         raise ValueError('initial Unix-like release must exist')
-    state = tag_state('unixlike', git('rev-parse', f"{tag_name('unixlike', value)}^{{commit}}"), value) if tag_name('unixlike', value) in git('tag', '--list').splitlines() else 'missing'
-    if state == 'missing':
+    if tag_name('unixlike', value) not in git('tag', '--list').splitlines():
         if not patch_merge(master):
             return {'action': 'wait', 'reason': 'general Unix-like publication belongs to the developer'}
         return {'action': 'publish', 'source': master, 'base': master, 'head': master}
+    require_published_base(master)
     prs = api('pulls?state=open&base=master&per_page=100')
     patches = [pr for pr in prs if pr['head']['ref'].startswith(PATCH_BRANCH)
                and pr['head']['repo']['full_name'] == repository()]
@@ -393,11 +407,7 @@ def ensure_pr(head, base, title, body):
 def refresh_pr(base, lock_path):
     if not SHA.fullmatch(base) or git('rev-parse', 'origin/master') != base:
         raise ValueError('refresh master base changed')
-    prior_value = declaration(base, 'unixlike')
-    prior = tag_name('unixlike', prior_value)
-    if prior != latest('unixlike') or tag_state('unixlike', git('rev-parse', f'{prior}^{{commit}}'), prior_value) != 'done':
-        raise ValueError('finish the current Unix-like publication before refreshing')
-    git('merge-base', '--is-ancestor', f'{prior}^{{commit}}', base)
+    prior = require_published_base(base)
     path = Path(lock_path)
     if path.is_symlink() or path.stat().st_size > 1024 * 1024:
         raise ValueError('invalid refresh lock artifact')
