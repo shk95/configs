@@ -50,3 +50,17 @@ normal-path operating evidence are distinct; no live failure-experiment project.
 Future tags use domain SemVer fixed by source declarations. Preserve the exact
 two historical tag objects and their old target across the one-time cutover;
 this is a closed historical exception, not a calendar-tag allocation policy.
+
+2026-10-06: the maintainer authorized chronological source-history refinement
+and one replacement of the unconsumed Unix-like/Windows 1.0.0 tags. Preserve
+the original shared refs and tag bytes before replacement. Pause automatic
+writes, validate the candidate locally, replace both refs with expected-old
+checks, restore protections and require exact-source dev CI before recreating
+the two annotations. A failed qualification restores the preserved refs/tags.
+Historical calendar tags remain exact. This one-time bounded migration exception does
+not allow routine tag mutation or change the normal writer's refusal behavior.
+
+The prior minimal dev/master and unconsumed tag objects are temporary rollback
+material, not a second permanent source archive. Delete their backups after
+successful qualification and replacement. Preserve the earlier overengineered
+archive separately; original PR/Actions records retain historical proof.

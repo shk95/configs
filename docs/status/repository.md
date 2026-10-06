@@ -1,27 +1,28 @@
 # Current state: repository
 
-## Reconstruction in progress
+## Current minimal release flow
 
-The reconstruction adopted verified source
-98ba4ef4c23282f9b478897e736d64f256d430c4 into both dev/master. Their original
-protections were restored. Old shared history remains on
-archive/reconstruction-20261005-dev and archive/reconstruction-20261005-master,
-and unfinished work has a verified local bundle/file archive. The two historical
-tag objects and consumer pins were preserved. Unix-like and Windows each
-published an immutable 1.0.0 tag at the adopted source, after maintainer
-Environment review. This certifies provider evidence, not host adoption or Apply.
+Unix-like and Windows have independently versioned source declarations and
+bounded GitHub automation. Only nixpkgs, home-manager, nix-darwin and nixos-wsl
+may refresh automatically. Required checks bind current candidates; exceptional
+release review uses the maintainer Environment. Candidate execution has no
+writer credential. Recovery finishes one known promotion before admitting the
+next; a lost original SHA requires manual identification.
 
-The bounded release writer uses release-control on master; release-approval
-requires maintainer review. Manual operation and CI continuation are enabled.
-Schedule enablement is still off pending normal-path and notification checks.
-Only nixpkgs, home-manager, nix-darwin and nixos-wsl may refresh automatically.
-The assembly CI exception is retired; ordinary event-range CI applies.
+The initial construction and normal protected promotion were observed on the
+original minimal source. Scheduled operation was enabled there, but enablement
+does not prove an actual scheduled run. Current exact-source CI remains in
+Actions and release proof in annotations. Host adoption, activation and Apply
+are outside this release flow.
 
-Current outcomes are in docs/work/repository/minimal-reconstruction/report.md.
-Remote execution evidence stays in Actions and tag annotations. Domain reports
-written before publication are source/fixture checkpoints, not a requirement to
-repeat or copy successful remote CI. Earlier observations below describe old
-source and do not add operating acceptance to this work.
+The maintainer authorized a chronological history refinement and reissue of
+the unconsumed 1.0.0 tags. Original dev/master refs and tag bytes are temporary cutover recovery only.
+Delete those backups after exact-source CI, tag and protection verification;
+the earlier overengineered source remains on archive/reconstruction-* branches. Recovery material
+and prior workflow closure are indexed in
+[the remote archive record](https://github.com/shk95/configs/issues/518).
+Automation stays off during ref/tag replacement and resumes after qualification.
+No worktree or stash from the retired lanes is an active execution dependency.
 
 This file states what is observably true of the repository scope today: hosts and
 classes in use, schema and version facts, and open conditions. Every decision
@@ -176,16 +177,15 @@ warns about a spec past its review-by, and `tool/version-control/audit-remote`
 reports an issue left open beside a terminal report; the workflow closed its
 first issue, #259, on 2026-09-19. The document layout is done
 (`docs/work/repository/docs-layout/report.md`); what it left is the
-classifier's handling of the registries' old roots, a provisional measure
-that ends when the move reaches `master` (#275). The work model is done too
+classifier compatibility for the registries' old roots, now retired after the
+move reached `master` (#275). The work model is done too
 (`docs/work/repository/work-model/report.md`), and so is the in-place
 NixOS-WSL update (`docs/work/unixlike/nixos-wsl-in-place-update/report.md`),
 whose issue the workflow also closed. A Windows release tag annotation states
 each host's evidence in a block of its own. New Unix-like provider tags state
 provider API and fixture evidence once, without certifying a private host;
 the audit retains the two tags of 2026-08-31 as historical exceptions
-(`docs/work/repository/release-tag-contract/report.md`); no tag has been
-created in that form yet. The CI reconsideration work item is done
+(`docs/work/repository/release-tag-contract/report.md`); the independent domain 1.0.0 series uses the current form. The CI reconsideration work item is done
 (`docs/work/repository/ci-headless-runtime/report.md`): the existing required
 Unix-like job now boots the generic headless class and exercises its account,
 ssh and firewall contract without adding a runner or workflow.

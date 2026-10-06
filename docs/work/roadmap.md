@@ -36,13 +36,13 @@ are revised for the new owner before work resumes.
 
 ## Current priorities
 
-2026-10-05: the maintainer selected fixed-base reconstruction from a886934.
-The active entry is `repository/minimal-reconstruction/spec.md`: preserve old
-work, recover required domain features, remove observed CI waste, connect
-bounded automated releases, validate the endpoint and then review cutover.
-The previous operating/controller continuation is frozen, not completed.
-Domain verification lives in the linked Unix-like and Windows reports.
-Host-specific deferred outcomes remain separate from provider reconstruction.
+2026-10-05: the maintainer selected the minimal domain and bounded-release
+outcomes in `repository/minimal-reconstruction/spec.md`.
+
+2026-10-06: domain source and the initial normal promotion are delivered. Actual scheduled operation remains
+to be observed separately from enabling the schedule. Chronological history
+refinement changes documentation and completed transition scaffolding, not
+the required domain outcomes. Deferred host evidence remains independent.
 
 ## Deferred outcomes
 

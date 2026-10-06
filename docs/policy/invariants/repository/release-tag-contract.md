@@ -15,3 +15,9 @@ inferred from the tag. The Unix-like provider and `common` tag state their
 three lanes once and certify no private host consumer. Windows states the
 lanes per host. The two historical calendar tags are preserved by exact object and target
 identity, including across the one-time shared-history reconstruction. That a label or reference names no machine is the manual half.
+
+The maintainer-authorized 2026-10-06 replacement of the two unconsumed 1.0.0
+annotations is a one-time bounded history-refinement exception recorded in
+`docs/policy/decisions/repository/minimal-release-automation.md`. It retains
+original objects until replacement is verified and gives the normal writer no
+tag-update path. Temporary rollback material may then be removed.

@@ -894,11 +894,12 @@ not branch-protection contexts because unselected domains are skipped.
 
 ## Bounded scheduled release
 
-Keep `.github/workflows/release.yml` off until the reconstruction endpoint,
+During a maintainer-authorized shared-history replacement, keep
+`.github/workflows/release.yml` writes and schedules off until the new source,
 branch policies, credentials and notification delivery have been checked.
 `CONFIGS_RELEASE_ENABLED=1` enables manual operation and CI continuation. Keep
 `CONFIGS_RELEASE_SCHEDULE_ENABLED` off during that verification, then set it to
-`1` to enable schedules. Both start off. Configure `release-control` for accepted
+`1` to enable schedules. Disable both during a shared-history replacement. Configure `release-control` for accepted
 master writer jobs without an extra approval requirement, and `release-approval`
 for master with required maintainer review. Approval jobs hold no writer
 concurrency or writer secret; candidate execution holds no writer credential.
