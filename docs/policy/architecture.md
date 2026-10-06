@@ -589,7 +589,7 @@ every Unix-like derivation hash separable from the source change beside it.
 Only its fixed patch publication declaration may accompany an automatic refresh
 (`INV repository/conventional-subject`, `INV repository/flake-lock-isolated`).
 
-Source flows one way from topic branches through `dev` into `master`.
+General development flows from topic branches through `dev` into `master`.
 Each source change is authored in a linked worktree for its topic branch.
 The primary checkout remains the integration point and a place for read-only
 inspection; its index and tracked files do not carry a task's edits. This
@@ -598,13 +598,16 @@ pull-request flow. A commit from the primary checkout is refused locally;
 editor writes are controlled by the start procedure because Git cannot
 intercept them. A separate native host clone may inspect and check an
 unpublished branch without becoming its authoring worktree.
-`master` accepts only a same-repository `dev` pull request and preserves that
-boundary with a merge commit. It does not flow its promotion merge commit back
-to `dev`. Consequently `dev` protection requires the proposed head to include
-its current base, while `master` protection may evaluate the pull request merge
-without requiring `dev` to contain the previous promotion merge commit. The
-single allowed source, one-open-promotion rule, and CI source gate preserve
-serialization.
+`master` accepts same-repository `dev` promotion or the narrowly validated
+Unix-like input patch lane, always through a protected PR and merge commit.
+An input patch is one commit based on the exact current master and changes
+only permitted lock data and its next patch declaration. Scheduled and manual
+entry points share this path and never integrate dev or publish Windows tags.
+General development promotion incorporates accepted input patch history first,
+so it cannot replace that history with an older lock or release declaration.
+It need not import promotion-only merge commits. At most one master PR proceeds
+at a time; exact-source CI binds either lane without a protection bypass
+(`docs/policy/decisions/repository/master-input-patch-releases.md`).
 
 A helper that publishes a change follows the same flow: it commits only on
 a topic branch, cutting one from the remote tip of `dev` when it stands on

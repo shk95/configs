@@ -77,6 +77,7 @@ described below; it does not author that branch's source change.
 
 ```text
 master <- dev <- feature/<domain>-<topic> or fix/<domain>-<topic>
+master <- feature/unixlike-input-patch-<master-sha-prefix> (validated automation only)
 ```
 
 Examples are `feature/unixlike-shell`, `fix/windows-zellij`, and
@@ -348,10 +349,11 @@ requires an accepted policy change first.
 6. Plan domain release tags or deployments separately when their own evidence
    is available.
 
-If promotion is wrong, revert or fix it through `dev` and promote again. Never
-rewrite `master` or move an existing release tag. `dev` requires an up-to-date
-base before merge; `master` does not, because it accepts only `dev` and its
-promotion merge commit intentionally does not flow back into `dev`.
+If promotion is wrong, revert or fix it through dev and promote again. Never
+rewrite master or move an existing release tag. Dev requires an up-to-date base.
+Master promotion need not carry promotion-only merge commits, but must incorporate
+accepted input patch history. Both master lanes require their applicable source
+checks and the one-open-master-PR gate.
 
 ## Add or change governance
 
@@ -895,102 +897,68 @@ not branch-protection contexts because unselected domains are skipped.
 ## Bounded scheduled release
 
 During a maintainer-authorized shared-history replacement, keep
-`.github/workflows/release.yml` writes and schedules off until the new source,
-branch policies, credentials and notification delivery have been checked.
-`CONFIGS_RELEASE_ENABLED=1` enables manual operation and CI continuation. Keep
-`CONFIGS_RELEASE_SCHEDULE_ENABLED` off during that verification, then set it to
-`1` to enable schedules. Disable both during a shared-history replacement. Configure `release-control` for accepted
-master writer jobs without an extra approval requirement, and `release-approval`
-for master with required maintainer review. Approval jobs hold no writer
-concurrency or writer secret; candidate execution holds no writer credential.
+`.github/workflows/release.yml` is the shared Unix-like input patch workflow.
+`CONFIGS_RELEASE_ENABLED=1` enables operation; `CONFIGS_RELEASE_SCHEDULE_ENABLED=1`
+also enables its daily 05:00 Asia/Seoul schedule. Keep schedules off while rolling
+out changed policy and tooling through ordinary dev-to-master promotion.
+Configure release-control for accepted master writers and either the existing
+CONFIGS_RELEASE_TOKEN or CONFIGS_RELEASE_APP_ID and CONFIGS_RELEASE_APP_PRIVATE_KEY.
+The writer needs Contents/PR write and Actions/Checks read with protected merge
+permission; no bypass. Candidate execution has no writer credentials. No general
+release approval or Windows operation belongs to this path.
 
-Reuse an equivalent existing `CONFIGS_RELEASE_TOKEN` Environment secret, or set
-`CONFIGS_RELEASE_APP_ID` and `CONFIGS_RELEASE_APP_PRIVATE_KEY` for a GitHub App
-installation on this repository. The writer needs Contents and Pull requests
-write plus Actions/Checks read, Workflows write when promoting workflow changes,
-and normal protected merges. It must not bypass
-Required checks. Do not use the default token to author automatic PRs: it can
-leave their CI awaiting approval. Platform authentication and Environment
-behavior: [GitHub token](https://docs.github.com/en/actions/concepts/security/github_token),
-[Environment protection](https://docs.github.com/en/actions/reference/workflows-and-actions/deployments-and-environments).
+### Input patch operation
 
-05:00 Asia/Seoul refreshes only nixpkgs, home-manager, nix-darwin and nixos-wsl.
-06:00 opens promotion; until 07:00 pending refresh releases the runner. After
-07:00 current integrated dev may proceed, with its own matching Required checks
-and needed review. CI completion resumes the same bounded path. Schedules may
-be delayed by GitHub; no timer or guarantee of a missed-run recovery is added.
+The workflow selects current master and refreshes nixpkgs, home-manager,
+nix-darwin and nixos-wsl. Unchanged inputs produce no PR or tag. Changed inputs
+produce one single-commit branch feature/unixlike-input-patch-<base SHA prefix>
+with only the lock and the next patch release declaration. It opens a master PR,
+requires exact-base/head/tree CI proof, merges through protection, confirms actual
+merge identity and publishes an immutable Unix-like tag. CI completion events
+resume scheduled operation; no 06/07 development-promotion stages or daily
+promotion limit remain. Delayed/missing schedules have no guaranteed catch-up.
 
-Prepare a changed domain's `release.json` before promotion: exact previous tag,
-new version, change description, compatibility and migration text. A patch
-refresh writes only its fixed declaration and lock. Human Unix-like changes
-pending since the previous release prevent an automatic patch from relabeling
-them. Do not change version or evidence after CI merely to certify that CI.
-Write local/fixture evidence with the source; use current Actions/PR checks for
-remote evidence. A remote CI result requires no report-only follow-up commit.
+At most one master PR may be open. Finish an existing development promotion before
+starting input patching. Development remains topic-to-dev-to-master. Before a
+later dev promotion, incorporate accepted input patch commits through a reviewed
+topic PR against dev: fetch origin, create the topic from origin/dev in a linked
+worktree, merge origin/master when it carries actual patch source, resolve any
+conflicting lock/declaration with the intended current inputs/version, and run
+checks before the protected dev PR merge. Do not merge master back solely to carry
+promotion merge commits. Development release versions and tags remain the
+maintainer's responsibility; input patch automation never publishes them.
 
-The one-time reconstruction adopted the verified endpoint and published the
-independent 1.0.0 tags. Its temporary CI range has been retired. Ordinary
-dev pushes and PRs use their actual event range. master is verified by its
-checked promotion PR and the actual merge parents/tree; duplicate master push
-CI is not run. The initial publication path is retired. Normal automation
-requires existing domain tags. A normal promotion records
-actual M's parents/tree against the checked PR, then publishes only its changed domains.
-A rerun reads existing remote tags, confirms targets and required annotation,
-and creates only missing tags. It never overwrites or requires a newly created
-tag object to have the old object's ID.
+### Manual operation and recovery
 
-If master moved and the original M cannot be determined, stop. Dispatch the
-workflow with `source` set to the original full SHA, using PR/Actions records
-as the human reference; Environment review is required again. Do not substitute
-current master for that source. Failed workflow notifications and Environment
-review requests are the initial alerts; verify actual maintainer delivery at
-live enablement. Full duplicate suppression is not a completion condition.
+Choose Actions → Manual Unix-like input patch → Run workflow → master or run:
 
-Read-only diagnosis: `tool/configs release inspect` (returns disabled when off).
-The workflow calls the guarded `advance`, `refresh-pr` and reviewed `publish`
-operations. Those never activate a host or run Windows Apply.
+```sh
+gh workflow run manual-release.yml --ref master
+```
 
-### One-call manual release
+REST clients POST to /repos/shk95/configs/actions/workflows/manual-release.yml/dispatches
+with ref=master and Actions write permission. The thin manual entry calls the same
+shared workflow and waits in its writer job up to 60 minutes, polling every
+30 seconds. Failure/cancellation of checks, stale candidates and expired waits
+stop visibly while preserving the PR. Scheduled inspection defers to active manual
+runs; cancel unwanted runs rather than leaving them pending. Both entry points
+serialize writer jobs and preserve already completed remote work.
 
-`Manual domain release` (`manual-release.yml`) is a separate dispatch-only
-entry point. It uses the same enablement, release-control credentials,
-release-approval Environment and branch protections as the scheduled flow.
-Publish the workflow and its tooling to master through the normal protected
-promotion before use. Only a dispatch targeting master is accepted.
+On failure inspect current PR/check state, repair the source or rerun transient
+CI failure, then rerun the whole workflow or dispatch again. If master moved
+before patch merge, close the stale patch PR and restart from current master;
+the automation never rebases or merges a stale patch. If an orphan branch at the
+same base conflicts with the intended lock, inspect and explicitly retire it
+before retrying. Existing matching branches/PRs are reused after ambiguous writes.
 
-Open Actions → Manual domain release → Run workflow, select master and run
-once, or call `gh workflow run manual-release.yml --ref master`. REST clients
-POST `{"ref":"master"}` to
-`/repos/shk95/configs/actions/workflows/manual-release.yml/dispatches` using
-an authorized token with Actions write permission. No input field or second
-dispatch is needed. Required Environment approval is still a human action.
+A known missing patch tag is completed before a new refresh. Reruns verify existing
+targets and annotations and create only missing tags; they never overwrite tags.
+If the original patch merge is no longer current master, dispatch Unix-like input
+patch with source=<original full merge SHA>. Only an input patch merge reachable
+from master and backed by its exact PR CI proof can recover. General promotion
+and Windows release sources are refused. Read-only diagnosis is tool/configs
+release inspect; supported explicit publication recovery is tool/configs release
+publish --source <SHA>. No GitHub Release or host activation/Apply is performed.
 
-The workflow refreshes the same four permitted inputs without writer
-credentials. Accepted master tooling validates and publishes the managed
-refresh PR, waits for its matching Required checks, integrates it, opens
-the dev-to-master promotion and waits for its matching checks. The approval
-job names that exact candidate and holds no writer credential or writer
-concurrency. The final writer rechecks the candidate before protected merge
-and immutable tag publication. Clock and daily promotion limits alone are
-omitted. Pending human domain changes still need source-owned declarations
-and required review; they cannot be relabelled as an automatic patch.
-
-CI waiting has a 60-minute budget in one integration job. Failed/cancelled
-checks, changed candidates or an expired wait fail visibly. The job releases
-writer concurrency before Environment review. Scheduled/CI-triggered release
-inspection waits while a manual run is queued, executing or awaiting review;
-cancel an unwanted manual run rather than leaving its approval pending.
-Manual dispatches are serialized and never cancel the running manual cycle.
-
-Unchanged inputs create no refresh commit or PR. If dev and master already
-have identical trees and publication is complete, the run ends without a new
-tag. An existing managed PR or promotion is resumed rather than duplicated.
-On failure inspect the run and current PR/check state, repair the failed
-source/CI or resolve the conflicting candidate, then dispatch again. If the
-prior promotion has missing tags, the next run finishes that publication
-before considering another cycle. Ambiguous original source identity still
-requires the explicit-source recovery operation above. No runtime database,
-cycle label or comment command is added.
-
-Report manual operating results separately from actual event=schedule runs.
-Neither path adopts private host pins, activates a host or runs Windows Apply.
+Current PRs/Actions/tags are the execution record, with no state database or result
+copy commit. Report manual qualification separately from actual schedule events.

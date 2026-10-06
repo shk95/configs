@@ -1,27 +1,21 @@
 # Current state: repository
 
-## Current minimal release flow
+## Current input patch flow
 
-Unix-like and Windows have independently versioned source declarations and
-bounded GitHub automation. Only nixpkgs, home-manager, nix-darwin and nixos-wsl
-may refresh automatically. Required checks bind current candidates; exceptional
-release review uses the maintainer Environment. Candidate execution has no
-writer credential. Recovery finishes one known promotion before admitting the
-next; a lost original SHA requires manual identification.
+Automatic and manual workflows share a master-based Unix-like input patch
+path. Only nixpkgs, home-manager, nix-darwin and nixos-wsl refresh; changed
+locks carry the next patch declaration and a checked PR directly into master.
+General dev promotion and Windows publication are not performed by this path.
+The one-open-master-PR rule separates patching from developer promotion, and
+promotion must incorporate already accepted patch history. Interrupted patch
+publication preserves its original merge and completes only missing tags.
 
-The initial construction and normal protected promotion were observed on the
-original minimal source. Scheduled operation was enabled there, but enablement
-does not prove an actual scheduled run. Current exact-source CI remains in
-Actions and release proof in annotations. Host adoption, activation and Apply
-are outside this release flow.
-
-The source now includes a one-call `Manual domain release` workflow. It uses
-the same permitted refresh, protected PR integration and immutable publication,
-with bounded CI waiting and separate candidate-specific Environment review.
-Only the clock/day scheduling choices are omitted. Local fixtures and workflow
-syntax checks cover this path; rollout and live manual operation remain to be
-qualified through Actions. Manual qualification does not close actual schedule
-observation. See `docs/work/repository/manual-domain-release/report.md`.
+The prior combined manual path was qualified through Actions with one
+publication recovery rerun. It is superseded by the narrowed source. Local
+proof is tracked in `docs/work/repository/master-input-patch/report.md`;
+rollout and live qualification of this revision belong to PR/Actions records.
+Manual qualification never proves the actual scheduled trigger. Consumer
+adoption, activation and Apply are outside this workflow.
 
 The maintainer authorized a chronological history refinement and reissue of
 the unconsumed 1.0.0 tags. Original dev/master refs and tag bytes are temporary cutover recovery only.
@@ -44,9 +38,9 @@ current-branch checks are required, administrators are enforced,
 conversations must be resolved, force pushes and deletions are disabled, and
 both branches require only the `Required checks` gate.
 
-`dev` requires a pull request and an up-to-date base; `master` accepts only
-`dev` through a pull request with a merge commit; squash and rebase merges
-are disabled.
+`dev` requires a pull request and an up-to-date base; `master` accepts
+same-repository dev promotion or the bounded Unix-like input patch lane
+through a merge-commit PR; squash and rebase merges are disabled.
 
 Source authoring now uses a task-dedicated linked worktree. The primary
 checkout remains available for inspection and integration. The routine

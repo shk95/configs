@@ -4,7 +4,6 @@ INV repository/bounded-release-automation
 INV repository/release-tag-contract
 """
 import argparse
-import datetime as dt
 import io
 import json
 import os
@@ -14,16 +13,14 @@ import subprocess
 import sys
 import time
 import zipfile
-from zoneinfo import ZoneInfo
 
-DOMAINS = ('unixlike', 'windows')
+PATCH_BRANCH = 'feature/unixlike-input-patch-'
 FIELDS = {'previous', 'version', 'summary', 'compatibility', 'migration'}
 VERSION = re.compile(r'(0|[1-9][0-9]*)\.(0|[1-9][0-9]*)\.(0|[1-9][0-9]*)\Z')
 SHA = re.compile(r'[0-9a-f]{40}\Z')
 REFRESH_SUMMARY = 'Refresh permitted Unix-like inputs.'
 LEGACY = {
     'unixlike-v2026.08.31': 'a844c146b5e966a42a3a3bb7d8245e24af4c8dcd',
-    'windows-v2026.08.31': '05dcfcefe69cc4f01a394364f8d68b06d5abbd5b',
 }
 
 
@@ -110,23 +107,10 @@ def annotation_fields(domain, source, value):
     lines = [f'Domain: {domain}', f"Version: {value['version']}", f'Source: {source}',
              f"Previous: {value['previous']}", f"Summary: {value['summary']}",
              f"Compatibility: {value['compatibility']}", f"Migration: {value['migration']}"]
-    if domain == 'windows':
-        lines += ['Host: windows-ci', 'Evaluation: passed; native Windows CI',
-                  'Build: not applicable; desired-state provider',
-                  'Native runtime: passed; native Windows CI fixtures']
-    else:
-        lines += ['Evaluation: passed; provider CI',
-                  'Build: passed; selected matching-system provider fixtures',
-                  'Native runtime: passed; provider CI fixtures']
+    lines += ['Evaluation: passed; provider CI',
+              'Build: passed; selected matching-system provider fixtures',
+              'Native runtime: passed; provider CI fixtures']
     return lines + ['Deployment: not performed by release', f'Evidence: https://github.com/{repository()}/commit/{source}']
-
-
-def planned(source):
-    parents = git('show', '-s', '--format=%P', source).split()
-    if len(parents) != 2:
-        return []
-    names = set(git('diff', '--name-only', parents[0], source).splitlines())
-    return [domain for domain in DOMAINS if f'{domain}/release.json' in names]
 
 
 def identity_from_zip(data):
@@ -166,21 +150,6 @@ def checked(base, head, tree, event):
 
 def merge_tree(base, head):
     return git('merge-tree', '--write-tree', base, head).splitlines()[0]
-
-
-def validate_versions(base, head):
-    paths = set(git('diff', '--name-only', base, head).splitlines())
-    domains = [domain for domain in DOMAINS if any(p.startswith(domain + '/') for p in paths)]
-    for domain in domains:
-        value = declaration(head, domain)
-        previous = latest(domain)
-        if previous is None or value['previous'] != previous:
-            raise ValueError(f'{domain}: refresh declaration against the latest published release')
-        before = tuple(map(int, previous[len(domain) + 2:].split('.')))
-        after = tuple(map(int, value['version'].split('.')))
-        if after <= before or f'{domain}/release.json' not in paths:
-            raise ValueError(f'{domain}: changed source requires a new release declaration')
-    return domains
 
 
 def validate_lock(before, after, allowed):
@@ -223,18 +192,28 @@ def validate_lock(before, after, allowed):
 
 
 def automatic(base, head):
+    """Static admission proof, also usable for historical patch audits.
+    INV repository/promotion-source
+    """
+    if git('show', '-s', '--format=%P', head).split() != [base]:
+        return False
     paths = set(git('diff', '--name-only', base, head).splitlines())
-    if not paths or not paths <= {'unixlike/flake.lock', 'unixlike/release.json'}:
+    if paths != {'unixlike/flake.lock', 'unixlike/release.json'}:
         return False
+    prior = tag_name('unixlike', declaration(base, 'unixlike'))
     value = declaration(head, 'unixlike')
-    prior = latest('unixlike')
-    if not prior or value != {'previous': prior, 'version': patch_version(prior), 'summary': REFRESH_SUMMARY, 'compatibility': 'patch', 'migration': ''}:
+    if value != {'previous': prior, 'version': patch_version(prior),
+                 'summary': REFRESH_SUMMARY, 'compatibility': 'patch', 'migration': ''}:
         return False
-    allowed = set(source_json('HEAD', 'unixlike/automatic-refresh-inputs.json'))
+    allowed = set(source_json(base, 'unixlike/automatic-refresh-inputs.json'))
     validate_lock(source_json(base, 'unixlike/flake.lock'), source_json(head, 'unixlike/flake.lock'), allowed)
-    # Admission also covers all pending domain changes since its previous release.
-    cumulative = set(git('diff', '--name-only', f'{prior}^{{commit}}', head, '--', 'unixlike').splitlines())
-    return cumulative <= {'unixlike/flake.lock', 'unixlike/release.json'}
+    return True
+
+
+def patch_merge(source):
+    parents = git('show', '-s', '--format=%P', source).split()
+    return (len(parents) == 2 and automatic(*parents)
+            and git('rev-parse', f'{source}^{{tree}}') == merge_tree(*parents))
 
 
 def patch_version(previous):
@@ -243,91 +222,55 @@ def patch_version(previous):
 
 
 def manual_active():
-    # Filter active states server-side so an old approval is not hidden by a
+    # Filter active states server-side so an old running job is not hidden by a
     # page of newer completed runs. No process/session liveness is inferred.
     return any(api(f'actions/workflows/manual-release.yml/runs?status={status}&per_page=1')['workflow_runs']
                for status in ('queued', 'in_progress', 'waiting', 'pending', 'requested'))
 
 
-def inspect(now=None, manual=False, start=False):
+def inspect(manual=False, start=False):
     if not manual and manual_active():
-        return {'action': 'wait', 'reason': 'manual release is active'}
-    master, dev = git('rev-parse', 'origin/master'), git('rev-parse', 'origin/dev')
-    for domain in DOMAINS:
-        if latest(domain) is None:
-            raise ValueError('initial domain tags must exist before normal automation')
-    pending = [d for d in planned(master) if tag_state(d, master, declaration(master, d)) == 'missing']
-    if pending:
-        return {'action': 'publish', 'source': master, 'base': master, 'head': master, 'approval': False}
-    for domain in DOMAINS:
-        value = declaration(master, domain)
-        refs = api(f"git/matching-refs/tags/{tag_name(domain, value)}")
-        exact = [ref for ref in refs if ref['ref'] == f'refs/tags/{tag_name(domain, value)}']
-        if not exact:
-            raise ValueError('publication source is ambiguous; specify its original SHA')
-        obj = exact[0]['object']
-        if obj['type'] != 'tag':
-            raise ValueError('published release must be annotated')
-        target = api(f"git/tags/{obj['sha']}")['object']['sha']
-        tag_state(domain, target, value)
-    current = now or dt.datetime.now(ZoneInfo('Asia/Seoul'))
-    refresh = [pr for pr in api('pulls?state=open&base=dev&per_page=100') if pr['head']['ref'] == 'feature/unixlike-automatic-refresh' and pr['head']['repo']['full_name'] == repository()]
-    if len(refresh) > 1:
-        raise ValueError('multiple managed refresh PRs')
-    if not manual and current.hour < 6:
-        if current.hour == 5 and not refresh:
-            return {'action': 'refresh', 'base': dev, 'head': dev, 'approval': False}
-        return {'action': 'wait', 'reason': 'promotion opens at 06:00 Asia/Seoul'}
-    # A single normal promotion per local day; recovery above is independent.
-    for pr in ([] if manual else api('pulls?state=closed&base=master&sort=updated&direction=desc&per_page=20')):
-        if pr['head']['ref'] == 'dev' and pr['head']['repo']['full_name'] == repository() and pr['merged_at'] and dt.datetime.fromisoformat(pr['merged_at'].replace('Z', '+00:00')).astimezone(ZoneInfo('Asia/Seoul')).date() == current.date():
-            return {'action': 'wait', 'reason': 'this cycle already promoted'}
-    if refresh:
-        pr = refresh[0]
+        return {'action': 'wait', 'reason': 'manual input patch is active'}
+    master = git('rev-parse', 'origin/master')
+    value = declaration(master, 'unixlike')
+    if latest('unixlike') is None:
+        raise ValueError('initial Unix-like release must exist')
+    state = tag_state('unixlike', git('rev-parse', f"{tag_name('unixlike', value)}^{{commit}}"), value) if tag_name('unixlike', value) in git('tag', '--list').splitlines() else 'missing'
+    if state == 'missing':
+        if not patch_merge(master):
+            return {'action': 'wait', 'reason': 'general Unix-like publication belongs to the developer'}
+        return {'action': 'publish', 'source': master, 'base': master, 'head': master}
+    prs = api('pulls?state=open&base=master&per_page=100')
+    patches = [pr for pr in prs if pr['head']['ref'].startswith(PATCH_BRANCH)
+               and pr['head']['repo']['full_name'] == repository()]
+    if len(patches) > 1:
+        raise ValueError('multiple input patch PRs')
+    if len(prs) != len(patches):
+        if manual:
+            raise ValueError('development promotion is open; finish it before input patching')
+        return {'action': 'wait', 'reason': 'development promotion is open'}
+    if patches:
+        pr = patches[0]
         head = pr['head']['sha']
         if not SHA.fullmatch(head):
-            raise ValueError('invalid managed refresh head')
-        # API-created commits are absent in the fresh accepted-tooling runner;
-        # the writer guard fetches dev/master, not the managed feature head.
+            raise ValueError('invalid input patch head')
         if subprocess.call(['git', 'cat-file', '-e', f'{head}^{{commit}}'], stdout=subprocess.DEVNULL, stderr=subprocess.DEVNULL):
             git('fetch', '--quiet', 'origin', head)
-        common = git('merge-base', dev, head)
-        if not automatic(common, head):
-            raise ValueError('managed refresh includes unpermitted content')
-        current_base = subprocess.call(['git', 'merge-base', '--is-ancestor', dev, head], stdout=subprocess.DEVNULL, stderr=subprocess.DEVNULL) == 0
-        if not current_base and (start or (not manual and current.hour < 7)):
-            return {'action': 'refresh', 'base': dev, 'head': dev, 'approval': False}
-        if not current_base and manual:
-            raise ValueError('managed refresh base changed; rerun the manual workflow')
-        if current_base:
-            tree = merge_tree(dev, head)
-            if checked(dev, head, tree, 'pull_request'):
-                return {'action': 'refresh-merge', 'number': pr['number'], 'base': dev, 'head': head, 'tree': tree, 'approval': False}
-        if manual or current.hour < 7:
-            return {'action': 'wait', 'reason': 'refresh Required checks pending',
-                    'base': dev, 'head': head}
-    promotions = api('pulls?state=open&base=master&per_page=100')
-    if start and not refresh and not promotions:
-        return {'action': 'refresh', 'base': dev, 'head': dev, 'approval': False}
-    if git('rev-parse', f'{master}^{{tree}}') == git('rev-parse', f'{dev}^{{tree}}'):
-        return {'action': 'none'}
-    validate_versions(master, dev)
-    tree = merge_tree(master, dev)
-    if promotions:
-        if len(promotions) != 1 or promotions[0]['head']['ref'] != 'dev' or promotions[0]['head']['repo']['full_name'] != repository():
-            raise ValueError('unexpected promotion PR')
-        pr = promotions[0]
-        if not checked(master, dev, tree, 'pull_request'):
-            return {'action': 'wait', 'reason': 'promotion Required checks pending',
-                    'base': master, 'head': dev}
-        return {'action': 'promote', 'number': pr['number'], 'base': master, 'head': dev, 'tree': tree, 'approval': not automatic(master, dev)}
-    return {'action': 'promotion-pr', 'base': master, 'head': dev, 'tree': tree, 'approval': False}
+        if not automatic(master, head):
+            raise ValueError('stale or unpermitted input patch; close it and rerun against current master')
+        tree = merge_tree(master, head)
+        if checked(master, head, tree, 'pull_request'):
+            return {'action': 'patch-merge', 'number': pr['number'], 'base': master, 'head': head, 'tree': tree}
+        return {'action': 'wait', 'reason': 'input patch Required checks pending', 'base': master, 'head': head}
+    if start:
+        return {'action': 'refresh', 'base': master, 'head': master}
+    return {'action': 'none'}
 
 
 def write_guard():
     if os.environ.get('CONFIGS_RELEASE_ENABLED') != '1' or not os.environ.get('GH_TOKEN'):
         raise ValueError('release writes need explicit enablement and writer credentials')
-    git('fetch', '--quiet', 'origin', '+refs/heads/dev:refs/remotes/origin/dev', '+refs/heads/master:refs/remotes/origin/master', '--tags')
+    git('fetch', '--quiet', 'origin', '+refs/heads/master:refs/remotes/origin/master', '--tags')
     if subprocess.call(['git', 'merge-base', '--is-ancestor', 'HEAD', 'origin/master'], stdout=subprocess.DEVNULL, stderr=subprocess.DEVNULL):
         raise ValueError('writer implementation is not accepted master source')
 
@@ -335,16 +278,24 @@ def write_guard():
 def publish(source):
     source = git('rev-parse', '--verify', f'{source}^{{commit}}')
     git('merge-base', '--is-ancestor', source, 'origin/master')
-    domains = planned(source)
-    if not domains:
-        raise ValueError('source is not an identified promotion publication')
+    if not patch_merge(source):
+        raise ValueError('source is not a bounded Unix-like input patch merge')
+    domains = ['unixlike']
     missing = [d for d in domains if tag_state(d, source, declaration(source, d)) == 'missing']
     if not missing:
         return
     parents = git('show', '-s', '--format=%P', source).split()
     tree = git('rev-parse', f'{source}^{{tree}}')
-    prs = api(f'commits/{source}/pulls')
-    verified = len(parents) == 2 and any(pr['merged_at'] and pr['base']['ref'] == 'master' and pr['head']['ref'] == 'dev' and pr['head']['repo']['full_name'] == repository() and pr['merge_commit_sha'] == source for pr in prs) and checked(parents[0], parents[1], tree, 'pull_request')
+    # GitHub's commit-to-PR association can lag its successful merge response.
+    # Retry read-only proof briefly; never relax source/check agreement.
+    verified = False
+    for attempt in range(3):
+        prs = api(f'commits/{source}/pulls')
+        verified = any(pr['merged_at'] and pr['base']['ref'] == 'master' and pr['head']['ref'].startswith(PATCH_BRANCH) and pr['head']['repo']['full_name'] == repository() and pr['merge_commit_sha'] == source for pr in prs) and checked(parents[0], parents[1], tree, 'pull_request')
+        if verified:
+            break
+        if attempt < 2:
+            time.sleep(5)
     if not verified:
         raise ValueError('publication lacks matching Required checks for its actual source tree')
     for domain in missing:
@@ -360,27 +311,23 @@ def publish(source):
             raise ValueError('remote publication not confirmed')
 
 
-def advance(expected_head, expected_base, approved=False, manual=False):
-    action = inspect(manual=True) if manual else inspect()
-    if manual and action['action'] == 'wait' and (action.get('head') != expected_head or action.get('base') != expected_base):
-        raise ValueError('candidate changed after preparation/approval')
-    if action['action'] in ('wait', 'none'):
+def advance(expected_head, expected_base, manual=False):
+    action = inspect(manual=manual)
+    if action['action'] == 'none' or (not manual and action['action'] == 'wait' and not action.get('head')):
         return action
     if action.get('head') != expected_head or action.get('base') != expected_base:
-        raise ValueError('candidate changed after preparation/approval')
-    if action['approval'] and not approved:
-        raise ValueError('this candidate requires Environment review')
+        raise ValueError('candidate changed; rerun against current master')
+    if action['action'] == 'wait':
+        return action
     if action['action'] == 'publish':
         publish(action['source'])
-    elif action['action'] == 'promotion-pr':
-        ensure_pr('dev', 'master', 'Promote accepted dev source', 'Source promotion only; domain publication is handled separately.')
-    else:
+    elif action['action'] == 'patch-merge':
         try:
             result = request(f"pulls/{action['number']}/merge", 'PUT', {'sha': action['head'], 'merge_method': 'merge'})
             if not result['merged']:
                 raise ValueError('protected merge did not complete')
         except subprocess.CalledProcessError:
-            pass  # A lost response is resolved by the remote PR, never a blind retry.
+            pass
         remote = api(f"pulls/{action['number']}")
         if not remote['merged'] or remote['head']['sha'] != action['head']:
             raise ValueError('remote merge is not confirmed')
@@ -388,18 +335,14 @@ def advance(expected_head, expected_base, approved=False, manual=False):
         git('fetch', '--quiet', 'origin')
         if git('show', '-s', '--format=%P', merged).split() != [action['base'], action['head']] or git('rev-parse', f'{merged}^{{tree}}') != action['tree']:
             raise ValueError('actual merge changed; no tags published')
-        if action['action'] == 'promote' and planned(merged):
-            publish(merged)
+        publish(merged)
+    else:
+        raise ValueError('unexpected input patch action')
     return action
 
 
 def prepare_manual(timeout=3600, interval=30):
-    """Finish checked integration, then return an exact candidate for review.
-
-    The caller owns writer concurrency. Review and final publication happen in
-    separate jobs, so no approval wait holds that concurrency or credential.
-    PRs, checks and tags remain the state; the deadline is only this job's budget.
-    """
+    """Wait for the one input patch PR and finish immutable publication."""
     deadline = time.monotonic() + timeout
     waiting = None
     while True:
@@ -409,28 +352,25 @@ def prepare_manual(timeout=3600, interval=30):
         if waiting is not None and identity != waiting:
             raise ValueError('candidate changed while waiting; rerun the manual workflow')
         print(json.dumps(action), file=sys.stderr, flush=True)
-        if action['action'] in ('promote', 'none'):
-            if pending_review(action):
-                raise ValueError('same candidate already awaits Environment review; use that run')
+        if action['action'] == 'none':
             return action
         if action['action'] == 'wait':
+            if not action.get('head'):
+                raise ValueError(action['reason'])
             checks = api(f"commits/{action['head']}/check-runs?per_page=100")['check_runs']
-            required = [check for check in checks if check['name'] == 'Required checks'
-                        and check['app']['id'] == 15368]
-            newest = max(required, key=lambda check: check['id']) if required else None
+            required = [c for c in checks if c['name'] == 'Required checks' and c['app']['id'] == 15368]
+            newest = max(required, key=lambda c: c['id']) if required else None
             if newest and newest['conclusion'] in ('failure', 'cancelled', 'timed_out', 'action_required', 'stale'):
                 raise ValueError('Required checks failed; repair or rerun CI before retrying')
             if time.monotonic() >= deadline:
-                raise ValueError('manual release check wait expired; remote PRs are preserved')
+                raise ValueError('manual input patch wait expired; remote PR is preserved')
             waiting = identity
             time.sleep(min(interval, max(0, deadline - time.monotonic())))
             continue
-        if action['action'] not in ('refresh-merge', 'promotion-pr', 'publish'):
-            raise ValueError('unexpected manual release action')
-        result = advance(action['head'], action['base'], manual=True)
-        waiting = identity if result['action'] == 'wait' else None
+        advance(action['head'], action['base'], manual=True)
+        waiting = None
         if time.monotonic() >= deadline:
-            raise ValueError('manual release wait expired; remote PRs are preserved')
+            raise ValueError('manual input patch wait expired; remote work is preserved')
 
 
 def ensure_pr(head, base, title, body):
@@ -451,112 +391,81 @@ def ensure_pr(head, base, title, body):
 
 
 def refresh_pr(base, lock_path):
-    if not SHA.fullmatch(base) or git('rev-parse', 'origin/dev') != base:
-        raise ValueError('refresh base changed')
-    if any(tag_state(d, git('rev-parse', f'{latest(d)}^{{commit}}'), declaration('origin/master', d)) != 'done' for d in DOMAINS):
-        raise ValueError('complete previous publication before refreshing')
+    if not SHA.fullmatch(base) or git('rev-parse', 'origin/master') != base:
+        raise ValueError('refresh master base changed')
+    prior_value = declaration(base, 'unixlike')
+    prior = tag_name('unixlike', prior_value)
+    if prior != latest('unixlike') or tag_state('unixlike', git('rev-parse', f'{prior}^{{commit}}'), prior_value) != 'done':
+        raise ValueError('finish the current Unix-like publication before refreshing')
+    git('merge-base', '--is-ancestor', f'{prior}^{{commit}}', base)
     path = Path(lock_path)
     if path.is_symlink() or path.stat().st_size > 1024 * 1024:
         raise ValueError('invalid refresh lock artifact')
     data = path.read_text()
     lock = json.loads(data)
     before = source_json(base, 'unixlike/flake.lock')
-    allowed = set(source_json('HEAD', 'unixlike/automatic-refresh-inputs.json'))
+    allowed = set(source_json(base, 'unixlike/automatic-refresh-inputs.json'))
     validate_lock(before, lock, allowed)
     if before == lock:
         return {'action': 'none'}
-    # A patch cannot silently relabel pending human Unix-like changes.
-    prior = latest('unixlike')
-    changed = set(git('diff', '--name-only', f'{prior}^{{commit}}', base, '--', 'unixlike').splitlines())
-    if not changed <= {'unixlike/flake.lock', 'unixlike/release.json'}:
-        raise ValueError('pending human Unix-like changes require a source-owned declaration')
+    if api('pulls?state=open&base=master&per_page=100'):
+        raise ValueError('a master PR opened during refresh; rerun after it completes')
     value = {'previous': prior, 'version': patch_version(prior), 'summary': REFRESH_SUMMARY,
              'compatibility': 'patch', 'migration': ''}
-    branch = 'feature/unixlike-automatic-refresh'
-    matching = api(f'git/matching-refs/heads/{branch}')
-    exact = [ref for ref in matching if ref['ref'] == f'refs/heads/{branch}']
-    parent = base
+    branch = PATCH_BRANCH + base[:12]
+    existing = api(f'git/matching-refs/heads/{branch}')
+    exact = [ref for ref in existing if ref['ref'] == 'refs/heads/' + branch]
     if exact:
-        parent = exact[0]['object']['sha']
-        git('fetch', '--quiet', 'origin', f'refs/heads/{branch}:refs/remotes/origin/{branch}')
-        if git('rev-parse', f'{base}^{{tree}}') != git('rev-parse', f'{parent}^{{tree}}') and not automatic(git('merge-base', base, parent), parent):
-            # A branch already merged into dev is a valid previous cycle.
-            if subprocess.call(['git', 'merge-base', '--is-ancestor', parent, base], stdout=subprocess.DEVNULL, stderr=subprocess.DEVNULL):
-                raise ValueError('managed branch contains unpermitted changes')
-        if subprocess.call(['git', 'merge-base', '--is-ancestor', base, parent], stdout=subprocess.DEVNULL, stderr=subprocess.DEVNULL) == 0 and source_json(parent, 'unixlike/flake.lock') == lock and source_json(parent, 'unixlike/release.json') == value:
-            return ensure_pr(branch, 'dev', 'Refresh permitted Unix-like inputs', 'Automatic patch: four permitted inputs only.')
-    # Base the new tree on current dev and append history without force pushes.
+        head = exact[0]['object']['sha']
+        git('fetch', '--quiet', 'origin', head)
+        if not automatic(base, head) or source_json(head, 'unixlike/flake.lock') != lock:
+            raise ValueError('input patch branch conflicts; inspect it before retrying')
+        return ensure_pr(branch, 'master', 'Patch permitted Unix-like inputs', 'Automatic Unix-like patch: four permitted inputs only; no dev promotion.')
     entries = []
     for name, content in [('unixlike/flake.lock', data), ('unixlike/release.json', json.dumps(value, indent=2) + '\n')]:
         blob = api('git/blobs', {'content': content, 'encoding': 'utf-8'})
         entries.append({'path': name, 'mode': '100644', 'type': 'blob', 'sha': blob['sha']})
     tree = api('git/trees', {'base_tree': git('rev-parse', f'{base}^{{tree}}'), 'tree': entries})
-    if parent != base and subprocess.call(['git', 'merge-base', '--is-ancestor', parent, base], stdout=subprocess.DEVNULL, stderr=subprocess.DEVNULL):
-        # Preserve existing refresh content in a normal synchronization merge.
-        sync_entries = [{'path': name, 'mode': '100644', 'type': 'blob', 'sha': git('rev-parse', f'{parent}:{name}')}
-                        for name in ('unixlike/flake.lock', 'unixlike/release.json')]
-        sync_tree = api('git/trees', {'base_tree': git('rev-parse', f'{base}^{{tree}}'), 'tree': sync_entries})
-        if sync_tree['sha'] != merge_tree(parent, base):
-            raise ValueError('refresh synchronization differs from the normal merge result')
-        sync = api('git/commits', {'message': 'Merge dev into managed refresh', 'tree': sync_tree['sha'], 'parents': [parent, base]})
-        parent = sync['sha']
-        commit = sync if tree['sha'] == sync_tree['sha'] else None
-    else:
-        parent = base
-        commit = None
-    if commit is None:
-        commit = api('git/commits', {'message': 'chore(unixlike-deps): refresh permitted inputs', 'tree': tree['sha'], 'parents': [parent]})
+    commit = api('git/commits', {'message': 'chore(unixlike-deps): refresh permitted inputs', 'tree': tree['sha'], 'parents': [base]})
     try:
-        if exact:
-            request(f'git/refs/heads/{branch}', 'PATCH', {'sha': commit['sha'], 'force': False})
-        else:
-            api('git/refs', {'ref': f'refs/heads/{branch}', 'sha': commit['sha']})
+        api('git/refs', {'ref': 'refs/heads/' + branch, 'sha': commit['sha']})
     except subprocess.CalledProcessError:
         pass
-    remote = api(f'git/ref/heads/{branch}')
-    if remote['object']['sha'] != commit['sha']:
-        raise ValueError('remote refresh branch write is not confirmed')
-    return ensure_pr(branch, 'dev', 'Refresh permitted Unix-like inputs', 'Automatic patch: four permitted inputs only.')
-
-
-def pending_review(action):
-    if not action.get('approval'):
-        return False
-    name = f"Approve {action['head']} on {action['base']}"
-    for run in api('actions/runs?status=waiting&per_page=100')['workflow_runs']:
-        if run.get('path') not in ('.github/workflows/release.yml', '.github/workflows/manual-release.yml'):
-            continue
-        if str(run['id']) == os.environ.get('GITHUB_RUN_ID'):
-            continue
-        jobs = api(f"actions/runs/{run['id']}/jobs?per_page=100")['jobs']
-        if any(job['name'] == name and job['conclusion'] is None for job in jobs):
-            return True
-    return False
+    if api('git/ref/heads/' + branch)['object']['sha'] != commit['sha']:
+        raise ValueError('input patch branch conflicts; inspect it before retrying')
+    return ensure_pr(branch, 'master', 'Patch permitted Unix-like inputs', 'Automatic Unix-like patch: four permitted inputs only; no dev promotion.')
 
 
 def main():
     parser = argparse.ArgumentParser(description=__doc__)
     sub = parser.add_subparsers(dest='operation', required=True)
     diagnosis = sub.add_parser('inspect')
-    diagnosis.add_argument('--source')
-    diagnosis.add_argument('--manual-start', action='store_true', help='start or resume a one-call manual cycle without clock/day scheduling')
+    modes = diagnosis.add_mutually_exclusive_group()
+    modes.add_argument('--manual-start', action='store_true')
+    modes.add_argument('--scheduled-start', action='store_true')
+    modes.add_argument('--source')
+    proof = sub.add_parser('verify-patch')
+    proof.add_argument('--base')
+    proof.add_argument('--head')
+    proof.add_argument('--merge')
     step = sub.add_parser('advance')
     step.add_argument('--head', required=True)
     step.add_argument('--base', required=True)
-    step.add_argument('--approved', action='store_true')
-    step.add_argument('--manual', action='store_true', help='recheck an explicitly requested manual cycle without clock/day scheduling')
-    sub.add_parser('prepare-manual', help='wait for checks and prepare a manual promotion for separate review/publication')
+    step.add_argument('--manual', action='store_true')
+    sub.add_parser('prepare-manual')
     publication = sub.add_parser('publish')
     publication.add_argument('--source', required=True)
-    publication.add_argument('--approved', action='store_true')
     refresh = sub.add_parser('refresh-pr')
     refresh.add_argument('--base', required=True)
     refresh.add_argument('--lock', required=True)
     args = parser.parse_args()
     try:
-        if args.operation == 'inspect':
-            if args.source and args.manual_start:
-                raise ValueError('explicit-source recovery and manual start are separate operations')
+        if args.operation == 'verify-patch':
+            valid = patch_merge(args.merge) if args.merge and not args.base and not args.head else automatic(args.base, args.head) if args.base and args.head and not args.merge else False
+            if not valid:
+                raise ValueError('not a single-commit permitted Unix-like input patch')
+            print('Unix-like input patch boundary passed')
+        elif args.operation == 'inspect':
             if os.environ.get('CONFIGS_RELEASE_ENABLED') != '1':
                 result = {'action': 'disabled'}
             else:
@@ -565,26 +474,24 @@ def main():
                     if not SHA.fullmatch(args.source):
                         raise ValueError('recovery source must be a full commit SHA')
                     git('merge-base', '--is-ancestor', args.source, 'origin/master')
-                    result = {'action': 'recover', 'head': args.source, 'base': args.source, 'approval': True}
+                    if not patch_merge(args.source):
+                        raise ValueError('recovery source is not a Unix-like input patch merge')
+                    result = {'action': 'publish', 'head': args.source, 'base': args.source}
                 else:
-                    result = inspect(manual=True, start=True) if args.manual_start else inspect()
-                if pending_review(result):
-                    result = {'action': 'wait', 'reason': 'same candidate already awaits Environment review'}
+                    result = inspect(manual=args.manual_start, start=args.manual_start or args.scheduled_start)
             print(json.dumps(result))
         else:
             write_guard()
             if args.operation == 'prepare-manual':
                 print(json.dumps(prepare_manual()))
             elif args.operation == 'publish':
-                if not args.approved:
-                    raise ValueError('explicit source recovery requires Environment review')
                 publish(args.source)
             elif args.operation == 'refresh-pr':
                 print(json.dumps(refresh_pr(args.base, args.lock)))
             else:
-                result = advance(args.head, args.base, args.approved, manual=args.manual)
+                result = advance(args.head, args.base, manual=args.manual)
                 if args.manual and result['action'] == 'wait':
-                    raise ValueError('Required checks changed after preparation; rerun the manual workflow')
+                    raise ValueError('Required checks changed; rerun the manual workflow')
                 print(json.dumps(result))
     except (ValueError, KeyError, OSError, subprocess.CalledProcessError, json.JSONDecodeError) as error:
         print(f'release: {error}', file=sys.stderr)

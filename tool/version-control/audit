@@ -205,24 +205,28 @@ if [ -n "$dev_ref$subject_tips" ]; then
 fi
 
 if [ -n "$master_ref" ] && [ -n "$dev_ref" ]; then
-  direct=$(git rev-list --no-merges "$master_ref" --not "$dev_ref")
-  if [ -n "$direct" ]; then
-    fail "master contains non-merge commits not present on dev"
-  else
-    ok "master has no direct non-merge commits outside dev"
-  fi
-
+  patch_heads=$(mktemp)
   invalid_promotions=0
   for merge in $(git rev-list --first-parent --merges "$master_ref"); do
     parents=$(git show -s --format='%P' "$merge")
     second_parent=$(printf '%s\n' "$parents" | awk '{print $2}')
-    if [ -z "$second_parent" ] || ! git merge-base --is-ancestor "$second_parent" "$dev_ref"; then
-      fail "master merge does not carry history accepted through dev: $merge"
+    if python3 "$audit_tools/release.py" verify-patch --merge "$merge" >/dev/null 2>&1; then
+      printf '%s\n' "$second_parent" >>"$patch_heads"
+    elif [ -z "$second_parent" ] || ! git merge-base --is-ancestor "$second_parent" "$dev_ref"; then
+      fail "master merge is neither accepted dev history nor a bounded input patch: $merge"
       invalid_promotions=$((invalid_promotions + 1))
     fi
   done
+  direct=$(git rev-list --no-merges "$master_ref" --not "$dev_ref")
+  for commit in $direct; do
+    if ! grep -qx "$commit" "$patch_heads"; then
+      fail "master contains a non-patch commit outside dev: $commit"
+      invalid_promotions=$((invalid_promotions + 1))
+    fi
+  done
+  rm -f "$patch_heads"
   if [ "$invalid_promotions" -eq 0 ]; then
-    ok "master merge history is traceable through dev"
+    ok "master history follows dev promotions or bounded Unix-like input patch PRs"
   fi
 fi
 

@@ -1,27 +1,33 @@
 #!/bin/sh
-
-# Validate the immutable source boundary for a master promotion pull request.
-#
 # INV repository/promotion-source
-
 set -eu
-
 base_ref=${PROMOTION_BASE_REF:?}
 head_ref=${PROMOTION_HEAD_REF:?}
 base_repository=${PROMOTION_BASE_REPOSITORY:?}
 head_repository=${PROMOTION_HEAD_REPOSITORY:?}
-
-[ "$base_ref" = master ] || {
-  echo "promotion base is '$base_ref', expected master" >&2
-  exit 1
+[ "$base_ref" = master ] && [ "$head_repository" = "$base_repository" ] || {
+  echo 'master requires a same-repository pull request' >&2; exit 1;
 }
-[ "$head_ref" = dev ] || {
-  echo "master accepts only dev, got '$head_ref'" >&2
-  exit 1
-}
-[ "$head_repository" = "$base_repository" ] || {
-  echo "master accepts dev only from $base_repository, got $head_repository" >&2
-  exit 1
-}
-
-echo "promotion source passed"
+root=$(CDPATH= cd -- "$(dirname -- "$0")/../.." && pwd)
+if [ "$head_ref" = dev ]; then
+  # Ordinary promotion must carry patches already accepted directly on master.
+  if [ -n "${PROMOTION_BASE_SHA:-}" ]; then
+    python3 -c 'import sys' || { echo 'Python is required for master source verification' >&2; exit 1; }
+    for merge in $(git rev-list --first-parent --merges "$PROMOTION_BASE_SHA"); do
+      parents=$(git show -s --format=%P "$merge")
+      set -- $parents
+      if [ "$#" -eq 2 ] && python3 "$root/tool/version-control/release.py" verify-patch --merge "$merge" >/dev/null 2>&1; then
+        git merge-base --is-ancestor "$2" "${PROMOTION_HEAD_SHA:?}" || {
+          echo 'dev must incorporate accepted master input patch history before promotion' >&2; exit 1;
+        }
+      fi
+    done
+  fi
+else
+  case "$head_ref" in
+    feature/unixlike-input-patch-*)
+      python3 "$root/tool/version-control/release.py" verify-patch --base "${PROMOTION_BASE_SHA:?}" --head "${PROMOTION_HEAD_SHA:?}" ;;
+    *) echo "master refuses source '$head_ref'" >&2; exit 1 ;;
+  esac
+fi
+echo 'master source passed'

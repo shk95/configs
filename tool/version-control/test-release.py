@@ -2,8 +2,8 @@
 """Small Git/API fixtures for the finite release boundary; no operating writes.
 INV repository/bounded-release-automation
 INV repository/release-tag-contract
+INV repository/promotion-source
 """
-import datetime as dt
 import importlib.util
 import io
 import json
@@ -16,7 +16,6 @@ import tempfile
 import unittest
 from unittest.mock import patch
 import zipfile
-from zoneinfo import ZoneInfo
 
 ROOT = Path(__file__).resolve().parents[2]
 spec = importlib.util.spec_from_file_location('release', ROOT / 'tool/version-control/release.py')
@@ -166,7 +165,7 @@ class ReleaseFixtures(unittest.TestCase):
                      'm': {'locked': {'rev': 'b'}}}}
         Path('README.md').write_text('Fixture repository.\n')
         seed = self.commit('chore(repository): seed fixture')
-        for domain in r.DOMAINS:
+        for domain in ('unixlike', 'windows'):
             Path(domain).mkdir()
             self.write(domain + '/release.json', {'previous': seed, 'version': '1.0.0', 'summary': 'First release',
                        'compatibility': 'breaking', 'migration': 'Explicit consumer adoption.'})
@@ -176,8 +175,9 @@ class ReleaseFixtures(unittest.TestCase):
         self.commit('feat(repository): initial fixture')
         self.write('unixlike/flake.lock', self.lock)
         self.base = self.commit('chore(unixlike-deps): initial fixture lock')
-        for domain in r.DOMAINS:
-            r.git('tag', '-a', domain + '-v1.0.0', '-m', '\n'.join(r.annotation_fields(domain, self.base, r.declaration(self.base, domain))))
+        r.git('tag', '-a', 'unixlike-v1.0.0', '-m', '\n'.join(r.annotation_fields('unixlike', self.base, r.declaration(self.base, 'unixlike'))))
+        r.git('tag', '-a', 'windows-v1.0.0', '-m', 'Domain: windows\nHost: windows-ci\nEvaluation: passed; fixture\nBuild: not applicable; desired-state\nNative runtime: passed; fixture')
+        self.windows_tag = r.git('rev-parse', 'windows-v1.0.0')
         self.write('unixlike/release.json', {'previous': 'unixlike-v1.0.0', 'version': '1.0.1',
                    'summary': r.REFRESH_SUMMARY, 'compatibility': 'patch', 'migration': ''})
         updated = json.loads(json.dumps(self.lock))
@@ -204,7 +204,6 @@ class ReleaseFixtures(unittest.TestCase):
 
     def test_allowed_patch_and_refusals(self):
         self.assertTrue(r.automatic(self.base, self.head))
-        self.assertEqual(r.validate_versions(self.base, self.head), ['unixlike'])
         lock = json.loads(json.dumps(self.lock))
         lock['nodes']['m']['locked']['rev'] = 'unauthorized'
         with self.assertRaises(ValueError):
@@ -216,8 +215,6 @@ class ReleaseFixtures(unittest.TestCase):
         self.write('unixlike/release.json', {'previous': 'unixlike-v1.0.0', 'version': '1.0.0',
                    'summary': 'Same version', 'compatibility': 'patch', 'migration': ''})
         changed = self.commit('docs(unixlike): invalid fixture declaration')
-        with self.assertRaises(ValueError):
-            r.validate_versions(self.base, changed)
         self.assertFalse(r.automatic(self.base, changed))
 
     def test_nonselected_dependency_graph_and_follows_are_preserved(self):
@@ -278,156 +275,15 @@ class ReleaseFixtures(unittest.TestCase):
         with patch.object(r, 'api', return_value=[]):
             self.assertEqual(r.tag_state('unixlike', self.head, value), 'missing')
 
-    def test_approval_cannot_survive_candidate_change(self):
-        prepared = {'action': 'promote', 'head': self.head, 'base': self.base, 'approval': True}
-        with patch.object(r, 'inspect', return_value=prepared):
-            with self.assertRaises(ValueError):
-                r.advance(self.head, self.base)
-            with self.assertRaises(ValueError):
-                r.advance('f' * 40, self.base, approved=True)
-            with self.assertRaises(ValueError):
-                r.advance(self.head, 'f' * 40, approved=True)
-
-    def promotion(self):
-        self.write('windows/release.json', {'previous': 'windows-v1.0.0', 'version': '1.0.1',
-                   'summary': 'Windows change', 'compatibility': 'patch', 'migration': ''})
-        head = self.commit('feat(windows): update fixture')
-        r.git('checkout', '-q', '--detach', self.base)
-        r.git('merge', '--no-ff', '-q', head, '-m', 'Merge fixture promotion')
-        source = r.git('rev-parse', 'HEAD')
-        r.git('update-ref', 'refs/remotes/origin/master', source)
-        return source
-
-    def test_partial_publication_precedes_next_promotion(self):
-        source = self.promotion()
-        with patch.object(r, 'tag_state', side_effect=['done', 'missing']):
-            action = r.inspect()
-        self.assertEqual(action['action'], 'publish')
-        self.assertEqual(action['source'], source)
-        self.assertFalse(action['approval'])
-
-    def test_partial_publish_creates_only_missing_tag(self):
-        source = self.promotion()
-        calls = []
-        def fake(path, data=None, **kwargs):
-            if path.startswith('commits/'):
-                return [{'merged_at': '2026-10-06T00:00:00Z', 'base': {'ref': 'master'},
-                         'head': {'ref': 'dev', 'repo': {'full_name': 'fixture/configs'}},
-                         'merge_commit_sha': source}]
-            calls.append((path, data))
-            return {'sha': 'f' * 40}
-        with patch.object(r, 'tag_state', side_effect=['done', 'missing', 'done']), patch.object(r, 'checked', return_value=True), patch.object(r, 'api', side_effect=fake):
-            r.publish(source)
-        self.assertEqual([path for path, _ in calls], ['git/tags', 'git/refs'])
-        self.assertEqual(calls[0][1]['tag'], 'windows-v1.0.1')
-        self.assertEqual(calls[0][1]['object'], source)
-        self.assertEqual(calls[1][1]['ref'], 'refs/tags/windows-v1.0.1')
-
-    def test_lost_source_stops_instead_of_searching_history(self):
-        with patch.object(r, 'api', return_value=[]), patch.object(r, 'tag_state', return_value='done'):
-            with self.assertRaisesRegex(ValueError, 'original SHA'):
-                r.inspect()
-
-    def test_existing_environment_wait_is_reused(self):
-        action = {'head': self.head, 'base': self.base, 'approval': True}
-        name = f'Approve {self.head} on {self.base}'
-        with patch.object(r, 'api', side_effect=[{'workflow_runs': [{'id': 7, 'path': '.github/workflows/release.yml'}]}, {'jobs': [{'name': name, 'conclusion': None}]}]):
-            self.assertTrue(r.pending_review(action))
-        with patch.object(r, 'api', side_effect=[{'workflow_runs': [{'id': 7, 'path': '.github/workflows/manual-release.yml'}]}, {'jobs': [{'name': name, 'conclusion': 'success'}]}]):
-            self.assertFalse(r.pending_review(action))
-
-    def test_clock_releases_runner_and_stops_refresh_wait_at_seven(self):
-        patch_head = self.head
-        r.git('checkout', '-q', self.base)
-        Path('README.md').write_text('Accepted repository change.\n')
-        dev = self.commit('docs(repository): accepted fixture change')
-        r.git('cherry-pick', patch_head)
-        self.head = r.git('rev-parse', 'HEAD')
-        r.git('update-ref', 'refs/remotes/origin/dev', dev)
-        refresh = {'number': 1, 'head': {'ref': 'feature/unixlike-automatic-refresh', 'sha': self.head,
-                   'repo': {'full_name': 'fixture/configs'}}}
-        def fake(path):
-            if path.startswith('pulls?state=closed'):
-                return []
-            if 'base=dev' in path:
-                return [refresh]
-            if 'base=master' in path:
-                return []
-            if 'matching-refs' in path:
-                return [{'ref': 'refs/tags/' + path.rsplit('/', 1)[1], 'object': {'type': 'tag', 'sha': 'f' * 40}}]
-            return {'object': {'sha': self.base}}
-        with patch.object(r, 'api', side_effect=fake), patch.object(r, 'tag_state', return_value='done'), patch.object(r, 'checked', return_value=False):
-            actions = [r.inspect(dt.datetime(2026, 10, 6, hour, tzinfo=ZoneInfo('Asia/Seoul')))['action'] for hour in (4, 5, 6, 7)]
-        self.assertEqual(actions, ['wait', 'wait', 'wait', 'promotion-pr'])
-        with patch.object(r, 'api', side_effect=lambda path: [] if path.startswith('pulls?') else fake(path)), patch.object(r, 'tag_state', return_value='done'):
-            self.assertEqual(r.inspect(dt.datetime(2026, 10, 6, 5, tzinfo=ZoneInfo('Asia/Seoul')))['action'], 'refresh')
-
-    def test_manual_start_and_continuation_ignore_only_schedule(self):
-        refresh = {'number': 1, 'head': {'ref': 'feature/unixlike-automatic-refresh', 'sha': self.head,
-                   'repo': {'full_name': 'fixture/configs'}}}
-        promotion = {'number': 2, 'head': {'ref': 'dev', 'sha': self.head,
-                     'repo': {'full_name': 'fixture/configs'}}}
-        opened = {'refresh': [], 'promotion': []}
-        def fake(path):
-            if path.startswith('pulls?state=closed'):
-                return [{'head': {'ref': 'dev', 'repo': {'full_name': 'fixture/configs'}},
-                         'merged_at': '2026-10-06T00:00:00Z'}]
-            if 'base=dev' in path:
-                return opened['refresh']
-            if 'base=master' in path:
-                return opened['promotion']
-            if 'matching-refs' in path:
-                return [{'ref': 'refs/tags/' + path.rsplit('/', 1)[1], 'object': {'type': 'tag', 'sha': 'f' * 40}}]
-            return {'object': {'sha': self.base}}
-        now = dt.datetime(2026, 10, 6, 16, tzinfo=ZoneInfo('Asia/Seoul'))
-        with patch.object(r, 'api', side_effect=fake), patch.object(r, 'tag_state', return_value='done'), patch.object(r, 'checked', return_value=True):
-            self.assertEqual(r.inspect(now)['action'], 'wait')
-            self.assertEqual(r.inspect(now, manual=True, start=True)['action'], 'refresh')
-            opened['refresh'] = [refresh]
-            r.git('update-ref', 'refs/remotes/origin/dev', self.base)
-            self.assertEqual(r.inspect(now, manual=True, start=True)['action'], 'refresh-merge')
-            r.git('update-ref', 'refs/remotes/origin/dev', self.head)
-            opened['refresh'] = []
-            opened['promotion'] = [promotion]
-            action = r.inspect(now, manual=True, start=True)
-            self.assertEqual(action['action'], 'promote')
-            self.assertFalse(action['approval'])
-            Path('README.md').write_text('Human change pending release.\n')
-            human = self.commit('docs(repository): human fixture change')
-            r.git('update-ref', 'refs/remotes/origin/dev', human)
-            self.assertTrue(r.inspect(now, manual=True)['approval'])
-            with patch.object(r, 'checked', return_value=False):
-                self.assertEqual(r.inspect(now, manual=True)['action'], 'wait')
-                with self.assertRaisesRegex(ValueError, 'candidate changed'):
-                    r.advance(self.head, self.base, manual=True)
-
     def test_schedule_waits_for_active_manual_run(self):
         with patch.object(r, 'manual_active', return_value=True), patch.object(r, 'api') as remote:
-            self.assertEqual(r.inspect(), {'action': 'wait', 'reason': 'manual release is active'})
+            self.assertEqual(r.inspect(), {'action': 'wait', 'reason': 'manual input patch is active'})
             remote.assert_not_called()
         # Completed/cancelled runs do not strand future scheduled operation.
         with patch.object(r, 'api', return_value={'workflow_runs': []}):
             self.assertFalse(self.real_manual_active())
         with patch.object(r, 'api', side_effect=lambda path: {'workflow_runs': [{'status': 'waiting'}] if 'status=waiting' in path else []}):
             self.assertTrue(self.real_manual_active())
-
-    def test_manual_wait_advances_to_separate_review_in_one_call(self):
-        refresh_wait = {'action': 'wait', 'base': self.base, 'head': self.head}
-        refresh_merge = {'action': 'refresh-merge', 'base': self.base, 'head': self.head, 'approval': False}
-        promotion_pr = {'action': 'promotion-pr', 'base': self.base, 'head': self.head, 'approval': False}
-        promote = {'action': 'promote', 'base': self.base, 'head': self.head, 'approval': True}
-        actions = [refresh_wait, refresh_merge, promotion_pr, refresh_wait, promote]
-        with patch.object(r, 'write_guard') as guard, patch.object(r, 'inspect', side_effect=actions), patch.object(r, 'advance', side_effect=[refresh_merge, promotion_pr]) as advance, patch.object(r, 'api', return_value={'check_runs': []}), patch.object(r, 'pending_review', return_value=False), patch.object(r.time, 'sleep') as sleep:
-            self.assertEqual(r.prepare_manual(), promote)
-            self.assertEqual(guard.call_count, 5)
-            self.assertEqual(sleep.call_count, 2)
-            self.assertEqual(advance.call_count, 2)
-            for call in advance.call_args_list:
-                self.assertEqual(call.kwargs, {'manual': True})
-        # The preparation loop never approves/promotes its own candidate.
-        with patch.object(r, 'write_guard'), patch.object(r, 'inspect', return_value=promote), patch.object(r, 'pending_review', return_value=True):
-            with self.assertRaisesRegex(ValueError, 'Environment review'):
-                r.prepare_manual()
 
     def test_manual_wait_failure_timeout_and_candidate_change_stop(self):
         waiting = {'action': 'wait', 'base': self.base, 'head': self.head}
@@ -436,191 +292,216 @@ class ReleaseFixtures(unittest.TestCase):
             with self.assertRaisesRegex(ValueError, 'Required checks failed'):
                 r.prepare_manual()
             writer.assert_not_called()
-        with patch.object(r, 'write_guard'), patch.object(r, 'inspect', return_value=waiting), patch.object(r, 'advance') as writer, patch.object(r, 'api', return_value={'check_runs': []}):
+        with patch.object(r, 'write_guard'), patch.object(r, 'inspect', return_value=waiting), patch.object(r, 'api', return_value={'check_runs': []}):
             with self.assertRaisesRegex(ValueError, 'wait expired'):
                 r.prepare_manual(timeout=0)
-            writer.assert_not_called()
         with patch.object(r, 'write_guard'), patch.object(r, 'inspect', side_effect=[waiting, {**waiting, 'head': 'f' * 40}]), patch.object(r, 'api', return_value={'check_runs': []}), patch.object(r.time, 'sleep'):
             with self.assertRaisesRegex(ValueError, 'candidate changed'):
                 r.prepare_manual()
         with patch.object(r, 'write_guard'), patch.object(r, 'inspect', return_value={'action': 'none'}), patch.object(r, 'advance') as writer:
             self.assertEqual(r.prepare_manual(), {'action': 'none'})
             writer.assert_not_called()
-        # A failed old check does not override the newer queued rerun.
-        latest = {**failed, 'id': 2, 'conclusion': None}
-        with patch.object(r, 'write_guard'), patch.object(r, 'inspect', side_effect=[waiting, {'action': 'none'}]), patch.object(r, 'api', return_value={'check_runs': [failed, latest]}), patch.object(r.time, 'sleep') as sleep:
-            with self.assertRaisesRegex(ValueError, 'candidate changed'):
-                r.prepare_manual()
-            sleep.assert_called_once()
 
-    def test_manual_final_cli_never_reports_wait_as_completed_release(self):
-        args = ['release', 'advance', '--manual', '--head', self.head, '--base', self.base]
-        with patch.object(sys, 'argv', args), patch.object(r, 'write_guard'), patch.object(r, 'advance', return_value={'action': 'wait'}), patch.object(sys, 'stderr', io.StringIO()) as error:
-            self.assertEqual(r.main(), 1)
-            self.assertIn('Required checks changed', error.getvalue())
-        with patch.object(sys, 'argv', args), patch.object(r, 'write_guard'), patch.object(r, 'advance', return_value={'action': 'none'}), patch.object(sys, 'stdout', io.StringIO()) as output:
-            self.assertEqual(r.main(), 0)
-            self.assertEqual(json.loads(output.getvalue()), {'action': 'none'})
-
-    def test_one_call_cycle_with_actual_remote_git_merges_checks_and_tags(self):
-        # Start with equal accepted branches and published declarations.
+    def test_one_call_patch_ignores_dev_and_preserves_windows(self):
+        # Actual remote Git objects and CI identity artifacts; only transport fake.
         r.git('checkout', '-q', '--detach', self.base)
         remote = LocalGitHub()
+        r.git('checkout', '-q', '-b', 'independent-dev')
+        Path('unreleased-development').write_text('Unrelated work stays on dev.')
+        dev = self.commit('feat(repository): independent development')
+        r.git('push', '--quiet', 'origin', 'HEAD:refs/heads/dev')
+        r.git('checkout', '-q', '--detach', self.base)
         lock = json.loads(json.dumps(self.lock))
         lock['nodes']['n']['locked']['rev'] = 'new-upstream'
         self.write('.git/manual-lock.json', lock)
         with patch.dict(os.environ, {'CONFIGS_RELEASE_ENABLED': '1', 'GH_TOKEN': 'fixture-only'}), patch.object(r, 'api', side_effect=remote.api), patch.object(r, 'request', side_effect=remote.request), patch.object(r.time, 'sleep', side_effect=remote.complete_ci):
             r.write_guard()
             start = r.inspect(manual=True, start=True)
-            self.assertEqual(start['action'], 'refresh')
+            self.assertEqual(start, {'action': 'refresh', 'base': self.base, 'head': self.base})
             r.refresh_pr(start['base'], '.git/manual-lock.json')
-            # The remote API created this object; a new runner starts without it.
             candidate = remote.prs[0]['head']['sha']
             self.assertNotEqual(subprocess.call(['git', 'cat-file', '-e', candidate], stderr=subprocess.DEVNULL), 0)
-            plan = r.prepare_manual()
-            self.assertEqual(plan['action'], 'promote')
-            self.assertFalse(plan['approval'])
-            result = r.advance(plan['head'], plan['base'], manual=True)
-            self.assertEqual(result['action'], 'promote')
-            self.assertEqual(len(remote.prs), 2)
-            self.assertTrue(all(pr['merged'] for pr in remote.prs))
-            self.assertEqual(remote.sleeps, 2)
+            self.assertEqual(r.prepare_manual(), {'action': 'none'})
+            self.assertEqual(len(remote.prs), 1)
+            self.assertEqual(remote.prs[0]['base']['ref'], 'master')
+            self.assertTrue(remote.prs[0]['merged'])
+            self.assertEqual(remote.remote_git('rev-parse', 'refs/heads/dev'), dev)
+            self.assertEqual(remote.remote_git('rev-parse', 'windows-v1.0.0'), self.windows_tag)
+            subprocess.check_call([str(ROOT/'tool/version-control/audit'),'--history'],stdout=subprocess.DEVNULL)
             source = remote.remote_git('rev-parse', 'refs/heads/master')
-            self.assertEqual(r.git('show', '-s', '--format=%P', source).split(), [plan['base'], plan['head']])
+            self.assertEqual(r.git('show', '-s', '--format=%P', source).split(), [self.base, candidate])
             self.assertEqual(remote.remote_git('rev-parse', 'unixlike-v1.0.1^{commit}'), source)
-            self.assertEqual(remote.remote_git('rev-parse', 'windows-v1.0.0^{commit}'), self.base)
             self.assertEqual(r.tag_state('unixlike', source, r.declaration(source, 'unixlike')), 'done')
-            # Rerunning with unchanged upstreams publishes nothing and adds no PR.
+            self.assertNotIn('unreleased-development', r.git('ls-tree', '--name-only', source))
             r.write_guard()
             before = list(remote.writes)
-            self.assertEqual(r.refresh_pr(r.git('rev-parse', 'origin/dev'), '.git/manual-lock.json'), {'action': 'none'})
+            self.assertEqual(r.refresh_pr(source, '.git/manual-lock.json'), {'action': 'none'})
             self.assertEqual(r.prepare_manual(), {'action': 'none'})
             self.assertEqual(remote.writes, before)
+            # CI source admission permits the narrow branch, not arbitrary sources.
+            env = dict(os.environ, PROMOTION_BASE_REF='master', PROMOTION_HEAD_REF=r.PATCH_BRANCH+self.base[:12], PROMOTION_BASE_REPOSITORY='fixture/configs', PROMOTION_HEAD_REPOSITORY='fixture/configs', PROMOTION_BASE_SHA=self.base, PROMOTION_HEAD_SHA=candidate)
+            subprocess.check_call([str(ROOT/'tool/version-control/check-promotion')],env=env,stdout=subprocess.DEVNULL)
+            # Stale development cannot promote until patch history is incorporated.
+            env.update(PROMOTION_HEAD_REF='dev', PROMOTION_BASE_SHA=source, PROMOTION_HEAD_SHA=dev)
+            self.assertNotEqual(subprocess.call([str(ROOT/'tool/version-control/check-promotion')],env=env,stdout=subprocess.DEVNULL,stderr=subprocess.DEVNULL),0)
+            r.git('checkout','-q','independent-dev')
+            r.git('merge','--no-ff','-q',source,'-m','Merge master input patch into development')
+            env['PROMOTION_HEAD_SHA']=r.git('rev-parse','HEAD')
+            subprocess.check_call([str(ROOT/'tool/version-control/check-promotion')],env=env,stdout=subprocess.DEVNULL)
+            # One more patch increments only the patch component.
+            r.git('checkout','-q','--detach',source)
+            lock['nodes']['n']['locked']['rev']='second-upstream'
+            self.write('.git/manual-lock.json',lock)
+            r.refresh_pr(source,'.git/manual-lock.json')
+            r.prepare_manual()
+            self.assertEqual(remote.remote_git('rev-parse','unixlike-v1.0.2^{commit}'),remote.remote_git('rev-parse','refs/heads/master'))
+
+    def test_stale_and_nonpatch_candidates_refused(self):
+        self.assertTrue(r.automatic(self.base,self.head))
+        Path('unexpected').write_text('Forbidden payload')
+        extra=self.commit('feat(repository): forbidden patch payload')
+        self.assertFalse(r.automatic(self.base,extra))
+        with patch.dict(os.environ, PROMOTION_BASE_REF='master', PROMOTION_HEAD_REF=r.PATCH_BRANCH+'fake', PROMOTION_BASE_REPOSITORY='fixture/configs', PROMOTION_HEAD_REPOSITORY='fixture/configs', PROMOTION_BASE_SHA=self.base, PROMOTION_HEAD_SHA=extra):
+            self.assertNotEqual(subprocess.call([str(ROOT/'tool/version-control/check-promotion')],stdout=subprocess.DEVNULL,stderr=subprocess.DEVNULL),0)
+        with patch.object(r,'inspect',return_value={'action':'patch-merge','base':self.base,'head':self.head}),patch.object(r,'request') as writer:
+            with self.assertRaisesRegex(ValueError,'candidate changed'):
+                r.advance('f'*40,self.base,manual=True)
+            writer.assert_not_called()
+
+    def test_publication_recovery_and_delayed_association(self):
+        r.git('checkout','-q','--detach',self.base)
+        remote=LocalGitHub()
+        lock=json.loads(json.dumps(self.lock));lock['nodes']['n']['locked']['rev']='new'
+        self.write('.git/manual-lock.json',lock)
+        with patch.dict(os.environ,CONFIGS_RELEASE_ENABLED='1',GH_TOKEN='fixture-only'),patch.object(r,'api',side_effect=remote.api),patch.object(r,'request',side_effect=remote.request),patch.object(r.time,'sleep',side_effect=remote.complete_ci):
+            r.write_guard();r.refresh_pr(self.base,'.git/manual-lock.json')
+            remote.complete_ci(0);r.write_guard()
+            plan=r.inspect(manual=True)
+            with patch.object(r,'publish',side_effect=ValueError('interrupted publication')):
+                with self.assertRaisesRegex(ValueError,'interrupted'):
+                    r.advance(plan['head'],plan['base'],manual=True)
+            r.write_guard();recovery=r.inspect(manual=True,start=True)
+            self.assertEqual(recovery['action'],'publish')
+            lag=[0]
+            def delayed(path,*args,**kwargs):
+                if path.startswith('commits/') and path.endswith('/pulls') and lag[0]==0:
+                    lag[0]+=1;return []
+                return remote.api(path,*args,**kwargs)
+            with patch.object(r,'api',side_effect=delayed):
+                self.assertEqual(r.prepare_manual(),{'action':'none'})
+            self.assertEqual(lag[0],1)
+            self.assertEqual(len(remote.prs),1)
+
+    def test_master_move_stops_existing_patch_and_old_refresh(self):
+        r.git('checkout','-q','--detach',self.base)
+        remote=LocalGitHub()
+        lock=json.loads(json.dumps(self.lock));lock['nodes']['n']['locked']['rev']='next'
+        self.write('.git/manual-lock.json',lock)
+        with patch.dict(os.environ,CONFIGS_RELEASE_ENABLED='1',GH_TOKEN='fixture-only'),patch.object(r,'api',side_effect=remote.api),patch.object(r,'request',side_effect=remote.request):
+            r.write_guard();r.refresh_pr(self.base,'.git/manual-lock.json')
+            Path('accepted-doc').write_text('Master advanced independently.')
+            advanced=self.commit('docs(repository): move accepted master')
+            r.git('push','--quiet','origin','HEAD:refs/heads/master')
+            r.write_guard()
+            with self.assertRaisesRegex(ValueError,'stale or unpermitted'):
+                r.inspect(manual=True)
+            with self.assertRaisesRegex(ValueError,'master base changed'):
+                r.refresh_pr(self.base,'.git/manual-lock.json')
+            self.assertFalse(remote.prs[0]['merged'])
+            self.assertEqual(remote.remote_git('rev-parse','refs/heads/master'),advanced)
+
+    def test_tampered_actual_merge_is_not_a_patch(self):
+        Path('tampered-merge-content').write_text('Not in the checked patch.')
+        altered=self.commit('docs(repository): tampered merge fixture')
+        tree=r.git('rev-parse',f'{altered}^{{tree}}')
+        source=subprocess.check_output(['git','commit-tree',tree,'-p',self.base,'-p',self.head],input=b'Merge tampered fixture').decode().strip()
+        self.assertTrue(r.automatic(self.base,self.head))
+        self.assertFalse(r.patch_merge(source))
+        r.git('update-ref','refs/remotes/origin/master',source)
+        with self.assertRaisesRegex(ValueError,'not a bounded'):
+            r.publish(source)
+        env=dict(os.environ,PROMOTION_BASE_REF='master',PROMOTION_HEAD_REF=r.PATCH_BRANCH+'fixture',PROMOTION_BASE_REPOSITORY='fixture/configs',PROMOTION_HEAD_REPOSITORY='fork/configs',PROMOTION_BASE_SHA=self.base,PROMOTION_HEAD_SHA=self.head)
+        self.assertNotEqual(subprocess.call([str(ROOT/'tool/version-control/check-promotion')],env=env,stdout=subprocess.DEVNULL,stderr=subprocess.DEVNULL),0)
+
+    def test_general_publication_and_promotion_are_not_automated(self):
+        r.git('checkout','-q','--detach',self.base)
+        remote=LocalGitHub()
+        with patch.object(r,'api',side_effect=remote.api):
+            self.assertEqual(r.inspect(),{'action':'none'})
+            remote.prs.append({'head':{'ref':'dev','repo':{'full_name':'fixture/configs'}},'base':{'ref':'master'},'merged_at':None})
+            self.assertEqual(r.inspect()['action'],'wait')
+            with self.assertRaisesRegex(ValueError,'development promotion'):
+                r.inspect(manual=True,start=True)
+            remote.prs.clear()
+            self.write('unixlike/release.json',{'previous':'unixlike-v1.0.0','version':'2.0.0','summary':'General change','compatibility':'breaking','migration':'Review.'})
+            general=self.commit('feat(unixlike)!: general development')
+            r.git('update-ref','refs/remotes/origin/master',general)
+            self.assertEqual(r.inspect()['action'],'wait')
+            with self.assertRaisesRegex(ValueError,'not a bounded'):
+                r.publish(general)
 
     def test_lost_pr_create_response_requires_remote_confirmation(self):
-        pr = {'head': {'ref': 'dev', 'repo': {'full_name': 'fixture/configs'}}}
-        with patch.object(r, 'api', side_effect=[[], subprocess.CalledProcessError(1, 'gh'), [pr]]):
-            self.assertEqual(r.ensure_pr('dev', 'master', 'title', 'body'), pr)
-        with patch.object(r, 'api', side_effect=[[], subprocess.CalledProcessError(1, 'gh'), []]):
-            with self.assertRaises(ValueError):
-                r.ensure_pr('dev', 'master', 'title', 'body')
+        pr={'head':{'ref':r.PATCH_BRANCH+'fixture','repo':{'full_name':'fixture/configs'}}}
+        with patch.object(r,'api',side_effect=[[],subprocess.CalledProcessError(1,'gh'),[pr]]):
+            self.assertEqual(r.ensure_pr(pr['head']['ref'],'master','title','body'),pr)
+        with patch.object(r,'api',side_effect=[[],subprocess.CalledProcessError(1,'gh'),[]]):
+            with self.assertRaises(ValueError):r.ensure_pr(pr['head']['ref'],'master','title','body')
 
-    def test_lost_merge_response_checks_remote_source(self):
-        action = {'action': 'promote', 'number': 1, 'head': self.head, 'base': self.base, 'tree': self.tree, 'approval': False}
-        remote = {'merged': True, 'head': {'sha': self.head}, 'merge_commit_sha': 'e' * 40}
-        real_git = r.git
-        def fake_git(*args):
-            if args[0] == 'fetch':
-                return ''
-            if args[:3] == ('show', '-s', '--format=%P'):
-                return self.base + ' ' + self.head
-            if args[0] == 'rev-parse':
-                return self.tree
-            return real_git(*args)
-        with patch.object(r, 'inspect', return_value=action), patch.object(r, 'request', side_effect=subprocess.CalledProcessError(1, 'gh')), patch.object(r, 'api', return_value=remote), patch.object(r, 'git', side_effect=fake_git), patch.object(r, 'planned', return_value=['unixlike']), patch.object(r, 'publish') as publication:
-            r.advance(self.head, self.base)
-            publication.assert_called_once_with('e' * 40)
-            publication.reset_mock()
-            with patch.object(r, 'planned', return_value=[]):
-                r.advance(self.head, self.base)
-            publication.assert_not_called()
-            remote['head']['sha'] = 'f' * 40
-            with self.assertRaises(ValueError):
-                r.advance(self.head, self.base)
+    def test_schedule_steps_and_lost_merge_response(self):
+        r.git('checkout','-q','--detach',self.base)
+        remote=LocalGitHub()
+        lock=json.loads(json.dumps(self.lock));lock['nodes']['n']['locked']['rev']='scheduled'
+        self.write('.git/manual-lock.json',lock)
+        with patch.dict(os.environ,CONFIGS_RELEASE_ENABLED='1',GH_TOKEN='fixture-only'),patch.object(r,'api',side_effect=remote.api),patch.object(r,'request',side_effect=remote.request):
+            r.write_guard()
+            start=r.inspect(start=True)
+            self.assertEqual(start['head'],self.base)
+            r.refresh_pr(start['base'],'.git/manual-lock.json')
+            r.write_guard()
+            self.assertEqual(r.inspect()['action'],'wait')
+            remote.complete_ci(0)
+            plan=r.inspect()
+            def lost_response(path,method,data):
+                remote.request(path,method,data)
+                raise subprocess.CalledProcessError(1,'gh')
+            with patch.object(r,'request',side_effect=lost_response):
+                r.advance(plan['head'],plan['base'])
+            r.write_guard()
+            self.assertEqual(r.inspect(),{'action':'none'})
+            self.assertEqual(len(remote.prs),1)
+            self.assertEqual(remote.remote_git('rev-parse','windows-v1.0.0'),self.windows_tag)
 
-    def test_refresh_second_cycle_and_actual_base_move(self):
-        # The small API fake creates real objects in this disposable Git DB.
-        r.git('remote', 'add', 'origin', '.')
-        branch = 'feature/unixlike-automatic-refresh'
-        commits = []
-        def fake(path, data=None, **kwargs):
-            if path.startswith('git/matching-refs/heads/'):
-                sha = subprocess.run(['git', 'rev-parse', '--verify', 'refs/heads/' + branch], capture_output=True, text=True)
-                return [] if sha.returncode else [{'ref': 'refs/heads/' + branch, 'object': {'sha': sha.stdout.strip()}}]
-            if path == 'git/blobs':
-                sha = subprocess.check_output(['git', 'hash-object', '-w', '--stdin'], input=data['content'].encode()).decode().strip()
-            elif path == 'git/trees':
-                index = Path(self.tmp.name, '.git', 'api-index')
-                if index.exists():
-                    index.unlink()
-                env = dict(os.environ, GIT_INDEX_FILE=str(index))
-                subprocess.check_call(['git', 'read-tree', data['base_tree']], env=env)
-                for entry in data['tree']:
-                    subprocess.check_call(['git', 'update-index', '--add', '--cacheinfo', entry['mode'], entry['sha'], entry['path']], env=env)
-                sha = subprocess.check_output(['git', 'write-tree'], env=env).decode().strip()
-            elif path == 'git/commits':
-                args = ['git', 'commit-tree', data['tree']]
-                for parent in data['parents']:
-                    args += ['-p', parent]
-                sha = subprocess.check_output(args, input=data['message'].encode()).decode().strip()
-                commits.append((sha, data))
-            elif path == 'git/refs':
-                r.git('update-ref', data['ref'], data['sha'])
-                return {}
-            elif path == 'git/ref/heads/' + branch:
-                return {'object': {'sha': r.git('rev-parse', 'refs/heads/' + branch)}}
-            else:
-                raise AssertionError(path)
-            return {'sha': sha}
-        def write_ref(path, method, data):
-            r.git('update-ref', 'refs/heads/' + branch, data['sha'])
-            return {}
-        def refresh(base, revision):
-            lock = r.source_json(base, 'unixlike/flake.lock')
-            lock['nodes']['n']['locked']['rev'] = revision
-            self.write('.git/candidate-lock.json', lock)
-            with patch.object(r, 'api', side_effect=fake), patch.object(r, 'request', side_effect=write_ref), patch.object(r, 'tag_state', return_value='done'), patch.object(r, 'ensure_pr', return_value={'number': 1}):
-                r.refresh_pr(base, '.git/candidate-lock.json')
-            return r.git('rev-parse', 'refs/heads/' + branch)
-        first = refresh(self.head, 'next')
-        self.assertEqual(r.git('show', '-s', '--format=%P', first), self.head)
-        r.git('merge', '--no-ff', '-q', branch, '-m', 'Merge accepted refresh')
-        dev = r.git('rev-parse', 'HEAD')
-        r.git('update-ref', 'refs/remotes/origin/dev', dev)
-        r.git('update-ref', 'refs/remotes/origin/master', dev)
-        r.git('tag', '-a', 'unixlike-v1.0.1', '-m', '\n'.join(r.annotation_fields('unixlike', dev, r.declaration(dev, 'unixlike'))))
-        second = refresh(dev, 'second')
-        self.assertEqual(r.git('show', '-s', '--format=%P', second), dev)
-        self.assertEqual(r.git('diff-tree', '--no-commit-id', '--name-only', '-r', second).splitlines(), ['unixlike/flake.lock', 'unixlike/release.json'])
-        # A real base update gets a synchronization merge, then a pure refresh.
-        Path('README.md').write_text('Actual integration update.\n')
-        advanced = self.commit('docs(repository): move fixture dev')
-        r.git('update-ref', 'refs/remotes/origin/dev', advanced)
-        third = refresh(advanced, 'second')
-        self.assertEqual(r.git('show', '-s', '--format=%P', third).split(), [second, advanced])
-        self.assertEqual(r.source_json(third, 'unixlike/flake.lock'), r.source_json(second, 'unixlike/flake.lock'))
-        self.assertEqual(r.git('show', f'{third}:README.md'), 'Actual integration update.')
-        # Audit the generated graph with the same entry used by CI.
-        r.git('update-ref', 'refs/remotes/origin/dev', third)
-        subprocess.check_call([str(ROOT / 'tool/version-control/audit'), '--history', third], stdout=subprocess.DEVNULL)
+    def test_branch_creation_resume_and_noop(self):
+        r.git('checkout','-q','--detach',self.base)
+        remote=LocalGitHub()
+        self.write('.git/manual-lock.json',self.lock)
+        with patch.object(r,'api',side_effect=remote.api),patch.object(r,'request',side_effect=remote.request):
+            self.assertEqual(r.refresh_pr(self.base,'.git/manual-lock.json'),{'action':'none'})
+            self.assertEqual(remote.writes,[])
+            lock=json.loads(json.dumps(self.lock));lock['nodes']['n']['locked']['rev']='next'
+            self.write('.git/manual-lock.json',lock)
+            with patch.object(r,'ensure_pr',side_effect=ValueError('interrupted before PR')):
+                with self.assertRaises(ValueError):r.refresh_pr(self.base,'.git/manual-lock.json')
+            r.refresh_pr(self.base,'.git/manual-lock.json')
+            self.assertEqual(len(remote.prs),1)
+            self.assertTrue(r.automatic(self.base,remote.prs[0]['head']['sha']))
 
-    def test_credentials_and_workflow_boundary(self):
-        with patch.dict(os.environ, {'CONFIGS_RELEASE_ENABLED': '', 'GH_TOKEN': ''}):
-            with self.assertRaises(ValueError):
-                r.write_guard()
-        workflow = (ROOT / '.github/workflows/release.yml').read_text()
-        candidate = workflow.split('\n  refresh:\n')[1].split('\n  refresh-writer:')[0]
-        approval = workflow.split('\n  approval:\n')[1].split('\n  writer:')[0]
-        self.assertNotIn('secrets.', candidate)
-        self.assertIn('persist-credentials: false', candidate)
-        self.assertIn('environment: release-approval', approval)
-        self.assertNotIn('concurrency:', approval)
-        self.assertIn('CONFIGS_RELEASE_ENABLED', workflow)
-        self.assertIn("github.event_name != 'schedule' || vars.CONFIGS_RELEASE_SCHEDULE_ENABLED == '1'", workflow)
-        self.assertNotIn('pull_request_target', workflow)
-        manual = (ROOT / '.github/workflows/manual-release.yml').read_text()
-        candidate = manual.split('\n  refresh:\n')[1].split('\n  integrate:')[0]
-        approval = manual.split('\n  approval:\n')[1].split('\n  writer:')[0]
-        self.assertNotIn('secrets.', candidate)
-        self.assertIn('persist-credentials: false', candidate)
-        self.assertIn('environment: release-approval', approval)
-        self.assertNotIn('concurrency:', approval)
-        self.assertNotIn('secrets.', approval)
-        self.assertIn('timeout-minutes: 65', manual)
-        self.assertIn('prepare-manual', manual)
-        self.assertIn('advance --manual', manual)
-        self.assertIn('test "$DISPATCH_REF" = refs/heads/master', manual)
-        self.assertNotIn('pull_request_target', manual)
+    def test_credentials_and_shared_workflow_boundary(self):
+        with patch.dict(os.environ,CONFIGS_RELEASE_ENABLED='',GH_TOKEN=''):
+            with self.assertRaises(ValueError):r.write_guard()
+        workflow=(ROOT/'.github/workflows/release.yml').read_text()
+        candidate=workflow.split('\n  refresh:\n')[1].split('\n  writer:')[0]
+        self.assertNotIn('secrets.',candidate)
+        self.assertIn('persist-credentials: false',candidate)
+        self.assertNotIn('release-approval',workflow)
+        self.assertNotIn('promotion-pr',workflow)
+        self.assertNotIn('windows',workflow)
+        self.assertIn('CONFIGS_RELEASE_SCHEDULE_ENABLED',workflow)
+        self.assertIn('timeout-minutes: 65',workflow)
+        manual=(ROOT/'.github/workflows/manual-release.yml').read_text()
+        self.assertIn('uses: ./.github/workflows/release.yml',manual)
+        self.assertIn('manual: true',manual)
+        self.assertNotIn('pull_request_target',workflow+manual)
 
 
 if __name__ == '__main__':
