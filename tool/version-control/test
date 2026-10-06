@@ -428,16 +428,11 @@ expect unixlike "$classify" --files docs/policy/invariants/unixlike/import-order
 expect windows "$classify" --files docs/policy/invariants/windows/parser-declared.md
 # A common scope is restored together with the domain; until then its paths have no owner.
 expect unclassified "$classify" --files docs/policy/invariants/common/example.md
-# PROV repository/classify-registry-old-roots: the next four fixtures.
-# The removed scope's placeholder keeps an arm of its own: its deletion is
-# inside every pull-request range that spans it, and an unclassified path
-# cannot be pushed.
-expect repository "$classify" --files invariants/common/.gitkeep
-# The registries' roots before they moved under docs/: a deletion there is
-# inside every range that spans the move.
-expect repository "$classify" --files invariants/README.md
-expect unixlike "$classify" --files invariants/unixlike/import-order.md
-expect windows "$classify" --files provisional/windows/appx-detection.md
+# INV repository/scope-ownership
+# Removed registry roots no longer classify as current paths.
+expect unclassified "$classify" --files invariants/common/.gitkeep
+expect unclassified "$classify" --files invariants/unixlike/import-order.md
+expect unclassified "$classify" --files provisional/windows/appx-detection.md
 expect unclassified "$classify" --files docs/policy/invariants/stray.md
 expect unclassified "$classify" --files docs/policy/invariants/linux/x.md
 # INV repository/scope-ownership
@@ -579,11 +574,9 @@ for stage in commit push; do
   expect_units '' "$stage" "$(printf 'M\tdocs/status/unixlike.md\nM\tdocs/status/windows.md')"
   expect_units '' "$stage" "$(printf 'A\tdocs/work/unixlike/example/spec.md')"
 done
-# PROV repository/classify-registry-old-roots
-# Deleting from the registries' old roots selects nothing either.
-for stage in commit push; do
-  expect_units '' "$stage" "$(printf 'D\tprovisional/unixlike/zellij-overlay.md\nD\tinvariants/windows/parser-declared.md')"
-done
+# INV repository/local-gate-selects-by-effect
+# A removed root is now an unclassified input rather than an implicit doc.
+expect_units 'unclassified' commit "$(printf 'D\tinvariants/windows/parser-declared.md')"
 # A misplaced document is still refused.
 expect_units 'unclassified' commit "$(printf 'A\tdocs/status/linux.md')"
 expect_units '' push "$docs_modified"
@@ -5042,6 +5035,49 @@ work_expect_fail "the same change as a range between commits" 'W7 criterion AC1 
 # of the pair has no base.
 work_new
 work_expect_pass "a first commit" --staged
+
+# INV repository/work-spec-has-report
+# Archive only a valid terminal pair; pending/malformed/unpaired removal fails.
+work_new
+work_report done verified verified
+work_run >/dev/null
+git -C "$work_repo" commit -q -m 'docs(unixlike): finish the probe'
+git -C "$work_repo" rm -q "$work_item/spec.md" "$work_item/report.md"
+work_expect_pass "a terminal pair archived together" --staged
+work_new
+work_report abandoned verified unmet
+work_run >/dev/null
+git -C "$work_repo" commit -q -m 'docs(unixlike): abandon the probe'
+git -C "$work_repo" rm -q "$work_item/spec.md" "$work_item/report.md"
+work_expect_pass "an abandoned terminal pair archived together" --staged
+work_new
+mkdir -p "$work_repo/docs/work/unixlike/successor"
+cp "$work_item/spec.md" "$work_repo/docs/work/unixlike/successor/spec.md"
+sed 's,docs/work/unixlike/probe/spec.md,docs/work/unixlike/successor/spec.md,'   "$work_item/report.md" >"$work_repo/docs/work/unixlike/successor/report.md"
+work_report superseded verified unmet
+awk '{ print } /^status: superseded$/ { print "superseded-by: docs/work/unixlike/successor/spec.md" }'   "$work_item/report.md" >"$work_item/report.tmp"
+mv "$work_item/report.tmp" "$work_item/report.md"
+work_run >/dev/null
+git -C "$work_repo" commit -q -m 'docs(unixlike): supersede the probe'
+git -C "$work_repo" rm -q "$work_item/spec.md" "$work_item/report.md"
+work_expect_pass "a superseded terminal pair archived together" --staged
+work_new
+work_run >/dev/null
+git -C "$work_repo" commit -q -m 'docs(unixlike): open the probe'
+git -C "$work_repo" rm -q "$work_item/spec.md" "$work_item/report.md"
+work_expect_fail "pending acceptance cannot disappear" 'W7 was removed' --staged
+work_new
+work_report done verified pending
+git -C "$work_repo" add .
+git -C "$work_repo" commit -q -m 'docs(unixlike): record invalid completion'
+git -C "$work_repo" rm -q "$work_item/spec.md" "$work_item/report.md"
+work_expect_fail "malformed completion cannot disappear" 'W7 was removed' --staged
+work_new
+work_report done verified verified
+work_run >/dev/null
+git -C "$work_repo" commit -q -m 'docs(unixlike): finish the probe'
+git -C "$work_repo" rm -q "$work_item/report.md"
+work_expect_fail "a spec cannot be archived without its report" 'W2' --staged
 
 # --overdue lists a spec past its review-by while its report is pending, and
 # not one whose report is terminal.

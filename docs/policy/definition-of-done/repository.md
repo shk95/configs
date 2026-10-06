@@ -151,3 +151,9 @@ own list is the file named for it beside this one (`unixlike.md`,
       (INV repository/pr-integration-authority).
 - [ ] Interrupted workers have a useful checkpoint; local liveness is not
       inferred from age, and cleanup considers unpushed and ignored data.
+
+## Terminal work archival
+
+- [ ] The repository maintainer reviewed the fixed remote original and absence
+      of active references before archiving a valid terminal spec/report pair
+      (INV repository/work-spec-has-report).

@@ -360,7 +360,9 @@ Work that needs more than one judgement is planned and verified in tracked
 documents rather than in an issue, whose text can be rewritten after the
 fact. A spec states the acceptance criteria and the evidence lanes each one
 requires; a report, created in the same commit, answers every criterion and
-ends as done, abandoned or superseded. Once the report exists a criterion is
+ends as done, abandoned or superseded. A valid terminal pair may later be
+archived together after fixed remote preservation and active-reference review;
+pending or malformed acceptance cannot disappear. Once the report exists a criterion is
 changed only by a dated amendment that names it, so the bar is visibly set
 before the work. A work document still binds nothing but the work it
 describes: a durable rule it produces lands in a decision record or an
@@ -516,7 +518,7 @@ the other direction. Promotion keeps the code and writes a decision record;
 the entry and its tags still go. Either way the decision record is what
 survives: the registry holds only measures that are still live, so the
 reason a measure was accepted and the alternatives rejected with it belong
-under `docs/policy/decisions/`, where nothing deletes them and a later reader can
+under `docs/policy/decisions/`, where adopted rationale remains and a later reader can
 still find out why the tree looks as it does. Extension is the third
 outcome and the only one that keeps the entry: it moves `review-by` and
 records why in the entry itself.
