@@ -86,29 +86,29 @@ done
 
 open_promotion_numbers=$(gh api --paginate \
   "repos/$repo/pulls?state=open&base=master&per_page=100" \
-  --jq '.[] | select(.head.ref == "dev" and .head.repo.full_name == "'"$repo"'") | .number')
+  --jq '.[] | .number')
 open_promotions=$(printf '%s\n' "$open_promotion_numbers" \
   | awk 'NF { count++ } END { print count + 0 }')
 invalid_open=$(gh api --paginate \
   "repos/$repo/pulls?state=open&base=master&per_page=100" \
-  --jq '.[] | select(.head.ref != "dev" or .head.repo.full_name != "'"$repo"'") | .number' \
+  --jq '.[] | select((.head.ref != "dev" and (.head.ref | startswith("feature/unixlike-input-patch-") | not)) or .head.repo.full_name != "'"$repo"'") | .number' \
   | paste -sd, -)
 if [ -n "$invalid_open" ]; then
   fail "open master pull requests have invalid sources: $invalid_open"
 elif [ "$open_promotions" -le 1 ]; then
-  ok "at most one same-repository dev-to-master promotion is open"
+  ok "at most one master pull request is open"
 else
-  fail "$open_promotions dev-to-master promotions are open"
+  fail "$open_promotions master pull requests are open"
 fi
 
 invalid_merged=$(gh api --paginate \
   "repos/$repo/pulls?state=closed&base=master&per_page=100" \
-  --jq '.[] | select(.merged_at != null) | select(.head.ref != "dev" or .head.repo.full_name != "'"$repo"'") | .number' \
+  --jq '.[] | select(.merged_at != null) | select((.head.ref != "dev" and (.head.ref | startswith("feature/unixlike-input-patch-") | not)) or .head.repo.full_name != "'"$repo"'") | .number' \
   | paste -sd, -)
 if [ -n "$invalid_merged" ]; then
   fail "merged master pull requests have invalid sources: $invalid_merged"
 else
-  ok "merged master pull requests came from same-repository dev"
+  ok "merged master pull requests came from same-repository dev or the input patch lane"
 fi
 
 merge_settings=$(gh api "repos/$repo" --jq '

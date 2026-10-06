@@ -1,17 +1,23 @@
-name: Scheduled domain release
+name: Unix-like input patch
 
 on:
   schedule:
-    - cron: '0 20,21,22 * * *' # 05 refresh, 06 promotion opens, 07 wait cutoff Asia/Seoul
+    - cron: '0 20 * * *' # 05:00 Asia/Seoul
   workflow_run:
     workflows: [CI]
     types: [completed]
   workflow_dispatch:
     inputs:
       source:
-        description: 'Optional original promotion SHA for exception recovery (requires review)'
+        description: 'Original input patch merge SHA for publication recovery only'
         required: false
         type: string
+  workflow_call:
+    inputs:
+      manual:
+        type: boolean
+        default: false
+
 
 permissions:
   contents: read
@@ -31,8 +37,12 @@ jobs:
       action: ${{ steps.plan.outputs.action }}
       base: ${{ steps.plan.outputs.base }}
       head: ${{ steps.plan.outputs.head }}
-      approval: ${{ steps.plan.outputs.approval }}
     steps:
+      - name: Require master for manual operation
+        if: github.event_name == 'workflow_dispatch'
+        env:
+          DISPATCH_REF: ${{ github.ref }}
+        run: test "$DISPATCH_REF" = refs/heads/master
       - uses: actions/checkout@v7
         with:
           ref: master
@@ -42,31 +52,30 @@ jobs:
         env:
           GH_TOKEN: ${{ github.token }}
           RECOVERY_SOURCE: ${{ inputs.source }}
+          MANUAL: ${{ inputs.manual == true }}
+          EVENT: ${{ github.event_name }}
         run: |
           if [ -n "$RECOVERY_SOURCE" ]; then
-            tool/configs release inspect --source "$RECOVERY_SOURCE" >"$RUNNER_TEMP/plan.json"
+            tool/version-control/release.py inspect --source "$RECOVERY_SOURCE" >"$RUNNER_TEMP/plan.json"
+          elif [ "$MANUAL" = true ]; then
+            tool/version-control/release.py inspect --manual-start >"$RUNNER_TEMP/plan.json"
+          elif [ "$EVENT" = schedule ]; then
+            tool/version-control/release.py inspect --scheduled-start >"$RUNNER_TEMP/plan.json"
           else
-            tool/configs release inspect >"$RUNNER_TEMP/plan.json"
+            tool/version-control/release.py inspect >"$RUNNER_TEMP/plan.json"
           fi
           python3 - <<'PY'
-          import json, os, re
+          import json, os
           from pathlib import Path
           plan = json.loads(Path(os.environ['RUNNER_TEMP'], 'plan.json').read_text())
+          if os.environ['MANUAL'] == 'true' and plan['action'] == 'disabled':
+              raise SystemExit('Input patch writes are disabled.')
           with open(os.environ['GITHUB_OUTPUT'], 'a') as output:
-              for key in ('action', 'base', 'head', 'approval'):
+              for key in ('action', 'base', 'head'):
                   output.write(f'{key}={str(plan.get(key, "")).lower()}\n')
           with open(os.environ['GITHUB_STEP_SUMMARY'], 'a') as summary:
               summary.write('Candidate selected from accepted master tooling:\n```json\n' + json.dumps(plan, indent=2) + '\n```\n')
           PY
-      - name: Show source-owned versions before approval
-        if: steps.plan.outputs.head != ''
-        env:
-          SOURCE: ${{ steps.plan.outputs.head }}
-        run: |
-          for domain in unixlike windows; do
-            echo "### $domain" >>"$GITHUB_STEP_SUMMARY"
-            git show "$SOURCE:$domain/release.json" >>"$GITHUB_STEP_SUMMARY"
-          done
 
   refresh:
     needs: prepare
@@ -89,10 +98,11 @@ jobs:
           path: unixlike/flake.lock
           retention-days: 1
 
-  refresh-writer:
+  writer:
     needs: [prepare, refresh]
-    if: needs.prepare.outputs.action == 'refresh'
+    if: always() && needs.prepare.result == 'success' && contains(fromJSON('["success", "skipped"]'), needs.refresh.result) && (contains(fromJSON('["refresh", "patch-merge", "publish"]'), needs.prepare.outputs.action) || (inputs.manual == true && needs.prepare.outputs.action == 'wait'))
     runs-on: ubuntu-latest
+    timeout-minutes: 65
     environment: release-control
     concurrency:
       group: configs-release-writes
@@ -104,6 +114,7 @@ jobs:
           fetch-depth: 0
           persist-credentials: false
       - uses: actions/download-artifact@v8
+        if: needs.prepare.outputs.action == 'refresh'
         with:
           name: refreshed-lock
           path: ${{ runner.temp }}/refreshed
@@ -113,57 +124,24 @@ jobs:
         with:
           app-id: ${{ vars.CONFIGS_RELEASE_APP_ID }}
           private-key: ${{ secrets.CONFIGS_RELEASE_APP_PRIVATE_KEY }}
-      - name: Validate data and publish refresh PR using accepted tooling
+      - name: Publish or resume the checked Unix-like input patch
         env:
           GH_TOKEN: ${{ steps.app.outputs.token || secrets.CONFIGS_RELEASE_TOKEN }}
           BASE: ${{ needs.prepare.outputs.base }}
-        run: tool/configs release refresh-pr --base "$BASE" --lock "$RUNNER_TEMP/refreshed/flake.lock"
-
-  approval:
-    name: Approve ${{ needs.prepare.outputs.head }} on ${{ needs.prepare.outputs.base }}
-    needs: prepare
-    if: needs.prepare.outputs.approval == 'true'
-    runs-on: ubuntu-latest
-    environment: release-approval
-    steps:
-      - name: Approved candidate
-        env:
           HEAD: ${{ needs.prepare.outputs.head }}
-          BASE: ${{ needs.prepare.outputs.base }}
-        run: printf 'Approved source %s against base %s\n' "$HEAD" "$BASE"
-
-  writer:
-    needs: [prepare, approval]
-    if: always() && needs.prepare.result == 'success' && (needs.approval.result == 'success' || needs.prepare.outputs.approval == 'false') && contains(fromJSON('["promote", "refresh-merge", "promotion-pr", "publish", "recover"]'), needs.prepare.outputs.action)
-    runs-on: ubuntu-latest
-    environment: release-control
-    concurrency:
-      group: configs-release-writes
-      cancel-in-progress: false
-    steps:
-      - uses: actions/checkout@v7
-        with:
-          ref: master
-          fetch-depth: 0
-          persist-credentials: false
-      - uses: actions/create-github-app-token@v3
-        id: app
-        if: vars.CONFIGS_RELEASE_APP_ID != ''
-        with:
-          app-id: ${{ vars.CONFIGS_RELEASE_APP_ID }}
-          private-key: ${{ secrets.CONFIGS_RELEASE_APP_PRIVATE_KEY }}
-      - name: Recheck candidate, perform bounded write and confirm remote result
-        env:
-          GH_TOKEN: ${{ steps.app.outputs.token || secrets.CONFIGS_RELEASE_TOKEN }}
-          HEAD: ${{ needs.prepare.outputs.head }}
-          BASE: ${{ needs.prepare.outputs.base }}
           ACTION: ${{ needs.prepare.outputs.action }}
-          APPROVED: ${{ needs.approval.result == 'success' }}
+          MANUAL: ${{ inputs.manual == true }}
+          RECOVERY_SOURCE: ${{ inputs.source }}
         run: |
-          if [ "$ACTION" = recover ]; then
-            tool/configs release publish --source "$HEAD" --approved
-          elif [ "$APPROVED" = true ]; then
-            tool/configs release advance --head "$HEAD" --base "$BASE" --approved
+          if [ -n "$RECOVERY_SOURCE" ]; then
+            tool/version-control/release.py publish --source "$RECOVERY_SOURCE"
           else
-            tool/configs release advance --head "$HEAD" --base "$BASE"
+            if [ "$ACTION" = refresh ]; then
+              tool/version-control/release.py refresh-pr --base "$BASE" --lock "$RUNNER_TEMP/refreshed/flake.lock"
+            fi
+            if [ "$MANUAL" = true ]; then
+              tool/version-control/release.py prepare-manual
+            elif [ "$ACTION" != refresh ]; then
+              tool/version-control/release.py advance --head "$HEAD" --base "$BASE"
+            fi
           fi

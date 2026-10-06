@@ -135,13 +135,16 @@ no repository decision, path convention, branch name, infrastructure identity,
 or current state. Keep project policy and enforcement here. Adoption of a
 shared skill is explicit; product-specific adapters never become its authority.
 
-For source promotion, only the same repository's `dev` branch may enter
-`master`. Use a pull request and a merge commit; never commit, cherry-pick,
-squash, or rebase directly into `master`. Promotion accepts source history but
-does not certify a domain release or authorize deployment. Do not merge
-`master` back into `dev` merely to carry a promotion merge commit. The
-repository maintainer owns promotion decisions. There is no operational
-bypass; change this policy through the governance workflow before deviating.
+General source promotion accepts only the same repository's `dev` branch into
+`master`. The sole direct patch lane accepts a same-repository, master-based,
+single-commit Unix-like permitted-input update and its next patch declaration.
+Both use protected pull requests and merge commits; never commit, cherry-pick,
+squash, or rebase directly into `master`. The patch lane does not operate on
+Windows or general development. Development promotion must incorporate already
+accepted input patch history. Bringing actual patch source back into `dev` is
+allowed; do not reverse-merge merely to carry a promotion merge commit.
+The maintainer owns promotion decisions. No protection bypass is permitted.
+See `docs/policy/decisions/repository/master-input-patch-releases.md`.
 
 Work is planned and verified in documents; execution issues name work lanes
 and dependencies without copying evidence or native pull-request state.

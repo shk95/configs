@@ -52,7 +52,9 @@ planning read-only unless the user explicitly authorizes a Git mutation.
   delivery. GitHub provides candidates and protected dev accepts only PRs.
   Do not infer candidates from local worktree or branch inventories.
 - **Promote**: Run `tool/configs plan-promotion`. Permit only a
-  same-repository `dev` to `master` pull request, ensure no competing promotion
+  same-repository `dev` to `master` development pull request incorporating accepted
+  input patch history; the separate automatic input patch lane is governed by
+  the master-input-patch-releases decision. Ensure no competing master PR
   is open, and introduce no fix in the promotion itself. Require `Required
   checks`, resolved conversations, and explicit authorization before a merge
   commit. Run both audits afterward. Do not reverse-merge the promotion commit

@@ -1,6 +1,6 @@
 #!/bin/sh
 
-# Require the current pull request to be the only open dev-to-master promotion.
+# Require the current pull request to be the only open master PR (development promotion or input patch).
 
 set -eu
 
