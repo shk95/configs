@@ -228,14 +228,6 @@
       "Target": "{USERPROFILE}\\.config\\wezterm\\config\\bindings.lua"
     },
     {
-      "Compare": "Text",
-      "Feature": "wezterm",
-      "Id": "weztermDarwin",
-      "Parser": "Lua",
-      "Source": "files/wezterm/platform/darwin.lua",
-      "Target": "{USERPROFILE}\\.config\\wezterm\\platform\\darwin.lua"
-    },
-    {
       "Compare": "ExactJson",
       "Feature": "wezterm",
       "Id": "weztermFontManifest",
@@ -250,14 +242,6 @@
       "Parser": "Lua",
       "Source": "files/wezterm/config/fonts.lua",
       "Target": "{USERPROFILE}\\.config\\wezterm\\config\\fonts.lua"
-    },
-    {
-      "Compare": "Text",
-      "Feature": "wezterm",
-      "Id": "weztermLinux",
-      "Parser": "Lua",
-      "Source": "files/wezterm/platform/linux.lua",
-      "Target": "{USERPROFILE}\\.config\\wezterm\\platform\\linux.lua"
     },
     {
       "Compare": "Text",

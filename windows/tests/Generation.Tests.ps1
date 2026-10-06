@@ -61,6 +61,15 @@ Describe 'Host declaration and generation contract' {
         $contract.units.id | Should -Not -Contain fancyZonesCustomLayouts
         $contract.units.id | Should -Not -Contain fancyZonesLayoutHotkeys
         $contract.units.id | Should -Contain fancyZonesDefaultLayouts
+        $contract.units.id | Should -Contain weztermWindows
+        $contract.units.id | Should -Not -Contain weztermLinux
+        $contract.units.id | Should -Not -Contain weztermDarwin
+    }
+    It 'refuses an enabled retired WezTerm platform unit <Id>' -ForEach @(
+        @{ Id = 'weztermDarwin' }, @{ Id = 'weztermLinux' }
+    ) {
+        New-FixtureEnvironment -Features @('wezterm') -Units @{ $Id = @{ enabled = $true } }
+        { Get-WinEnvEnvironmentPlan $environment $provider } | Should -Throw '*Unknown active unit*'
     }
     It 'selects <Feature> with exactly its dependency closure' -ForEach @(
         @{ Feature = ''; Expected = 'core' }, @{ Feature = 'font'; Expected = 'core,font' },
