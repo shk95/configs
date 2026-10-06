@@ -949,3 +949,48 @@ live enablement. Full duplicate suppression is not a completion condition.
 Read-only diagnosis: `tool/configs release inspect` (returns disabled when off).
 The workflow calls the guarded `advance`, `refresh-pr` and reviewed `publish`
 operations. Those never activate a host or run Windows Apply.
+
+### One-call manual release
+
+`Manual domain release` (`manual-release.yml`) is a separate dispatch-only
+entry point. It uses the same enablement, release-control credentials,
+release-approval Environment and branch protections as the scheduled flow.
+Publish the workflow and its tooling to master through the normal protected
+promotion before use. Only a dispatch targeting master is accepted.
+
+Open Actions → Manual domain release → Run workflow, select master and run
+once, or call `gh workflow run manual-release.yml --ref master`. REST clients
+POST `{"ref":"master"}` to
+`/repos/shk95/configs/actions/workflows/manual-release.yml/dispatches` using
+an authorized token with Actions write permission. No input field or second
+dispatch is needed. Required Environment approval is still a human action.
+
+The workflow refreshes the same four permitted inputs without writer
+credentials. Accepted master tooling validates and publishes the managed
+refresh PR, waits for its matching Required checks, integrates it, opens
+the dev-to-master promotion and waits for its matching checks. The approval
+job names that exact candidate and holds no writer credential or writer
+concurrency. The final writer rechecks the candidate before protected merge
+and immutable tag publication. Clock and daily promotion limits alone are
+omitted. Pending human domain changes still need source-owned declarations
+and required review; they cannot be relabelled as an automatic patch.
+
+CI waiting has a 60-minute budget in one integration job. Failed/cancelled
+checks, changed candidates or an expired wait fail visibly. The job releases
+writer concurrency before Environment review. Scheduled/CI-triggered release
+inspection waits while a manual run is queued, executing or awaiting review;
+cancel an unwanted manual run rather than leaving its approval pending.
+Manual dispatches are serialized and never cancel the running manual cycle.
+
+Unchanged inputs create no refresh commit or PR. If dev and master already
+have identical trees and publication is complete, the run ends without a new
+tag. An existing managed PR or promotion is resumed rather than duplicated.
+On failure inspect the run and current PR/check state, repair the failed
+source/CI or resolve the conflicting candidate, then dispatch again. If the
+prior promotion has missing tags, the next run finishes that publication
+before considering another cycle. Ambiguous original source identity still
+requires the explicit-source recovery operation above. No runtime database,
+cycle label or comment command is added.
+
+Report manual operating results separately from actual event=schedule runs.
+Neither path adopts private host pins, activates a host or runs Windows Apply.

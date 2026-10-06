@@ -12,6 +12,7 @@ from pathlib import Path
 import re
 import subprocess
 import sys
+import time
 import zipfile
 from zoneinfo import ZoneInfo
 
@@ -241,7 +242,16 @@ def patch_version(previous):
     return f'{major}.{minor}.{patch + 1}'
 
 
-def inspect(now=None):
+def manual_active():
+    # Filter active states server-side so an old approval is not hidden by a
+    # page of newer completed runs. No process/session liveness is inferred.
+    return any(api(f'actions/workflows/manual-release.yml/runs?status={status}&per_page=1')['workflow_runs']
+               for status in ('queued', 'in_progress', 'waiting', 'pending', 'requested'))
+
+
+def inspect(now=None, manual=False, start=False):
+    if not manual and manual_active():
+        return {'action': 'wait', 'reason': 'manual release is active'}
     master, dev = git('rev-parse', 'origin/master'), git('rev-parse', 'origin/dev')
     for domain in DOMAINS:
         if latest(domain) is None:
@@ -264,40 +274,52 @@ def inspect(now=None):
     refresh = [pr for pr in api('pulls?state=open&base=dev&per_page=100') if pr['head']['ref'] == 'feature/unixlike-automatic-refresh' and pr['head']['repo']['full_name'] == repository()]
     if len(refresh) > 1:
         raise ValueError('multiple managed refresh PRs')
-    if current.hour < 6:
+    if not manual and current.hour < 6:
         if current.hour == 5 and not refresh:
             return {'action': 'refresh', 'base': dev, 'head': dev, 'approval': False}
         return {'action': 'wait', 'reason': 'promotion opens at 06:00 Asia/Seoul'}
     # A single normal promotion per local day; recovery above is independent.
-    for pr in api('pulls?state=closed&base=master&sort=updated&direction=desc&per_page=20'):
+    for pr in ([] if manual else api('pulls?state=closed&base=master&sort=updated&direction=desc&per_page=20')):
         if pr['head']['ref'] == 'dev' and pr['head']['repo']['full_name'] == repository() and pr['merged_at'] and dt.datetime.fromisoformat(pr['merged_at'].replace('Z', '+00:00')).astimezone(ZoneInfo('Asia/Seoul')).date() == current.date():
             return {'action': 'wait', 'reason': 'this cycle already promoted'}
     if refresh:
         pr = refresh[0]
         head = pr['head']['sha']
+        if not SHA.fullmatch(head):
+            raise ValueError('invalid managed refresh head')
+        # API-created commits are absent in the fresh accepted-tooling runner;
+        # the writer guard fetches dev/master, not the managed feature head.
+        if subprocess.call(['git', 'cat-file', '-e', f'{head}^{{commit}}'], stdout=subprocess.DEVNULL, stderr=subprocess.DEVNULL):
+            git('fetch', '--quiet', 'origin', head)
         common = git('merge-base', dev, head)
         if not automatic(common, head):
             raise ValueError('managed refresh includes unpermitted content')
         current_base = subprocess.call(['git', 'merge-base', '--is-ancestor', dev, head], stdout=subprocess.DEVNULL, stderr=subprocess.DEVNULL) == 0
-        if not current_base and current.hour < 7:
+        if not current_base and (start or (not manual and current.hour < 7)):
             return {'action': 'refresh', 'base': dev, 'head': dev, 'approval': False}
+        if not current_base and manual:
+            raise ValueError('managed refresh base changed; rerun the manual workflow')
         if current_base:
             tree = merge_tree(dev, head)
             if checked(dev, head, tree, 'pull_request'):
                 return {'action': 'refresh-merge', 'number': pr['number'], 'base': dev, 'head': head, 'tree': tree, 'approval': False}
-        if current.hour < 7:
-            return {'action': 'wait', 'reason': 'refresh pending; runner is released'}
+        if manual or current.hour < 7:
+            return {'action': 'wait', 'reason': 'refresh Required checks pending',
+                    'base': dev, 'head': head}
+    promotions = api('pulls?state=open&base=master&per_page=100')
+    if start and not refresh and not promotions:
+        return {'action': 'refresh', 'base': dev, 'head': dev, 'approval': False}
     if git('rev-parse', f'{master}^{{tree}}') == git('rev-parse', f'{dev}^{{tree}}'):
         return {'action': 'none'}
     validate_versions(master, dev)
     tree = merge_tree(master, dev)
-    promotions = api('pulls?state=open&base=master&per_page=100')
     if promotions:
         if len(promotions) != 1 or promotions[0]['head']['ref'] != 'dev' or promotions[0]['head']['repo']['full_name'] != repository():
             raise ValueError('unexpected promotion PR')
         pr = promotions[0]
         if not checked(master, dev, tree, 'pull_request'):
-            return {'action': 'wait', 'reason': 'promotion Required checks pending'}
+            return {'action': 'wait', 'reason': 'promotion Required checks pending',
+                    'base': master, 'head': dev}
         return {'action': 'promote', 'number': pr['number'], 'base': master, 'head': dev, 'tree': tree, 'approval': not automatic(master, dev)}
     return {'action': 'promotion-pr', 'base': master, 'head': dev, 'tree': tree, 'approval': False}
 
@@ -338,8 +360,10 @@ def publish(source):
             raise ValueError('remote publication not confirmed')
 
 
-def advance(expected_head, expected_base, approved=False):
-    action = inspect()
+def advance(expected_head, expected_base, approved=False, manual=False):
+    action = inspect(manual=True) if manual else inspect()
+    if manual and action['action'] == 'wait' and (action.get('head') != expected_head or action.get('base') != expected_base):
+        raise ValueError('candidate changed after preparation/approval')
     if action['action'] in ('wait', 'none'):
         return action
     if action.get('head') != expected_head or action.get('base') != expected_base:
@@ -367,6 +391,46 @@ def advance(expected_head, expected_base, approved=False):
         if action['action'] == 'promote' and planned(merged):
             publish(merged)
     return action
+
+
+def prepare_manual(timeout=3600, interval=30):
+    """Finish checked integration, then return an exact candidate for review.
+
+    The caller owns writer concurrency. Review and final publication happen in
+    separate jobs, so no approval wait holds that concurrency or credential.
+    PRs, checks and tags remain the state; the deadline is only this job's budget.
+    """
+    deadline = time.monotonic() + timeout
+    waiting = None
+    while True:
+        write_guard()
+        action = inspect(manual=True)
+        identity = (action.get('base'), action.get('head'))
+        if waiting is not None and identity != waiting:
+            raise ValueError('candidate changed while waiting; rerun the manual workflow')
+        print(json.dumps(action), file=sys.stderr, flush=True)
+        if action['action'] in ('promote', 'none'):
+            if pending_review(action):
+                raise ValueError('same candidate already awaits Environment review; use that run')
+            return action
+        if action['action'] == 'wait':
+            checks = api(f"commits/{action['head']}/check-runs?per_page=100")['check_runs']
+            required = [check for check in checks if check['name'] == 'Required checks'
+                        and check['app']['id'] == 15368]
+            newest = max(required, key=lambda check: check['id']) if required else None
+            if newest and newest['conclusion'] in ('failure', 'cancelled', 'timed_out', 'action_required', 'stale'):
+                raise ValueError('Required checks failed; repair or rerun CI before retrying')
+            if time.monotonic() >= deadline:
+                raise ValueError('manual release check wait expired; remote PRs are preserved')
+            waiting = identity
+            time.sleep(min(interval, max(0, deadline - time.monotonic())))
+            continue
+        if action['action'] not in ('refresh-merge', 'promotion-pr', 'publish'):
+            raise ValueError('unexpected manual release action')
+        result = advance(action['head'], action['base'], manual=True)
+        waiting = identity if result['action'] == 'wait' else None
+        if time.monotonic() >= deadline:
+            raise ValueError('manual release wait expired; remote PRs are preserved')
 
 
 def ensure_pr(head, base, title, body):
@@ -459,7 +523,9 @@ def pending_review(action):
     if not action.get('approval'):
         return False
     name = f"Approve {action['head']} on {action['base']}"
-    for run in api('actions/workflows/release.yml/runs?status=waiting&per_page=100')['workflow_runs']:
+    for run in api('actions/runs?status=waiting&per_page=100')['workflow_runs']:
+        if run.get('path') not in ('.github/workflows/release.yml', '.github/workflows/manual-release.yml'):
+            continue
         if str(run['id']) == os.environ.get('GITHUB_RUN_ID'):
             continue
         jobs = api(f"actions/runs/{run['id']}/jobs?per_page=100")['jobs']
@@ -473,10 +539,13 @@ def main():
     sub = parser.add_subparsers(dest='operation', required=True)
     diagnosis = sub.add_parser('inspect')
     diagnosis.add_argument('--source')
+    diagnosis.add_argument('--manual-start', action='store_true', help='start or resume a one-call manual cycle without clock/day scheduling')
     step = sub.add_parser('advance')
     step.add_argument('--head', required=True)
     step.add_argument('--base', required=True)
     step.add_argument('--approved', action='store_true')
+    step.add_argument('--manual', action='store_true', help='recheck an explicitly requested manual cycle without clock/day scheduling')
+    sub.add_parser('prepare-manual', help='wait for checks and prepare a manual promotion for separate review/publication')
     publication = sub.add_parser('publish')
     publication.add_argument('--source', required=True)
     publication.add_argument('--approved', action='store_true')
@@ -486,6 +555,8 @@ def main():
     args = parser.parse_args()
     try:
         if args.operation == 'inspect':
+            if args.source and args.manual_start:
+                raise ValueError('explicit-source recovery and manual start are separate operations')
             if os.environ.get('CONFIGS_RELEASE_ENABLED') != '1':
                 result = {'action': 'disabled'}
             else:
@@ -496,20 +567,25 @@ def main():
                     git('merge-base', '--is-ancestor', args.source, 'origin/master')
                     result = {'action': 'recover', 'head': args.source, 'base': args.source, 'approval': True}
                 else:
-                    result = inspect()
+                    result = inspect(manual=True, start=True) if args.manual_start else inspect()
                 if pending_review(result):
                     result = {'action': 'wait', 'reason': 'same candidate already awaits Environment review'}
             print(json.dumps(result))
         else:
             write_guard()
-            if args.operation == 'publish':
+            if args.operation == 'prepare-manual':
+                print(json.dumps(prepare_manual()))
+            elif args.operation == 'publish':
                 if not args.approved:
                     raise ValueError('explicit source recovery requires Environment review')
                 publish(args.source)
             elif args.operation == 'refresh-pr':
                 print(json.dumps(refresh_pr(args.base, args.lock)))
             else:
-                print(json.dumps(advance(args.head, args.base, args.approved)))
+                result = advance(args.head, args.base, args.approved, manual=args.manual)
+                if args.manual and result['action'] == 'wait':
+                    raise ValueError('Required checks changed after preparation; rerun the manual workflow')
+                print(json.dumps(result))
     except (ValueError, KeyError, OSError, subprocess.CalledProcessError, json.JSONDecodeError) as error:
         print(f'release: {error}', file=sys.stderr)
         return 1
