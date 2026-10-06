@@ -265,10 +265,16 @@ its owner. A checkpoint is not a heartbeat or an atomic remote lane claim.
 A worker resuming a Ready PR first coordinates withdrawal of admission,
 confirms any auto-merge request is cancelled, and converts the PR back to
 Draft before editing or pushing. Recreated workspaces follow the same rule.
-Ready is restored only when the revised result and its checks are complete.
+Ready is restored when the revised result is reviewable and no current required
+check has failed; pending checks are reported and remain a writer-side gate.
 
-Workers commit, push, create a Draft PR and finish with Ready after current-head
-required checks. They never use commit --publish or arm auto-merge. The legacy
+Workers commit, push, create a Draft PR and may finish with Ready when the
+implementation is complete and reviewable, reviews and blockers are accounted
+for, and no current required check has failed. Pending remote checks are
+reported as pending; a failed check keeps the PR Draft until repaired and
+rerun. The integrator may dispatch a qualified conditional request while checks
+are pending; the writer waits for successful checks on the exact frozen head
+before its protected merge. Workers never use commit --publish or arm auto-merge. The legacy
 commit --publish convenience remains a human-authorized integration operation;
 its confirmation is not a worker handoff. Worker authorization to publish is
 not permission to merge. Existing authorized scope does not need repeated
@@ -297,7 +303,7 @@ Semantic labels such as blocked and high-risk may inform admission.
 One maintainer-managed integration session admits one candidate at a time.
 Merge Queue is not used. Keep dev's PR requirement, Required checks with strict
 base, administrator enforcement, resolved conversations, no force push and no
-deletion. Do not grant agents bypass. Risk-specific human review is an explicit
+deletion on both protected branches. Do not grant agents bypass. Risk-specific human review is an explicit
 admission requirement; add CODEOWNERS only with actual owner identities and
 review rules. Required approval count remains zero for ordinary changes.
 
@@ -305,14 +311,87 @@ Re-query the candidate head/checks before admission. If strict protection needs
 a newer base, ask its worker to merge origin/dev into its feature branch and
 revalidate. Do not eagerly update every worker. Return conflicts and failed
 validation to a worker, recreating its workspace from the remote if necessary.
-With separate merge authorization, request GitHub merge-commit integration
-with the expected head after checks pass. Do not arm unattended auto-merge
-requests that could admit a later worker head. On recovery cancel any existing
-auto-merge request and confirm cancellation before asking for head changes;
-if it merged concurrently, inspect the actual result. Never
-use an administrator bypass. Confirm merged state before admitting the next;
-an accepted request or armed auto-merge is not a completed merge. Strict base
-protection remains the safeguard if dev changes during admission.
+With separate merge authorization, submit an explicit bounded request for an
+ordinary candidate:
+
+```sh
+tool/configs conditional-merge submit --pr <number> --target dev \
+  --head <full-head-sha> --base <full-observed-dev-sha> --confirm
+```
+
+For dev-to-master promotion, use `--target master` after `tool/configs
+plan-promotion` confirms the same-repository `dev` source, accepted patch
+ancestry and single open master PR. `--confirm` is the explicit dispatch
+action. The command rechecks the candidate and target, then reports a confirmed
+Actions run URL and `requested`; that response does not mean merged. Actions
+waits up to 60 minutes including its retained queue, then rechecks Ready state,
+same-repository source, exact head/base, review and conversation blockers,
+newest exact-source Required checks and current strict protection before it
+calls the protected merge API. The API matches the approved head; strict
+protection is the server safeguard if the target moves between the final read
+and merge. There is no atomic expected-target-SHA field.
+
+Before the workflow can run, its file must reach the default branch `master`;
+dispatch always selects accepted `dev`. A maintainer must separately configure
+the repository variable `CONFIGS_MERGE_ENABLED=0` and comma-separated
+`CONFIGS_MERGE_ACTORS` login allowlist. The `merge-control` environment must
+allow deployments from `dev` only before any writer credential is added. Store
+either the GitHub App ID variable `CONFIGS_MERGE_APP_ID` and private key secret
+`CONFIGS_MERGE_APP_PRIVATE_KEY`, or the dedicated `CONFIGS_MERGE_TOKEN` secret
+there; keep it independent of `release-control`. The App needs Contents write,
+Pull requests write, and Administration, Actions, Checks and Metadata read.
+Qualify both targets and the target-move race through a separately authorized,
+scoped live trial. For that trial only, use the dedicated actor allowlist and a
+designated qualification PR, set `CONFIGS_MERGE_ENABLED=1`, collect the
+workflow/merge/audit evidence, then immediately set it back to `0`. The
+maintainer reviews that evidence and separately authorizes general enablement.
+The branch implementation does not create the environment, add credentials,
+enable writes or perform a qualification merge. Unknown protection settings
+refuse; pending mergeability and current CI may wait within the bound. Continue
+using the reviewed synchronous procedure while the writer is disabled. High-risk
+candidates require admission-specific synchronous review and are refused by
+the asynchronous path; blocked candidates remain refused.
+
+Dev writers serialize in their own Actions group. Master writers share
+`configs-release-writes` with the Unix-like input patch workflow. Both queues
+retain pending requests and do not cancel active writers. Requests admitted
+against an old target stop as stale after another writer moves it. The human
+`commit --publish` path and direct protected manual merges do not participate
+in these groups, so no total-writer serialization is claimed; strict branch
+protection remains the final safeguard. Do not arm native auto-merge as a
+substitute for this admission flow. On cancellation, confirm the Actions run
+has stopped before asking for head changes; if it merged during cancellation,
+inspect the actual PR and merge commit. An ambiguous request or merge is
+recovered from GitHub before any retry. Never use an administrator bypass.
+Confirm the merged state and post-merge audit result before admitting the
+next request.
+
+The synchronous fallback performs the same admission and exact-source checks
+before a human-authorized protected merge. Refresh the PR and target refs; record
+the current full head and base SHAs; confirm the PR is Ready, same-repository,
+unblocked, free of unresolved required or admission-specific review blockers
+and unresolved conversations, with no stack
+or auto-merge request. Wait for all required checks on that exact head:
+
+```sh
+gh pr checks <number> --required --watch
+gh pr view <number> --json state,isDraft,baseRefName,baseRefOid,headRefOid,mergeStateStatus,reviewDecision
+gh api repos/{owner}/{repo}/branches/{target}/protection
+```
+
+Re-query the target ref and PR after checks complete. If the head or base moved,
+repeat admission and check validation for the new identities. Once the
+maintainer has explicitly authorized the merge, use the current head SHA to
+retain the server-side head guard:
+
+```sh
+gh pr merge <number> --merge --match-head-commit <full-head-sha>
+```
+
+Then inspect the merged PR and merge commit, and run
+`tool/configs audit --history <merge-commit>` plus `tool/configs audit-remote`.
+An ambiguous command result is recovered from GitHub before retrying. Neither
+this fallback nor the conditional writer bypasses branch protection.
 
 Native stacks were demonstrated in a separate lab, not certified for this
 repository. Until trunk-wide CI and all-layer admission are implemented and
@@ -342,9 +421,15 @@ requires an accepted policy change first.
 3. Open a pull request from `dev` to `master` titled
    `chore(repository): promote dev to master`. Record included pull requests,
    scopes, check evidence, and known unavailable native evidence.
-4. Require `Required checks`, resolved conversations, and an explicit merge
-   request. Merge with a merge commit only.
-5. Run local and remote version-control audits after the merge. Do not merge
+4. Require resolved conversations and explicit maintainer authorization. When
+   the conditional writer is qualified and enabled, submit the frozen master
+   request with `tool/configs conditional-merge submit --target master` while
+   checks may be pending; its writer requires successful exact-source checks
+   before merge. Otherwise wait for successful checks on the exact current head
+   and use the reviewed synchronous merge procedure. Both paths merge with a
+   merge commit.
+5. Confirm the actual merge commit and run local and remote version-control
+   audits after the merge. Do not merge
    the promotion commit back into `dev`.
 6. Plan domain release tags or deployments separately when their own evidence
    is available.
@@ -512,7 +597,9 @@ the format; this is the procedure.
    commit of the implementation PR, or a planning handoff reviewed beforehand.
    Preserve evidence distinctions and link issues with Refs references, never
    closing keywords (INV repository/no-closing-keyword). Publish a Draft early
-   when useful and make it Ready only after completion and required checks.
+   when useful and make it Ready when implementation is reviewable, blockers
+   are accounted for and no current required check has failed. Report pending
+   checks; the integrator's conditional writer waits for exact-head success.
 6. To change a criterion after the report exists, add a paragraph to the spec
    that opens `Amended YYYY-MM-DD` and names the criterion. The checker
    refuses a criterion removed or rewritten without one.

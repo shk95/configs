@@ -34,13 +34,14 @@ is `docs/policy/architecture.md`, and the three-domain direction is
 files beside this one.
 
 Branch protection is enabled on both `dev` and `master`: pull requests and
-current-branch checks are required, administrators are enforced,
+up-to-date branch checks are required on both, administrators are enforced,
 conversations must be resolved, force pushes and deletions are disabled, and
 both branches require only the `Required checks` gate.
 
 `dev` requires a pull request and an up-to-date base; `master` accepts
 same-repository dev promotion or the bounded Unix-like input patch lane
-through a merge-commit PR; squash and rebase merges are disabled.
+through a merge-commit PR and now also requires an up-to-date base; squash and
+rebase merges are disabled.
 
 Source authoring now uses a task-dedicated linked worktree. The primary
 checkout remains available for inspection and integration. The routine
@@ -200,9 +201,11 @@ project skills. The session helper
 records local handoffs; it does not enforce process liveness or credentials.
 See docs/policy/decisions/repository/github-agent-workflow.md.
 
-Observed dev protection already requires PRs, strict Required checks, resolved
-conversations and administrator enforcement; force pushes and deletion are
-forbidden. No remote settings were changed. No blanket required human review
+Observed protection on both `dev` and `master` requires PRs, strict Required
+checks, resolved conversations and administrator enforcement; force pushes and
+deletion are forbidden. The maintainer explicitly restored strict checks on
+`master` on 2026-10-06; the read-only remote audit now checks both branches. No
+blanket required human review
 or CODEOWNERS identities were introduced. Native stacks remain unsupported in
 production pending trunk CI and admission verification; Merge Queue is not used.
 CI effect selection reached dev in PR #413. Documentation retains its owning
@@ -217,6 +220,27 @@ Unix-like verification work, and PR #414 adds Windows suite and slow-test
 timing without removing tests or demonstrating a speedup. Their reports retain
 the measured evidence and its limits. Post-merge validation remains until safe
 equivalence is demonstrated; no cross-run result reuse is implemented.
+
+## Conditional protected merge (2026-10-06)
+
+The implementation in PR #532 adds a common explicit Actions request for
+authorized `dev` integration and `dev`-to-`master` promotion. Requests bind a
+PR number, target, head SHA and observed target SHA; successful dispatch means
+`requested`, not merged. The accepted workflow and reviewer skills recheck
+current strict protection, latest exact-source CI and the PR before calling the
+protected merge API. Master promotion keeps its source and one-open-PR checks.
+Master requests share the existing input-patch writer group; queued requests
+are retained and stale targets stop. See
+`docs/policy/decisions/repository/conditional-protected-merge.md`.
+
+GitHub registers `workflow_dispatch` only from the default branch. The new
+workflow must first land in `dev`, then reach `master` through the existing
+explicit promotion before dispatch is available. The `merge-control`
+environment, dev-only deployment policy, actor allowlist and dedicated writer
+credential have not been configured. The enablement variable remains unset or
+zero. No protected merge qualification or target-move race test has run, so
+the writer remains disabled and the synchronous integration path remains the
+operating path.
 
 ## Common
 

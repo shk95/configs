@@ -40,9 +40,14 @@ useful push; PR creation only at the end remains valid for a small task.
 Use gh pr create --draft --base dev and a body file with scope, result,
 verification, limitations and Refs issue links. Do not use commit --publish:
 that human convenience helper arms auto-merge and exceeds worker responsibility.
-Once work is complete, required checks have passed on the current head and
-required reviews/blockers are accounted for, use gh pr ready. Record handoff
-and checkpoint as handed-off. Ready is a candidate, not integration approval.
+Once the implementation is complete and reviewable, reviews/blockers are
+accounted for, and no current required check has failed, use `gh pr ready`.
+Pending remote checks may remain pending at handoff; report them clearly. A
+failed check keeps the PR Draft until repaired and rerun. The integrator may
+dispatch a qualified conditional request while checks are pending; the writer
+waits for successful checks on the exact frozen head before its protected merge.
+Record handoff and checkpoint as handed-off. Ready is a candidate, not
+integration approval.
 
 Never push/merge dev, arm auto-merge, choose other workers' merge order, or
 use local branches/worktrees to find integration candidates. Do not eagerly
@@ -67,8 +72,9 @@ Before editing or pushing review repairs to an existing Ready PR, coordinate
 withdrawal of any outstanding admission with the integrator and confirm any
 auto-merge request is cancelled. Convert the PR back to Draft with gh pr ready
 <number> --undo; only then resume implementation. This also applies when
-recreating a reclaimed workspace. Return to Ready after the changed result and
-current-head checks are complete. Do not replay a stale command or overwrite
+recreating a reclaimed workspace. Return to Ready when the revised result is
+reviewable and no current required check has failed; pending checks are reported
+and remain a writer-side gate. Do not replay a stale command or overwrite
 a server-updated branch.
 
 An abandoned task records disposition of every useful/unpushed change. A

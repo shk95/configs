@@ -33,13 +33,25 @@ have different authority.
 
 ## Protection and dependencies
 
-Keep dev PR-only with Required checks, strict base, administrator enforcement,
-resolved conversations and no force pushes or deletions. Merge Queue is not
+Keep dev and master PR-only with Required checks, strict base, administrator
+enforcement, resolved conversations and no force pushes or deletions. Merge Queue is not
 used for the personal-owned repository. Auto-merge is admission convenience,
 not a branch updater or a queue. The default is an immediate head-matched
 merge after checks; recover outstanding requests from GitHub and cancel them
 before worker repair, because an armed request may admit a later worker head. CODEOWNERS requires real reviewer identities;
 ordinary changes do not acquire a blanket human review requirement.
+
+Amended 2026-10-06: the maintainer explicitly restored strict Required checks
+on `master` as well as `dev`. This leaves master promotion and the existing
+input-patch writer dependent on an up-to-date target; it introduces no bypass.
+The repository audit now checks strict protection on both branches.
+
+Amended 2026-10-06: the maintainer adopted the separately gated conditional
+protected-merge path in
+`docs/policy/decisions/repository/conditional-protected-merge.md`. It may move
+the bounded wait into Actions after the explicit admission; immediate
+head-matched synchronous merging remains the fallback until rollout is
+qualified and enabled.
 
 A separate public native-stack lab demonstrated layer CI, automatic rebases,
 conflicts, remote recovery and shared merge commits. That experiment does not
