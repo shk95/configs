@@ -110,6 +110,22 @@ enabled, pushes, opens the pull request against `dev` and arms auto-merge, so
 the merge happens when `Required checks` pass. There is no unattended mode and
 no hook bypass. Drop `--publish` to stop at the commit.
 
+After the manual workflow reaches `master`, refresh the four automatically
+permitted inputs and complete a protected release by opening
+**Actions → Manual domain release → Run workflow**, selecting
+`master`, and run once. The workflow waits for CI, integrates the refresh,
+opens the promotion and publishes changed-domain tags after checks and any
+required Environment approval. The same one-call entry is:
+
+```sh
+gh workflow run manual-release.yml --ref master
+```
+
+This manual path ignores the schedule's time/day limit but retains the release
+guards. It performs no host activation or Windows Apply. Manual success does
+not prove GitHub's scheduled trigger ran. See `CONTRIBUTING.md` for
+prerequisites, wait limits and recovery.
+
 Codex, Claude Code, and other Agent Skills-compatible tools can use the
 project's `run-version-control-workflow` skill to classify a change, audit Git
 policy, prepare work, or plan a domain release. The canonical model-neutral

@@ -15,6 +15,14 @@ does not prove an actual scheduled run. Current exact-source CI remains in
 Actions and release proof in annotations. Host adoption, activation and Apply
 are outside this release flow.
 
+The source now includes a one-call `Manual domain release` workflow. It uses
+the same permitted refresh, protected PR integration and immutable publication,
+with bounded CI waiting and separate candidate-specific Environment review.
+Only the clock/day scheduling choices are omitted. Local fixtures and workflow
+syntax checks cover this path; rollout and live manual operation remain to be
+qualified through Actions. Manual qualification does not close actual schedule
+observation. See `docs/work/repository/manual-domain-release/report.md`.
+
 The maintainer authorized a chronological history refinement and reissue of
 the unconsumed 1.0.0 tags. Original dev/master refs and tag bytes are temporary cutover recovery only.
 Delete those backups after exact-source CI, tag and protection verification;

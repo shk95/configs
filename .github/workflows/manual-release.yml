@@ -1,0 +1,179 @@
+name: Manual domain release
+
+on:
+  workflow_dispatch:
+
+permissions:
+  contents: read
+  actions: read
+  checks: read
+  pull-requests: read
+
+concurrency:
+  group: configs-manual-release
+  cancel-in-progress: false
+
+env:
+  CONFIGS_RELEASE_ENABLED: ${{ vars.CONFIGS_RELEASE_ENABLED }}
+  GITHUB_REPOSITORY: ${{ github.repository }}
+
+jobs:
+  prepare:
+    runs-on: ubuntu-latest
+    outputs:
+      action: ${{ steps.plan.outputs.action }}
+      base: ${{ steps.plan.outputs.base }}
+      head: ${{ steps.plan.outputs.head }}
+    steps:
+      - name: Require accepted master dispatch
+        env:
+          DISPATCH_REF: ${{ github.ref }}
+        run: test "$DISPATCH_REF" = refs/heads/master
+      - uses: actions/checkout@v7
+        with:
+          ref: master
+          fetch-depth: 0
+          persist-credentials: false
+      - id: plan
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          tool/version-control/release.py inspect --manual-start >"$RUNNER_TEMP/plan.json"
+          python3 - <<'PY'
+          import json, os
+          from pathlib import Path
+          plan = json.loads(Path(os.environ['RUNNER_TEMP'], 'plan.json').read_text())
+          if plan['action'] == 'disabled':
+              raise SystemExit('Release writes are disabled.')
+          with open(os.environ['GITHUB_OUTPUT'], 'a') as output:
+              for key in ('action', 'base', 'head'):
+                  output.write(f'{key}={plan.get(key, "")}\n')
+          with open(os.environ['GITHUB_STEP_SUMMARY'], 'a') as summary:
+              summary.write('Manual start (not schedule evidence):\n```json\n' + json.dumps(plan, indent=2) + '\n```\n')
+          PY
+
+  refresh:
+    needs: prepare
+    if: needs.prepare.outputs.action == 'refresh'
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v7
+        with:
+          ref: ${{ needs.prepare.outputs.head }}
+          persist-credentials: false
+      - uses: cachix/install-nix-action@v31.10.6
+        with:
+          install_url: https://releases.nixos.org/nix/nix-2.34.8/install
+          extra_nix_config: 'experimental-features = nix-command flakes'
+      - name: Refresh permitted inputs without writer credentials
+        run: unixlike/tool/refresh-inputs --input nixpkgs --input home-manager --input nix-darwin --input nixos-wsl
+      - uses: actions/upload-artifact@v7
+        with:
+          name: refreshed-lock
+          path: unixlike/flake.lock
+          retention-days: 1
+
+  integrate:
+    needs: [prepare, refresh]
+    if: always() && needs.prepare.result == 'success' && contains(fromJSON('["success", "skipped"]'), needs.refresh.result)
+    runs-on: ubuntu-latest
+    timeout-minutes: 65
+    environment: release-control
+    concurrency:
+      group: configs-release-writes
+      cancel-in-progress: false
+    outputs:
+      action: ${{ steps.plan.outputs.action }}
+      base: ${{ steps.plan.outputs.base }}
+      head: ${{ steps.plan.outputs.head }}
+      approval: ${{ steps.plan.outputs.approval }}
+    steps:
+      - uses: actions/checkout@v7
+        with:
+          ref: master
+          fetch-depth: 0
+          persist-credentials: false
+      - uses: actions/download-artifact@v8
+        if: needs.prepare.outputs.action == 'refresh'
+        with:
+          name: refreshed-lock
+          path: ${{ runner.temp }}/refreshed
+      - uses: actions/create-github-app-token@v3
+        id: app
+        if: vars.CONFIGS_RELEASE_APP_ID != ''
+        with:
+          app-id: ${{ vars.CONFIGS_RELEASE_APP_ID }}
+          private-key: ${{ secrets.CONFIGS_RELEASE_APP_PRIVATE_KEY }}
+      - name: Publish validated refresh candidate
+        if: needs.prepare.outputs.action == 'refresh'
+        env:
+          GH_TOKEN: ${{ steps.app.outputs.token || secrets.CONFIGS_RELEASE_TOKEN }}
+          BASE: ${{ needs.prepare.outputs.base }}
+        run: tool/version-control/release.py refresh-pr --base "$BASE" --lock "$RUNNER_TEMP/refreshed/flake.lock"
+      - id: plan
+        name: Wait for CI, integrate refresh and prepare exact promotion
+        env:
+          GH_TOKEN: ${{ steps.app.outputs.token || secrets.CONFIGS_RELEASE_TOKEN }}
+        run: |
+          tool/version-control/release.py prepare-manual >"$RUNNER_TEMP/plan.json"
+          python3 - <<'PY'
+          import json, os, subprocess
+          from pathlib import Path
+          plan = json.loads(Path(os.environ['RUNNER_TEMP'], 'plan.json').read_text())
+          with open(os.environ['GITHUB_OUTPUT'], 'a') as output:
+              for key in ('action', 'base', 'head', 'approval'):
+                  output.write(f'{key}={str(plan.get(key, "")).lower()}\n')
+          with open(os.environ['GITHUB_STEP_SUMMARY'], 'a') as summary:
+              summary.write('Checked manual candidate:\n```json\n' + json.dumps(plan, indent=2) + '\n```\n')
+              if plan.get('head'):
+                  for domain in ('unixlike', 'windows'):
+                      summary.write(f'### {domain}\n```json\n')
+                      summary.write(subprocess.check_output(['git', 'show', f"{plan['head']}:{domain}/release.json"]).decode())
+                      summary.write('\n```\n')
+          PY
+
+  approval:
+    name: Approve ${{ needs.integrate.outputs.head }} on ${{ needs.integrate.outputs.base }}
+    needs: integrate
+    if: needs.integrate.outputs.approval == 'true'
+    runs-on: ubuntu-latest
+    environment: release-approval
+    steps:
+      - name: Approved candidate
+        env:
+          HEAD: ${{ needs.integrate.outputs.head }}
+          BASE: ${{ needs.integrate.outputs.base }}
+        run: printf 'Approved source %s against base %s\n' "$HEAD" "$BASE"
+
+  writer:
+    needs: [integrate, approval]
+    if: always() && needs.integrate.result == 'success' && needs.integrate.outputs.action == 'promote' && (needs.approval.result == 'success' || needs.integrate.outputs.approval == 'false')
+    runs-on: ubuntu-latest
+    environment: release-control
+    concurrency:
+      group: configs-release-writes
+      cancel-in-progress: false
+    steps:
+      - uses: actions/checkout@v7
+        with:
+          ref: master
+          fetch-depth: 0
+          persist-credentials: false
+      - uses: actions/create-github-app-token@v3
+        id: app
+        if: vars.CONFIGS_RELEASE_APP_ID != ''
+        with:
+          app-id: ${{ vars.CONFIGS_RELEASE_APP_ID }}
+          private-key: ${{ secrets.CONFIGS_RELEASE_APP_PRIVATE_KEY }}
+      - name: Recheck candidate, promote and confirm immutable publication
+        env:
+          GH_TOKEN: ${{ steps.app.outputs.token || secrets.CONFIGS_RELEASE_TOKEN }}
+          HEAD: ${{ needs.integrate.outputs.head }}
+          BASE: ${{ needs.integrate.outputs.base }}
+          APPROVED: ${{ needs.approval.result == 'success' }}
+        run: |
+          if [ "$APPROVED" = true ]; then
+            tool/version-control/release.py advance --manual --head "$HEAD" --base "$BASE" --approved
+          else
+            tool/version-control/release.py advance --manual --head "$HEAD" --base "$BASE"
+          fi
