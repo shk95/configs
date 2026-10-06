@@ -61,10 +61,7 @@ for branch in dev master; do
   fi
 
   strict=$(gh api "$endpoint" --jq '.required_status_checks.strict')
-  case "$branch" in
-    dev) expected_strict=true ;;
-    master) expected_strict=false ;;
-  esac
+  expected_strict=true
   if [ "$strict" = "$expected_strict" ]; then
     ok "$branch strict status-check setting is $expected_strict"
   else

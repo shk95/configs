@@ -31,6 +31,7 @@ for route in \
   design-citations:version-control/design-citations test:version-control/test \
   audit:version-control/audit audit-remote:version-control/audit-remote \
   plan-promotion:version-control/plan-promotion \
+  conditional-merge:version-control/conditional-merge.py \
   release:version-control/release.py \
   plan-release:version-control/plan-release \
   hook-evidence:version-control/hook-evidence; do
@@ -5536,3 +5537,6 @@ echo "version-control fixtures passed"
 
 # INV repository/bounded-release-automation
 python3 "$root/tool/version-control/test-release.py"
+
+# INV repository/conditional-protected-merge
+python3 "$root/tool/version-control/test-conditional-merge.py"

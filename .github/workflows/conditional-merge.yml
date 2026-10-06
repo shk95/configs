@@ -1,0 +1,115 @@
+name: Conditional protected merge
+
+on:
+  workflow_dispatch:
+    inputs:
+      pr:
+        description: Pull request number reviewed by the integrator
+        required: true
+        type: number
+      target:
+        description: Protected target branch
+        required: true
+        type: choice
+        options: [dev, master]
+      head:
+        description: Full approved pull request head SHA
+        required: true
+        type: string
+      base:
+        description: Full observed target SHA
+        required: true
+        type: string
+
+permissions:
+  contents: read
+  actions: read
+  checks: read
+  pull-requests: read
+
+jobs:
+  admission:
+    name: Authorize request
+    runs-on: ubuntu-latest
+    outputs:
+      accepted_sha: ${{ steps.check.outputs.accepted_sha }}
+    env:
+      GH_TOKEN: ${{ github.token }}
+      GITHUB_REPOSITORY: ${{ github.repository }}
+      CONFIGS_MERGE_ENABLED: ${{ vars.CONFIGS_MERGE_ENABLED }}
+      CONFIGS_MERGE_ACTORS: ${{ vars.CONFIGS_MERGE_ACTORS }}
+      PR: ${{ inputs.pr }}
+      TARGET: ${{ inputs.target }}
+      HEAD: ${{ inputs.head }}
+      BASE: ${{ inputs.base }}
+    steps:
+      - name: Require accepted workflow revision
+        env:
+          DISPATCH_REF: ${{ github.ref }}
+        run: test "$DISPATCH_REF" = refs/heads/dev
+      - uses: actions/checkout@v7
+        with:
+          ref: ${{ github.sha }}
+          fetch-depth: 0
+          persist-credentials: false
+      - id: check
+        name: Check operator and accepted source
+        env:
+          GITHUB_RUN_ID: ${{ github.run_id }}
+          GITHUB_ACTOR: ${{ github.actor }}
+        run: |
+          output=$(tool/version-control/conditional-merge.py preflight \
+            --run-id "$GITHUB_RUN_ID" --pr "$PR" --target "$TARGET" --head "$HEAD" --base "$BASE")
+          printf '%s\n' "$output" >>"$GITHUB_STEP_SUMMARY"
+          python3 -c 'import json,os,sys; print("accepted_sha="+json.loads(sys.argv[1])["accepted_sha"], file=open(os.environ["GITHUB_OUTPUT"],"a"))' "$output"
+
+  writer:
+    name: Wait and merge under protection
+    needs: admission
+    if: needs.admission.result == 'success' && vars.CONFIGS_MERGE_ENABLED == '1'
+    runs-on: ubuntu-latest
+    timeout-minutes: 65
+    environment: merge-control
+    concurrency:
+      group: ${{ inputs.target == 'master' && 'configs-release-writes' || 'configs-dev-writes' }}
+      cancel-in-progress: false
+      queue: max
+    permissions:
+      contents: read
+      actions: read
+      checks: read
+      pull-requests: write
+    env:
+      GITHUB_REPOSITORY: ${{ github.repository }}
+      GITHUB_RUN_ID: ${{ github.run_id }}
+      GITHUB_ACTOR: ${{ github.actor }}
+      CONFIGS_MERGE_ENABLED: ${{ vars.CONFIGS_MERGE_ENABLED }}
+      CONFIGS_MERGE_ACTORS: ${{ vars.CONFIGS_MERGE_ACTORS }}
+      PR: ${{ inputs.pr }}
+      TARGET: ${{ inputs.target }}
+      HEAD: ${{ inputs.head }}
+      BASE: ${{ inputs.base }}
+    steps:
+      - uses: actions/checkout@v7
+        with:
+          ref: ${{ needs.admission.outputs.accepted_sha }}
+          fetch-depth: 0
+          persist-credentials: false
+      - id: app
+        if: vars.CONFIGS_MERGE_APP_ID != ''
+        uses: actions/create-github-app-token@v3
+        with:
+          app-id: ${{ vars.CONFIGS_MERGE_APP_ID }}
+          private-key: ${{ secrets.CONFIGS_MERGE_APP_PRIVATE_KEY }}
+          permission-actions: read
+          permission-checks: read
+          permission-administration: read
+          permission-contents: write
+          permission-pull-requests: write
+      - name: Merge the exact admitted head
+        env:
+          GH_TOKEN: ${{ steps.app.outputs.token || secrets.CONFIGS_MERGE_TOKEN }}
+        run: |
+          test -n "$GH_TOKEN"
+          tool/version-control/conditional-merge.py run \
+            --run-id "$GITHUB_RUN_ID" --pr "$PR" --target "$TARGET" --head "$HEAD" --base "$BASE"

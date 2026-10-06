@@ -56,8 +56,13 @@ planning read-only unless the user explicitly authorizes a Git mutation.
   input patch history; the separate automatic input patch lane is governed by
   the master-input-patch-releases decision. Ensure no competing master PR
   is open, and introduce no fix in the promotion itself. Require `Required
-  checks`, resolved conversations, and explicit authorization before a merge
-  commit. Run both audits afterward. Do not reverse-merge the promotion commit
+  checks`, resolved conversations, and explicit maintainer authorization. If
+  the conditional writer is qualified and enabled, submit the frozen request
+  with `tool/configs conditional-merge submit --target master` while checks may
+  be pending; its writer requires successful exact-source checks before merge.
+  Otherwise wait for successful checks on the exact current head, then use the
+  established reviewed synchronous merge.
+  Confirm the merge commit and run both audits afterward. Do not reverse-merge the promotion commit
   into `dev`; do not infer release or deployment.
 - **Release**: Run `tool/configs plan-release <domain> [commit]` first.
   Require the Definition of Done evidence and an annotated, new, immutable tag

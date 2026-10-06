@@ -86,6 +86,18 @@ own list is the file named for it beside this one (`unixlike.md`,
 - [ ] Local and remote audits pass after merge; `master` is not reverse-merged
       into `dev` merely to carry the promotion merge commit.
 
+## Conditional protected merge
+
+- [ ] `INV repository/conditional-protected-merge`: Before enabling the
+      `merge-control` writer, a maintainer verifies the environment admits only
+      `dev` deployments, then conducts a separately authorized scoped live
+      trial with `CONFIGS_MERGE_ENABLED=1` and a designated qualification PR.
+      Immediately reset it to `0`; review evidence for accepted-`dev` dispatch,
+      both target lanes, current exact-source CI, separate writer credentials
+      and target-move refusal before separately accepting general enablement.
+      Evidence identifies the remote Actions runs and records that no bypass
+      was used.
+
 ## Unix-like input patch
 
 - [ ] The same-repository patch head is one commit on the current master and
