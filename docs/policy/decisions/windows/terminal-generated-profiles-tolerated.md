@@ -36,3 +36,8 @@ is unsupported. **No `state.json` schema changes**: an applied host keeps its
 recorded selection, sees a changed desired-state hash and a higher project
 version, and redeploys.
 
+
+2026-09-30: `host-generation-owns-selection.md` preserves the externally
+generated profile entries on the write side as well. Whole-unit settings still
+come from one chosen desired source; this retention of generated app entries
+does not merge provider defaults and host customization.

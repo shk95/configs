@@ -67,9 +67,9 @@ Rejected:
 What it costs. A seventh repository-wide scan runs on every commit and in CI.
 The tree gains a directory whose contents are never authoritative, which a
 reader has to learn to read as argument and an agent must not follow as rule;
-the charter in `docs/work/README.md` is the whole of that warning. Documents
-are never deleted, so the directory only grows and `superseded` is its only
-retirement. Porting the three documents that opened the area costs a
+the charter in `docs/work/README.md` is the whole of that warning. Supersession records the end of a work item. A valid terminal pair can later
+leave the current tree together after fixed remote preservation and reference
+review; pending acceptance cannot be removed as archive cleanup. Porting the three documents that opened the area costs a
 translation: they were written as Korean HTML artefacts, and the repository is
 public and its text is English (`CONTRIBUTING.md`). And the checked rule
 is lexical: it separates citing a document from naming the directory, so a
@@ -91,3 +91,13 @@ candidates remain observations until they are deleted on promotion. Neither
 adopts a rule. A durable result enters a decision record or invariant; a
 temporary measure enters the provisional registry. Status may link a report
 as evidence of current state. The direct-citation boundary remains in force.
+
+2026-10-06: the maintainer accepted terminal-pair archival for retired work.
+Original release/controller and daily-refresh work is preserved on
+`archive/reconstruction-20261005-dev` at
+`fc2e1abdfc64ad3f2cc8156c49bc54f256c284ef`. Supersession is recorded at the
+minimal-adoption stage of the current history; no prior minimal branch backup
+is a permanent dependency.
+Remote preservation and recovery are indexed in
+[the archive record](https://github.com/shk95/configs/issues/518).
+It adds no requirement to the current release implementation.

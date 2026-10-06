@@ -36,6 +36,11 @@ Selects only required features, currently core.
 .PARAMETER All
 Selects every feature declared by the manifest.
 
+.PARAMETER Generation
+Validated generated directory. Its declaration owns selection; selector flags
+are refused. Requires management PowerShell already available and never installs
+bootstrap prerequisites before the generation integrity guard.
+
 .EXAMPLE
 PS> .\windows\win-env.ps1 check -Feature terminal
 
@@ -79,7 +84,8 @@ param(
     [string[]] $Feature,
     [string[]] $Add,
     [switch] $Minimal,
-    [switch] $All
+    [switch] $All,
+    [string] $Generation
 )
 
 $ErrorActionPreference = 'Stop'
@@ -101,13 +107,36 @@ function Exit-Unverified {
     exit 69
 }
 
+# Generated mode must reach its integrity guard before any bootstrap installation.
+if (-not $Generation -and -not (Test-Path -LiteralPath (Join-Path (Split-Path -Parent (Split-Path -Parent $PSScriptRoot)) '.git'))) {
+    throw 'Source-only bootstrap requires a provider clone; generated configurations require explicit Generation mode.'
+}
+# It requires an already available management PowerShell; inbox entry forwarding
+# remains compatible with 5.1, but never installs on a stale generated input.
+if ($Generation) {
+    foreach ($selector in @('Feature', 'Add', 'Minimal', 'All')) {
+        if ($PSBoundParameters.ContainsKey($selector)) { throw 'Generation owns selection; selector flags are refused.' }
+    }
+    $management = Get-Command pwsh.exe -CommandType Application -All -ErrorAction SilentlyContinue | Select-Object -First 1
+    if (-not $management) {
+        if ($Check) { Exit-Unverified 'PowerShell 7 is missing; generated Check never installs prerequisites.' }
+        throw 'Generated Apply requires PowerShell 7 already available; bootstrap separately before generation.'
+    }
+    $forward = @('-NoLogo', '-NoProfile', '-File', $setupPath, '-Generation', $Generation)
+    if ($Check) { $forward += '-Check' }
+    if ($Force) { $forward += '-Force' }
+    Write-Verbose ("Using management PowerShell: $($management.Source)")
+    & $management.Source @forward
+    exit $LASTEXITCODE
+}
+
 if (-not (Get-Command winget.exe -ErrorAction SilentlyContinue)) {
     if ($Check) { Exit-Unverified 'WinGet is missing; -Check never installs prerequisites.' }
     Write-Error 'WinGet is required. Install or repair Microsoft App Installer first.'
     exit 1
 }
 
-$pwsh = Get-Command pwsh.exe -ErrorAction SilentlyContinue
+$pwsh = Get-Command pwsh.exe -CommandType Application -All -ErrorAction SilentlyContinue | Select-Object -First 1
 if (-not $pwsh) {
     if ($Check) { Exit-Unverified 'PowerShell 7 is missing; -Check never installs prerequisites.' }
 
@@ -120,7 +149,7 @@ if (-not $pwsh) {
     $machinePath = [Environment]::GetEnvironmentVariable('Path', 'Machine')
     $userPath = [Environment]::GetEnvironmentVariable('Path', 'User')
     $env:Path = "$machinePath;$userPath"
-    $pwsh = Get-Command pwsh.exe -ErrorAction SilentlyContinue
+    $pwsh = Get-Command pwsh.exe -CommandType Application -All -ErrorAction SilentlyContinue | Select-Object -First 1
     if (-not $pwsh) {
         $candidate = Join-Path $env:ProgramFiles 'PowerShell\7\pwsh.exe'
         if (Test-Path -LiteralPath $candidate) { $pwsh = Get-Item -LiteralPath $candidate }

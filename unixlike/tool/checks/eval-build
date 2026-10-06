@@ -1,0 +1,203 @@
+#!/bin/sh
+# Two tiers of verification, with explicit native build selection.
+#
+#   Tier 1 — eval.  Forces each configuration's toplevel derivation. Writing
+#                   that .drv requires instantiating the whole input graph, so
+#                   this already catches option typos, type errors, module
+#                   assertions, bad imports *and* packages that do not exist.
+#   Tier 2 — build. Realises it. What this adds over eval is narrower than it
+#                   looks: sources that cannot be fetched, and derivations that
+#                   fail to compile.
+#
+# `nix flake check` is neither, and this is the reason the script exists: it
+# validates the flake's shape and its standard outputs. It does not descend
+# into homeConfigurations or darwinConfigurations at all, and of a
+# nixosConfigurations output it asks only that the toplevel is a derivation,
+# which does not instantiate it. A green `nix flake check` says nothing about
+# whether your configurations work. Forcing `.drvPath` is what actually
+# evaluates them.
+#
+# Skipped builds are reported without download-size planning: that is
+# informational work and adds no evaluation or build evidence.
+#
+# Every synthetic configuration is evaluated. Selected native fixture builds
+# prove the provider can realise an output; foreign configurations remain
+# evaluation-only until a matching runner builds them. No output here is a host
+# activation target.
+#
+# INV unixlike/eval-covers-every-host — evaluation is evidence only when it
+# reached every configuration. A flavour the flake exports but that lists
+# nothing, a flavour whose attribute fails to evaluate, and a run that reached
+# no configuration at all are failures, not passes. So is a flavour this
+# repository's flake stops exporting: the composition file's outputs are
+# freeform attributes, so a misspelt one is only a warning to `nix flake
+# check`. A fixture flake, reached through CHECKS_FLAKE, may export fewer
+# flavours and has the missing ones reported as absent;
+# tool/checks/eval-coverage-test holds those fixtures.
+
+set -e
+. "$(CDPATH= cd -- "$(dirname -- "$0")" && pwd)/prerequisite"
+require_command nix
+
+root=$(CDPATH= cd -- "$(dirname "$0")/../.." && pwd)
+flake=${CHECKS_FLAKE:-path:$root}
+here=$(nix eval --raw --impure --expr 'builtins.currentSystem')
+
+# The provider CI selects one representative for each constructor it can build
+# on this system. A fixture flake has no implicit selection. A caller may name
+# exact output attributes with CHECKS_BUILD_TARGETS, or deliberately build all
+# native configurations with CHECKS_BUILD_ALL=1. Neither choice depends on the
+# running machine's hostname or on activation eligibility.
+if [ -n "${CHECKS_FLAKE:-}" ]; then
+  default_build_targets=
+else
+  case "$here" in
+    x86_64-linux) default_build_targets='homeConfigurations.example nixosConfigurations.fixture-cli' ;;
+    aarch64-linux) default_build_targets='nixosConfigurations.fixture-arm-cli' ;;
+    aarch64-darwin) default_build_targets='darwinConfigurations.fixture-mac' ;;
+    *) default_build_targets= ;;
+  esac
+fi
+build_targets=${CHECKS_BUILD_TARGETS-$default_build_targets}
+
+# The flavours the flake exports, read once; each `builtins.getFlake` is a
+# full evaluation outside the flake cache.
+exported=$(nix eval --raw --impure --expr \
+  "builtins.concatStringsSep \" \" (builtins.attrNames (builtins.getFlake \"$flake\"))")
+
+report=$(mktemp)
+trap 'rm -f "$report"' EXIT
+
+nix flake check "$flake"
+
+# The attribute that forces a real derivation, per flavour.
+# `pkgs.stdenv.hostPlatform.system` resolves the target system for all three,
+# so the probe below needs no special-casing.
+toplevel_attr() {
+  case $1 in
+    homeConfigurations) echo "activationPackage" ;;
+    *)                  echo "config.system.build.toplevel" ;;
+  esac
+}
+
+selected_for_build() {
+  [ -n "${CHECKS_BUILD_ALL:-}" ] && return 0
+  case " $build_targets " in
+    *" $1 "*) return 0 ;;
+    *) return 1 ;;
+  esac
+}
+
+check_flavour() {
+  output=$1
+  attr=$(toplevel_attr "$output")
+
+  # INV unixlike/eval-covers-every-host: a flavour this repository's flake
+  # no longer exports is a failure; a fixture flake may leave one out and has
+  # it reported as absent. Empty and a failing flavour attribute are
+  # failures, and the summary refuses a report that reached no configuration.
+  case " $exported " in
+    *" $output "*) ;;
+    *)
+      if [ -n "${CHECKS_FLAKE:-}" ]; then
+        printf '→ skip  %s — the fixture flake exports no such flavour\n' "$output"
+      else
+        printf '%s|-|ABSENT\n' "$output" >> "$report"
+      fi
+      return 0
+      ;;
+  esac
+
+  if ! names=$(nix eval --raw "$flake#$output" \
+    --apply 'x: builtins.concatStringsSep "\n" (builtins.attrNames x)' 2>&1); then
+    printf '%s\n' "$names" >&2
+    printf '%s|-|FLAVOUR_FAIL\n' "$output" >> "$report"
+    return 0
+  fi
+  if [ -z "$names" ]; then
+    printf '%s|-|EMPTY\n' "$output" >> "$report"
+    return 0
+  fi
+
+  echo "$names" | while IFS= read -r name; do
+    [ -n "$name" ] || continue
+    ref="$flake#$output.\"$name\""
+    system=$(nix eval --raw "$ref.pkgs.stdenv.hostPlatform.system" 2>/dev/null || echo "unknown")
+
+    printf '→ eval  %s.%s\n' "$output" "$name"
+    if ! nix eval --raw "$ref.$attr.drvPath" >/dev/null; then
+      printf '%s.%s|%s|EVAL_FAIL\n' "$output" "$name" "$system" >> "$report"
+      continue
+    fi
+
+    if [ "$system" != "$here" ]; then
+      printf '%s.%s|%s|FOREIGN\n' "$output" "$name" "$system" >> "$report"
+      continue
+    fi
+
+    if ! selected_for_build "$output.$name"; then
+      printf '→ skip  %s.%s — native build not selected\n' "$output" "$name"
+      printf '%s.%s|%s|SKIPPED\n' "$output" "$name" "$system" >> "$report"
+      continue
+    fi
+
+    printf '→ build %s.%s\n' "$output" "$name"
+    if nix build --no-link "$ref.$attr"; then
+      printf '%s.%s|%s|ok\n' "$output" "$name" "$system" >> "$report"
+    else
+      printf '%s.%s|%s|BUILD_FAIL\n' "$output" "$name" "$system" >> "$report"
+    fi
+  done
+}
+
+check_flavour homeConfigurations
+check_flavour nixosConfigurations
+check_flavour darwinConfigurations
+
+echo
+echo "── Verification coverage ─────────────────────────────────"
+printf '   host: %s\n\n' "$here"
+
+while IFS='|' read -r target system status; do
+  case "$status" in
+    ok)           line="eval ✓ build ✓" ;;
+    EVAL_FAIL)    line="eval ✗" ;;
+    BUILD_FAIL)   line="eval ✓ build ✗" ;;
+    SKIPPED)      line="eval ✓ build — not selected" ;;
+    FOREIGN)      line="eval ✓ build — targets $system" ;;
+    FLAVOUR_FAIL) line="eval ✗ — the flavour itself failed to evaluate" ;;
+    EMPTY)        line="eval ✗ — exported, but lists no configuration" ;;
+    ABSENT)       line="eval ✗ — the flake no longer exports this flavour" ;;
+    *)            line="unknown" ;;
+  esac
+  printf '   %-38s %s\n' "$target" "$line"
+done < "$report"
+echo
+
+if grep -q '|SKIPPED$' "$report"; then
+  cat <<EOF
+   · Some native configurations were evaluated without a selected build.
+     Select exact targets with CHECKS_BUILD_TARGETS or use CHECKS_BUILD_ALL=1.
+
+EOF
+fi
+
+# A missing, foreign, failed or misspelled selected build cannot quietly pass.
+for selected in $build_targets; do
+  if ! awk -F '|' -v target="$selected" '$1 == target && $3 == "ok" { found = 1 } END { exit !found }' "$report"; then
+    printf '\033[31m✗ Selected native build has no passing result: %s\033[0m\n' "$selected" >&2
+    exit 1
+  fi
+done
+
+if grep -qE 'FAIL|EMPTY|ABSENT' "$report"; then
+  printf '\033[31m✗ A configuration failed to evaluate or build.\033[0m\n' >&2
+  exit 1
+fi
+
+# INV unixlike/eval-covers-every-host: a check that found nothing to evaluate
+# has failed, not passed.
+if ! grep -qE '\|(ok|FOREIGN|SKIPPED)(\||$)' "$report"; then
+  printf '\033[31m✗ No configuration was evaluated; the flake exports none.\033[0m\n' >&2
+  exit 1
+fi

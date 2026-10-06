@@ -36,12 +36,13 @@ are revised for the new owner before work resumes.
 
 ## Current priorities
 
-No active roadmap priority is assigned. Deferred outcomes remain deferred until
-the maintainer selects the next work.
+2026-10-05: the maintainer selected the minimal domain and bounded-release
+outcomes in `repository/minimal-reconstruction/spec.md`.
 
-Standalone work does not need a roadmap row. The planner maintains priorities,
-dependencies and disposition here; PR state remains on GitHub. Completion needs
-the maintainer's acceptance and a report reference, not a copied merged flag.
+2026-10-06: domain source and the initial normal promotion are delivered. Actual scheduled operation remains
+to be observed separately from enabling the schedule. Chronological history
+refinement changes documentation and completed transition scaffolding, not
+the required domain outcomes. Deferred host evidence remains independent.
 
 ## Deferred outcomes
 

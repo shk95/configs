@@ -5,6 +5,12 @@ scope: windows
 status: accepted
 source: 9f1e8ce:docs/status.md § Capture moves a host change into desired state
 
+2026-09-30: Host-original capture still restores only the supported
+`__LOCALAPPDATA_JSON__` token. Other private values remain literal host-owned
+data outside provider source under `host-capture-owns-originals.md`; this does
+not add token expansion or a portable-host promise. The provider-publication
+refusal described below remains historical for that former flow.
+
 The placeholder direction is deliberately asymmetric. Apply expands exactly one
 content placeholder, `__LOCALAPPDATA_JSON__`, to the JSON-escaped spelling of
 that directory. Capture therefore restores that one spelling and reports every

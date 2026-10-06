@@ -2,7 +2,7 @@ name: CI
 
 on:
   push:
-    branches: [master, dev]
+    branches: [dev]
   pull_request:
     branches: [master, dev]
 
@@ -70,17 +70,30 @@ jobs:
           done
 
   repository:
-    name: Version-control policy
+    name: Version-control policy (${{ matrix.os }})
     needs: classify
     if: needs.classify.outputs.repository_checks == 'true'
-    runs-on: ubuntu-latest
+    strategy:
+      matrix:
+        os: [ubuntu-latest, windows-latest]
+    runs-on: ${{ matrix.os }}
     # The merge gate is the one place where a check that could not run must not
     # pass.
     env:
       REQUIRE_NATIVE: "1"
     steps:
       - uses: actions/checkout@v7
+      - uses: actions/setup-python@v6
+        with:
+          python-version: '3.13'
       - run: tool/version-control/test
+        if: runner.os == 'Linux'
+      - name: Retired capture guard on native Git for Windows
+        if: runner.os == 'Windows'
+        shell: bash
+        env:
+          CONFIGS_CONTROLLER_PYTHON: python
+        run: tool/version-control/test-retired-capture
 
   unix:
     name: Flake and Unix-like hosts
@@ -93,7 +106,17 @@ jobs:
       REQUIRE_NATIVE: "1"
     steps:
       - uses: actions/checkout@v7
-      - uses: DeterminateSystems/nix-installer-action@v22
+      - uses: cachix/install-nix-action@v31.10.6
+        with:
+          install_url: https://releases.nixos.org/nix/nix-2.34.8/install
+          extra_nix_config: |
+            experimental-features = nix-command flakes
+      - name: Verify upstream Nix baseline
+        shell: bash
+        run: |
+          actual=$(nix --version)
+          printf 'Unix-like CI Nix implementation/version: %s\n' "$actual"
+          test "$actual" = 'nix (Nix) 2.34.8'
       - run: unixlike/tool/checks/format
       - run: unixlike/tool/checks/lint
       - run: unixlike/tool/checks/payloads-test
@@ -114,32 +137,22 @@ jobs:
     runs-on: windows-latest
     env:
       REQUIRE_NATIVE: "1"
-      # The Pester suite's end-to-end capture cases each launch a child
-      # PowerShell, so .githooks/pre-push leaves them out to keep a local push
-      # quick. This is the merge gate, where nothing is left out.
-      WIN_ENV_E2E: "1"
     steps:
       - uses: actions/checkout@v7
-      - name: Validate desired state and test PowerShell
+      # INV repository/windows-ci-runtime-bound: hosted pwsh only acquires the
+      # Windows-owned exact artifact; management runs its explicit executable.
+      - name: Acquire declared Windows management runtime
+        id: runtime
         shell: pwsh
         run: |
-          pwsh -NoProfile -File .\windows\tool\setup-dev.ps1
+          & .\.github\scripts\prepare-windows-ci-runtime.ps1
           if ($LASTEXITCODE -ne 0) { exit $LASTEXITCODE }
-          winget install --id Zellij.Zellij --exact --source winget --accept-source-agreements --accept-package-agreements --disable-interactivity
-          if ($LASTEXITCODE -ne 0) { exit $LASTEXITCODE }
-          $machinePath = [Environment]::GetEnvironmentVariable('Path', 'Machine')
-          $userPath = [Environment]::GetEnvironmentVariable('Path', 'User')
-          $env:Path = "$machinePath;$userPath;$env:Path"
-          # No parse loop here: the Windows test implementation parses every script
-          # under windows/ before the suite runs, and a loop from the checkout
-          # root reached the Unix-like PowerShell payload
-          # (INV repository/no-cross-domain-dependency).
-          # Run each internal script in a child process: a terminating error
-          # becomes a nonzero status. Read it before another command can
-          # replace the result. The public entry point has separate fixtures.
-          pwsh -NoProfile -File .\windows\tool\check-desired-state.ps1
-          if ($LASTEXITCODE -ne 0) { exit $LASTEXITCODE }
-          pwsh -NoProfile -File .\windows\tool\test.ps1
+      - name: Verify native runtimes and run Windows management checks
+        shell: pwsh
+        env:
+          CONFIGS_CI_PWSH: ${{ steps.runtime.outputs.pwsh }}
+        run: |
+          & $env:CONFIGS_CI_PWSH -NoLogo -NoProfile -NonInteractive -File .\.github\scripts\windows-ci.ps1 -RuntimePath $env:CONFIGS_CI_PWSH
           if ($LASTEXITCODE -ne 0) { exit $LASTEXITCODE }
 
   # The job key stays `secrets`: the required-checks gate, its SECRETS_RESULT
@@ -295,3 +308,14 @@ jobs:
       - uses: actions/checkout@v7
       - name: Enforce scoped results
         run: tool/version-control/required-checks
+      - name: Record the tested source
+        if: success()
+        env:
+          CI_BASE: ${{ needs.classify.outputs.base }}
+        run: python3 .github/scripts/ci-source.py
+      - uses: actions/upload-artifact@v7
+        if: success()
+        with:
+          name: ci-source
+          path: ${{ runner.temp }}/source.json
+          retention-days: 90

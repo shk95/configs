@@ -2,7 +2,8 @@
 
 date: 2026-08-12
 scope: unixlike
-status: accepted
+status: superseded
+superseded-by: docs/policy/decisions/unixlike/public-environment-host-boundary.md
 source: 9f1e8ce:docs/status.md § Unix-like Home Manager and package ownership
 
 Homebrew owns Mac App Store applications, macOS GUI applications, and the few

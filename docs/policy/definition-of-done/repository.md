@@ -139,7 +139,10 @@ own list is the file named for it beside this one (`unixlike.md`,
       the manual evidence (INV repository/release-tag-contract).
 - [ ] Missing native evidence is recorded as unavailable, never inferred from
       foreign evaluation.
-- [ ] The tag is new and immutable; an existing tag is never moved or reused.
+- [ ] The tag is new and immutable. The only initial 1.0.0 reissue is the
+      one-time maintainer-authorized history-refinement exception in
+      `docs/policy/decisions/repository/minimal-release-automation.md`; routine
+      existing tags are never moved or reused.
 - [ ] Tag creation and push each have explicit authorization.
 - [ ] Activation or Apply is reported separately and is not implied by the tag.
 
@@ -151,3 +154,9 @@ own list is the file named for it beside this one (`unixlike.md`,
       (INV repository/pr-integration-authority).
 - [ ] Interrupted workers have a useful checkpoint; local liveness is not
       inferred from age, and cleanup considers unpushed and ignored data.
+
+## Terminal work archival
+
+- [ ] The repository maintainer reviewed the fixed remote original and absence
+      of active references before archiving a valid terminal spec/report pair
+      (INV repository/work-spec-has-report).

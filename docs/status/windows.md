@@ -6,6 +6,28 @@ is recorded under `docs/policy/decisions/`; the model those decisions implement
 is `docs/policy/architecture.md`. The other scopes' state is in the files
 beside this one.
 
+## Current host-owned configuration
+
+Version-1 environment declarations explicitly select features and complete
+settings units. Generation binds the provider revision, inputs and resulting
+desired state before Check or Apply; generated operation state uses schema 3.
+Capture previews application settings into host originals and writes only after
+explicit Save. It performs no provider Git publication. The provider does not
+offer host-global .wslconfig or personal FancyZones layouts/hotkeys.
+
+The domain runtime declaration owns the verification interpreter; hosted native
+Windows fixtures are distinct from LTSC client observations. Generation and
+capture are implemented here; native qualification remains a separate gate.
+See `host-generation-owns-selection.md` and `host-capture-owns-originals.md`
+under `docs/policy/decisions/windows/`, and `windows/examples/README.md`.
+
+## Historical source and client observations
+
+The observations below belong to their dated provider payloads and client
+runs. They do not describe the generated environment, reintroduce retired
+provider units or certify current host adoption. Legacy helper behavior and
+its fixtures remain readable independently of current provider offerings.
+
 `windows/desired/manifest.json` is at schema 4; `windows/state.json` is at
 schema 2; `ProjectVersion` is 0.6.0. Schema 4 declares seven features —
 `core`, `font`, `zellij`, `terminal`, `wezterm`, `powertoys`, `wsl` — and
@@ -65,7 +87,7 @@ Since #241, `capture -Publish` on a run that found no drift resumes an earlier
 capture's unfinished publish from the topic branch that carries it, for
 single-parent commits with the capture subject that change only
 `windows/desired/**`, and refuses anything else
-(`INV windows/capture-publishes-through-dev`). Module-level fixtures cover the
+(`windows/capture-publishes-through-dev`). Module-level fixtures cover the
 branch and commit rules and the resumed pull-request body; the `WIN_ENV_E2E`
 cases cover a resumed run. The suite's module-level fixtures now capture what
 the functions they drive print, and run their `-WhatIf` cases in a runspace
@@ -112,7 +134,7 @@ Sources:
   https://learn.microsoft.com/en-us/powershell/windows/module-compatibility
 - Windows Terminal product repository — https://github.com/microsoft/terminal
 
-## `.wslconfig` prerequisites
+## Historical `.wslconfig` prerequisites
 
 The two existing build variants suffice for the declared policy (#198):
 `files/wsl/mirrored-networking.wslconfig` at build >=22621 and
@@ -167,7 +189,7 @@ host file were unchanged. Native evidence for the >=22621 mirrored file
 remains owned by #121; mocks cannot close it. #198 adds prerequisite checks,
 not a WSL update, restart, firewall change or a change to Apply triggers.
 
-The `.wslconfig` runtime effect is permanently unverifiable on this host:
+The historical `.wslconfig` runtime effect is permanently unverifiable on this host:
 only the deployed file's content and its agreement with the host's Windows
 build can ever be checked
 (`docs/policy/decisions/windows/wslconfig-selected-by-windows-build.md`).
@@ -177,7 +199,7 @@ has no naming context to classify by and stays a manual invariant with named
 evidence, and the Windows-side hygiene assertion still matches one literal
 path inside one directory; generalising it is separate work.
 
-## Open conditions
+## Historical client evidence limits
 
 - The Windows 10 support boundary is `INV windows/support-boundary-named`.
   Since #53 the terminal delegation item decides itself against the
@@ -185,8 +207,3 @@ path inside one directory; generalising it is separate work.
   on stays the reviewer's manual evidence. The lower side is observed
   (build 19044.7663); no host at or above 19045.3031 has been, so the
   item's evidence above the boundary is still owed.
-- One resumed `capture -Publish` for a branch in the stuck state on the
-  maintainer's host is still owed as evidence
-  (`docs/policy/decisions/windows/capture-moves-host-changes.md`),
-  with the pull request it opens or arms and one pre-push log whose
-  `Windows tests` step shows no fixture output (#241).

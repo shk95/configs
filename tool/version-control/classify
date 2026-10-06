@@ -90,21 +90,12 @@ while IFS= read -r path; do
       echo unclassified
       ;;
     AGENTS.md|CLAUDE.md|CONTRIBUTING.md|README.md|LICENSE|docs/*|\
-    .agents/*|.claude/*|.codex/*|.github/*|.githooks/*|.editorconfig|.gitattributes|\
+    .agents/*|.claude/*|.codex/*|.github/*|.githooks/*|.vscode/settings.json|.editorconfig|.gitattributes|\
     .gitignore|tool/configs|tool/setup|tool/doctor.sh|tool/worktree.sh|tool/work-session.sh|tool/version-control/*|\
     tool/dispatch/*)
       echo repository
       ;;
     # common/ has no arm: the change that creates the domain restores its classification, dispatch and gate together (docs/policy/architecture.md, "Common domain").
-    # PROV repository/classify-registry-old-roots
-    # The registries' roots before they moved under docs/, and the removed
-    # common scope's placeholder: a deletion must still classify while it sits
-    # inside a pull-request or promotion range. Dropped once the move has
-    # reached master.
-    invariants/README.md|invariants/common/.gitkeep|provisional/README.md) echo repository ;;
-    invariants/unixlike/*|provisional/unixlike/*) echo unixlike ;;
-    invariants/windows/*|provisional/windows/*) echo windows ;;
-    invariants/repository/*|provisional/repository/*) echo repository ;;
     *) echo unclassified ;;
   esac
 done <"$paths" | sort -u >"$scopes"

@@ -140,8 +140,10 @@ each criterion it touches by its id, so the bar is visibly set before the
 work and every move of it is dated. The checker compares the commit being
 made, or the range being merged, with its base, and refuses a criterion that
 was removed or rewritten — in its text or its lanes — without such a
-paragraph. Adding a criterion needs none. A work item is never deleted: a
-decision record cites it as the source of what was adopted.
+paragraph. Adding a criterion needs none. A valid terminal spec/report pair may leave the current tree together after
+the maintainer verifies its preservation at a fixed remote commit and removes
+active references. Pending or malformed reports and unpaired removal refuse.
+The archived result remains history; the current adopted decision owns policy.
 
 ## Carried documents
 

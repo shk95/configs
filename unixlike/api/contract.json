@@ -1,0 +1,168 @@
+{
+  "changes": [
+    {
+      "after": "mkHome requires homeDirectory",
+      "before": "mkHome omitted homeDirectory and derived /home/<user>",
+      "entryPoint": "mkHome",
+      "guidance": "Pass the actual home directory; keep any existing home.stateVersion override in homeModules.",
+      "id": "mkHome-explicit-home-directory"
+    },
+    {
+      "after": "mkHome selects WSL and graphics through environment",
+      "before": "mkHome always selected WSL CLI composition",
+      "entryPoint": "mkHome",
+      "guidance": "Set environment.wsl = true for an existing WSL home; explicitly set graphical = false for a general CLI home.",
+      "id": "mkHome-explicit-environment"
+    },
+    {
+      "after": "mkNixos selects environment from system, user and environment; host modules realize the machine",
+      "before": "mkNixos required name, host.kind, host.stateVersion and profiles",
+      "entryPoint": "mkNixos",
+      "guidance": "Move hostname, account, machine, access and storage settings into systemModules; retain effective stateVersion explicitly where it differs from the provider default. Pass the output name in the consumer flake.",
+      "id": "mkNixos-environment-and-host-modules"
+    },
+    {
+      "after": "mkDarwin receives system and user while systemModules own hostname, account, daemon and app selection",
+      "before": "mkDarwin required host.system, host.hostName and host.user",
+      "entryPoint": "mkDarwin",
+      "guidance": "Move hostname and account settings to systemModules and retain any effective compatibility value that differs from the provider default.",
+      "id": "mkDarwin-host-realization"
+    }
+  ],
+  "compatibilityDefaults": {
+    "homeManager": "25.11",
+    "nixDarwin": 6,
+    "nixos": "25.11"
+  },
+  "constraints": {
+    "mkDarwin": {
+      "systems": [
+        "aarch64-darwin"
+      ],
+      "wsl": false
+    },
+    "mkHome": {
+      "graphicalWithWsl": false,
+      "systemModules": false,
+      "systems": [
+        "x86_64-linux"
+      ]
+    },
+    "mkNixos": {
+      "graphicalWithWsl": false,
+      "systems": [
+        "x86_64-linux",
+        "aarch64-linux"
+      ],
+      "wslRequiresHostIntegration": true
+    }
+  },
+  "domain": "unixlike",
+  "entryPoints": {
+    "mkDarwin": {
+      "inputs": {
+        "environment": {
+          "defaults": {
+            "graphical": true,
+            "wsl": false
+          },
+          "required": false,
+          "type": "selection"
+        },
+        "git": {
+          "required": true,
+          "type": "nameEmail"
+        },
+        "homeModules": {
+          "required": false,
+          "type": "moduleList"
+        },
+        "system": {
+          "required": true,
+          "type": "enum"
+        },
+        "systemModules": {
+          "required": false,
+          "type": "moduleList"
+        },
+        "user": {
+          "required": true,
+          "type": "string"
+        }
+      },
+      "output": "darwinConfigurations.<name>.config.system.build.toplevel",
+      "path": "lib.mkDarwin"
+    },
+    "mkHome": {
+      "inputs": {
+        "environment": {
+          "defaults": {
+            "graphicalOtherwise": true,
+            "graphicalWhenWsl": false,
+            "wsl": false
+          },
+          "required": false,
+          "type": "selection"
+        },
+        "git": {
+          "required": true,
+          "type": "nameEmail"
+        },
+        "homeDirectory": {
+          "required": true,
+          "type": "absolutePathString"
+        },
+        "homeModules": {
+          "required": false,
+          "type": "moduleList"
+        },
+        "system": {
+          "required": true,
+          "type": "enum"
+        },
+        "user": {
+          "required": true,
+          "type": "string"
+        }
+      },
+      "output": "homeConfigurations.<name>.activationPackage",
+      "path": "lib.mkHome"
+    },
+    "mkNixos": {
+      "inputs": {
+        "environment": {
+          "defaults": {
+            "graphicalOtherwise": true,
+            "graphicalWhenWsl": false,
+            "wsl": false
+          },
+          "required": false,
+          "type": "selection"
+        },
+        "git": {
+          "required": true,
+          "type": "nameEmail"
+        },
+        "homeModules": {
+          "required": false,
+          "type": "moduleList"
+        },
+        "system": {
+          "required": true,
+          "type": "enum"
+        },
+        "systemModules": {
+          "required": false,
+          "type": "moduleList"
+        },
+        "user": {
+          "required": true,
+          "type": "string"
+        }
+      },
+      "output": "nixosConfigurations.<name>.config.system.build.toplevel",
+      "path": "lib.mkNixos"
+    }
+  },
+  "formatVersion": 1
+}

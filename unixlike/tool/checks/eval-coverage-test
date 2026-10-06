@@ -1,15 +1,12 @@
 #!/bin/sh
-# Fixtures for the coverage rule in tool/checks/test.
+# Fixtures for the coverage rule in tool/checks/eval-build.
 #
 # INV unixlike/eval-covers-every-host
 #
-# Evaluation is evidence only when it reached every configuration. The
-# positive case is a fixture flake exporting one configuration; the negatives
-# are a flavour the flake exports but that lists nothing, and a flake that
-# exports no flavour at all. The real flake is the other positive case, run by
-# CI as tool/checks/test itself.
+# Evaluation must reach every configuration, and an explicitly selected native
+# build must pass. The fixtures cover both accepted and refused outcomes.
 #
-# CHECKS_FLAKE points tool/checks/test at a fixture flake instead of this
+# CHECKS_FLAKE points tool/checks/eval-build at a fixture flake instead of this
 # repository; the fixtures carry no inputs, so nothing is fetched.
 
 set -e
@@ -32,7 +29,7 @@ fixtures="$repo/tool/checks/fixtures/eval-coverage"
 #
 # INV unixlike/eval-covers-every-host
 printf '→ accepts a flake that exports one configuration\n'
-if ! output=$(CHECKS_FLAKE="path:$fixtures/probe" tool/checks/test 2>&1); then
+if ! output=$(CHECKS_FLAKE="path:$fixtures/probe" tool/checks/eval-build 2>&1); then
   printf '%s\n' "$output" >&2
   fail "the evaluation check rejected the probe fixture"
 fi
@@ -41,7 +38,7 @@ printf '%s\n' "$output" | grep -q 'homeConfigurations.probe' \
 
 for case in empty-flavour no-flavour; do
   printf '→ rejects %s\n' "$case"
-  if output=$(CHECKS_FLAKE="path:$fixtures/$case" tool/checks/test 2>&1); then
+  if output=$(CHECKS_FLAKE="path:$fixtures/$case" tool/checks/eval-build 2>&1); then
     printf '%s\n' "$output" >&2
     fail "the evaluation check passed the $case fixture"
   fi
@@ -56,7 +53,7 @@ done
 # the fixture's own message. Either is the broken host's failure and no
 # other's.
 printf '→ rejects a host that fails to evaluate, by name\n'
-if output=$(CHECKS_FLAKE="path:$fixtures/failing-host" tool/checks/test 2>&1); then
+if output=$(CHECKS_FLAKE="path:$fixtures/failing-host" tool/checks/eval-build 2>&1); then
   printf '%s\n' "$output" >&2
   fail "the evaluation check passed a host whose toplevel does not instantiate"
 fi
@@ -70,16 +67,15 @@ elif ! printf '%s\n' "$output" | grep -q 'the broken fixture host does not insta
   fail "the evaluation check failed for a reason other than the broken host"
 fi
 
-# A NixOS host can activate one output, the one named after it, so that is
-# the one the check builds there; every other NixOS output is evaluated and
-# reported as not activatable, as all of them are anywhere else.
-printf '→ builds only the NixOS output named after the host it runs on\n'
+# A selected NixOS fixture builds regardless of the running host's name. The
+# other one is evaluated and reported as unselected.
+printf '→ builds the selected NixOS fixture independent of host name\n'
 hosts_flake=$(mktemp -d)
 hosts_flake=$(CDPATH= cd -- "$hosts_flake" && pwd -P)
 trap 'rm -rf "$hosts_flake"' EXIT
 here=$(nix eval --raw --impure --expr 'builtins.currentSystem')
 sed "s/@system@/$here/g" "$fixtures/nixos-hosts/flake.nix.in" > "$hosts_flake/flake.nix"
-if ! output=$(CHECKS_BUILD_ALL= CHECKS_NIXOS_HOST=this-host CHECKS_FLAKE="path:$hosts_flake" tool/checks/test 2>&1); then
+if ! output=$(CHECKS_BUILD_TARGETS=nixosConfigurations.this-host CHECKS_FLAKE="path:$hosts_flake" tool/checks/eval-build 2>&1); then
   printf '%s\n' "$output" >&2
   fail "the evaluation check rejected the two-host fixture on this-host"
 fi
@@ -87,19 +83,33 @@ printf '%s\n' "$output" | grep -q '^→ build nixosConfigurations.this-host$' &&
   printf '%s\n' "$output" | grep -q '^→ skip  nixosConfigurations.other-host ' &&
   ! printf '%s\n' "$output" | grep -q '^→ build nixosConfigurations.other-host$' || {
   printf '%s\n' "$output" >&2
-  fail "on this-host the evaluation check did not build this-host alone"
+  fail "the check did not build only the selected fixture"
 }
 
-# Neither fixture name is this machine's, so the same holds when the test
-# itself runs on a NixOS host.
-printf '→ builds no NixOS output on a host none of them is named after\n'
-if ! output=$(CHECKS_BUILD_ALL= CHECKS_NIXOS_HOST= CHECKS_FLAKE="path:$hosts_flake" tool/checks/test 2>&1); then
+printf '→ evaluates both fixtures when no build is selected\n'
+if ! output=$(CHECKS_FLAKE="path:$hosts_flake" tool/checks/eval-build 2>&1); then
   printf '%s\n' "$output" >&2
-  fail "the evaluation check rejected the two-host fixture off-host"
+  fail "the evaluation check rejected the unselected two-host fixture"
 fi
 if printf '%s\n' "$output" | grep -q '^→ build nixosConfigurations'; then
   printf '%s\n' "$output" >&2
-  fail "the evaluation check built a NixOS output on a host it is not named after"
+  fail "the evaluation check built an unselected fixture"
 fi
+
+printf '→ refuses a selected output that is absent\n'
+if output=$(CHECKS_BUILD_TARGETS=nixosConfigurations.missing CHECKS_FLAKE="path:$hosts_flake" tool/checks/eval-build 2>&1); then
+  printf '%s\n' "$output" >&2
+  fail "the evaluation check accepted a missing selected build"
+fi
+printf '%s\n' "$output" | grep -q 'Selected native build has no passing result: nixosConfigurations.missing' \
+  || fail "the missing selection failed without a useful reason"
+
+printf '→ refuses a selected output for a foreign system\n'
+if output=$(CHECKS_BUILD_TARGETS=homeConfigurations.probe CHECKS_FLAKE="path:$fixtures/probe" tool/checks/eval-build 2>&1); then
+  printf '%s\n' "$output" >&2
+  fail "the evaluation check accepted a foreign selected build"
+fi
+printf '%s\n' "$output" | grep -q 'Selected native build has no passing result: homeConfigurations.probe' \
+  || fail "the foreign selection failed without a useful reason"
 
 printf '✓ evaluation coverage fixtures behave\n'

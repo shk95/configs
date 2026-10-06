@@ -78,11 +78,10 @@ Composition, identity, and ownership in this domain rest on ten rules, each
 registered under `docs/policy/invariants/unixlike/`. One file maps module classes to
 hosts, and a feature file writes into a class without naming a host or
 forcing another class's decision, so where a program reaches is read in one
-place. For NixOS, a machine kind names its required classes and the optional
-profiles it offers; each host makes a typed profile choice separate from its
-identity. That one composition file validates the choice and decides the
-imports, so a host does not import a feature class directly
-(`docs/policy/decisions/unixlike/hosts-select-offered-machine-profiles.md`).
+place. Public constructor inputs choose independent WSL and graphical
+environments; consumers provide native modules for host realization. Internal
+classes and paths are not public API
+(`docs/policy/decisions/unixlike/public-environment-host-boundary.md`).
 A graphical class is composed only into a home that has a display. Both WSL
 homes are command-line configurations: they receive no Linux GUI programs,
 graphical session, or WSLg integration. Their terminal is declared in the
@@ -361,7 +360,9 @@ Work that needs more than one judgement is planned and verified in tracked
 documents rather than in an issue, whose text can be rewritten after the
 fact. A spec states the acceptance criteria and the evidence lanes each one
 requires; a report, created in the same commit, answers every criterion and
-ends as done, abandoned or superseded. Once the report exists a criterion is
+ends as done, abandoned or superseded. A valid terminal pair may later be
+archived together after fixed remote preservation and active-reference review;
+pending or malformed acceptance cannot disappear. Once the report exists a criterion is
 changed only by a dated amendment that names it, so the bar is visibly set
 before the work. A work document still binds nothing but the work it
 describes: a durable rule it produces lands in a decision record or an
@@ -517,7 +518,7 @@ the other direction. Promotion keeps the code and writes a decision record;
 the entry and its tags still go. Either way the decision record is what
 survives: the registry holds only measures that are still live, so the
 reason a measure was accepted and the alternatives rejected with it belong
-under `docs/policy/decisions/`, where nothing deletes them and a later reader can
+under `docs/policy/decisions/`, where adopted rationale remains and a later reader can
 still find out why the tree looks as it does. Extension is the third
 outcome and the only one that keeps the entry: it moves `review-by` and
 records why in the entry itself.
@@ -544,13 +545,19 @@ inspect. Readiness and deployment are domain-scoped rather than repository-wide.
 - `dev` integrates reviewed source changes.
 - `master` contains accepted repository history; it is not proof that every
   domain at that commit was deployed.
-- `unixlike-vYYYY.MM.DD[.N]` identifies a validated Unix-like release.
-- `windows-vYYYY.MM.DD[.N]` identifies a validated Windows release.
-- `common-vYYYY.MM.DD[.N]` identifies a validated common release.
+- `unixlike-vMAJOR.MINOR.PATCH` identifies a validated Unix-like release.
+- `windows-vMAJOR.MINOR.PATCH` identifies a validated Windows release.
+- `common-vMAJOR.MINOR.PATCH` identifies a validated common release.
 
 A tag certifies only its named domain. Unrelated files present at the same Git
 commit do not acquire that certification. Evidence is recorded and reported
 per domain.
+
+Release inputs live in each releasing domain's `release.json`: previous basis,
+exact SemVer, summary, compatibility and migration text. Unix-like and Windows
+start independently at 1.0.0; no common release is introduced. CI and approval
+state stay in GitHub. The exact two 2026.08.31 tag objects remain historical
+exceptions to new-master reachability after reconstruction.
 
 Release tags are annotated and immutable. A release target must be reachable
 from `master`, but it need not be the newest commit when a domain intentionally
@@ -578,7 +585,8 @@ mutable one would be the more visible of the pair
 Commit subjects on the integration branches are Conventional Commits, and a
 `unixlike/flake.lock` refresh is its own commit: the first keeps history
 readable by tools that group by type, the second keeps a change that moves
-every Unix-like derivation hash separable from the source change beside it
+every Unix-like derivation hash separable from the source change beside it.
+Only its fixed patch publication declaration may accompany an automatic refresh
 (`INV repository/conventional-subject`, `INV repository/flake-lock-isolated`).
 
 Source flows one way from topic branches through `dev` into `master`.

@@ -2,7 +2,8 @@
 
 date: 2026-09-23
 scope: unixlike
-status: accepted
+status: superseded
+superseded-by: docs/policy/decisions/unixlike/public-environment-host-boundary.md
 issue: #339
 reopen-when: A guest cannot provide a usable Niri session with its hypervisor graphics, or a guest needs a materially different graphical environment rather than a machine-specific integration layer.
 source: docs/work/unixlike/graphical-vm-guests/spec.md § Decisions

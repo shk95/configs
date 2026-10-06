@@ -3,6 +3,11 @@
 set -eu
 
 root=$(CDPATH= cd -- "$(dirname "$0")/../.." && pwd)
+# All fixture Git commands and their child hooks inherit this test-only
+# boundary, not caller routing/configuration or network transport authority.
+# INV repository/fixture-git-isolation
+. "$root/tool/version-control/fixture-git-environment.sh"
+"$root/tool/version-control/fixture-git-isolation-test"
 classify="$root/tool/version-control/classify"
 audit="$root/tool/version-control/audit"
 plan_release="$root/tool/version-control/plan-release"
@@ -26,6 +31,7 @@ for route in \
   design-citations:version-control/design-citations test:version-control/test \
   audit:version-control/audit audit-remote:version-control/audit-remote \
   plan-promotion:version-control/plan-promotion \
+  release:version-control/release.py \
   plan-release:version-control/plan-release \
   hook-evidence:version-control/hook-evidence; do
   command=${route%%:*}
@@ -408,6 +414,8 @@ expect repository "$classify" --files .agents/skills/example/SKILL.md
 expect repository "$classify" --files .claude/settings.json
 expect repository "$classify" --files .codex/config.toml
 expect repository "$classify" --files .codex/rules/example.rules
+expect repository "$classify" --files .vscode/settings.json
+expect unclassified "$classify" --files .vscode/settings.nix
 expect unclassified "$classify" --files .codex-extra/config.toml
 expect unclassified "$classify" --files unexpected.file
 # INV repository/scope-ownership
@@ -420,16 +428,11 @@ expect unixlike "$classify" --files docs/policy/invariants/unixlike/import-order
 expect windows "$classify" --files docs/policy/invariants/windows/parser-declared.md
 # A common scope is restored together with the domain; until then its paths have no owner.
 expect unclassified "$classify" --files docs/policy/invariants/common/example.md
-# PROV repository/classify-registry-old-roots: the next four fixtures.
-# The removed scope's placeholder keeps an arm of its own: its deletion is
-# inside every pull-request range that spans it, and an unclassified path
-# cannot be pushed.
-expect repository "$classify" --files invariants/common/.gitkeep
-# The registries' roots before they moved under docs/: a deletion there is
-# inside every range that spans the move.
-expect repository "$classify" --files invariants/README.md
-expect unixlike "$classify" --files invariants/unixlike/import-order.md
-expect windows "$classify" --files provisional/windows/appx-detection.md
+# INV repository/scope-ownership
+# Removed registry roots no longer classify as current paths.
+expect unclassified "$classify" --files invariants/common/.gitkeep
+expect unclassified "$classify" --files invariants/unixlike/import-order.md
+expect unclassified "$classify" --files provisional/windows/appx-detection.md
 expect unclassified "$classify" --files docs/policy/invariants/stray.md
 expect unclassified "$classify" --files docs/policy/invariants/linux/x.md
 # INV repository/scope-ownership
@@ -571,11 +574,9 @@ for stage in commit push; do
   expect_units '' "$stage" "$(printf 'M\tdocs/status/unixlike.md\nM\tdocs/status/windows.md')"
   expect_units '' "$stage" "$(printf 'A\tdocs/work/unixlike/example/spec.md')"
 done
-# PROV repository/classify-registry-old-roots
-# Deleting from the registries' old roots selects nothing either.
-for stage in commit push; do
-  expect_units '' "$stage" "$(printf 'D\tprovisional/unixlike/zellij-overlay.md\nD\tinvariants/windows/parser-declared.md')"
-done
+# INV repository/local-gate-selects-by-effect
+# A removed root is now an unclassified input rather than an implicit doc.
+expect_units 'unclassified' commit "$(printf 'D\tinvariants/windows/parser-declared.md')"
 # A misplaced document is still refused.
 expect_units 'unclassified' commit "$(printf 'A\tdocs/status/linux.md')"
 expect_units '' push "$docs_modified"
@@ -739,16 +740,25 @@ printf '%s\n' "$promotion_plan" | grep -q '^base: master$'
 printf '%s\n' "$promotion_plan" | grep -q '^head: dev$'
 printf '%s\n' "$promotion_plan" | grep -q '^commits-to-promote: 1$'
 
-first_plan=$(cd "$test_root" && "$plan_release" unixlike master 2030.01.02)
-printf '%s\n' "$first_plan" | grep -q '^tag: unixlike-v2030.01.02$'
+for domain in unixlike windows common; do
+  mkdir -p "$test_root/$domain"
+  printf '{"version":"3.1.2"}\n' >"$test_root/$domain/release.json"
+done
+git -C "$test_root" add unixlike/release.json windows/release.json common/release.json
+git -C "$test_root" commit -q -m 'chore(repository): declare fixture release versions'
+git -C "$test_root" switch -q dev
+git -C "$test_root" merge -q --no-edit master
+git -C "$test_root" switch -q master
+first_plan=$(cd "$test_root" && "$plan_release" unixlike master)
+printf '%s\n' "$first_plan" | grep -q '^tag: unixlike-v3.1.2$'
 
-git -C "$test_root" tag -a unixlike-v2030.01.02 \
+git -C "$test_root" tag -a unixlike-v3.1.2 \
   -m 'Domain: unixlike' \
   -m 'Evaluation: passed; fixture' \
   -m 'Build: passed; fixture' \
   -m 'Native runtime: passed; fixture'
-second_plan=$(cd "$test_root" && "$plan_release" unixlike master 2030.01.02)
-printf '%s\n' "$second_plan" | grep -q '^tag: unixlike-v2030.01.02.1$'
+second_plan=$(cd "$test_root" && "$plan_release" unixlike master)
+printf '%s\n' "$second_plan" | grep -q '^tag: unixlike-v3.1.2$'
 
 # INV repository/flake-lock-isolated
 # INV repository/release-tag-contract
@@ -868,13 +878,13 @@ fi
 audit_ci_commit=$(git -C "$audit_ci" -c user.name=Fixture -c user.email=fixture@example.invalid \
   commit-tree -p HEAD -m 'feat(repository): leave master behind' 'HEAD^{tree}')
 git -C "$audit_ci" -c user.name=Fixture -c user.email=fixture@example.invalid \
-  tag -a windows-v2030.04.05 -m 'Domain: windows' -m 'Host: windows' \
+  tag -a windows-v3.4.5 -m 'Domain: windows' -m 'Host: windows' \
   -m 'Evaluation: passed; fixture' \
   -m 'Build: passed; fixture' -m 'Native runtime: passed; fixture' "$audit_ci_commit"
 audit_status=0
 audit_ci_tag=$(cd "$audit_ci" && REQUIRE_NATIVE=1 "$audit" --history 2>&1) || audit_status=$?
 if [ "$audit_status" -eq 0 ] ||
-  ! printf '%s\n' "$audit_ci_tag" | grep -q 'not reachable from master: windows-v2030.04.05$'; then
+  ! printf '%s\n' "$audit_ci_tag" | grep -q 'not reachable from master: windows-v3.4.5$'; then
   printf '%s\n' "$audit_ci_tag" >&2
   echo "audit --history accepted a release tag master does not contain" >&2
   exit 1
@@ -952,10 +962,10 @@ printf 'advance\n' >>"$audit_publisher/file"
 git -C "$audit_publisher" commit -q -am 'feat(repository): advance dev'
 git -C "$audit_publisher" switch -q master
 git -C "$audit_publisher" merge -q --no-ff dev -m "Merge branch 'dev'"
-git -C "$audit_publisher" tag -a common-v2030.03.04 -m 'Domain: common' \
+git -C "$audit_publisher" tag -a common-v3.3.4 -m 'Domain: common' \
   -m 'Evaluation: passed; fixture' -m 'Build: passed; fixture' \
   -m 'Native runtime: passed; fixture'
-git -C "$audit_publisher" push -q origin master dev common-v2030.03.04
+git -C "$audit_publisher" push -q origin master dev common-v3.3.4
 git -C "$audit_stale" fetch -q origin
 
 # A local master that lags origin/master, which contains the release tag.
@@ -990,13 +1000,13 @@ printf 'unpublished\n' >>"$audit_ahead/file"
 git -C "$audit_ahead" commit -q -am 'feat(repository): prepare an unpublished release'
 git -C "$audit_ahead" switch -q master
 git -C "$audit_ahead" merge -q --no-ff dev -m "Merge branch 'dev'"
-git -C "$audit_ahead" tag -a windows-v2030.05.06 -m 'Domain: windows' -m 'Host: windows' \
+git -C "$audit_ahead" tag -a windows-v3.5.6 -m 'Domain: windows' -m 'Host: windows' \
   -m 'Evaluation: passed; fixture' -m 'Build: passed; fixture' \
   -m 'Native runtime: passed; fixture'
 audit_status=0
 audit_ahead_output=$(cd "$audit_ahead" && "$audit" --history 2>&1) || audit_status=$?
 if [ "$audit_status" -eq 0 ] ||
-  ! printf '%s\n' "$audit_ahead_output" | grep -q 'not reachable from master: windows-v2030.05.06$' ||
+  ! printf '%s\n' "$audit_ahead_output" | grep -q 'not reachable from master: windows-v3.5.6$' ||
   ! printf '%s\n' "$audit_ahead_output" | grep -q '^summary: 0 warning(s), 1 failure(s)$'; then
   printf '%s\n' "$audit_ahead_output" >&2
   echo "audit --history judged a release tag against a local master ahead of origin/master" >&2
@@ -1044,28 +1054,34 @@ printf 'lock\n' >"$test_root/flake.lock"
 git -C "$test_root" add flake.lock
 git -C "$test_root" commit -q -m 'chore(unixlike-deps): refresh flake.lock'
 (cd "$test_root" && "$audit") >/dev/null
+# A fixed publication declaration is the only allowed lock companion.
+printf 'bounded lock\n' >"$test_root/unixlike/flake.lock"
+printf '{"version":"3.1.3"}\n' >"$test_root/unixlike/release.json"
+git -C "$test_root" add unixlike/flake.lock unixlike/release.json
+git -C "$test_root" commit -q -m 'chore(unixlike-deps): refresh with publication input'
+(cd "$test_root" && "$audit") >/dev/null
 git -C "$test_root" switch -q master
 
-git -C "$test_root" tag bad-v2030.01.02
+git -C "$test_root" tag bad-v3.1.2
 if (cd "$test_root" && "$audit") >/dev/null 2>&1; then
   echo "audit accepted an invalid tag name" >&2
   exit 1
 fi
-git -C "$test_root" tag -d bad-v2030.01.02 >/dev/null
+git -C "$test_root" tag -d bad-v3.1.2 >/dev/null
 
-git -C "$test_root" tag windows-v2030.01.02
+git -C "$test_root" tag windows-v3.1.2
 if (cd "$test_root" && "$audit") >/dev/null 2>&1; then
   echo "audit accepted a lightweight release tag" >&2
   exit 1
 fi
-git -C "$test_root" tag -d windows-v2030.01.02 >/dev/null
+git -C "$test_root" tag -d windows-v3.1.2 >/dev/null
 
-git -C "$test_root" tag -a windows-v2030.01.02 -m 'Domain: windows'
+git -C "$test_root" tag -a windows-v3.1.2 -m 'Domain: windows'
 if (cd "$test_root" && "$audit") >/dev/null 2>&1; then
   echo "audit accepted a release tag without evidence" >&2
   exit 1
 fi
-git -C "$test_root" tag -d windows-v2030.01.02 >/dev/null
+git -C "$test_root" tag -d windows-v3.1.2 >/dev/null
 
 # INV repository/release-tag-contract: Windows states each host's evidence in
 # its own block; the Unix-like provider states its evidence once. Each case is
@@ -1102,27 +1118,27 @@ Host: wsl-nixos
   Evaluation: passed; fixture
 
 Deployment: not performed by release'
-tag_case accept windows-v2030.06.01 '^ok: release tag is annotated, evidenced, and master-reachable: windows-v2030.06.01$' "$two_hosts"
-tag_case accept common-v2030.06.01 '^ok: .*: common-v2030.06.01$' 'Domain: common
+tag_case accept windows-v3.6.1 '^ok: release tag is annotated, evidenced, and master-reachable: windows-v3.6.1$' "$two_hosts"
+tag_case accept common-v3.6.1 '^ok: .*: common-v3.6.1$' 'Domain: common
 Evaluation: passed; fixture
 Build: not applicable
 Native runtime: not applicable; deploys nowhere
 Deployment: not performed by release'
 
-tag_case refuse unixlike-v2030.06.03 'lacks Native runtime (unixlike-v2030.06.03)$' 'Domain: unixlike
+tag_case refuse unixlike-v3.6.3 'lacks Native runtime (unixlike-v3.6.3)$' 'Domain: unixlike
 Evaluation: passed
 Build: passed'
-tag_case refuse unixlike-v2030.06.04 'a unixlike tag carries a host block: darwin (unixlike-v2030.06.04)$' 'Domain: unixlike
+tag_case refuse unixlike-v3.6.4 'a unixlike tag carries a host block: darwin (unixlike-v3.6.4)$' 'Domain: unixlike
 Host: darwin
 Evaluation: passed
 Build: passed
 Native runtime: passed'
-tag_case refuse unixlike-v2030.06.05 'Build is repeated (unixlike-v2030.06.05)$' 'Domain: unixlike
+tag_case refuse unixlike-v3.6.5 'Build is repeated (unixlike-v3.6.5)$' 'Domain: unixlike
 Evaluation: passed
 Build: passed
 Build: passed
 Native runtime: passed'
-tag_case refuse unixlike-v2030.06.06 'Native runtime is none of passed, unavailable, not applicable: probably (unixlike-v2030.06.06)$' 'Domain: unixlike
+tag_case refuse unixlike-v3.6.6 'Native runtime is none of passed, unavailable, not applicable: probably (unixlike-v3.6.6)$' 'Domain: unixlike
 Evaluation: passed
 Build: passed
 Native runtime: probably'
@@ -1130,11 +1146,11 @@ Native runtime: probably'
 old_form='Evaluation: passed; fixture
 Build: passed; fixture
 Native runtime: passed; fixture'
-tag_case accept unixlike-v2030.06.02 '^ok: .*: unixlike-v2030.06.02$' "Domain: unixlike
+tag_case accept unixlike-v3.6.2 '^ok: .*: unixlike-v3.6.2$' "Domain: unixlike
 $old_form"
-tag_case refuse windows-v2030.06.02 'Build stands outside a host block (windows-v2030.06.02)$' "Domain: windows
+tag_case refuse windows-v3.6.2 'Build stands outside a host block (windows-v3.6.2)$' "Domain: windows
 $old_form"
-tag_case refuse windows-v2030.06.04 'host darwin lacks Native runtime (windows-v2030.06.04)$' 'Domain: windows
+tag_case refuse windows-v3.6.4 'host darwin lacks Native runtime (windows-v3.6.4)$' 'Domain: windows
 Host: darwin
 Evaluation: passed
 Build: passed
@@ -1142,34 +1158,34 @@ Host: wsl-nixos
 Evaluation: passed
 Build: passed
 Native runtime: passed'
-tag_case refuse windows-v2030.06.05 'host darwin repeats Build (windows-v2030.06.05)$' 'Domain: windows
+tag_case refuse windows-v3.6.5 'host darwin repeats Build (windows-v3.6.5)$' 'Domain: windows
 Host: darwin
 Evaluation: passed
 Build: passed
 Build: passed
 Native runtime: passed'
-tag_case refuse windows-v2030.06.06 'Evaluation stands outside a host block (windows-v2030.06.06)$' 'Domain: windows
+tag_case refuse windows-v3.6.6 'Evaluation stands outside a host block (windows-v3.6.6)$' 'Domain: windows
 Evaluation: passed
 Host: darwin
 Evaluation: passed
 Build: passed
 Native runtime: passed'
-tag_case refuse windows-v2030.06.07 'Native runtime is none of passed, unavailable, not applicable: probably (windows-v2030.06.07)$' 'Domain: windows
+tag_case refuse windows-v3.6.7 'Native runtime is none of passed, unavailable, not applicable: probably (windows-v3.6.7)$' 'Domain: windows
 Host: darwin
 Evaluation: passed
 Build: passed
 Native runtime: probably'
-tag_case refuse windows-v2030.06.08 'Build is none of passed, unavailable, not applicable: passedish; fixture (windows-v2030.06.08)$' 'Domain: windows
+tag_case refuse windows-v3.6.8 'Build is none of passed, unavailable, not applicable: passedish; fixture (windows-v3.6.8)$' 'Domain: windows
 Host: darwin
 Evaluation: passed
 Build: passedish; fixture
 Native runtime: passed'
-tag_case refuse windows-v2030.06.09 'host label is outside .*: Some-Machine.local (windows-v2030.06.09)$' 'Domain: windows
+tag_case refuse windows-v3.6.9 'host label is outside .*: Some-Machine.local (windows-v3.6.9)$' 'Domain: windows
 Host: Some-Machine.local
 Evaluation: passed
 Build: passed
 Native runtime: passed'
-tag_case refuse windows-v2030.06.10 'host label is repeated: darwin (windows-v2030.06.10)$' 'Domain: windows
+tag_case refuse windows-v3.6.10 'host label is repeated: darwin (windows-v3.6.10)$' 'Domain: windows
 Host: darwin
 Evaluation: passed
 Build: passed
@@ -1178,49 +1194,47 @@ Host: darwin
 Evaluation: passed
 Build: passed
 Native runtime: passed'
-tag_case refuse common-v2030.06.02 'a common tag carries a host block: darwin (common-v2030.06.02)$' 'Domain: common
+tag_case refuse common-v3.6.2 'a common tag carries a host block: darwin (common-v3.6.2)$' 'Domain: common
 Host: darwin
 Evaluation: passed
 Build: passed
 Native runtime: passed'
-tag_case refuse common-v2030.06.03 'lacks Build (common-v2030.06.03)$' 'Domain: common
+tag_case refuse common-v3.6.3 'lacks Build (common-v3.6.3)$' 'Domain: common
 Evaluation: passed
 Native runtime: not applicable'
-tag_case refuse windows-v2030.06.03 'lacks Domain: windows (windows-v2030.06.03)$' 'Domain: unixlike
+tag_case refuse windows-v3.6.3 'lacks Domain: windows (windows-v3.6.3)$' 'Domain: unixlike
 Host: windows
 Evaluation: passed
 Build: passed
 Native runtime: passed'
 
-# The two tags that predate the host-block form are excepted by name. The
-# Unix-like domain-level form is now valid for provider-only releases.
-tag_case accept unixlike-v2026.08.31 '^ok: .*: unixlike-v2026.08.31$' "Domain: unixlike
+# A name alone cannot impersonate either preserved historical object.
+tag_case refuse unixlike-v2026.08.31 'historical tag object changed: unixlike-v2026.08.31' "Domain: unixlike
 $old_form"
-tag_case accept windows-v2026.08.31 '^ok: .*: windows-v2026.08.31$' "Domain: windows
+tag_case refuse windows-v2026.08.31 'historical tag object changed: windows-v2026.08.31' "Domain: windows
 $old_form"
-tag_case refuse windows-v2026.08.31 'lacks Build: (windows-v2026.08.31)$' 'Domain: windows
-Evaluation: passed
-Native runtime: passed'
-tag_case accept unixlike-v2026.08.31.1 '^ok: .*: unixlike-v2026.08.31.1$' "Domain: unixlike
+tag_case refuse unixlike-v2026.08.31.1 'tag name does not follow domain policy' "Domain: unixlike
+$old_form"
+tag_case refuse unixlike-v01.0.0 'tag name does not follow domain policy' "Domain: unixlike
 $old_form"
 
 # The planner templates the form the audit holds, per domain, and creates
 # no tag.
 tags_before=$(git -C "$test_root" tag)
-host_plan=$(cd "$test_root" && "$plan_release" windows master 2030.07.01)
+host_plan=$(cd "$test_root" && "$plan_release" windows master)
 printf '%s\n' "$host_plan" | grep -q '^  Host: <label' &&
   printf '%s\n' "$host_plan" | grep -q '^    Native runtime: <passed | unavailable | not applicable' &&
   ! printf '%s\n' "$host_plan" | grep -q '^  Evaluation:' || {
   echo "plan-release did not template a host block for windows" >&2
   exit 1
 }
-common_plan=$(cd "$test_root" && "$plan_release" common master 2030.07.01)
+common_plan=$(cd "$test_root" && "$plan_release" common master)
 printf '%s\n' "$common_plan" | grep -q '^  Build: <passed | unavailable | not applicable' &&
   ! printf '%s\n' "$common_plan" | grep -q 'Host:' || {
   echo "plan-release did not template domain-level lanes for common" >&2
   exit 1
 }
-unixlike_plan=$(cd "$test_root" && "$plan_release" unixlike master 2030.07.01)
+unixlike_plan=$(cd "$test_root" && "$plan_release" unixlike master)
 printf '%s\n' "$unixlike_plan" | grep -q '^  Build: <passed | unavailable | not applicable' &&
   ! printf '%s\n' "$unixlike_plan" | grep -q 'Host:' || {
   echo "plan-release did not template provider-level lanes for unixlike" >&2
@@ -1328,7 +1342,7 @@ run_pre_push() {
 
 # Unix-like host, its own native `pwsh` on PATH: the checks actually run under
 # it instead of being reported unverified, and the output names CI as the
-# native gate for what a Linux pwsh cannot exercise (WIN_ENV_E2E).
+# native gate for Windows management behavior.
 if ! unix_output=$(run_pre_push "$hook_root/pwsh-only"); then
   echo "pre-push failed outright with a Unix-like host's own pwsh available" >&2
   echo "$unix_output" >&2
@@ -1350,8 +1364,8 @@ if printf '%s\n' "$unix_output" | grep -q 'CI must supply evidence'; then
   echo "pre-push reported the Windows checks unverified despite a Unix-like pwsh" >&2
   exit 1
 fi
-if ! printf '%s\n' "$unix_output" | grep -qi 'WIN_ENV_E2E'; then
-  echo "pre-push did not note that WIN_ENV_E2E stays a CI concern under a Unix-like pwsh" >&2
+if ! printf '%s\n' "$unix_output" | grep -qi 'native gate'; then
+  echo "pre-push did not preserve the native Windows CI boundary" >&2
   exit 1
 fi
 
@@ -1535,16 +1549,6 @@ mkdir -p "$commit_root/unixlike/tool/checks" "$commit_root/unixlike/modules" \
 cp -R "$root/.githooks" "$commit_root/.githooks"
 cp -R "$root/tool/version-control" "$commit_root/tool/version-control"
 cp -R "$root/tool/dispatch" "$commit_root/tool/dispatch"
-# `capture karabiner` runs the real projection tool over the real payloads: the
-# command under test is the one that decides a capture is a commit, and a
-# stand-in for either side would leave that decision proving nothing. The host
-# it reads is faked through --host and --hotkeys-host, which is the whole
-# reason those flags exist.
-karabiner_assets=$root/unixlike/modules/programs/karabiner
-mkdir -p "$commit_root/unixlike/modules/programs/karabiner"
-cp "$karabiner_assets/tool" "$karabiner_assets/karabiner.json" \
-  "$karabiner_assets/symbolic-hotkeys.json" \
-  "$commit_root/unixlike/modules/programs/karabiner/"
 # The pre-commit hook this fixture enables also runs
 # tool/version-control/invariants, whose own cases are below; here it is a
 # stand-in so only the behaviour under test decides the outcome.
@@ -2206,8 +2210,7 @@ fi
 # A uname stub proves a platform guard without depending on which platform
 # runs this suite, which is the only way a guard's own case can hold on both
 # sides of it. It answers `-s` and nothing else, because that is all the helper
-# ever asks. Two guards use it: capture karabiner's Darwin guard below, and
-# --publish's refusal on native Windows further down.
+# ever asks. It proves --publish's refusal on native Windows further down.
 uname_stub() {
   # $1: directory to create the stub in. $2: what `uname -s` reports there.
   mkdir -p "$1"
@@ -2222,147 +2225,8 @@ STUB
   chmod +x "$1/uname"
 }
 
-# ---------------------------------------------------------------------------
-# tool/version-control/commit capture karabiner
-# ---------------------------------------------------------------------------
-#
-# INV unixlike/host-written-payload-projected
-#
-# The capture direction of the same projection
-# unixlike/modules/programs/karabiner/module.nix applies: what the payloads declare
-# decides what is read back, and what else the host keeps in that file is
-# runtime that is neither reported as drift nor captured. The real
-# unixlike/modules/programs/karabiner/tool and the real payloads are in the
-# throwaway repository above; only the host is faked, through the flags
-# that exist for it, so the two directions of the rule are the fixture's
-# subject rather than a stand-in's.
-capture_host="$test_root/karabiner-host.json"
-capture_hotkeys_host="$test_root/karabiner-hotkeys-host.json"
-
-run_capture() {
-  capture_answer=$1
-  shift
-  printf '%s\n' "$capture_answer" | (
-    unset GIT_DIR GIT_WORK_TREE GIT_INDEX_FILE
-    cd "$commit_root" || exit 1
-    KARABINER_PLATFORM=darwin
-    export KARABINER_PLATFORM
-    PATH="$commit_stub_path:$PATH" tool/version-control/commit "$@" 2>&1
-  )
-}
-
-capture_payloads_untouched() {
-  for capture_payload in karabiner.json symbolic-hotkeys.json; do
-    if ! cmp -s "$commit_root/unixlike/modules/programs/karabiner/$capture_payload" \
-      "$karabiner_assets/$capture_payload"; then
-      echo "capture karabiner rewrote unixlike/modules/programs/karabiner/$capture_payload while $1" >&2
-      exit 1
-    fi
-  done
-  if [ -n "$(commit_git status --porcelain --untracked-files=no)" ] \
-    || [ "$(commit_count)" != "$capture_before" ]; then
-    echo "capture karabiner wrote something while $1" >&2
-    exit 1
-  fi
-}
-
-# A host that matches both payloads and holds one top-level key beside them.
-# `machine_specific` is the host's own runtime state: a capture that read it
-# back would put a per-machine identifier into desired state.
-{
-  printf '{\n'
-  printf '  "machine_specific": {},\n'
-  tail -n +2 "$karabiner_assets/karabiner.json"
-} >"$capture_host"
-cp "$karabiner_assets/symbolic-hotkeys.json" "$capture_hotkeys_host"
-
-capture_before=$(commit_count)
-capture_status=0
-capture_output=$(run_capture n --dry-run --host "$capture_host" \
-  --hotkeys-host "$capture_hotkeys_host" capture karabiner) || capture_status=$?
-if [ "$capture_status" -eq 0 ]; then
-  echo "capture karabiner planned a commit against a host that matches the payloads" >&2
-  exit 1
-fi
-if ! printf '%s\n' "$capture_output" | grep -q 'nothing to capture'; then
-  printf '%s\n' "$capture_output" >&2
-  echo "capture karabiner did not refuse with nothing to capture" >&2
-  exit 1
-fi
-capture_payloads_untouched "the host matched the payloads"
-
-# The same command on a host that is not a Mac refuses before it reads
-# anything: the projection of a host that holds no Karabiner state would
-# capture the payloads away. The platform comes from a uname stub rather than
-# from whatever runs this suite, so the case holds on the Mac this feature
-# targets as well; on that host the real uname would pass the guard, the run
-# would reach the still-matching host above, and this would be asserting the
-# refusal of the case before it.
-uname_stub "$commit_root/stub-uname" Linux
-capture_status=0
-capture_output=$(
-  printf 'n\n' | (
-    unset GIT_DIR GIT_WORK_TREE GIT_INDEX_FILE KARABINER_PLATFORM
-    cd "$commit_root" || exit 1
-    PATH="$commit_root/stub-uname:$commit_stub_path:$PATH" \
-      tool/version-control/commit --dry-run \
-      --host "$capture_host" --hotkeys-host "$capture_hotkeys_host" \
-      capture karabiner 2>&1
-  )
-) || capture_status=$?
-if [ "$capture_status" -eq 0 ]; then
-  printf '%s\n' "$capture_output" >&2
-  echo "capture karabiner ran on a host that is not a Mac" >&2
-  exit 1
-fi
-if ! printf '%s\n' "$capture_output" | grep -q 'runs on a Mac only'; then
-  printf '%s\n' "$capture_output" >&2
-  echo "capture karabiner refused a host that is not a Mac for another reason" >&2
-  exit 1
-fi
-capture_payloads_untouched "the host was not a Mac"
-
-# A host that differs in one declared member of each payload, and still holds
-# the undeclared one. The dry run answers the same four questions the other
-# commands answer and writes nothing.
-{
-  printf '{\n'
-  printf '  "machine_specific": {},\n'
-  tail -n +2 "$karabiner_assets/karabiner.json"
-} | sed 's/"check_for_updates": false/"check_for_updates": true/' >"$capture_host"
-sed 's/"enabled": false/"enabled": true/' \
-  "$karabiner_assets/symbolic-hotkeys.json" >"$capture_hotkeys_host"
-
-capture_before=$(commit_count)
-if ! capture_output=$(run_capture n --dry-run --host "$capture_host" \
-  --hotkeys-host "$capture_hotkeys_host" capture karabiner); then
-  printf '%s\n' "$capture_output" >&2
-  echo "capture karabiner refused a host that drifted from the payloads" >&2
-  exit 1
-fi
-for capture_line in \
-  '^edit: unixlike/modules/programs/karabiner/karabiner.json$' \
-  '^edit: unixlike/modules/programs/karabiner/symbolic-hotkeys.json$' \
-  '^-    "check_for_updates": false$' \
-  '^+    "check_for_updates": true$' \
-  '^-      "enabled": false,$' \
-  '^+      "enabled": true,$' \
-  '^classification: unixlike$' \
-  '^  unixlike:payloads$' \
-  '^message: feat(unixlike): capture karabiner desired state$'; do
-  if ! printf '%s\n' "$capture_output" | grep -q "$capture_line"; then
-    printf '%s\n' "$capture_output" >&2
-    echo "the capture dry run did not report a line matching $capture_line" >&2
-    exit 1
-  fi
-done
-# The runtime key is in the host this run read and in neither diff.
-if printf '%s\n' "$capture_output" | grep -q 'machine_specific'; then
-  printf '%s\n' "$capture_output" >&2
-  echo "capture karabiner offered to read an undeclared top-level key back" >&2
-  exit 1
-fi
-capture_payloads_untouched "a dry run described a drifted host"
+# INV repository/retired-capture-publication
+"$root/tool/version-control/test-retired-capture"
 
 # ---------------------------------------------------------------------------
 # tool/version-control/commit --publish
@@ -2713,9 +2577,8 @@ fi
 publish_wrote_nothing "refusing on master"
 publish_git switch -q dev
 
-# #90: --publish is a Unix-like flow with a PowerShell counterpart in
-# the Windows capture verb, and uname_stub above proves that guard the same
-# way the capture cases prove theirs.
+# #90: --publish is a Unix-like helper. Native Windows contributors use
+# ordinary topic branches and pull requests; the guard refuses on every host.
 
 # Positive: a Unix-like uname still reaches the ordinary preflight, gh
 # included.
@@ -2746,7 +2609,7 @@ for publish_uname_win in MINGW64_NT-10.0-19045 MSYS_NT-10.0-19045 CYGWIN_NT-10.0
   fi
   publish_path="$publish_root/stub:$PATH"
   printf '%s\n' "$win_out" | grep -q 'not supported on native Windows'
-  printf '%s\n' "$win_out" | grep -q 'win-env\.ps1 capture -Feature <id> -Publish'
+  printf '%s\n' "$win_out" | grep -q 'Publish Windows source edits through a topic branch and pull request'
   if [ -s "$publish_log" ]; then
     echo "commit --publish consulted gh on native Windows ($publish_uname_win)" >&2
     exit 1
@@ -4597,20 +4460,55 @@ domain_reads="$root/tool/version-control/domain-reads"
 grep -q 'evidence_run "domain reads" tool/version-control/domain-reads' "$root/.githooks/pre-commit"
 grep -q 'run: tool/version-control/domain-reads' "$root/.github/workflows/ci.yml"
 for windows_ci_script in setup-dev.ps1 check-desired-state.ps1 test.ps1; do
-  windows_ci_prefix='pwsh -NoProfile -File .\windows\tool\'
-  windows_ci_next=$(grep -F -A1 "${windows_ci_prefix}${windows_ci_script}" "$root/.github/workflows/ci.yml" | sed -n '2p')
-  if [ "$windows_ci_next" != '          if ($LASTEXITCODE -ne 0) { exit $LASTEXITCODE }' ]; then
-    echo "Windows CI does not stop on the $windows_ci_script process status" >&2
+  if ! grep -Fq "windows/tool/$windows_ci_script" "$root/.github/scripts/windows-ci.ps1"; then
+    echo "Windows CI no longer invokes the $windows_ci_script implementation" >&2
     exit 1
   fi
 done
-windows_winget_next=$(grep -F -A1 'winget install --id Zellij.Zellij' "$root/.github/workflows/ci.yml" | sed -n '2p')
-if [ "$windows_winget_next" != '          if ($LASTEXITCODE -ne 0) { exit $LASTEXITCODE }' ]; then
+windows_winget_next=$(grep -F -A1 '& winget.exe install --id Zellij.Zellij' "$root/.github/scripts/windows-ci.ps1" | sed -n '2p')
+if ! printf '%s\n' "$windows_winget_next" | grep -Fq 'if ($LASTEXITCODE -ne 0) { throw'; then
   echo "Windows CI does not stop on Zellij installation failure" >&2
   exit 1
 fi
 if grep -q 'Get-ChildItem -Recurse' "$root/.github/workflows/ci.yml"; then
   echo "the CI workflow walks the checkout for PowerShell files; the Windows test verb owns that parse" >&2
+  exit 1
+fi
+
+# INV repository/windows-ci-runtime-bound
+# Native fixtures run in the Windows job; these assertions hold selection
+# and the explicit controller, not native runtime evidence.
+windows_ci_workflow="$root/.github/workflows/ci.yml"
+windows_ci_module="$root/.github/scripts/WindowsCiRuntime.psm1"
+windows_ci_controller="$root/.github/scripts/windows-ci.ps1"
+# INV repository/local-gate-selects-by-effect
+# Native runtime inputs select Windows even alone. Unknown .github material
+# keeps repository ownership without acquiring a Windows runtime effect.
+for path in .github/scripts/WindowsCiRuntime.psm1 \
+  .github/scripts/assert-windows-ci-runtime.ps1 \
+  .github/scripts/prepare-windows-ci-runtime.ps1 \
+  .github/scripts/windows-ci.ps1 .github/tests/test-windows-ci-runtime.ps1; do
+  for status in M A D; do
+    expect_units 'repository:fixtures
+windows:suite' ci "$(printf '%s\t%s' "$status" "$path")"
+  done
+done
+expect_units 'repository:fixtures
+windows:suite' ci "$(printf 'R100\tdocs/fixture.md\t.github/tests/test-windows-ci-runtime.ps1')"
+expect_units 'repository:fixtures' ci "$(printf 'M\t.github/CODEOWNERS')"
+expect_units 'repository:fixtures' ci "$(printf 'M\t.github/scripts/unrelated.ps1')"
+for stage in commit push; do
+  expect_units 'repository:fixtures' "$stage" "$(printf 'M\t.github/scripts/WindowsCiRuntime.psm1')"
+  expect_units 'repository:fixtures' "$stage" "$(printf 'M\t.github/scripts/windows-ci.ps1')"
+  expect_units '' "$stage" "$(printf 'M\t.github/CODEOWNERS')"
+done
+grep -Fq 'CONFIGS_CI_PWSH: ${{ steps.runtime.outputs.pwsh }}' "$windows_ci_workflow"
+grep -Fq '& $env:CONFIGS_CI_PWSH -NoLogo -NoProfile -NonInteractive -File' "$windows_ci_workflow"
+grep -Fq '.github/tests/test-windows-ci-runtime.ps1' "$windows_ci_controller"
+grep -Fq 'Invoke-CiProcess -Executable $RuntimePath' "$windows_ci_controller"
+grep -Fq 'if ($LASTEXITCODE -ne 0) { throw' "$windows_ci_module"
+if grep -Eq 'pwsh +-NoProfile +-File .*windows' "$windows_ci_workflow"; then
+  echo 'Windows CI management reverted to the hosted-image runtime' >&2
   exit 1
 fi
 
@@ -5138,6 +5036,49 @@ work_expect_fail "the same change as a range between commits" 'W7 criterion AC1 
 work_new
 work_expect_pass "a first commit" --staged
 
+# INV repository/work-spec-has-report
+# Archive only a valid terminal pair; pending/malformed/unpaired removal fails.
+work_new
+work_report done verified verified
+work_run >/dev/null
+git -C "$work_repo" commit -q -m 'docs(unixlike): finish the probe'
+git -C "$work_repo" rm -q "$work_item/spec.md" "$work_item/report.md"
+work_expect_pass "a terminal pair archived together" --staged
+work_new
+work_report abandoned verified unmet
+work_run >/dev/null
+git -C "$work_repo" commit -q -m 'docs(unixlike): abandon the probe'
+git -C "$work_repo" rm -q "$work_item/spec.md" "$work_item/report.md"
+work_expect_pass "an abandoned terminal pair archived together" --staged
+work_new
+mkdir -p "$work_repo/docs/work/unixlike/successor"
+cp "$work_item/spec.md" "$work_repo/docs/work/unixlike/successor/spec.md"
+sed 's,docs/work/unixlike/probe/spec.md,docs/work/unixlike/successor/spec.md,'   "$work_item/report.md" >"$work_repo/docs/work/unixlike/successor/report.md"
+work_report superseded verified unmet
+awk '{ print } /^status: superseded$/ { print "superseded-by: docs/work/unixlike/successor/spec.md" }'   "$work_item/report.md" >"$work_item/report.tmp"
+mv "$work_item/report.tmp" "$work_item/report.md"
+work_run >/dev/null
+git -C "$work_repo" commit -q -m 'docs(unixlike): supersede the probe'
+git -C "$work_repo" rm -q "$work_item/spec.md" "$work_item/report.md"
+work_expect_pass "a superseded terminal pair archived together" --staged
+work_new
+work_run >/dev/null
+git -C "$work_repo" commit -q -m 'docs(unixlike): open the probe'
+git -C "$work_repo" rm -q "$work_item/spec.md" "$work_item/report.md"
+work_expect_fail "pending acceptance cannot disappear" 'W7 was removed' --staged
+work_new
+work_report done verified pending
+git -C "$work_repo" add .
+git -C "$work_repo" commit -q -m 'docs(unixlike): record invalid completion'
+git -C "$work_repo" rm -q "$work_item/spec.md" "$work_item/report.md"
+work_expect_fail "malformed completion cannot disappear" 'W7 was removed' --staged
+work_new
+work_report done verified verified
+work_run >/dev/null
+git -C "$work_repo" commit -q -m 'docs(unixlike): finish the probe'
+git -C "$work_repo" rm -q "$work_item/report.md"
+work_expect_fail "a spec cannot be archived without its report" 'W2' --staged
+
 # --overdue lists a spec past its review-by while its report is pending, and
 # not one whose report is terminal.
 work_new
@@ -5592,3 +5533,6 @@ git -C "$authoring_root" worktree add -q -b fix/repository-pinned "$authoring_pi
 "$root/tool/version-control/session-test"
 
 echo "version-control fixtures passed"
+
+# INV repository/bounded-release-automation
+python3 "$root/tool/version-control/test-release.py"

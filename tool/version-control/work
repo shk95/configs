@@ -37,7 +37,8 @@
 #   W7  with --staged or --range: a criterion that stood beside a report at
 #       the base is present and unchanged at the head, in its text and its
 #       lanes, unless the head's spec carries an `Amended` paragraph the base
-#       did not have that names the criterion
+#       did not have that names the criterion; a valid terminal pair may
+#       leave the tree together after its fixed remote preservation is reviewed
 #
 # The default subject is the index, like tool/version-control/hygiene: the
 # invariant is about committed state. --working-tree names one local item and
@@ -492,7 +493,21 @@ if [ "$mode" = range ] && git rev-parse -q --verify "$base^{commit}" >/dev/null 
     report=${spec%spec.md}report.md
     blob_exists "$base" "$report" || continue
     if ! blob_exists "$head" "$spec"; then
-      echo "$spec: W7 was removed while its report existed; close the work through the report's state" >>"$tmp/fail"
+      # INV repository/work-spec-has-report: deletion cannot hide pending or
+      # malformed acceptance. Validate the whole base tree through an isolated
+      # index, intentionally refusing archival from any malformed base work.
+      archive_index="$tmp/archive-base.index"
+      if [ ! -f "$archive_index" ]; then
+        GIT_INDEX_FILE="$archive_index" git read-tree "$base"
+      fi
+      if ! blob_exists "$head" "$report" &&
+         blob "$base" "$report" | parse | awk -F '\t' '
+           $1 == "H" && $2 == "status" { terminal = ($3 == "done" || $3 == "abandoned" || $3 == "superseded") }
+           END { exit !terminal }
+         ' && GIT_INDEX_FILE="$archive_index" "$0" >/dev/null 2>&1; then
+        continue
+      fi
+      echo "$spec: W7 was removed while its report existed; only a valid terminal pair may be archived together" >>"$tmp/fail"
       continue
     fi
     blob "$base" "$spec" | parse >"$tmp/base.rec"

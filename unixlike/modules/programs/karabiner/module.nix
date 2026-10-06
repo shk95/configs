@@ -1,58 +1,76 @@
-# Karabiner's configuration file is desired state; the application is not.
-#
+# Provider settings use finite whole-unit ownership and explicit host documents.
 # INV unixlike/host-written-payload-projected
+# INV unixlike/composition-in-one-place
 #
-# Karabiner-Elements is a Homebrew cask, declared once in
-# `modules/platforms/homebrew.nix`, and stays there: this file declares no
-# package and no service. `docs/policy/decisions/unixlike/homebrew-owns-mac-apps.md` is the
-# rule, and nothing about managing the configuration changes who owns the
-# application.
+# This concern contributes only to modules.homeManager.darwin. App selection and
+# lifecycle remain consumer-owned. The final selected-app/appSettings gates and
+# each unit enable flag decide document loading and apply independently.
 #
-# The file is delivered by an activation script rather than by
-# `xdg.configFile`, because Karabiner unlinks and rewrites
-# `~/.config/karabiner/karabiner.json` on every save. A link into the Nix
-# store would survive exactly until the first change made in the user
-# interface, and the store path is read-only, so the save would either fail or
-# replace the link with a plain file that no longer tracks the payload.
-# `modules/karabiner/tool apply` writes a copy instead, restricted to the
-# top-level keys the payload declares, and leaves the host's own runtime keys
-# in place. `docs/policy/decisions/unixlike/karabiner-desired-state-by-projection.md` records
-# that choice and what was rejected.
+# One versioned units.json supplies ownership and bounded shape constraints to
+# pure Nix consumption and the shared native adapter/capture engine. Disabled
+# documents remain unread. Source=configs uses defaults with dormant data retained
+# in the host document; source=host replaces the unit without merging defaults.
 #
-# The same script writes the two macOS symbolic hotkeys the Korean
-# input-source toggle depends on, so one activation entry covers both halves
-# of one behaviour rather than splitting them across two.
+# Home Manager runs the permanent adapter as the home user after writeBoundary,
+# with explicit locked Python, a pinned concern source and absolute native readers.
+# Its run wrapper preserves dry-run behavior. Files are replaced atomically and
+# symbolic hotkeys use individual defaults -dict-add writes, preserving siblings.
 #
-# INV unixlike/composition-in-one-place: this file writes into
-# `modules.homeManager.darwin` and stops there. It defines one activation
-# entry that no other module defines, so no priority is overridden and
-# nothing is forced; it names no host, and which hosts receive
-# `homeManager.darwin` stays `modules/flake/configurations.nix`'s decision.
-#
-# `run` is Home Manager's own wrapper, so `--dry-run` reports the command
-# instead of running it, and under nix-darwin the activation runs as the user
-# whose Karabiner file this is. `JQ` hands the script the jq it already has,
-# so the activation resolves nothing from PATH.
-#
-# That matters beyond jq. The PATH an activation script runs under is Home
-# Manager's own inputs — bash, coreutils, diffutils, findutils, gettext,
-# gnugrep, gnused, jq, ncurses and Nix — and the caller's PATH is appended only
-# when `home.emptyActivationPath` is false, which on this home it is not. So
-# /usr/bin is absent, and `defaults`, `plutil` and `activateSettings` would not
-# resolve by name. Nothing is added to PATH here: `modules/karabiner/tool`
-# resolves those three itself, from PATH first and from their absolute macOS
-# location second, so the fixtures can still shim them and the activation still
-# finds them.
+# The legacy concern-local tool remains exact project/marker compatibility for
+# the separate capture-to-Git caller until its repository-owned retirement.
+# It is not the host-document adapter or a dependency of the new capture command.
 _: {
   modules.homeManager.darwin = {
     pkgs,
     lib,
+    config,
     ...
-  }: {
-    home.activation.karabinerDesiredState = lib.hm.dag.entryAfter ["writeBoundary"] ''
-      JQ=${pkgs.jq}/bin/jq run sh ${./tool} apply \
-        --payload ${./karabiner.json} \
-        --hotkeys ${./symbolic-hotkeys.json}
-    '';
+  }: let
+    contract = builtins.fromJSON (builtins.readFile ./units.json);
+    validation = import ../../../tool/darwin-capture/validation.nix {inherit lib contract;};
+    capture = config.providerDarwin.capture;
+    selected =
+      builtins.elem "karabiner-elements" config.providerDarwin.selectedApps
+      && config.providerDarwin.appSettings.enable
+      && config.providerDarwin.appSettings.karabiner;
+    effective = unit: selected && unit.enable;
+    settings = unit: option: fallback:
+      if option.settingsDocument == null
+      then fallback
+      else let
+        doc = validation.document unit option.settingsDocument;
+      in
+        if doc.source == "configs"
+        then fallback
+        else pkgs.writeText "${unit}-host-settings.json" (builtins.toJSON doc.settings);
+    karabiner = effective capture.karabiner;
+    hotkeys = effective capture.symbolicHotkeys;
+    unitOptions = name: {
+      enable = lib.mkOption {
+        type = lib.types.bool;
+        default = true;
+        description = "Enable provider management of the ${name} settings unit when Karabiner settings are selected.";
+      };
+      settingsDocument = lib.mkOption {
+        type = lib.types.nullOr lib.types.path;
+        default = null;
+        description = "Explicit version-1 host/configs source document for ${name}. Disabled units do not read it.";
+      };
+    };
+  in {
+    options.providerDarwin.capture = {
+      karabiner = unitOptions "Karabiner";
+      symbolicHotkeys = unitOptions "symbolic hotkeys 60/61";
+    };
+    config = {
+      home.activation = lib.mkIf (karabiner || hotkeys) {
+        karabinerDesiredState = lib.hm.dag.entryAfter ["writeBoundary"] ''
+          CONFIGS_CAPTURE_CONCERN=${./.} run ${pkgs.python3}/bin/python3 \
+            ${../../../tool/darwin-capture}/adapter.py apply \
+            ${lib.optionalString karabiner "--unit karabiner --settings ${settings "karabiner" capture.karabiner ./karabiner.json}"} \
+            ${lib.optionalString hotkeys "--unit symbolic-hotkeys --settings ${settings "symbolic-hotkeys" capture.symbolicHotkeys ./symbolic-hotkeys.json}"}
+        '';
+      };
+    };
   };
 }

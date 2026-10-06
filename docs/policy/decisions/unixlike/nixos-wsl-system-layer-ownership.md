@@ -2,7 +2,8 @@
 
 date: 2026-09-06
 scope: unixlike
-status: accepted
+status: superseded
+superseded-by: docs/policy/decisions/unixlike/public-environment-host-boundary.md
 issue: #190
 issue: #191
 issue: #195
@@ -151,7 +152,7 @@ that a dotfile change on this host is a system switch: it needs `sudo` and a
 system evaluation. For the same reason the standalone home's activation is
 refused here, since it would put the Ubuntu home over the composed one. The
 host also lost its channel on that date: it is rebuilt from this flake alone
-(`INV unixlike/nixos-no-channel`), and what an import leaves behind — a
+(`unixlike/nixos-no-channel`), and what an import leaves behind — a
 default configuration file, and on the first import a channel — is removed
 by a documented step, because no activation removes it.
 

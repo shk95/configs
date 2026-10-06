@@ -142,9 +142,11 @@ just check
 
 just zellij-patch-check v0.45.1
 just karabiner-check   # target Mac only; compares the Karabiner payloads
-just karabiner-capture # target Mac only; reads the drift back and commits it
 just karabiner-test
 ```
+
+Observed Darwin settings use the pinned host-document preview/review/save
+workflow in [CONTRIBUTING.md](CONTRIBUTING.md#capture-darwin-host-documents).
 
 Host-specific Justfile recipes refuse to use the provider's synthetic
 outputs. Evaluate, build and activate a real host from its reviewed private
@@ -214,7 +216,7 @@ unchanged; `win-env.ps1 help` prints the table.
 ```
 
 Arguments after the verb reach the script unchanged, so `check -Feature
-terminal` and `capture -Feature powertoys -Publish` mean what the sections
+terminal` and `capture -SourceRoot <provider-checkout> -Environment <environment-file> -Unit <id>` mean what the sections
 below say, and a command the script refuses ends the run at 1. A verb it does
 not know is refused with exit status 64, which no check outcome uses. CI and
 the hooks use these same public verbs.
@@ -300,143 +302,33 @@ it took.
 Deselecting stops management. It does not uninstall a package or delete a file
 that a previous Apply deployed; removing those is a separate manual decision.
 
-### `.wslconfig` follows the host's Windows build
+### Host-global WSL settings
 
-Selection is on or off, but `%USERPROFILE%\.wslconfig` has to exist on every
-host that selects `wsl` with *different content*, because the options WSL
-honours depend on the Windows build. `networkingMode=Mirrored` and two
-`[experimental]` keys beside it require Windows 11 22H2, build 22621; a host
-below that bound — Windows 10, and equally a Windows 11 21H2 host — ignores
-them in silence. The manifest therefore declares two payloads for that one
-file, and the run picks between them by build:
-
-```text
-win-env check summary
-  selected: core, wsl
-  Windows build 22631: wslConfig from files/wsl/mirrored-networking.wslconfig
-```
-
-The resolver keeps the lower payload when the build is undetermined; capture
-refuses that case, and `check` reports the missing build evidence as unverified.
-The major version is `10` on Windows 10 and Windows 11 alike and is never used
-for source selection. The lower payload contains only `autoMemoryReclaim`; its
-NAT filename does not assert which networking stack is running.
-
-A host that crosses the bound later, because Windows Update moved it, is not
-redeployed on its own: the desired state did not change, only the host did.
-`-Check` reports it as `wslConfig settings` drift and exits 2, and
-`.\windows\win-env.ps1 apply -Force` writes the payload the new build honours.
-
-`check -Feature wsl` reports source agreement separately from Windows build
-and WSL **application** version prerequisites. Missing or unsupported
-prerequisites are unverified (69 when there is no drift); known drift still
-returns 2, and `REQUIRE_NATIVE=1` makes unverified evidence a failure (1).
-The WSL application version comes from `wsl.exe --version`, not the
-WSL1/WSL2 mode of a distribution. The key/section support table is in
-`docs/status/`.
-
-Preview a host edit with:
-
-```powershell
-.\windows\win-env.ps1 capture -Id wslConfig -WhatIf
-```
-
-Capture validates those prerequisites before reporting even an unchanged
-file. It refuses NAT or an omitted mirrored mode when the selected payload
-requests mirrored networking, identifying the payload and asking for a
-reviewed desired-state edit to change that policy. This is a repository policy
-mismatch, not a claim that NAT is invalid on Windows 11. Compatible memory/CPU
-tuning, comments and formatting stay intact. Unknown keys are preserved and
-identified as outside this support check rather than called unsupported.
-
-A supported mirrored configuration with `dnsTunneling=false` remains capturable:
-`bestEffortDnsParsing=true` is then inactive, and the preview explains this
-without deleting either setting. An omitted `dnsTunneling` is reported without
-assuming an older release's default. No check here certifies the running
-network stack or DNS behavior: `.wslconfig` is read at VM startup, and these
-commands never restart WSL. Apply triggers and source selection remain as
-recorded in `docs/policy/decisions/windows/wslconfig-selected-by-windows-build.md`.
+The provider does not manage `.wslconfig`. The host owns this file, its
+networking policy and any WSL restart. Generation and capture do not modify it.
 
 ### Capture a change made in the application
 
-Apply writes a payload to the host. The other direction has a tool of its own,
-so a setting changed through PowerToys, Windows Terminal, WezTerm, the managed
-PowerShell profile, `.wslconfig` or Zellij becomes desired state with one
-command and one confirmation:
-
-Run a writing capture in a linked task worktree. From the primary checkout,
-`-WhatIf` can still preview the diff without writing. Create the linked
-worktree on the Windows host with `bash tool/configs worktree new windows-capture-settings
-feature`, then run the following commands from that worktree.
+Capture reads supported application settings into version-1 host originals.
+SourceRoot identifies a clean provider checkout; Environment names the host
+environment declaration. Documents are relative to that declaration. Preview
+is the default and `-Save` explicitly writes host originals. It does not edit provider
+payloads, create branches, commit, push or open a pull request.
 
 ```powershell
-.\windows\win-env.ps1 capture                          # every feature this host applied
-.\windows\win-env.ps1 capture -Feature powertoys       # one feature
-.\windows\win-env.ps1 capture -Id windowsTerminal      # one managed file
-.\windows\win-env.ps1 capture -Publish                 # commit it and take it to dev
-.\windows\win-env.ps1 capture -Branch fix/windows-font # override the branch name below
-.\windows\win-env.ps1 capture -WhatIf                  # decide and diff, write nothing
+.\windows\win-env.ps1 capture -SourceRoot C:\provider -Environment C:\host\environment.json -Unit advancedPaste -Document settings/paste.json
+.\windows\win-env.ps1 capture -SourceRoot C:\provider -Environment C:\host\environment.json -Unit advancedPaste -Document settings/paste.json -Save
 ```
 
-Drift is decided by the comparison `-Check` already uses. Each drifted managed
-file is copied into the payload this host resolves — the build-selected variant
-for a conditional file — with the placeholder Apply expands restored, a JSON
-payload pretty-printed to this repository's two-space style regardless of how
-the host application wrote it, the diff is shown, and one `[y/N]` commits it:
-one `feat(windows):` commit per feature, through the repository's hooks. The
-round trip closes, so the check that reported the drift passes afterwards.
+First capture requires an explicit relative Document; later capture may omit it
+when the unit already has a connection. Capture never selects features or
+enables units.
 
-`-Publish` carries that same confirmation the rest of the way: change the
-setting in the application, run `capture.ps1 -Feature <feature> -Publish`,
-answer `y`, and the run branches, commits, pushes, opens one pull request
-against `dev`, arms auto-merge and prints the pull-request URL. Nothing else is
-needed unless CI fails. The pull request's title is the commit's own subject —
-a run that captured several features titles it `feat(windows): capture settings
-from the host` and lists them — and its body carries the captured managed-file
-ids, the feature selection, this host's Windows build and the commit output the
-hooks produced here. It never waits on CI and never merges: `Required checks`
-and an up-to-date base still decide that, and a push the pre-push hook or the
-remote rejects leaves every commit local on the named branch, with no retry and
-no bypass. `-Publish` needs `gh` authenticated for github.com (`winget install
-GitHub.cli`) and `Allow auto-merge` on in the repository settings; it refuses
-before writing anything if either is missing, if an open pull request from the
-same branch targets a base other than `dev`, or if the remote already has the
-branch this run would create. A pull request already open against `dev` from
-this branch is armed as it is, title and body untouched. Because a push carries
-a branch rather than a commit, anything the branch already holds beyond `dev`
-is listed before the `[y/N]`. `-WhatIf -Publish` prints the branch, the title,
-the body and every command, and writes nothing.
-
-A `JsonSubset` payload — most of the PowerToys inventory — is captured by
-projecting the host file onto the keys the payload declares. The payload gains
-the host's value for every key it already owns and gains no member it did not,
-so a version stamp, a timestamp or a window position the application keeps in
-the same file cannot reach desired state. Widening what a capture picks up is
-therefore an edit to the payload, not to a list of exceptions.
-
-That holds for the members of a declared object. A declared *list* is exact —
-the comparison matches it by position and requires equal length — so declaring
-one is a claim to own the whole list, and declaring an empty list means
-capturing whatever the host happens to hold there. Declare a list only when
-there is content to declare; a key left undeclared owns nothing, which is what
-an empty list cannot express.
-
-It refuses instead of guessing, and says which rule it refused under:
-a file the suite already names as runtime state; a `JsonSubset` payload whose
-declared key the host file no longer holds, or whose host value is no longer
-the shape the payload declares, both named by key path; content
-that still holds an absolute account path, this host's account name, or a
-`.wslconfig` `firewall` key; and a build-conditional file on a host whose
-Windows build is undetermined. Windows Terminal profiles the application
-generated are dropped rather than captured, so a fragment profile from one
-host's Git for Windows never reaches another host. Like the Unix-like commit
-helper it refuses when the index already holds staged changes or a payload it
-would write has uncommitted changes, and never bypasses a hook. Its branch rule
-is the same helper's, too: on `master` it refuses outright; on `dev` it
-branches to `feature/windows-capture-<feature>` from a freshly fetched
-`origin/dev` (or `-Branch <name>`), reported before the `[y/N]`, so `dev` never
-carries the commit; on any other branch it commits where it is. Nothing on the
-host is written: the managed targets are read and nothing else.
+JsonSubset capture projects only declared object members and takes declared
+arrays whole. Unmanaged runtime siblings stay outside the captured desired
+state. The supported LocalAppData token is restored; other private values stay
+literal host-owned content. Review the preview, save explicitly and regenerate
+before Check or Apply. See `windows/examples/README.md` for complete examples.
 
 ## Deployment
 
@@ -447,3 +339,9 @@ change. Domain tags and evidence requirements are defined in
 
 No activation or Apply is a routine check. Perform either only deliberately on
 the matching host.
+
+Scheduled releases use domain-owned SemVer declarations and the standard
+GitHub PR/CI/Environment path. Initial Unix-like and Windows versions are
+independently 1.0.0. Automatic refresh changes only four permitted inputs; host
+adoption and deployment remain explicit. See CONTRIBUTING.md, "Bounded scheduled
+release", for setup, the 05/06/07 schedule and original-SHA recovery.

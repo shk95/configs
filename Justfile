@@ -176,10 +176,10 @@ alias generations := home-generations
 #
 ############################################################################
 
-# Update all the flake inputs
+# Refresh provider inputs except explicitly documented exclusions
 [group('nix')]
 up:
-    nix flake update
+    "{{justfile_directory()}}/unixlike/tool/refresh-inputs"
 
 # Update a single input, e.g. `just upp nixpkgs`
 [group('nix')]
@@ -272,10 +272,10 @@ darwin-generations:
 karabiner-check:
     unixlike/modules/programs/karabiner/tool check
 
-# Read this Mac's Karabiner drift back into the payloads and commit it.
+# Retired publication entry; use explicit pinned host-document preview/review/save.
 [group('darwin')]
 karabiner-capture *args:
-    tool/version-control/commit {{args}} capture karabiner
+    @echo 'karabiner-capture is retired. Use the pinned preview/review/save workflow in unixlike/tool/darwin-capture/README.md with explicit host-owned document destinations; connect and publish them separately.' >&2; exit 1
 
 # Prove the Karabiner projection tolerates runtime members and refuses drift.
 [group('darwin')]
@@ -315,23 +315,6 @@ nixos-build host="":
     set -euo pipefail
     target=$(just _nixos-target {{ quote(host) }})
     nix build --no-link --print-out-paths "path:./unixlike#nixosConfigurations.${target}.config.system.build.toplevel"
-
-# Write a reviewable wrapper flake for one explicit persistent disk. This
-# writes only the named plan directory and never touches the target device.
-[group('nixos')]
-nixos-install-plan host disk plan:
-    @echo 'Use the host flake in configs-hosts for installation planning.' >&2; exit 1
-
-# Run the same disko installation proof that nixos-anywhere --vm-test selects,
-# then boot the installed result on disposable QEMU disks. The portable form
-# lets QEMU fall back to TCG when the builder has no nested KVM; it never
-# connects to or activates a real host.
-[group('nixos')]
-nixos-install-vm-test host="":
-    #!/usr/bin/env bash
-    set -euo pipefail
-    target=$(just _nixos-target {{ quote(host) }})
-    unixlike/tool/install-vm-test "${target}"
 
 # NixOS-WSL's builder refuses to run unless EUID is 0 — it chowns paths inside
 # the rootfs it assembles — so this needs a password and an agent cannot run

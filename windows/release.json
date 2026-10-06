@@ -1,0 +1,7 @@
+{
+  "previous": "windows-v2026.08.31",
+  "version": "1.0.0",
+  "summary": "Selected host-owned Windows generation and application-original capture.",
+  "compatibility": "breaking",
+  "migration": "Use version-1 host environment declarations and regenerate saved originals before Check or Apply."
+}

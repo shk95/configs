@@ -127,9 +127,9 @@ the evidence in `docs/policy/definition-of-done/`.
 
 Use independent release tags:
 
-- `unixlike-vYYYY.MM.DD`, with `.N` for another release that day;
-- `windows-vYYYY.MM.DD`, with `.N` for another release that day;
-- `common-vYYYY.MM.DD`, with `.N` for another release that day.
+- `unixlike-vMAJOR.MINOR.PATCH`;
+- `windows-vMAJOR.MINOR.PATCH`;
+- `common-vMAJOR.MINOR.PATCH`, only when common material exists.
 
 Keep `unixlike/flake.lock` refreshes in dedicated `chore(unixlike-deps)`
 commits. A domain tag certifies only the named domain even though the commit
@@ -600,6 +600,37 @@ For reusable storage-class development, `unixlike/tool/install-plan` and
 `install-vm-test` use synthetic provider fixtures. Their disposable VM proof
 validates the provider layout and installer wiring, not a private disk.
 
+### Capture Darwin host documents
+
+Pin one reviewed full provider commit for preview and Save. On the target Mac,
+use the delivered app with explicit host-owned documents and existing destination
+parents. Paths must be absolute and canonical, outside provider source/store,
+application directories and observed originals; the proposal must be a new file.
+
+```sh
+nix run 'github:shk95/configs/<full-commit>?dir=unixlike#darwin-capture' -- \
+  preview --unit karabiner --document /host-repository/settings/karabiner.json \
+  --unit symbolic-hotkeys --document /host-repository/settings/hotkeys.json \
+  --output /private-preview-directory/proposal.json
+nix run 'github:shk95/configs/<same-full-commit>?dir=unixlike#darwin-capture' -- \
+  save --preview /private-preview-directory/proposal.json
+```
+
+Review the mode-600 private proposal's readers, destinations, complete settings
+and source transitions before explicitly requesting Save. Save validates the
+bound tool/schema, rereads inputs and targets, and recomputes the proposal; stale
+or inconsistent state refuses. Each replacement is atomic, but multiple documents
+are not one transaction. After refusal or partial Save, preserve completed
+results and preview the actual current state again before another review/Save.
+See `unixlike/tool/darwin-capture/README.md` for the delivered document contract.
+
+Saving documents does not connect them to a consumer, publish provider changes,
+apply application settings or activate a host. Consumer connection is separately
+reviewed, and activation requires an explicit request. The retired repository
+`capture karabiner` publication invocation refuses without observing the host or
+changing Git; it never redirects to Save. The historical domain projection tool,
+`just karabiner-check` and `just karabiner-test` remain independently available.
+
 ## Windows changes
 
 Windows declarations, payloads, checks, and Apply logic live inside `windows/`
@@ -656,63 +687,19 @@ desired-state change while a host's chosen set is not. Report which selection
 produced any `-Check` or Apply evidence, because a check that passed under a
 minimal selection says nothing about the features it excluded.
 
-A change made in an application's own UI moves back into desired state with
-`.\windows\win-env.ps1 capture`, run from a linked task worktree on the
-Windows host. Run `bash tool/configs worktree new windows-capture-settings feature`
-from the primary clone to create it from `origin/dev` before writing. The primary clone
-may run `capture -WhatIf` to inspect the proposed diff and may resume a
-publish with no new payload change. A writing run in the primary clone
-refuses before switching branches, staging, or editing a payload. Capture
-reads the managed targets and writes only
-this repository's payloads — a JSON payload pretty-printed to this
-repository's two-space style — and ends at one confirmation before committing.
-Preview it with `-WhatIf` first. It restates the guards of
-`tool/version-control/commit` rather than calling it, including its branch
-rule: it refuses on `master`, on a dirty index, and on a payload that already
-has uncommitted changes, and never bypasses a hook. On `dev` it branches to
-`feature/windows-capture-<feature>` from a freshly fetched `origin/dev` (or a
-name given with `-Branch`) before it commits, reported in the plan before the
-`[y/N]`, so a capture run on `dev` never leaves a commit on that protected
-branch; on any other branch the commit stays there. Read its refusals rather
-than working around them, and read the hook output under its commit: Git for
-Windows runs the POSIX hooks natively, but a clone that has not set
-`core.hooksPath` runs none of them.
+A change made in an application's UI can be previewed through
+`windows/win-env.ps1 capture -SourceRoot <provider-checkout> -Environment <environment-file> -Unit <id>`.
+First capture requires `-Document <relative-file>`; later capture uses its
+existing connection. SourceRoot is a clean provider checkout, while Environment
+is the host declaration path. Adding `-Save` explicitly writes complete host-owned
+originals. Regenerate the selected environment before Check or Apply.
+See `windows/examples/README.md` for the declaration format and examples.
+Capture does not modify provider source or perform Git publication. Publish
+provider source edits through the ordinary topic-branch and pull-request flow.
 
-Add `-Publish` and that same confirmation pushes the branch, opens one pull
-request against `dev`, arms auto-merge and prints the pull-request URL. It is
-the Windows copy of `--publish` above and behaves the same way: it never waits
-on CI and never merges, a rejected push leaves every commit local on the named
-branch, and nothing retries with a bypass. It requires `gh` authenticated for
-github.com and `Allow auto-merge` on in the repository settings, and refuses
-before writing anything if either is missing, if a pull request from the same
-branch is open against another base, or if the remote already has the branch
-the run would create; a pull request already open against `dev` from that
-branch is armed unchanged. It pushes a branch rather than a commit, so it
-lists whatever the branch already carries beyond `dev` before the `[y/N]`.
-`-WhatIf -Publish` prints the branch, the title, the body and every command
-and writes nothing. Promotion to `master` and release remain the flows above.
-
-A capture's commit makes the host read as unchanged, so a rerun after a publish
-that did not finish captures nothing. With `-Publish` that run resumes the
-publish instead of stopping at "Nothing to capture": on a topic branch whose
-every commit beyond `origin/dev` has the subject capture gives its commits and
-changes only `windows/desired/**`, one confirmation (`Publish these commits?
-[y/N]`) pushes the branch unless `origin` already has it at that commit, opens
-or reuses the pull request against `dev`, and arms auto-merge. A branch whose
-push was rejected, one pushed by hand with no pull request, and one whose
-auto-merge was never armed all finish this way; run it on that branch. Any
-other commit on the branch refuses the run, so push it and open the pull
-request yourself. It never resumes on `dev` or `master`, and on `dev` it names
-a local `feature/windows-capture-<feature>` branch that still carries commits.
-The detached-HEAD, staged-change and uncommitted-payload refusals still apply.
-The resumed pull request says its commits came from an earlier run, and when
-nothing was pushed it says no pre-push hook ran rather than showing hook
-output.
-
-The local test verb leaves out the Pester cases that run `capture.ps1` end to
-end in a child PowerShell, and says which ones it skipped. Set
-`WIN_ENV_E2E=1` to run them; the `windows-latest` CI job does, so the merge
-gate covers them and a local push stays quick.
+The native Windows suite exercises host-original generation and capture in
+disposable fixtures. Foreign-host PowerShell results are fixture evidence;
+hosted native Windows checks remain the management-runtime gate.
 
 ## Common changes
 
@@ -904,3 +891,61 @@ Branch protection on `dev` and `master` requires the stable `Required checks`
 job. That job fails unless classification and secret scanning pass and every
 selected domain job succeeds. Conditional domain job names are deliberately
 not branch-protection contexts because unselected domains are skipped.
+
+## Bounded scheduled release
+
+During a maintainer-authorized shared-history replacement, keep
+`.github/workflows/release.yml` writes and schedules off until the new source,
+branch policies, credentials and notification delivery have been checked.
+`CONFIGS_RELEASE_ENABLED=1` enables manual operation and CI continuation. Keep
+`CONFIGS_RELEASE_SCHEDULE_ENABLED` off during that verification, then set it to
+`1` to enable schedules. Disable both during a shared-history replacement. Configure `release-control` for accepted
+master writer jobs without an extra approval requirement, and `release-approval`
+for master with required maintainer review. Approval jobs hold no writer
+concurrency or writer secret; candidate execution holds no writer credential.
+
+Reuse an equivalent existing `CONFIGS_RELEASE_TOKEN` Environment secret, or set
+`CONFIGS_RELEASE_APP_ID` and `CONFIGS_RELEASE_APP_PRIVATE_KEY` for a GitHub App
+installation on this repository. The writer needs Contents and Pull requests
+write plus Actions/Checks read, Workflows write when promoting workflow changes,
+and normal protected merges. It must not bypass
+Required checks. Do not use the default token to author automatic PRs: it can
+leave their CI awaiting approval. Platform authentication and Environment
+behavior: [GitHub token](https://docs.github.com/en/actions/concepts/security/github_token),
+[Environment protection](https://docs.github.com/en/actions/reference/workflows-and-actions/deployments-and-environments).
+
+05:00 Asia/Seoul refreshes only nixpkgs, home-manager, nix-darwin and nixos-wsl.
+06:00 opens promotion; until 07:00 pending refresh releases the runner. After
+07:00 current integrated dev may proceed, with its own matching Required checks
+and needed review. CI completion resumes the same bounded path. Schedules may
+be delayed by GitHub; no timer or guarantee of a missed-run recovery is added.
+
+Prepare a changed domain's `release.json` before promotion: exact previous tag,
+new version, change description, compatibility and migration text. A patch
+refresh writes only its fixed declaration and lock. Human Unix-like changes
+pending since the previous release prevent an automatic patch from relabeling
+them. Do not change version or evidence after CI merely to certify that CI.
+Write local/fixture evidence with the source; use current Actions/PR checks for
+remote evidence. A remote CI result requires no report-only follow-up commit.
+
+The one-time reconstruction adopted the verified endpoint and published the
+independent 1.0.0 tags. Its temporary CI range has been retired. Ordinary
+dev pushes and PRs use their actual event range. master is verified by its
+checked promotion PR and the actual merge parents/tree; duplicate master push
+CI is not run. The initial publication path is retired. Normal automation
+requires existing domain tags. A normal promotion records
+actual M's parents/tree against the checked PR, then publishes only its changed domains.
+A rerun reads existing remote tags, confirms targets and required annotation,
+and creates only missing tags. It never overwrites or requires a newly created
+tag object to have the old object's ID.
+
+If master moved and the original M cannot be determined, stop. Dispatch the
+workflow with `source` set to the original full SHA, using PR/Actions records
+as the human reference; Environment review is required again. Do not substitute
+current master for that source. Failed workflow notifications and Environment
+review requests are the initial alerts; verify actual maintainer delivery at
+live enablement. Full duplicate suppression is not a completion condition.
+
+Read-only diagnosis: `tool/configs release inspect` (returns disabled when off).
+The workflow calls the guarded `advance`, `refresh-pr` and reviewed `publish`
+operations. Those never activate a host or run Windows Apply.

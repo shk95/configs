@@ -10,8 +10,18 @@
 # rather than from a second input. claude-code is unfree, and
 # modules/flake/nixpkgs.nix allows that for every flavour.
 _: {
-  modules.homeManager.agents = {pkgs, ...}: {
-    home.packages = [
+  modules.homeManager.agents = {
+    pkgs,
+    lib,
+    config,
+    ...
+  }: {
+    options.providerTools.agents.enable = lib.mkOption {
+      type = lib.types.bool;
+      default = true;
+      description = "Install the shared coding agent command-line tools.";
+    };
+    config.home.packages = lib.optionals config.providerTools.agents.enable [
       pkgs.claude-code
       pkgs.codex
     ];

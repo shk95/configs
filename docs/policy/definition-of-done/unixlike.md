@@ -20,6 +20,8 @@ file, which every change owes.
       in-place migration fails closed (INV unixlike/generated-config-key-in-schema).
 - [ ] Activation is performed only when explicitly requested.
 - [ ] Runtime claims name the host on which they were observed.
-- [ ] A `unixlike-v...` tag is assigned only after required native evidence
-      is available, including `CHECKS_BUILD_ALL=1 unixlike/tool/checks/test`
-      on a matching host.
+- [ ] A `unixlike-v...` tag is assigned only after the affected public contract
+      and platform outputs have their selected native build evidence. Record
+      the exact selections and unavailable lanes; an unselected output has no
+      build claim. `CHECKS_BUILD_ALL=1 unixlike/tool/checks/test` is an optional
+      broader check, not a release prerequisite by itself.

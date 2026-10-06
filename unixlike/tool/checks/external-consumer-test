@@ -1,0 +1,124 @@
+#!/bin/sh
+# Exercise the connected mkHome API across a real, separately locked flake.
+set -eu
+. "$(CDPATH= cd -- "$(dirname -- "$0")" && pwd)/prerequisite"
+require_command nix jq
+cd "$(CDPATH= cd -- "$(dirname -- "$0")/../../.." && pwd)"
+provider_root=$PWD
+fixture_user=example
+candidate_dir=$(mktemp -d)
+candidate_dir=$(CDPATH= cd -- "$candidate_dir" && pwd -P)
+cp -R "$provider_root/unixlike" "$candidate_dir/unixlike"
+consumer_dir=$(mktemp -d)
+consumer_dir=$(CDPATH= cd -- "$consumer_dir" && pwd -P)
+trap 'rm -rf "$consumer_dir" "$candidate_dir"' EXIT
+
+cat > "$consumer_dir/flake.nix" <<EOF
+{
+  inputs.configs.url = "path:$candidate_dir?dir=unixlike";
+  inputs.nixpkgs.follows = "configs/nixpkgs";
+  outputs = {configs, ...}: let
+    contract = builtins.fromJSON (builtins.readFile (configs.outPath + "/api/contract.json"));
+    base = {
+      system = "x86_64-linux";
+      user = "example";
+      homeDirectory = "/home/$fixture_user";
+      git = {name = "Example"; email = "example@example.invalid";};
+      environment = {graphical = false; wsl = false;};
+    };
+    cli = configs.lib.mkHome base;
+    omitted = configs.lib.mkHome (builtins.removeAttrs base ["environment"]);
+    wsl = configs.lib.mkHome (base // {environment = {wsl = true;};});
+    override = configs.lib.mkHome (base // {
+      homeModules = [{home.stateVersion = "26.05"; home.sessionVariables.CONSUMER = "yes";}];
+    });
+  in {
+    homeConfigurations = {inherit cli omitted wsl override;};
+    probe = {
+      contractFormat = contract.formatVersion;
+      contractPath = contract.entryPoints.mkHome.path;
+      cli = {
+        system = cli.pkgs.stdenv.hostPlatform.system;
+        user = cli.config.home.username;
+        directory = cli.config.home.homeDirectory;
+        email = cli.config.programs.git.settings.user.email;
+        stateVersion = cli.config.home.stateVersion;
+        ghostty = cli.config.programs.ghostty.enable;
+        fontconfig = cli.config.fonts.fontconfig.enable;
+      };
+      omitted.ghostty = omitted.config.programs.ghostty.enable;
+      wsl = {
+        ghostty = wsl.config.programs.ghostty.enable;
+        fontconfig = wsl.config.fonts.fontconfig.enable;
+      };
+      override = {
+        stateVersion = override.config.home.stateVersion;
+        extension = override.config.home.sessionVariables.CONSUMER;
+      };
+    };
+    bad = {
+      missingHome = (configs.lib.mkHome (builtins.removeAttrs base ["homeDirectory"])).config.home.username;
+      unknown = (configs.lib.mkHome (base // {unknown = true;})).config.home.username;
+      retired = (configs.lib.mkHome (base // {host = {kind = "wsl";};})).config.home.username;
+      systemModules = (configs.lib.mkHome (base // {systemModules = [];})).config.home.username;
+      unknownEnvironment = (configs.lib.mkHome (base // {environment = {desktop = false;};})).config.home.username;
+      graphicalWsl = (configs.lib.mkHome (base // {environment = {wsl = true; graphical = true;};})).config.home.username;
+      relativeHome = (configs.lib.mkHome (base // {homeDirectory = "relative";})).config.home.homeDirectory;
+    };
+  };
+}
+EOF
+
+if ! lock_result=$(nix flake lock "path:$consumer_dir" 2>&1); then
+  printf '%s\n' "$lock_result" >&2
+  exit 1
+fi
+jq -e '.nodes.root.inputs.nixpkgs == ["configs", "nixpkgs"] and .nodes.configs.locked.dir == "unixlike"' "$consumer_dir/flake.lock" >/dev/null
+python_cmd=$(python_for_test)
+"$python_cmd" "$provider_root/unixlike/tool/contract-inspect" \
+  --candidate-tree "$candidate_dir/unixlike" \
+  --candidate-source-root "$candidate_dir" \
+  --candidate-lock "$consumer_dir/flake.lock" \
+  | jq -e --arg nar "$(jq -r '.nodes.configs.locked.narHash' "$consumer_dir/flake.lock")" \
+    '.candidate.lockVerified == true and .candidate.narHash == $nar' >/dev/null
+nix eval --json "path:$consumer_dir#probe" | jq -e --arg fixture_home "/home/$fixture_user" '
+  .contractFormat == 1 and .contractPath == "lib.mkHome" and
+  .cli.system == "x86_64-linux" and .cli.user == "example" and
+  .cli.directory == $fixture_home and
+  .cli.email == "example@example.invalid" and .cli.stateVersion == "25.11" and
+  .cli.ghostty == false and .cli.fontconfig == false and
+  .omitted.ghostty == true and .wsl.ghostty == false and .wsl.fontconfig == true and
+  .override.stateVersion == "26.05" and .override.extension == "yes"
+' >/dev/null
+nix eval --raw "path:$consumer_dir#homeConfigurations.cli.activationPackage.drvPath" >/dev/null
+
+refuse() {
+  name=$1 expected=$2
+  if result=$(nix eval --raw "path:$consumer_dir#bad.$name" 2>&1); then
+    printf 'external consumer: accepted %s\n' "$name" >&2
+    exit 1
+  fi
+  printf '%s\n' "$result" | grep -Fq "$expected" || {
+    printf 'external consumer: %s failed without %s\n%s\n' "$name" "$expected" "$result" >&2
+    exit 1
+  }
+}
+refuse missingHome "missing required field homeDirectory"
+refuse unknown "unknown"
+refuse retired "host"
+refuse systemModules "systemModules"
+refuse unknownEnvironment "desktop"
+refuse graphicalWsl "environment.graphical cannot be true"
+refuse relativeHome "homeDirectory"
+
+generated=$(nix eval --json --impure --expr 'import ./unixlike/api/contract.nix' | jq -S .)
+checked=$(jq -S . unixlike/api/contract.json)
+[ "$generated" = "$checked" ] || {
+  echo 'external consumer: checked contract data has drifted' >&2
+  exit 1
+}
+if [ "${1:-}" = --build ]; then
+  nix build --no-link "path:$consumer_dir#homeConfigurations.cli.activationPackage"
+fi
+printf 'candidate source: %s\n' "$(jq -r '.nodes.configs.locked.narHash' "$consumer_dir/flake.lock")"
+printf '✓ external standalone consumer, contract, derivation and refusals\n'

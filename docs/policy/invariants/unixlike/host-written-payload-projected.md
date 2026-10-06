@@ -1,9 +1,13 @@
 id: unixlike/host-written-payload-projected
-statement: A payload the host application rewrites in place is compared, applied and captured by one projection onto the members the payload declares; what else the host keeps in that file is runtime and is neither reported as drift nor captured.
+statement: Managed settings that a host application rewrites in place have one finite ownership declaration used by comparison, application, capture and consumption, with whole declared members replaced and undeclared runtime siblings excluded from drift and capture.
 rationale: docs/policy/architecture.md § Unix-like domain
 enforced-by: tool unixlike/modules/programs/karabiner/tool
 enforced-by: fixture unixlike/tool/checks/karabiner-test
-enforced-by: fixture tool/version-control/test
+enforced-by: fixture unixlike/tool/checks/karabiner-entry-test
+enforced-by: schema unixlike/tool/darwin-capture/engine.py
+enforced-by: schema unixlike/modules/programs/karabiner/module.nix
+enforced-by: fixture unixlike/tool/checks/darwin-capture-test.py
+enforced-by: fixture unixlike/tool/checks/darwin-capture-consumer-test
 decision: docs/policy/decisions/unixlike/karabiner-desired-state-by-projection.md § Karabiner desired state is compared and applied by projection
 
 Most Unix-like payloads are delivered as a link into the Nix store, so the
@@ -22,9 +26,8 @@ beneath it, and an undeclared member of the same document is left where it is.
 The fixture holds both directions, because either half alone is useless. A
 projection that reported the host's own runtime members would make every
 application save a drift; one that missed a changed declared member would make
-the payload decorative. The capture direction has a fixture of its own in
-`tool/version-control/test`, because the command that reads a projection back
-into the payloads is the commit helper rather than the projection tool.
+the payload decorative. The capture engine and consumer fixtures prove host-document handling
+independently of Git publication. The repository publication caller is retired.
 
 The first payload under this rule is Karabiner's, and the same rule covers the
 symbolic hotkey entries the input-source toggle depends on: there the declared
@@ -32,3 +35,16 @@ members are entry numbers in a dictionary the host holds dozens of entries in.
 The Windows domain reached the same rule from the other side and registered it
 separately as `INV windows/subset-owns-declared-keys`; the two are copies of one
 idea, each enforced by its own domain's tooling.
+
+Reconciled2026-09-30. Version-1 host-document management declares finite units in
+`unixlike/modules/programs/karabiner/units.json`, independent of present settings:
+Karabiner global/profiles parents and symbolic hotkey entries60/61. The new native
+adapter, capture engine and typed module consumption read that declaration.
+Active host documents replace whole units; configs source returns provider
+defaults while retaining dormant data. Disabled units do not load documents.
+Missing required parents/entries and unsupported deletion/reset shapes refuse.
+
+The legacy executable retains provider projection and comparison compatibility.
+The retired publication entry refuses arguments without reading host settings
+or performing Git mutation. Host-document capture and typed consumption use
+their declared finite units independently of that historical protocol.

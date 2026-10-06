@@ -16,19 +16,14 @@ root=$(git rev-parse --show-toplevel)
 cd "$root"
 
 usage() {
-  echo "usage: tool/configs plan-release <unixlike|windows|common> [commit] [YYYY.MM.DD]" >&2
+  echo "usage: tool/configs plan-release <unixlike|windows|common> [commit]" >&2
   exit 2
 }
 
-[ "$#" -ge 1 ] && [ "$#" -le 3 ] || usage
+[ "$#" -ge 1 ] && [ "$#" -le 2 ] || usage
 domain=$1
 commit=${2:-master}
-release_date=${3:-$(date +%Y.%m.%d)}
-
 case "$domain" in unixlike|windows|common) ;; *) usage ;; esac
-if ! printf '%s\n' "$release_date" | grep -Eq '^[0-9]{4}\.[0-9]{2}\.[0-9]{2}$'; then
-  usage
-fi
 
 git show-ref --verify --quiet refs/heads/master || {
   echo "master branch is unavailable" >&2
@@ -45,25 +40,16 @@ if ! git merge-base --is-ancestor "$target" master; then
   exit 1
 fi
 
-base="$domain-v$release_date"
-max=-1
-for tag in $(git tag --list "$base" "$base.*"); do
-  case "$tag" in
-    "$base") suffix=0 ;;
-    "$base".*) suffix=${tag#"$base".} ;;
-    *) continue ;;
-  esac
-  case "$suffix" in *[!0-9]*|"") continue ;; esac
-  if [ "$suffix" -gt "$max" ]; then
-    max=$suffix
-  fi
-done
-
-if [ "$max" -lt 0 ]; then
-  candidate=$base
-else
-  candidate="$base.$((max + 1))"
-fi
+# The source declaration fixes the publication input; retries never allocate
+# another version. This read-only command does not claim CI or approval.
+version=$(git show "$target:$domain/release.json" | python3 -c '
+import json, re, sys
+value = json.load(sys.stdin)
+version = value["version"]
+if not isinstance(version, str) or not re.fullmatch(r"(0|[1-9][0-9]*)\.(0|[1-9][0-9]*)\.(0|[1-9][0-9]*)", version):
+    raise SystemExit("invalid source-owned SemVer")
+print(version)')
+candidate="$domain-v$version"
 
 # Windows states evidence per host. The Unix-like provider and common domains
 # state it once; neither tag certifies a private host consumer.
