@@ -918,6 +918,9 @@ merge identity and publishes an immutable Unix-like tag. CI completion events
 resume scheduled operation; no 06/07 development-promotion stages or daily
 promotion limit remain. Delayed/missing schedules have no guaranteed catch-up.
 
+Master Unix-like configuration source must match its published release before
+input patching; finish any unpublished development release first.
+
 At most one master PR may be open. Finish an existing development promotion before
 starting input patching. Development remains topic-to-dev-to-master. Before a
 later dev promotion, incorporate accepted input patch commits through a reviewed
