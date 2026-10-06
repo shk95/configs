@@ -4,6 +4,7 @@ date: 2026-10-06
 scope: repository
 status: approved
 review-by: 2026-10-20
+issue: #520
 
 ## Implementation
 
