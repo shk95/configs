@@ -6,7 +6,7 @@ is recorded under `docs/policy/decisions/`; the model those decisions implement
 is `docs/policy/architecture.md`. The other scopes' state is in the files
 beside this one.
 
-## U1 source state
+## Released provider source
 
 This source revision exports typed `mkNixos`, `mkDarwin` and `mkHome` with
 independent WSL and graphical selection, native host module extension and
@@ -19,10 +19,23 @@ selection and lifecycle are also consumer-owned
 (`docs/policy/decisions/unixlike/public-environment-host-boundary.md`).
 
 The typed API and native preference overrides are implemented in this source.
-Matching-system qualification is still pending. Domain verification is recorded in
-`docs/work/unixlike/minimal-reconstruction/report.md`. Previous PR and host
-observations below describe old pins, not this new source. No host adoption or
-activation is performed by reconstruction.
+The annotated `unixlike-v1.0.0` release qualifies provider source
+`ca2da420882c6479f393cec22b6113c84da0fee4`: evaluation passed, selected
+matching-system provider fixture builds passed, and native runtime passed for
+the provider CI fixtures. The annotation links the
+[matching CI run](https://github.com/shk95/configs/actions/runs/37409358471)
+and records its candidate and identical release tree. These lanes do not
+certify every possible configuration or a private consumer output. Deployment
+was not performed by the release. This source qualification does not verify
+scheduled release operation: the schedule is enabled, but an actual scheduled
+run remains unobserved in the repository report
+(`docs/work/repository/minimal-reconstruction/report.md`, AC5).
+
+`docs/work/unixlike/minimal-reconstruction/report.md` retains its original
+checkpoint evidence and pending rows; release qualification is recorded by
+the annotation and matching CI run. Earlier PR and host observations below
+belong to their original pins and do not establish current consumer adoption
+or activation.
 
 ## Historical pre-U1 state and host evidence
 
