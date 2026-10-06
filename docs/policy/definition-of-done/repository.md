@@ -77,7 +77,7 @@ own list is the file named for it beside this one (`unixlike.md`,
 ## Dev-to-master promotion
 
 - [ ] The pull request is from this repository's `dev` to `master`, and no
-      other promotion pull request is open.
+      other master pull request is open.
 - [ ] `tool/configs plan-promotion` reports all commits and scopes.
 - [ ] The promotion contains no source fix authored only for the promotion.
 - [ ] `Required checks` passes and conversations are resolved.
@@ -85,6 +85,17 @@ own list is the file named for it beside this one (`unixlike.md`,
 - [ ] The merge is source acceptance, not domain certification or deployment.
 - [ ] Local and remote audits pass after merge; `master` is not reverse-merged
       into `dev` merely to carry the promotion merge commit.
+
+## Unix-like input patch
+
+- [ ] The same-repository patch head is one commit on the current master and
+      changes only permitted Unix-like lock data and its next patch declaration.
+- [ ] Exact PR CI evidence and the actual merge parents/tree agree; protection
+      and the one-open-master-PR rule are retained.
+- [ ] Developer promotion incorporates accepted input patch history; neither
+      dev integration nor Windows publication occurs in the patch controller.
+- [ ] The immutable annotation and interrupted-publication recovery satisfy the
+      release evidence items below; no host adoption or activation is inferred.
 
 ## Common domain
 

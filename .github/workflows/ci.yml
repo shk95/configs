@@ -264,10 +264,14 @@ jobs:
       REQUIRE_NATIVE: "1"
     steps:
       - uses: actions/checkout@v7
-      - name: Require same-repository dev source
+        with:
+          fetch-depth: 0
+      - name: Require dev promotion or a bounded Unix-like input patch
         env:
           PROMOTION_BASE_REF: ${{ github.base_ref }}
           PROMOTION_HEAD_REF: ${{ github.head_ref }}
+          PROMOTION_BASE_SHA: ${{ github.event.pull_request.base.sha }}
+          PROMOTION_HEAD_SHA: ${{ github.event.pull_request.head.sha }}
           PROMOTION_BASE_REPOSITORY: ${{ github.repository }}
           PROMOTION_HEAD_REPOSITORY: ${{ github.event.pull_request.head.repo.full_name }}
         run: tool/version-control/check-promotion
