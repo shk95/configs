@@ -26,9 +26,8 @@ beneath it, and an undeclared member of the same document is left where it is.
 The fixture holds both directions, because either half alone is useless. A
 projection that reported the host's own runtime members would make every
 application save a drift; one that missed a changed declared member would make
-the payload decorative. The capture direction has a fixture of its own in
-`tool/version-control/test`, because the command that reads a projection back
-into the payloads is the commit helper rather than the projection tool.
+the payload decorative. The capture engine and consumer fixtures prove host-document handling
+independently of Git publication. The repository publication caller is retired.
 
 The first payload under this rule is Karabiner's, and the same rule covers the
 symbolic hotkey entries the input-source toggle depends on: there the declared
@@ -45,20 +44,7 @@ Active host documents replace whole units; configs source returns provider
 defaults while retaining dormant data. Disabled units do not load documents.
 Missing required parents/entries and unsupported deletion/reset shapes refuse.
 
-The legacy executable and both historical fixtures remain exact compatibility
-enforcement for the existing provider-payload Git caller; they are not claimed as
-host-document contract consumers. Their payload-bound protocol and locator/tags
-remain until the separately owned caller retirement. Historical observations
-retain their original source binding.
-
-Reconciled 2026-10-01. Active host-document schema and capture/consumer fixtures
-above enforce the single finite unit declaration independently of the historical
-Git caller. The retired Justfile publication entry refuses legacy arguments
-without reading observations or inferring a host-document Save destination;
-its fixture also proves the retained comparison delegation. The registry detaches
-only the root legacy fixture locator before its separately owned tag/block
-retirement. That root fixture still exists and may name this registered invariant;
-its continued historical coverage does not make it an active host-document
-consumer. The domain legacy tool, project protocol and projection fixture remain
-unchanged and registered. Earlier payload-bound rationale and observations retain
-their original source meaning.
+The legacy executable retains provider projection and comparison compatibility.
+The retired publication entry refuses arguments without reading host settings
+or performing Git mutation. Host-document capture and typed consumption use
+their declared finite units independently of that historical protocol.
