@@ -13,18 +13,7 @@ for _, name in ipairs(modules) do
   require(name).apply_to_config(config)
 end
 
-local triple = wezterm.target_triple
-local platform
-
-if triple:find("windows") then
-  platform = "platform.windows"
-elseif triple:find("darwin") then
-  platform = "platform.darwin"
-else
-  platform = "platform.linux"
-end
-
-require(platform).apply_to_config(config)
+require("platform.windows").apply_to_config(config)
 
 local local_ok, local_config = pcall(require, "local")
 if local_ok and type(local_config) == "table" and local_config.apply_to_config then

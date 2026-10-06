@@ -21,6 +21,17 @@ capture are implemented here; native qualification remains a separate gate.
 See `host-generation-owns-selection.md` and `host-capture-owns-originals.md`
 under `docs/policy/decisions/windows/`, and `windows/examples/README.md`.
 
+## Windows-only WezTerm payload
+
+The provider WezTerm loader selects platform.windows directly. Linux and Darwin
+payloads and their managed unit declarations are removed from the Windows tree.
+Existing deployed copies are left unmanaged and are not automatically deleted;
+the Windows loader does not use them. Consumers pinned to windows-v1.0.0 may
+disable weztermLinux and weztermDarwin until explicitly adopting a later release.
+The release declaration proposes windows-v2.0.0 (breaking unit removal), based on
+windows-v1.0.0. No new tag is implied by the declaration. Native client
+qualification of this cleanup remains unverified; no Apply ran.
+
 ## Historical source and client observations
 
 The observations below belong to their dated provider payloads and client

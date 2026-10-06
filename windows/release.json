@@ -1,7 +1,7 @@
 {
-  "previous": "windows-v2026.08.31",
-  "version": "1.0.0",
-  "summary": "Selected host-owned Windows generation and application-original capture.",
+  "previous": "windows-v1.0.0",
+  "version": "2.0.0",
+  "summary": "Windows-only WezTerm configuration without unused Linux and Darwin units.",
   "compatibility": "breaking",
-  "migration": "Use version-1 host environment declarations and regenerate saved originals before Check or Apply."
+  "migration": "Remove weztermDarwin and weztermLinux declarations when adopting this release, then regenerate before Check or Apply. Existing deployed platform files are left unmanaged."
 }
