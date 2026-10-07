@@ -58,6 +58,47 @@ class ConditionalMergeFixtures(unittest.TestCase):
         self.assertFalse(m.REPO.fullmatch('shk95/configs/other'))
 
     # FIXTURE repository/conditional-protected-merge
+    def test_protection_check_fetches_repository_settings_without_trailing_slash(self):
+        repo_url = f'{m.API}/repos/shk95/configs'
+        protection_url = f'{repo_url}/branches/dev/protection'
+        pull_url = f'{repo_url}/pulls/17'
+        branch = {'required_status_checks': {
+            'strict': True, 'contexts': ['Required checks'],
+            'checks': [{'context': 'Required checks', 'app_id': m.APP_ID}]},
+            'enforce_admins': {'enabled': True},
+            'required_conversation_resolution': {'enabled': True},
+            'required_pull_request_reviews': {},
+            'allow_force_pushes': {'enabled': False}, 'allow_deletions': {'enabled': False}}
+        repository = {'allow_merge_commit': True, 'allow_squash_merge': False,
+                      'allow_rebase_merge': False}
+
+        class Endpoint:
+            def __init__(self):
+                self.urls = []
+
+            def open(self, request, timeout):
+                self.urls.append(request.full_url)
+                if request.full_url.endswith('/'):
+                    raise m.urllib.error.HTTPError(request.full_url, 404, 'Not Found', None, io.BytesIO())
+                responses = {protection_url: branch, repo_url: repository,
+                             pull_url: {'number': 17}}
+                if request.full_url not in responses:
+                    raise AssertionError(f'unexpected GitHub API URL: {request.full_url}')
+                return io.BytesIO(json.dumps(responses[request.full_url]).encode())
+
+        endpoint = Endpoint()
+        api = m.GitHub('fixture-token', 'shk95/configs')
+        with patch.object(m.urllib.request, 'build_opener', return_value=endpoint):
+            m.validate_protection(api, 'dev')
+            self.assertEqual(api.request('pulls/17'), {'number': 17})
+            with self.assertRaises(m.urllib.error.HTTPError) as error:
+                endpoint.open(m.urllib.request.Request(repo_url + '/'), timeout=30)
+
+        self.assertEqual(error.exception.code, 404)
+        error.exception.close()
+        self.assertEqual(endpoint.urls, [protection_url, repo_url, pull_url, repo_url + '/'])
+
+    # FIXTURE repository/conditional-protected-merge
     def test_source_archive_is_bounded_and_binds_event_base_head_and_tree(self):
         record = {'event': 'pull_request', 'base': 'a' * 40, 'head': 'b' * 40, 'tree': 'c' * 40}
         self.assertEqual(m.source_identity(archive(record)), record)

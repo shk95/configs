@@ -31,7 +31,12 @@ class GitHub:
         self.token, self.repo = token, repo
 
     def request(self, path, method='GET', data=None, binary=False):
-        url = path if path.startswith('https://') else f'{API}/repos/{self.repo}/{path.lstrip("/")}'
+        if path.startswith('https://'):
+            url = path
+        else:
+            endpoint = f'{API}/repos/{self.repo}'
+            route = path.lstrip('/')
+            url = f'{endpoint}/{route}' if route else endpoint
         headers = {'Accept': 'application/vnd.github+json', 'Authorization': f'Bearer {self.token}',
                    'X-GitHub-Api-Version': API_VERSION, 'User-Agent': 'configs-conditional-merge'}
         payload = None if data is None else json.dumps(data).encode()
