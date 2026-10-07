@@ -55,3 +55,23 @@ are separate. Manual qualification never proves the scheduled trigger.
 
 Domain ownership and current host/native evidence remain in the domain status
 files. A repository change has no configuration output or domain release tag.
+
+## Work-role source separation
+
+On 2026-10-07 the maintainer requested Codex-only extraction into Agent Rack's
+existing Work Cycle package. The prepared configs worktree removes six tracked
+role skills, one Claude workflow adapter and two command aliases. Policy,
+contributor procedures, tools, hooks, CI and native checkpoint behavior remain
+project-owned and usable without an installed replacement. Local ignored
+Context Bridge data is preserved. Existing Claude instruction and permission
+files provide no replacement plugin connection.
+
+Agent Rack's previous extraction was remote-first and referred to retired
+conditional integration behavior. Its 0.3.0 source preparation refreshes the
+six roles from configs 4c72b000ad23b2a32c564c6f907192bd34f82870, retains
+historical imports and defers Claude packaging. Publication, installation,
+actual installed-host discovery and consumer adoption have not happened.
+The maintainer subsequently authorized committing and integrating the configs
+result into local dev. Agent Rack's separate source changes remain uncommitted;
+external distribution and consumer adoption are separate operations.
+See docs/work/repository/codex-work-cycle-extraction/report.md for evidence.

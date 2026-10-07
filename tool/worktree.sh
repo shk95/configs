@@ -14,7 +14,7 @@
 # They share .git, so `core.hooksPath` carries over — a new worktree has working
 # hooks with no setup.
 #
-# Removal requires reclaim-workspaces review and explicit authorization.
+# Removal requires contributor preservation review and explicit authorization.
 # Integration or a remote copy can preserve delivery; a clean worktree alone
 # does not prove that newer local commits or ignored files are disposable.
 # This low-level helper performs non-force removal, not an eligibility check.

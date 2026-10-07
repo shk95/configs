@@ -120,11 +120,11 @@ and push a tag only when the user explicitly requests those mutations. Create
 no GitHub Release: the annotation is the whole record. Activation and Windows
 Apply happen after release and are not implied by a tag.
 
-For agent-assisted work, invoke `run-version-control-workflow`. Its canonical
-Agent Skills implementation is under `.agents/skills/`; model-specific
-discovery files are adapters only. Audit and release planning are read-only by
-default. This document remains the human fallback and the contract the skill
-executes.
+Agents and people follow this document and tool/configs directly. There are no
+tracked local work-role skills or workflow command aliases. External workflow
+plugins are optional and must read the target policy; no replacement is
+installed by source separation. Audit and release planning are read-only by
+default. Installation and verified invocation are later consumer adoption.
 
 ### zellij overlay
 
@@ -167,13 +167,14 @@ default branch, so the watcher does nothing until this file reaches `master`
 through the next promotion; before that its shell body is run by hand with
 `DRY_RUN=1`.
 
-## Agent roles and handoff
+## Local work and handoff
 
-Use project-local skills. plan-work inspects existing plans and defines
-acceptance when needed. execute-work pins local dev and the reviewed plan,
-works in its dedicated worktree and records actual evidence. integrate-work
-reviews a local candidate and integrates its verified SHA sequentially.
-Explicit user Git authorization carries through the agreed task.
+Inspect existing work with tool/configs records --table work. Define acceptance
+using "Plan and verify work" when needed. Pin local dev and the reviewed plan,
+use a dedicated worktree, run the relevant checks and record actual evidence.
+Review exact candidate/base SHA and perform sequential integration using
+"Local integration and completion". Explicit user Git authorization carries
+through the agreed task; these procedures require no installed plugin.
 
 Use `tool/configs session start <spec-path-or-> <lane>` for a useful local
 checkpoint. Before interruption, `session checkpoint suspended` records the
@@ -181,11 +182,12 @@ goal, exact state, evidence, unfinished work and next step. A checkpoint is
 neither a heartbeat nor proof of delivery. Changed acceptance returns to
 planning; uncertain liveness does not authorize cleanup.
 
-inspect-work reads requested local handoffs. Remote status is optional and
-must be relevant to an explicit remote operation. reclaim-workspaces reviews
-unpushed/unique commits and tracked, untracked and ignored data before any
-requested non-force removal. Do not read notes/ content. Keep useful old
-worktrees; a clean diff is not preservation evidence. No automatic pruning.
+Use tool/configs session inspect and read-only Git state for requested local
+handoffs. Remote status is optional and must be relevant to an explicit remote
+operation or preservation review. Review unpushed/unique commits and tracked,
+untracked and ignored data before any requested non-force removal. Do not read
+notes/ content. Keep useful old worktrees; a clean diff is not preservation
+evidence. No automatic pruning.
 
 ## GitHub integration
 
@@ -233,14 +235,13 @@ Before adding a rule, write a small governance decomposition:
 2. State rationale and tool-independent invariants.
 3. Define human prerequisites, ordered steps, recovery, and authorization
    boundaries without adding obligations absent from the policy.
-4. Assign repeatable orchestration to a canonical skill and deterministic
-   decisions to tools, hooks, CI, or remote settings.
+4. Assign reusable orchestration to its owning external plugin and
+   deterministic decisions to tools, hooks, CI, or remote settings.
 5. Define evidence, positive and negative fixtures, current migration state,
    and the condition for removing superseded implementation.
 
-Use `design-project-governance` from the sibling `skills` project to perform
-this decomposition. The skill owns only the generic method; this repository
-owns the result. A product-specific adapter must not own any part of either.
+This repository owns the decomposition and its project decisions. External
+workflow instructions resolve those decisions instead of copying their policy.
 
 ## Add or change an invariant
 

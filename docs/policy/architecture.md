@@ -371,9 +371,13 @@ integration complete development; remote push, protected master acceptance
 and domain releases are later operations. Checkpoints preserve interrupted
 work without proving liveness or authorizing deletion.
 
-The canonical agent workflow follows the Agent Skills open standard under
-`.agents/skills/`. Product-specific discovery locations may contain thin
-adapters, but they do not own or duplicate the workflow.
+Reusable work-role orchestration is maintained in the external Agent Rack
+Work Cycle plugin. This repository owns policy, contributor procedures and
+deterministic tools; they remain usable without an installed plugin. No tracked
+local work-role skills, workflow aliases or plugin connection are supplied.
+Installation and invocation are an explicit later adoption, never an implicit
+source dependency. Model-specific instruction files carry no independent policy.
+See docs/policy/decisions/repository/external-work-role-orchestration.md.
 
 Master branch protection consumes one stable CI contract named `Required checks`.
 The gate validates classification, the repository-wide secret scan, and each

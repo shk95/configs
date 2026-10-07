@@ -39,8 +39,9 @@ own list is the file named for it beside this one (`unixlike.md`,
 - [ ] An unrelated domain failure is not required to validate a domain change.
 - [ ] Master CI exposes the stable `Required checks` gate and master protection
       requires it instead of conditional domain job names.
-- [ ] Model-specific skill locations only discover the canonical Agent Skills
-      workflow and do not duplicate its policy (INV repository/adapters-pointer-only).
+- [ ] Model-specific context, command and skill files point to authoritative
+      project guidance or explicitly adopted skill sources and add no
+      independent policy (INV repository/adapters-pointer-only).
 - [ ] A reviewer confirms documented repository operator commands use
       `tool/configs`, hooks and CI call implementation tools directly, and
       neither operator entry point crosses into another domain's deployment
@@ -134,9 +135,9 @@ own list is the file named for it beside this one (`unixlike.md`,
       `accepted`.
 - [ ] A recurring issue is indexed in `docs/reference/troubleshooting.md` by its literal
       symptom.
-- [ ] A canonical skill lives in the owning project or an explicitly adopted
-      shared-skill project; model-specific adapters contain no independent
-      project judgement.
+- [ ] Reusable role skills remain in their owning external plugin; project
+      procedure stays usable without installation and model-specific
+      instructions contain no independent project judgement.
 
 ## Release evidence
 
