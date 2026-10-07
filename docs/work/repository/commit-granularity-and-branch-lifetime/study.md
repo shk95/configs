@@ -32,7 +32,7 @@ What is actually enforced is narrower than it looks:
   A milestone-named branch satisfies it unchanged.
 - `.githooks/pre-commit` refuses a commit only when a staged path has no
   owning scope. Nothing counts scopes, so a two-scope commit passes the gate.
-- `INV repository/publish-through-dev` requires one pull request against
+- `retired invariant repository/publish-through-dev` requires one pull request against
   `dev` from a topic branch. It says nothing about the branch's age or how
   many commits it carries.
 - `INV repository/conventional-subject` holds the subject to seventy-two
@@ -129,7 +129,7 @@ things stop it. `.github/workflows/ci.yml` triggers on pull requests whose
 base is `master` or `dev`, so a pull request between topic branches runs no
 job at all, and branch protection guards only those two branches; the
 intermediate step would land with no gate. And
-`INV repository/publish-through-dev` states that a published change reaches
+`retired invariant repository/publish-through-dev` states that a published change reaches
 shared history through one pull request against `dev`, with the helper
 refusing a head already proposed against another base. Stacking would need
 both the workflow and that invariant changed, which is a larger change than

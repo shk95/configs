@@ -37,7 +37,7 @@ own list is the file named for it beside this one (`unixlike.md`,
 - [ ] Version-control fixture tests cover every changed invariant.
 - [ ] A Windows-only change can be prepared and checked without Nix.
 - [ ] An unrelated domain failure is not required to validate a domain change.
-- [ ] CI exposes the stable `Required checks` gate and branch protection
+- [ ] Master CI exposes the stable `Required checks` gate and master protection
       requires it instead of conditional domain job names.
 - [ ] Model-specific skill locations only discover the canonical Agent Skills
       workflow and do not duplicate its policy (INV repository/adapters-pointer-only).
@@ -83,8 +83,8 @@ own list is the file named for it beside this one (`unixlike.md`,
 - [ ] `Required checks` passes and conversations are resolved.
 - [ ] The pull request uses a merge commit and explicit merge authorization.
 - [ ] The merge is source acceptance, not domain certification or deployment.
-- [ ] Local and remote audits pass after merge; `master` is not reverse-merged
-      into `dev` merely to carry the promotion merge commit.
+- [ ] Actual merge is confirmed; current master history can be reflected at
+      the next local work/promotion synchronization.
 
 ## Unix-like input patch
 
@@ -157,14 +157,14 @@ own list is the file named for it beside this one (`unixlike.md`,
 - [ ] Tag creation and push each have explicit authorization.
 - [ ] Activation or Apply is reported separately and is not implied by the tag.
 
-## Agent delivery and recovery
+## Local delivery and recovery
 
-- [ ] A reviewer confirms the worker hands off a remote feature branch and PR,
-      integration enumerates GitHub candidates, and dev protection still
-      requires PR/check admission without an agent bypass
-      (INV repository/pr-integration-authority).
-- [ ] Interrupted workers have a useful checkpoint; local liveness is not
-      inferred from age, and cleanup considers unpushed and ignored data.
+- [ ] The integrator confirms exact candidate/base SHA, relevant combined-result
+      checks, clean worktrees and sequential ff-only dev integration
+      (INV repository/local-development-integration).
+- [ ] Local completion is independent of push, issue or PR state.
+- [ ] Interrupted work has a useful checkpoint; cleanup reviews unique commits
+      and ignored data, never inferring liveness or deletion permission.
 
 ## Terminal work archival
 

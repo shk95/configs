@@ -15,7 +15,7 @@
 # hooks with no setup.
 #
 # Removal requires reclaim-workspaces review and explicit authorization.
-# A remote branch and PR can preserve delivery before merge; a merged PR alone
+# Integration or a remote copy can preserve delivery; a clean worktree alone
 # does not prove that newer local commits or ignored files are disposable.
 # This low-level helper performs non-force removal, not an eligibility check.
 
@@ -58,13 +58,14 @@ case "${1:-}" in
     case "$kind" in feature|fix) ;; *) echo "kind must be feature or fix" >&2; exit 1 ;; esac
     validate_name "$name"
 
-    git fetch -q origin "$integration"
-    git worktree add -b "$kind/$name" "$wt_root/$kind-$name" "origin/$integration"
+    # INV repository/local-development-integration
+    git rev-parse --verify "refs/heads/$integration^{commit}" >/dev/null
+    git worktree add -b "$kind/$name" "$wt_root/$kind-$name" "$integration"
 
     echo
     echo "Worktree ready:"
     echo "  cd $wt_root/$kind-$name"
-    echo "  branch $kind/$name (from origin/$integration)"
+    echo "  branch $kind/$name (from local $integration)"
     ;;
 
   list)

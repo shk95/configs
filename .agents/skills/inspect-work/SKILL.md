@@ -1,27 +1,16 @@
 ---
 name: inspect-work
-description: Report worker workspace handoffs and GitHub work status read-only, distinguish uncertain session liveness, and provide verified resume guidance.
+description: Inspect local work and useful handoffs read-only; query remote state when relevant.
 ---
 
-# Inspect work
+# inspect work
 
-Run tool/configs session inspect for local worker checkpoints. Read only the
-worktree root's .work-session.md and Git state; notes/ remains out of bounds.
-A missing checkpoint is unknown, not idle. A stale timestamp or absent process
-is insufficient proof that a worker is finished. An active marker is an intent
-record, not a heartbeat. Report contradictions and ask the operator to identify
-ownership before another writer enters that worktree.
+Read requested worktree Git state and useful checkpoints with session inspect.
+Report base/head, tracked/index/untracked/ignored state and unfinished work.
+Do not read notes/. A checkpoint is not proof of liveness or integration.
 
-Query GitHub separately for linked plans/issues/PRs, Draft/Ready, current checks,
-reviews, dependencies and merge result. Do not copy these fields into local
-session notes. Report two views: recoverable local execution and remote
-integration; make missing or inaccessible remote information explicit.
-
-Where a recorded Codex session ID is valid, the command prints codex -C <path>
-resume <id>. It is guidance, not evidence the session is running or resumable.
-For another client or missing ID, print the worktree path and handoff rather
-than inventing a command. Never resume or mutate a worker while only reporting.
-
-For possible cleanup, pass the evidence to reclaim-workspaces. The worktree
-inventory is permitted here for execution-space management, never integration
-candidate selection.
+Local completion may be ahead of the remote. Do not turn missing PRs, open
+issues or absent remote branches into incomplete local development. Query
+GitHub only for requested remote inspection or relevant preservation evidence.
+Resume guidance needs verified identity and actual current state; preserve
+unknown ownership instead of inferring a live or dead session.

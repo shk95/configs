@@ -31,7 +31,7 @@ env:
 
 jobs:
   prepare:
-    if: github.event_name != 'schedule' || vars.CONFIGS_RELEASE_SCHEDULE_ENABLED == '1'
+    if: (github.event_name != 'schedule' || vars.CONFIGS_RELEASE_SCHEDULE_ENABLED == '1') && (github.event_name != 'workflow_run' || (github.event.workflow_run.event == 'pull_request' && github.event.workflow_run.conclusion == 'success'))
     runs-on: ubuntu-latest
     outputs:
       action: ${{ steps.plan.outputs.action }}
@@ -91,7 +91,19 @@ jobs:
           install_url: https://releases.nixos.org/nix/nix-2.34.8/install
           extra_nix_config: 'experimental-features = nix-command flakes'
       - name: Refresh permitted inputs without writer credentials
-        run: unixlike/tool/refresh-inputs --input nixpkgs --input home-manager --input nix-darwin --input nixos-wsl
+        shell: bash
+        run: |
+          mapfile -t inputs < <(python3 - <<'PY'
+          import json
+          from pathlib import Path
+          for name in json.loads(Path('unixlike/automatic-refresh-inputs.json').read_text()):
+              print(name)
+          PY
+          )
+          args=()
+          for input in "${inputs[@]}"; do args+=(--input "$input"); done
+          test "${#args[@]}" -gt 0
+          unixlike/tool/refresh-inputs "${args[@]}"
       - uses: actions/upload-artifact@v7
         with:
           name: refreshed-lock

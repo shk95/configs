@@ -9,10 +9,9 @@ work item is one directory, `docs/work/<scope>/<slug>/`:
 | `report.md` | fixed | for each acceptance criterion, its state and the evidence behind it |
 | `study.md` | optional | what was measured and argued before a spec existed |
 
-An issue holds what changes while the work runs — the increments as a
-checklist, their order, blockers, links to pull requests. It carries no
-acceptance criteria and is never a source of evidence; what matters after it
-closes is written into the report.
+An optional issue may link work and dependencies. It does not hold acceptance
+criteria, evidence or the completion authority. Small unambiguous local work
+may use a concise result instead of a tracked pair.
 
 A work document is not policy. It binds only the work it describes. A durable
 rule it produces belongs in a decision record or invariant, and a temporary
@@ -56,8 +55,8 @@ Carry the evidence and report changes with the result that produced them
 (INV repository/pull-request-spans-an-evidence-lane).
 
 The planner defines pickup lanes with outcome, scope, dependencies, inputs,
-acceptance, verification and replan conditions. The execution issue lists
-these lanes without duplicating PR states or evidence. At pickup the worker
+acceptance, verification and replan conditions. An optional execution issue may link
+these outcomes without becoming a mandatory remote step. At pickup the worker
 records the current dev base separately from the reviewed plan revision and
 checks assumptions. Scope or acceptance changes return to the planner after a
 checkpoint. A standalone plan needs no roadmap entry; small single-criterion

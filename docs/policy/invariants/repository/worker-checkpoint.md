@@ -9,4 +9,4 @@ The local tool cannot prove session liveness or semantic completeness of a
 handoff. The role skills require reviewing Git and remote evidence before
 resuming or reclaiming a workspace. Missing local state is unknown, never
 proof of completed delivery. Role adherence itself is agent procedure, not an
-OS sandbox or credential boundary; protected dev supplies the remote gate.
+OS sandbox or credential boundary; local dev preserves integration, while protected master supplies remote admission.
