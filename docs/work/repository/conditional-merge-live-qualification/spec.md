@@ -22,7 +22,7 @@ protected PR #539. Its topic merge commit is
 `07c4ff8325e38568afa4c0d8845117ff3164909a`. Bootstrap promotion PR #540 has
 since merged that accepted `dev` revision to `master` as
 `6c60f37d5e8ebb31f7b69c84eb0a65affb57b9bf`; its Required checks passed in
-run `37557373470`, and workflow registration run `376977835` is active. This
+run `37557373470`, and workflow `376977835` is active. This
 bootstrap is not the separate meaningful master-promotion trial in AC3. The
 workflow dispatch must select the accepted `dev` revision; do not infer
 registration from its presence on `dev`.
