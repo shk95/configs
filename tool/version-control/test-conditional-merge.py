@@ -12,6 +12,7 @@ import shutil
 import tempfile
 import subprocess
 import unittest
+import datetime as dt
 from unittest.mock import Mock, patch
 import zipfile
 
@@ -19,6 +20,7 @@ ROOT = Path(__file__).resolve().parents[2]
 spec = importlib.util.spec_from_file_location('conditional_merge', ROOT / 'tool/version-control/conditional-merge.py')
 m = importlib.util.module_from_spec(spec)
 spec.loader.exec_module(m)
+NOW = lambda: dt.datetime.now(dt.timezone.utc).isoformat().replace('+00:00', 'Z')
 
 
 def archive(record):
@@ -81,6 +83,15 @@ class ConditionalMergeFixtures(unittest.TestCase):
             ('GET', 'actions/artifacts/40/zip'): archive({'event': 'pull_request', 'base': request['base'], 'head': request['head'], 'tree': tree})})
         self.assertEqual(m.source_run(good, request, tree), (run, 'success'))
 
+        stale_base = API({
+            ('PAGES', f"actions/workflows/ci.yml/runs?head_sha={request['head']}&event=pull_request&per_page=100"): [run],
+            ('PAGES', f"commits/{request['head']}/check-runs?per_page=100"): [check],
+            ('PAGES', 'actions/runs/20/artifacts?per_page=100'): [{'id': 40, 'name': 'ci-source', 'expired': False}],
+            ('GET', 'actions/artifacts/40/zip'): archive({'event': 'pull_request', 'base': 'e' * 40,
+                'head': request['head'], 'tree': tree})})
+        with self.assertRaisesRegex(ValueError, 'identity does not match'):
+            m.source_run(stale_base, request, tree)
+
         newer_pending = {**run, 'id': 21, 'status': 'in_progress', 'conclusion': None}
         stale = API({
             ('PAGES', f"actions/workflows/ci.yml/runs?head_sha={request['head']}&event=pull_request&per_page=100"): [run, newer_pending]})
@@ -136,6 +147,14 @@ class ConditionalMergeFixtures(unittest.TestCase):
             ('PAGES', 'pulls/17/reviews?per_page=100'): [],
             'branches/dev/protection': {'required_pull_request_reviews': {'required_approving_review_count': 0}}})
         self.assertTrue(m.read_pr(api, request)['_conditional_waiting'])
+        behind = json.loads(json.dumps(pr))
+        behind.pop('_conditional_waiting', None)
+        behind['mergeable'] = True
+        behind['mergeable_state'] = 'behind'
+        self.assertFalse(m.read_pr(API({**api.values, 'pulls/17': behind}), request,
+                                   allow_dev_chain=True).get('_conditional_waiting', False))
+        with self.assertRaisesRegex(ValueError, 'behind its target'):
+            m.read_pr(API({**api.values, 'pulls/17': behind}), request)
         conflict = json.loads(json.dumps(pr))
         conflict['mergeable'] = False
         conflict['mergeable_state'] = 'dirty'
@@ -149,7 +168,7 @@ class ConditionalMergeFixtures(unittest.TestCase):
                   'base': {'ref': 'dev', 'sha': 'c' * 40, 'repo': {'full_name': request['repo']}},
                   'head': {'ref': 'feature/topic', 'sha': request['head'], 'repo': {'full_name': request['repo']}}}
         self.assertEqual(m.read_pr(API({'pulls/17': merged}), request), merged)
-        for field, value in (('head_sha', 'd' * 40), ('base_ref', 'master'), ('repo', 'fork/configs')):
+        for field, value in (('base_ref', 'master'), ('repo', 'fork/configs')):
             pr = json.loads(json.dumps(merged))
             if field == 'head_sha':
                 pr['head']['sha'] = value
@@ -183,7 +202,9 @@ class ConditionalMergeFixtures(unittest.TestCase):
                'head_branch': 'dev', 'head_sha': 'a' * 40, 'status': 'in_progress',
                'created_at': '2026-10-06T12:00:00Z'}
         api.values['actions/runs/1'] = run
-        with patch.object(m, 'branch_sha', return_value='d' * 40), self.assertRaisesRegex(ValueError, 'no longer current'):
+        with patch.object(m, 'branch_sha', return_value='d' * 40), \
+             patch.object(m.subprocess, 'run', return_value=type('Result', (), {'returncode': 0})()), \
+             patch.object(m, 'is_ancestor', return_value=False), self.assertRaisesRegex(ValueError, 'not an ancestor'):
             m.verify_accepted_run(api, '1')
         with patch.dict(os.environ, {'CONFIGS_MERGE_ACTORS': 'maintainer'}):
             with self.assertRaisesRegex(ValueError, 'not in CONFIGS_MERGE_ACTORS'):
@@ -194,7 +215,9 @@ class ConditionalMergeFixtures(unittest.TestCase):
                 {'actor': {'login': 'maintainer'}})
         run['status'] = 'completed'
         api.values['actions/runs/1'] = run
-        with patch.object(m, 'branch_sha', return_value='a' * 40), self.assertRaisesRegex(ValueError, 'not active'):
+        with patch.object(m, 'branch_sha', return_value='a' * 40), \
+             patch.object(m.subprocess, 'run', return_value=type('Result', (), {'returncode': 0})()), \
+             self.assertRaisesRegex(ValueError, 'not active'):
             m.verify_accepted_run(api, '1')
 
     # FIXTURE repository/conditional-protected-merge
@@ -231,13 +254,44 @@ class ConditionalMergeFixtures(unittest.TestCase):
             m.check_reviews(api, request, {}, set())
 
     # FIXTURE repository/conditional-protected-merge
+    def test_approval_on_original_head_does_not_satisfy_integration_head_and_changes_request_persists(self):
+        request = {'pr': 17, 'target': 'dev', 'base': 'a' * 40, 'head': 'b' * 40, 'repo': 'shk95/configs'}
+        current_pr = {'head': {'sha': 'c' * 40}}
+        old_approval = {'user': {'login': 'reviewer'}, 'state': 'APPROVED',
+                        'commit_id': request['head'], 'submitted_at': '2026-10-06T09:00:00Z'}
+        api = API({('PAGES', 'pulls/17/reviews?per_page=100'): [old_approval],
+                   'branches/dev/protection': {'required_pull_request_reviews': {'required_approving_review_count': 1}}})
+        with self.assertRaisesRegex(ValueError, 'approvals'):
+            m.check_reviews(api, request, current_pr, set())
+        api.values[('PAGES', 'pulls/17/reviews?per_page=100')] = [
+            {**old_approval, 'state': 'CHANGES_REQUESTED', 'submitted_at': '2026-10-06T10:00:00Z',
+             'commit_id': 'c' * 40},
+            {'user': old_approval['user'], 'state': 'COMMENTED', 'commit_id': 'c' * 40,
+             'submitted_at': '2026-10-06T11:00:00Z'}]
+        with self.assertRaisesRegex(ValueError, 'outstanding change request'):
+            m.check_reviews(api, request, current_pr, set())
+
+    # FIXTURE repository/conditional-protected-merge
+    def test_submit_refuses_any_source_head_other_than_reviewed_SHA(self):
+        args = type('Args', (), {'confirm': True, 'pr': 17, 'target': 'dev', 'head': 'b' * 40,
+                                 'base': 'a' * 40})()
+        api = API()
+        with patch.dict(os.environ, {'GH_TOKEN': 'fixture'}), patch.object(m, 'repo_name', return_value='shk95/configs'), \
+             patch.object(m, 'GitHub', return_value=api), \
+             patch.object(m, 'read_pr', return_value={'head': {'sha': 'c' * 40}}):
+            with self.assertRaisesRegex(ValueError, 'reviewed source SHA'):
+                m.submit(args)
+        self.assertFalse(any(call[1] == 'POST' for call in api.calls))
+
+    # FIXTURE repository/conditional-protected-merge
     def test_ambiguous_dispatch_is_never_retried(self):
         args = type('Args', (), {'confirm': True, 'pr': 17, 'target': 'dev', 'head': 'b' * 40,
                                  'base': 'a' * 40})()
         api = API()
         api.request = Mock(side_effect=m.urllib.error.URLError('timed out'))
         with patch.dict(os.environ, {'GH_TOKEN': 'fixture'}), patch.object(m, 'repo_name', return_value='shk95/configs'), patch.object(m, 'GitHub', return_value=api), \
-             patch.object(m, 'read_pr', return_value={'number': 17}), patch.object(m, 'branch_sha', return_value='a' * 40), \
+             patch.object(m, 'read_pr', return_value={'number': 17, 'head': {'sha': 'b' * 40}}), \
+             patch.object(m, 'branch_sha', return_value='a' * 40), \
              patch('builtins.print'):
             with self.assertRaisesRegex(ValueError, 'inspect Actions before retrying'):
                 m.submit(args)
@@ -247,8 +301,9 @@ class ConditionalMergeFixtures(unittest.TestCase):
     def test_write_orchestration_submits_once_only_after_exact_ci_and_protection(self):
         request = {'pr': 17, 'target': 'dev', 'head': 'b' * 40, 'base': 'a' * 40}
         args = type('Args', (), {'run_id': '99', **request})()
-        active = {'created_at': '2026-10-06T12:00:00Z'}
-        open_pr = {'state': 'open', 'merged_at': None, '_conditional_waiting': False}
+        active = {'created_at': NOW()}
+        open_pr = {'state': 'open', 'merged_at': None, '_conditional_waiting': False,
+                   'head': {'sha': request['head']}, 'base': {'sha': request['base']}}
         merged_pr = {'state': 'closed', 'merged_at': '2026-10-06T12:02:00Z',
                      'head': {'sha': request['head']}, 'merge_commit_sha': 'c' * 40}
         api = API({'pulls/17': merged_pr})
@@ -262,6 +317,7 @@ class ConditionalMergeFixtures(unittest.TestCase):
              patch.object(m, 'check_independent_shape'), \
              patch.object(m, 'read_pr', side_effect=[open_pr, open_pr, open_pr]), \
              patch.object(m, 'branch_sha', return_value=request['base']), \
+             patch.object(m, 'validate_dev_chain', return_value=0), patch.object(m, 'is_ancestor', return_value=True), \
              patch.object(m, 'sha256_tree', return_value='d' * 40), \
              patch.object(m, 'source_run', return_value=({'id': 10}, 'success')), \
              patch.object(m, 'finish', return_value='confirmed'), patch.object(m.time, 'monotonic', return_value=1):
@@ -274,8 +330,9 @@ class ConditionalMergeFixtures(unittest.TestCase):
     def test_write_orchestration_refuses_new_ci_failure_and_timeout_without_merge(self):
         request = {'pr': 17, 'target': 'dev', 'head': 'b' * 40, 'base': 'a' * 40}
         args = type('Args', (), {'run_id': '99', **request})()
-        active = {'created_at': '2026-10-06T12:00:00Z'}
-        pr = {'state': 'open', 'merged_at': None, '_conditional_waiting': False}
+        active = {'created_at': NOW()}
+        pr = {'state': 'open', 'merged_at': None, '_conditional_waiting': False,
+              'head': {'sha': request['head']}, 'base': {'sha': request['base']}}
         base_api = API()
         env = {'GITHUB_RUN_ID': '99', 'GITHUB_REPOSITORY': 'shk95/configs', 'GITHUB_ACTOR': 'maintainer',
                'GH_TOKEN': 'fixture', 'CONFIGS_MERGE_ENABLED': '1'}
@@ -283,6 +340,7 @@ class ConditionalMergeFixtures(unittest.TestCase):
              patch.object(m, 'GitHub', return_value=base_api), patch.object(m, 'verify_accepted_run', return_value=active), \
              patch.object(m, 'validate_actor'), patch.object(m, 'validate_protection'), patch.object(m, 'check_independent_shape'), \
              patch.object(m, 'read_pr', return_value=pr), patch.object(m, 'branch_sha', return_value=request['base']), \
+             patch.object(m, 'validate_dev_chain', return_value=0), patch.object(m, 'is_ancestor', return_value=True), \
              patch.object(m, 'sha256_tree', return_value='d' * 40), patch.object(m, 'source_run', side_effect=ValueError('newest CI failed')):
             with self.assertRaisesRegex(ValueError, 'newest CI failed'):
                 m.write_run(args)
@@ -294,39 +352,356 @@ class ConditionalMergeFixtures(unittest.TestCase):
              patch.object(m, 'repo_name', return_value='shk95/configs'), patch.object(m, 'verify_accepted_run', return_value=active), \
              patch.object(m, 'validate_actor'), patch.object(m, 'validate_protection'), patch.object(m, 'check_independent_shape'), \
              patch.object(m, 'read_pr', return_value=pr), patch.object(m, 'branch_sha', return_value=request['base']), \
+             patch.object(m, 'validate_dev_chain', return_value=0), patch.object(m, 'is_ancestor', return_value=True), \
              patch.object(m, 'sha256_tree', return_value='d' * 40), patch.dict(os.environ, env):
-            with self.assertRaisesRegex(ValueError, '60-minute CI wait expired'):
+            with self.assertRaisesRegex(ValueError, '60-minute request deadline expired'):
                 m.write_run(args)
         self.assertFalse(any(call[1] == 'PUT' for call in waiting_api.calls))
+
+    # FIXTURE repository/conditional-protected-merge
+    def test_dev_base_drift_A_to_B_updates_same_approved_head_and_gates_latest_base(self):
+        request = {'pr': 17, 'target': 'dev', 'head': 'b' * 40, 'base': 'a' * 40}
+        args = type('Args', (), {'run_id': '99', **request})()
+        active_run = {'created_at': NOW()}
+        first = {'state': 'open', 'merged_at': None, '_conditional_waiting': False,
+                 'head': {'sha': request['head']}, 'base': {'sha': request['base']}}
+        integrated = {'state': 'open', 'merged_at': None, '_conditional_waiting': False,
+                      'head': {'sha': 'c' * 40}, 'base': {'sha': 'd' * 40}}
+        merged = {'state': 'closed', 'merged_at': '2026-10-07T01:05:00Z',
+                  'head': {'sha': 'c' * 40}, 'merge_commit_sha': 'e' * 40}
+        api = API({('PUT', 'pulls/17/merge'): {'merged': True}, 'pulls/17': merged})
+        reads = [first, first, integrated, integrated]
+        update = Mock(return_value=integrated)
+        source = Mock(return_value=({'id': 501}, 'success'))
+        with patch.dict(os.environ, {'GITHUB_RUN_ID': '99', 'GITHUB_REPOSITORY': 'shk95/configs',
+                                     'GITHUB_ACTOR': 'maintainer', 'GH_TOKEN': 'fixture',
+                                     'CONFIGS_MERGE_ENABLED': '1'}), \
+             patch.object(m, 'repo_name', return_value='shk95/configs'), \
+             patch.object(m, 'GitHub', return_value=api), \
+             patch.object(m, 'verify_accepted_run', return_value=active_run), patch.object(m, 'validate_actor'), \
+             patch.object(m, 'validate_protection'), patch.object(m, 'check_independent_shape'), \
+             patch.object(m, 'read_pr', side_effect=reads), \
+             patch.object(m, 'branch_sha', return_value='d' * 40), \
+             patch.object(m, 'validate_dev_chain', side_effect=[0, 1, 1]), \
+             patch.object(m, 'is_ancestor', side_effect=[False, True]), \
+             patch.object(m, 'refuse_latest_ci_failure'), patch.object(m, 'update_dev_branch', update), \
+             patch.object(m, 'sha256_tree', return_value='f' * 40), patch.object(m, 'source_run', source), \
+             patch.object(m, 'finish', return_value='confirmed'), patch.object(m.time, 'monotonic', return_value=2):
+            self.assertEqual(m.write_run(args), 'confirmed')
+        update.assert_called_once()
+        self.assertEqual(update.call_args.args[2], request['head'])
+        self.assertEqual(request['head'], 'b' * 40)
+        self.assertEqual(source.call_args.args[1]['base'], 'd' * 40)
+        self.assertEqual(source.call_args.args[1]['head'], 'c' * 40)
+        self.assertEqual([call[2] for call in api.calls if call[1] == 'PUT'],
+                         [{'sha': 'c' * 40, 'merge_method': 'merge'}])
+
+    # FIXTURE repository/conditional-protected-merge
+    def test_change_request_on_integrated_head_stops_without_a_second_update_or_merge(self):
+        request = {'pr': 17, 'target': 'dev', 'head': 'b' * 40, 'base': 'a' * 40}
+        args = type('Args', (), {'run_id': '99', **request})()
+        active = {'created_at': NOW()}
+        pr = {'state': 'open', 'merged_at': None, '_conditional_waiting': False,
+              'head': {'sha': request['head']}, 'base': {'sha': request['base']}}
+        api = API()
+        update = Mock(return_value={'head': {'sha': 'c' * 40}})
+        read = Mock(side_effect=[pr, pr, ValueError('candidate has an outstanding change request')])
+        with patch.dict(os.environ, {'GITHUB_RUN_ID': '99', 'GITHUB_REPOSITORY': 'shk95/configs',
+                                     'GITHUB_ACTOR': 'maintainer', 'GH_TOKEN': 'fixture',
+                                     'CONFIGS_MERGE_ENABLED': '1'}), \
+             patch.object(m, 'repo_name', return_value='shk95/configs'), patch.object(m, 'GitHub', return_value=api), \
+             patch.object(m, 'verify_accepted_run', return_value=active), patch.object(m, 'validate_actor'), \
+             patch.object(m, 'validate_protection'), patch.object(m, 'check_independent_shape'), \
+             patch.object(m, 'read_pr', read), patch.object(m, 'branch_sha', return_value='d' * 40), \
+             patch.object(m, 'validate_dev_chain', return_value=0), patch.object(m, 'is_ancestor', return_value=False), \
+             patch.object(m, 'refuse_latest_ci_failure'), patch.object(m, 'update_dev_branch', update), \
+             patch.object(m.time, 'monotonic', return_value=2):
+            with self.assertRaisesRegex(ValueError, 'outstanding change request'):
+                m.write_run(args)
+        update.assert_called_once()
+        self.assertFalse(any(call[1] == 'PUT' for call in api.calls))
+
+    # FIXTURE repository/conditional-protected-merge
+    def test_branch_update_uses_head_CAS_and_refuses_conflicts_before_api_write(self):
+        request = {'pr': 17, 'target': 'dev', 'head': 'b' * 40, 'source_head': 'b' * 40,
+                   'base': 'a' * 40, 'source_base': 'a' * 40, 'repo': 'shk95/configs'}
+        old = {'state': 'open', 'draft': False, 'head': {'sha': request['head'], 'ref': 'feature/topic'},
+               'base': {'sha': request['base']}, '_conditional_waiting': False}
+        updated = {**old, 'head': {'sha': 'c' * 40, 'ref': 'feature/topic'}}
+        api = API()
+        with patch.dict(os.environ, {'GITHUB_RUN_ID': '99'}), \
+             patch.object(m, 'verify_accepted_run', return_value={'head_sha': 'x' * 40}), \
+             patch.object(m, 'validate_accepted_revision'), patch.object(m, 'validate_protection'), \
+             patch.object(m, 'read_pr', side_effect=[old, updated]), patch.object(m, 'branch_sha', return_value='d' * 40), \
+             patch.object(m, 'validate_dev_chain', return_value=1), patch.object(m, 'sha256_tree', return_value='e' * 40), \
+             patch.object(m, 'refuse_latest_ci_failure'), patch.object(m, 'check_independent_shape'), \
+             patch.object(m.time, 'monotonic', return_value=5):
+            self.assertEqual(m.update_dev_branch(api, request, request['head'], 100), updated)
+        puts = [call for call in api.calls if call[1] == 'PUT']
+        self.assertEqual(len(puts), 1)
+        self.assertEqual(puts[0][0], 'pulls/17/update-branch')
+        self.assertEqual(puts[0][2], {'expected_head_sha': request['head']})
+
+        exhausted = API()
+        with patch.dict(os.environ, {'GITHUB_RUN_ID': '99'}), \
+             patch.object(m, 'verify_accepted_run', return_value={'head_sha': 'x' * 40}), \
+             patch.object(m, 'validate_accepted_revision'), patch.object(m, 'validate_protection'), \
+             patch.object(m, 'read_pr', return_value=old), patch.object(m, 'branch_sha', return_value='d' * 40), \
+             patch.object(m, 'validate_dev_chain', return_value=3), patch.object(m, 'is_ancestor', return_value=False), \
+             patch.object(m.time, 'monotonic', return_value=5):
+            with self.assertRaisesRegex(ValueError, 'three dev integration updates exhausted'):
+                m.update_dev_branch(exhausted, request, request['head'], 100)
+        self.assertFalse(any(call[1] == 'PUT' for call in exhausted.calls))
+
+        protection_changed = API()
+        with patch.dict(os.environ, {'GITHUB_RUN_ID': '99'}), \
+             patch.object(m, 'verify_accepted_run', return_value={'head_sha': 'x' * 40}), \
+             patch.object(m, 'validate_accepted_revision'), \
+             patch.object(m, 'validate_protection', side_effect=ValueError('strict protection changed')), \
+             patch.object(m.time, 'monotonic', return_value=5), \
+             self.assertRaisesRegex(ValueError, 'strict protection changed'):
+            m.update_dev_branch(protection_changed, request, request['head'], 100)
+        self.assertFalse(any(call[1] == 'PUT' for call in protection_changed.calls))
+
+        blocked = API()
+        with patch.dict(os.environ, {'GITHUB_RUN_ID': '99'}), \
+             patch.object(m, 'verify_accepted_run', return_value={'head_sha': 'x' * 40}), \
+             patch.object(m, 'validate_accepted_revision'), patch.object(m, 'validate_protection'), \
+             patch.object(m, 'read_pr', return_value=old), patch.object(m, 'branch_sha', return_value='d' * 40), \
+             patch.object(m, 'validate_dev_chain', return_value=1), patch.object(m, 'sha256_tree', side_effect=ValueError('conflict')), \
+             patch.object(m.time, 'monotonic', return_value=5):
+            with self.assertRaisesRegex(ValueError, 'conflict'):
+                m.update_dev_branch(blocked, request, request['head'], 100)
+        self.assertFalse(any(call[1] == 'PUT' for call in blocked.calls))
+
+        ambiguous = API()
+        ambiguous.request = Mock(side_effect=m.urllib.error.URLError('response lost'))
+        with patch.dict(os.environ, {'GITHUB_RUN_ID': '99'}), \
+             patch.object(m, 'verify_accepted_run', return_value={'head_sha': 'x' * 40}), \
+             patch.object(m, 'validate_accepted_revision'), patch.object(m, 'validate_protection'), \
+             patch.object(m, 'read_pr', side_effect=[old, updated]), patch.object(m, 'branch_sha', return_value='d' * 40), \
+             patch.object(m, 'validate_dev_chain', return_value=1), patch.object(m, 'sha256_tree', return_value='e' * 40), \
+             patch.object(m, 'refuse_latest_ci_failure'), patch.object(m, 'check_independent_shape'), \
+             patch.object(m.time, 'monotonic', return_value=5):
+            self.assertEqual(m.update_dev_branch(ambiguous, request, request['head'], 100), updated)
+        self.assertEqual(ambiguous.request.call_count, 1)
+
+    # FIXTURE repository/conditional-protected-merge
+    def test_latest_failed_required_check_refuses_before_dev_update(self):
+        head = 'b' * 40
+        api = API({('PAGES', f"actions/workflows/ci.yml/runs?head_sha={head}&event=pull_request&per_page=100"): [],
+                   ('PAGES', f"commits/{head}/check-runs?per_page=100"): [
+                       {'id': 42, 'name': 'Required checks', 'app': {'id': m.APP_ID},
+                        'status': 'completed', 'conclusion': 'cancelled'}]})
+        with self.assertRaisesRegex(ValueError, 'newest Required checks run did not pass'):
+            m.refuse_latest_ci_failure(api, head)
+
+    # FIXTURE repository/conditional-protected-merge
+    def test_accepted_dev_tooling_allows_unrelated_move_but_refuses_safety_path_change(self):
+        api = API()
+        run = {'head_sha': 'a' * 40}
+        with patch.object(m, 'branch_sha', return_value='b' * 40), \
+             patch.object(m, 'is_ancestor', return_value=True), \
+             patch.object(m.subprocess, 'run', side_effect=[type('R', (), {'returncode': 0})(),
+                                                             type('R', (), {'returncode': 1})()]) as calls:
+            with self.assertRaisesRegex(ValueError, 'safety paths changed'):
+                m.validate_accepted_revision(api, run, 'dev')
+        self.assertEqual(calls.call_args.args[0][-len(m.SAFETY_PATHS):], list(m.SAFETY_PATHS))
+        with patch.object(m, 'branch_sha', return_value='b' * 40), patch.object(m, 'is_ancestor', return_value=True), \
+             patch.object(m.subprocess, 'run', return_value=type('R', (), {'returncode': 0})()) as calls:
+            self.assertEqual(m.validate_accepted_revision(api, run, 'dev', allow_recovery=True), 'b' * 40)
+            self.assertEqual(calls.call_count, 1)  # fetch only; recovery does not reinterpret old execution safety
+
+    # FIXTURE repository/conditional-protected-merge
+    def test_dev_integration_chain_is_clean_bounded_and_preserves_source(self):
+        with tempfile.TemporaryDirectory() as temporary:
+            repo = Path(temporary) / 'repo'
+            subprocess.run(['git', 'init', '-q', '-b', 'dev', str(repo)], check=True)
+            def git(*args, **kwargs):
+                return subprocess.run(['git', *args], cwd=repo, check=True, text=True,
+                                      stdout=subprocess.PIPE, stderr=subprocess.PIPE, **kwargs).stdout.strip()
+            git('config', 'user.name', 'Fixture')
+            git('config', 'user.email', 'fixture@example.invalid')
+            (repo / 'shared.txt').write_text('base\n')
+            git('add', 'shared.txt')
+            git('commit', '-qm', 'base')
+            source_base = git('rev-parse', 'HEAD')
+            git('switch', '-qc', 'topic')
+            (repo / 'shared.txt').write_text('topic\n')
+            git('commit', '-qam', 'approved source')
+            source_head = git('rev-parse', 'HEAD')
+            git('switch', '-q', 'dev')
+            (repo / 'dev.txt').write_text('accepted dev change\n')
+            git('add', 'dev.txt')
+            git('commit', '-qm', 'accepted dev change')
+            base_b = git('rev-parse', 'HEAD')
+            clean_tree = git('merge-tree', '--write-tree', source_head, base_b).splitlines()[0]
+            env = {**os.environ, 'GIT_AUTHOR_NAME': 'Fixture', 'GIT_AUTHOR_EMAIL': 'fixture@example.invalid',
+                   'GIT_COMMITTER_NAME': 'Fixture', 'GIT_COMMITTER_EMAIL': 'fixture@example.invalid'}
+            integrated = subprocess.run(['git', 'commit-tree', clean_tree, '-p', source_head, '-p', base_b],
+                                        cwd=repo, env=env, check=True, text=True, stdout=subprocess.PIPE).stdout.strip()
+            (repo / 'later.txt').write_text('later accepted dev\n')
+            git('add', 'later.txt')
+            git('commit', '-qm', 'later accepted dev')
+            current_dev = git('rev-parse', 'HEAD')
+            def merge_commit(first, second):
+                tree = git('merge-tree', '--write-tree', first, second).splitlines()[0]
+                return subprocess.run(['git', 'commit-tree', tree, '-p', first, '-p', second],
+                                      cwd=repo, env=env, check=True, text=True,
+                                      stdout=subprocess.PIPE).stdout.strip()
+            integrated2 = merge_commit(integrated, current_dev)
+            integrated3 = merge_commit(integrated2, current_dev)
+            integrated4 = merge_commit(integrated3, current_dev)
+            extra_source = subprocess.run(['git', 'commit-tree', git('rev-parse', f'{integrated}^{{tree}}'),
+                                           '-p', integrated], cwd=repo, env=env, check=True, text=True,
+                                          stdout=subprocess.PIPE).stdout.strip()
+            (repo / 'shared.txt').write_text('dev conflict\n')
+            git('add', 'shared.txt')
+            git('commit', '-qm', 'conflicting dev update')
+            conflict_dev = git('rev-parse', 'HEAD')
+            conflict_result = subprocess.run(['git', 'merge-tree', '--write-tree', source_head, conflict_dev],
+                                             cwd=repo, text=True, stdout=subprocess.PIPE, stderr=subprocess.PIPE)
+            conflict_tree = conflict_result.stdout.splitlines()[0]
+            conflict_merge = subprocess.run(['git', 'commit-tree', conflict_tree, '-p', source_head,
+                                              '-p', conflict_dev], cwd=repo, env=env, check=True, text=True,
+                                             stdout=subprocess.PIPE).stdout.strip()
+            git('remote', 'add', 'origin', str(repo))
+            request = {'source_base': source_base, 'base': source_base,
+                       'source_head': source_head, 'head': source_head}
+            previous = Path.cwd()
+            os.chdir(repo)
+            try:
+                self.assertEqual(m.validate_dev_chain(request, integrated, current_dev), 1)
+                self.assertEqual(m.validate_dev_chain(request, integrated3, current_dev), 3)
+                with self.assertRaisesRegex(ValueError, 'exceeds three updates'):
+                    m.validate_dev_chain(request, integrated4, current_dev)
+                with self.assertRaisesRegex(ValueError, 'malformed integration'):
+                    m.validate_dev_chain(request, extra_source, current_dev)
+                with self.assertRaisesRegex(ValueError, 'not conflict-free'):
+                    m.validate_dev_chain(request, conflict_merge, conflict_dev)
+                bad_tree = subprocess.run(['git', 'commit-tree', git('rev-parse', f'{source_head}^{{tree}}'),
+                                           '-p', source_head, '-p', base_b], cwd=repo, env=env, check=True,
+                                          text=True, stdout=subprocess.PIPE).stdout.strip()
+                with self.assertRaisesRegex(ValueError, 'non-deterministic tree'):
+                    m.validate_dev_chain(request, bad_tree, current_dev)
+                arbitrary = subprocess.run(['git', 'commit-tree', git('rev-parse', f'{source_head}^{{tree}}'),
+                                             '-p', source_head], cwd=repo, env=env, check=True,
+                                            text=True, stdout=subprocess.PIPE).stdout.strip()
+                with self.assertRaisesRegex(ValueError, 'malformed integration'):
+                    m.validate_dev_chain(request, arbitrary, current_dev)
+            finally:
+                os.chdir(previous)
+
+    # FIXTURE repository/conditional-protected-merge
+    def test_finish_recovers_only_approved_integration_and_uses_actual_tested_base(self):
+        with tempfile.TemporaryDirectory() as temporary:
+            repo = Path(temporary) / 'repo'
+            subprocess.run(['git', 'init', '-q', '-b', 'dev', str(repo)], check=True)
+            def git(*args):
+                return subprocess.run(['git', *args], cwd=repo, check=True, text=True,
+                                      stdout=subprocess.PIPE, stderr=subprocess.PIPE).stdout.strip()
+            git('config', 'user.name', 'Fixture')
+            git('config', 'user.email', 'fixture@example.invalid')
+            (repo / 'base.txt').write_text('A\n')
+            git('add', 'base.txt')
+            git('commit', '-qm', 'admitted base A')
+            source_base = git('rev-parse', 'HEAD')
+            git('switch', '-qc', 'topic')
+            (repo / 'topic.txt').write_text('approved source H\n')
+            git('add', 'topic.txt')
+            git('commit', '-qm', 'approved source')
+            source_head = git('rev-parse', 'HEAD')
+            git('switch', '-q', 'dev')
+            (repo / 'dev.txt').write_text('accepted dev B\n')
+            git('add', 'dev.txt')
+            git('commit', '-qm', 'accepted dev B')
+            base_b = git('rev-parse', 'HEAD')
+            tree_i = git('merge-tree', '--write-tree', source_head, base_b).splitlines()[0]
+            env = {**os.environ, 'GIT_AUTHOR_NAME': 'Fixture', 'GIT_AUTHOR_EMAIL': 'fixture@example.invalid',
+                   'GIT_COMMITTER_NAME': 'Fixture', 'GIT_COMMITTER_EMAIL': 'fixture@example.invalid'}
+            integration = subprocess.run(['git', 'commit-tree', tree_i, '-p', source_head, '-p', base_b],
+                                          cwd=repo, env=env, check=True, text=True, stdout=subprocess.PIPE).stdout.strip()
+            merge_commit = subprocess.run(['git', 'commit-tree', tree_i, '-p', base_b, '-p', integration],
+                                          cwd=repo, env=env, check=True, text=True, stdout=subprocess.PIPE).stdout.strip()
+            (repo / 'later.txt').write_text('later dev C\n')
+            git('add', 'later.txt')
+            git('commit', '-qm', 'later dev C')
+            current_dev = git('rev-parse', 'HEAD')
+            git('remote', 'add', 'origin', str(repo))
+            request = {'pr': 17, 'target': 'dev', 'head': source_head, 'source_head': source_head,
+                       'base': source_base, 'source_base': source_base, 'repo': 'shk95/configs'}
+            request['head'] = integration
+            pr = {'merge_commit_sha': merge_commit, 'head': {'sha': integration}}
+            api = API({'git/ref/heads/dev': {'object': {'sha': current_dev}}})
+            original_run = m.subprocess.run
+            def run(command, *args, **kwargs):
+                if command[0] == 'tool/version-control/audit' or command == ['tool/version-control/audit-remote']:
+                    return type('Result', (), {'returncode': 0, 'stdout': 'passed'})()
+                if command[:3] == ['git', 'fetch', '--quiet'] and 'dev' in command and 'master' in command:
+                    return type('Result', (), {'returncode': 0, 'stdout': ''})()
+                return original_run(command, *args, **kwargs)
+            previous = Path.cwd()
+            os.chdir(repo)
+            outputs = []
+            source_evidence = Mock(return_value=({'id': 20}, 'success'))
+            try:
+                with patch.object(m.subprocess, 'run', side_effect=run), \
+                     patch.object(m, 'source_run', source_evidence), \
+                     patch('builtins.print', side_effect=lambda *args, **kwargs: outputs.append(args[0])):
+                    m.finish(api, request, pr, 'already merged')
+                record = json.loads(outputs[-1])
+                self.assertEqual(record['approved_source_head'], source_head)
+                self.assertEqual(record['integration_head'], integration)
+                self.assertEqual(record['tested_base'], base_b)
+                self.assertEqual(source_evidence.call_args.args[1]['base'], base_b)
+                self.assertEqual(source_evidence.call_args.args[1]['head'], integration)
+                wrong = dict(request, source_head=base_b)
+                with patch.object(m.subprocess, 'run', side_effect=run), patch.object(m, 'source_run', source_evidence), \
+                     patch('builtins.print'):
+                    with self.assertRaisesRegex(ValueError, 'post-merge identity or audit failed'):
+                        m.finish(api, wrong, pr, 'already merged')
+            finally:
+                os.chdir(previous)
 
     # FIXTURE repository/conditional-protected-merge
     def test_changed_target_and_ambiguous_merge_never_retry(self):
         request = {'pr': 17, 'target': 'dev', 'head': 'b' * 40, 'base': 'a' * 40}
         args = type('Args', (), {'run_id': '99', **request})()
-        active = {'created_at': '2026-10-06T12:00:00Z'}
-        pr = {'state': 'open', 'merged_at': None, '_conditional_waiting': False}
+        active = {'created_at': NOW()}
+        pr = {'state': 'open', 'merged_at': None, '_conditional_waiting': False,
+              'head': {'sha': request['head']}, 'base': {'sha': request['base']}}
         env = {'GITHUB_RUN_ID': '99', 'GITHUB_REPOSITORY': 'shk95/configs', 'GITHUB_ACTOR': 'maintainer',
                'GH_TOKEN': 'fixture', 'CONFIGS_MERGE_ENABLED': '1'}
         common = [patch.object(m, 'repo_name', return_value='shk95/configs'),
                   patch.object(m, 'verify_accepted_run', return_value=active), patch.object(m, 'validate_actor'),
                   patch.object(m, 'validate_protection'), patch.object(m, 'check_independent_shape'),
                   patch.object(m, 'read_pr', return_value=pr), patch.object(m, 'sha256_tree', return_value='d' * 40),
+                  patch.object(m, 'validate_dev_chain', return_value=0), patch.object(m, 'is_ancestor', return_value=True),
                   patch.object(m, 'source_run', return_value=({'id': 10}, 'success')), patch.object(m.time, 'monotonic', return_value=1)]
         moved = API()
+        master_request = {'pr': 17, 'target': 'master', 'head': 'b' * 40, 'base': 'a' * 40}
+        master_args = type('Args', (), {'run_id': '99', **master_request})()
+        master_pr = {'state': 'open', 'merged_at': None, '_conditional_waiting': False,
+                     'head': {'sha': master_request['head']}, 'base': {'sha': master_request['base']}}
+        master_common = [patch.object(m, 'repo_name', return_value='shk95/configs'),
+                         patch.object(m, 'verify_accepted_run', return_value=active), patch.object(m, 'validate_actor'),
+                         patch.object(m, 'read_pr', return_value=master_pr), patch.object(m, 'validate_protection'),
+                         patch.object(m, 'check_independent_shape')]
         with ExitStack() as stack:
             stack.enter_context(patch.dict(os.environ, env))
             stack.enter_context(patch.object(m, 'GitHub', return_value=moved))
-            stack.enter_context(patch.object(m, 'branch_sha', side_effect=[request['base'], 'e' * 40]))
-            for context in common:
+            stack.enter_context(patch.object(m, 'branch_sha', return_value='e' * 40))
+            for context in master_common:
                 stack.enter_context(context)
-            with self.assertRaisesRegex(ValueError, 'target moved before merge'):
-                m.write_run(args)
+            with self.assertRaisesRegex(ValueError, 'master target or source head moved'):
+                m.write_run(master_args)
         self.assertFalse(any(call[1] == 'PUT' for call in moved.calls))
 
         ambiguous = API()
         ambiguous.request = Mock(side_effect=lambda path, method='GET', data=None, binary=False:
             (_ for _ in ()).throw(m.urllib.error.URLError('connection lost')) if method == 'PUT'
-            else {'state': 'open', 'merged_at': None, 'head': {'sha': request['head']}})
+            else {'state': 'open', 'merged_at': None, 'head': {'sha': request['head']},
+                  'base': {'sha': request['base']}, '_conditional_waiting': False})
         with ExitStack() as stack:
             stack.enter_context(patch.dict(os.environ, env))
             stack.enter_context(patch.object(m, 'GitHub', return_value=ambiguous))
@@ -350,30 +725,35 @@ class ConditionalMergeFixtures(unittest.TestCase):
              patch.object(m, 'repo_name', return_value='shk95/configs'), patch.object(m, 'GitHub', return_value=api), \
              patch.object(m, 'verify_accepted_run', return_value={'created_at': '2026-10-06T10:00:00Z'}), \
              patch.object(m, 'validate_actor'), patch.object(m, 'read_pr', return_value=merged), \
+             patch.object(m, 'validate_dev_chain', return_value=0), patch.object(m, 'branch_sha', return_value='c' * 40), \
              patch.object(m, 'finish', return_value='already merged') as finish:
             self.assertEqual(m.write_run(args), 'already merged')
-        finish.assert_called_once_with(api, {'pr': 17, 'target': 'dev', 'head': 'b' * 40, 'base': 'a' * 40,
-                                              'repo': 'shk95/configs'}, merged, 'already merged')
+        self.assertEqual(finish.call_args.args[1]['source_head'], 'b' * 40)
+        self.assertEqual(finish.call_args.args[3], 'already merged')
         self.assertFalse(any(call[1] == 'PUT' for call in api.calls))
 
     # FIXTURE repository/conditional-protected-merge
     def test_finish_binds_merge_parents_tree_and_reports_postmerge_audit_failure(self):
         request = {'pr': 17, 'target': 'dev', 'head': 'b' * 40, 'base': 'a' * 40, 'repo': 'shk95/configs'}
-        pr = {'merge_commit_sha': 'c' * 40}
+        pr = {'merge_commit_sha': 'c' * 40, 'head': {'sha': 'b' * 40}}
         outputs = []
         audit_ok = type('Result', (), {'returncode': 0, 'stdout': 'passed'})()
         audit_fail = type('Result', (), {'returncode': 1, 'stdout': 'remote audit failed'})()
         with patch.object(m.subprocess, 'run', return_value=audit_ok), \
              patch.object(m.subprocess, 'check_output', side_effect=['a' * 40 + ' ' + 'b' * 40, 'd' * 40]), \
-             patch.object(m, 'sha256_tree', return_value='d' * 40), \
+             patch.object(m, 'sha256_tree', return_value='d' * 40), patch.object(m, 'source_run', return_value=({'id': 1}, 'success')), \
+             patch.object(m, 'branch_sha', return_value='a' * 40), \
+             patch.object(m, 'is_ancestor', return_value=True), patch.object(m, 'validate_dev_chain', return_value=0), \
              patch('builtins.print', side_effect=lambda *args, **kwargs: outputs.append(args[0])):
             m.finish(API(), request, pr, 'merged')
         self.assertIn('"state": "merged"', outputs[-1])
 
         outputs.clear()
-        with patch.object(m.subprocess, 'run', side_effect=[audit_ok, audit_ok, audit_fail]), \
+        with patch.object(m.subprocess, 'run', side_effect=[audit_ok, audit_ok, audit_ok, audit_fail]), \
              patch.object(m.subprocess, 'check_output', side_effect=['a' * 40 + ' ' + 'b' * 40, 'd' * 40]), \
-             patch.object(m, 'sha256_tree', return_value='d' * 40), \
+             patch.object(m, 'sha256_tree', return_value='d' * 40), patch.object(m, 'source_run', return_value=({'id': 1}, 'success')), \
+             patch.object(m, 'branch_sha', return_value='a' * 40), \
+             patch.object(m, 'is_ancestor', return_value=True), patch.object(m, 'validate_dev_chain', return_value=0), \
              patch('builtins.print', side_effect=lambda *args, **kwargs: outputs.append(args[0])):
             with self.assertRaisesRegex(ValueError, 'merge completed; post-merge'):
                 m.finish(API(), request, pr, 'merged')
@@ -383,7 +763,10 @@ class ConditionalMergeFixtures(unittest.TestCase):
                               (['a' * 40, 'b' * 40], 'f' * 40)):
             with self.subTest(parents=parents, tree=tree), patch.object(m.subprocess, 'run', return_value=audit_ok), \
                  patch.object(m.subprocess, 'check_output', side_effect=[' '.join(parents), tree]), \
-                 patch.object(m, 'sha256_tree', return_value='d' * 40), patch('builtins.print'):
+                 patch.object(m, 'sha256_tree', return_value='d' * 40), patch.object(m, 'source_run', return_value=({'id': 1}, 'success')), \
+                 patch.object(m, 'branch_sha', return_value='a' * 40), \
+                 patch.object(m, 'is_ancestor', return_value=True), patch.object(m, 'validate_dev_chain', return_value=0), \
+                 patch('builtins.print'):
                 with self.assertRaisesRegex(ValueError, 'post-merge identity or audit failed'):
                     m.finish(API(), request, pr, 'merged')
 
@@ -401,6 +784,8 @@ class ConditionalMergeFixtures(unittest.TestCase):
         self.assertIn('ref: ${{ github.sha }}', workflow)
         self.assertNotIn('ref: ${{ inputs.head }}', workflow)
         self.assertIn('permission-contents: write', workflow)
+        self.assertIn('Recheck queued request before minting writer token', workflow)
+        self.assertIn('test "$accepted" = "$ACCEPTED_SHA"', workflow)
         self.assertNotIn('  members: read', workflow)
 
     # FIXTURE repository/conditional-protected-merge

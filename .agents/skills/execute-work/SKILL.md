@@ -44,8 +44,11 @@ Once the implementation is complete and reviewable, reviews/blockers are
 accounted for, and no current required check has failed, use `gh pr ready`.
 Pending remote checks may remain pending at handoff; report them clearly. A
 failed check keeps the PR Draft until repaired and rerun. The integrator may
-dispatch a qualified conditional request while checks are pending; the writer
-waits for successful checks on the exact frozen head before its protected merge.
+dispatch a qualified conditional request while checks are pending. The writer
+keeps the reviewed source head fixed; on dev only, it may add the bounded
+deterministic accepted-dev integration chain in the repository decision. It
+requires successful CI for the latest dev base and exact integration head
+before protected merge. Master remains frozen-base/head.
 Record handoff and checkpoint as handed-off. Ready is a candidate, not
 integration approval.
 

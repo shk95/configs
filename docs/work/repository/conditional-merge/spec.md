@@ -14,6 +14,21 @@ bypassing protection. Support both topic-to-dev integration and explicit
 dev-to-master promotion. This plan does not enable remote writes or change the
 current operating policy before its implementation is adopted.
 
+Amended 2026-10-07, AC2, AC3 and AC4, Refusal and recovery, and Concurrency
+guarantee: for a dev-target request only, preserve the reviewed source head as
+the immutable starting point while permitting at most three conflict-free
+integration merges that add accepted dev history to the PR branch. Each commit
+must have exactly two parents, continue the first-parent chain from the approved
+source head, use a second parent in accepted dev history, and have the
+deterministic clean-merge tree. Use GitHub's branch-update API with
+`expected_head_sha`; inspect actual parents and tree because the API has no
+expected-base condition. Require new current-dev exact-source CI after the final
+integration head, within the original 60-minute request age. Master promotion
+keeps the original frozen base/head contract and receives no branch update.
+Strict protection and no-bypass behavior remain unchanged. The implementation
+is tracked in the follow-up spec at
+`docs/work/repository/conditional-merge-base-drift/spec.md`.
+
 Keep the existing integration and promotion skills. They perform their own
 review and authorization, then submit one common bounded merge request. Policy
 belongs in the adopted decision and invariant, human procedure in CONTRIBUTING,
@@ -65,22 +80,27 @@ CI runs independently. Serialize writer execution per target; master's writer
 group is shared with the existing input patch writer. Do not cancel an active
 writer when another request arrives. Use explicit pending-run retention rather
 than silently replacing earlier pending requests. A pending run does not renew
-approval. Multiple admitted requests may enter, but after one moves the target,
-the others stop as stale. No merge ordering decisions are delegated to workers.
+approval. Multiple admitted requests may enter, but dev requests may incorporate
+later accepted dev history only through the bounded integration chain in the
+dated amendment. Master requests stop as stale on target movement. No merge
+ordering decisions are delegated to workers.
 
 ## Refusal and recovery
 
 | Observation | Result |
 | --- | --- |
 | Both identities unchanged and exact-source required CI/protection satisfied | Protected merge, result verification and audit |
-| Head or target changed | Stop; fresh inspection and explicit admission required |
+| Head changed outside the permitted dev integration chain, or master target changed | Stop; fresh inspection and explicit admission required |
 | CI failed or cancelled, unsupported candidate, or invalid request | Stop and preserve PR |
 | CI/protection evidence pending or temporarily unknown | Bounded wait; timeout stops visibly |
 | Same approved source already merged | Verify remote identity; report completion without another merge |
 | Merge API result ambiguous | Read remote PR and merge identity before any retry |
 | Audit fails after confirmed merge | Report audit failure separately; no automatic rollback |
 
-No automatic branch update, rebase, source repair, or reapproval is introduced.
+No source commit, conflict-resolution commit, or source rewrite is accepted
+after approval. The dev-only integration merge chain is the sole permitted PR
+branch update; master remains frozen. Unexpected commits or malformed ancestry
+stop the request.
 Cancellation is confirmed before worker repair. If the request merged while
 cancellation was attempted, inspect the result rather than claiming revocation.
 Actions cancellation is not an atomic rollback of an API request. Recovery uses
@@ -89,9 +109,12 @@ GitHub records; loss of a local worktree does not lose the request.
 ## Concurrency guarantee and limit
 
 The merge API provides an atomic expected-head condition, not an expected-target
-condition. Rechecking the target and then calling the API is not a compare-and-swap
-on the target. Concurrency serializes participating writers only. Strict branch
-protection remains the final gate for protected merges outside that group.
+condition. The dev branch-update API similarly CASes the current PR head but not
+dev; validate its actual second parent and tree. If dev moves during update or
+CI, a permitted update may repeat within three updates and the original
+60-minute deadline. Master stops on any base movement. Concurrency serializes
+participating writers only. Strict branch protection remains the final gate for
+protected merges outside that group.
 
 All supported unattended writers must share the appropriate group. The existing
 human commit --publish interface and direct protected manual merging must be
@@ -141,8 +164,8 @@ local fixtures alone.
 | ID | Criterion | Required lanes |
 | --- | --- | --- |
 | AC1 | Existing integration and promotion skills retain their separate review/authorization boundaries and submit the same bounded request without a new skill or duplicated CI policy. | policy checks, review |
-| AC2 | An authorized unchanged dev PR or dev-to-master promotion merges only after current exact-source required CI and all protected conditions pass. | fixtures, affected dispatch |
-| AC3 | Changed head/target, failed or superseded evidence, Draft/fork/stack input, unresolved blockers, unsupported master source and timeout cannot cause a merge. | fixtures, affected dispatch |
-| AC4 | Competing requests serialize with existing master input patch writers; stale requests stop and later arrivals do not cancel active writers or silently replace pending requests. | fixtures, affected dispatch |
+| AC2 | An authorized dev PR retains its reviewed source head through at most three clean dev-only integration merges, then merges only after current-dev exact-source CI and all protected conditions pass; master remains frozen-base/head. | fixtures, affected dispatch |
+| AC3 | Any source commit beyond the approved head, malformed integration chain, conflict, changed master identity, failed or superseded evidence, Draft/fork/stack input, unresolved blockers, unsupported master source and timeout cannot cause a merge. | fixtures, affected dispatch |
+| AC4 | Competing requests serialize with existing master input patch writers; permitted dev target advances are incorporated only within the bounded chain, and later arrivals do not cancel active writers or silently replace pending requests. | fixtures, affected dispatch |
 | AC5 | Submission confirmation, cancellation, ambiguous writes and reruns recover from GitHub and distinguish requested, merged and post-merge audit outcomes without duplicate writes. | fixtures, affected dispatch |
 | AC6 | Accepted tooling and bounded credentials preserve branch protection; remote qualification accounts for external writers and proves safe handling of the target-move race without claiming atomic target matching. | fixtures, affected dispatch, review |

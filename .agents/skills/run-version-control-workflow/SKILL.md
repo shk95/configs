@@ -57,9 +57,13 @@ planning read-only unless the user explicitly authorizes a Git mutation.
   the master-input-patch-releases decision. Ensure no competing master PR
   is open, and introduce no fix in the promotion itself. Require `Required
   checks`, resolved conversations, and explicit maintainer authorization. If
-  the conditional writer is qualified and enabled, submit the frozen request
+  the conditional writer is qualified and enabled, submit the frozen-source,
+  frozen-base request
   with `tool/configs conditional-merge submit --target master` while checks may
-  be pending; its writer requires successful exact-source checks before merge.
+  be pending; its writer never updates the promotion branch and requires
+  successful exact-source checks before merge. A qualified dev request may
+  add only the bounded accepted-dev integration chain in the adopted decision
+  and must pass new exact-source CI for its latest base/head before merge.
   Otherwise wait for successful checks on the exact current head, then use the
   established reviewed synchronous merge.
   Confirm the merge commit and run both audits afterward. Do not reverse-merge the promotion commit

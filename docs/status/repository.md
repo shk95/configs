@@ -221,16 +221,18 @@ timing without removing tests or demonstrating a speedup. Their reports retain
 the measured evidence and its limits. Post-merge validation remains until safe
 equivalence is demonstrated; no cross-run result reuse is implemented.
 
-## Conditional protected merge (2026-10-06)
+## Conditional protected merge (2026-10-06; amended 2026-10-07)
 
-The implementation in PR #532 adds a common explicit Actions request for
-authorized `dev` integration and `dev`-to-`master` promotion. Requests bind a
-PR number, target, head SHA and observed target SHA; successful dispatch means
-`requested`, not merged. The accepted workflow and reviewer skills recheck
-current strict protection, latest exact-source CI and the PR before calling the
-protected merge API. Master promotion keeps its source and one-open-PR checks.
-Master requests share the existing input-patch writer group; queued requests
-are retained and stale targets stop. See
+PR #532 added a common explicit Actions request for authorized `dev`
+integration and `dev`-to-`master` promotion. The current follow-up lane in issue
+#535 implements a revised dev request path: keep the reviewed source head while
+adding up to three structurally verified, conflict-free accepted-dev
+integration merges after base movement. It requires new CI bound to the current
+dev base, exact integration head and merge tree within the original 60-minute
+deadline. Master remains frozen-base/head. The follow-up is not yet part of
+`dev`; until it is merged and separately qualified, the deployed behavior
+remains the PR #532 frozen identity path. Master requests share the existing
+input-patch writer group; queued requests are retained. See
 `docs/policy/decisions/repository/conditional-protected-merge.md`.
 
 GitHub registers `workflow_dispatch` only from the default branch. The new
@@ -240,7 +242,8 @@ environment, dev-only deployment policy, actor allowlist and dedicated writer
 credential have not been configured. The enablement variable remains unset or
 zero. No protected merge qualification or target-move race test has run, so
 the writer remains disabled and the synchronous integration path remains the
-operating path.
+operating path. Implementation fixtures do not establish remote branch-update
+or protected-merge behavior.
 
 ## Common
 
