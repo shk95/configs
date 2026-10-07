@@ -7,6 +7,7 @@
 # INV repository/no-closing-keyword
 # INV repository/required-checks-gate
 # INV repository/promotion-source
+# INV repository/flake-lock-isolated
 # Isolated local mechanics; this is not a GitHub or native-host qualification.
 set -eu
 MSYS_NO_PATHCONV=1
@@ -204,4 +205,35 @@ hook = (root / '.githooks/pre-commit').read_text()
 assert 'evidence_run "version-control fixtures"' not in hook
 assert 'evidence_run hygiene' in hook
 PY
+# Shared patch source can have distinct master/dev merge identities. A
+# range must not classify the accepted master merge as an authored refresh.
+history="$scratch/patch-history"
+git init -q -b dev "$history"
+git -C "$history" config user.name Fixture
+git -C "$history" config user.email fixture@example.invalid
+mkdir -p "$history/unixlike" "$history/docs/status" "$history/.githooks" "$history/tool"
+cp -R "$root/tool/version-control" "$history/tool/"
+cp "$root/.githooks/commit-msg" "$history/.githooks/"
+printf '{}\n' >"$history/unixlike/flake.lock"
+git -C "$history" add .
+git -C "$history" commit -qm 'chore(repository): seed patch history'
+git -C "$history" branch master
+git -C "$history" switch -qc feature/unixlike-input-patch-fixture
+printf '{"updated":true}\n' >"$history/unixlike/flake.lock"
+git -C "$history" commit -qam 'chore(unixlike-deps): refresh permitted input'
+patch=$(git -C "$history" rev-parse HEAD)
+git -C "$history" switch -q master
+git -C "$history" merge -q --no-ff "$patch" -m 'Merge permitted input patch'
+git -C "$history" switch -q dev
+git -C "$history" merge -q --ff-only "$patch"
+git -C "$history" switch -qc feature/repository-from-master master
+printf 'new local governance\n' >"$history/docs/status/repository.md"
+git -C "$history" add docs/status/repository.md
+git -C "$history" commit -qm 'refactor(repository): follow reset master'
+(cd "$history" && tool/version-control/audit --range "$patch" HEAD) >/dev/null
+printf '{"bad-refresh":true}\n' >"$history/unixlike/flake.lock"
+git -C "$history" commit -qam 'feat(unixlike): disguised refresh'
+if (cd "$history" && tool/version-control/audit --range "$patch" HEAD) >/dev/null 2>&1; then
+  echo 'range accepted an authored refresh without isolated dependency subject' >&2; exit 1
+fi
 printf 'verified: local pickup, retired publish/prune, parallel ff-only, conflict resolution, exact push range, scoped tags and ordinary push rejection\n'
