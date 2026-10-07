@@ -628,13 +628,46 @@ def write_run(args):
         return finish(api, active, pr, 'merged')
 
 
+def confirmed_merge_identity(api, request):
+    owner, name = request['repo'].split('/', 1)
+    query = '''query($owner:String!, $name:String!, $number:Int!) {
+      repository(owner:$owner, name:$name) {
+        nameWithOwner
+        pullRequest(number:$number) {
+          number state merged mergedAt baseRefName headRefOid mergeCommit { oid }
+        }
+      }
+    }'''
+    result = api.request('https://api.github.com/graphql', method='POST', data={
+        'query': query, 'variables': {'owner': owner, 'name': name, 'number': request['pr']}})
+    if not isinstance(result, dict) or result.get('errors'):
+        raise ValueError('GraphQL response did not confirm the merged pull request identity')
+    data_result = result.get('data')
+    if not isinstance(data_result, dict):
+        raise ValueError('GraphQL response omitted the merged repository identity')
+    repository = data_result.get('repository')
+    if not isinstance(repository, dict):
+        raise ValueError('GraphQL merge identity repository does not match the admitted repository')
+    repository_name = repository.get('nameWithOwner')
+    if not isinstance(repository_name, str) or repository_name.lower() != request['repo'].lower():
+        raise ValueError('GraphQL merge identity repository does not match the admitted repository')
+    pr = repository.get('pullRequest')
+    if not isinstance(pr, dict):
+        raise ValueError('GraphQL response omitted the merged pull request identity')
+    if (pr.get('number') != request['pr'] or pr.get('state') != 'MERGED' or pr.get('merged') is not True
+            or not pr.get('mergedAt') or pr.get('baseRefName') != request['target']
+            or pr.get('headRefOid') != request['head']):
+        raise ValueError('GraphQL merge identity does not match the admitted pull request')
+    merge_commit = pr.get('mergeCommit')
+    if not isinstance(merge_commit, dict):
+        raise ValueError('GraphQL response omitted the merged commit identity')
+    return full_sha(merge_commit.get('oid'), 'merge commit')
+
+
 def finish(api, request, pr, label):
-    merged = pr.get('merge_commit_sha')
-    if not merged:
-        print(json.dumps({'state': 'merged-with-audit-failure', 'pr': request['pr'],
-                          'audit': 'merged PR has no merge commit identity'}), file=sys.stderr)
-        raise ValueError('merge completed; result identity is incomplete')
+    merged = None
     try:
+        merged = confirmed_merge_identity(api, request)
         subprocess.run(['git', 'fetch', '--quiet', '--no-tags', 'origin', merged], check=True)
         parents = subprocess.check_output(['git', 'show', '-s', '--format=%P', merged], text=True).strip().split()
         if request['target'] == 'dev':
@@ -654,6 +687,8 @@ def finish(api, request, pr, label):
                 raise ValueError('merged PR has no successful exact-base integration-head CI evidence')
         else:
             tree = sha256_tree(request['base'], request['head'])
+            if source_run(api, request, tree)[1] != 'success':
+                raise ValueError('merged PR has no successful exact-source CI evidence')
         actual_tree = subprocess.check_output(['git', 'rev-parse', f'{merged}^{{tree}}'], text=True).strip()
         expected_parents = [request['base'], request['head']] if request['target'] == 'master' else parents
         if parents != expected_parents or actual_tree != tree:
