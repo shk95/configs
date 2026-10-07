@@ -361,7 +361,9 @@ root_commit=$(git rev-list --max-parents=0 HEAD | head -1)
 # Both spellings, permanently. The lock moved into the domain, and this rule
 # reads history: the refreshes made before the move are still at the old path
 # and always will be, because history is not rewritten.
-lock_commits=$(git log --format='%H' -- flake.lock unixlike/flake.lock)
+# Merge/adoption commits carry already authored input history. Inspect the
+# original non-merge refresh commits, not a merge that combines their history.
+lock_commits=$(git log --no-merges --format='%H' -- flake.lock unixlike/flake.lock)
 if [ "$mode" = range ]; then
   # INV repository/local-development-integration
   scopes=$("$audit_tools/classify" --range "$range_base" "$range_tip")
@@ -375,7 +377,7 @@ if [ "$mode" = range ]; then
       fail "source commit has mixed or unclassified ownership: $commit"
     fi
   done
-  lock_commits=$(git log --format='%H' "$range_base..$range_tip" -- flake.lock unixlike/flake.lock)
+  lock_commits=$(git log --no-merges --format='%H' "$range_base..$range_tip" -- flake.lock unixlike/flake.lock)
 fi
 [ "$mode" != tag ] || lock_commits=
 for sha in $lock_commits; do
