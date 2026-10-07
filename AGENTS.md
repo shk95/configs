@@ -141,8 +141,11 @@ single-commit Unix-like permitted-input update and its next patch declaration.
 Both use protected pull requests and merge commits; never commit, cherry-pick,
 squash, or rebase directly into `master`. The patch lane does not operate on
 Windows or general development. Development promotion must incorporate already
-accepted input patch history. Before work or promotion, reflect the selected/current master snapshot in
-local dev, resolving and verifying in a linked worktree when necessary.
+accepted input patch history. Dev and master retain separate first-parent
+histories. Before work or promotion, reflect new history from the selected
+master snapshot through a dev-based merge in a linked worktree, with the dev
+lane as its first parent. Do not fast-forward dev to master or to its promotion
+merge. Resolve and verify before local integration.
 The maintainer owns promotion decisions. No protection bypass is permitted.
 See `docs/policy/decisions/repository/master-input-patch-releases.md`.
 

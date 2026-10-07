@@ -84,7 +84,8 @@ own list is the file named for it beside this one (`unixlike.md`,
 - [ ] The pull request uses a merge commit and explicit merge authorization.
 - [ ] The merge is source acceptance, not domain certification or deployment.
 - [ ] Actual merge is confirmed; current master history can be reflected at
-      the next local work/promotion synchronization.
+      the next explicit local work/promotion synchronization, with dev remaining
+      on its own lane after promotion.
 
 ## Unix-like input patch
 
@@ -161,6 +162,10 @@ own list is the file named for it beside this one (`unixlike.md`,
 
 - [ ] The integrator confirms exact candidate/base SHA, relevant combined-result
       checks, clean worktrees and sequential ff-only dev integration
+      (INV repository/local-development-integration).
+- [ ] Master synchronization keeps the dev lane as the merge's first parent
+      and the selected master snapshot as its second parent; dev is not
+      fast-forwarded to master or its promotion merge
       (INV repository/local-development-integration).
 - [ ] Local completion is independent of push, issue or PR state.
 - [ ] Interrupted work has a useful checkpoint; cleanup reviews unique commits

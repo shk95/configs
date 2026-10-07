@@ -8,20 +8,28 @@ docs/policy/decisions/repository/local-development-workflow.md.
 Implementation and evidence are recorded in
 docs/work/repository/local-development-workflow/report.md.
 
-The reconstruction basis is reset dev 0fc573e and master 60bcd46. The accepted
-Unix-like input patch/tag at master is retained. The backup conditional merge,
-base-drift and qualification flow is not an active dependency. Existing
-worktrees and uncommitted extraction data are preserved; Agent Rack is outside
-this redesign. Historical reconstruction and host evidence are not rewritten.
+The separate first-parent lanes continue from dev 0fc573e and master 81229c1.
+The accepted Unix-like input patch/tag at master 60bcd46 is retained. Master
+synchronization uses a dev-based no-ff merge; dev continues on its own lane
+after protected master promotion. The backup conditional merge, base-drift and
+qualification flow is not an active dependency. Cancelled workspace history
+and uncommitted extraction data were preserved in verified recovery archives
+before cleanup; Agent Rack is outside this redesign. Historical reconstruction
+and host evidence are not rewritten.
 
 ## Remote adoption
 
 On 2026-10-07 the maintainer-authorized cutover replaced old remote dev
 b8e9273 and master 6c60f37 with the reset-based candidate and master basis.
-The first normal promotion was accepted through
-[PR #546](https://github.com/shk95/configs/pull/546), with all selected native
-jobs and Required checks successful. Actual merge parents/tree were confirmed.
-Its master merge history was reflected into dev without source reauthoring.
+The initial promotion through [PR #546](https://github.com/shk95/configs/pull/546)
+passed its selected native jobs and Required checks, but its topology advanced
+dev onto the master lane. That topology was superseded by the maintainer's
+history-only correction through [PR #547](https://github.com/shk95/configs/pull/547).
+The corrected merge 8698a8b has first parent 60bcd46 and second parent 4e6cd4a.
+Its exact-source CI and Required checks passed, and actual merge parents/tree
+were confirmed. At that transition both branch trees exactly matched their
+pre-correction trees, published tag objects were unchanged, and dev continued
+on its own lane. Subsequent master synchronization follows the amended procedure.
 
 Dev protection now permits ordinary push without PR/required checks or
 conversation resolution. Master retains strict Required checks and protected

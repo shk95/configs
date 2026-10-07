@@ -8,7 +8,9 @@ description: Verify a local candidate and fast-forward dev sequentially.
 Read CONTRIBUTING.md "Local integration and completion". Confirm integration
 authorization and ownership of one integration operation at a time.
 
-1. Read the candidate's exact SHA, recorded dev base, diff and evidence.
+1. Read the candidate's exact SHA, recorded dev base, diff and evidence. Review
+   that its first-parent path continues the development lane and any master
+   synchronization uses a dev-based --no-ff merge.
 2. Confirm primary is on dev, clean and has no operation in progress. Confirm
    dev still equals the reviewed base and is an ancestor of the candidate.
 3. If not, stop. Reflect current dev in the candidate worktree, resolve there

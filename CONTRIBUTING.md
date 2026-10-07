@@ -54,10 +54,12 @@ to the other.
 
 ## Branch and commit flow
 
-Start from the selected local master snapshot. If it adds history, incorporate
-it into dev. A fast-forward can use primary; a merge or conflict resolution is
-authored in a linked topic worktree and checked before exact-SHA integration.
-Remote fetching is an explicit synchronization operation, not task pickup.
+Start from local dev and select the local master snapshot to incorporate.
+If master adds history, merge it with `git merge --no-ff <master-SHA>` in a
+dev-based linked topic worktree. The merge's first parent continues the dev
+lane and its second parent is the selected master snapshot. Resolve and check
+the result there before exact-SHA integration. Remote fetching is an explicit
+synchronization operation, not task pickup.
 
 Create a dedicated topic worktree from local dev:
 
@@ -70,6 +72,11 @@ scope; a topic is one coherent same-scope result. Dev can accumulate multiple
 scopes for later push and promotion. Primary is for inspection and integration;
 source commits, including conflict resolution, are made in the topic worktree.
 Do not author directly on master or rebase published work.
+
+Keep dev and master on their own first-parent paths. Fast-forward integration
+advances dev to a verified dev-based candidate; it never advances dev directly
+to master or to a master promotion merge. After promotion, continue from dev
+and reflect master at the next explicit work/promotion synchronization.
 
 ## Local integration and completion
 
@@ -202,16 +209,18 @@ requires an accepted policy change first.
 
 1. Explicitly fetch current remote master/dev and inspect differences against
    completed local work. Do not replace local dev with origin/dev implicitly.
-2. Reflect current master in the candidate worktree, resolve and verify, then
-   integrate into dev using the local procedure. Push dev normally.
+2. If current master adds history, reflect it with `--no-ff` in the dev-based
+   candidate worktree, retaining the dev lane as the first parent. Resolve and
+   verify, then integrate into dev using the local procedure. Push dev normally.
 3. Run `tool/configs plan-promotion` on the selected local snapshots and
    review every included commit/scope. Check for another open master PR.
 4. Create the same-repository dev to master PR. Required checks and resolved
    conversations must pass against the current base/head before an explicitly
    requested merge commit. If master moves or checks fail, stop and repair
    manually through dev; no automatic base repair or retry controller.
-5. Confirm actual merged state. Domain publication is a separate decision.
-   Reflect accepted master history at the next work/promotion synchronization.
+5. Confirm actual merged state and keep dev on its own lane. Domain publication
+   is a separate decision. Reflect accepted master history with the procedure
+   above at the next explicit work/promotion synchronization.
 
 The one-time reset-based cutover is recorded separately from routine promotion.
 It never becomes an everyday force option. Existing annotated tags stay fixed.

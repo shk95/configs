@@ -15,12 +15,15 @@ dev admission to integrate-work and cleanup review to reclaim-workspaces.
 Use local dev, not implicit origin/dev pickup. The project's user request
 governs authorization; installed plugins and command allowlists do not.
 
-Before master promotion explicitly synchronize remote snapshots, reflect
-current master in the candidate, verify and integrate locally, then push dev
-normally. plan-promotion reads selected local snapshots. Check open master
-PRs and admit only same-repository dev or the bounded input patch lane, with
+Before master promotion explicitly synchronize remote snapshots. If master
+adds history, merge its selected SHA with --no-ff in the dev-based candidate,
+keeping the dev lane as the first parent. Verify and integrate locally, then
+push dev normally. plan-promotion reads selected local snapshots. Check open
+master PRs and admit only same-repository dev or the bounded input patch lane, with
 strict Required checks and resolved conversations. Merge only with explicit
-authorization; confirm actual merge. Base drift or failed checks stops.
+authorization; confirm actual merge and keep dev on its own lane. Reflect
+master at the next explicit work/promotion synchronization; never fast-forward
+dev to the promotion merge. Base drift or failed checks stops.
 
 Domain release planning uses plan-release. Annotated immutable tags certify
 their named domain only. Tag creation/push require authorization; no GitHub
