@@ -16,17 +16,26 @@ this redesign. Historical reconstruction and host evidence are not rewritten.
 
 ## Remote adoption
 
-Remote cutover has not yet been performed. The 2026-10-07 captured remote
-tips were dev b8e9273 and master 6c60f37; these are snapshots, not a live
-assertion. Existing remote dev PR/check gates and old workflows remain until
-the explicitly reviewed one-time ref/settings transition. Local source is not
-proof that GitHub already runs the new policy.
+On 2026-10-07 the maintainer-authorized cutover replaced old remote dev
+b8e9273 and master 6c60f37 with the reset-based candidate and master basis.
+The first normal promotion was accepted through
+[PR #546](https://github.com/shk95/configs/pull/546), with all selected native
+jobs and Required checks successful. Actual merge parents/tree were confirmed.
+Its master merge history was reflected into dev without source reauthoring.
 
-The intended protection is ordinary dev push without PR/required checks or
-conversation resolution; master retains strict Required checks and protected
+Dev protection now permits ordinary push without PR/required checks or
+conversation resolution. Master retains strict Required checks and protected
 merge-commit PRs with zero required approvals. Both enforce administrators
-and prohibit everyday force pushes/deletion. Live gate, writer and scheduled
-evidence are recorded operationally, separately from local implementation.
+and prohibit everyday force pushes/deletion. Automatic and manual input patch
+operation and its schedule are enabled again; no new patch publication or
+actual scheduled trigger is certified by the source promotion.
+
+Cancelled conditional-merge/qualification issues and PRs were retired. Related
+topic/backup/reconstruction branches and worktrees were reclaimed after a
+verified recovery archive preserved their history and dirty/checkpoint data.
+Current remote facts are checked explicitly for remote operations, not cached
+as prerequisites of local development. Operational documentation can complete
+on dev without another immediate master promotion.
 
 ## Input patch and domain boundaries
 
