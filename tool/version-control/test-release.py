@@ -17,6 +17,8 @@ import unittest
 from unittest.mock import patch
 import zipfile
 
+sys.dont_write_bytecode = True
+
 ROOT = Path(__file__).resolve().parents[2]
 spec = importlib.util.spec_from_file_location('release', ROOT / 'tool/version-control/release.py')
 r = importlib.util.module_from_spec(spec)

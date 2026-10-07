@@ -6,6 +6,13 @@ enforced-by: tool tool/dispatch/ci-base
 enforced-by: fixture tool/version-control/test
 decision: docs/policy/decisions/repository/local-gate-selects-by-effect.md § The local gate selects checks by effect
 
+Commit uses fast staged checks and final candidates use the related suites.
+Pre-push reads transmitted history and tags only; native/fixture execution
+does not depend on its checkout. Master CI selects conservative affected
+suites and fails unknown inputs. Dev has no automatic CI gate.
+
+Historical operation before 2026-10-07:
+
 The selector is each gate's answer to "which checks does this change
 need"; ownership is a different question and stays with the classifier.
 The version-control fixture suite copies the hooks, the dispatcher and the
@@ -32,3 +39,9 @@ repository-wide scans. Unknown input or an unsupported event is a failure.
 The 2026-09-30 runtime binding adoption also selects the native Windows suite
 for its known repository-owned runtime helpers and fixture, independently of
 ownership; unrelated .github material keeps repository-only CI selection.
+
+2026-10-07: local-development-workflow.md replaces remote dev admission.
+Local combined-result checks precede exact-SHA integration; push only checks
+transmitted history, and Required checks applies to master PRs. Concise local
+evidence replaces a mandatory PR body. Closing keywords are also checked in
+current master incoming history.

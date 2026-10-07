@@ -33,7 +33,7 @@ schema and no message.
 
 The repository half of the fixture pruning landed on 2026-09-04 and made
 C10 the default. The three remaining untagged units were sections of the
-commit-helper suite. `INV repository/publish-through-dev` now holds what the
+commit-helper suite. `retired invariant repository/publish-through-dev` now holds what the
 `--publish` and `prune` cases prove — one pull request against `dev` from a
 topic branch, never a commit on `dev` or `master`, a created branch starts
 at `origin/dev`, a rejected push stays local, protected branches are never

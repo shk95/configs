@@ -61,3 +61,10 @@ work and preserve conservative shared-input coverage. Keep repeated post-merge
 validation until identical validated inputs and the actual result are proven;
 no optimistic reuse based only on PR green status. Historical reports and
 completed decisions remain historical; current procedures describe this model.
+
+## Amendment 2026-10-07: local completion
+
+The accepted local-development-workflow.md decision replaces conflicting dev
+PR admission, remote pickup/delivery, automatic closure and promotion-history
+restrictions. Retained domain and publication boundaries remain in force.
+The statements above record the earlier operation and its evidence.

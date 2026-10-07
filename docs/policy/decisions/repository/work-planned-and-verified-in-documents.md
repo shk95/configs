@@ -117,3 +117,10 @@ recovery. The spec/report pairing, dated acceptance amendments, evidence lanes
 and report-driven issue closure remain accepted. Roadmap participation is
 optional; the planner manages priorities and pickup-ready plans separately.
 The measured history and completed work above remain historical evidence.
+
+## Amendment 2026-10-07: local completion
+
+The accepted local-development-workflow.md decision replaces conflicting dev
+PR admission, remote pickup/delivery, automatic closure and promotion-history
+restrictions. Retained domain and publication boundaries remain in force.
+The statements above record the earlier operation and its evidence.

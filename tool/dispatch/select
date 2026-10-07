@@ -155,7 +155,7 @@ if has_scope unclassified; then
   echo unclassified
 fi
 
-if has_scope repository && [ "$fixtures" -eq 1 ]; then
+if [ "$stage" = push ] && has_scope repository && [ "$fixtures" -eq 1 ]; then
   echo repository:fixtures
 fi
 

@@ -1,5 +1,5 @@
 ---
-description: Verify, record gaps and publish using the shared workflow
+description: Verify, record gaps and complete local work using the shared workflow
 ---
 
 Invoke `/run-version-control-workflow` in prepare mode with the supplied task.

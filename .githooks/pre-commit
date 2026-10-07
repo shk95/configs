@@ -75,10 +75,8 @@ if selected unixlike:payloads; then
   run_check payloads "Fix the payload it rejected, or declare it in unixlike/payloads.json."
 fi
 
-if selected repository:fixtures; then
-  evidence_run "version-control fixtures" tool/version-control/test \
-    || abort "Version-control policy fixtures failed."
-fi
+# Full repository fixtures run on the final candidate and master CI.
+# Commit keeps staged hygiene, ownership, secrets and related quick checks.
 
 # Desired-state hygiene is repository-wide, domain-agnostic and cheap, the same
 # shape as the secret scan below, so it runs unconditionally rather than

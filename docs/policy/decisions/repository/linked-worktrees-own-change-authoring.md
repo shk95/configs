@@ -29,3 +29,10 @@ those operations without identifying which task owns an edit.
 
 Rejected: treating a CI check as proof of authoring location. The worktree
 path is not present in a commit or pull request.
+
+## Amendment 2026-10-07: local completion
+
+The accepted local-development-workflow.md decision replaces conflicting dev
+PR admission, remote pickup/delivery, automatic closure and promotion-history
+restrictions. Retained domain and publication boundaries remain in force.
+The statements above record the earlier operation and its evidence.

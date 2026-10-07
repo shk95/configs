@@ -36,6 +36,10 @@ are revised for the new owner before work resumes.
 
 ## Current priorities
 
+2026-10-07: reset-based local workflow redesign takes priority. The cancelled
+backup flow and external skill extraction are not prerequisites; deferred
+host outcomes and earlier completed evidence remain independent.
+
 2026-10-05: the maintainer selected the minimal domain and bounded-release
 outcomes in `repository/minimal-reconstruction/spec.md`.
 

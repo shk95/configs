@@ -54,117 +54,47 @@ to the other.
 
 ## Branch and commit flow
 
-Start a source change in its own linked worktree, with one topic branch for the
-reviewable increment. Keep the primary checkout available for read-only
-inspection and integration. `tool/configs worktree new <scope>-<topic> [feature|fix]`
-fetches `origin/dev`, creates the branch and its sibling worktree, and prepares
-its local dependencies. For a requested fixed base commit, create the linked
-worktree at that exact commit and attach a topic branch there before editing;
-verify that the commit is the intended `origin/dev` base before publishing.
-The remote feature branch and PR preserve delivery. A local worktree may be
-reclaimed after the handoff and data review below, even before merge; recreate
-it from the remote branch when feedback requires changes.
+Start from the selected local master snapshot. If it adds history, incorporate
+it into dev. A fast-forward can use primary; a merge or conflict resolution is
+authored in a linked topic worktree and checked before exact-SHA integration.
+Remote fetching is an explicit synchronization operation, not task pickup.
 
-`tool/version-control/require-linked-worktree` is a preflight for scripts that
-write source. The pre-commit hook also refuses commits from the primary
-checkout, including direct `git commit`; the routine commit helper refuses
-there before it edits. Git cannot intercept an editor writing a file, so the
-agent workflow and this start procedure keep editing in the linked worktree,
-while the commit guard catches a misplaced change before it enters history.
-Read-only checks, integration, promotion and release operations may use the
-primary checkout. A native Windows clone may check an unpublished branch as
-described below; it does not author that branch's source change.
+Create a dedicated topic worktree from local dev:
 
-```text
-master <- dev <- feature/<domain>-<topic> or fix/<domain>-<topic>
-master <- feature/unixlike-input-patch-<master-sha-prefix> (validated automation only)
+```sh
+tool/configs worktree new repository-example feature
 ```
 
-Examples are `feature/unixlike-shell`, `fix/windows-zellij`, and
-`feature/common-terminal-colors`. Governance examples are
-`feature/repository-vcs-audit` and `fix/repository-ci-dispatch`.
+The helper neither fetches nor authenticates. One source commit belongs to one
+scope; a topic is one coherent same-scope result. Dev can accumulate multiple
+scopes for later push and promotion. Primary is for inspection and integration;
+source commits, including conflict resolution, are made in the topic worktree.
+Do not author directly on master or rebase published work.
 
-A branch is one reviewable increment: one issue, or what one judgement
-covers. Cut it from `origin/dev`, and merge it through one pull request when
-it is complete and green
-(`docs/policy/decisions/repository/work-planned-and-verified-in-documents.md`). A spec's increments are coherent same-scope outcomes, not individual steps or
-evidence environments. Keep the report rows and status produced by the change
-in that PR (INV repository/pull-request-spans-an-evidence-lane). The original
-invariant identifier remains stable; its statement now covers multiple lanes.
-"Plan and verify work" below explains the plan boundary.
+## Local integration and completion
 
-A commit marks a judgement point. It carries the change one decision
-produced, however many files that is, and is not split further merely because
-it has parts (`docs/policy/decisions/repository/commit-marks-a-judgement-point.md`). Scope the
-subject, for example `feat(unixlike):`, `fix(windows):`, `chore(common):` or
-`refactor(repository):`. A document classifies as the scope directory that
-holds it, or the scope a file under `docs/status/` or
-`docs/policy/definition-of-done/` is named for, so a domain's decision,
-invariant, evidence item and status land in that domain's commit
-(`docs/policy/decisions/repository/documents-classified-by-scope.md`).
-Anything that still touches two scopes is two commits.
+1. One integrator handles local dev at a time. Confirm primary dev is clean and
+   has no merge/rebase operation in progress.
+2. In the candidate worktree, record current dev SHA and merge that dev when
+   needed. Resolve any conflicts there. Do not refresh every worker whenever
+   another task completes.
+3. Run the relevant checks on the final combined result. Commit any remaining
+   source change, then verify the exact final SHA and a clean candidate.
+4. Return to primary. Confirm dev still equals the recorded base and remains
+   clean; otherwise stop and return to the candidate for review/verification.
+5. Advance dev with `git merge --ff-only <verified-full-SHA>`.
+6. Record the result, SHA, verification, unavailable items and push status.
+   Local completion requires the agreed scope's evidence, not a remote PR.
 
-Branches interleave where one blocks another, and no rule is needed to make
-them: the pre-commit hook refuses a staged path with no owning scope, so a
-move cannot be committed before the classifier accepts its new paths, and the
-old paths cannot be deleted before the move has merged. Where that happens
-each half merges when it is ready.
+The command in step 5 does not prove verification or cleanliness on its own.
+Its input is the exact candidate reviewed above. Push later when requested;
+ordinary push rejection stops without changing completed local work. Never
+retry an ordinary push with force. Domain release/activation remains separate.
 
-Use merge commits for completed work; do not squash or rebase published work.
-Do not commit directly to `master`.
-
-`dev` requires an up-to-date branch, so one whose base has moved catches up
-before it can merge and GitHub's auto-merge will not do it. Merge `dev` into
-the branch locally and push: the pre-push hook and the native lanes then run
-against the tree that will actually land, which is where this repository's
-native evidence comes from. Do not use `gh pr update-branch`, which has
-GitHub author that merge outside both. `git merge-tree --write-tree HEAD
-origin/dev` shows the conflicts read-only first.
-
-`dev` means the affected domain's repository checks pass. `master` means the
-source change has been accepted; it no longer means every platform at that
-commit has been exercised. Native readiness is represented by domain tags and
-the evidence in `docs/policy/definition-of-done/`.
-
-Use independent release tags:
-
-- `unixlike-vMAJOR.MINOR.PATCH`;
-- `windows-vMAJOR.MINOR.PATCH`;
-- `common-vMAJOR.MINOR.PATCH`, only when common material exists.
-
-Keep `unixlike/flake.lock` refreshes in dedicated `chore(unixlike-deps)`
-commits. A domain tag certifies only the named domain even though the commit
-may contain accepted history from the others.
-
-For a routine desired-state edit whose message is a template — a Homebrew
-formula or cask, a `unixlike/flake.lock` refresh —
-`tool/configs commit` shows the edit, the classification, the selected
-checks, and the message, then applies it and commits on your confirmation. It
-refuses on `master` and never bypasses a hook.
-
-Run it from a linked worktree on a branch dedicated to that edit. On a topic
-branch it commits where it stands, and with `--publish` it arms auto-merge on
-the pull request already open from that head, which on a branch carrying
-other work would merge that work unfinished. Every edit it templates is
-`unixlike`, so on a `repository` branch it would also produce a two-scope
-commit. The primary `dev` checkout is refused before the helper edits.
-
-Add `--publish` and that one confirmation carries the change the rest of the
-way. If `dev` is checked out in a linked worktree, the helper branches to `feature/<scope>-<topic>` from
-`origin/dev`; on any other branch it commits where it is. It then pushes,
-opens a pull request against `dev`, arms auto-merge, and prints the
-pull-request URL. It never waits on CI and never merges: `Required checks` and
-an up-to-date base still decide that, and a push the pre-push hook or the
-remote rejects leaves the commit local. `--dry-run --publish` prints the
-branch, the pull-request title and body, and every command, and writes
-nothing.
-
-`--publish` requires `Allow auto-merge` to be on in the repository settings and
-`gh` to be authenticated for github.com; it refuses before writing anything if
-either is missing. It pushes the branch rather than the one commit, so it lists
-everything on the branch that is not yet on `dev` before you confirm. Where a
-pull request from the branch is already open against `dev` it arms that one and
-leaves its title and body alone.
+Routine desired-state edits use `tool/configs commit` in a dedicated topic
+worktree. It confirms an edit and commits locally with hooks. `--dry-run`
+writes nothing; `--publish` and `prune` are retired and refuse. The helper
+does not fetch, branch, push, open a PR or request auto-merge.
 
 Domain releases use immutable annotated tags. The target commit must be
 reachable from `master`. The annotation records the domain and reports
@@ -232,100 +162,35 @@ through the next promotion; before that its shell body is run by hand with
 
 ## Agent roles and handoff
 
-Use the project skills under .agents/skills/. An unspecified "work on X"
-request first checks existing work through plan-work; only a small clear
-single-criterion task goes straight to execute-work. Planning owns the roadmap
-and work plans. Implementation owners update other docs affected by their work.
-Do not turn every documentation edit into a planner assignment.
+Use project-local skills. plan-work inspects existing plans and defines
+acceptance when needed. execute-work pins local dev and the reviewed plan,
+works in its dedicated worktree and records actual evidence. integrate-work
+reviews a local candidate and integrates its verified SHA sequentially.
+Explicit user Git authorization carries through the agreed task.
 
-At pickup, inspect the plan and current repository. Fetch origin/dev, enter a
-new linked worktree immediately and record both the execution base and the
-reviewed plan revision. The plan's age alone does not require replanning;
-changed acceptance, dependencies or ownership does. A worker can adjust details
-inside the agreed result without silently weakening the criteria.
+Use `tool/configs session start <spec-path-or-> <lane>` for a useful local
+checkpoint. Before interruption, `session checkpoint suspended` records the
+goal, exact state, evidence, unfinished work and next step. A checkpoint is
+neither a heartbeat nor proof of delivery. Changed acceptance returns to
+planning; uncertain liveness does not authorize cleanup.
 
-Run tool/configs session start <plan-path-or-> <lane> in that worktree. The
-ignored .work-session.md holds lane, base, plan revision/content digest,
-optional session ID and a free-text handoff. No PR state or check result cache
-belongs there. Before interruption or role change, feed a meaningful handoff
-into tool/configs session checkpoint suspended. Include goal, current commit
-and uncommitted work, evidence, remaining work, reason and next action.
-After approved replanning, run session replan <spec-path> while suspended;
-it records the new revision and preserves the preceding checkpoint. A
-recreated workspace uses session recover rather than checkpoint active; the
-original base remains unknown unless separately verified. If a hard crash
-leaves .work-session.lock, confirm ownership with the operator, preserve any
-useful note/body, remove only that stale lock, then retry. PID or age alone
-is insufficient. Use handed-off after Ready delivery; abandoned requires explicit disposition of
-useful work. A resumed worker inspects local and remote changes before marking
-active. An unfinished worker may return to planning after this checkpoint.
-The planner chooses continuation, split, supersession or abandonment and names
-its owner. A checkpoint is not a heartbeat or an atomic remote lane claim.
-
-A worker resuming a Ready PR first coordinates withdrawal of admission,
-confirms any auto-merge request is cancelled, and converts the PR back to
-Draft before editing or pushing. Recreated workspaces follow the same rule.
-Ready is restored only when the revised result and its checks are complete.
-
-Workers commit, push, create a Draft PR and finish with Ready after current-head
-required checks. They never use commit --publish or arm auto-merge. The legacy
-commit --publish convenience remains a human-authorized integration operation;
-its confirmation is not a worker handoff. Worker authorization to publish is
-not permission to merge. Existing authorized scope does not need repeated
-confirmation for each commit or push.
-
-Use tool/configs session inspect to find local handoffs; inspect-work combines
-that with fresh GitHub observations. Resume guidance is printed only for a
-recorded session identity. An unknown session remains unknown.
-
-Reclaim-workspaces is read-only by default. Before removal, inspect owner,
-tracked/index/untracked/ignored paths and commits absent from the freshly
-fetched remote. Do not read notes/ content. A clean diff or a merged PR alone
-is insufficient. Recommend retain/resume, uncertain, or eligible. Obtain
-explicit deletion authorization; then use a non-force worktree removal. The
-worktree done helper removes a named worktree but does not establish safety.
-A PR with all work pushed permits pre-merge reclamation after this review.
+inspect-work reads requested local handoffs. Remote status is optional and
+must be relevant to an explicit remote operation. reclaim-workspaces reviews
+unpushed/unique commits and tracked, untracked and ignored data before any
+requested non-force removal. Do not read notes/ content. Keep useful old
+worktrees; a clean diff is not preservation evidence. No automatic pruning.
 
 ## GitHub integration
 
-The integration session queries GitHub Draft/Ready PRs, exact heads, checks,
-reviews, conversations, dependencies, mergeability and outstanding auto-merge
-requests. It never reconstructs candidates from local worktree/branch lists.
-GitHub native states are not duplicated as labels or local state files.
-Semantic labels such as blocked and high-risk may inform admission.
+Dev is local integration followed by ordinary remote synchronization. It has
+no PR, required-check or conversation-resolution admission gate. Administrator
+enforcement and force-push/deletion prohibitions remain enabled.
 
-One maintainer-managed integration session admits one candidate at a time.
-Merge Queue is not used. Keep dev's PR requirement, Required checks with strict
-base, administrator enforcement, resolved conversations, no force push and no
-deletion. Do not grant agents bypass. Risk-specific human review is an explicit
-admission requirement; add CODEOWNERS only with actual owner identities and
-review rules. Required approval count remains zero for ordinary changes.
-
-Re-query the candidate head/checks before admission. If strict protection needs
-a newer base, ask its worker to merge origin/dev into its feature branch and
-revalidate. Do not eagerly update every worker. Return conflicts and failed
-validation to a worker, recreating its workspace from the remote if necessary.
-With separate merge authorization, request GitHub merge-commit integration
-with the expected head after checks pass. Do not arm unattended auto-merge
-requests that could admit a later worker head. On recovery cancel any existing
-auto-merge request and confirm cancellation before asking for head changes;
-if it merged concurrently, inspect the actual result. Never
-use an administrator bypass. Confirm merged state before admitting the next;
-an accepted request or armed auto-merge is not a completed merge. Strict base
-protection remains the safeguard if dev changes during admission.
-
-Native stacks were demonstrated in a separate lab, not certified for this
-repository. Until trunk-wide CI and all-layer admission are implemented and
-verified, do not create or merge a native stack here. Wait for a dependency to
-land and then branch from dev. Stacks can automatically rebase upper layers
-and multiple PRs can share a merge commit; ordinary branch-update assumptions
-must not be applied to them. No local dependency database is added.
-
-The new role contract takes effect when this governance PR enters dev. Existing
-workers checkpoint their actual state and adopt it at the next handoff; do not
-rewrite their history. Effect-based CI changes and domain efficiency work are
-separate follow-ups. Keep post-merge validation until equivalence with the
-actual integrated result is proved; a prior PR success is insufficient.
+Master retains PR admission, strict Required checks, resolved conversations,
+administrator enforcement and force-push/deletion prohibitions. Required
+approvals remain zero; merge commits are the only enabled merge method.
+General development uses same-repository dev to master. The bounded input
+patch is its independent exception. No operational protection bypass.
 
 ## Promote dev to master
 
@@ -335,25 +200,21 @@ repository. Keep at most one such pull request open. The repository maintainer
 owns the promotion decision. There is no operational bypass; a different flow
 requires an accepted policy change first.
 
-1. Fetch `dev` and `master`, then run `tool/configs plan-promotion`.
-2. Review every commit and owning scope in `master..dev`. Do not add a fix to
-   the promotion pull request; land the fix through its owning branch into
-   `dev`, then refresh the promotion.
-3. Open a pull request from `dev` to `master` titled
-   `chore(repository): promote dev to master`. Record included pull requests,
-   scopes, check evidence, and known unavailable native evidence.
-4. Require `Required checks`, resolved conversations, and an explicit merge
-   request. Merge with a merge commit only.
-5. Run local and remote version-control audits after the merge. Do not merge
-   the promotion commit back into `dev`.
-6. Plan domain release tags or deployments separately when their own evidence
-   is available.
+1. Explicitly fetch current remote master/dev and inspect differences against
+   completed local work. Do not replace local dev with origin/dev implicitly.
+2. Reflect current master in the candidate worktree, resolve and verify, then
+   integrate into dev using the local procedure. Push dev normally.
+3. Run `tool/configs plan-promotion` on the selected local snapshots and
+   review every included commit/scope. Check for another open master PR.
+4. Create the same-repository dev to master PR. Required checks and resolved
+   conversations must pass against the current base/head before an explicitly
+   requested merge commit. If master moves or checks fail, stop and repair
+   manually through dev; no automatic base repair or retry controller.
+5. Confirm actual merged state. Domain publication is a separate decision.
+   Reflect accepted master history at the next work/promotion synchronization.
 
-If promotion is wrong, revert or fix it through dev and promote again. Never
-rewrite master or move an existing release tag. Dev requires an up-to-date base.
-Master promotion need not carry promotion-only merge commits, but must incorporate
-accepted input patch history. Both master lanes require their applicable source
-checks and the one-open-master-PR gate.
+The one-time reset-based cutover is recorded separately from routine promotion.
+It never becomes an everyday force option. Existing annotated tags stay fixed.
 
 ## Add or change governance
 
@@ -477,59 +338,27 @@ promoted.
 
 ## Plan and verify work
 
-Work with more than one acceptance criterion or more than one pull request
-has a spec and a report. Any other change is a single pull request whose body
-carries its evidence; an issue for it is optional. `docs/work/README.md` is
-the format; this is the procedure.
+Use a spec/report pair when planning, decisions or sustained verification
+need a durable record. A small unambiguous change may use its commit body and
+concise result instead. An issue and roadmap entry are optional.
 
-1. Classify the outcome. The work item is `docs/work/<scope>/<slug>/`, and
-   the spec has that one scope. Work whose outcome spans scopes is one spec
-   per scope. An increment may classify differently from its spec, and its
-   commit and pull request stay single-scope.
-2. Write `spec.md`: the problem, the decisions with what was rejected, the
-   increments — one for each coherent reviewable same-scope outcome, not
-   one for each step or verification lane — and an `## Acceptance` table naming for each criterion the
-   evidence lanes that must be verified. A criterion no check can decide
-   names `review`. Set `review-by` to the date by which someone could tell
-   whether the work is done. Argue a direction first in `study.md` when it
-   needs a survey or a measurement, quoting each measurement with the date
-   and the commit it was taken at.
-3. Create `report.md` in the same commit, with one `pending` row per
-   criterion. Before implementation, run
-   `tool/configs work --working-tree docs/work/<scope>/<slug>` for
-   read-only feedback on the new pair, including untracked files. This does
-   not validate the proposed commit. When staging is authorized, stage both
-   and run `tool/configs work --staged`; the hook runs that check too.
-4. When implementation starts, open the execution issue. Its first line names
-   the spec path; it holds the increments as a checklist and carries no
-   acceptance criteria. Add `issue: #<n>` to the spec's header. A report
-   issue that already exists — a bug, an upstream watch — links the spec and
-   becomes the execution issue.
-5. Work in coherent same-scope increments, one worker branch and PR each.
-   Multiple verification lanes can support one result. Record the evidence
-   and report changes in that same PR; external host/session evidence may
-   justify a documentation-only result. The plan/report pair can be the first
-   commit of the implementation PR, or a planning handoff reviewed beforehand.
-   Preserve evidence distinctions and link issues with Refs references, never
-   closing keywords (INV repository/no-closing-keyword). Publish a Draft early
-   when useful and make it Ready only after completion and required checks.
-6. To change a criterion after the report exists, add a paragraph to the spec
-   that opens `Amended YYYY-MM-DD` and names the criterion. The checker
-   refuses a criterion removed or rewritten without one.
-7. End the report as `done`, `abandoned` or `superseded`. The push to `dev`
-   that carries it closes the execution issue with a comment linking the
-   report (`INV repository/issue-closes-from-report`); nothing else closes
-   one automatically, and `tool/configs audit-remote` reports an
-   issue left open beside a terminal report. A durable rule the work produced lands
-   in a decision record or an invariant that names the document as its
-   source, never by citing the work item from a document that carries
-   authority; `tool/configs design-citations` refuses that citation.
+1. Classify the outcome and read relevant current work. Create the owning
+   `docs/work/<scope>/<slug>/spec.md` and pending `report.md` together in a
+   dedicated worktree. State acceptance, evidence lanes and dependencies.
+2. Run `tool/configs work --working-tree docs/work/<scope>/<slug>` before
+   relying on the pair. Once staging is authorized, use `work --staged`.
+3. Work and record evidence with the source change that produced it. Keep
+   unavailable/failed evidence distinct. Change existing criteria only through
+   dated amendments. Remote Actions evidence stays in Actions/PR records.
+4. Mark implementation done when its criteria are verified. A later push or
+   operational cutover can have its own pending record without undoing local
+   completion. Issues are handled explicitly; use Refs links in source.
+5. Retire obsolete active references with the adopted replacement. Do not
+   rewrite historical failures as success or make all old report cleanup a
+   prerequisite for current development. Archive paired records when their
+   relevant preservation and reference review is complete.
 
-`docs/work/roadmap.md` states priorities and dependencies, not schedule or PR
-state. Maintain active, deferred and historical outcomes with reasons and
-references; standalone work need not enter it. GitHub milestones are not used. A spec whose
-`review-by` has passed while its report is pending is overdue:
-`tool/configs work --overdue` lists it.
+The format remains `docs/work/README.md`; a work document is not policy.
 
 ## Record a decision
 
@@ -783,120 +612,19 @@ tool/configs audit-remote  # when gh is authenticated
 tool/configs hook-evidence
 ```
 
-`tool/version-control/audit --history` runs on every push and in the
-repository-wide CI scan job, and judges committed history alone. It reads
-`dev` and `master` as `origin/dev` and `origin/master` when those refs
-exist, and the local branches only when they do not, so a local `dev` or
-`master` that lags or leads its remote neither blocks a push nor lets one
-through unchecked. A clone that has not fetched is judged against the remote
-as it last saw it. Every local tag is still judged, including one the push
-does not carry: a stray local `*-v*` tag still fails the push until it is
-deleted. The full form, which also judges this clone — local branch names,
-the hooks setting — and reads the local branches first, is a read-only look
-by hand, because a clone's scratch branch is not a property of the change
-being pushed. `tool/configs plan-release` checks reachability from
-the local `master`, because it plans a tag this clone creates.
+Push runs bounded `audit --range <base> <tip>` for transmitted commits and
+`audit --tag <name>` for a transmitted release tag. It does not rerun native
+suites from the current checkout. Final candidate verification precedes local
+integration; master CI verifies its actual PR result.
 
-The history form also judges, through `.githooks/commit-msg`, the non-merge
-subjects of the commits being published: the pre-push hook names the tips it
-pushes, and CI names `HEAD`, which for a pull request is the merge GitHub
-would make. A commit made without the hooks or with `--no-verify` therefore
-fails the push that carries it, and the pull request, before it merges. A
-commit on a branch the push does not carry is not judged.
-
-### Desired-state hygiene
-
-`tool/version-control/hygiene` scans the tracked tree for undeclared user and
-host names, absolute home paths, tracked runtime state, and machine-unique
-identifiers. It runs on every commit from `.githooks/pre-commit` beside the
-secret scan and outside domain dispatch, and again in CI, because the invariant
-is repository-wide rather than scoped to the domain being changed.
-
-```sh
-tool/configs hygiene
-```
-
-When it reports something, in order of preference:
-
-1. Remove the value. A leaked value is desired state that names one machine.
-2. If it is a synthetic provider fixture name or a value that genuinely
-   belongs to another declaration in this repository, declare it in
-   `tool/version-control/hygiene.names` with the owning change. Real Unix-like
-   host names and accounts belong in the private consumer repository.
-3. If it is a runtime artefact, delete it and add an ignore rule. The ignore
-   rule alone changes nothing once the file is tracked; it has to leave the
-   index too.
-4. Only when the reported text is genuinely not what it looks like, add one
-   `<path>`, tab, `<literal string>` row to `tool/version-control/hygiene.allow`
-   with a comment giving the reason. Both halves of "one string at one path"
-   are enforced, not conventions: an entry whose literal no longer occurs at
-   its path fails the check and is removed together with the text it forgave,
-   and an entry that forgives more than one line fails as the whole-file
-   exclusion it is. Write a literal specific enough to name the occurrence.
-
-Adding an allow entry is a governance change and is reviewed as one. There is
-no operational bypass: `git commit --no-verify` skips every hook and leaves CI
-to reject the same content.
-
-A bare account name written into prose is not detectable and is not covered.
-Reading prose in the diff for one is a manual obligation recorded in
-`docs/policy/definition-of-done/`.
-
-### Cross-domain reads
-
-`tool/version-control/domain-reads` scans each domain's code in the index —
-the flake, the modules and the Unix-like checks on one side, the Windows
-scripts on the other — for a path that names the other domain's tree, with
-comments stripped and payload trees left out. It runs on every commit beside
-the hygiene scan and in CI, because a read across the boundary is a property
-of two trees rather than of the domain being changed.
-
-```sh
-tool/configs domain-reads
-```
-
-When it reports something, copy what the other domain owns into the domain
-that reads it; the destination then owns the copy (`docs/policy/architecture.md`,
-"Default rule: keep implementations separate"). There is no allow list: a
-read across the boundary has no legitimate form.
-
-### Design citations
-
-`tool/version-control/design-citations` scans the index for a citation of a
-work item from authority-bearing files. It runs on every commit and in CI.
-
-```sh
-tool/configs design-citations
-```
-
-When it reports something, decide which of the two the sentence is doing. If
-it says where work documents live, name the directory rather than a file:
-`docs/work/` passes and `docs/work/<file>` does not. If it rests on the
-document's argument, put the accepted rule in a decision record or invariant,
-or register a temporary measure, and cite that instead. There is no allow list.
-
-### Document indexes
-
-`tool/version-control/records` refuses an area README — decisions, candidates
-or work — that names one of the area's documents: a record or candidate by
-its file name, a work item by its `<scope>/<slug>`. The list is printed from
-the headers instead, so a new record never edits a repository file
-(`INV repository/document-index-generated`). It runs on every commit and in
-CI.
-
-```sh
-tool/configs records
-tool/configs records --table decisions
-```
-
-Branch protection on `dev` and `master` requires the stable `Required checks`
-job. That job fails unless classification and secret scanning pass and every
-selected domain job succeeds. Conditional domain job names are deliberately
-not branch-protection contexts because unselected domains are skipped.
+The full audit and `audit --history` remain explicit diagnostics for clone
+and integration history. The history diagnostic uses fetched remote snapshots
+when available; it is not proof of the current local candidate. Release
+planning uses selected local master. Refresh snapshots explicitly for remote
+operations. An unrelated local tag is not part of a branch push check.
 
 ## Bounded scheduled release
 
-During a maintainer-authorized shared-history replacement, keep
 `.github/workflows/release.yml` is the shared Unix-like input patch workflow.
 `CONFIGS_RELEASE_ENABLED=1` enables operation; `CONFIGS_RELEASE_SCHEDULE_ENABLED=1`
 also enables its daily 05:00 Asia/Seoul schedule. Keep schedules off while rolling
@@ -922,14 +650,11 @@ Master Unix-like configuration source must match its published release before
 input patching; finish any unpublished development release first.
 
 At most one master PR may be open. Finish an existing development promotion before
-starting input patching. Development remains topic-to-dev-to-master. Before a
-later dev promotion, incorporate accepted input patch commits through a reviewed
-topic PR against dev: fetch origin, create the topic from origin/dev in a linked
-worktree, merge origin/master when it carries actual patch source, resolve any
-conflicting lock/declaration with the intended current inputs/version, and run
-checks before the protected dev PR merge. Do not merge master back solely to carry
-promotion merge commits. Development release versions and tags remain the
-maintainer's responsibility; input patch automation never publishes them.
+starting input patching. Development remains local topic-to-dev followed by protected master promotion.
+Incorporate accepted master patch history in a candidate worktree, preserving
+intended inputs/version, verify and fast-forward local dev. No patch adoption
+PR against dev or report-only delivery is required. Development release
+versions and tags remain the maintainer's responsibility.
 
 ### Manual operation and recovery
 
