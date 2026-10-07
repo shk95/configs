@@ -323,13 +323,24 @@ For dev-to-master promotion, use `--target master` after `tool/configs
 plan-promotion` confirms the same-repository `dev` source, accepted patch
 ancestry and single open master PR. `--confirm` is the explicit dispatch
 action. The command rechecks the candidate and target, then reports a confirmed
-Actions run URL and `requested`; that response does not mean merged. Actions
-waits up to 60 minutes including its retained queue, then rechecks Ready state,
-same-repository source, exact head/base, review and conversation blockers,
-newest exact-source Required checks and current strict protection before it
-calls the protected merge API. The API matches the approved head; strict
-protection is the server safeguard if the target moves between the final read
-and merge. There is no atomic expected-target-SHA field.
+Actions run URL and `requested`; that response does not mean merged. The request
+freezes the reviewed source head and records the initial target SHA. If `dev`
+advances after dispatch, the writer may update only that same-repository topic
+PR with GitHub's branch-update API and `expected_head_sha`. It verifies each
+resulting commit has exactly two parents (previous PR head first, accepted dev
+commit second), accepted dev ancestry from the recorded base, and the
+deterministic conflict-free merge tree. At most three such updates are allowed,
+including recovered updates, within 60 minutes from request creation. No new
+source commit or conflict resolution is accepted. A latest failed or cancelled
+required check stops the request before another update. After the last update,
+CI must pass for the latest dev base, exact integration head and merge tree;
+older base evidence cannot authorize a merge. The queued writer rechecks
+accepted tooling before minting its App token and before each write, and checks
+the PR and review blockers again at each integration head. Master promotion
+never updates its branch and refuses target or head drift. The protected merge
+matches the exact tested head; strict protection is the server safeguard if
+the target moves between the final read and merge. Neither API has an atomic
+expected-base condition.
 
 Before the workflow can run, its file must reach the default branch `master`;
 dispatch always selects accepted `dev`. A maintainer must separately configure
@@ -354,8 +365,10 @@ the asynchronous path; blocked candidates remain refused.
 
 Dev writers serialize in their own Actions group. Master writers share
 `configs-release-writes` with the Unix-like input patch workflow. Both queues
-retain pending requests and do not cancel active writers. Requests admitted
-against an old target stop as stale after another writer moves it. The human
+retain pending requests and do not cancel active writers. A dev request may
+incorporate later accepted dev history only through the same bounded
+integration chain; a master request stops as stale after another writer moves
+its target. The human
 `commit --publish` path and direct protected manual merges do not participate
 in these groups, so no total-writer serialization is claimed; strict branch
 protection remains the final safeguard. Do not arm native auto-merge as a

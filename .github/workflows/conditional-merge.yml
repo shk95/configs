@@ -95,6 +95,21 @@ jobs:
           ref: ${{ needs.admission.outputs.accepted_sha }}
           fetch-depth: 0
           persist-credentials: false
+      - name: Recheck queued request before minting writer token
+        env:
+          GH_TOKEN: ${{ github.token }}
+          GITHUB_RUN_ID: ${{ github.run_id }}
+          ACCEPTED_SHA: ${{ needs.admission.outputs.accepted_sha }}
+          PR: ${{ inputs.pr }}
+          TARGET: ${{ inputs.target }}
+          HEAD: ${{ inputs.head }}
+          BASE: ${{ inputs.base }}
+        run: |
+          output=$(tool/version-control/conditional-merge.py preflight \
+            --run-id "$GITHUB_RUN_ID" --pr "$PR" --target "$TARGET" --head "$HEAD" --base "$BASE")
+          printf '%s\n' "$output" >>"$GITHUB_STEP_SUMMARY"
+          accepted=$(python3 -c 'import json,sys; print(json.loads(sys.argv[1])["accepted_sha"])' "$output")
+          test "$accepted" = "$ACCEPTED_SHA"
       - id: app
         if: vars.CONFIGS_MERGE_APP_ID != ''
         uses: actions/create-github-app-token@v3

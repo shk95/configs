@@ -26,9 +26,12 @@ ci-passed labels or local JSON/YAML queues.
 1. Review the Ready PR's actual diff/result and linked plan. Check dependencies,
 semantic blockers and risk-specific review needs. Respect explicit blocked or
 high-risk metadata. No global human review requirement is added.
-2. Re-query the exact current head and current check state. Pending checks may
+2. Re-query the reviewed source head and current check state. Pending checks may
    proceed to a qualified conditional request; the writer requires successful
-   exact-source checks before merge. A failed check blocks admission. Inspect
+   exact-source checks before merge. A failed check blocks admission. A dev
+   base movement during the request may be incorporated only by the bounded
+   deterministic integration chain in the adopted decision; source changes
+   remain outside the admission. Master promotion stays frozen-base/head. Inspect
    existing auto-merge requests before admitting another candidate after restart.
 3. With dev strict protection, refresh only this candidate when required.
 Return conflict resolution or semantic corrections to its worker. Withdraw

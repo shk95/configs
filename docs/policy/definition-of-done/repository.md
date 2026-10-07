@@ -93,8 +93,14 @@ own list is the file named for it beside this one (`unixlike.md`,
       `dev` deployments, then conducts a separately authorized scoped live
       trial with `CONFIGS_MERGE_ENABLED=1` and a designated qualification PR.
       Immediately reset it to `0`; review evidence for accepted-`dev` dispatch,
-      both target lanes, current exact-source CI, separate writer credentials
-      and target-move refusal before separately accepting general enablement.
+      both target lanes, current exact-source CI, separate writer credentials,
+      and actual App-token triggering of normal PR CI. For dev drift, verify a
+      clean A-to-B update yields the deterministic integration head and new
+      exact-base CI; changed source, conflicts, stale/failed CI, more than three
+      updates, CAS/ambiguous API results and deadline are refused or recover
+      without duplicate writes. Verify master target drift still refuses
+      without a branch update. Review separate writer credentials and all
+      refusal/recovery evidence before separately accepting general enablement.
       Evidence identifies the remote Actions runs and records that no bypass
       was used.
 

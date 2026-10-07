@@ -22,6 +22,8 @@ API = 'https://api.github.com'
 API_VERSION = '2026-03-10'
 APP_ID = 15368
 WAIT_SECONDS = 3600
+MAX_DEV_UPDATES = 3
+SAFETY_PATHS = ('.github/', 'tool/', '.agents/', 'AGENTS.md', 'CONTRIBUTING.md', 'docs/policy/')
 
 
 class GitHub:
@@ -132,21 +134,25 @@ def source_identity(data):
     return source
 
 
-def request_identity(pr, request):
+def request_identity(pr, request, allow_dev_chain=False):
+    head_matches = pr['head']['sha'] == request['head']
+    base_matches = pr['base']['sha'] == request['base']
     return (pr['number'] == request['pr'] and pr['base']['ref'] == request['target']
-            and pr['head']['sha'] == request['head'] and pr['base']['sha'] == request['base']
+            and (head_matches or (allow_dev_chain and request['target'] == 'dev'))
+            and (base_matches or (allow_dev_chain and request['target'] == 'dev'))
             and pr['head']['repo'] and pr['head']['repo']['full_name'].lower() == request['repo'].lower()
             and pr['base']['repo']['full_name'].lower() == request['repo'].lower())
 
 
 def merged_request_identity(pr, request):
     return (pr['number'] == request['pr'] and pr['base']['ref'] == request['target']
-            and pr['head']['sha'] == request['head'] and pr['head']['repo'] and pr['base']['repo']
+            and (pr['head']['sha'] == request['head'] or request['target'] == 'dev')
+            and pr['head']['repo'] and pr['base']['repo']
             and pr['head']['repo']['full_name'].lower() == request['repo'].lower()
             and pr['base']['repo']['full_name'].lower() == request['repo'].lower())
 
 
-def read_pr(api, request):
+def read_pr(api, request, allow_dev_chain=False):
     pr = api.request(f"pulls/{request['pr']}")
     if pr['state'] == 'closed' and pr.get('merged_at'):
         if not merged_request_identity(pr, request):
@@ -156,7 +162,7 @@ def read_pr(api, request):
         return pr
     if pr['state'] != 'open' or pr.get('draft'):
         raise ValueError('candidate must be an open Ready pull request')
-    if not request_identity(pr, request):
+    if not request_identity(pr, request, allow_dev_chain=allow_dev_chain):
         raise ValueError('pull request head or target identity changed; fresh admission is required')
     if pr.get('auto_merge'):
         raise ValueError('candidate already has an auto-merge request; cancel and inspect it first')
@@ -167,8 +173,10 @@ def read_pr(api, request):
         raise ValueError('candidate is explicitly blocked')
     if 'high-risk' in labels:
         raise ValueError('high-risk candidate requires admission-specific synchronous review')
-    if pr.get('mergeable') is False or pr.get('mergeable_state') in ('dirty', 'behind'):
+    if pr.get('mergeable') is False or pr.get('mergeable_state') == 'dirty':
         raise ValueError(f"candidate is not mergeable ({pr.get('mergeable_state')})")
+    if pr.get('mergeable_state') == 'behind' and not (allow_dev_chain and request['target'] == 'dev'):
+        raise ValueError('candidate is behind its target')
     if pr.get('mergeable') is not True or pr.get('mergeable_state') in ('unknown', 'blocked'):
         pr['_conditional_waiting'] = True
     check_conversations(api, request)
@@ -206,14 +214,14 @@ def check_reviews(api, request, pr, labels):
     reviews = api.pages(f"pulls/{request['pr']}/reviews?per_page=100")
     latest = {}
     for review in sorted(reviews, key=lambda r: r.get('submitted_at') or ''):
-        if (review.get('user') and review.get('commit_id') == request['head']
-                and review.get('state') in ('APPROVED', 'CHANGES_REQUESTED')):
-            latest[review['user']['login'].lower()] = review.get('state')
-    if 'CHANGES_REQUESTED' in latest.values():
+        if review.get('user') and review.get('state') in ('APPROVED', 'CHANGES_REQUESTED', 'DISMISSED'):
+            latest[review['user']['login'].lower()] = review
+    if any(review.get('state') == 'CHANGES_REQUESTED' for review in latest.values()):
         raise ValueError('candidate has an outstanding change request')
     protection = api.request(f"branches/{request['target']}/protection")
     requirements = protection.get('required_pull_request_reviews') or {}
-    approved = [login for login, state in latest.items() if state == 'APPROVED']
+    approved = [login for login, review in latest.items()
+                if review.get('state') == 'APPROVED' and review.get('commit_id') == pr['head']['sha']]
     if len(approved) < requirements.get('required_approving_review_count', 0):
         raise ValueError('required pull request approvals are not satisfied')
 
@@ -266,6 +274,117 @@ def branch_sha(api, branch):
     return ref['object']['sha']
 
 
+def is_ancestor(ancestor, descendant):
+    return subprocess.run(['git', 'merge-base', '--is-ancestor', ancestor, descendant],
+                          stdout=subprocess.DEVNULL, stderr=subprocess.DEVNULL).returncode == 0
+
+
+def validate_dev_chain(request, current_head, current_dev):
+    """Accept only deterministic clean merges extending the frozen source head."""
+    source_head = request.get('source_head', request['head'])
+    source_base = request.get('source_base', request['base'])
+    for value in (source_base, source_head, current_head, current_dev):
+        subprocess.run(['git', 'fetch', '--quiet', '--no-tags', 'origin', value], check=True)
+    if not is_ancestor(source_base, current_dev):
+        raise ValueError('current dev is not descended from the originally admitted base')
+    if not is_ancestor(source_head, current_head):
+        raise ValueError('approved source head is not an ancestor of the PR head')
+    chain = subprocess.check_output(['git', 'rev-list', '--first-parent', '--reverse', '--max-count=4',
+                                     f'{source_head}..{current_head}'], text=True).split()
+    if len(chain) > MAX_DEV_UPDATES:
+        raise ValueError('dev integration chain exceeds three updates')
+    previous = source_head
+    for commit in chain:
+        parents = subprocess.check_output(['git', 'show', '-s', '--format=%P', commit], text=True).strip().split()
+        if len(parents) != 2 or parents[0] != previous:
+            raise ValueError('PR head contains a source commit or malformed integration merge')
+        base = parents[1]
+        if not is_ancestor(source_base, base) or not is_ancestor(base, current_dev):
+            raise ValueError('integration merge second parent is outside accepted dev ancestry')
+        try:
+            expected_tree = subprocess.check_output(['git', 'merge-tree', '--write-tree', parents[0], base],
+                                                    text=True, stderr=subprocess.PIPE).splitlines()[0].strip()
+        except subprocess.CalledProcessError as error:
+            raise ValueError('integration merge is not conflict-free') from error
+        actual_tree = subprocess.check_output(['git', 'rev-parse', f'{commit}^{{tree}}'], text=True).strip()
+        if expected_tree != actual_tree:
+            raise ValueError('integration merge has conflict resolution or a non-deterministic tree')
+        previous = commit
+    return len(chain)
+
+
+def update_dev_branch(api, request, expected_head, deadline):
+    """CAS the PR head, then observe and validate the asynchronous GitHub update."""
+    if time.monotonic() >= deadline:
+        raise ValueError('60-minute request deadline expired before branch update')
+    verify_run = os.environ.get('GITHUB_RUN_ID')
+    if not verify_run:
+        raise ValueError('writer run identity is unavailable before branch update')
+    run = verify_accepted_run(api, verify_run, target='dev')
+    validate_accepted_revision(api, run, 'dev')
+    validate_protection(api, 'dev')
+    latest_pr = read_pr(api, request, allow_dev_chain=True)
+    if latest_pr['head']['sha'] != expected_head:
+        raise ValueError('PR state or expected head changed before branch update')
+    if latest_pr['head'].get('ref') in ('dev', 'master'):
+        raise ValueError('protected branch refs cannot be updated as topic PRs')
+    current_dev = branch_sha(api, 'dev')
+    chain_count = validate_dev_chain(request, expected_head, current_dev)
+    if chain_count >= MAX_DEV_UPDATES and not is_ancestor(current_dev, expected_head):
+        raise ValueError('three dev integration updates exhausted before current dev was included')
+    sha256_tree(current_dev, expected_head)  # refuse conflicts before asking GitHub to update
+    refuse_latest_ci_failure(api, expected_head)
+    check_independent_shape(api, dict(request, head=expected_head, base=current_dev))
+    if time.monotonic() >= deadline:
+        raise ValueError('60-minute request deadline expired before branch update')
+    ambiguous_error = None
+    try:
+        api.request(f"pulls/{request['pr']}/update-branch", method='PUT',
+                    data={'expected_head_sha': expected_head})
+    except urllib.error.HTTPError as error:
+        if error.code == 422:
+            current = read_pr(api, request, allow_dev_chain=True)
+            if current['head']['sha'] != expected_head:
+                validate_dev_chain(request, current['head']['sha'], branch_sha(api, 'dev'))
+                return current
+            raise ValueError('PR head compare-and-swap failed; re-inspect the accepted chain') from error
+        ambiguous_error = error
+    except (urllib.error.URLError, TimeoutError) as error:
+        ambiguous_error = error
+    while time.monotonic() < deadline:
+        pr = read_pr(api, request, allow_dev_chain=True)
+        if pr['head']['sha'] != expected_head:
+            current_dev = branch_sha(api, 'dev')
+            validate_dev_chain(request, pr['head']['sha'], current_dev)
+            return pr
+        time.sleep(min(5, max(0, deadline - time.monotonic())))
+    # A final read can confirm an accepted update after the wait bound; it does
+    # not authorize another write or extend the request deadline.
+    pr = read_pr(api, request, allow_dev_chain=True)
+    if pr['head']['sha'] != expected_head:
+        validate_dev_chain(request, pr['head']['sha'], branch_sha(api, 'dev'))
+        return pr
+    if ambiguous_error:
+        raise ValueError(f'branch update response is ambiguous ({ambiguous_error}); inspect GitHub before retrying') from ambiguous_error
+    raise ValueError('branch update remains ambiguous at the request deadline; inspect GitHub before retrying')
+
+
+def validate_accepted_revision(api, run, target, allow_recovery=False):
+    current = branch_sha(api, 'dev')
+    subprocess.run(['git', 'fetch', '--quiet', '--no-tags', 'origin', current], check=True)
+    accepted = run['head_sha']
+    if not is_ancestor(accepted, current):
+        raise ValueError('accepted workflow revision is not an ancestor of current target')
+    if target == 'master':
+        if accepted != current and not (allow_recovery and is_ancestor(accepted, current)):
+            raise ValueError('master promotion requires a workflow dispatched from current dev')
+    elif not allow_recovery:
+        changed = subprocess.run(['git', 'diff', '--quiet', accepted, current, '--', *SAFETY_PATHS]).returncode
+        if changed:
+            raise ValueError('accepted workflow safety paths changed on dev; request a fresh accepted revision')
+    return current
+
+
 def source_run(api, request, tree):
     runs = api.pages(f"actions/workflows/ci.yml/runs?head_sha={request['head']}&event=pull_request&per_page=100")
     runs = [r for r in runs if r.get('path') == '.github/workflows/ci.yml'
@@ -300,6 +419,23 @@ def source_run(api, request, tree):
     return latest, 'success'
 
 
+def refuse_latest_ci_failure(api, head):
+    runs = api.pages(f"actions/workflows/ci.yml/runs?head_sha={head}&event=pull_request&per_page=100")
+    runs = [r for r in runs if r.get('path') == '.github/workflows/ci.yml'
+            and r.get('event') == 'pull_request' and r.get('head_sha') == head]
+    if runs:
+        latest = max(runs, key=lambda r: int(r['id']))
+        if latest.get('status') == 'completed' and latest.get('conclusion') not in ('success', None):
+            raise ValueError(f"newest matching CI run {latest['id']} concluded {latest.get('conclusion')}")
+    checks = api.pages(f"commits/{head}/check-runs?per_page=100")
+    required = [c for c in checks if c.get('name') == 'Required checks' and c.get('app', {}).get('id') == APP_ID]
+    if not required:
+        return
+    latest_check = max(required, key=lambda c: int(c['id']))
+    if latest_check.get('status') == 'completed' and latest_check.get('conclusion') not in ('success', None):
+        raise ValueError('newest Required checks run did not pass; refusing to hide failure with an update')
+
+
 def validate_actor(api, request, run, require_repository_role=True):
     actors = {x.strip().lower() for x in os.environ.get('CONFIGS_MERGE_ACTORS', '').split(',') if x.strip()}
     actor = run.get('actor', {}).get('login', '').lower()
@@ -311,20 +447,13 @@ def validate_actor(api, request, run, require_repository_role=True):
             raise ValueError('dispatch actor must have admin or maintain repository permission')
 
 
-def verify_accepted_run(api, run_id, allow_recovery=False):
+def verify_accepted_run(api, run_id, allow_recovery=False, target='dev'):
     run = api.request(f'actions/runs/{run_id}')
     if run.get('event') != 'workflow_dispatch' or run.get('path') != '.github/workflows/conditional-merge.yml':
         raise ValueError('unsupported workflow run')
     if run.get('head_branch') != 'dev':
         raise ValueError('workflow was not dispatched from the accepted dev ref')
-    current_dev = branch_sha(api, 'dev')
-    if run.get('head_sha') != current_dev:
-        if not allow_recovery:
-            raise ValueError('accepted tooling ref is no longer current dev; submit a fresh request')
-        subprocess.run(['git', 'fetch', '--quiet', '--no-tags', 'origin', current_dev], check=True)
-        if subprocess.run(['git', 'merge-base', '--is-ancestor', run['head_sha'], current_dev],
-                          stdout=subprocess.DEVNULL, stderr=subprocess.DEVNULL).returncode != 0:
-            raise ValueError('accepted workflow revision is not an ancestor of current dev')
+    validate_accepted_revision(api, run, target, allow_recovery=allow_recovery)
     allowed_status = ('in_progress', 'completed') if allow_recovery else ('in_progress',)
     if run.get('status') not in allowed_status or run.get('created_at') is None:
         raise ValueError('workflow run is not active')
@@ -347,8 +476,9 @@ def preflight(args):
         raise ValueError('invalid target or pull request number')
     full_sha(args.head, 'head')
     full_sha(args.base, 'base')
-    request = {'pr': args.pr, 'target': args.target, 'head': full_sha(args.head, 'head'),
-               'base': full_sha(args.base, 'base'), 'repo': repo}
+    head, base = full_sha(args.head, 'head'), full_sha(args.base, 'base')
+    request = {'pr': args.pr, 'target': args.target, 'head': head, 'source_head': head,
+               'base': base, 'source_base': base, 'repo': repo}
     pr = api.request(f"pulls/{request['pr']}")
     if pr.get('state') == 'closed' and pr.get('merged_at'):
         if not merged_request_identity(pr, request):
@@ -356,7 +486,7 @@ def preflight(args):
         recovery = True
     else:
         recovery = False
-    run = verify_accepted_run(api, run_id, allow_recovery=recovery)
+    run = verify_accepted_run(api, run_id, allow_recovery=recovery, target=args.target)
     validate_actor(api, {'repo': repo}, run)
     print(json.dumps({'state': 'authorized', 'actor': run['actor']['login'], 'accepted_sha': run['head_sha']}))
 
@@ -366,8 +496,10 @@ def request_from_inputs(args, repo):
         raise ValueError('target must be dev or master')
     if args.pr < 1:
         raise ValueError('pull request number must be positive')
-    return {'pr': args.pr, 'target': args.target, 'head': full_sha(args.head, 'head'),
-            'base': full_sha(args.base, 'base'), 'repo': repo}
+    head = full_sha(args.head, 'head')
+    base = full_sha(args.base, 'base')
+    return {'pr': args.pr, 'target': args.target, 'head': head, 'source_head': head,
+            'base': base, 'source_base': base, 'repo': repo}
 
 
 def submit(args):
@@ -376,7 +508,9 @@ def submit(args):
     repo = repo_name()
     request = request_from_inputs(args, repo)
     api = GitHub(token(), repo)
-    pr = read_pr(api, request)
+    pr = read_pr(api, request, allow_dev_chain=request['target'] == 'dev')
+    if pr['head']['sha'] != request['head']:
+        raise ValueError('PR source head changed before submission; the reviewed source SHA must match exactly')
     if pr.get('merged_at'):
         raise ValueError('candidate is already merged; inspect its recorded result instead of dispatching')
     if branch_sha(api, request['target']) != request['base']:
@@ -399,30 +533,53 @@ def write_run(args):
     run_id = os.environ.get('GITHUB_RUN_ID')
     if not run_id or str(args.run_id) != run_id:
         raise ValueError('input run id does not match this Actions run')
+    admitted_head = full_sha(args.head, 'head')
+    admitted_base = full_sha(args.base, 'base')
     request = {'pr': args.pr, 'target': args.target,
-               'head': full_sha(args.head, 'head'), 'base': full_sha(args.base, 'base'), 'repo': repo}
+               'head': admitted_head, 'source_head': admitted_head,
+               'base': admitted_base, 'source_base': admitted_base, 'repo': repo}
     if request['target'] not in ('dev', 'master'):
         raise ValueError('unsupported target')
     if os.environ.get('CONFIGS_MERGE_ENABLED') != '1':
         raise ValueError('conditional merges are disabled; CONFIGS_MERGE_ENABLED is not 1')
-    run = verify_accepted_run(api, run_id, allow_recovery=True)
+    run = verify_accepted_run(api, run_id, allow_recovery=True, target=request['target'])
     validate_actor(api, {'repo': repo}, run)
-    pr = read_pr(api, request)
+    pr = read_pr(api, request, allow_dev_chain=True)
     if pr.get('merged_at'):
+        if request['target'] == 'dev':
+            validate_dev_chain(request, pr['head']['sha'], branch_sha(api, 'dev'))
+            request['head'] = pr['head']['sha']
         return finish(api, request, pr, 'already merged')
-    run = verify_accepted_run(api, run_id)
+    run = verify_accepted_run(api, run_id, target=request['target'])
     validate_protection(api, request['target'])
     check_independent_shape(api, request)
     deadline = time.monotonic() + max(0, WAIT_SECONDS - (dt.datetime.now(dt.timezone.utc) - dt.datetime.fromisoformat(run['created_at'].replace('Z', '+00:00'))).total_seconds())
     while True:
-        verify_accepted_run(api, run_id)
-        pr = read_pr(api, request)
+        if time.monotonic() >= deadline:
+            raise ValueError('60-minute request deadline expired; pull request is preserved')
+        verify_accepted_run(api, run_id, target=request['target'])
+        pr = read_pr(api, request, allow_dev_chain=request['target'] == 'dev')
         if pr.get('merged_at'):
+            if request['target'] == 'dev':
+                validate_dev_chain(request, pr['head']['sha'], branch_sha(api, 'dev'))
+                request['head'] = pr['head']['sha']
             return finish(api, request, pr, 'already merged')
-        if branch_sha(api, request['target']) != request['base']:
-            raise ValueError('target moved while the request waited; fresh admission is required')
-        tree = sha256_tree(request['base'], request['head'])
-        ci, state = source_run(api, request, tree)
+        current_base = branch_sha(api, request['target'])
+        active = dict(request, head=pr['head']['sha'], base=current_base)
+        if request['target'] == 'dev':
+            chain_count = validate_dev_chain(request, pr['head']['sha'], current_base)
+            if not is_ancestor(current_base, pr['head']['sha']):
+                # Check the newest evidence for the currently observed head
+                # before starting another update; a failure must not be hidden.
+                refuse_latest_ci_failure(api, pr['head']['sha'])
+                if chain_count >= MAX_DEV_UPDATES:
+                    raise ValueError('three dev integration updates exhausted before current dev was included')
+                pr = update_dev_branch(api, request, pr['head']['sha'], deadline)
+                continue
+        elif current_base != request['base'] or pr['head']['sha'] != request['head']:
+            raise ValueError('master target or source head moved; fresh admission is required')
+        tree = sha256_tree(current_base, pr['head']['sha'])
+        ci, state = source_run(api, active, tree)
         if state == 'waiting':
             if time.monotonic() >= deadline:
                 raise ValueError('60-minute CI wait expired; pull request is preserved')
@@ -436,31 +593,34 @@ def write_run(args):
         # Last inspection immediately before the protected merge API. GitHub
         # receives an atomic expected-head condition; strict protection guards
         # a target move, which has no compare-and-swap field in that API.
-        verify_accepted_run(api, run_id)
-        pr = read_pr(api, request)
-        if branch_sha(api, request['target']) != request['base']:
-            raise ValueError('target moved before merge; fresh admission is required')
+        verify_accepted_run(api, run_id, target=request['target'])
+        pr = read_pr(api, request, allow_dev_chain=request['target'] == 'dev')
+        latest_base = branch_sha(api, request['target'])
+        if latest_base != active['base'] or pr['head']['sha'] != active['head']:
+            if request['target'] == 'dev':
+                continue
+            raise ValueError('master target or source head moved before merge; fresh admission is required')
         if pr.get('_conditional_waiting'):
             raise ValueError('GitHub protection state is pending; no merge was requested')
         validate_protection(api, request['target'])
-        check_independent_shape(api, request)
-        if source_run(api, request, tree)[1] != 'success':
+        check_independent_shape(api, active)
+        if source_run(api, active, tree)[1] != 'success':
             raise ValueError('Required checks changed before merge')
         try:
             result = api.request(f"pulls/{request['pr']}/merge", method='PUT',
-                                 data={'sha': request['head'], 'merge_method': 'merge'})
+                                 data={'sha': active['head'], 'merge_method': 'merge'})
             if not result or result.get('merged') is not True:
                 raise ValueError('protected merge API did not confirm success')
         except (urllib.error.URLError, TimeoutError, ValueError) as error:
             current = api.request(f"pulls/{request['pr']}")
-            if not current.get('merged_at') or current['head']['sha'] != request['head']:
+            if not current.get('merged_at') or current['head']['sha'] != active['head']:
                 raise ValueError(f'merge result is ambiguous or refused ({error}); inspect GitHub before retrying') from error
             pr = current
         else:
             pr = api.request(f"pulls/{request['pr']}")
-        if not pr.get('merged_at') or pr['head']['sha'] != request['head']:
+        if not pr.get('merged_at') or pr['head']['sha'] != active['head']:
             raise ValueError('merge response was not confirmed by the pull request')
-        return finish(api, request, pr, 'merged')
+        return finish(api, active, pr, 'merged')
 
 
 def finish(api, request, pr, label):
@@ -472,9 +632,26 @@ def finish(api, request, pr, label):
     try:
         subprocess.run(['git', 'fetch', '--quiet', '--no-tags', 'origin', merged], check=True)
         parents = subprocess.check_output(['git', 'show', '-s', '--format=%P', merged], text=True).strip().split()
-        tree = sha256_tree(request['base'], request['head'])
+        if request['target'] == 'dev':
+            if len(parents) != 2 or parents[1] != pr['head']['sha']:
+                raise ValueError('dev merge commit does not preserve the accepted PR integration head')
+            if label != 'already merged' and parents[0] != request['base']:
+                raise ValueError('protected merge used a base newer than the exact base CI evidence tested')
+            current_dev = branch_sha(api, 'dev')
+            subprocess.run(['git', 'fetch', '--quiet', '--no-tags', 'origin', current_dev], check=True)
+            source_base = request.get('source_base', request['base'])
+            if not is_ancestor(source_base, parents[0]) or not is_ancestor(parents[0], current_dev):
+                raise ValueError('dev merge commit base is outside the admitted dev ancestry')
+            validate_dev_chain(request, parents[1], current_dev)
+            tree = sha256_tree(parents[0], parents[1])
+            evidence_request = dict(request, base=parents[0], head=parents[1])
+            if source_run(api, evidence_request, tree)[1] != 'success':
+                raise ValueError('merged PR has no successful exact-base integration-head CI evidence')
+        else:
+            tree = sha256_tree(request['base'], request['head'])
         actual_tree = subprocess.check_output(['git', 'rev-parse', f'{merged}^{{tree}}'], text=True).strip()
-        if parents != [request['base'], request['head']] or actual_tree != tree:
+        expected_parents = [request['base'], request['head']] if request['target'] == 'master' else parents
+        if parents != expected_parents or actual_tree != tree:
             raise ValueError('merged commit parents/tree differ from the approved identities')
         subprocess.run(['git', 'fetch', '--quiet', 'origin', 'dev', 'master', '--tags'], check=True)
         for command in (['tool/version-control/audit', '--history', merged],
@@ -487,6 +664,9 @@ def finish(api, request, pr, label):
                           'merge_commit': merged, 'audit': str(error)}), file=sys.stderr)
         raise ValueError('merge completed; post-merge identity or audit failed') from error
     print(json.dumps({'state': label, 'pr': request['pr'], 'merge_commit': merged,
+                      'approved_source_head': request.get('source_head', request['head']),
+                      'integration_head': request['head'],
+                      'tested_base': parents[0] if request['target'] == 'dev' else request['base'],
                       'parents': parents, 'tree': actual_tree, 'audit': 'passed'}))
 
 
