@@ -3,28 +3,14 @@ statement: A change that belongs to a spec verifies at least one acceptance crit
 rationale: AGENTS.md § Governance design
 enforced-by: manual the reviewer confirms a coherent source outcome carries its produced evidence and result records, or names their external source without requiring a separate bookkeeping delivery
 owner: repository maintainer
-decision: docs/policy/decisions/repository/github-agent-workflow.md § GitHub-centered agent workflow
+decision: docs/policy/decisions/repository/local-development-workflow.md § Decision
 
-Historical operation before 2026-10-07:
+A coherent outcome may span several evidence lanes. Evidence accompanies the
+result that produced it; concise local records follow the small-change
+procedure. External runtime or remote check evidence is referenced where it
+was produced rather than mirrored in a separate bookkeeping delivery.
 
-A spec's increments are coherent same-scope outcomes and may span multiple
-evidence lanes. Lanes and internal steps do not independently force PRs. Measured on 2026-09-20, about twelve of forty merged pull requests
-held only a report row, a report's end, a status sentence or a roadmap row,
-each following evidence that another pull request had produced minutes
-earlier; the record's paragraph of that date has the figures.
-
-No tool holds this. The legitimate bookkeeping-only change — a report ended
-after the maintainer installed a host by hand, a roadmap row that records an
-end — has the same path list as the one this rule removes, so a path check
-would refuse both or neither. A change with no spec is outside the
-statement: its evidence is its pull request's body.
-
-Remote CI evidence lives in current Actions/PR checks and is referenced as that
-external source. It does not require a report-only follow-up push. Source
-reports carry local/fixture proof and state the remote gate honestly.
-
-2026-10-07: local-development-workflow.md replaces remote dev admission.
-Local combined-result checks precede exact-SHA integration; push only checks
-transmitted history, and Required checks applies to master PRs. Concise local
-evidence replaces a mandatory PR body. Closing keywords are also checked in
-current master incoming history.
+This is manual because a path-only check cannot distinguish unsupported
+bookkeeping from a legitimate record of evidence produced outside the
+repository. Historical measurements remain in the decision history rather
+than the current invariant's operating guidance.

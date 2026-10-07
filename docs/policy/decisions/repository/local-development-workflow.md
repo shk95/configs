@@ -7,10 +7,10 @@ source: docs/work/repository/local-development-workflow/spec.md
 
 ## Decision
 
-Reconstruct from reset dev 0fc573e and master 60bcd46, keeping the accepted
-input patch without inheriting the cancelled backup implementation. Local dev
-is the development basis and integration authority. Worktrees isolate topic
-authoring; final combined candidates are checked and integrated sequentially
+Dev continues from reset 0fc573e and master from 81229c1, keeping the accepted
+input patch at 60bcd46 without inheriting the cancelled backup implementation.
+Local dev is the development basis and integration authority. Worktrees isolate
+topic authoring; final combined candidates are checked and integrated sequentially
 by exact-SHA fast-forward. Fail on conflicts or unexpected base changes.
 
 Local implementation, required verification and integration complete a task.
@@ -40,9 +40,23 @@ existing completion meanings. No domain source or host deployment changes.
 
 ## Cutover
 
-Prepare candidate N locally on M0. After reviewing current remote identities
-and writer state, replace only remote dev/master with N/M0 under a separate
-one-time authorization; preserve tags. Restore everyday protections, adopt N
-through normal dev to master PR, verify the actual gate, then resume writers.
+The initial cutover prepared candidate N on master M0 and replaced remote
+dev/master with N/M0 under separate one-time authorization. Protected PR #546
+accepted that source. This initial topology is superseded by the lane
+correction below; its evidence remains historical.
 No reset/force option is added to ordinary tools. Agent Rack and its existing
 extraction are independent follow-up work.
+
+## Amendment 2026-10-07: preserve branch lanes
+
+The maintainer requested separate first-parent paths rooted at dev 0fc573e
+and master 81229c1. Reconstruct the dev-side master synchronization with dev
+as its first parent, retain the published master patch at 60bcd46, and replay
+the existing source changes unchanged. Protected PR #547 accepted the corrected
+promotion after exact-source CI; both branch trees were preserved at transition.
+
+For subsequent work, master synchronization is a dev-based merge that keeps
+the development lane as its first parent even when fast-forward is possible.
+Verified topic-to-dev integration remains exact-SHA fast-forward. Master
+promotion remains a protected merge-commit PR; dev continues on its own lane
+afterward. Reflect master at the next explicit work/promotion synchronization.

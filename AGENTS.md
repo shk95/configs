@@ -67,13 +67,13 @@ rule stands on this sentence alone.
 | --- | --- | --- |
 | Never activate Home Manager, NixOS, or nix-darwin without an explicit request. | Activation changes a host; evaluation and build evidence never imply permission. | none |
 | Never run Windows `Apply` without an explicit request. `-Check` is the read-only path. | The same boundary on the Windows side. | none |
-| Do not commit, push, tag, rewrite history, or change branches unless the user explicitly requests it. | A tool allowlist reduces prompts; it never authorizes a mutation. | skill (`run-version-control-workflow` refuses); `tool/version-control/commit` refuses on `master` |
+| Do not commit, push, tag, rewrite history, or change branches unless the user explicitly requests it. | A tool allowlist reduces prompts; it never authorizes a mutation. | manual session authorization; `tool/version-control/commit` refuses on `master` |
 | Author tracked source changes and commits in a linked worktree dedicated to the task. Keep the primary checkout for read-only inspection and integration. | A task's edits must not disturb the integration checkout or another task's index. | tool (`tool/version-control/require-linked-worktree` refuses commits from the primary checkout); fixture |
 | Do not update flake inputs, change login shells, garbage-collect Nix stores, shut down WSL, or change global Git configuration unless the task calls for it. | Each is host-global or irreversible from inside a session. | none |
 | Treat WSL cgroups, binfmt_misc, mounts, and similar kernel-global resources as shared by every distribution, and the kernel under an OrbStack machine as shared by every machine and by OrbStack's container engine. | One distribution's fix is every distribution's change, and an OrbStack machine's UIDs are mapped one to one: its root is UID 0 on that kernel. | none for WSL; consumer-owned assertion and fixture for an OrbStack machine's binfmt registry |
 | Preserve externally managed PowerShell profile blocks. Do not change Windows OpenSSH DefaultShell or add a `.wslconfig` firewall value without explicit direction. | Both are host state another owner writes. | none |
 | Classify a change before editing and change only the owning domain. | Evidence, release tags, and CI jobs are selected by ownership. | hook (`tool/version-control/classify` refuses an unclassified path) |
-| Report evaluation, build, native runtime, and activation or Apply evidence separately, and never upgrade partial evidence. | A tag or a merge is only as true as the lane it names. | `.githooks/evidence`; skill |
+| Report evaluation, build, native runtime, and activation or Apply evidence separately, and never upgrade partial evidence. | A tag or a merge is only as true as the lane it names. | `.githooks/evidence`; manual evidence review |
 | Register a temporary measure under `docs/provisional/` in the change that adds it, tag every disposable line `PROV <scope>/<slug>`, and retire it by deleting the entry and its tags together. | A measure with no exit condition and no review date becomes permanent by neglect. | tool (`tool/version-control/provisional`) |
 
 ## Where invariants are enforced
@@ -87,7 +87,8 @@ states the rule without naming a command, cites its rationale in
 in `docs/policy/definition-of-done/<scope>.md`), or `pending` (an issue, until a check
 exists). `tool/version-control/invariants` checks in both directions that
 every declaration exists and names its invariant, on every commit and in CI.
-Read the classified scope's list before editing that scope.
+Use the classified scope's list to identify affected invariants and read those
+entries before editing.
 `docs/policy/invariants/README.md` is the format.
 
 ## Governance design
@@ -99,7 +100,8 @@ When adding a repository rule, separate its concerns before implementation:
   without depending on a particular command, product, or model.
 - Put human-operable prerequisites, ordered steps, recovery, and authorization
   boundaries in `CONTRIBUTING.md`.
-- Put repeatable agent orchestration in a canonical `.agents/skills/` skill.
+- Keep reusable agent orchestration in its owning external plugin. Repository
+  policy and human-operable procedure remain here; installation is optional.
 - Put deterministic classification and enforcement in `tool/`, hooks, CI, and
   remote repository settings.
 - Give repository operators one documented command entry point. Hooks, CI and
@@ -124,16 +126,17 @@ When adding a repository rule, separate its concerns before implementation:
   when a task, an issue or a record points at it, never as a rule to follow.
 
 Each obligation has one authoritative source. Procedures and tools implement
-policy but must not silently create new policy. Model-specific adapters only
-discover canonical skills. Every enforceable invariant needs positive and
-negative fixtures, every fixture names the invariant it proves and a fixture
-that proves none is removed, and non-automated invariants need an explicit
+policy but must not silently create new policy. Model-specific adapters point
+to authoritative sources and add no independent policy. Every enforceable
+invariant needs positive and negative fixtures, every fixture names the
+invariant it proves and a fixture that proves none is removed, and non-automated
+invariants need an explicit
 evidence item and named decision owner.
 
-Extract a method into the sibling `skills` project only when it contains
-no repository decision, path convention, branch name, infrastructure identity,
-or current state. Keep project policy and enforcement here. Adoption of a
-shared skill is explicit; product-specific adapters never become its authority.
+Keep project policy, procedure and enforcement in this repository. Reusable
+agent orchestration belongs to its owning external plugin and resolves this
+repository's rules at invocation. Adoption is explicit; a plugin or discovery
+adapter never becomes the authority for project decisions.
 
 General source promotion accepts only the same repository's `dev` branch into
 `master`. The sole direct patch lane accepts a same-repository, master-based,
@@ -141,8 +144,11 @@ single-commit Unix-like permitted-input update and its next patch declaration.
 Both use protected pull requests and merge commits; never commit, cherry-pick,
 squash, or rebase directly into `master`. The patch lane does not operate on
 Windows or general development. Development promotion must incorporate already
-accepted input patch history. Before work or promotion, reflect the selected/current master snapshot in
-local dev, resolving and verifying in a linked worktree when necessary.
+accepted input patch history. Dev and master retain separate first-parent
+histories. Before work or promotion, reflect new history from the selected
+master snapshot through a dev-based merge in a linked worktree, with the dev
+lane as its first parent. Do not fast-forward dev to master or to its promotion
+merge. Resolve and verify before local integration.
 The maintainer owns promotion decisions. No protection bypass is permitted.
 See `docs/policy/decisions/repository/master-input-patch-releases.md`.
 
@@ -172,20 +178,24 @@ uncommitted and ignored data before any explicitly requested removal. Helpers
 never prune automatically. GitHub/remote status is queried only for an explicit
 remote operation or relevant preservation review.
 
-Project-local plan-work, execute-work, integrate-work, inspect-work and
-reclaim-workspaces support these operations. run-version-control-workflow
-routes classification, audits, promotion and release. Canonical skills execute
-project policy; external plugin capabilities are not changed by this redesign.
+Use CONTRIBUTING.md and tool/configs for planning, implementation, inspection,
+integration and preservation review. No installed plugin is a prerequisite.
+Reusable work-role orchestration is maintained externally; this repository
+keeps no tracked local role skills or workflow discovery aliases. Installation
+and consumer connection are separate from source separation.
 The accepted operating contract is
 docs/policy/decisions/repository/local-development-workflow.md.
 
 ## Working contract
 
-1. Read `CONTRIBUTING.md`, `docs/policy/architecture.md`, `docs/policy/invariants/<scope>/` for
-   the classified scope, the scope's current state in `docs/status/<scope>.md`, and
-   every decision record those entries and that state cite.
-2. Classify the task as `unixlike`, `windows`, `common`, `repository`, or an
+1. Classify the task as `unixlike`, `windows`, `common`, `repository`, or an
    explicit transfer.
+2. Read the relevant sections of `CONTRIBUTING.md` and
+   `docs/policy/architecture.md`, the affected entries under
+   `docs/policy/invariants/<scope>/`, and the task-relevant current state in
+   `docs/status/<scope>.md`. Follow decision records when needed to establish
+   the current rule or resolve ambiguity; historical citations are not a
+   default session reading list.
 3. Use `tool/configs doctor` before relying on host-local capabilities.
 4. Change only the owning domain. Treat a cross-domain copy as a separate,
    reviewable adoption change.
@@ -201,10 +211,10 @@ architecture and ownership in `docs/policy/architecture.md`, current state in
 their verification in `docs/work/`, and executable policy in `tool/`, hooks, and CI.
 `docs/README.md` maps the document tree; a document is owned by the scope
 directory, or the scope-named file, that holds it.
-Canonical project-specific agent workflows live under `.agents/skills/` and
-follow the Agent Skills open standard. Reusable
-cross-project methods live in the separate sibling `skills` project.
-Model-specific context and skill files only point to canonical sources.
+Canonical reusable work-role skills are maintained in the external Agent Rack
+Work Cycle plugin. This checkout supplies no tracked workflow skill or plugin
+installation configuration. Model-specific instruction files only point to
+project guidance. Local excluded connection files remain maintainer-owned data.
 
 `notes/` is untracked maintainer scratch space. It is free-form by design and
 carries no structure, review, or retention promise, so it states no policy and

@@ -54,10 +54,12 @@ to the other.
 
 ## Branch and commit flow
 
-Start from the selected local master snapshot. If it adds history, incorporate
-it into dev. A fast-forward can use primary; a merge or conflict resolution is
-authored in a linked topic worktree and checked before exact-SHA integration.
-Remote fetching is an explicit synchronization operation, not task pickup.
+Start from local dev and select the local master snapshot to incorporate.
+If master adds history, merge it with `git merge --no-ff <master-SHA>` in a
+dev-based linked topic worktree. The merge's first parent continues the dev
+lane and its second parent is the selected master snapshot. Resolve and check
+the result there before exact-SHA integration. Remote fetching is an explicit
+synchronization operation, not task pickup.
 
 Create a dedicated topic worktree from local dev:
 
@@ -70,6 +72,11 @@ scope; a topic is one coherent same-scope result. Dev can accumulate multiple
 scopes for later push and promotion. Primary is for inspection and integration;
 source commits, including conflict resolution, are made in the topic worktree.
 Do not author directly on master or rebase published work.
+
+Keep dev and master on their own first-parent paths. Fast-forward integration
+advances dev to a verified dev-based candidate; it never advances dev directly
+to master or to a master promotion merge. After promotion, continue from dev
+and reflect master at the next explicit work/promotion synchronization.
 
 ## Local integration and completion
 
@@ -113,11 +120,11 @@ and push a tag only when the user explicitly requests those mutations. Create
 no GitHub Release: the annotation is the whole record. Activation and Windows
 Apply happen after release and are not implied by a tag.
 
-For agent-assisted work, invoke `run-version-control-workflow`. Its canonical
-Agent Skills implementation is under `.agents/skills/`; model-specific
-discovery files are adapters only. Audit and release planning are read-only by
-default. This document remains the human fallback and the contract the skill
-executes.
+Agents and people follow this document and tool/configs directly. There are no
+tracked local work-role skills or workflow command aliases. External workflow
+plugins are optional and must read the target policy; no replacement is
+installed by source separation. Audit and release planning are read-only by
+default. Installation and verified invocation are later consumer adoption.
 
 ### zellij overlay
 
@@ -160,13 +167,14 @@ default branch, so the watcher does nothing until this file reaches `master`
 through the next promotion; before that its shell body is run by hand with
 `DRY_RUN=1`.
 
-## Agent roles and handoff
+## Local work and handoff
 
-Use project-local skills. plan-work inspects existing plans and defines
-acceptance when needed. execute-work pins local dev and the reviewed plan,
-works in its dedicated worktree and records actual evidence. integrate-work
-reviews a local candidate and integrates its verified SHA sequentially.
-Explicit user Git authorization carries through the agreed task.
+Inspect existing work with tool/configs records --table work. Define acceptance
+using "Plan and verify work" when needed. Pin local dev and the reviewed plan,
+use a dedicated worktree, run the relevant checks and record actual evidence.
+Review exact candidate/base SHA and perform sequential integration using
+"Local integration and completion". Explicit user Git authorization carries
+through the agreed task; these procedures require no installed plugin.
 
 Use `tool/configs session start <spec-path-or-> <lane>` for a useful local
 checkpoint. Before interruption, `session checkpoint suspended` records the
@@ -174,11 +182,12 @@ goal, exact state, evidence, unfinished work and next step. A checkpoint is
 neither a heartbeat nor proof of delivery. Changed acceptance returns to
 planning; uncertain liveness does not authorize cleanup.
 
-inspect-work reads requested local handoffs. Remote status is optional and
-must be relevant to an explicit remote operation. reclaim-workspaces reviews
-unpushed/unique commits and tracked, untracked and ignored data before any
-requested non-force removal. Do not read notes/ content. Keep useful old
-worktrees; a clean diff is not preservation evidence. No automatic pruning.
+Use tool/configs session inspect and read-only Git state for requested local
+handoffs. Remote status is optional and must be relevant to an explicit remote
+operation or preservation review. Review unpushed/unique commits and tracked,
+untracked and ignored data before any requested non-force removal. Do not read
+notes/ content. Keep useful old worktrees; a clean diff is not preservation
+evidence. No automatic pruning.
 
 ## GitHub integration
 
@@ -202,16 +211,18 @@ requires an accepted policy change first.
 
 1. Explicitly fetch current remote master/dev and inspect differences against
    completed local work. Do not replace local dev with origin/dev implicitly.
-2. Reflect current master in the candidate worktree, resolve and verify, then
-   integrate into dev using the local procedure. Push dev normally.
+2. If current master adds history, reflect it with `--no-ff` in the dev-based
+   candidate worktree, retaining the dev lane as the first parent. Resolve and
+   verify, then integrate into dev using the local procedure. Push dev normally.
 3. Run `tool/configs plan-promotion` on the selected local snapshots and
    review every included commit/scope. Check for another open master PR.
 4. Create the same-repository dev to master PR. Required checks and resolved
    conversations must pass against the current base/head before an explicitly
    requested merge commit. If master moves or checks fail, stop and repair
    manually through dev; no automatic base repair or retry controller.
-5. Confirm actual merged state. Domain publication is a separate decision.
-   Reflect accepted master history at the next work/promotion synchronization.
+5. Confirm actual merged state and keep dev on its own lane. Domain publication
+   is a separate decision. Reflect accepted master history with the procedure
+   above at the next explicit work/promotion synchronization.
 
 The one-time reset-based cutover is recorded separately from routine promotion.
 It never becomes an everyday force option. Existing annotated tags stay fixed.
@@ -224,14 +235,13 @@ Before adding a rule, write a small governance decomposition:
 2. State rationale and tool-independent invariants.
 3. Define human prerequisites, ordered steps, recovery, and authorization
    boundaries without adding obligations absent from the policy.
-4. Assign repeatable orchestration to a canonical skill and deterministic
-   decisions to tools, hooks, CI, or remote settings.
+4. Assign reusable orchestration to its owning external plugin and
+   deterministic decisions to tools, hooks, CI, or remote settings.
 5. Define evidence, positive and negative fixtures, current migration state,
    and the condition for removing superseded implementation.
 
-Use `design-project-governance` from the sibling `skills` project to perform
-this decomposition. The skill owns only the generic method; this repository
-owns the result. A product-specific adapter must not own any part of either.
+This repository owns the decomposition and its project decisions. External
+workflow instructions resolve those decisions instead of copying their policy.
 
 ## Add or change an invariant
 

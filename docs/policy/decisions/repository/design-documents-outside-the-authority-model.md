@@ -43,12 +43,10 @@ would own it.
 
 Rejected:
 
-- A separate repository, the way cross-project methods live in the sibling
-  `skills` project. That project's admission test is that the material
-  contains no repository decision, path convention, branch name,
-  infrastructure identity or current state (`AGENTS.md`, "Governance
-  design"). A design document is made of those, and a record there could not
-  be cited by a tracked path.
+- A separate repository. A design document contains repository decisions,
+  path conventions, branch names, infrastructure identity and current state,
+  so it belongs alongside the source it describes. A record elsewhere could
+  not be cited by a tracked path.
 - Tracking `notes/`. It is ignored so that free-form thinking stays out of a
   public history and out of every ignore-aware search, which is the whole of
   what it offers; tracking it would remove that and put unreviewed text in

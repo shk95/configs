@@ -371,9 +371,13 @@ integration complete development; remote push, protected master acceptance
 and domain releases are later operations. Checkpoints preserve interrupted
 work without proving liveness or authorizing deletion.
 
-The canonical agent workflow follows the Agent Skills open standard under
-`.agents/skills/`. Product-specific discovery locations may contain thin
-adapters, but they do not own or duplicate the workflow.
+Reusable work-role orchestration is maintained in the external Agent Rack
+Work Cycle plugin. This repository owns policy, contributor procedures and
+deterministic tools; they remain usable without an installed plugin. No tracked
+local work-role skills, workflow aliases or plugin connection are supplied.
+Installation and invocation are an explicit later adoption, never an implicit
+source dependency. Model-specific instruction files carry no independent policy.
+See docs/policy/decisions/repository/external-work-role-orchestration.md.
 
 Master branch protection consumes one stable CI contract named `Required checks`.
 The gate validates classification, the repository-wide secret scan, and each
@@ -591,8 +595,11 @@ only permitted lock data and its next patch declaration. Scheduled and manual
 entry points share this path and never integrate dev or publish Windows tags.
 General development promotion incorporates accepted input patch history first,
 so it cannot replace that history with an older lock or release declaration.
-Current master history is reflected before a later promotion, including
-promotion merges when needed. At most one master PR proceeds
+Dev and master retain their own first-parent histories so development and
+accepted-source history remain separately readable. Current master history is
+reflected before a later promotion through a dev-based merge whose first
+parent continues the dev lane, including promotion merges when needed.
+Dev continues on its own lane after promotion. At most one master PR proceeds
 at a time; exact-source CI binds either lane without a protection bypass
 (`docs/policy/decisions/repository/master-input-patch-releases.md`).
 

@@ -8,25 +8,42 @@ docs/policy/decisions/repository/local-development-workflow.md.
 Implementation and evidence are recorded in
 docs/work/repository/local-development-workflow/report.md.
 
-The reconstruction basis is reset dev 0fc573e and master 60bcd46. The accepted
-Unix-like input patch/tag at master is retained. The backup conditional merge,
-base-drift and qualification flow is not an active dependency. Existing
-worktrees and uncommitted extraction data are preserved; Agent Rack is outside
-this redesign. Historical reconstruction and host evidence are not rewritten.
+The separate first-parent lanes continue from dev 0fc573e and master 81229c1.
+The accepted Unix-like input patch/tag at master 60bcd46 is retained. Master
+synchronization uses a dev-based no-ff merge; dev continues on its own lane
+after protected master promotion. The backup conditional merge, base-drift and
+qualification flow is not an active dependency. Cancelled workspace history
+and uncommitted extraction data were preserved in verified recovery archives
+before cleanup; Agent Rack is outside this redesign. Historical reconstruction
+and host evidence are not rewritten.
 
 ## Remote adoption
 
-Remote cutover has not yet been performed. The 2026-10-07 captured remote
-tips were dev b8e9273 and master 6c60f37; these are snapshots, not a live
-assertion. Existing remote dev PR/check gates and old workflows remain until
-the explicitly reviewed one-time ref/settings transition. Local source is not
-proof that GitHub already runs the new policy.
+On 2026-10-07 the maintainer-authorized cutover replaced old remote dev
+b8e9273 and master 6c60f37 with the reset-based candidate and master basis.
+The initial promotion through [PR #546](https://github.com/shk95/configs/pull/546)
+passed its selected native jobs and Required checks, but its topology advanced
+dev onto the master lane. That topology was superseded by the maintainer's
+history-only correction through [PR #547](https://github.com/shk95/configs/pull/547).
+The corrected merge 8698a8b has first parent 60bcd46 and second parent 4e6cd4a.
+Its exact-source CI and Required checks passed, and actual merge parents/tree
+were confirmed. At that transition both branch trees exactly matched their
+pre-correction trees, published tag objects were unchanged, and dev continued
+on its own lane. Subsequent master synchronization follows the amended procedure.
 
-The intended protection is ordinary dev push without PR/required checks or
-conversation resolution; master retains strict Required checks and protected
+Dev protection now permits ordinary push without PR/required checks or
+conversation resolution. Master retains strict Required checks and protected
 merge-commit PRs with zero required approvals. Both enforce administrators
-and prohibit everyday force pushes/deletion. Live gate, writer and scheduled
-evidence are recorded operationally, separately from local implementation.
+and prohibit everyday force pushes/deletion. Automatic and manual input patch
+operation and its schedule are enabled again; no new patch publication or
+actual scheduled trigger is certified by the source promotion.
+
+Cancelled conditional-merge/qualification issues and PRs were retired. Related
+topic/backup/reconstruction branches and worktrees were reclaimed after a
+verified recovery archive preserved their history and dirty/checkpoint data.
+Current remote facts are checked explicitly for remote operations, not cached
+as prerequisites of local development. Operational documentation can complete
+on dev without another immediate master promotion.
 
 ## Input patch and domain boundaries
 
@@ -38,3 +55,23 @@ are separate. Manual qualification never proves the scheduled trigger.
 
 Domain ownership and current host/native evidence remain in the domain status
 files. A repository change has no configuration output or domain release tag.
+
+## Work-role source separation
+
+On 2026-10-07 the maintainer requested Codex-only extraction into Agent Rack's
+existing Work Cycle package. The prepared configs worktree removes six tracked
+role skills, one Claude workflow adapter and two command aliases. Policy,
+contributor procedures, tools, hooks, CI and native checkpoint behavior remain
+project-owned and usable without an installed replacement. Local ignored
+Context Bridge data is preserved. Existing Claude instruction and permission
+files provide no replacement plugin connection.
+
+Agent Rack's previous extraction was remote-first and referred to retired
+conditional integration behavior. Its 0.3.0 source preparation refreshes the
+six roles from configs 4c72b000ad23b2a32c564c6f907192bd34f82870, retains
+historical imports and defers Claude packaging. Publication, installation,
+actual installed-host discovery and consumer adoption have not happened.
+The maintainer subsequently authorized committing and integrating the configs
+result into local dev. Agent Rack's separate source changes remain uncommitted;
+external distribution and consumer adoption are separate operations.
+See docs/work/repository/codex-work-cycle-extraction/report.md for evidence.
