@@ -47,6 +47,15 @@ class API:
         return self.values.get(('PAGES', path), self.values.get(path, []))
 
 
+def graphql_identity(request, merge_commit='c' * 40, repository_name=None, **overrides):
+    pull_request = {'number': request['pr'], 'state': 'MERGED', 'merged': True,
+                    'mergedAt': '2026-10-07T02:43:50Z', 'baseRefName': request['target'],
+                    'headRefOid': request['head'], 'mergeCommit': {'oid': merge_commit}}
+    pull_request.update(overrides)
+    return {'data': {'repository': {'nameWithOwner': request['repo'] if repository_name is None else repository_name,
+                                    'pullRequest': pull_request}}}
+
+
 class ConditionalMergeFixtures(unittest.TestCase):
     # FIXTURE repository/conditional-protected-merge
     def test_sha_and_repository_inputs_require_full_exact_values(self):
@@ -97,6 +106,51 @@ class ConditionalMergeFixtures(unittest.TestCase):
         self.assertEqual(error.exception.code, 404)
         error.exception.close()
         self.assertEqual(endpoint.urls, [protection_url, repo_url, pull_url, repo_url + '/'])
+
+    # FIXTURE repository/conditional-protected-merge
+    def test_graphql_merge_identity_uses_api_adapter_and_requires_exact_identity(self):
+        request = {'pr': 17, 'target': 'dev', 'head': 'b' * 40,
+                   'base': 'a' * 40, 'repo': 'shk95/configs'}
+        response = graphql_identity(request)
+        endpoint = type('Endpoint', (), {})()
+        endpoint.request = None
+
+        def open_request(req, timeout):
+            endpoint.request = req
+            self.assertEqual(req.full_url, 'https://api.github.com/graphql')
+            self.assertEqual(req.get_method(), 'POST')
+            self.assertEqual(req.get_header('X-github-api-version'), '2026-03-10')
+            payload = json.loads(req.data)
+            self.assertEqual(payload['variables'], {'owner': 'shk95', 'name': 'configs', 'number': 17})
+            return io.BytesIO(json.dumps(response).encode())
+
+        endpoint.open = open_request
+        api = m.GitHub('fixture-token', request['repo'])
+        with patch.object(m.urllib.request, 'build_opener', return_value=endpoint):
+            self.assertEqual(m.confirmed_merge_identity(api, request), 'c' * 40)
+
+        invalid = [
+            ({'errors': [{'message': 'denied'}]}, 'did not confirm'),
+            ({'data': {'repository': None}}, 'repository does not match'),
+            ({'data': []}, 'omitted the merged repository'),
+            (graphql_identity(request, repository_name='fork/configs'), 'repository does not match'),
+            (graphql_identity(request, repository_name=''), 'repository does not match'),
+            (graphql_identity(request, repository_name=None) | {'data': {'repository': {
+                'nameWithOwner': None, 'pullRequest': graphql_identity(request)['data']['repository']['pullRequest']}}},
+             'repository does not match'),
+            ({'data': {'repository': {'nameWithOwner': request['repo'], 'pullRequest': None}}}, 'omitted'),
+            (graphql_identity(request, number=18), 'does not match'),
+            (graphql_identity(request, state='OPEN'), 'does not match'),
+            (graphql_identity(request, merged=False), 'does not match'),
+            (graphql_identity(request, mergedAt=None), 'does not match'),
+            (graphql_identity(request, baseRefName='master'), 'does not match'),
+            (graphql_identity(request, headRefOid='d' * 40), 'does not match'),
+            (graphql_identity(request, mergeCommit=None), 'omitted'),
+            (graphql_identity(request, mergeCommit={'oid': 'c' * 39}), 'full 40-character'),
+        ]
+        for result, message in invalid:
+            with self.subTest(message=message), self.assertRaisesRegex(ValueError, message):
+                m.confirmed_merge_identity(API({('POST', 'https://api.github.com/graphql'): result}), request)
 
     # FIXTURE repository/conditional-protected-merge
     def test_source_archive_is_bounded_and_binds_event_base_head_and_tree(self):
@@ -672,8 +726,10 @@ class ConditionalMergeFixtures(unittest.TestCase):
             request = {'pr': 17, 'target': 'dev', 'head': source_head, 'source_head': source_head,
                        'base': source_base, 'source_base': source_base, 'repo': 'shk95/configs'}
             request['head'] = integration
-            pr = {'merge_commit_sha': merge_commit, 'head': {'sha': integration}}
-            api = API({'git/ref/heads/dev': {'object': {'sha': current_dev}}})
+            pr = {'head': {'sha': integration}}
+            api = API({'git/ref/heads/dev': {'object': {'sha': current_dev}},
+                       ('POST', 'https://api.github.com/graphql'):
+                           graphql_identity(request, merge_commit=merge_commit)})
             original_run = m.subprocess.run
             def run(command, *args, **kwargs):
                 if command[0] == 'tool/version-control/audit' or command == ['tool/version-control/audit-remote']:
@@ -776,7 +832,8 @@ class ConditionalMergeFixtures(unittest.TestCase):
     # FIXTURE repository/conditional-protected-merge
     def test_finish_binds_merge_parents_tree_and_reports_postmerge_audit_failure(self):
         request = {'pr': 17, 'target': 'dev', 'head': 'b' * 40, 'base': 'a' * 40, 'repo': 'shk95/configs'}
-        pr = {'merge_commit_sha': 'c' * 40, 'head': {'sha': 'b' * 40}}
+        pr = {'head': {'sha': 'b' * 40}}
+        api = API({('POST', 'https://api.github.com/graphql'): graphql_identity(request)})
         outputs = []
         audit_ok = type('Result', (), {'returncode': 0, 'stdout': 'passed'})()
         audit_fail = type('Result', (), {'returncode': 1, 'stdout': 'remote audit failed'})()
@@ -786,7 +843,7 @@ class ConditionalMergeFixtures(unittest.TestCase):
              patch.object(m, 'branch_sha', return_value='a' * 40), \
              patch.object(m, 'is_ancestor', return_value=True), patch.object(m, 'validate_dev_chain', return_value=0), \
              patch('builtins.print', side_effect=lambda *args, **kwargs: outputs.append(args[0])):
-            m.finish(API(), request, pr, 'merged')
+            m.finish(api, request, pr, 'merged')
         self.assertIn('"state": "merged"', outputs[-1])
 
         outputs.clear()
@@ -797,7 +854,7 @@ class ConditionalMergeFixtures(unittest.TestCase):
              patch.object(m, 'is_ancestor', return_value=True), patch.object(m, 'validate_dev_chain', return_value=0), \
              patch('builtins.print', side_effect=lambda *args, **kwargs: outputs.append(args[0])):
             with self.assertRaisesRegex(ValueError, 'merge completed; post-merge'):
-                m.finish(API(), request, pr, 'merged')
+                m.finish(api, request, pr, 'merged')
         self.assertIn('"state": "merged-with-audit-failure"', outputs[0])
 
         for parents, tree in ((['e' * 40, 'b' * 40], 'd' * 40),
@@ -809,7 +866,38 @@ class ConditionalMergeFixtures(unittest.TestCase):
                  patch.object(m, 'is_ancestor', return_value=True), patch.object(m, 'validate_dev_chain', return_value=0), \
                  patch('builtins.print'):
                 with self.assertRaisesRegex(ValueError, 'post-merge identity or audit failed'):
-                    m.finish(API(), request, pr, 'merged')
+                    m.finish(api, request, pr, 'merged')
+
+        master_request = dict(request, target='master')
+        master_api = API({('POST', 'https://api.github.com/graphql'): graphql_identity(master_request)})
+        master_pr = {'head': {'sha': master_request['head']}}
+        successful_source = Mock(return_value=({'id': 2}, 'success'))
+        with patch.object(m.subprocess, 'run', return_value=audit_ok), \
+             patch.object(m.subprocess, 'check_output', side_effect=['a' * 40 + ' ' + 'b' * 40, 'd' * 40]), \
+             patch.object(m, 'sha256_tree', return_value='d' * 40), \
+             patch.object(m, 'source_run', successful_source), patch('builtins.print'):
+            m.finish(master_api, master_request, master_pr, 'already merged')
+        self.assertEqual(successful_source.call_args.args[1], master_request)
+        self.assertEqual(successful_source.call_args.args[2], 'd' * 40)
+
+        with self.subTest(master_source_state='waiting'), \
+                 patch.object(m.subprocess, 'run', return_value=audit_ok), \
+                 patch.object(m.subprocess, 'check_output', side_effect=['a' * 40 + ' ' + 'b' * 40, 'd' * 40]), \
+                 patch.object(m, 'sha256_tree', return_value='d' * 40), \
+                 patch.object(m, 'source_run', return_value=(None, 'waiting')), patch('builtins.print'):
+            with self.assertRaisesRegex(ValueError, 'post-merge identity or audit failed'):
+                m.finish(master_api, master_request, master_pr, 'already merged')
+
+        failed_run = {'id': 3, 'path': '.github/workflows/ci.yml', 'event': 'pull_request',
+                      'head_sha': master_request['head'], 'status': 'completed', 'conclusion': 'failure'}
+        failed_api = API({('POST', 'https://api.github.com/graphql'): graphql_identity(master_request),
+                          ('PAGES', f"actions/workflows/ci.yml/runs?head_sha={master_request['head']}&event=pull_request&per_page=100"):
+                              [failed_run]})
+        with patch.object(m.subprocess, 'run', return_value=audit_ok), \
+             patch.object(m.subprocess, 'check_output', side_effect=['a' * 40 + ' ' + 'b' * 40, 'd' * 40]), \
+             patch.object(m, 'sha256_tree', return_value='d' * 40), patch('builtins.print'):
+            with self.assertRaisesRegex(ValueError, 'post-merge identity or audit failed'):
+                m.finish(failed_api, master_request, master_pr, 'already merged')
 
     # FIXTURE repository/conditional-protected-merge
     def test_workflow_serializes_writers_without_replacing_pending_runs(self):
