@@ -26,14 +26,24 @@ set -eu
 # a detached, hook-less, branch-less shape by construction, so the merge gate
 # asks for history alone rather than for findings it would have to ignore.
 usage() {
-  echo "usage: tool/configs audit [--history [<revision>...]]" >&2
+  echo "usage: tool/configs audit [--history [<revision>...] | --range <base> <tip> | --tag <name>]" >&2
   exit 2
 }
 mode=full
+range_base=
+range_tip=
+selected_tag=
 if [ "$#" -gt 0 ]; then
-  [ "$1" = --history ] || usage
-  mode=history
-  shift
+  case "$1" in
+    --history) mode=history; shift ;;
+    --range)
+      [ "$#" -eq 3 ] || usage
+      mode=range; range_base=$2; range_tip=$3; shift 3 ;;
+    --tag)
+      [ "$#" -eq 2 ] || usage
+      mode=tag; selected_tag=$2; shift 2 ;;
+    *) usage ;;
+  esac
 fi
 for revision in "$@"; do
   case "$revision" in -*) usage ;; esac
@@ -138,10 +148,17 @@ ref_of() {
     printf 'origin/%s\n' "$1"
   fi
 }
-dev_ref=$(ref_of dev)
-master_ref=$(ref_of master)
+dev_ref=
+master_ref=
+if [ "$mode" != range ]; then
+  dev_ref=$(ref_of dev)
+  master_ref=$(ref_of master)
+fi
 unverified=0
-for required in dev master; do
+required_refs="dev master"
+[ "$mode" != tag ] || required_refs=master
+[ "$mode" != range ] || required_refs=
+for required in $required_refs; do
   eval "resolved=\$${required}_ref"
   if [ -n "$resolved" ]; then
     ok "$required resolves to $resolved"
@@ -155,7 +172,7 @@ if [ "$mode" = full ]; then
   for local_branch in $(git for-each-ref --format='%(refname:short)' refs/heads); do
     case "$local_branch" in
       dev|master) ;;
-      backup/*) warn "local backup branch remains: $local_branch" ;;
+      backup|backup/*) warn "local backup branch remains: $local_branch" ;;
       feature/*|fix/*)
         if printf '%s\n' "$local_branch" | grep -Eq '^(feature|fix)/(unixlike|windows|common|repository)-[a-z0-9][a-z0-9-]*$'; then
           ok "branch name follows policy: $local_branch"
@@ -187,8 +204,15 @@ for revision in "$@"; do
     fail "revision to judge does not name a commit: $revision"
   fi
 done
-if [ -n "$dev_ref$subject_tips" ]; then
+if [ "$mode" = range ]; then
+  git rev-parse --verify "$range_tip^{commit}" >/dev/null
+  git rev-parse --verify "$range_base^{commit}" >/dev/null
+  subject_scope="$range_base..$range_tip"
+  git log "$range_base..$range_tip" --no-merges --format='%H%x09%s' >"$commits"
+elif [ "$mode" != tag ] && [ -n "$dev_ref$subject_tips" ]; then
   git log $dev_ref $subject_tips --no-merges --format='%H%x09%s' >"$commits"
+fi
+if [ "$mode" != tag ] && [ -s "$commits" ]; then
   tab=$(printf '\t')
   commit_failures=$failures
   while IFS="$tab" read -r sha subject; do
@@ -204,7 +228,7 @@ if [ -n "$dev_ref$subject_tips" ]; then
   fi
 fi
 
-if [ -n "$master_ref" ] && [ -n "$dev_ref" ]; then
+if [ "$mode" != tag ] && [ -n "$master_ref" ] && [ -n "$dev_ref" ]; then
   patch_heads=$(mktemp)
   invalid_promotions=0
   for merge in $(git rev-list --first-parent --merges "$master_ref"); do
@@ -283,7 +307,10 @@ annotation_defects() {
 }
 
 tag_count=0
-for tag in $(git tag); do
+tags=$(git tag)
+[ "$mode" != range ] || tags=
+[ "$mode" != tag ] || tags=$selected_tag
+for tag in $tags; do
   tag_count=$((tag_count + 1))
   # Historical objects survive the one-time reconstruction outside new master.
   # Name-only exemptions would allow a forged replacement.
@@ -326,7 +353,7 @@ EOF
     fi
   fi
 done
-if [ "$tag_count" -eq 0 ]; then
+if [ "$mode" != range ] && [ "$tag_count" -eq 0 ]; then
   warn "no domain release tags exist; release workflow is unexercised"
 fi
 
@@ -334,7 +361,26 @@ root_commit=$(git rev-list --max-parents=0 HEAD | head -1)
 # Both spellings, permanently. The lock moved into the domain, and this rule
 # reads history: the refreshes made before the move are still at the old path
 # and always will be, because history is not rewritten.
-for sha in $(git log --format='%H' -- flake.lock unixlike/flake.lock); do
+# Merge/adoption commits carry already authored input history. Inspect the
+# original non-merge refresh commits, not a merge that combines their history.
+lock_commits=$(git log --no-merges --format='%H' -- flake.lock unixlike/flake.lock)
+if [ "$mode" = range ]; then
+  # INV repository/local-development-integration
+  scopes=$("$audit_tools/classify" --range "$range_base" "$range_tip")
+  if printf '%s\n' "$scopes" | grep -qx unclassified; then
+    fail "transmitted content has an unclassified path"
+  fi
+  for commit in $(git rev-list --no-merges "$range_base..$range_tip"); do
+    commit_scopes=$(git diff-tree --no-commit-id --name-only -r "$commit" | "$audit_tools/classify" --stdin)
+    count=$(printf '%s\n' "$commit_scopes" | awk 'NF { n++ } END { print n+0 }')
+    if [ "$count" -gt 1 ] || printf '%s\n' "$commit_scopes" | grep -qx unclassified; then
+      fail "source commit has mixed or unclassified ownership: $commit"
+    fi
+  done
+  lock_commits=$(git log --no-merges --format='%H' "$range_base..$range_tip" -- flake.lock unixlike/flake.lock)
+fi
+[ "$mode" != tag ] || lock_commits=
+for sha in $lock_commits; do
   [ "$sha" = "$root_commit" ] && continue
   # A commit that only moves the lock is not a refresh, and the rule is about
   # refreshes. Rename detection answers that directly: a pure rename is R100
@@ -361,13 +407,16 @@ done
 # way the provisional check reports an overdue measure outside the scopes
 # under change: it is a prompt to end the report or move the date, not a
 # failure of the change at hand. The work check owns the reading.
-overdue_specs=$("$audit_tools/work" --overdue) || overdue_specs=
+overdue_specs=
+if [ "$mode" = full ] || [ "$mode" = history ]; then
+  overdue_specs=$("$audit_tools/work" --overdue) || overdue_specs=
+fi
 if [ -n "$overdue_specs" ]; then
   printf '%s\n' "$overdue_specs" | while IFS= read -r overdue_spec; do
     printf 'warning: overdue spec: %s\n' "$overdue_spec"
   done
   warnings=$((warnings + $(printf '%s\n' "$overdue_specs" | wc -l | tr -d ' ')))
-else
+elif [ "$mode" = full ] || [ "$mode" = history ]; then
   ok "no spec is past its review-by with a pending report"
 fi
 

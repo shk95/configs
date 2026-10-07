@@ -92,23 +92,22 @@ present and is intentionally ignored by Git.
 
 Run checks for the domain you changed. `CONTRIBUTING.md` lists the workflows.
 
-A routine desired-state edit whose commit message is a template — a Homebrew
-formula or cask, a `unixlike/flake.lock` refresh — reaches `dev` in one
-command:
+Create a task worktree from local dev, then edit and commit locally:
 
 ```sh
 tool/configs worktree new unixlike-brew-add feature
 cd ../configs-wt/feature-unixlike-brew-add
-tool/configs commit --dry-run --publish brew add <formula>
-tool/configs commit --publish brew add <formula>
+tool/configs commit --dry-run brew add <formula>
+tool/configs commit brew add <formula>
 ```
 
-The first shows the edit, the branch, the selected checks, the commit message,
-the pull-request body and every command it would run, and writes nothing. The
-second asks once, then branches from `origin/dev`, commits with the hooks
-enabled, pushes, opens the pull request against `dev` and arms auto-merge, so
-the merge happens when `Required checks` pass. There is no unattended mode and
-no hook bypass. Drop `--publish` to stop at the commit.
+The helper previews and confirms the edit, runs commit hooks and stops at the
+local commit. It does not fetch, publish or prune. Verify the final candidate
+including current dev, then integrate its exact SHA into primary dev with
+ff-only as described in CONTRIBUTING. Local development can finish before
+push. Push is synchronization; master promotion and domain release are chosen
+separately. Dev has no required PR or automatic CI; master retains protected
+PR checks.
 
 Update the four permitted Unix-like inputs from current `master` using
 **Actions → Manual Unix-like input patch → Run workflow**, selecting `master`.

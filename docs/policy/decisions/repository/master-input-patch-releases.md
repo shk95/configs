@@ -55,3 +55,10 @@ This repository policy change follows the existing topic/dev/master route before
 the direct patch lane is used. Branch protections remain PR-only, merge-only
 and Required-checks gated. Remote Actions qualification and actual schedule
 observation remain separate from local fixture proof.
+
+## Amendment 2026-10-07: local completion
+
+The accepted local-development-workflow.md decision replaces conflicting dev
+PR admission, remote pickup/delivery, automatic closure and promotion-history
+restrictions. Retained domain and publication boundaries remain in force.
+The statements above record the earlier operation and its evidence.

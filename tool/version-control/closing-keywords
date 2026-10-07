@@ -121,7 +121,7 @@ case "${1:-}" in
   --range)
     [ "$#" -eq 5 ] && [ "$4" = --base-ref ] || usage
     require_command git grep
-    if [ "$5" != dev ]; then
+    if [ "$5" != dev ] && [ "$5" != master ]; then
       echo "· closing keywords: the range of a pull request into $5 is not read; a promotion answers for its body"
       exit 0
     fi

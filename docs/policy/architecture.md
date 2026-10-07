@@ -356,40 +356,26 @@ headers, and a hand-kept one would make every new record a repository edit.
 No domain suite reads a document, so documents select no check unit by that
 ownership.
 
-Work that needs more than one judgement is planned and verified in tracked
-documents rather than in an issue, whose text can be rewritten after the
-fact. A spec states the acceptance criteria and the evidence lanes each one
-requires; a report, created in the same commit, answers every criterion and
-ends as done, abandoned or superseded. A valid terminal pair may later be
-archived together after fixed remote preservation and active-reference review;
-pending or malformed acceptance cannot disappear. Once the report exists a criterion is
-changed only by a dated amendment that names it, so the bar is visibly set
-before the work. A work document still binds nothing but the work it
-describes: a durable rule it produces lands in a decision record or an
-invariant.
+Work needing sustained planning is recorded in paired specs and reports;
+small coherent changes may record evidence in commit bodies or concise results.
+Issues and roadmap entries are optional. Evidence remains truthful and dated
+criteria amendments remain visible. Cancelled policy need not keep its old
+validators or all reports active. Source messages do not implicitly close
+issues at promotion; issue management is explicit.
 
-An issue closes from what its report says, never from a merge. GitHub closes
-a referenced issue when a closing keyword reaches the default branch, which
-here is a promotion: an event that accepts source history and certifies
-nothing. So no commit message on its way to `dev` and no promotion body
-carries one, and a message links an issue with `Refs #<n>`. The one automatic
-closure reads the report: a push to `dev` that ends a report closes the issue
-its spec names, and the audits report what that misses — an issue still open
-beside a terminal report, and a spec past its review date whose report is
-still pending.
-
-GitHub pull requests preserve integration candidates independently of local
-execution spaces. Workers hand off delivery; one authorized integration
-session admits candidates under protected dev. Local checkpoints make an
-interrupted worker recoverable and establish a handoff before role changes;
-they never replace remote integration state. Cleanup needs evidence of data
-preservation, not an age or process heuristic.
+Local dev is integration authority. Task worktrees isolate authoring. One
+integrator reflects current dev in the final candidate, verifies the combined
+result and advances clean primary dev to that exact SHA with ff-only. A changed
+base stops the attempt. Local implementation, required verification and
+integration complete development; remote push, protected master acceptance
+and domain releases are later operations. Checkpoints preserve interrupted
+work without proving liveness or authorizing deletion.
 
 The canonical agent workflow follows the Agent Skills open standard under
 `.agents/skills/`. Product-specific discovery locations may contain thin
 adapters, but they do not own or duplicate the workflow.
 
-Branch protection consumes one stable CI contract named `Required checks`.
+Master branch protection consumes one stable CI contract named `Required checks`.
 The gate validates classification, the repository-wide secret scan, and each
 job selected by effect. Individual domain jobs remain conditional and
 are not protection contracts, so adding or skipping a domain does not silently
@@ -593,8 +579,8 @@ General development flows from topic branches through `dev` into `master`.
 Each source change is authored in a linked worktree for its topic branch.
 The primary checkout remains the integration point and a place for read-only
 inspection; its index and tracked files do not carry a task's edits. This
-keeps concurrent tasks separate without changing the single-scope branch and
-pull-request flow. A commit from the primary checkout is refused locally;
+keeps concurrent tasks separate while keeping source commits/topic work single-scope and allowing accumulated
+dev/promotion history to contain multiple scopes. A commit from the primary checkout is refused locally;
 editor writes are controlled by the start procedure because Git cannot
 intercept them. A separate native host clone may inspect and check an
 unpublished branch without becoming its authoring worktree.
@@ -605,15 +591,16 @@ only permitted lock data and its next patch declaration. Scheduled and manual
 entry points share this path and never integrate dev or publish Windows tags.
 General development promotion incorporates accepted input patch history first,
 so it cannot replace that history with an older lock or release declaration.
-It need not import promotion-only merge commits. At most one master PR proceeds
+Current master history is reflected before a later promotion, including
+promotion merges when needed. At most one master PR proceeds
 at a time; exact-source CI binds either lane without a protection bypass
 (`docs/policy/decisions/repository/master-input-patch-releases.md`).
 
-A helper that publishes a change follows the same flow: it commits only on
-a topic branch, cutting one from the remote tip of `dev` when it stands on
-`dev`, opens one pull request against `dev`, never commits on `master`,
-leaves a rejected push local, and never deletes `dev`, `master` or the
-branch it stands on.
+The routine edit helper commits locally on its existing topic branch after
+confirmation. It does not fetch, publish, integrate or prune. Dev has no PR
+or required remote checks. Master retains strict protected PR admission.
+Daily development never depends on an old backup branch or external extraction
+project. Remote basis replacement is a separately reviewed one-time operation.
 
 ## Why the repository remains a monorepo
 

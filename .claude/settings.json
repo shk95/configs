@@ -6,12 +6,12 @@
   ],
   "permissions": {
     "allow": [
+      "Bash(tool/configs:*)",
       "Bash(tool/doctor.sh:*)",
       "Bash(tool/setup:*)",
       "Bash(tool/worktree.sh:*)",
       "Bash(unixlike/tool/checks/:*)",
       "Bash(tool/version-control/:*)",
-
       "Bash(git status:*)",
       "Bash(git diff:*)",
       "Bash(git log:*)",
@@ -24,7 +24,6 @@
       "Bash(git fetch:*)",
       "Bash(git worktree:*)",
       "Bash(git config core.hooksPath:*)",
-
       "Bash(gh issue list:*)",
       "Bash(gh issue view:*)",
       "Bash(gh issue create:*)",
@@ -34,9 +33,7 @@
       "Bash(gh run list:*)",
       "Bash(gh run view:*)",
       "Bash(gh run watch:*)",
-
       "Bash(gitleaks:*)",
-
       "Bash(nix flake check:*)",
       "Bash(nix flake show:*)",
       "Bash(nix flake metadata:*)",
@@ -46,7 +43,8 @@
       "Bash(nix fmt:*)",
       "Bash(nix develop:*)",
       "Bash(nix-instantiate --parse:*)",
-      "Bash(direnv allow:*)"
+      "Bash(direnv allow:*)",
+      "Bash(git merge:*)"
     ]
   }
 }

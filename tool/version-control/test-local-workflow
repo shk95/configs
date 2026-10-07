@@ -1,0 +1,239 @@
+#!/bin/sh
+# INV repository/local-development-integration
+# INV repository/local-gate-selects-by-effect
+# INV repository/conventional-subject
+# INV repository/release-tag-contract
+# INV repository/change-authoring-in-linked-worktree
+# INV repository/no-closing-keyword
+# INV repository/required-checks-gate
+# INV repository/promotion-source
+# INV repository/flake-lock-isolated
+# Isolated local mechanics; this is not a GitHub or native-host qualification.
+set -eu
+MSYS_NO_PATHCONV=1
+MSYS2_ARG_CONV_EXCL='*'
+export MSYS_NO_PATHCONV MSYS2_ARG_CONV_EXCL
+root=$(CDPATH= cd -- "$(dirname -- "$0")/../.." && pwd)
+. "$root/tool/version-control/fixture-git-environment.sh"
+scratch=$(mktemp -d)
+trap 'rm -rf "$scratch"' EXIT
+repo="$scratch/configs"
+mkdir -p "$repo/docs/status" "$repo/tool" "$repo/.githooks"
+cp -R "$root/tool/version-control" "$repo/tool/version-control"
+cp -R "$root/tool/dispatch" "$repo/tool/dispatch"
+cp "$root/tool/worktree.sh" "$repo/tool/worktree.sh"
+cp "$root/.githooks/commit-msg" "$root/.githooks/evidence" "$root/.githooks/pre-push" "$repo/.githooks/"
+git -C "$repo" init -q -b dev
+git -C "$repo" config user.name Fixture
+git -C "$repo" config user.email fixture@example.invalid
+printf 'initial\n' >"$repo/docs/status/repository.md"
+git -C "$repo" add .
+git -C "$repo" commit -q -m 'chore(repository): seed local fixture'
+git -C "$repo" branch master
+base=$(git -C "$repo" rev-parse dev)
+git -C "$repo" update-ref refs/remotes/origin/dev "$base"
+printf 'local-ahead\n' >>"$repo/docs/status/repository.md"
+git -C "$repo" commit -qam 'feat(repository): local ahead work'
+ahead=$(git -C "$repo" rev-parse dev)
+(cd "$repo" && tool/worktree.sh new repository-a feature >/dev/null)
+(cd "$repo" && tool/worktree.sh new repository-b feature >/dev/null)
+a="$scratch/configs-wt/feature-repository-a"
+b="$scratch/configs-wt/feature-repository-b"
+[ "$(git -C "$a" rev-parse HEAD)" = "$ahead" ]
+[ "$(git -C "$b" rev-parse HEAD)" = "$ahead" ]
+! git -C "$repo" remote get-url origin >/dev/null 2>&1
+git -C "$repo" branch backup
+refs_before=$(git -C "$repo" show-ref)
+for args in '--dry-run --publish brew add fixture' 'prune'; do
+  if (cd "$a" && tool/version-control/commit $args) >/dev/null 2>&1; then
+    echo 'retired helper operation was accepted' >&2; exit 1
+  fi
+done
+[ "$(git -C "$repo" show-ref)" = "$refs_before" ]
+[ -z "$(git -C "$a" status --porcelain)" ]
+printf 'worker A\n' >"$a/docs/status/repository.md"
+git -C "$a" commit -qam 'feat(repository): worker A'
+candidate=$(git -C "$a" rev-parse HEAD)
+(cd "$a" && tool/version-control/require-linked-worktree)
+if (cd "$repo" && tool/version-control/require-linked-worktree) >/dev/null 2>&1; then
+  echo 'primary passed the source authoring guard' >&2; exit 1
+fi
+git -C "$repo" merge -q --ff-only "$candidate"
+[ "$(git -C "$repo" rev-parse dev)" = "$candidate" ]
+printf 'worker B\n' >"$b/docs/status/repository.md"
+git -C "$b" commit -qam 'feat(repository): worker B'
+stale=$(git -C "$b" rev-parse HEAD)
+if git -C "$repo" merge -q --ff-only "$stale" >/dev/null 2>&1; then
+  echo 'stale parallel candidate integrated without reflection' >&2; exit 1
+fi
+[ "$(git -C "$repo" rev-parse dev)" = "$candidate" ]
+if git -C "$b" merge -q dev >/dev/null 2>&1; then
+  echo 'expected real content conflict did not occur' >&2; exit 1
+fi
+printf 'worker A and B resolved\n' >"$b/docs/status/repository.md"
+git -C "$b" add docs/status/repository.md
+(cd "$b" && tool/version-control/require-linked-worktree)
+git -C "$b" commit -q -m 'fix(repository): resolve parallel results'
+resolved=$(git -C "$b" rev-parse HEAD)
+[ -z "$(git -C "$b" status --porcelain)" ]
+git -C "$repo" merge -q --ff-only "$resolved"
+[ "$(git -C "$repo" rev-parse dev)" = "$resolved" ]
+# Independent scope-owned work can accumulate on dev without a mixed commit.
+(cd "$repo" && tool/worktree.sh new windows-c feature >/dev/null)
+c="$scratch/configs-wt/feature-windows-c"
+mkdir -p "$c/windows/desired"
+printf '{}\n' >"$c/windows/desired/manifest.json"
+git -C "$c" add windows/desired/manifest.json
+git -C "$c" commit -qm 'feat(windows): separate native scope'
+resolved=$(git -C "$c" rev-parse HEAD)
+git -C "$repo" merge -q --ff-only "$resolved"
+git -C "$repo" switch -q -c fix/repository-unrelated "$base"
+printf 'unrelated\n' >"$repo/docs/status/repository.md"
+git -C "$repo" commit -qam 'a deliberately invalid subject'
+bad=$(git -C "$repo" rev-parse HEAD)
+push_tip() {
+  printf 'refs/heads/dev %s refs/heads/dev %s\n' "$1" "$base" |
+    (cd "$repo" && .githooks/pre-push)
+}
+push_tip "$resolved" >/dev/null
+if push_tip "$bad" >/dev/null 2>&1; then
+  echo 'push accepted a transmitted invalid subject' >&2; exit 1
+fi
+git -C "$repo" tag unrelated-invalid-local-tag
+push_tip "$resolved" >/dev/null
+git -C "$repo" switch -q dev
+git -C "$repo" switch -q -c feature/repository-mixed
+printf 'mixed\n' >>"$repo/docs/status/repository.md"
+printf '{"changed":true}\n' >"$repo/windows/desired/manifest.json"
+git -C "$repo" add docs/status/repository.md windows/desired/manifest.json
+git -C "$repo" commit -qm 'feat(repository): mixed source ownership'
+mixed=$(git -C "$repo" rev-parse HEAD)
+if push_tip "$mixed" >/dev/null 2>&1; then
+  echo 'push accepted a mixed-scope source commit' >&2; exit 1
+fi
+git -C "$repo" switch -q dev
+git -C "$repo" branch -f master dev
+git -C "$repo" tag -a common-v1.0.0 -m 'Domain: common' -m 'Evaluation: passed' -m 'Build: not applicable' -m 'Native runtime: not applicable'
+(cd "$repo" && tool/version-control/audit --tag common-v1.0.0) >/dev/null
+git -C "$repo" tag common-v2.0.0
+if (cd "$repo" && tool/version-control/audit --tag common-v2.0.0) >/dev/null 2>&1; then
+  echo 'tag inspection accepted a lightweight release' >&2; exit 1
+fi
+tag_sha=$(git -C "$repo" rev-parse refs/tags/common-v1.0.0)
+for operation in replace delete rename; do
+  case "$operation" in
+    replace) line="refs/tags/common-v1.0.0 $tag_sha refs/tags/common-v1.0.0 $base" ;;
+    delete) line="(delete) 0000000000000000000000000000000000000000 refs/tags/common-v1.0.0 $tag_sha" ;;
+    rename) line="refs/tags/common-v1.0.0 $tag_sha refs/tags/common-v3.0.0 0000000000000000000000000000000000000000" ;;
+  esac
+  if printf '%s\n' "$line" | (cd "$repo" && .githooks/pre-push) >/dev/null 2>&1; then
+    echo "push accepted release tag $operation" >&2; exit 1
+  fi
+done
+# Ordinary remote competition rejects; completed local result remains intact.
+git init -q --bare "$scratch/remote.git"
+git -C "$repo" remote add origin "$scratch/remote.git"
+git -C "$repo" push -q origin "$base:refs/heads/dev"
+git -C "$repo" push -q origin "$bad:refs/heads/dev"
+if git -C "$repo" push -q origin dev >/dev/null 2>&1; then
+  echo 'ordinary push overwrote peer history' >&2; exit 1
+fi
+[ "$(git -C "$repo" rev-parse dev)" = "$resolved" ]
+# Protection expectations use the real jq filters against synthetic API JSON.
+mkdir "$scratch/api"
+cat >"$scratch/api/dev.json" <<'JSON'
+{"required_status_checks":null,"required_pull_request_reviews":null,"enforce_admins":{"enabled":true},"required_conversation_resolution":{"enabled":false},"allow_force_pushes":{"enabled":false},"allow_deletions":{"enabled":false}}
+JSON
+cat >"$scratch/api/master.json" <<'JSON'
+{"required_status_checks":{"contexts":["Required checks"],"checks":[{"context":"Required checks","app_id":15368}],"strict":true},"required_pull_request_reviews":{"required_approving_review_count":0},"enforce_admins":{"enabled":true},"required_conversation_resolution":{"enabled":true},"allow_force_pushes":{"enabled":false},"allow_deletions":{"enabled":false}}
+JSON
+cat >"$scratch/api/gh" <<'SH'
+#!/bin/sh
+set -eu
+case "$1" in
+  auth) exit 0 ;;
+  repo)
+    case "$*" in *nameWithOwner*) echo fixture/configs ;; *) echo master ;; esac
+    exit 0 ;;
+  api) shift ;;
+  *) exit 1 ;;
+esac
+[ "$1" != --paginate ] || shift
+endpoint=$1
+shift
+case "$endpoint" in
+  */branches/dev/protection) data=$(cat "$FIXTURE_API/dev.json") ;;
+  */branches/master/protection) data=$(cat "$FIXTURE_API/master.json") ;;
+  */pulls\?*) data='[]' ;;
+  repos/fixture/configs) data='{"allow_merge_commit":true,"allow_squash_merge":false,"allow_rebase_merge":false}' ;;
+  *) exit 1 ;;
+esac
+if [ "$#" -eq 0 ]; then printf '%s\n' "$data"; else
+  [ "$1" = --jq ] && [ "$#" -eq 2 ]
+  printf '%s\n' "$data" | jq -r "$2"
+fi
+SH
+chmod +x "$scratch/api/gh"
+run_remote_audit() {
+  (cd "$repo" && FIXTURE_API="$scratch/api" PATH="$scratch/api:$PATH" "$root/tool/version-control/audit-remote")
+}
+run_remote_audit >/dev/null
+cp "$scratch/api/dev.json" "$scratch/api/dev-good.json"
+jq '.required_pull_request_reviews={}' "$scratch/api/dev-good.json" >"$scratch/api/dev.json"
+if run_remote_audit >/dev/null 2>&1; then echo 'remote audit accepted dev PR gate' >&2; exit 1; fi
+cp "$scratch/api/dev-good.json" "$scratch/api/dev.json"
+cp "$scratch/api/master.json" "$scratch/api/master-good.json"
+jq '.required_status_checks.strict=false' "$scratch/api/master-good.json" >"$scratch/api/master.json"
+if run_remote_audit >/dev/null 2>&1; then echo 'remote audit accepted stale master base' >&2; exit 1; fi
+cp "$scratch/api/master-good.json" "$scratch/api/master.json"
+jq '.required_status_checks.checks[0].app_id=999' "$scratch/api/master-good.json" >"$scratch/api/master.json"
+if run_remote_audit >/dev/null 2>&1; then echo 'remote audit accepted a different required-check app' >&2; exit 1; fi
+cp "$scratch/api/master-good.json" "$scratch/api/master.json"
+python3 - "$root" <<'PY'
+import json, sys
+from pathlib import Path
+root = Path(sys.argv[1])
+ci = (root / '.github/workflows/ci.yml').read_text().split('concurrency:')[0]
+assert 'branches: [master]' in ci and '  push:' not in ci and '[master, dev]' not in ci
+release = (root / '.github/workflows/release.yml').read_text()
+assert 'automatic-refresh-inputs.json' in release
+inputs = json.loads((root / 'unixlike/automatic-refresh-inputs.json').read_text())
+assert inputs and all(isinstance(name, str) for name in inputs)
+assert '--input nixpkgs' not in release
+assert not (root / '.github/workflows/work-closure.yml').exists()
+hook = (root / '.githooks/pre-commit').read_text()
+assert 'evidence_run "version-control fixtures"' not in hook
+assert 'evidence_run hygiene' in hook
+PY
+# Shared patch source can have distinct master/dev merge identities. A
+# range must not classify the accepted master merge as an authored refresh.
+history="$scratch/patch-history"
+git init -q -b dev "$history"
+git -C "$history" config user.name Fixture
+git -C "$history" config user.email fixture@example.invalid
+mkdir -p "$history/unixlike" "$history/docs/status" "$history/.githooks" "$history/tool"
+cp -R "$root/tool/version-control" "$history/tool/"
+cp "$root/.githooks/commit-msg" "$history/.githooks/"
+printf '{}\n' >"$history/unixlike/flake.lock"
+git -C "$history" add .
+git -C "$history" commit -qm 'chore(repository): seed patch history'
+git -C "$history" branch master
+git -C "$history" switch -qc feature/unixlike-input-patch-fixture
+printf '{"updated":true}\n' >"$history/unixlike/flake.lock"
+git -C "$history" commit -qam 'chore(unixlike-deps): refresh permitted input'
+patch=$(git -C "$history" rev-parse HEAD)
+git -C "$history" switch -q master
+git -C "$history" merge -q --no-ff "$patch" -m 'Merge permitted input patch'
+git -C "$history" switch -q dev
+git -C "$history" merge -q --ff-only "$patch"
+git -C "$history" switch -qc feature/repository-from-master master
+printf 'new local governance\n' >"$history/docs/status/repository.md"
+git -C "$history" add docs/status/repository.md
+git -C "$history" commit -qm 'refactor(repository): follow reset master'
+(cd "$history" && tool/version-control/audit --range "$patch" HEAD) >/dev/null
+printf '{"bad-refresh":true}\n' >"$history/unixlike/flake.lock"
+git -C "$history" commit -qam 'feat(unixlike): disguised refresh'
+if (cd "$history" && tool/version-control/audit --range "$patch" HEAD) >/dev/null 2>&1; then
+  echo 'range accepted an authored refresh without isolated dependency subject' >&2; exit 1
+fi
+printf 'verified: local pickup, retired publish/prune, parallel ff-only, conflict resolution, exact push range, scoped tags and ordinary push rejection\n'

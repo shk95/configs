@@ -65,7 +65,7 @@ Rejected:
   `.github/workflows/ci.yml` triggers on pull requests based on `master` or
   `dev`, so a pull request between topic branches runs no job at all and
   branch protection guards neither, and
-  `INV repository/publish-through-dev` states that a published change
+  `retired invariant repository/publish-through-dev` states that a published change
   reaches shared history through one pull request against `dev`. Both would
   have to change.
 - Keeping hour-long branches. It is the status quo and it works; what it

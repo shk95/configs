@@ -141,43 +141,43 @@ single-commit Unix-like permitted-input update and its next patch declaration.
 Both use protected pull requests and merge commits; never commit, cherry-pick,
 squash, or rebase directly into `master`. The patch lane does not operate on
 Windows or general development. Development promotion must incorporate already
-accepted input patch history. Bringing actual patch source back into `dev` is
-allowed; do not reverse-merge merely to carry a promotion merge commit.
+accepted input patch history. Before work or promotion, reflect the selected/current master snapshot in
+local dev, resolving and verifying in a linked worktree when necessary.
 The maintainer owns promotion decisions. No protection bypass is permitted.
 See `docs/policy/decisions/repository/master-input-patch-releases.md`.
 
-Work is planned and verified in documents; execution issues name work lanes
-and dependencies without copying evidence or native pull-request state.
-The planner manages docs/work plans and roadmap priorities, not every document.
-A roadmap entry is optional. A standalone plan is valid. Only a small,
-unambiguous, single-scope, single-criterion change may go directly to a worker;
-other work goes through planning. The existing spec/report format and dated
-amendment rule remain in force. The maintainer owns roadmap priorities and
-acceptance of a completed report.
+Local development starts from local dev, after reflecting the selected master
+snapshot. Use one topic branch and linked worktree per coherent same-scope
+outcome. Independent work may proceed in parallel. Before integration, reflect
+current local dev in the candidate worktree, resolve conflicts there and run
+the checks needed by the combined result. Integrate the verified exact SHA
+into primary dev with ff-only, one candidate at a time. A changed base or
+conflict stops integration; no automatic refresh controller is needed.
 
-A worker pins the current origin/dev and reviewed plan revision at pickup,
-then immediately works in a dedicated linked worktree. One coherent same-scope
-outcome is one branch and PR; evidence lanes are reported separately but do not
-force separate PRs. Workers deliver remote branches and Ready PRs. They do not
-merge dev, arm auto-merge or orchestrate other workers. GitHub is integration
-authority; local worktrees and ignored checkpoints preserve execution only.
-A PR and its remote branch must suffice to reconstruct integration after the
-worker's local workspace disappears.
+Local implementation, agreed verification and dev integration complete the
+local task. Push is later synchronization; the maintainer separately chooses
+master promotion and domain publication. No issue, PR or remote CI is required
+to start or finish local development. Explicit authorization still governs Git
+mutations and remote writes; a failed push preserves local completion.
 
-Roles are dynamic. An unfinished worker must leave a useful checkpoint before
-suspension, planner return or role change; interruption is not completion.
-Changed acceptance, scope or dependency returns to planning. The planner
-resolves continuation ownership; no process-liveness guess authorizes cleanup.
-A single authorized integration session admits GitHub Ready PRs and performs
-server-side PR integration. Refresh a candidate only for an actual conflict or
-required integration update, not whenever dev moves. Reclamation checks local,
-remote and ignored data before any explicitly authorized deletion.
+Use a paired spec/report for work needing sustained planning or evidence;
+small unambiguous changes need only a concise result and verification record.
+Criteria change by dated amendment, and unavailable evidence is never success.
+Issue management is optional and explicit. Do not automatically close issues
+from dev pushes or use source messages to close them at promotion.
 
-Use plan-work, execute-work, integrate-work, inspect-work and
-reclaim-workspaces for these operations; run-version-control-workflow routes
-ambiguous requests and retains audits, promotion and releases. Procedural
-steps live in CONTRIBUTING.md. The accepted operating contract is
-`docs/policy/decisions/repository/github-agent-workflow.md`.
+Interrupted work leaves a useful local checkpoint. Checkpoints cannot prove
+process liveness, integration or cleanup eligibility. Review unique commits,
+uncommitted and ignored data before any explicitly requested removal. Helpers
+never prune automatically. GitHub/remote status is queried only for an explicit
+remote operation or relevant preservation review.
+
+Project-local plan-work, execute-work, integrate-work, inspect-work and
+reclaim-workspaces support these operations. run-version-control-workflow
+routes classification, audits, promotion and release. Canonical skills execute
+project policy; external plugin capabilities are not changed by this redesign.
+The accepted operating contract is
+docs/policy/decisions/repository/local-development-workflow.md.
 
 ## Working contract
 
