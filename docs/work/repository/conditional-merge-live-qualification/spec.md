@@ -44,11 +44,15 @@ a writer dispatch or successful protected merge.
 ## Qualification sequence
 
 1. **Normal dev request (P).** This spec/report PR is the first useful
-   documentation candidate. After its ordinary PR checks pass and the
+   documentation candidate. Its ordinary Required checks and `ci-source`
+   record must pass before the maintainer dispatches the request; the App
+   token does not trigger this already-completed check run. After the
    maintainer completes workflow registration and scoped setup, submit one
    conditional request at the unchanged source head and base. Confirm the
-   workflow run, ordinary `pull_request` CI, exact `ci-source` base/head/tree,
-   protected merge result and post-merge audits. Reset the flag to `0`.
+   workflow run, that pre-existing evidence still binds the exact
+   `ci-source` base/head/tree, protected merge result and post-merge audits.
+   App-token-triggered fresh `pull_request` CI is proved by the later R update
+   in step 2. Reset the flag to `0`.
 2. **Target race and dev drift (R then B).** Prepare a useful report-update PR
    R at base B with exact current-head CI passing, and a separate disjoint
    useful `docs/work/` PR B based on the same `dev` commit. Before any writer
@@ -108,9 +112,14 @@ reviews all evidence and separately accepts rollout.
 
 ## Acceptance
 
+Amended 2026-10-07, AC1: the normal request reuses Required-check evidence
+that passed before dispatch; it does not claim the App triggered that
+pre-existing run. The App-triggered fresh CI evidence belongs to the later R
+base-update test in AC2.
+
 | ID | Criterion | Required lanes |
 | --- | --- | --- |
-| AC1 | The normal `dev` trial proves accepted dispatch, isolated App-token use, ordinary PR CI bound to the unchanged source/base/tree, protected merge and post-merge audits. | affected dispatch, review |
+| AC1 | The normal `dev` trial proves accepted dispatch against unchanged identities, exact pre-dispatch Required-check evidence, protected merge and post-merge audits. | affected dispatch, review |
 | AC2 | With R at H/base B and B merged to advance `dev` to C, strict protection refuses the stale exact-H merge; the new request then creates only deterministic H→I(C), triggers new exact C/I/tree CI, and merges I. | affected dispatch, review |
 | AC3 | After workflow registration on `master`, a meaningful `dev` promotion passes accepted-patch ancestry and merges with frozen source/base; master receives no branch update. | affected dispatch, policy checks, review |
 | AC4 | The report distinguishes live remote evidence from fixtures and confirms the scoped flag is reset to zero after each trial; no general enablement or bypass is inferred. | policy checks, review |
