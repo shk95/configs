@@ -117,6 +117,17 @@ reviews all evidence and separately accepts rollout.
 
 ## Acceptance
 
+Amended 2026-10-07, successor candidate after the stopped first trial: PR #538
+was merged, but both conditional-run attempts ended in post-merge audit
+failure because the pinned REST API version no longer returned
+`merge_commit_sha`. It is not a successful AC1 trial and cannot be repeated.
+The documentation PR carrying this continuation is the successor normal
+`dev` candidate (P2). Its exact head must pass fresh required checks and
+review before the maintainer considers a new scoped request. AC1–AC4 and their
+evidence requirements below are unchanged; the remaining qualification
+sequence stays gated until that candidate's result is recorded. The writer
+remains disabled outside maintainer-owned trials.
+
 Amended 2026-10-07, AC1: the normal request reuses Required-check evidence
 that passed before dispatch; it does not claim the App triggered that
 pre-existing run. The App-triggered fresh CI evidence belongs to the later R
