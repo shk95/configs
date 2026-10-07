@@ -16,11 +16,13 @@ on the default branch. The writer remains disabled outside the root-owned
 scoped trials.
 
 PR #536 merged into `dev` as `e38f29d886d22b07807211f36eb61799413c2f69`.
-The accepted master input patch #534 still must be incorporated into `dev`
-through its own Unix-like PR before the next ordinary master promotion. This
-qualification depends on that adoption PR and the separate promotion that
-places the workflow on `master`. The workflow dispatch must select the
-accepted `dev` revision; do not infer registration from its presence on `dev`.
+The accepted master input patch #534 has since been adopted into `dev` through
+protected PR #539. Its topic merge commit is
+`76e40f48c95d196ecabd3ff4cbf81c0a32cdac9d`, and the resulting `dev` merge is
+`07c4ff8325e38568afa4c0d8845117ff3164909a`. The next ordinary master
+promotion still must register the accepted workflow revision on `master`.
+The workflow dispatch must select the accepted `dev` revision; do not infer
+registration from its presence on `dev`.
 
 The repository maintainer owns all remote setup and operations: creating the
 dev-only `merge-control` environment, installing the dedicated App
