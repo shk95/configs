@@ -117,6 +117,16 @@ reviews all evidence and separately accepts rollout.
 
 ## Acceptance
 
+Amended 2026-10-07, after successor candidate P2: PR #543 passed its exact
+pre-dispatch checks, was admitted at the unchanged `dev` base, and merged with
+a successful writer audit; the report records the live evidence and marks
+AC1 verified. The next target-race candidates are separate useful
+documentation PRs R and B, both based on `dev` commit
+`b8e927317a08acb9a451ed3770047302305bd09b`. The maintainer will freeze R's
+head and record its prechecks in the remote PR before merging B. Do not put R's
+own final head SHA in R's report. AC2–AC4 and their evidence requirements
+remain unchanged and pending.
+
 Amended 2026-10-07, successor candidate after the stopped first trial: PR #538
 was merged, but both conditional-run attempts ended in post-merge audit
 failure because the pinned REST API version no longer returned

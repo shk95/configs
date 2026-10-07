@@ -7,7 +7,7 @@ status: pending
 
 | ID | State | Evidence |
 | --- | --- | --- |
-| AC1 | pending | PR #538 had exact pre-dispatch CI, but both conditional-run attempts ended in a post-merge identity audit failure. It does not qualify as a successful request. See the first-trial record below. |
+| AC1 | verified | Successor PR #543 completed the normal dev request with exact pre-dispatch CI and artifact evidence, protected merge, and successful writer audit. The earlier PR #538 audit failure remains recorded below and is not treated as success. |
 | AC2 | pending | No controlled stale-base refusal or H→I(C) request has been performed. |
 | AC3 | pending | Bootstrap promotion #540 registered the workflow; the meaningful conditional `dev`-to-`master` trial has not been performed. |
 | AC4 | pending | The first trial's failure is recorded separately from passing push CI and manual audits below. The writer flag was reset to zero after each attempt; complete scoped qualification remains pending. |
@@ -65,12 +65,37 @@ the token. These were manual read-only credential and policy checks, not an
 Actions writer run or a successful post-merge writer audit. The writer flag
 remains zero.
 
-The documentation PR carrying the 2026-10-07 continuation in the spec is the
-successor normal candidate P2. AC1–AC4 remain pending until new scoped live
-evidence satisfies their unchanged criteria. The controlled target race,
-integration update, and meaningful conditional master request have not been
-performed. The fixture coverage for source changes, conflicts,
-failed/cancelled checks, the deadline, compare-and-swap, ambiguous updates,
-and recovery remains local evidence, separate from affected-dispatch and
-protected-merge evidence. The writer flag is currently zero; the maintainer
-owns any later scoped enablement and dispatch.
+The documentation PR carrying the 2026-10-07 continuation in the spec was
+designated successor normal candidate P2; its later successful trial is
+recorded below. The controlled target race, integration update, and meaningful
+conditional master request have not been performed. The fixture coverage for
+source changes, conflicts, failed/cancelled checks, the deadline,
+compare-and-swap, ambiguous updates, and recovery remains local evidence,
+separate from affected-dispatch and protected-merge evidence. The writer flag
+is currently zero; the maintainer owns any later scoped enablement and
+dispatch.
+
+## Successor normal trial: PR #543
+
+Successor candidate [PR #543](https://github.com/shk95/configs/pull/543) was
+admitted at its unchanged approved source head
+`4765cf2d401934f3aca6d03a40141971b9acc573` and tested base
+`bb24d2017cbdfdfdced54921a49b50f62433b682`. Required checks run
+[37567180800](https://github.com/shk95/configs/actions/runs/37567180800)
+passed, and `ci-source` artifact `11459410776` matched that exact
+base/head/tree tuple before dispatch.
+
+Conditional workflow run
+[37567304296](https://github.com/shk95/configs/actions/runs/37567304296)
+used the accepted workflow revision at the pinned base and completed with
+writer output `state: merged`, `audit: passed`. The protected merge was
+`b8e927317a08acb9a451ed3770047302305bd09b` at 2026-10-07T03:34:04Z; its
+parents were the tested base followed by the approved source head, and its
+tree was `39295d7bd60e315528ddfc3cca1b18e3a3d2d9ac`. The maintainer verified
+`CONFIGS_MERGE_ENABLED=0` after the trial. This satisfies AC1; it does not
+erase or replace the separate failed audit record for PR #538.
+
+The next candidates R and B are separate useful documentation PRs created
+from this resulting `dev` base. The maintainer will capture R's frozen head
+and prechecks in the remote PR after review; this report intentionally does
+not contain R's own final head SHA. AC2–AC4 remain pending.
