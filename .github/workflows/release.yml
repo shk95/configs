@@ -2,7 +2,7 @@ name: Unix-like input patch
 
 on:
   schedule:
-    - cron: '0 20 * * *' # 05:00 Asia/Seoul
+    - cron: '17 16 * * *' # 01:17 Asia/Seoul
   workflow_run:
     workflows: [CI]
     types: [completed]
