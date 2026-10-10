@@ -34,6 +34,13 @@ _: {
           truncation_symbol = "…/";
         };
 
+        # Make the current machine visible in every shell, including local
+        # sessions; Starship otherwise limits this module to SSH sessions.
+        hostname = {
+          ssh_only = false;
+          format = "[$hostname]($style) ";
+        };
+
         # Emoji, not the default ``, which is a Nerd Font glyph. The WSL homes
         # render in Windows Terminal, whose font is a Windows setting this
         # flake cannot reach. A Nerd Font here would depend on that setting;

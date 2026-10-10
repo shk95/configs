@@ -1,7 +1,7 @@
 {
-  "previous": "unixlike-v1.0.4",
-  "version": "1.0.5",
-  "summary": "Refresh permitted Unix-like inputs.",
+  "previous": "unixlike-v1.0.5",
+  "version": "1.0.6",
+  "summary": "Show the hostname in local Starship prompts.",
   "compatibility": "patch",
   "migration": ""
 }
