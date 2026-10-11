@@ -287,6 +287,89 @@ class ReleaseFixtures(unittest.TestCase):
         with patch.object(r, 'api', side_effect=lambda path: {'workflow_runs': [{'status': 'waiting'}] if 'status=waiting' in path else []}):
             self.assertTrue(self.real_manual_active())
 
+    def test_developer_release_is_a_published_refresh_baseline(self):
+        # INV repository/bounded-release-automation
+        # INV repository/release-tag-contract
+        # A general release records actual evidence; the next input patch still
+        # needs its own checked merge and exact generated publication evidence.
+        r.git('checkout', '-q', '--detach', self.base)
+        remote = LocalGitHub()
+        self.write('unixlike/release.json', {'previous': 'unixlike-v1.0.0', 'version': '1.1.0',
+                   'summary': 'Developer-owned configuration change.', 'compatibility': 'minor', 'migration': ''})
+        Path('unixlike/general-config').write_text('Released configuration.')
+        general = self.commit('feat(unixlike): released development')
+        lines = r.annotation_fields('unixlike', general, r.declaration(general, 'unixlike'))
+        lines = [line.rstrip() for line in lines if not line.startswith(('Evaluation:', 'Build:', 'Native runtime:', 'Evidence:'))]
+        lines += ['Evaluation: passed; reviewed PR checks',
+                  'Build: passed; matching-system provider fixture',
+                  'Native runtime: passed; generated fixture reproduction',
+                  'Evidence: https://github.com/fixture/configs/pull/42']
+        r.git('tag', '-a', 'unixlike-v1.1.0', '-m', '\n'.join(lines))
+        r.git('push', '--quiet', 'origin', 'HEAD:refs/heads/master', '--tags')
+        r.git('fetch', '--quiet', 'origin')
+        r.git('update-ref', 'refs/heads/master', general)
+        subprocess.check_call([str(ROOT / 'tool/version-control/audit'), '--tag', 'unixlike-v1.1.0'], stdout=subprocess.DEVNULL)
+        baseline_tag = remote.remote_git('rev-parse', 'unixlike-v1.1.0')
+        with patch.dict(os.environ, CONFIGS_RELEASE_ENABLED='1', GH_TOKEN='fixture-only'), patch.object(r, 'api', side_effect=remote.api), patch.object(r, 'request', side_effect=remote.request):
+            for manual in (False, True):
+                with self.subTest(manual=manual):
+                    self.assertEqual(r.inspect(manual=manual, start=True), {'action': 'refresh', 'base': general, 'head': general})
+            self.assertEqual(remote.writes, [])
+            # plan-release's minimal annotation is also a valid baseline.
+            minimal = '\n'.join(line for line in lines if line.startswith(('Domain:', 'Evaluation:', 'Build:', 'Native runtime:', 'Deployment:')))
+            original_api = remote.api
+            def minimal_tag(path, *args, **kwargs):
+                result = original_api(path, *args, **kwargs)
+                if path == f'git/tags/{baseline_tag}':
+                    return {**result, 'message': minimal}
+                return result
+            with patch.object(r, 'api', side_effect=minimal_tag):
+                self.assertEqual(r.inspect(start=True)['action'], 'refresh')
+            lock = json.loads(json.dumps(self.lock))
+            lock['nodes']['n']['locked']['rev'] = 'after-development-release'
+            self.write('.git/refreshed-lock.json', lock)
+            r.refresh_pr(general, '.git/refreshed-lock.json')
+            remote.complete_ci(0)
+            plan = r.inspect()
+            self.assertEqual(plan['action'], 'patch-merge')
+            r.advance(plan['head'], plan['base'])
+            self.assertEqual(remote.remote_git('rev-parse', 'unixlike-v1.1.0'), baseline_tag)
+            self.assertEqual(remote.remote_git('rev-parse', 'windows-v1.0.0'), self.windows_tag)
+            source = remote.remote_git('rev-parse', 'master')
+            self.assertEqual(remote.remote_git('rev-parse', 'unixlike-v1.1.1^{commit}'), source)
+            self.assertEqual(r.tag_state('unixlike', source, r.declaration(source, 'unixlike')), 'done')
+
+    def test_baseline_rejects_invalid_evidence_and_writer_keeps_exact_confirmation(self):
+        # INV repository/release-tag-contract
+        # INV repository/bounded-release-automation
+        value = r.declaration(self.base, 'unixlike')
+        message = 'Domain: unixlike\nEvaluation: passed; PR checks\nBuild: unavailable; no matching host\nNative runtime: not applicable; provider only'
+        obj = {'tag': 'unixlike-v1.0.0', 'object': {'type': 'commit', 'sha': self.base}, 'message': message}
+        ref = {'ref': 'refs/tags/unixlike-v1.0.0', 'object': {'type': 'tag', 'sha': 'f' * 40}}
+        with patch.object(r, 'api', side_effect=lambda path: [ref] if 'matching-refs' in path else obj):
+            self.assertEqual(r.tag_state('unixlike', self.base, value, generated=False), 'done')
+            with self.assertRaisesRegex(ValueError, 'conflicting required annotation'):
+                r.tag_state('unixlike', self.base, value)
+            invalid = [message.replace('Build: unavailable; no matching host', ''),
+                       message.replace('passed; PR checks', 'failed; PR checks'),
+                       message.replace('passed; PR checks', 'passed without a separator'),
+                       message.replace('Domain: unixlike', 'Domain: windows'),
+                       message + '\nBuild: passed; duplicate',
+                       message + '\nHost: private-host']
+            for annotation in invalid:
+                with self.subTest(annotation=annotation):
+                    obj['message'] = annotation
+                    with self.assertRaisesRegex(ValueError, 'conflicting required annotation'):
+                        r.tag_state('unixlike', self.base, value, generated=False)
+            obj['message'] = message
+            obj['object']['sha'] = self.head
+            with self.assertRaisesRegex(ValueError, 'conflicting remote target'):
+                r.tag_state('unixlike', self.base, value, generated=False)
+            obj['object']['sha'] = self.base
+            ref['object']['type'] = 'commit'
+            with self.assertRaisesRegex(ValueError, 'remote tag is not annotated'):
+                r.tag_state('unixlike', self.base, value, generated=False)
+
     def test_manual_wait_failure_timeout_and_candidate_change_stop(self):
         waiting = {'action': 'wait', 'base': self.base, 'head': self.head}
         failed = {'id': 1, 'name': 'Required checks', 'app': {'id': 15368}, 'conclusion': 'failure'}
