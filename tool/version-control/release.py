@@ -84,7 +84,7 @@ def latest(domain):
     return max(names, key=lambda name: tuple(map(int, name[len(domain) + 2:].split('.')))) if names else None
 
 
-def tag_state(domain, source, value):
+def tag_state(domain, source, value, *, generated=True):
     name = tag_name(domain, value)
     found = api(f'git/matching-refs/tags/{name}')
     exact = [ref for ref in found if ref['ref'] == f'refs/tags/{name}']
@@ -94,11 +94,24 @@ def tag_state(domain, source, value):
     if obj['type'] != 'tag':
         raise ValueError(f'{name}: remote tag is not annotated')
     tag = api(f"git/tags/{obj['sha']}")
-    required = annotation_fields(domain, source, value)
     if tag['tag'] != name or tag['object']['type'] != 'commit' or tag['object']['sha'] != source:
         raise ValueError(f'{name}: conflicting remote target')
-    lines = tag['message'].splitlines()
-    if not all(line in lines for line in required):
+    if generated:
+        # Writer confirmation binds the exact evidence it generated, including
+        # retries after an ambiguous write. A baseline may be developer-authored.
+        lines = tag['message'].splitlines()
+        valid = all(line in lines for line in annotation_fields(domain, source, value))
+    else:
+        # INV repository/release-tag-contract: the Unix-like baseline follows
+        # audit's domain-level evidence form, not the writer's evidence wording.
+        lines = [line.strip() for line in tag['message'].splitlines()]
+        valid = domain == 'unixlike' and f'Domain: {domain}' in lines
+        valid = valid and not any(line.startswith('Host:') for line in lines)
+        for lane in ('Evaluation', 'Build', 'Native runtime'):
+            evidence = [line.split(':', 1)[1].strip() for line in lines if line.startswith(f'{lane}:')]
+            valid = valid and len(evidence) == 1 and re.fullmatch(
+                r'(passed|unavailable|not applicable)([ \t]*;.*)?', evidence[0]) is not None
+    if not valid:
         raise ValueError(f'{name}: conflicting required annotation')
     return 'done'
 
@@ -234,7 +247,7 @@ def require_published_base(base):
     if prior != latest('unixlike'):
         raise ValueError('finish the current Unix-like publication before refreshing')
     target = git('rev-parse', f'{prior}^{{commit}}')
-    if tag_state('unixlike', target, value) != 'done':
+    if tag_state('unixlike', target, value, generated=False) != 'done':
         raise ValueError('finish the current Unix-like publication before refreshing')
     git('merge-base', '--is-ancestor', target, base)
     if subprocess.call(['git', 'diff', '--quiet', target, base, '--', 'unixlike', '.envrc', 'Justfile']):
