@@ -35,8 +35,13 @@ Dev protection now permits ordinary push without PR/required checks or
 conversation resolution. Master retains strict Required checks and protected
 merge-commit PRs with zero required approvals. Both enforce administrators
 and prohibit everyday force pushes/deletion. Automatic and manual input patch
-operation and its schedule are enabled again; no new patch publication or
-actual scheduled trigger is certified by the source promotion.
+operation and its schedule are enabled again; the 2026-10-07 source promotion
+itself certified neither a new patch publication nor an actual scheduled
+trigger. On 2026-10-11, the enabled schedule completed a permitted-input
+refresh and writer run (#38171470068), producing PR #554. Its selected
+Unix-like CI and Required checks passed; the protected merge is 219c3e8 with
+the immutable unixlike-v1.0.7 tag. Follow-on run #38172240020 succeeded. This
+is actual schedule-path evidence; it does not certify host activation or Apply.
 
 Cancelled conditional-merge/qualification issues and PRs were retired. Related
 topic/backup/reconstruction branches and worktrees were reclaimed after a
