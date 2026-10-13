@@ -94,7 +94,7 @@ jobs:
         run: tool/version-control/test-retired-capture
 
   unix:
-    name: Flake and Unix-like hosts
+    name: Unix-like provider contract
     needs: classify
     if: needs.classify.outputs.unixlike_checks == 'true'
     runs-on: ubuntu-latest
@@ -117,16 +117,7 @@ jobs:
           test "$actual" = 'nix (Nix) 2.34.8'
       - run: unixlike/tool/checks/format
       - run: unixlike/tool/checks/lint
-      - run: unixlike/tool/checks/payloads-test
-      - run: unixlike/tool/checks/karabiner-test
-      - run: unixlike/tool/checks/flake-test
-      - run: unixlike/tool/checks/composition-test
-      - run: unixlike/tool/checks/eval-coverage-test
-      - run: unixlike/tool/checks/prerequisite-test
       - run: unixlike/tool/checks/test
-      # Composes every host twice; the merge gate runs it, the local gate
-      # does not (INV unixlike/import-order-independence).
-      - run: unixlike/tool/checks/import-order-test
 
   windows:
     name: Windows desired state

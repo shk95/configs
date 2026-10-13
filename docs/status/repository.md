@@ -80,3 +80,16 @@ The maintainer subsequently authorized committing and integrating the configs
 result into local dev. Agent Rack's separate source changes remain uncommitted;
 external distribution and consumer adoption are separate operations.
 See docs/work/repository/codex-work-cycle-extraction/report.md for evidence.
+
+## Provider verification connection
+
+The 2026-10-13 prepared connection uses one Unix-like provider suite in CI and
+local checks. Automatic Unix-like annotations report focused artifact build
+evidence and mark host native runtime not applicable. The connection depends on
+the Unix-like provider-verification worktree; neither set of source edits is
+committed or integrated yet. Existing tag annotations remain unchanged.
+
+Independent review corrections passed locally on 2026-10-13. Existing complete
+prior-format publications are recognized without writes; new-write confirmation
+remains current-format-only. Twenty-one release fixtures cover this boundary.
+No remote CI or publication was performed by this adjustment.

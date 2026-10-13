@@ -168,7 +168,7 @@ if [ "$scope" = all ] || [ "$scope" = unixlike ]; then
   echo
   echo "Provider fixtures"
   ok "Unix-like flake outputs are synthetic test instances; real host flakes live in configs-hosts"
-  ok "Run Unix-like evaluation and build checks here; activate only from a reviewed host consumer"
+  ok "Run provider contract, payload and focused artifact checks here; host builds and activation belong to the consumer"
 
   echo
   echo "Karabiner (Darwin only)"

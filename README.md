@@ -153,6 +153,12 @@ just karabiner-test
 Observed Darwin settings use the pinned host-document preview/review/save
 workflow in [CONTRIBUTING.md](CONTRIBUTING.md#capture-darwin-host-documents).
 
+`just check` verifies the provider contract, synthetic composition evaluation,
+locked payload parsers and owned tools. Focused generated-file and source-patch checks build the
+provider's own artifacts; this does not build or run a consumer host. The
+public [configs-host-template](https://github.com/shk95/configs-host-template)
+illustrates API adoption and owns verification of its own examples and pin.
+
 Host-specific Justfile recipes refuse to use the provider's synthetic
 outputs. Evaluate, build and activate a real host from its reviewed private
 consumer flake under `configs-hosts/hosts/<host>/`.

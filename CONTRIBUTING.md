@@ -574,24 +574,25 @@ For Unix-like changes:
 ```sh
 unixlike/tool/checks/format
 unixlike/tool/checks/lint
-unixlike/tool/checks/payloads
 unixlike/tool/checks/test
 ```
 
-The fixtures that prove the Unix-like checks refuse what they must —
-`unixlike/tool/checks/payloads-test`, `flake-test`, `composition-test`,
-`eval-coverage-test`, `prerequisite-test` and `import-order-test` — run in
-the CI unix job. Run one by hand when its check or its fixtures change.
-`import-order-test` composes every host twice and is merge-gate only by
-design (`INV unixlike/import-order-independence`).
+`unixlike/tool/checks/test` is the complete provider suite used by local
+verification and CI. It checks the public constructor contract, native-module
+extensions, an independently locked synthetic consumer, payloads, provider
+scripts, evaluation coverage and import-order independence. Run an individual
+fixture while working on its implementation; run the suite on the final result.
 
-`unixlike/tool/checks/payloads` parses every source payload declared in
-`unixlike/payloads.json` with the tool that consumes it. Evaluation does not
-cover them: Nix copies a payload into the store without reading it.
+Every synthetic configuration is evaluated to its toplevel derivation. Host
+closures and VM sessions are not built by default. Flake checks realize focused
+provider-owned source transformations such as carried patches, plus native parser validation of generated
+Niri and Noctalia configuration files. Host reproductions run in the consumer and are not provider release
+qualification. Real host builds and runtime belong to the
+consumer. The public configs-host-template is checked on its own source and pin;
+provider verification does not fetch a moving template or private consumer.
 
-`unixlike/tool/checks/test` evaluates every declared Unix-like configuration
-and builds configurations native to the current host when appropriate. Foreign
-evaluation is not native build or activation evidence.
+Payload parsers use the provider's locked Nix input. Evaluation does not cover
+payload syntax because Nix copies these files without reading them.
 
 For Windows changes, run the native Windows commands above. Unix-like Nix
 evaluation is not part of Windows verification.

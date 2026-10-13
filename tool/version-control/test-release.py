@@ -177,7 +177,11 @@ class ReleaseFixtures(unittest.TestCase):
         self.commit('feat(repository): initial fixture')
         self.write('unixlike/flake.lock', self.lock)
         self.base = self.commit('chore(unixlike-deps): initial fixture lock')
-        r.git('tag', '-a', 'unixlike-v1.0.0', '-m', '\n'.join(r.annotation_fields('unixlike', self.base, r.declaration(self.base, 'unixlike'))))
+        annotation = r.annotation_fields('unixlike', self.base, r.declaration(self.base, 'unixlike'))
+        self.assertIn('Build: passed; provider-owned artifact checks on CI system', annotation)
+        self.assertIn('Native runtime: not applicable; host runtime belongs to consumers', annotation)
+        self.assertFalse(any(line.startswith('Native runtime: passed') for line in annotation))
+        r.git('tag', '-a', 'unixlike-v1.0.0', '-m', '\n'.join(annotation))
         r.git('tag', '-a', 'windows-v1.0.0', '-m', 'Domain: windows\nHost: windows-ci\nEvaluation: passed; fixture\nBuild: not applicable; desired-state\nNative runtime: passed; fixture')
         self.windows_tag = r.git('rev-parse', 'windows-v1.0.0')
         self.write('unixlike/release.json', {'previous': 'unixlike-v1.0.0', 'version': '1.0.1',
@@ -276,6 +280,89 @@ class ReleaseFixtures(unittest.TestCase):
                 r.tag_state('unixlike', self.head, value)
         with patch.object(r, 'api', return_value=[]):
             self.assertEqual(r.tag_state('unixlike', self.head, value), 'missing')
+
+    def test_existing_publication_recognizes_legacy_without_writes(self):
+        # INV repository/bounded-release-automation
+        # INV repository/release-tag-contract
+        value = r.declaration(self.head, 'unixlike')
+        current = r.annotation_fields('unixlike', self.head, value)
+        legacy = [
+            'Build: passed; selected matching-system provider fixtures'
+            if line.startswith('Build:') else
+            'Native runtime: passed; provider CI fixtures'
+            if line.startswith('Native runtime:') else line
+            for line in current
+        ]
+        obj = {'tag': 'unixlike-v1.0.1', 'object': {'type': 'commit', 'sha': self.head}}
+        ref = {'ref': 'refs/tags/unixlike-v1.0.1', 'object': {'type': 'tag', 'sha': 'f' * 40}}
+        def reads(path, *args):
+            self.assertFalse(args, 'existing publication must make no writes')
+            return [ref] if 'matching-refs' in path else obj
+        def source_read(*args):
+            self.assertIn(args[0], ('rev-parse', 'merge-base'))
+            return self.head if args[0] == 'rev-parse' else ''
+        with patch.object(r, 'api', side_effect=reads), patch.object(r, 'git', side_effect=source_read), \
+                patch.object(r, 'patch_merge', return_value=True), patch.object(r, 'declaration', return_value=value):
+            for form in (current, legacy):
+                obj['message'] = '\n'.join(form)
+                r.publish(self.head)
+            invalid = [
+                [line for line in legacy if not line.startswith('Build:')],
+                [line.replace('Summary: ', 'Summary: altered ') for line in legacy],
+                legacy + ['Build: failed; conflicting evidence'],
+                legacy + ['  Build: failed; conflicting evidence'],
+                legacy + ['Host: unexpected'],
+                legacy + ['  Host: unexpected'],
+            ]
+            for form in invalid:
+                obj['message'] = '\n'.join(form)
+                with self.assertRaisesRegex(ValueError, 'conflicting required annotation'):
+                    r.publish(self.head)
+            obj['message'] = '\n'.join(legacy)
+            obj['object']['sha'] = self.base
+            with self.assertRaisesRegex(ValueError, 'conflicting remote target'):
+                r.publish(self.head)
+            obj['object']['sha'] = self.head
+            # New-write confirmation retains current exact required fields.
+            with self.assertRaisesRegex(ValueError, 'conflicting required annotation'):
+                r.tag_state('unixlike', self.head, value)
+
+    def test_new_publication_rejects_legacy_write_confirmation(self):
+        # INV repository/bounded-release-automation
+        # INV repository/release-tag-contract
+        value = r.declaration(self.head, 'unixlike')
+        ref = {'ref': 'refs/tags/unixlike-v1.0.1', 'object': {'type': 'tag', 'sha': 'f' * 40}}
+        obj = {'tag': 'unixlike-v1.0.1', 'object': {'type': 'commit', 'sha': self.head}}
+        published = [False]
+        def remote(path, *args):
+            if 'matching-refs' in path:
+                return [ref] if published[0] else []
+            if path == 'git/tags':
+                obj['message'] = args[0]['message'].replace(
+                    'Build: passed; provider-owned artifact checks on CI system',
+                    'Build: passed; selected matching-system provider fixtures').replace(
+                    'Native runtime: not applicable; host runtime belongs to consumers',
+                    'Native runtime: passed; provider CI fixtures')
+                return {'sha': 'f' * 40}
+            if path == 'git/refs':
+                published[0] = True
+                raise subprocess.CalledProcessError(1, 'fixture ambiguous write')
+            if path.startswith('git/tags/'):
+                return obj
+            if path.endswith('/pulls'):
+                return [{'merged_at': 'fixture', 'base': {'ref': 'master'},
+                         'head': {'ref': r.PATCH_BRANCH + 'fixture', 'repo': {'full_name': r.repository()}},
+                         'merge_commit_sha': self.head}]
+            raise AssertionError(path)
+        def source_read(*args):
+            if args[0] == 'merge-base': return ''
+            if args[0] == 'show': return self.base + ' ' + self.head
+            return self.tree if args[-1].endswith('^{tree}') else self.head
+        with patch.object(r, 'api', side_effect=remote), patch.object(r, 'git', side_effect=source_read), \
+                patch.object(r, 'patch_merge', return_value=True), patch.object(r, 'declaration', return_value=value), \
+                patch.object(r, 'checked', return_value=True):
+            with self.assertRaisesRegex(ValueError, 'conflicting required annotation'):
+                r.publish(self.head)
 
     def test_schedule_waits_for_active_manual_run(self):
         with patch.object(r, 'manual_active', return_value=True), patch.object(r, 'api') as remote:
