@@ -1,11 +1,6 @@
-# Systems that build repository tooling or host configurations. Windows is a
-# target bundle, not a Nix build platform; it is rendered on the Unix-like
-# development hosts listed here and consumed without Nix on Windows.
-#
-# `aarch64-linux` is here for the aarch64 NixOS hosts the typed inventory
-# declares. It is evaluated on the other systems and built natively or on a
-# remote builder, never under emulation: binfmt_misc on a WSL distribution is
-# shared by every distribution, so none is registered there.
+# Native systems supported by provider tooling and public constructors.
+# Composition witnesses evaluate on any verification system. A provider check
+# realizes only artifacts it owns; consumer host builds are separate.
 _: {
   systems = [
     "x86_64-linux"

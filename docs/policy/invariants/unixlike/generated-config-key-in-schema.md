@@ -1,6 +1,7 @@
 id: unixlike/generated-config-key-in-schema
 statement: A key written into a generated configuration exists in the pinned tool's schema at the locked version, and a tool that migrates its own configuration in place is started once against the rendered file before the change is accepted.
 rationale: docs/policy/architecture.md § Unix-like domain
+enforced-by: fixture unixlike/modules/flake/generated-config-checks.nix
 enforced-by: manual the reviewer reads each new or changed key against the pinned tool's source or documentation at the locked version, starts a tool that migrates its own configuration once against the rendered file, and reports both beside the evaluation and build evidence
 owner: repository maintainer
 
@@ -12,7 +13,11 @@ starts (`git.paging` in `unixlike/modules/programs/lazygit.nix`, found by review
 merged, not by any check). A wrong default cited in a comment for the same
 tool family (full-border.yazi) came from the same gap. The evidence is the
 reviewer's reading and one start of the built binary against the rendered
-home, required by `docs/policy/definition-of-done/unixlike.md`. Enforcement by a check is
-not funded: it would need a declaration per generated file, a pty and a
+home, required by `docs/policy/definition-of-done/unixlike.md`. General automatic enforcement is not implemented: it would need a declaration per generated file, a pty and a
 per-tool pass condition, and fixtures — a project the size of
 `unixlike/tool/checks/payloads`.
+
+Focused Linux flake checks realize Niri and Noctalia configuration sources,
+including Niri repeat-delay rendering, and prove native parser refusal of
+malformed inputs. These checks do not build a host closure or prove a session.
+Other generated keys and in-place migrations retain the manual obligation.

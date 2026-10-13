@@ -1,12 +1,12 @@
 #!/bin/sh
-# Fixtures for the coverage rule in tool/checks/eval-build.
+# Fixtures for the coverage rule in tool/checks/evaluate.
 #
 # INV unixlike/eval-covers-every-host
 #
-# Evaluation must reach every configuration, and an explicitly selected native
-# build must pass. The fixtures cover both accepted and refused outcomes.
+# Evaluation must reach every synthetic composition without realizing a host
+# closure. The fixtures cover accepted and refused evaluation outcomes.
 #
-# CHECKS_FLAKE points tool/checks/eval-build at a fixture flake instead of this
+# CHECKS_FLAKE points tool/checks/evaluate at a fixture flake instead of this
 # repository; the fixtures carry no inputs, so nothing is fetched.
 
 set -e
@@ -29,7 +29,7 @@ fixtures="$repo/tool/checks/fixtures/eval-coverage"
 #
 # INV unixlike/eval-covers-every-host
 printf '→ accepts a flake that exports one configuration\n'
-if ! output=$(CHECKS_FLAKE="path:$fixtures/probe" tool/checks/eval-build 2>&1); then
+if ! output=$(CHECKS_FLAKE="path:$fixtures/probe" tool/checks/evaluate 2>&1); then
   printf '%s\n' "$output" >&2
   fail "the evaluation check rejected the probe fixture"
 fi
@@ -38,27 +38,22 @@ printf '%s\n' "$output" | grep -q 'homeConfigurations.probe' \
 
 for case in empty-flavour no-flavour; do
   printf '→ rejects %s\n' "$case"
-  if output=$(CHECKS_FLAKE="path:$fixtures/$case" tool/checks/eval-build 2>&1); then
+  if output=$(CHECKS_FLAKE="path:$fixtures/$case" tool/checks/evaluate 2>&1); then
     printf '%s\n' "$output" >&2
     fail "the evaluation check passed the $case fixture"
   fi
 done
 
-# A host for another platform is evaluated and never built, so evaluation is
-# all the evidence it has, and one that stops instantiating must fail the run
-# by name. Which step finds it depends on the Nix that runs the check: a
-# `nix flake check` that only asks for a derivation passes it, and the row
-# comes from forcing `.drvPath`, with the sound host still reported beside
-# it; one that instantiates every NixOS configuration stops on it first, with
-# the fixture's own message. Either is the broken host's failure and no
-# other's.
+# A composition for another platform must still instantiate. Depending on
+# Nix, flake shape validation may detect the bad derivation before the explicit
+# walk; either path must reject the broken composition for its actual reason.
 printf '→ rejects a host that fails to evaluate, by name\n'
-if output=$(CHECKS_FLAKE="path:$fixtures/failing-host" tool/checks/eval-build 2>&1); then
+if output=$(CHECKS_FLAKE="path:$fixtures/failing-host" tool/checks/evaluate 2>&1); then
   printf '%s\n' "$output" >&2
   fail "the evaluation check passed a host whose toplevel does not instantiate"
 fi
-if printf '%s\n' "$output" | grep -q 'nixosConfigurations.broken  *eval ✗$'; then
-  printf '%s\n' "$output" | grep -q 'nixosConfigurations.sound  *eval ✓ build — targets riscv64-linux$' || {
+if printf '%s\n' "$output" | grep -q 'nixosConfigurations.broken eval ✗ (FAIL)$'; then
+  printf '%s\n' "$output" | grep -q 'nixosConfigurations.sound eval ✓$' || {
     printf '%s\n' "$output" >&2
     fail "the evaluation check did not report the sound host beside the broken one"
   }
@@ -67,49 +62,36 @@ elif ! printf '%s\n' "$output" | grep -q 'the broken fixture host does not insta
   fail "the evaluation check failed for a reason other than the broken host"
 fi
 
-# A selected NixOS fixture builds regardless of the running host's name. The
-# other one is evaluated and reported as unselected.
-printf '→ builds the selected NixOS fixture independent of host name\n'
-hosts_flake=$(mktemp -d)
-hosts_flake=$(CDPATH= cd -- "$hosts_flake" && pwd -P)
-trap 'rm -rf "$hosts_flake"' EXIT
+# Native derivations whose builders refuse execution still evaluate. This
+# catches a regression which turns composition evidence into host realization.
+printf '→ evaluates native compositions without executing their builders\n'
+compositions=$(mktemp -d)
+compositions=$(CDPATH= cd -- "$compositions" && pwd -P)
+trap 'rm -rf "$compositions"' EXIT
 here=$(nix eval --raw --impure --expr 'builtins.currentSystem')
-sed "s/@system@/$here/g" "$fixtures/nixos-hosts/flake.nix.in" > "$hosts_flake/flake.nix"
-if ! output=$(CHECKS_BUILD_TARGETS=nixosConfigurations.this-host CHECKS_FLAKE="path:$hosts_flake" tool/checks/eval-build 2>&1); then
+sed "s/@system@/$here/g" "$fixtures/nixos-hosts/flake.nix.in" > "$compositions/flake.nix"
+if ! output=$(CHECKS_FLAKE="path:$compositions" tool/checks/evaluate 2>&1); then
   printf '%s\n' "$output" >&2
-  fail "the evaluation check rejected the two-host fixture on this-host"
+  fail 'native compositions were realized instead of evaluated'
 fi
-printf '%s\n' "$output" | grep -q '^→ build nixosConfigurations.this-host$' &&
-  printf '%s\n' "$output" | grep -q '^→ skip  nixosConfigurations.other-host ' &&
-  ! printf '%s\n' "$output" | grep -q '^→ build nixosConfigurations.other-host$' || {
+for name in this-host other-host; do
+  printf '%s\n' "$output" | grep -q "nixosConfigurations.$name eval ✓" \
+    || fail "missing native composition $name"
+done
+# The provider requires every family, even when other compositions are valid.
+printf '→ accepts all required families without executing native builders\n'
+sed "s/@system@/$here/g" "$fixtures/required-families/flake.nix.in" > "$compositions/flake.nix"
+if ! output=$(CHECKS_FLAKE="path:$compositions" CHECKS_STRICT_FAMILIES=1 tool/checks/evaluate 2>&1); then
   printf '%s\n' "$output" >&2
-  fail "the check did not build only the selected fixture"
-}
-
-printf '→ evaluates both fixtures when no build is selected\n'
-if ! output=$(CHECKS_FLAKE="path:$hosts_flake" tool/checks/eval-build 2>&1); then
-  printf '%s\n' "$output" >&2
-  fail "the evaluation check rejected the unselected two-host fixture"
+  fail 'the strict evaluation check rejected all required families'
 fi
-if printf '%s\n' "$output" | grep -q '^→ build nixosConfigurations'; then
-  printf '%s\n' "$output" >&2
-  fail "the evaluation check built an unselected fixture"
-fi
-
-printf '→ refuses a selected output that is absent\n'
-if output=$(CHECKS_BUILD_TARGETS=nixosConfigurations.missing CHECKS_FLAKE="path:$hosts_flake" tool/checks/eval-build 2>&1); then
-  printf '%s\n' "$output" >&2
-  fail "the evaluation check accepted a missing selected build"
-fi
-printf '%s\n' "$output" | grep -q 'Selected native build has no passing result: nixosConfigurations.missing' \
-  || fail "the missing selection failed without a useful reason"
-
-printf '→ refuses a selected output for a foreign system\n'
-if output=$(CHECKS_BUILD_TARGETS=homeConfigurations.probe CHECKS_FLAKE="path:$fixtures/probe" tool/checks/eval-build 2>&1); then
-  printf '%s\n' "$output" >&2
-  fail "the evaluation check accepted a foreign selected build"
-fi
-printf '%s\n' "$output" | grep -q 'Selected native build has no passing result: homeConfigurations.probe' \
-  || fail "the foreign selection failed without a useful reason"
-
+for family in homeConfigurations nixosConfigurations darwinConfigurations; do
+  printf '→ refuses missing required family %s\n' "$family"
+  sed "/^    $family =/d; s/@system@/$here/g" "$fixtures/required-families/flake.nix.in" > "$compositions/flake.nix"
+  if output=$(CHECKS_FLAKE="path:$compositions" CHECKS_STRICT_FAMILIES=1 tool/checks/evaluate 2>&1); then
+    fail "the strict evaluation check accepted missing $family"
+  fi
+  printf '%s\n' "$output" | grep -q "$family eval ✗ (ABSENT)" \
+    || fail "missing $family failed without the required-family diagnosis"
+done
 printf '✓ evaluation coverage fixtures behave\n'

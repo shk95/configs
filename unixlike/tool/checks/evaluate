@@ -1,0 +1,67 @@
+#!/bin/sh
+# Synthetic public API composition evidence, not host realization.
+# Flake checks realize only provider-owned artifacts such as generated files and source patches.
+# INV unixlike/eval-covers-every-host
+set -eu
+. "$(CDPATH= cd -- "$(dirname -- "$0")" && pwd)/prerequisite"
+require_command nix
+root=$(CDPATH= cd -- "$(dirname "$0")/../.." && pwd)
+flake=${CHECKS_FLAKE:-path:$root}
+strict_families=1
+if [ -n "${CHECKS_FLAKE:-}" ]; then
+  strict_families=${CHECKS_STRICT_FAMILIES:-0}
+fi
+case "$strict_families" in 0|1) ;; *) echo 'Invalid strict-family mode' >&2; exit 2 ;; esac
+exported=$(nix eval --raw --impure --expr \
+  "builtins.concatStringsSep \" \" (builtins.attrNames (builtins.getFlake \"$flake\"))")
+report=$(mktemp)
+trap 'rm -f "$report"' EXIT
+# Shape validation and focused provider artifact checks; no host output build.
+nix flake check "$flake"
+for flavour in homeConfigurations nixosConfigurations darwinConfigurations; do
+  case " $exported " in
+    *" $flavour "*) ;;
+    *)
+      if [ "$strict_families" = 1 ]; then
+        printf '%s|ABSENT\n' "$flavour" >> "$report"
+      fi
+      continue ;;
+  esac
+  if ! names=$(nix eval --raw "$flake#$flavour" \
+    --apply 'x: builtins.concatStringsSep "\n" (builtins.attrNames x)'); then
+    printf '%s|FAIL\n' "$flavour" >> "$report"
+    continue
+  fi
+  if [ -z "$names" ]; then
+    printf '%s|EMPTY\n' "$flavour" >> "$report"
+    continue
+  fi
+  case "$flavour" in
+    homeConfigurations) attr=activationPackage ;;
+    *) attr=config.system.build.toplevel ;;
+  esac
+  printf '%s\n' "$names" | while IFS= read -r name; do
+    target="$flavour.$name"
+    printf '→ eval %s\n' "$target"
+    if nix eval --raw "$flake#$flavour.\"$name\".$attr.drvPath" >/dev/null; then
+      printf '%s|ok\n' "$target" >> "$report"
+    else
+      printf '%s|FAIL\n' "$target" >> "$report"
+    fi
+  done
+done
+printf '\nProvider composition coverage (evaluation only):\n'
+while IFS='|' read -r target status; do
+  case "$status" in
+    ok) printf '  %s eval ✓\n' "$target" ;;
+    *) printf '  %s eval ✗ (%s)\n' "$target" "$status" ;;
+  esac
+done < "$report"
+if grep -qE '\|(FAIL|EMPTY|ABSENT)$' "$report"; then
+  echo 'Provider composition evaluation failed.' >&2
+  exit 1
+fi
+if ! grep -q '|ok$' "$report"; then
+  echo 'No provider composition was evaluated.' >&2
+  exit 1
+fi
