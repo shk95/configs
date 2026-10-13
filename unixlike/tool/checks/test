@@ -1,11 +1,16 @@
 #!/bin/sh
-# Run independent suites once before provider evaluation/build.
+# One provider suite: contract, composition, payloads and provider tooling.
+# Configuration outputs are synthetic evaluation witnesses, not host targets.
 # INV unixlike/provider-input-refresh-bounded
 # INV unixlike/host-written-payload-projected
 # INV unixlike/eval-covers-every-host
 set -eu
 checks=$(CDPATH= cd -- "$(dirname -- "$0")" && pwd)
-"$checks/refresh-inputs-test"
-"$checks/darwin-capture-test"
-"$checks/karabiner-entry-test"
-exec "$checks/eval-build" "$@"
+. "$checks/prerequisite"
+require_command nix
+for suite in refresh-inputs-test darwin-capture-test karabiner-entry-test \
+  payloads-test karabiner-test flake-test composition-test \
+  eval-coverage-test prerequisite-test import-order-test; do
+  "$checks/$suite"
+done
+exec "$checks/evaluate" "$@"

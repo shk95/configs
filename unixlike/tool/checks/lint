@@ -15,8 +15,8 @@ require_command nix
 checks_dir=$(CDPATH= cd -- "$(dirname -- "$0")" && pwd)
 cd "$checks_dir/../.."
 
-nix run nixpkgs#statix -- check .
-nix run nixpkgs#deadnix -- --fail .
+nix run --inputs-from "path:$PWD" nixpkgs#statix -- check .
+nix run --inputs-from "path:$PWD" nixpkgs#deadnix -- --fail .
 
 # The composition rule is static analysis of the same tree: a feature file
 # names no host flavour and forces no value (INV unixlike/composition-in-one-place).

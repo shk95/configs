@@ -18,6 +18,17 @@ printf '%s' "$coverage" | jq -e '.count > 0 and .failures == []' >/dev/null || {
 }
 printf '✓ finite published constructor contract: %s cases\n' "$(printf '%s' "$coverage" | jq -r .count)"
 
+# INV unixlike/eval-covers-every-host: state-version/type probes alone do not
+# instantiate complete supported compositions.
+compositions=$(nix eval --json --impure --expr '
+  (import ./tool/checks/composition-witnesses.nix {
+    provider = builtins.getFlake (toString ./.);
+  }).toplevels')
+printf '%s' "$compositions" | jq -e 'length > 0 and all(.[]; endswith(".drv"))' >/dev/null
+printf '✓ public constructor/system/environment toplevels: %s scenarios\n' "$(printf '%s' "$compositions" | jq length)"
+"$provider_root/tool/checks/composition-witnesses-test"
+
+
 consumer_dir=$(mktemp -d)
 consumer_dir=$(CDPATH= cd -- "$consumer_dir" && pwd -P)
 trap 'rm -rf "$consumer_dir"' EXIT

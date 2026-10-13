@@ -22,8 +22,8 @@
 # The optional directory's files are added to the module set, which is how
 # tool/checks/import-order-test proves the check refuses an order-sensitive
 # pair. Evaluation only, no build; twice the cost of tool/checks/test's
-# evaluation tier, which is why the merge gate runs it and the local gate
-# does not.
+# evaluation walk. The complete provider suite runs it locally and in CI;
+# the quick pre-commit gate does not.
 
 set -e
 . "$(CDPATH= cd -- "$(dirname -- "$0")" && pwd)/prerequisite"
