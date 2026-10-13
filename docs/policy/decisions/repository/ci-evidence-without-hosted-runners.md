@@ -79,3 +79,12 @@ and refuses missing or failed selected builds. The required Unix-like CI job
 keeps evaluation of all exported configurations and representative native
 builds; private machine builds and activation remain consumer evidence. This
 does not add a hosted runner or weaken a selected check.
+
+## 2026-10-13: provider artifact qualification
+
+The Unix-like provider's representative host-build requirement above is replaced
+by `docs/policy/decisions/repository/provider-verification-evidence.md` and
+`docs/policy/decisions/unixlike/provider-verification-boundary.md`. Current
+qualification evaluates API compositions and checks provider-owned generated
+files and source transformations without host closure or VM realization.
+Historical evidence and the Windows requirements in this record are retained.

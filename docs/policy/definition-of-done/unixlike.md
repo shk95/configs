@@ -7,8 +7,8 @@ file, which every change owes.
       payload rather than a cross-platform abstraction.
 - [ ] The affected Home Manager, NixOS, or nix-darwin toplevel derivation
       evaluates.
-- [ ] A native build is performed on a matching system when sources or packages
-      changed.
+- [ ] Provider-owned source transformations and generated configuration artifacts
+      are checked on matching verification systems when affected. Consumer host builds are not provider prerequisites.
 - [ ] Foreign evaluation is reported as evaluation, not native build evidence.
 - [ ] Every source payload is declared in `unixlike/payloads.json` and parsed by
       the tool that will consume it. Evaluation is not payload evidence: Nix
@@ -19,9 +19,10 @@ file, which every change owes.
       Home Manager installs that file as a read-only store symlink, so an
       in-place migration fails closed (INV unixlike/generated-config-key-in-schema).
 - [ ] Activation is performed only when explicitly requested.
-- [ ] Runtime claims name the host on which they were observed.
-- [ ] A `unixlike-v...` tag is assigned only after the affected public contract
-      and platform outputs have their selected native build evidence. Record
-      the exact selections and unavailable lanes; an unselected output has no
-      build claim. `CHECKS_BUILD_ALL=1 unixlike/tool/checks/test` is an optional
-      broader check, not a release prerequisite by itself.
+- [ ] Any optional runtime reproduction names its system and exact selection;
+      ordinary provider verification makes no host runtime claim.
+- [ ] A `unixlike-v...` tag certifies the public API, synthetic composition
+      evaluation, payload validation, generated-file parsing and provider-owned tooling. Host closure
+      builds, boot, desktop sessions and activation belong to the consumer.
+      Consumer configuration builds are reported separately and are never
+      inferred from the provider suite.

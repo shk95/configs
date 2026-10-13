@@ -1,0 +1,10 @@
+{
+  outputs = _: let
+    d = derivation {name = "family-probe"; system = "@system@"; builder = "/bin/false";};
+    native = {config.system.build.toplevel = d; pkgs.stdenv = {system = "@system@"; hostPlatform.system = "@system@";};};
+  in {
+    homeConfigurations = {probe.activationPackage = d;};
+    nixosConfigurations = {probe = native;};
+    darwinConfigurations = {probe = native;};
+  };
+}

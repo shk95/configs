@@ -144,6 +144,14 @@ An installed Unix-like host consumes its independently pinned private flake
 and activates only after evaluation and native build evidence for that host.
 A `configs` Unix-like release tag certifies the provider API and fixtures,
 not a final consumer output or deployment.
+Routine provider evidence comprises the public contract, synthetic composition
+evaluation, payloads and provider-owned scripts. It does not require host
+closure builds or boot/desktop VM execution. Source transformations and generated configuration files owned by
+the provider retain focused build checks. Optional host realizations are
+reproductions and never consumer adoption evidence. The provider and the public
+configs-host-template each verify their own source and lock; provider CI uses an
+independent synthetic consumer rather than fetching a moving template.
+
 
 ## Windows domain
 

@@ -17,5 +17,5 @@ three flavours,
 with the same collection, composition and comparison engine. It accepts a
 stable list and adds a pair of files contributing to one
 flake-level list at the same order and requires the check to refuse it. The
-check evaluates every host twice, so the merge gate runs it and the local
-gate does not (#128).
+check evaluates every synthetic composition twice. The complete provider suite
+runs it locally and in CI; the quick pre-commit gate does not (#128).

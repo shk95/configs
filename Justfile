@@ -45,14 +45,13 @@ _nixos-host:
 doctor:
     tool/doctor.sh
 
-# Run formatting, lint, payload parsing, and evaluation/native-build coverage.
+# Run formatting, lint and the complete provider verification suite.
 # The checks a change needs; the fixtures that prove each check refuses what it
 # must have recipes of their own below and run in CI.
 [group('repository')]
 check:
     unixlike/tool/checks/format
     unixlike/tool/checks/lint
-    unixlike/tool/checks/payloads
     unixlike/tool/checks/test
 
 [group('repository')]
@@ -302,11 +301,8 @@ nixos-eval host="":
     drv=$(nix eval --raw "path:./unixlike#nixosConfigurations.${target}.config.system.build.toplevel.drvPath")
     printf '%s\n' "${drv}"
 
-# `unixlike/tool/checks/test` builds a NixOS output only on the host it names,
-# because nothing anywhere else can activate the result. This is the
-# deliberate way to ask for it; `CHECKS_BUILD_ALL=1 unixlike/tool/checks/test`
-# is the other. An aarch64 host builds natively or on a remote builder, never
-# under emulation (unixlike/modules/flake/systems.nix).
+# Provider verification evaluates synthetic API compositions. Real NixOS
+# closure builds run from the reviewed consumer flake.
 
 # Build a NixOS host's closure (the NixOS-WSL one is ~1.9 GiB)
 [group('nixos')]

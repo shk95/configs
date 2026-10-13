@@ -46,7 +46,7 @@ work=$(mktemp -d)
 trap 'rm -rf "$work"' EXIT
 
 # One jq call; everything below is plain text processing.
-nix shell nixpkgs#jq -c jq -r '.payloads[] | "\(.format)\t\(.source)"' "$manifest" \
+nix shell --inputs-from "path:$repo" nixpkgs#jq -c jq -r '.payloads[] | "\(.format)\t\(.source)"' "$manifest" \
   | sort >"$work/declared"
 
 cut -f2 "$work/declared" | sort >"$work/declared-sources"
@@ -83,13 +83,13 @@ paths_for() {
 lua=$(paths_for lua)
 if [ -n "$lua" ]; then
   printf '→ lua\n'
-  printf '%s\n' "$lua" | xargs nix shell nixpkgs#lua5_4 -c luac -p
+  printf '%s\n' "$lua" | xargs nix shell --inputs-from "path:$repo" nixpkgs#lua5_4 -c luac -p
 fi
 
 json=$(paths_for json)
 if [ -n "$json" ]; then
   printf '→ json\n'
-  printf '%s\n' "$json" | xargs nix shell nixpkgs#jq -c jq empty
+  printf '%s\n' "$json" | xargs nix shell --inputs-from "path:$repo" nixpkgs#jq -c jq empty
 fi
 
 # zellij takes one --config at a time and reports on stdout, which is noise
@@ -98,7 +98,7 @@ kdl=$(paths_for kdl)
 if [ -n "$kdl" ]; then
   printf '→ kdl\n'
   for file in $kdl; do
-    if ! nix shell nixpkgs#zellij -c zellij --config "$file" setup --check >"$work/kdl" 2>&1; then
+    if ! nix shell --inputs-from "path:$repo" nixpkgs#zellij -c zellij --config "$file" setup --check >"$work/kdl" 2>&1; then
       cat "$work/kdl" >&2
       fail "zellij rejected '$file'."
     fi
@@ -112,7 +112,7 @@ powershell=$(paths_for powershell)
 if [ -n "$powershell" ]; then
   printf '→ powershell\n'
   for file in $powershell; do
-    nix shell nixpkgs#powershell -c pwsh -NoProfile -Command "
+    nix shell --inputs-from "path:$repo" nixpkgs#powershell -c pwsh -NoProfile -Command "
       \$errors = \$null
       [void][System.Management.Automation.Language.Parser]::ParseFile('$repo/$file', [ref]\$null, [ref]\$errors)
       if (\$errors.Count) {

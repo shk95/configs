@@ -1,0 +1,44 @@
+#!/bin/sh
+# INV unixlike/eval-covers-every-host: supported-system composition coverage is
+# independent of the example output inventory and forces the actual toplevel.
+set -eu
+. "$(CDPATH= cd -- "$(dirname -- "$0")" && pwd)/prerequisite"
+require_command nix
+cd "$(CDPATH= cd -- "$(dirname -- "$0")/../.." && pwd)"
+result=$(nix eval --json --impure --expr '
+  let
+    actual = builtins.getFlake (toString ./.);
+    make = failArm: let
+      drv = args: derivation {
+        name = "composition-probe";
+        system = args.system;
+        builder = if failArm && args.system == "aarch64-linux"
+          then throw "ARM fixture toplevel refuses"
+          else "/bin/false";
+      };
+      native = args: {config.system = {stateVersion = "25.11"; build.toplevel = drv args;};};
+    in actual // {
+      # There are no example outputs: only public constructors are available.
+      nixosConfigurations = {};
+      darwinConfigurations = {};
+      homeConfigurations = {};
+      lib = {
+        mkNixos = native;
+        mkDarwin = native;
+        mkHome = args: {activationPackage = drv args;};
+      };
+    };
+    succeeds = value: (builtins.tryEval (builtins.deepSeq value true)).success;
+    good = import ./tool/checks/composition-witnesses.nix {provider = make false;};
+    bad = import ./tool/checks/composition-witnesses.nix {provider = make true;};
+  in {
+    noExamples = succeeds good.toplevels;
+    supportedArm = good.toplevels ? "mkNixos/aarch64-linux/cli";
+    armStateStillReads = bad.witnesses."mkNixos/aarch64-linux/cli".configuration.config.system.stateVersion == "25.11";
+    refusesArmToplevel = !(succeeds bad.toplevels);
+  }')
+case "$result" in
+  '{"armStateStillReads":true,"noExamples":true,"refusesArmToplevel":true,"supportedArm":true}') ;;
+  *) printf 'composition witness detector failed: %s\n' "$result" >&2; exit 1 ;;
+esac
+printf '✓ constructor witnesses survive absent examples and reject ARM-only toplevel failure\n'

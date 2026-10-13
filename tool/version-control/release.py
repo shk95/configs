@@ -84,7 +84,7 @@ def latest(domain):
     return max(names, key=lambda name: tuple(map(int, name[len(domain) + 2:].split('.')))) if names else None
 
 
-def tag_state(domain, source, value, *, generated=True):
+def tag_state(domain, source, value, *, generated=True, allow_legacy_generated=False):
     name = tag_name(domain, value)
     found = api(f'git/matching-refs/tags/{name}')
     exact = [ref for ref in found if ref['ref'] == f'refs/tags/{name}']
@@ -100,7 +100,25 @@ def tag_state(domain, source, value, *, generated=True):
         # Writer confirmation binds the exact evidence it generated, including
         # retries after an ambiguous write. A baseline may be developer-authored.
         lines = tag['message'].splitlines()
-        valid = all(line in lines for line in annotation_fields(domain, source, value))
+        expected = annotation_fields(domain, source, value)
+        forms = [expected]
+        if allow_legacy_generated:
+            # Recognize the one previously published writer format only while
+            # discovering an existing immutable publication. Never use this
+            # compatibility path to confirm a new remote write.
+            forms.append([
+                'Build: passed; selected matching-system provider fixtures'
+                if line.startswith('Build:') else
+                'Native runtime: passed; provider CI fixtures'
+                if line.startswith('Native runtime:') else line
+                for line in expected
+            ])
+        valid = not any(line.lstrip().startswith('Host:') for line in lines) and any(
+            all(lines.count(line) == 1 and
+                sum(item.lstrip().startswith(line.split(':', 1)[0] + ':') for item in lines) == 1
+                for line in form)
+            for form in forms)
+
     else:
         # INV repository/release-tag-contract: the Unix-like baseline follows
         # audit's domain-level evidence form, not the writer's evidence wording.
@@ -121,8 +139,8 @@ def annotation_fields(domain, source, value):
              f"Previous: {value['previous']}", f"Summary: {value['summary']}",
              f"Compatibility: {value['compatibility']}", f"Migration: {value['migration']}"]
     lines += ['Evaluation: passed; provider CI',
-              'Build: passed; selected matching-system provider fixtures',
-              'Native runtime: passed; provider CI fixtures']
+              'Build: passed; provider-owned artifact checks on CI system',
+              'Native runtime: not applicable; host runtime belongs to consumers']
     return lines + ['Deployment: not performed by release', f'Evidence: https://github.com/{repository()}/commit/{source}']
 
 
@@ -308,7 +326,7 @@ def publish(source):
     if not patch_merge(source):
         raise ValueError('source is not a bounded Unix-like input patch merge')
     domains = ['unixlike']
-    missing = [d for d in domains if tag_state(d, source, declaration(source, d)) == 'missing']
+    missing = [d for d in domains if tag_state(d, source, declaration(source, d), allow_legacy_generated=True) == 'missing']
     if not missing:
         return
     parents = git('show', '-s', '--format=%P', source).split()

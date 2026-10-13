@@ -6,6 +6,20 @@ is recorded under `docs/policy/decisions/`; the model those decisions implement
 is `docs/policy/architecture.md`. The other scopes' state is in the files
 beside this one.
 
+## Provider verification boundary
+
+The 2026-10-13 verification adjustment makes routine verification certify the
+public API, synthetic composition evaluation, declared payloads and provider
+scripts. No synthetic host closure or graphical VM is built by default.
+Focused source-patch and generated-file parser checks remain. Host builds are consumer reproductions;
+consumer builds and runtime evidence belong to configs-host-template and its
+host consumers. Historical release evidence below remains evidence for its
+original source and does not describe this changed verification contract.
+
+Independent review corrections passed locally: eleven semantic API toplevels,
+strict-family and ARM detector fixtures, native ARM Linux generated-file checks,
+and Darwin source-patch checks. No host runtime or consumer adoption is certified.
+
 ## Released provider source
 
 This source revision exports typed `mkNixos`, `mkDarwin` and `mkHome` with
