@@ -1,7 +1,7 @@
 {
-  "previous": "unixlike-v1.0.8",
-  "version": "1.0.9",
-  "summary": "Align verification with provider-owned contracts and artifact checks.",
+  "previous": "unixlike-v1.0.9",
+  "version": "1.0.10",
+  "summary": "Refresh permitted Unix-like inputs.",
   "compatibility": "patch",
   "migration": ""
 }
