@@ -161,8 +161,11 @@ reproduction in `docs/policy/decisions/unixlike/zellij-patched-on-darwin-until-u
 are the build and runtime evidence; the checks prove only that the range
 applies.
 
-`.github/workflows/zellij-upstream-5500.yml` watches the pull request and
-reports a bump or a merge as an issue. GitHub runs a `schedule` only from the
+`.github/workflows/zellij-upstream-5500.yml` watches the branch tracked by
+the nixpkgs input and opens one issue, then disables itself, when its Zellij
+source contains the replacement fix merged in upstream #5714. The original
+#5500 was closed in favour of that fix. The watch does not update the lock
+or retire the overlay; its manual dry-run mode performs no remote writes. GitHub runs a `schedule` only from the
 default branch, so the watcher does nothing until this file reaches `master`
 through the next promotion; before that its shell body is run by hand with
 `DRY_RUN=1`.
