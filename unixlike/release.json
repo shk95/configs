@@ -1,6 +1,6 @@
 {
-  "previous": "unixlike-v1.0.15",
-  "version": "1.0.16",
+  "previous": "unixlike-v1.0.16",
+  "version": "1.0.17",
   "summary": "Refresh permitted Unix-like inputs.",
   "compatibility": "patch",
   "migration": ""
