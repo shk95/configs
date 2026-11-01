@@ -5,6 +5,7 @@
     { "source": "programs/karabiner/symbolic-hotkeys.json", "format": "json" },
     { "source": "programs/karabiner/units.json", "format": "json" },
     { "source": "programs/karabiner/tool", "format": "shell" },
+    { "source": "programs/paneru/init.lua", "format": "lua" },
     { "source": "programs/powershell/profile.ps1", "format": "powershell" },
     { "source": "programs/wezterm/config/appearance.lua", "format": "lua" },
     { "source": "programs/wezterm/config/behavior.lua", "format": "lua" },
