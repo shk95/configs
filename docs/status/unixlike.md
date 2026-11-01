@@ -51,6 +51,24 @@ the annotation and matching CI run. Earlier PR and host observations below
 belong to their original pins and do not establish current consumer adoption
 or activation.
 
+## Paneru on Darwin
+
+The Darwin Home Manager class imports the locked upstream Paneru module and
+owns its package, launchd agent and Lua configuration together. The source
+payload is `unixlike/modules/programs/paneru/init.lua`; edit that file to
+change the configuration. It preserves the former host TOML settings,
+explanatory comments and disabled examples, with command-string binding keys
+and Lua table syntax.
+
+Upstream installs the payload as `~/.paneru.lua` when Home Manager's
+`xdg.enable` is false (the current provider default), or as
+`$XDG_CONFIG_HOME/paneru/init.lua` when it is true. Either recognized Lua file
+replaces TOML configuration entirely. The old TOML need not be deleted.
+A private consumer must explicitly adopt this provider source before its
+next activation manages the Paneru service. Replacing an independently
+installed service also requires preserving its existing launchd plist and
+checking macOS Accessibility permission for the Nix executable.
+
 ## Historical pre-U1 state and host evidence
 
 The following observations describe older provider pins and host generations.
