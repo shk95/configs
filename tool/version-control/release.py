@@ -4,7 +4,6 @@ INV repository/bounded-release-automation
 INV repository/release-tag-contract
 """
 import argparse
-import io
 import json
 import os
 from pathlib import Path
@@ -12,7 +11,9 @@ import re
 import subprocess
 import sys
 import time
-import zipfile
+
+sys.dont_write_bytecode = True
+from github_proof import source_record
 
 PATCH_BRANCH = 'feature/unixlike-input-patch-'
 FIELDS = {'previous', 'version', 'summary', 'compatibility', 'migration'}
@@ -145,17 +146,11 @@ def annotation_fields(domain, source, value):
 
 
 def identity_from_zip(data):
-    if len(data) > 65536:
-        raise ValueError('CI source record archive is too large')
-    with zipfile.ZipFile(io.BytesIO(data)) as archive:
-        item = archive.getinfo('source.json')
-        if item.file_size > 4096:
-            raise ValueError('CI source record is too large')
-        value = json.loads(archive.read(item))
-    if set(value) != {'event', 'base', 'head', 'tree'} or value['event'] not in ('push', 'pull_request'):
-        raise ValueError('invalid CI source record')
-    if not all(isinstance(value[k], str) and SHA.fullmatch(value[k]) for k in ('base', 'head', 'tree')):
-        raise ValueError('invalid CI source identities')
+    value = source_record(data)
+    # Release publication keeps its narrower event boundary; candidate dispatch
+    # proof is available to local work but cannot authorize the patch writer.
+    if value['event'] not in ('push', 'pull_request'):
+        raise ValueError('invalid release CI event')
     return value
 
 
@@ -224,7 +219,7 @@ def validate_lock(before, after, allowed):
 
 def automatic(base, head):
     """Static admission proof, also usable for historical patch audits.
-    INV repository/promotion-source
+    INV repository/topic-source
     """
     if git('show', '-s', '--format=%P', head).split() != [base]:
         return False
@@ -292,8 +287,8 @@ def inspect(manual=False, start=False):
         raise ValueError('multiple input patch PRs')
     if len(prs) != len(patches):
         if manual:
-            raise ValueError('development promotion is open; finish it before input patching')
-        return {'action': 'wait', 'reason': 'development promotion is open'}
+            raise ValueError('a master topic PR is open; finish it before input patching')
+        return {'action': 'wait', 'reason': 'a master topic PR is open'}
     if patches:
         pr = patches[0]
         head = pr['head']['sha']
@@ -461,7 +456,7 @@ def refresh_pr(base, lock_path):
         git('fetch', '--quiet', 'origin', head)
         if not automatic(base, head) or source_json(head, 'unixlike/flake.lock') != lock:
             raise ValueError('input patch branch conflicts; inspect it before retrying')
-        return ensure_pr(branch, 'master', 'Patch permitted Unix-like inputs', 'Automatic Unix-like patch: four permitted inputs only; no dev promotion.')
+        return ensure_pr(branch, 'master', 'Patch permitted Unix-like inputs', 'Automatic Unix-like patch: four permitted inputs only; no host deployment.')
     entries = []
     for name, content in [('unixlike/flake.lock', data), ('unixlike/release.json', json.dumps(value, indent=2) + '\n')]:
         blob = api('git/blobs', {'content': content, 'encoding': 'utf-8'})
@@ -474,7 +469,7 @@ def refresh_pr(base, lock_path):
         pass
     if api('git/ref/heads/' + branch)['object']['sha'] != commit['sha']:
         raise ValueError('input patch branch conflicts; inspect it before retrying')
-    return ensure_pr(branch, 'master', 'Patch permitted Unix-like inputs', 'Automatic Unix-like patch: four permitted inputs only; no dev promotion.')
+    return ensure_pr(branch, 'master', 'Patch permitted Unix-like inputs', 'Automatic Unix-like patch: four permitted inputs only; no host deployment.')
 
 
 def main():

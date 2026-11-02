@@ -60,3 +60,10 @@ the development lane as its first parent even when fast-forward is possible.
 Verified topic-to-dev integration remains exact-SHA fast-forward. Master
 promotion remains a protected merge-commit PR; dev continues on its own lane
 afterward. Reflect master at the next explicit work/promotion synchronization.
+
+## Amendment 2026-11-02: master and topics
+
+The accepted master-topic-workflow.md decision replaces dev authoring/integration,
+mandatory linked worktrees and general master PR-only admission in this record.
+Retained scope, evidence, preservation and bounded publication rules remain.
+Earlier operation and measurements above are historical.

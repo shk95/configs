@@ -1,0 +1,4 @@
+#!/bin/sh
+# INV repository/workspace-choice
+set -eu
+exec "$(dirname "$0")/policy" authoring

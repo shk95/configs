@@ -6,18 +6,16 @@
 #
 # `--history` is the merge-gate and pre-push form, which audits committed
 # history alone, because a runner has no clone-local configuration to audit.
-# It judges dev and master as origin/ holds them when a fetch left those refs
-# (see ref_of below); every local tag is still judged. Each <revision> is a
-# commit the caller is about to publish, whose non-merge subjects are judged
-# with dev's: the merge gate names HEAD, the commit under test, and
-# .githooks/pre-push names the tips it pushes.
+# History diagnostics use fetched origin/master when available; full local
+# diagnostics prefer local master. Explicit publication ranges inspect only
+# transmitted commits, and tag checks only the selected tag.
 #
 # INV repository/flake-lock-isolated, INV repository/release-tag-contract
 # INV repository/hooks-are-the-tracked-ones
 # INV repository/conventional-subject — subjects are judged by
 # .githooks/commit-msg, the grammar's only owner.
 #
-# Exit 0 verified, 69 unverified (no dev/master ref), any other status failed.
+# Exit 0 verified, 69 unverified (no master ref), any other status failed.
 
 set -eu
 
@@ -125,20 +123,8 @@ if [ "$mode" = full ]; then
   fi
 fi
 
-# The integration branches the checks below judge. The full form reads a local
-# branch when it exists, else the remote-tracking ref a fetch left behind. The
-# history form reads origin/<name> first, for dev and master together: a local
-# branch is clone state no push carries, and one that lags or leads its remote
-# would fail a push, or pass it unchecked, over history it does not change.
-# Resolving only one of the two to the remote would compare a fresh ref with a
-# stale one and fail the traceability checks. The server keeps origin/dev and
-# origin/master consistent, so the history form needs no rule for local and
-# remote diverging. What it accepts: a clone that has not fetched judges the
-# remote as it last saw it, and a subject on an unpublished local dev commit
-# is left to .githooks/commit-msg. tool/version-control/plan-release stays on
-# the local master, because it plans a tag this clone is about to create. A
-# clone with neither ref cannot answer the history questions and says so as
-# unverified, which CI turns into a failure.
+# Full diagnostics prefer local master; remote-history diagnostics prefer the
+# fetched snapshot. Neither fetches nor relies on a dev ref.
 ref_of() {
   if [ "$mode" = history ] && git show-ref --verify --quiet "refs/remotes/origin/$1"; then
     printf 'origin/%s\n' "$1"
@@ -148,14 +134,10 @@ ref_of() {
     printf 'origin/%s\n' "$1"
   fi
 }
-dev_ref=
 master_ref=
-if [ "$mode" != range ]; then
-  dev_ref=$(ref_of dev)
-  master_ref=$(ref_of master)
-fi
+if [ "$mode" != range ]; then master_ref=$(ref_of master); fi
 unverified=0
-required_refs="dev master"
+required_refs=master
 [ "$mode" != tag ] || required_refs=master
 [ "$mode" != range ] || required_refs=
 for required in $required_refs; do
@@ -171,7 +153,8 @@ done
 if [ "$mode" = full ]; then
   for local_branch in $(git for-each-ref --format='%(refname:short)' refs/heads); do
     case "$local_branch" in
-      dev|master) ;;
+      master) ;;
+      dev) ;; # retained legacy ref, never an authoring basis
       backup|backup/*) warn "local backup branch remains: $local_branch" ;;
       feature/*|fix/*)
         if printf '%s\n' "$local_branch" | grep -Eq '^(feature|fix)/(unixlike|windows|common|repository)-[a-z0-9][a-z0-9-]*$'; then
@@ -189,13 +172,10 @@ commit_msg_hook="$root/.githooks/commit-msg"
 commits=$(mktemp)
 subject_file=$(mktemp)
 trap 'rm -f "$commits" "$subject_file"' EXIT
-# The revisions a caller names are read with dev. git log walks the union of
-# its arguments, so history a revision shares with dev is read once, and a
-# promotion's merge, whose non-merge commits are already on dev, adds nothing.
-# Each is resolved to a commit id, which holds no separator, so the list
-# splits safely where it is expanded below.
-subject_tips=
-subject_scope=dev
+# Include HEAD and explicit revisions so direct master and topic subjects
+# receive the same commit-message checks, even in a detached CI checkout.
+subject_tips=$(git rev-parse HEAD)
+subject_scope=master,HEAD
 for revision in "$@"; do
   if resolved_revision=$(git rev-parse --verify --quiet "$revision^{commit}"); then
     subject_tips="$subject_tips $resolved_revision"
@@ -206,13 +186,24 @@ for revision in "$@"; do
 done
 if [ "$mode" = range ]; then
   git rev-parse --verify "$range_tip^{commit}" >/dev/null
-  git rev-parse --verify "$range_base^{commit}" >/dev/null
-  subject_scope="$range_base..$range_tip"
-  git log "$range_base..$range_tip" --no-merges --format='%H%x09%s' >"$commits"
-elif [ "$mode" != tag ] && [ -n "$dev_ref$subject_tips" ]; then
-  git log $dev_ref $subject_tips --no-merges --format='%H%x09%s' >"$commits"
+  empty_tree=$(git hash-object -t tree /dev/null)
+  if [ "$range_base" = "$empty_tree" ]; then
+    # The initial push event has no previous commit. Only Git's exact empty
+    # tree is admitted as that basis; arbitrary tree objects still refuse.
+    range_walk=$range_tip
+  else
+    git rev-parse --verify "$range_base^{commit}" >/dev/null
+    range_walk="$range_base..$range_tip"
+  fi
+  subject_scope=$range_walk
+  git log "$range_walk" --no-merges --format='%H%x09%s' >"$commits"
+elif [ "$mode" != tag ] && [ -n "$master_ref$subject_tips" ]; then
+  git log $master_ref $subject_tips --no-merges --format='%H%x09%s' >"$commits"
 fi
-if [ "$mode" != tag ] && [ -s "$commits" ]; then
+if [ "$mode" != tag ] && [ -s "$commits" ] && [ ! -x "$commit_msg_hook" ]; then
+  warn "commit subject checker is unavailable"
+  unverified=1
+elif [ "$mode" != tag ] && [ -s "$commits" ]; then
   tab=$(printf '\t')
   commit_failures=$failures
   while IFS="$tab" read -r sha subject; do
@@ -225,32 +216,6 @@ if [ "$mode" != tag ] && [ -s "$commits" ]; then
   done <"$commits"
   if [ "$failures" -eq "$commit_failures" ]; then
     ok "non-merge commit subjects on $subject_scope follow policy"
-  fi
-fi
-
-if [ "$mode" != tag ] && [ -n "$master_ref" ] && [ -n "$dev_ref" ]; then
-  patch_heads=$(mktemp)
-  invalid_promotions=0
-  for merge in $(git rev-list --first-parent --merges "$master_ref"); do
-    parents=$(git show -s --format='%P' "$merge")
-    second_parent=$(printf '%s\n' "$parents" | awk '{print $2}')
-    if python3 "$audit_tools/release.py" verify-patch --merge "$merge" >/dev/null 2>&1; then
-      printf '%s\n' "$second_parent" >>"$patch_heads"
-    elif [ -z "$second_parent" ] || ! git merge-base --is-ancestor "$second_parent" "$dev_ref"; then
-      fail "master merge is neither accepted dev history nor a bounded input patch: $merge"
-      invalid_promotions=$((invalid_promotions + 1))
-    fi
-  done
-  direct=$(git rev-list --no-merges "$master_ref" --not "$dev_ref")
-  for commit in $direct; do
-    if ! grep -qx "$commit" "$patch_heads"; then
-      fail "master contains a non-patch commit outside dev: $commit"
-      invalid_promotions=$((invalid_promotions + 1))
-    fi
-  done
-  rm -f "$patch_heads"
-  if [ "$invalid_promotions" -eq 0 ]; then
-    ok "master history follows dev promotions or bounded Unix-like input patch PRs"
   fi
 fi
 
@@ -370,14 +335,14 @@ if [ "$mode" = range ]; then
   if printf '%s\n' "$scopes" | grep -qx unclassified; then
     fail "transmitted content has an unclassified path"
   fi
-  for commit in $(git rev-list --no-merges "$range_base..$range_tip"); do
-    commit_scopes=$(git diff-tree --no-commit-id --name-only -r "$commit" | "$audit_tools/classify" --stdin)
+  for commit in $(git rev-list --no-merges "$range_walk"); do
+    commit_scopes=$(git diff-tree --root --no-commit-id --name-only -r "$commit" | "$audit_tools/classify" --stdin)
     count=$(printf '%s\n' "$commit_scopes" | awk 'NF { n++ } END { print n+0 }')
     if [ "$count" -gt 1 ] || printf '%s\n' "$commit_scopes" | grep -qx unclassified; then
       fail "source commit has mixed or unclassified ownership: $commit"
     fi
   done
-  lock_commits=$(git log --no-merges --format='%H' "$range_base..$range_tip" -- flake.lock unixlike/flake.lock)
+  lock_commits=$(git log --no-merges --format='%H' "$range_walk" -- flake.lock unixlike/flake.lock)
 fi
 [ "$mode" != tag ] || lock_commits=
 for sha in $lock_commits; do

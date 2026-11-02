@@ -67,154 +67,90 @@ rule stands on this sentence alone.
 | --- | --- | --- |
 | Never activate Home Manager, NixOS, or nix-darwin without an explicit request. | Activation changes a host; evaluation and build evidence never imply permission. | none |
 | Never run Windows `Apply` without an explicit request. `-Check` is the read-only path. | The same boundary on the Windows side. | none |
-| Do not commit, push, tag, rewrite history, or change branches unless the user explicitly requests it. | A tool allowlist reduces prompts; it never authorizes a mutation. | manual session authorization; `tool/version-control/commit` refuses on `master` |
-| Author tracked source changes and commits in a linked worktree dedicated to the task. Keep the primary checkout for read-only inspection and integration. | A task's edits must not disturb the integration checkout or another task's index. | tool (`tool/version-control/require-linked-worktree` refuses commits from the primary checkout); fixture |
+| Commit, integrate, push, tag, rewrite history or change branches only within the user's explicit task authorization; preserve a staged-only boundary when requested. | Authorization persists within its agreed scope; a tool allowlist supplies none. | manual authorization review |
+| Use the user-selected current checkout or linked worktree; ask when the choice is missing or must change, and isolate parallel authors. | A continuing task keeps its agreed workspace instead of repeating the question. | explicit workspace argument; manual user-choice review |
 | Do not update flake inputs, change login shells, garbage-collect Nix stores, shut down WSL, or change global Git configuration unless the task calls for it. | Each is host-global or irreversible from inside a session. | none |
 | Treat WSL cgroups, binfmt_misc, mounts, and similar kernel-global resources as shared by every distribution, and the kernel under an OrbStack machine as shared by every machine and by OrbStack's container engine. | One distribution's fix is every distribution's change, and an OrbStack machine's UIDs are mapped one to one: its root is UID 0 on that kernel. | none for WSL; consumer-owned assertion and fixture for an OrbStack machine's binfmt registry |
 | Preserve externally managed PowerShell profile blocks. Do not change Windows OpenSSH DefaultShell or add a `.wslconfig` firewall value without explicit direction. | Both are host state another owner writes. | none |
-| Classify a change before editing and change only the owning domain. | Evidence, release tags, and CI jobs are selected by ownership. | hook (`tool/version-control/classify` refuses an unclassified path) |
-| Report evaluation, build, native runtime, and activation or Apply evidence separately, and never upgrade partial evidence. | A tag or a merge is only as true as the lane it names. | `.githooks/evidence`; manual evidence review |
+| Classify a change before editing and change only the owning domain. | Ownership determines boundaries and release scope; effect selects checks. | classifier reports ownership; hooks and CI reject unclassified paths |
+| Report evaluation, build, native runtime, and activation or Apply evidence separately, and never upgrade partial evidence. | A tag or a merge is only as true as the lane it names. | domain checks and manual report review |
 | Register a temporary measure under `docs/provisional/` in the change that adds it, tag every disposable line `PROV <scope>/<slug>`, and retire it by deleting the entry and its tags together. | A measure with no exit condition and no review date becomes permanent by neglect. | tool (`tool/version-control/provisional`) |
 
 ## Where invariants are enforced
 
-Codebase invariants — what must remain true of committed desired state and
-tooling — are enumerated under `docs/policy/invariants/<scope>/`, one file each. An entry
-states the rule without naming a command, cites its rationale in
-`docs/policy/architecture.md` or this file, and declares its enforcement as
-`schema` (an evaluator or loader refuses it), `tool` (a script refuses it),
-`fixture` (a test proves both directions), `manual` (a reviewer evidence item
-in `docs/policy/definition-of-done/<scope>.md`), or `pending` (an issue, until a check
-exists). `tool/version-control/invariants` checks in both directions that
-every declaration exists and names its invariant, on every commit and in CI.
-Use the classified scope's list to identify affected invariants and read those
-entries before editing.
-`docs/policy/invariants/README.md` is the format.
+`docs/policy/invariants/<scope>/` states the invariants and their enforcement.
+Read the affected entries when changing behavior or governance; the format is
+`docs/policy/invariants/README.md`. The registry check validates declarations
+and fixture tags, not the truth or sufficiency of evidence.
 
 ## Governance design
 
-When adding a repository rule, separate its concerns before implementation:
+Each obligation has one authoritative source. Procedures, tools and optional
+agent orchestration implement it without adding policy. Keep project policy,
+procedure and enforcement here; model-specific adapters only point to them.
+Local notes, installed plugins and agent memory supply no project rule or
+permission. Reusable orchestration is optional and owned externally.
 
-- Put durable rationale in `AGENTS.md` or `docs/policy/architecture.md` and the
-  invariant itself in `docs/policy/invariants/<scope>/`. State what must remain true
-  without depending on a particular command, product, or model.
-- Put human-operable prerequisites, ordered steps, recovery, and authorization
-  boundaries in `CONTRIBUTING.md`.
-- Keep reusable agent orchestration in its owning external plugin. Repository
-  policy and human-operable procedure remain here; installation is optional.
-- Put deterministic classification and enforcement in `tool/`, hooks, CI, and
-  remote repository settings.
-- Give repository operators one documented command entry point. Hooks, CI and
-  implementation scripts call the underlying tools directly; a test may call
-  the entry point to prove its public contract. Keep each configuration
-  domain's operator commands and implementation inside that domain's boundary.
-- Put current adoption state and migration gaps in `docs/status/<scope>.md` and
-  expensive choices in `docs/policy/decisions/`; put per-run proof in CI, pull
-  requests, and release evidence.
-- Put a rule that has been observed but not accepted, and a document or tool
-  judged stale, in `docs/policy/candidates/` until recurrence or silence decides it.
-  A candidate is an observation and never a source of authority.
-- Put the plan for a piece of work and its verification in `docs/work/`,
-  outside the authority model: a spec with its acceptance criteria and the
-  evidence lanes each requires, a report that answers every criterion, and
-  optionally the study that argued the direction. A work document binds only
-  the work it describes. A durable rule it produces belongs in a decision
-  record or invariant; a temporary measure belongs in the provisional
-  registry. A decision record or provisional entry may name the work as its
-  source. Other rule-bearing material cites the adopted result
-  (`INV repository/design-outside-authority`). An agent reads a work item
-  when a task, an issue or a record points at it, never as a rule to follow.
+When changing governance:
 
-Each obligation has one authoritative source. Procedures and tools implement
-policy but must not silently create new policy. Model-specific adapters point
-to authoritative sources and add no independent policy. Every enforceable
-invariant needs positive and negative fixtures, every fixture names the
-invariant it proves and a fixture that proves none is removed, and non-automated
-invariants need an explicit
-evidence item and named decision owner.
+- Put rationale in this file or `docs/policy/architecture.md` and invariants in
+  `docs/policy/invariants/<scope>/`. Keep statements independent of a command,
+  product or model. Enforceable invariants need positive and negative fixtures;
+  manual evidence needs a named owner and a definition-of-done item.
+- Put human procedure in `CONTRIBUTING.md` and deterministic decisions in
+  tools, hooks, CI or remote settings. Operators use `tool/configs`; hooks and
+  CI call implementations. Domain operations stay in their owning domain.
+- Put adoption state in `docs/status/`, costly choices in decision records and
+  unaccepted observations in candidates. A candidate is not authority and does
+  not delay a change the maintainer has explicitly requested.
+- Use paired specs/reports for sustained planning or evidence, with dated
+  criteria amendments; small clear changes need only concise results and
+  verification. Work records bind their task, never future project behavior
+  (`INV repository/design-outside-authority`).
 
-Keep project policy, procedure and enforcement in this repository. Reusable
-agent orchestration belongs to its owning external plugin and resolves this
-repository's rules at invocation. Adoption is explicit; a plugin or discovery
-adapter never becomes the authority for project decisions.
+## Version control
 
-General source promotion accepts only the same repository's `dev` branch into
-`master`. The sole direct patch lane accepts a same-repository, master-based,
-single-commit Unix-like permitted-input update and its next patch declaration.
-Both use protected pull requests and merge commits; never commit, cherry-pick,
-squash, or rebase directly into `master`. The patch lane does not operate on
-Windows or general development. Development promotion must incorporate already
-accepted input patch history. Dev and master retain separate first-parent
-histories. Before work or promotion, reflect new history from the selected
-master snapshot through a dev-based merge in a linked worktree, with the dev
-lane as its first parent. Do not fast-forward dev to master or to its promotion
-merge. Resolve and verify before local integration.
-The maintainer owns promotion decisions. No protection bypass is permitted.
-See `docs/policy/decisions/repository/master-input-patch-releases.md`.
+Master is the release and ordinary work branch. Several logical commits for
+one same-scope outcome use a topic and no-ff integration. A selected linked
+worktree also uses a topic, even for one commit. Follow the workspace and
+authorization boundaries above throughout the agreed task; do not request the
+same answer or approval again. A workspace choice is not commit/push consent.
+History maintenance still needs fresh approval for its exact operation.
+If work grows after a master commit, keep that commit and group remaining
+work on a topic rather than rewriting accepted history.
 
-Local development starts from local dev, after reflecting the selected master
-snapshot. Use one topic branch and linked worktree per coherent same-scope
-outcome. Independent work may proceed in parallel. Before integration, reflect
-current local dev in the candidate worktree, resolve conflicts there and run
-the checks needed by the combined result. Integrate the verified exact SHA
-into primary dev with ff-only, one candidate at a time. A changed base or
-conflict stops integration; no automatic refresh controller is needed.
+Use the relevant operation in `CONTRIBUTING.md` through tracked tools instead
+of reproducing their checks or inventing agent-only exceptions. Integration,
+push, release, history maintenance and workspace removal use their respective
+procedures when requested. Ordinary force pushes are forbidden; approved
+maintenance uses the isolated capability. Deletion requires preservation
+review. Missing evidence and uncertain liveness never authorize either.
 
-Local implementation, agreed verification and dev integration complete the
-local task. Push is later synchronization; the maintainer separately chooses
-master promotion and domain publication. No issue, PR or remote CI is required
-to start or finish local development. Explicit authorization still governs Git
-mutations and remote writes; a failed push preserves local completion.
-
-Use a paired spec/report for work needing sustained planning or evidence;
-small unambiguous changes need only a concise result and verification record.
-Criteria change by dated amendment, and unavailable evidence is never success.
-Issue management is optional and explicit. Do not automatically close issues
-from dev pushes or use source messages to close them at promotion.
-
-Interrupted work leaves a useful local checkpoint. Checkpoints cannot prove
-process liveness, integration or cleanup eligibility. Review unique commits,
-uncommitted and ignored data before any explicitly requested removal. Helpers
-never prune automatically. GitHub/remote status is queried only for an explicit
-remote operation or relevant preservation review.
-
-Use CONTRIBUTING.md and tool/configs for planning, implementation, inspection,
-integration and preservation review. No installed plugin is a prerequisite.
-Reusable work-role orchestration is maintained externally; this repository
-keeps no tracked local role skills or workflow discovery aliases. Installation
-and consumer connection are separate from source separation.
-The accepted operating contract is
-docs/policy/decisions/repository/local-development-workflow.md.
+Issues, ordinary PRs, external role plugins and local checkpoint files are
+optional. No planner/worker split or separate bookkeeping delivery is required.
+Source preparation, publication and deployment are distinct outcomes. Preserve
+existing history and data; never prune as incidental cleanup.
 
 ## Working contract
 
-1. Classify the task as `unixlike`, `windows`, `common`, `repository`, or an
-   explicit transfer.
-2. Read the relevant sections of `CONTRIBUTING.md` and
-   `docs/policy/architecture.md`, the affected entries under
-   `docs/policy/invariants/<scope>/`, and the task-relevant current state in
-   `docs/status/<scope>.md`. Follow decision records when needed to establish
-   the current rule or resolve ambiguity; historical citations are not a
-   default session reading list.
-3. Use `tool/configs doctor` before relying on host-local capabilities.
-4. Change only the owning domain. Treat a cross-domain copy as a separate,
-   reviewable adoption change.
-5. Run narrow domain checks before broader checks. Do not require an unrelated
-   domain to pass merely to validate the changed domain.
-6. Report evaluation, build, native runtime check, and activation or Apply
-   evidence separately for each affected domain.
+1. Classify the task and inspect actual Git state. Continue existing work
+   without reinitializing it or disturbing its staged changes.
+2. Read only relevant current procedure, ownership, affected invariants and
+   status. Consult decisions or work records when the task or an ambiguity
+   calls for them; historical citations are not a session reading list.
+3. Use `tool/configs doctor <scope>` before depending on an unverified host
+   capability or after the environment changes. Consult `policy show` when
+   resolving mechanical rules and use `workflow start` for a clean new start,
+   not as a prerequisite to inspection or continuing work.
+4. Change only the owning scope, run the relevant tracked checks and report
+   actual evidence and unavailable checks. Read only the applicable review
+   items in `docs/policy/definition-of-done/<scope>.md`; a passing tool result
+   need not be manually reimplemented or reported checkbox by checkbox.
 
-User-facing usage belongs in `README.md`, workflow in `CONTRIBUTING.md`,
-architecture and ownership in `docs/policy/architecture.md`, current state in
-`docs/status/`, decisions in `docs/policy/decisions/`, recurring symptoms in
-`docs/reference/troubleshooting.md`, invariants in `docs/policy/invariants/`, plans and
-their verification in `docs/work/`, and executable policy in `tool/`, hooks, and CI.
-`docs/README.md` maps the document tree; a document is owned by the scope
-directory, or the scope-named file, that holds it.
-Canonical reusable work-role skills are maintained in the external Agent Rack
-Work Cycle plugin. This checkout supplies no tracked workflow skill or plugin
-installation configuration. Model-specific instruction files only point to
-project guidance. Local excluded connection files remain maintainer-owned data.
+`docs/README.md` maps documentation: usage is in `README.md`, procedure in
+`CONTRIBUTING.md`, ownership and rationale in architecture, current state in
+status, adopted choices in decisions, invariants in their registry, work proof
+in specs/reports and recurring symptoms in troubleshooting.
 
 `notes/` is untracked maintainer scratch space. It is free-form by design and
 carries no structure, review, or retention promise, so it states no policy and

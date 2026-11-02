@@ -1,0 +1,195 @@
+#!/usr/bin/env python3
+"""Repository-owned master/topic operation. No fetch, push, tag or pruning."""
+# INV repository/local-development-integration
+# INV repository/workspace-choice
+# INV repository/local-gate-selects-by-effect
+import sys
+sys.dont_write_bytecode = True
+import argparse
+import json
+import os
+import re
+import subprocess
+from pathlib import Path
+from repo_policy import load, topic_pattern
+from github_proof import verify
+from topic_scope import validate as validate_topic
+
+POLICY = load()
+BASE = POLICY["base_branch"]
+
+
+def run(*args, cwd=None, capture=True):
+    result = subprocess.run(args, cwd=cwd, text=True, stdout=subprocess.PIPE if capture else None, check=True)
+    return result.stdout.strip() if capture else ''
+
+
+def git(*args, cwd=None):
+    return run('git', *args, cwd=cwd)
+
+
+def clean(root):
+    if git('status', '--porcelain', cwd=root):
+        raise ValueError('Commit or preserve staged, unstaged and untracked changes first; nothing was discarded.')
+    for operation in ('MERGE_HEAD', 'rebase-merge', 'rebase-apply', 'CHERRY_PICK_HEAD'):
+        if Path(git('rev-parse', '--path-format=absolute', '--git-path', operation, cwd=root)).exists():
+            raise ValueError('Finish the existing Git operation first.')
+
+
+def sha(value):
+    if not re.fullmatch('[0-9a-f]{40}', value):
+        raise ValueError('Use a reviewed full 40-character SHA.')
+    return git('rev-parse', '--verify', value + '^{commit}')
+
+
+def record_path():
+    return Path(git('rev-parse', '--path-format=absolute', '--git-path', POLICY['workspace_record']))
+
+
+def inspect(root):
+    path = record_path()
+    value = json.loads(path.read_text()) if path.is_file() and not path.is_symlink() else None
+    return {'branch': git('branch', '--show-current'), 'head': git('rev-parse', 'HEAD'),
+            'master': git('rev-parse', BASE), 'workspace': str(root),
+            'linked': git('rev-parse', '--git-dir') != git('rev-parse', '--git-common-dir'),
+            'changes': git('status', '--short'), 'remote': 'not queried',
+            'policy': 'tool/version-control/policy.json', 'work_record': value,
+            'record_authority': 'execution evidence only; not approval, liveness or cleanup permission',
+            'workspace_choice': 'ask the user, then pass an explicit --workspace to start'}
+
+
+def check(root, base, head, ci_run=None):
+    clean(root)
+    base, head = sha(base), sha(head)
+    if git('rev-parse', 'HEAD') != head:
+        raise ValueError('Check the exact candidate in its checkout first.')
+    git('merge-base', '--is-ancestor', base, head)
+    tools = root / 'tool'
+    changes = git('diff', '--name-status', base, head)
+    units = subprocess.run([str(tools / 'dispatch/select'), 'ci'], input=changes + '\n', text=True,
+                           stdout=subprocess.PIPE, check=True).stdout.splitlines()
+    scopes = run(str(tools / 'version-control/classify'), '--range', base, head).splitlines()
+    branch = git('branch', '--show-current')
+    if branch != BASE:
+        validate_topic(branch, base, head, POLICY)
+    commands = [('version-control/audit', '--range', base, head),
+                ('version-control/work', '--range', base, head)]
+    commands += [(f'version-control/{name}',) for name in
+                 ('hygiene', 'domain-reads', 'design-citations', 'records', 'invariants')]
+    commands.append(('version-control/provisional', '--scopes', ','.join(scope for scope in scopes if scope != 'none')))
+    run('gitleaks', 'git', '--log-opts=' + base + '..' + head, '--redact', '--no-banner', cwd=root, capture=False)
+    proof = None
+    if ci_run:
+        proof = verify(ci_run, base, head, git('rev-parse', head + '^{tree}'))
+    # Local global scans always run. Live exact-source proof may supply suites.
+    for unit in units:
+        if unit == 'windows:runtime':
+            if not proof:
+                raise ValueError('Windows CI runtime wiring requires exact hosted evidence via --ci-run')
+            continue
+        if unit not in POLICY['ci']['suite_commands']:
+            raise ValueError(f'Unknown selected check: {unit}')
+        if proof:
+            continue
+        if unit == 'windows:suite' and os.name != 'nt':
+            raise ValueError('Native Windows checks unavailable: use --ci-run with exact hosted evidence')
+        commands += POLICY['ci']['suite_commands'][unit]
+    for command in commands:
+        path = root / command[0] if command[0].startswith(('tool/', 'unixlike/', 'windows/')) else tools / command[0]
+        argv = [str(path), *command[1:]]
+        if path.suffix == '.ps1':
+            argv = ['pwsh', '-NoProfile', '-File', str(path), *command[1:]]
+        print('check:', ' '.join(argv), flush=True)
+        run(*argv, cwd=root, capture=False)
+    clean(root)
+    if git('rev-parse', 'HEAD') != head:
+        raise ValueError('Candidate changed while checks were running.')
+    receipt = {'verified_base': base, 'verified_head': head, 'tree': git('rev-parse', head + '^{tree}'),
+               'units': units, 'ci': proof}
+    print(json.dumps(receipt))
+
+
+def main():
+    parser = argparse.ArgumentParser(description=__doc__)
+    sub = parser.add_subparsers(dest='command', required=True)
+    sub.add_parser('inspect')
+    start = sub.add_parser('start')
+    start.add_argument('--scope', choices=POLICY['scopes'], required=True)
+    start.add_argument('--commits', choices=['one', 'many'], required=True)
+    start.add_argument('--workspace', choices=POLICY['workspace_choices'], required=True,
+                       help="Pass the user's answer; agents must ask before choosing.")
+    start.add_argument('--topic')
+    start.add_argument('--kind', choices=POLICY['topic_kinds'], default=POLICY['topic_kinds'][0])
+    start.add_argument('--dry-run', action='store_true')
+    for name in ('check', 'merge'):
+        command = sub.add_parser(name)
+        command.add_argument('--base', required=True)
+        command.add_argument('--head', required=True)
+        command.add_argument('--ci-run', help='Live successful GitHub CI run covering the exact base/head/tree')
+    args = parser.parse_args()
+    root = Path(git('rev-parse', '--show-toplevel'))
+    os.chdir(root)
+    if args.command == 'inspect':
+        print(json.dumps(inspect(root), indent=2))
+    elif args.command == 'start':
+        clean(root)
+        master = git('rev-parse', BASE)
+        branch = git('branch', '--show-current')
+        if args.workspace == 'current' and branch != BASE:
+            raise ValueError('Start current-workspace work from master; preserve existing work first.')
+        needs_topic = args.commits == 'many' or args.workspace == 'linked'
+        if needs_topic and (not args.topic or not re.fullmatch('[a-z0-9][a-z0-9-]*', args.topic)):
+            raise ValueError('A topic slug is required for multiple commits or a linked workspace.')
+        target = f'{args.kind}/{args.scope}-{args.topic}' if needs_topic else BASE
+        print(json.dumps({'base': master, 'scope': args.scope, 'branch': target, 'workspace': args.workspace, 'commits': args.commits}))
+        if args.dry_run:
+            return
+        selected = root
+        if args.workspace == 'linked':
+            primary = Path(git('worktree', 'list', '--porcelain').splitlines()[0][9:])
+            destination = primary.parent / (primary.name + '-wt') / target.replace('/', '-', 1)
+            run('git', 'worktree', 'add', '-b', target, str(destination), master, capture=False)
+            selected = destination
+        elif needs_topic:
+            run('git', 'switch', '-c', target, master, capture=False)
+        path = selected / git('rev-parse', '--git-path', POLICY['workspace_record'], cwd=selected)
+        if path.is_symlink(): raise ValueError('Refuse symlink operation record')
+        data = dict(schema=1, base=master, scope=args.scope, branch=target,
+                    commits=args.commits, workspace=args.workspace, selection='explicit caller argument')
+        # This is public operation state, not an assertion that approval occurred.
+        temporary = path.with_suffix('.tmp')
+        with temporary.open('x') as stream: json.dump(data, stream, indent=2)
+        os.replace(temporary, path)
+    elif args.command == 'check':
+        check(root, args.base, args.head, args.ci_run)
+    else:
+        base, head = sha(args.base), sha(args.head)
+        branch = git('branch', '--show-current')
+        if not re.fullmatch(topic_pattern(POLICY), branch):
+            raise ValueError('Merge must start in the reviewed topic checkout.')
+        if base == head or git('rev-parse', BASE) != base:
+            raise ValueError('Empty candidate or changed master base; reflect master and verify again.')
+        check(root, base, head, args.ci_run)
+        # Find an existing master checkout. Otherwise reuse the chosen workspace.
+        target = None
+        for record in git('worktree', 'list', '--porcelain').split('\n\n'):
+            if ('\nbranch refs/heads/' + BASE) in record:
+                target = Path(record.splitlines()[0][9:])
+        if target is None:
+            run('git', 'switch', BASE, cwd=root, capture=False)
+            target = root
+        clean(target)
+        if git('rev-parse', 'HEAD', cwd=target) != base or git('branch', '--show-current', cwd=target) != BASE:
+            raise ValueError('Master changed during verification; integration stopped.')
+        run('git', 'merge', '--' + POLICY['merge_method'], '--no-edit', head, cwd=target, capture=False)
+        parents = git('show', '-s', '--format=%P', 'HEAD', cwd=target).split()
+        if parents != [base, head]:
+            raise ValueError('Unexpected merge identity; preserve and inspect the result.')
+        print(json.dumps({'merge': git('rev-parse', 'HEAD', cwd=target), 'parents': parents, 'push': 'not performed'}))
+
+
+if __name__ == '__main__':
+    try:
+        main()
+    except (ValueError, OSError, subprocess.CalledProcessError) as error:
+        raise SystemExit(str(error))

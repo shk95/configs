@@ -67,6 +67,15 @@ Nix to author, validate, or consume.
 
 ## Develop
 
+Master is the release and normal work branch. One logical commit stays on
+master; several logical commits for one outcome use a master-based topic and
+`--no-ff` integration. Agents ask whether to use the current checkout or a
+linked worktree; parallel authors use isolation. Start with `tool/configs
+workflow inspect`, then `workflow start --scope <scope> --commits one|many
+--workspace current|linked` (add `--topic <slug>` for a topic). Use the tracked
+`workflow check` and `workflow merge` commands with reviewed full base/head
+SHA. CONTRIBUTING.md defines authorization, verification and recovery.
+
 Prepare the clone and inspect available host capabilities:
 
 `tool/configs help` lists the repository commands intended for direct use.
@@ -92,48 +101,49 @@ present and is intentionally ignored by Git.
 
 Run checks for the domain you changed. `CONTRIBUTING.md` lists the workflows.
 
-Create a task worktree from local dev, then edit and commit locally:
+For one logical edit, use the current master checkout after the user's
+workspace choice. For example:
 
 ```sh
-tool/configs worktree new unixlike-brew-add feature
-cd ../configs-wt/feature-unixlike-brew-add
+tool/configs workflow start --scope unixlike --commits one --workspace current
 tool/configs commit --dry-run brew add <formula>
 tool/configs commit brew add <formula>
 ```
 
 The helper previews and confirms the edit, runs commit hooks and stops at the
-local commit. It does not fetch, publish or prune. Verify the final candidate
-including current dev, then integrate its exact SHA into primary dev with
-ff-only as described in CONTRIBUTING. Local development can finish before
-push. Push is synchronization; master promotion and domain release are chosen
-separately. Dev has no required PR or automatic CI; master retains protected
-PR checks.
+local commit. It does not fetch, publish or prune. For a larger outcome, use
+`workflow start --commits many` with a topic and the user's workspace choice,
+then verify and merge its exact SHA with `workflow merge` as described in
+CONTRIBUTING. Push and domain release remain separate authorized operations.
+CI runs on master pushes and optional topic PRs; ordinary master work needs
+no mandatory PR admission.
 
 Update the four permitted Unix-like inputs from current `master` using
 **Actions → Manual Unix-like input patch → Run workflow**, selecting `master`.
 The shared path creates one input patch PR directly against master, waits for
 CI, merges through branch protection and publishes the next Unix-like patch tag.
-It does not integrate dev, publish Windows or activate a host. The API/CLI entry is:
+It does not publish Windows or activate a host. The API/CLI entry is:
 
 ```sh
 gh workflow run manual-release.yml --ref master
 ```
 
-The daily 05:00 Asia/Seoul schedule uses the same patch path and CI completion
+The daily 01:17 Asia/Seoul schedule uses the same patch path and CI completion
 events continue it. General development and its releases remain independently
-operated on dev. Manual success does not prove the scheduled trigger ran.
+operated on master and topics. Manual success does not prove the scheduled trigger ran.
 See `CONTRIBUTING.md` for prerequisites, wait limits and recovery.
 
 Agent-assisted work follows `AGENTS.md`, `CONTRIBUTING.md` and `tool/configs`.
-The tracked local work-role skills and Claude workflow aliases have been
-removed. Their maintained source belongs to Agent Rack's Work Cycle plugin;
-this checkout works without an installed replacement. External distribution,
-installation and verified consumer invocation are later steps. This change
-adds no plugin manifest, marketplace, source-path adapter or activation setting
-in configs. Existing project policy, tools and checks remain authoritative.
+Optional external orchestration adds no project policy or installation
+prerequisite; the repository supplies the complete operating contract.
 
-Source promotion uses `tool/configs plan-promotion` before a
-`dev`-to-`master` pull request; promotion is not a release or deployment.
+There is no dev promotion or general PR requirement. Use `tool/configs policy
+show` for mechanical rules and `workflow inspect` for actual state and stored
+operation inputs. Candidate CI may be dispatched for exact base/head SHA on
+master without a PR; `workflow check/merge --ci-run <id>` validates its live
+proof. Worktree removal requires preservation review and an exact reviewed
+head. Ordinary force pushes refuse; the separately adopted human-approved
+maintenance workflow is the only isolated-capability exception.
 
 The Justfile exposes the provider checks:
 

@@ -1,82 +1,89 @@
 #!/bin/sh
 # INV repository/worker-checkpoint
+# INV repository/fixture-git-isolation
 set -eu
 MSYS_NO_PATHCONV=1
 MSYS2_ARG_CONV_EXCL='*'
 export MSYS_NO_PATHCONV MSYS2_ARG_CONV_EXCL
 root=$(CDPATH= cd -- "$(dirname -- "$0")/../.." && pwd)
-# Hooks export repository context; all writes below belong to fixtures.
-unset GIT_DIR GIT_WORK_TREE GIT_INDEX_FILE GIT_COMMON_DIR GIT_PREFIX \
-  GIT_OBJECT_DIRECTORY GIT_ALTERNATE_OBJECT_DIRECTORIES GIT_NAMESPACE GIT_CEILING_DIRECTORIES
+. "$root/tool/version-control/fixture-git-environment.sh"
 fixture=$(mktemp -d)
 trap 'rm -rf "$fixture"' EXIT HUP INT TERM
-git init -q "$fixture/repo"
+git init -q -b master "$fixture/repo"
 cd "$fixture/repo"
 git config user.name Fixture
 git config user.email fixture@example.invalid
-plan_root=docs/work
-plan_dir=$plan_root/repository/fixture
-plan=$plan_dir/spec.md
-mkdir -p tool/version-control "$plan_dir"
+mkdir -p tool/version-control
 cp "$root/tool/work-session.sh" tool/
-cp "$root/tool/version-control/require-linked-worktree" tool/version-control/
+for source in authoring policy policy.json repo_policy.py; do
+  cp "$root/tool/version-control/$source" tool/version-control/
+done
 printf '/.work-session.md\n/.work-session.lock/\n' > .gitignore
-printf '# Fixture plan\n' > "$plan"
 git add .
 git -c core.hooksPath=/dev/null commit -qm 'test(repository): fixture'
-if sh tool/work-session.sh start - sample > /dev/null 2>&1; then
-  echo 'primary checkout accepted worker writes' >&2; exit 1
-fi
-git worktree add -qb feature/repository-fixture "$fixture/worker"
-cd "$fixture/worker"
-sh tool/work-session.sh start - sample >/dev/null
+# Legacy text is preserved verbatim by inspection. No lifecycle is inferred.
+printf '# Worker checkpoint\nstate: abandoned\nsession-id: legacy\n\nRemaining: review\n' > .work-session.md
 before=$(git hash-object .work-session.md)
-if sh tool/work-session.sh start - duplicate >/dev/null 2>&1; then
-  echo 'start overwrote checkpoint' >&2; exit 1
-fi
-[ "$before" = "$(git hash-object .work-session.md)" ]
-if printf '' | sh tool/work-session.sh checkpoint suspended >/dev/null 2>&1; then
-  echo 'empty handoff accepted' >&2; exit 1
-fi
-[ "$before" = "$(git hash-object .work-session.md)" ]
-if printf 'replan\n' | sh tool/work-session.sh replan "$plan" >/dev/null 2>&1; then
-  echo 'active worker replanned without checkpoint' >&2; exit 1
-fi
-printf 'Goal: fixture\nRemaining: inspect next\n' | sh tool/work-session.sh checkpoint suspended >/dev/null
-grep -q '^state: suspended$' .work-session.md
-grep -q '^Remaining: inspect next$' .work-session.md
-printf 'Approved changed plan\n' | sh tool/work-session.sh replan "$plan" >/dev/null
-grep -q "^plan: $plan$" .work-session.md
-grep -q '^Previous checkpoint before replan:$' .work-session.md
-expected_digest=$(git hash-object "$plan")
-grep -q "^plan-content: $expected_digest$" .work-session.md
-if printf 'invalid\n' | sh tool/work-session.sh checkpoint handed-off >/dev/null 2>&1; then
-  echo 'suspended task handed off without resumption' >&2; exit 1
-fi
-printf 'Reviewed checkpoint\n' | sh tool/work-session.sh checkpoint active >/dev/null
-grep -q '^Approved changed plan$' .work-session.md
-grep -q '^Previous checkpoint before replan:$' .work-session.md
-printf 'Remote delivery verified\n' | sh tool/work-session.sh checkpoint handed-off >/dev/null
 sh tool/work-session.sh inspect > "$fixture/inspection"
-grep -q '^state: handed-off$' "$fixture/inspection"
-[ -z "$(git status --porcelain)" ]
-printf 'Review feedback\n' | sh tool/work-session.sh checkpoint active >/dev/null
-printf 'Disposition agreed\n' | sh tool/work-session.sh checkpoint abandoned >/dev/null
-if printf 'resume\n' | sh tool/work-session.sh checkpoint active >/dev/null 2>&1; then
-  echo 'abandoned lane resumed silently' >&2; exit 1
-fi
-mv .work-session.md "$fixture/abandoned"
+grep -q '^state: abandoned$' "$fixture/inspection"
+grep -q '^Remaining: review$' "$fixture/inspection"
+grep -q 'not policy, approval, liveness or cleanup permission' "$fixture/inspection"
+! grep -q 'Resume guidance' "$fixture/inspection"
+[ "$before" = "$(git hash-object .work-session.md)" ]
+# Empty input and retired verbs cannot replace existing notes.
+for content in '' '   '; do
+  if printf '%s\n' "$content" | sh tool/work-session.sh save >/dev/null 2>&1; then
+    echo 'empty handoff accepted' >&2; exit 1
+  fi
+  [ "$before" = "$(git hash-object .work-session.md)" ]
+  [ ! -e .work-session.lock ]
+done
+for command in start recover replan checkpoint; do
+  if printf 'replace\n' | sh tool/work-session.sh "$command" >/dev/null 2>&1; then
+    echo 'retired session verb accepted' >&2; exit 1
+  fi
+  [ "$before" = "$(git hash-object .work-session.md)" ]
+done
 mkdir .work-session.lock
-if sh tool/work-session.sh recover - recovered >/dev/null 2>&1; then
+printf 'preserve owner\n' > .work-session.lock/owner
+if printf 'replace\n' | sh tool/work-session.sh save >/dev/null 2>&1; then
   echo 'existing write lock ignored' >&2; exit 1
 fi
+[ "$before" = "$(git hash-object .work-session.md)" ]
+grep -q '^preserve owner$' .work-session.lock/owner
+rm .work-session.lock/owner
 rmdir .work-session.lock
-sh tool/work-session.sh recover - recovered >/dev/null
-grep -q '^base: unknown$' .work-session.md
-grep -q "^start-head: $(git rev-parse HEAD)$" .work-session.md
+# Explicit save intentionally replaces old notes with exactly the supplied text.
+printf 'Goal: fixture\nEvidence: not yet verified\nNext: inspect\n' > "$fixture/new-note"
+sh tool/work-session.sh save < "$fixture/new-note" >/dev/null
+cmp .work-session.md "$fixture/new-note"
+[ ! -e .work-session.lock ]
+[ -z "$(git status --porcelain)" ]
+before=$(git hash-object .work-session.md)
+git add -f .work-session.md
+if printf 'replace\n' | sh tool/work-session.sh save >/dev/null 2>&1; then
+  echo 'tracked checkpoint accepted' >&2; exit 1
+fi
+[ "$before" = "$(git hash-object .work-session.md)" ]
+git rm --cached -q .work-session.md
+printf '/.work-session.lock/\n' > .gitignore
+if printf 'replace\n' | sh tool/work-session.sh save >/dev/null 2>&1; then
+  echo 'unignored checkpoint accepted' >&2; exit 1
+fi
+[ "$before" = "$(git hash-object .work-session.md)" ]
+git checkout -- .gitignore
 mv .work-session.md "$fixture/original"
 ln -s "$fixture/original" .work-session.md
-if printf 'overwrite\n' | sh tool/work-session.sh checkpoint active >/dev/null 2>&1; then
+if printf 'replace\n' | sh tool/work-session.sh save >/dev/null 2>&1; then
   echo 'symlink checkpoint accepted' >&2; exit 1
 fi
-echo 'worker checkpoint fixtures passed'
+[ "$before" = "$(git hash-object "$fixture/original")" ]
+sh tool/work-session.sh inspect > "$fixture/symlink-inspection"
+! grep -q '^Goal: fixture$' "$fixture/symlink-inspection"
+rm .work-session.md
+mkdir .work-session.md
+if printf 'replace\n' | sh tool/work-session.sh save >/dev/null 2>&1; then
+  echo 'directory checkpoint accepted' >&2; exit 1
+fi
+[ -z "$(ls -A .work-session.md)" ]
+echo 'local handoff save/inspect fixtures passed'

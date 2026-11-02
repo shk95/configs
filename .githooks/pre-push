@@ -1,6 +1,6 @@
 #!/bin/sh
 # Inspect transmitted history only. Final candidate suites run before local
-# dev integration; this hook never runs suites from an unrelated checkout.
+# topic integration; this hook never runs suites from an unrelated checkout.
 # INV repository/local-development-integration
 # INV repository/local-gate-selects-by-effect
 # INV repository/conventional-subject
@@ -39,13 +39,17 @@ while read -r local_ref local_sha remote_ref remote_sha; do
       ;;
     refs/heads/*)
       if [ "$remote_sha" = 0000000000000000000000000000000000000000 ]; then
-        base=$(git merge-base "$local_sha" dev)
+        base=$(git merge-base "$local_sha" master)
       else
         base=$remote_sha
       fi
       git rev-parse --verify "$base^{commit}" >/dev/null || {
         echo 'Fetch the remote target explicitly before checking this push' >&2; exit 1;
       }
+      if [ "$remote_sha" != 0000000000000000000000000000000000000000 ] && ! git merge-base --is-ancestor "$remote_sha" "$local_sha"; then
+        echo 'Non-fast-forward push refused; use the separately approved history-rewrite workflow' >&2
+        exit 1
+      fi
       evidence_run "transmitted history" tool/version-control/audit --range "$base" "$local_sha" || exit 1
       ;;
     *) echo "Unsupported destination ref: $remote_ref" >&2; exit 1 ;;

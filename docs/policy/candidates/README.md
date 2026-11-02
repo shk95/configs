@@ -2,9 +2,9 @@
 
 A candidate is an observation, never a rule. Nothing cites a candidate as
 authority, and an agent does not follow one as a rule. This directory is the
-observation stage a sentence passes through before it is added to a policy
-document, and the stage an existing document, script or sentence passes
-through before it is removed. `CONTRIBUTING.md § Observe before adding or
+place for unaccepted additions or removals that need more evidence.
+Explicit maintainer decisions and corrections proceed through their owning
+scope without waiting for recurrence. `CONTRIBUTING.md § Observe before adding or
 removing` is the procedure; `docs/policy/decisions/repository/candidates-observed-before-adoption.md`
 records why the stage exists.
 
@@ -30,7 +30,8 @@ someone would like to exist.
 
 Each later occurrence is one dated line under `Occurrences` with its
 evidence. Promotion makes the change through its owning scope's flow and
-deletes the file in the same pull request; dropping deletes the file.
+deletes the file with the adopted change; a pull request is optional.
+Dropping deletes the file.
 History is the record either way. There is no checker for this directory
 on purpose.
 

@@ -1,0 +1,116 @@
+#!/usr/bin/env python3
+"""Review optional workspaces; removal refuses unpreserved data."""
+# INV repository/workspace-preservation
+# INV repository/local-development-integration
+import sys
+sys.dont_write_bytecode = True
+import argparse
+import json
+from pathlib import Path
+import re
+import subprocess
+from repo_policy import load, topic_pattern
+from recovery import validate_bundle
+
+
+def git(*args, cwd=None):
+    return subprocess.check_output(['git', *args], cwd=cwd).decode().strip()
+
+
+def registered():
+    records = []
+    for block in git('worktree', 'list', '--porcelain', '-z').split('\0\0'):
+        fields = dict(line.split(' ', 1) if ' ' in line else (line, '') for line in block.split('\0') if line)
+        if 'worktree' in fields:
+            records.append(fields)
+    return records
+
+
+def inventory(path, policy=None, preserved_bundle=None):
+    policy = policy or load()
+    path = Path(path).resolve()
+    records = registered()
+    matching = [r for r in records if Path(r['worktree']).resolve() == path]
+    if len(matching) != 1:
+        raise ValueError('Only registered workspaces may be reviewed or removed')
+    branch = git('branch', '--show-current', cwd=path)
+    head = git('rev-parse', '--verify', 'HEAD^{commit}', cwd=path)
+    branch_ref = 'refs/heads/' + branch if branch else None
+    try:
+        branch_head = git('show-ref', '--verify', '--hash', branch_ref, cwd=path) if branch_ref else None
+    except subprocess.CalledProcessError:
+        branch_head = None
+    # Only name scratch-space presence. Never enumerate or read notes content.
+    ignored = git('ls-files', '--others', '--ignored', '--exclude-standard', '-z', '--', ':!notes/**', cwd=path).split('\0')
+    ignored = [x for x in ignored if x]
+    if (path / 'notes').exists():
+        ignored.append('notes/ (maintainer scratch: contents not inspected)')
+    unique = git('rev-list', head, '--not', policy['base_branch'], cwd=path).splitlines()
+    changes = git('status', '--porcelain', '--untracked-files=all', cwd=path).splitlines()
+    operations = [name for name in ('MERGE_HEAD', 'rebase-merge', 'rebase-apply', 'CHERRY_PICK_HEAD')
+                  if Path(git('rev-parse', '--path-format=absolute', '--git-path', name, cwd=path)).exists()]
+    recovery = None
+    if preserved_bundle:
+        bundle = Path(preserved_bundle)
+        if bundle.is_symlink(): raise ValueError('Recovery bundle cannot be a symlink')
+        bundle = bundle.resolve()
+        if bundle == path or path in bundle.parents: raise ValueError('Recovery must live outside the workspace being removed')
+        digest = validate_bundle(bundle, head)
+        recovery = {'path': str(bundle), 'sha256': digest, 'head': head}
+    blockers = []
+    if path == Path(records[0]['worktree']).resolve(): blockers.append('primary checkout')
+    if not re.fullmatch(topic_pattern(policy), branch): blockers.append('not a named topic')
+    if matching[0].get('branch') != branch_ref or matching[0].get('HEAD') != head:
+        blockers.append('registered workspace identity differs from live HEAD/branch')
+    if branch_ref is None or branch_head != head:
+        blockers.append('named branch does not retain the exact workspace head')
+    if changes: blockers.append('tracked or untracked changes')
+    if ignored: blockers.append('ignored data requires preservation')
+    if operations: blockers.append('Git operation in progress')
+    return dict(path=str(path), branch=branch, head=head, unique_commits=unique,
+                retained_branch={'ref': branch_ref, 'head': branch_head},
+                changes=changes, ignored=ignored, operations=operations, source_recovery=recovery,
+                removable=not blockers, blockers=blockers, remote='not queried')
+
+
+def main():
+    parser = argparse.ArgumentParser(description=__doc__)
+    commands = parser.add_subparsers(dest='command', required=True)
+    commands.add_parser('list')
+    for command in ('review', 'done'):
+        child = commands.add_parser(command)
+        child.add_argument('path_or_name')
+        child.add_argument('--preserved-bundle', help='Complete external recovery advertising this exact head')
+        if command == 'done': child.add_argument('--expect-head', required=True)
+    args = parser.parse_args()
+    policy = load()
+    if args.command == 'list':
+        print(json.dumps(registered(), indent=2))
+    else:
+        target = args.path_or_name
+        for item in registered():
+            if item.get('branch', '').removeprefix('refs/heads/').split('/', 1)[-1] == target:
+                target = item['worktree']
+                break
+        result = inventory(target, policy, args.preserved_bundle)
+        print(json.dumps(result, indent=2))
+        if args.command == 'done':
+            if not re.fullmatch('[0-9a-f]{40}', args.expect_head) or result['head'] != args.expect_head:
+                raise ValueError('Workspace head changed or was not reviewed by full SHA')
+            if not result['removable']: raise ValueError('Preserve every reported item before removal; no force option exists')
+            if inventory(target, policy, args.preserved_bundle) != result: raise ValueError('Workspace changed during preservation review')
+            common = git('rev-parse', '--path-format=absolute', '--git-common-dir', cwd=result['path'])
+            subprocess.check_call(['git', 'worktree', 'remove', result['path']])
+            try:
+                retained = git('--git-dir', common, 'show-ref', '--verify', '--hash',
+                               result['retained_branch']['ref'], cwd=common)
+            except subprocess.CalledProcessError as error:
+                raise ValueError('Workspace removed but retained branch is unavailable; preserve the reviewed SHA and inspect') from error
+            if retained != result['head']:
+                raise ValueError('Workspace removed but retained branch changed; preserve the reviewed SHA and inspect')
+            print('Workspace removed; branch retained. Removal is an explicitly authorized operation.')
+
+
+if __name__ == '__main__':
+    try: main()
+    except (ValueError, OSError, subprocess.CalledProcessError) as error: raise SystemExit(str(error))

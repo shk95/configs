@@ -18,5 +18,8 @@ execution evidence; local foreign checks never substitute for it.
 The PowerShell runtime loader and process probe refuse the mismatch; they
 are interpreted source, not POSIX executables. Workflow/controller selection
 is held by repository wiring fixtures and exercised in the native job.
-Known runtime helper or native fixture changes select the Windows suite even
-without a workflow edit; unrelated repository inputs do not acquire that effect.
+Known runtime helper, controller, native fixture or CI workflow changes select
+the Windows suite and a proof-only runtime unit. That unit requires exact
+hosted Windows evidence for local check/merge, including on Windows; ordinary
+domain validate/test cannot substitute. Unrelated repository inputs do not
+acquire that runtime-governance effect.

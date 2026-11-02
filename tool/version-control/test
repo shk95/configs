@@ -12,9 +12,7 @@ classify="$root/tool/version-control/classify"
 audit="$root/tool/version-control/audit"
 plan_release="$root/tool/version-control/plan-release"
 required_checks="$root/tool/version-control/required-checks"
-check_promotion="$root/tool/version-control/check-promotion"
-check_promotion_queue="$root/tool/version-control/check-promotion-queue"
-plan_promotion="$root/tool/version-control/plan-promotion"
+topic_source="$root/tool/version-control/topic-source"
 
 # INV repository/operator-entry-boundary
 # Every published repository command selects exactly its own implementation,
@@ -24,13 +22,12 @@ mkdir -p "$operator_fixture/tool/version-control"
 cp "$root/tool/configs" "$operator_fixture/tool/configs"
 for route in \
   setup:setup doctor:doctor.sh worktree:worktree.sh session:work-session.sh \
-  commit:version-control/commit classify:version-control/classify \
+  policy:version-control/policy history-rewrite:version-control/history-rewrite workflow:version-control/workflow commit:version-control/commit classify:version-control/classify \
   work:version-control/work records:version-control/records \
   invariants:version-control/invariants provisional:version-control/provisional \
   hygiene:version-control/hygiene domain-reads:version-control/domain-reads \
   design-citations:version-control/design-citations test:version-control/test \
   audit:version-control/audit audit-remote:version-control/audit-remote \
-  plan-promotion:version-control/plan-promotion \
   release:version-control/release.py \
   plan-release:version-control/plan-release \
   hook-evidence:version-control/hook-evidence; do
@@ -187,7 +184,7 @@ case "$msys_fixture" in /tmp/*) rm -rf -- "$msys_fixture" ;; esac
 
 grep -q '^  required:$' "$root/.github/workflows/ci.yml"
 grep -q '^    name: Required checks$' "$root/.github/workflows/ci.yml"
-grep -q 'needs: \[classify, repository, unix, windows, secrets, promotion\]' \
+grep -q 'needs: \[classify, repository, unix, windows, secrets, topic\]' \
   "$root/.github/workflows/ci.yml"
 grep -q 'run: tool/version-control/required-checks' \
   "$root/.github/workflows/ci.yml"
@@ -198,6 +195,7 @@ grep -q 'run: tool/version-control/required-checks' \
 # pushed tips or the commit under test, so their own subjects are judged.
 grep -q 'tool/version-control/audit --range' "$root/.githooks/pre-push"
 grep -q 'run: tool/version-control/audit --history HEAD$' "$root/.github/workflows/ci.yml"
+grep -q 'run: tool/version-control/audit --range "\$CI_BASE" HEAD$' "$root/.github/workflows/ci.yml"
 # INV repository/local-gate-selects-by-effect: CI selects whole suites by
 # effect, retaining ownership separately for unconditional policy scans.
 grep -q 'run: tool/version-control/test$' "$root/.github/workflows/ci.yml"
@@ -295,8 +293,8 @@ run_gate() {
     WINDOWS_SCOPE=${WINDOWS_SCOPE:-false} \
     WINDOWS_RESULT=${WINDOWS_RESULT:-skipped} \
     SECRETS_RESULT=${SECRETS_RESULT:-success} \
-    PROMOTION_SCOPE=${PROMOTION_SCOPE:-false} \
-    PROMOTION_RESULT=${PROMOTION_RESULT:-skipped} \
+    TOPIC_SCOPE=${TOPIC_SCOPE:-false} \
+    TOPIC_RESULT=${TOPIC_RESULT:-skipped} \
     "$required_checks"
 }
 
@@ -310,7 +308,7 @@ run_gate >/dev/null
 (REPOSITORY_SCOPE=true REPOSITORY_RESULT=success run_gate) >/dev/null
 (UNIXLIKE_SCOPE=true UNIXLIKE_RESULT=success run_gate) >/dev/null
 (WINDOWS_SCOPE=true WINDOWS_RESULT=success run_gate) >/dev/null
-(PROMOTION_SCOPE=true PROMOTION_RESULT=success run_gate) >/dev/null
+(TOPIC_SCOPE=true TOPIC_RESULT=success run_gate) >/dev/null
 if (REPOSITORY_SCOPE=true REPOSITORY_RESULT=failure run_gate) >/dev/null 2>&1; then
   echo "required-checks accepted a failed selected job" >&2
   exit 1
@@ -319,7 +317,7 @@ if (SECRETS_RESULT=failure run_gate) >/dev/null 2>&1; then
   echo "required-checks accepted a failed secret scan" >&2
   exit 1
 fi
-if (PROMOTION_SCOPE=true PROMOTION_RESULT=failure run_gate) >/dev/null 2>&1; then
+if (TOPIC_SCOPE=true TOPIC_RESULT=failure run_gate) >/dev/null 2>&1; then
   echo "required-checks accepted a failed promotion gate" >&2
   exit 1
 fi
@@ -343,36 +341,39 @@ if (CLASSIFY_RESULT=failure run_gate) >/dev/null 2>&1; then
   echo 'gate accepted failed selection' >&2; exit 1
 fi
 
-# INV repository/promotion-source
-PROMOTION_BASE_REF=master \
-PROMOTION_HEAD_REF=dev \
-PROMOTION_BASE_REPOSITORY=owner/repo \
-PROMOTION_HEAD_REPOSITORY=owner/repo \
-  "$check_promotion" >/dev/null
-if PROMOTION_BASE_REF=master \
-  PROMOTION_HEAD_REF=feature/repository-bypass \
-  PROMOTION_BASE_REPOSITORY=owner/repo \
-  PROMOTION_HEAD_REPOSITORY=owner/repo \
-  "$check_promotion" >/dev/null 2>&1; then
-  echo "promotion gate accepted a non-dev source" >&2
+# INV repository/topic-source
+topic_fixture=$(mktemp -d)
+git -C "$topic_fixture" init -q -b master
+git -C "$topic_fixture" config user.name Fixture
+git -C "$topic_fixture" config user.email fixture@example.invalid
+mkdir -p "$topic_fixture/docs/status"
+printf 'base\n' >"$topic_fixture/docs/status/repository.md"
+git -C "$topic_fixture" add .
+git -C "$topic_fixture" commit -qm 'test(repository): topic base'
+topic_base=$(git -C "$topic_fixture" rev-parse HEAD)
+printf 'candidate\n' >"$topic_fixture/docs/status/repository.md"
+git -C "$topic_fixture" commit -qam 'feat(repository): topic candidate'
+topic_head=$(git -C "$topic_fixture" rev-parse HEAD)
+run_topic_source() {
+  (cd "$topic_fixture" && TOPIC_BASE_REF=master \
+    TOPIC_BASE_SHA=$topic_base TOPIC_HEAD_SHA=$topic_head \
+    TOPIC_HEAD_REF=$1 TOPIC_BASE_REPOSITORY=owner/repo \
+    TOPIC_HEAD_REPOSITORY=$2 "$topic_source")
+}
+run_topic_source feature/repository-example owner/repo >/dev/null
+if run_topic_source dev owner/repo >/dev/null 2>&1; then
+  echo "topic gate accepted a retired dev source" >&2
   exit 1
 fi
-
-printf '3\n' | PROMOTION_REPOSITORY=owner/repo PROMOTION_PULL_NUMBER=3 \
-  "$check_promotion_queue" --stdin >/dev/null
-if printf '3\n4\n' | PROMOTION_REPOSITORY=owner/repo PROMOTION_PULL_NUMBER=3 \
-  "$check_promotion_queue" --stdin >/dev/null 2>&1; then
-  echo "promotion queue accepted multiple open promotions" >&2
+if run_topic_source feature/repository-example fork/repo >/dev/null 2>&1; then
+  echo "topic gate accepted a fork source" >&2
   exit 1
 fi
-if PROMOTION_BASE_REF=master \
-  PROMOTION_HEAD_REF=dev \
-  PROMOTION_BASE_REPOSITORY=owner/repo \
-  PROMOTION_HEAD_REPOSITORY=fork/repo \
-  "$check_promotion" >/dev/null 2>&1; then
-  echo "promotion gate accepted a fork source" >&2
+if run_topic_source feature/windows-wrong-scope owner/repo >/dev/null 2>&1; then
+  echo "topic gate accepted the wrong named scope" >&2
   exit 1
 fi
+rm -rf "$topic_fixture"
 
 expect() {
   expected=$1
@@ -483,10 +484,6 @@ repository' "$classify" --files windows/setup.ps1 docs/status/repository.md
 # running a whole flake evaluation for a file Nix never parses was the cost.
 expect_units() {
   expected=$1
-  # Full fixtures belong to candidate/CI checks, not the commit quick gate.
-  if [ "$2" = commit ]; then
-    expected=$(printf '%s\n' "$expected" | grep -v '^repository:fixtures$' || true)
-  fi
   actual=$(printf '%s\n' "$3" | "$root/tool/dispatch/select" "$2")
   if [ "$actual" != "$expected" ]; then
     printf 'select %s expected <%s>, got <%s>\n' "$2" "$expected" "$actual" >&2
@@ -494,9 +491,14 @@ expect_units() {
   fi
 }
 
+# Retired stages must fail rather than silently selecting no checks.
+if printf '' | "$root/tool/dispatch/select" push >/dev/null 2>&1; then
+  echo 'retired push selection was accepted' >&2
+  exit 1
+fi
+
 kdl_modified=$(printf 'M\tunixlike/modules/programs/zellij/config.kdl')
 kdl_added=$(printf 'A\tunixlike/modules/programs/zellij/extra.kdl')
-module_modified=$(printf 'M\tunixlike/modules/programs/git.nix')
 windows_modified=$(printf 'M\twindows/setup.ps1')
 docs_modified=$(printf 'M\tdocs/status/repository.md')
 unknown_modified=$(printf 'M\tunexpected.file')
@@ -504,16 +506,13 @@ unknown_modified=$(printf 'M\tunexpected.file')
 # Nix copies a payload without reading it, so evaluating the flake says nothing
 # about a modified one either way.
 expect_units 'unixlike:payloads' commit "$kdl_modified"
-expect_units '' push "$kdl_modified"
 
 # An added or removed payload can change what a module references, and a rename
 # appears as both, so the full suite comes back.
 expect_units 'unixlike:format
 unixlike:lint
 unixlike:payloads' commit "$kdl_added"
-expect_units 'unixlike:test' push "$kdl_added"
 
-expect_units 'unixlike:test' push "$module_modified"
 
 # INV repository/local-gate-selects-by-effect
 # unixlike/modules/programs/karabiner/tool holds the projection the Karabiner
@@ -523,19 +522,18 @@ darwin_tool_modified=$(printf 'M\tunixlike/modules/programs/karabiner/tool')
 expect_units 'unixlike:format
 unixlike:lint
 unixlike:payloads' commit "$darwin_tool_modified"
-expect_units 'unixlike:test' push "$darwin_tool_modified"
 
 # INV repository/local-gate-selects-by-effect
 # A payload beside its module narrows the same way a payload tree used to, and
 # the module next to it does not: under the concern-first layout the file's
 # suffix is what separates what the evaluator reads from what it copies.
 unixlike_module_modified=$(printf 'M\tunixlike/modules/programs/git.nix')
-expect_units 'unixlike:test' push "$unixlike_module_modified"
 concern_kdl_modified=$(printf 'M\tunixlike/modules/programs/zellij/config.kdl')
 expect_units 'unixlike:payloads' commit "$concern_kdl_modified"
-expect_units '' push "$concern_kdl_modified"
 concern_module_modified=$(printf 'M\tunixlike/modules/programs/zellij/module.nix')
-expect_units 'unixlike:test' push "$concern_module_modified"
+expect_units 'unixlike:format
+unixlike:lint
+unixlike:payloads' commit "$concern_module_modified"
 
 # A rename carries two paths on one line. Both have to reach classify, or a
 # payload moved into the module tree is never selected for the payload check.
@@ -543,35 +541,28 @@ renamed_into_assets=$(printf 'R100\tdocs/note.md\tunixlike/modules/moved.lua')
 expect_units 'unixlike:format
 unixlike:lint
 unixlike:payloads' commit "$renamed_into_assets"
-expect_units 'unixlike:test' push "$renamed_into_assets"
-expect_units 'windows:desired-state
-windows:tests' push "$windows_modified"
 expect_units '' commit "$docs_modified"
 expect_units 'unclassified' commit "$unknown_modified"
 
 # INV repository/local-gate-selects-by-effect
 # The fixture suite copies .githooks, tool/dispatch and tool/version-control
-# and greps the CI workflow; a change under any of them selects it at both
-# stages, alone or beside a documentation path, and a change to documentation
-# or to the registry, which the suite never reads, selects nothing here (the
-# hooks run hygiene, invariants and audit unconditionally).
+# and greps the CI workflow. Commit keeps quick checks only; CI exercises
+# affected suites below. Documentation selects no suite at either stage,
+# while the hooks retain unconditional global policy scans.
 hook_modified=$(printf 'M\t.githooks/pre-commit')
 workflow_modified=$(printf 'M\t.github/workflows/ci.yml')
 dispatch_modified=$(printf 'M\ttool/dispatch/select')
-vc_modified=$(printf 'M\ttool/version-control/audit')
 entry_modified=$(printf 'M\tdocs/policy/invariants/repository/scope-ownership.md')
 measure_modified=$(printf 'M\tdocs/provisional/unixlike/zellij-overlay.md')
 docs_and_hook=$(printf 'M\tdocs/status/repository.md\nM\t.githooks/pre-push')
-expect_units 'repository:fixtures' commit "$hook_modified"
-expect_units 'repository:fixtures' push "$hook_modified"
-expect_units 'repository:fixtures' commit "$workflow_modified"
-expect_units 'repository:fixtures' commit "$dispatch_modified"
-expect_units 'repository:fixtures' push "$vc_modified"
+expect_units '' commit "$hook_modified"
+expect_units '' commit "$workflow_modified"
+expect_units '' commit "$dispatch_modified"
 expect_units '' commit "$entry_modified"
 # A document is owned by the scope its directory names, but no domain suite
 # reads one, so a Unix-like provisional entry, invariant, decision or status
 # file, or a Windows one, selects nothing at either stage.
-for stage in commit push; do
+for stage in commit ci; do
   expect_units '' "$stage" "$measure_modified"
   expect_units '' "$stage" "$(printf 'M\tdocs/policy/invariants/unixlike/import-order.md')"
   expect_units '' "$stage" "$(printf 'A\tdocs/policy/decisions/windows/example.md')"
@@ -583,28 +574,22 @@ done
 expect_units 'unclassified' commit "$(printf 'D\tinvariants/windows/parser-declared.md')"
 # A misplaced document is still refused.
 expect_units 'unclassified' commit "$(printf 'A\tdocs/status/linux.md')"
-expect_units '' push "$docs_modified"
-expect_units 'repository:fixtures' commit "$docs_and_hook"
+expect_units '' commit "$docs_and_hook"
 # The three governance scripts the suite scans for the MSYS guard and copies
 # into the hooks-path fixtures select it too; a deletion under a trigger tree
 # is still a change to it; a file under .github/ that is not a workflow is not.
 doctor_modified=$(printf 'M\ttool/doctor.sh')
-setup_modified=$(printf 'M\ttool/setup')
 worktree_modified=$(printf 'M\ttool/worktree.sh')
-hook_deleted=$(printf 'D\t.githooks/evidence')
 codeowners_modified=$(printf 'M\t.github/CODEOWNERS')
-expect_units 'repository:fixtures' commit "$doctor_modified"
-expect_units 'repository:fixtures' push "$setup_modified"
-expect_units 'repository:fixtures' commit "$worktree_modified"
-expect_units 'repository:fixtures' commit "$(printf 'M\ttool/configs')"
-expect_units 'repository:fixtures' push "$(printf 'M\ttool/configs')"
-expect_units 'repository:fixtures' push "$hook_deleted"
-expect_units 'repository:fixtures' commit "$(printf 'M\ttool/work-session.sh')"
+expect_units '' commit "$doctor_modified"
+expect_units '' commit "$worktree_modified"
+expect_units '' commit "$(printf 'M\ttool/configs')"
+expect_units '' commit "$(printf 'M\ttool/work-session.sh')"
 expect_units '' commit "$codeowners_modified"
 
 # INV repository/local-gate-selects-by-effect
-# CI uses ownership only after removing documents. Unlike local push, it
-# deliberately does not narrow payloads. Cross-domain moves cover both ends.
+# CI uses ownership only after removing documents and deliberately does not
+# narrow payloads. Cross-domain moves cover both ends.
 for change in "$docs_modified" "$entry_modified" "$measure_modified"; do
   expect_units '' ci "$change"
 done
@@ -618,11 +603,15 @@ expect_units 'unixlike:suite
 windows:suite' ci "$(printf 'R100\tunixlike/modules/old.ps1\twindows/desired/new.ps1')"
 expect_units 'windows:suite' ci "$windows_modified"
 expect_units 'repository:fixtures' ci "$(printf 'M\ttool/work-session.sh')"
-for path in .github/workflows/ci.yml tool/dispatch/select tool/dispatch/ci-base tool/version-control/classify tool/version-control/required-checks; do
+for path in tool/dispatch/select tool/dispatch/ci-base tool/version-control/classify tool/version-control/required-checks; do
   expect_units 'repository:fixtures
 unixlike:suite
 windows:suite' ci "$(printf 'M\t%s' "$path")"
 done
+expect_units 'repository:fixtures
+unixlike:suite
+windows:suite
+windows:runtime' ci "$(printf 'M\t.github/workflows/ci.yml')"
 for input in "$unknown_modified" "$(printf 'M\tdocs/status/linux.md')" 'M' "$(printf 'R100\tdocs/a.md')"; do
   if printf '%s\n' "$input" | "$root/tool/dispatch/select" ci >/dev/null 2>&1; then
     echo 'CI selector accepted unknown or malformed input' >&2; exit 1
@@ -635,7 +624,7 @@ done
 event_sha=$(git -C "$root" rev-parse HEAD)
 event_base() {
   EVENT_NAME=${EVENT_NAME:-pull_request} PR_BASE=$event_sha \
-    PR_BASE_REF=${PR_BASE_REF:-dev} EVENT_BASE_REF=${EVENT_BASE_REF:-dev} \
+    PR_BASE_REF=${PR_BASE_REF:-master} EVENT_BASE_REF=${EVENT_BASE_REF:-master} \
     PR_STACK=${PR_STACK:-null} PUSH_BASE=${PUSH_BASE:-$event_sha} \
     "$root/tool/dispatch/ci-base"
 }
@@ -648,7 +637,7 @@ fi
 if (PR_BASE_REF=feature/repository-layer event_base) >/dev/null 2>&1; then
   echo 'CI accepted layer-only stack coverage' >&2; exit 1
 fi
-if (EVENT_BASE_REF=master event_base) >/dev/null 2>&1; then
+if (EVENT_BASE_REF=dev event_base) >/dev/null 2>&1; then
   echo 'CI accepted mismatched event bases' >&2; exit 1
 fi
 if (EVENT_NAME=push PUSH_BASE=bad event_base) >/dev/null 2>&1; then
@@ -659,15 +648,18 @@ fi
 # Codex project paths select no local units; the hooks' unconditional scans
 # still apply. A similar unknown prefix stays refused, while changes to the
 # classifier or its fixtures keep selecting the repository suite.
-for stage in commit push; do
-  for codex_path in .codex/config.toml .codex/rules/example.rules; do
-    expect_units '' "$stage" "$(printf 'A\t%s' "$codex_path")"
-  done
-  expect_units 'unclassified' "$stage" "$(printf 'A\t.codex-extra/config.toml')"
-  for vc_path in tool/version-control/classify tool/version-control/test; do
-    expect_units 'repository:fixtures' "$stage" "$(printf 'M\t%s' "$vc_path")"
-  done
+for codex_path in .codex/config.toml .codex/rules/example.rules; do
+  expect_units '' commit "$(printf 'A\t%s' "$codex_path")"
+  expect_units 'repository:fixtures' ci "$(printf 'A\t%s' "$codex_path")"
 done
+expect_units 'unclassified' commit "$(printf 'A\t.codex-extra/config.toml')"
+if printf 'A\t.codex-extra/config.toml\n' | "$root/tool/dispatch/select" ci >/dev/null 2>&1; then
+  echo 'CI accepted an unknown agent prefix' >&2; exit 1
+fi
+for vc_path in tool/version-control/classify tool/version-control/test; do
+  expect_units '' commit "$(printf 'M\t%s' "$vc_path")"
+done
+expect_units 'repository:fixtures' ci "$(printf 'M\ttool/version-control/test')"
 
 test_root=$(mktemp -d)
 cleanup() {
@@ -739,10 +731,9 @@ printf 'promotion\n' >>"$test_root/file"
 git -C "$test_root" add file
 git -C "$test_root" commit -q -m 'feat(repository): prepare promotion'
 git -C "$test_root" switch -q master
-promotion_plan=$(cd "$test_root" && "$plan_promotion")
-printf '%s\n' "$promotion_plan" | grep -q '^base: master$'
-printf '%s\n' "$promotion_plan" | grep -q '^head: dev$'
-printf '%s\n' "$promotion_plan" | grep -q '^commits-to-promote: 1$'
+if (cd "$test_root" && "$root/tool/configs" plan-promotion) >/dev/null 2>&1; then
+  echo 'retired dev promotion was accepted' >&2; exit 1
+fi
 
 for domain in unixlike windows common; do
   mkdir -p "$test_root/$domain"
@@ -929,7 +920,7 @@ if [ "$audit_status" -eq 0 ] ||
 fi
 audit_pr_checkout 'feat(repository): add a pull request change'
 if ! audit_pr_output=$(cd "$audit_pr" && REQUIRE_NATIVE=1 "$audit" --history HEAD 2>&1) ||
-  ! printf '%s\n' "$audit_pr_output" | grep -q '^ok: non-merge commit subjects on dev, HEAD follow policy$'; then
+  ! printf '%s\n' "$audit_pr_output" | grep -q '^ok: non-merge commit subjects on master,HEAD, HEAD follow policy$'; then
   printf '%s\n' "$audit_pr_output" >&2
   echo "audit --history HEAD refused a pull request whose own subjects conform" >&2
   exit 1
@@ -986,7 +977,7 @@ fi
 git -C "$audit_stale" branch -q dev "$audit_stale_dev"
 git -C "$audit_stale" branch -q -D master
 if ! audit_stale_output=$(cd "$audit_stale" && REQUIRE_NATIVE=1 "$audit" --history 2>&1) ||
-  ! printf '%s\n' "$audit_stale_output" | grep -q 'dev resolves to origin/dev$'; then
+  ! printf '%s\n' "$audit_stale_output" | grep -q 'master resolves to origin/master$'; then
   printf '%s\n' "$audit_stale_output" >&2
   echo "audit --history compared origin/master with a stale local dev" >&2
   exit 1
@@ -1358,7 +1349,7 @@ commit_git branch master
 # would make every one of them exercise that path too.
 commit_git switch -q -c feature/unixlike-fixture
 
-# INV repository/change-authoring-in-linked-worktree: helper fixtures author
+# INV repository/workspace-choice: helper fixtures author
 # their source in a linked worktree; the primary checkout stays on dev.
 commit_primary=$commit_root
 git -C "$commit_primary" switch -q dev
@@ -1695,17 +1686,10 @@ fi
 run_commit n --dry-run cask add readable >/dev/null
 
 # INV repository/local-development-integration
-# AGENTS.md: only dev enters master, and there is no operational bypass.
+# Master direct edits use the same hook and confirmation contract.
 commit_git switch -q master
-if master_output=$(run_commit y cask add zzz); then
-  echo "commit helper committed on master" >&2
-  exit 1
-fi
-printf '%s\n' "$master_output" | grep -q master
-if [ -n "$(commit_git status --porcelain --untracked-files=no)" ]; then
-  echo "commit helper changed the tree while refusing on master" >&2
-  exit 1
-fi
+run_commit n --dry-run cask add zzz >/dev/null
+[ -z "$(commit_git status --porcelain --untracked-files=no)" ]
 commit_git switch -q feature/unixlike-fixture
 
 # AGENTS.md § Governance design: a tool that takes the hook's bypass silently
@@ -2368,7 +2352,7 @@ git -C "$hygiene_hook_root" config user.email fixture@example.invalid
 printf 'fixture\n' >"$hygiene_hook_root/file"
 git -C "$hygiene_hook_root" add .
 git -C "$hygiene_hook_root" commit -q -m 'feat(repository): create hygiene hook fixture'
-# INV repository/change-authoring-in-linked-worktree
+# INV repository/workspace-choice
 hygiene_hook_primary=$hygiene_hook_root
 hygiene_hook_root="$test_root/hygiene-hook-linked"
 git -C "$hygiene_hook_primary" worktree add -q -b feature/repository-hygiene-hook "$hygiene_hook_root"
@@ -2492,16 +2476,14 @@ chmod +x "$secret_hook_root/tool/version-control/hygiene" \
   "$secret_hook_root/tool/version-control/invariants" \
   "$secret_hook_root/tool/version-control/provisional"
 
-git -C "$secret_hook_root" init -q -b dev
+git -C "$secret_hook_root" init -q -b master
 git -C "$secret_hook_root" config user.name Fixture
 git -C "$secret_hook_root" config user.email fixture@example.invalid
 printf 'fixture\n' >"$secret_hook_root/file"
 git -C "$secret_hook_root" add .
 git -C "$secret_hook_root" commit -q -m 'feat(repository): create secret hook fixture'
-# INV repository/change-authoring-in-linked-worktree
-secret_hook_primary=$secret_hook_root
-secret_hook_root="$test_root/secret-hook-linked"
-git -C "$secret_hook_primary" worktree add -q -b feature/repository-secret-hook "$secret_hook_root"
+# INV repository/workspace-choice
+# This fixture exercises the hook directly on primary master.
 mkdir -p "$secret_hook_root/unixlike/modules" "$secret_hook_root/stub"
 printf '_: {}\n' >"$secret_hook_root/unixlike/modules/fixture.nix"
 git -C "$secret_hook_root" add unixlike/modules/fixture.nix
@@ -2976,7 +2958,7 @@ git -C "$inv_hook_root" config user.email fixture@example.invalid
 printf 'fixture\n' >"$inv_hook_root/file"
 git -C "$inv_hook_root" add .
 git -C "$inv_hook_root" commit -q -m 'feat(repository): create invariants hook fixture'
-# INV repository/change-authoring-in-linked-worktree
+# INV repository/workspace-choice
 inv_hook_primary=$inv_hook_root
 inv_hook_root="$test_root/invariants-hook-linked"
 git -C "$inv_hook_primary" worktree add -q -b feature/repository-invariants-hook "$inv_hook_root"
@@ -3443,18 +3425,18 @@ for path in .github/scripts/WindowsCiRuntime.psm1 \
   .github/scripts/windows-ci.ps1 .github/tests/test-windows-ci-runtime.ps1; do
   for status in M A D; do
     expect_units 'repository:fixtures
-windows:suite' ci "$(printf '%s\t%s' "$status" "$path")"
+windows:suite
+windows:runtime' ci "$(printf '%s\t%s' "$status" "$path")"
   done
 done
 expect_units 'repository:fixtures
-windows:suite' ci "$(printf 'R100\tdocs/fixture.md\t.github/tests/test-windows-ci-runtime.ps1')"
+windows:suite
+windows:runtime' ci "$(printf 'R100\tdocs/fixture.md\t.github/tests/test-windows-ci-runtime.ps1')"
 expect_units 'repository:fixtures' ci "$(printf 'M\t.github/CODEOWNERS')"
 expect_units 'repository:fixtures' ci "$(printf 'M\t.github/scripts/unrelated.ps1')"
-for stage in commit push; do
-  expect_units 'repository:fixtures' "$stage" "$(printf 'M\t.github/scripts/WindowsCiRuntime.psm1')"
-  expect_units 'repository:fixtures' "$stage" "$(printf 'M\t.github/scripts/windows-ci.ps1')"
-  expect_units '' "$stage" "$(printf 'M\t.github/CODEOWNERS')"
-done
+expect_units '' commit "$(printf 'M\t.github/scripts/WindowsCiRuntime.psm1')"
+expect_units '' commit "$(printf 'M\t.github/scripts/windows-ci.ps1')"
+expect_units '' commit "$(printf 'M\t.github/CODEOWNERS')"
 grep -Fq 'CONFIGS_CI_PWSH: ${{ steps.runtime.outputs.pwsh }}' "$windows_ci_workflow"
 grep -Fq '& $env:CONFIGS_CI_PWSH -NoLogo -NoProfile -NonInteractive -File' "$windows_ci_workflow"
 grep -Fq '.github/tests/test-windows-ci-runtime.ps1' "$windows_ci_controller"
@@ -4188,85 +4170,10 @@ if (cd "$closing_repo" && "$closing_keywords" --range 00000000000000000000000000
 fi
 
 # ---------------------------------------------------------------------------
-# A source commit belongs to a linked worktree
+# Authoring accepts the selected current or linked workspace
 # ---------------------------------------------------------------------------
-# INV repository/change-authoring-in-linked-worktree
-authoring_root="$test_root/authoring-primary"
-authoring_linked="$test_root/authoring-linked"
-mkdir -p "$authoring_root/tool/version-control" "$authoring_root/.githooks"
-git -C "$authoring_root" init -q -b dev
-git -C "$authoring_root" config user.name Fixture
-git -C "$authoring_root" config user.email fixture@example.invalid
-cp "$root/tool/version-control/require-linked-worktree" "$authoring_root/tool/version-control/require-linked-worktree"
-cp "$root/tool/version-control/commit" "$authoring_root/tool/version-control/commit"
-cp "$root/.githooks/evidence" "$authoring_root/.githooks/evidence"
-chmod +x "$authoring_root/tool/version-control/require-linked-worktree" "$authoring_root/tool/version-control/commit"
-printf 'fixture\n' >"$authoring_root/source"
-git -C "$authoring_root" add source
-git -C "$authoring_root" -c core.hooksPath=/dev/null commit -q -m 'feat(repository): create authoring fixture'
-git -C "$authoring_root" worktree add -q -b feature/repository-authoring "$authoring_linked"
-
-if authoring_output=$(cd "$authoring_root" && "$root/tool/version-control/require-linked-worktree" 2>&1); then
-  echo "the primary checkout passed the linked-worktree guard" >&2
-  exit 1
-fi
-printf '%s\n' "$authoring_output" | grep -qF 'INV repository/change-authoring-in-linked-worktree' || {
-  printf '%s\n' "$authoring_output" >&2
-  echo "the guard did not name the primary-checkout violation" >&2
-  exit 1
-}
-(cd "$authoring_linked" && "$root/tool/version-control/require-linked-worktree") || {
-  echo "the linked worktree failed the authoring guard" >&2
-  exit 1
-}
-if authoring_output=$(cd "$authoring_root" && "$root/.githooks/pre-commit" 2>&1); then
-  echo "pre-commit accepted the primary checkout" >&2
-  exit 1
-fi
-printf '%s\n' "$authoring_output" | grep -qF 'INV repository/change-authoring-in-linked-worktree' || {
-  printf '%s\n' "$authoring_output" >&2
-  echo "pre-commit did not invoke the worktree guard first" >&2
-  exit 1
-}
-if ! (cd "$authoring_root" && tool/version-control/commit --help >/dev/null); then
-  echo "the primary checkout could not read helper help" >&2
-  exit 1
-fi
-if (cd "$authoring_root" && tool/version-control/commit prune >/dev/null 2>&1); then
-  echo "the primary checkout accepted retired prune" >&2
-  exit 1
-fi
-if authoring_output=$(cd "$authoring_root" && tool/version-control/commit --dry-run brew add fixture 2>&1); then
-  echo "the commit helper accepted the primary checkout" >&2
-  exit 1
-fi
-printf '%s\n' "$authoring_output" | grep -qF 'INV repository/change-authoring-in-linked-worktree' || {
-  printf '%s\n' "$authoring_output" >&2
-  echo "the commit helper did not refuse before editing" >&2
-  exit 1
-}
-
-# A linked caller must create siblings of the primary checkout, and removal
-# follows the topic branch even for a user-pinned worktree with another name.
-cp "$root/tool/worktree.sh" "$authoring_root/tool/worktree.sh"
-chmod +x "$authoring_root/tool/worktree.sh"
-authoring_remote="$test_root/authoring-remote.git"
-git init -q --bare "$authoring_remote"
-git -C "$authoring_root" remote add origin "$authoring_remote"
-git -C "$authoring_root" push -q origin dev
-(cd "$authoring_linked" && "$authoring_root/tool/worktree.sh" new repository-from-linked feature >/dev/null)
-authoring_sibling="$test_root/authoring-primary-wt/feature-repository-from-linked"
-[ -d "$authoring_sibling" ] || {
-  echo "the linked caller did not create a sibling of the primary checkout" >&2
-  exit 1
-}
-authoring_pinned="$test_root/pinned-base"
-git -C "$authoring_root" worktree add -q -b fix/repository-pinned "$authoring_pinned" HEAD
-(cd "$authoring_linked" && "$authoring_root/tool/worktree.sh" done repository-pinned >/dev/null)
-[ ! -e "$authoring_pinned" ] || {
-  echo "worktree done did not find the topic branch at its pinned path" >&2
-  exit 1
-}
+# INV repository/workspace-choice
+# Positive/negative branch and workspace cases live in test-local-workflow.
 
 # INV repository/local-development-integration
 "$root/tool/version-control/test-local-workflow"

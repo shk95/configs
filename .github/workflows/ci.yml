@@ -1,11 +1,26 @@
 name: CI
 
+permissions:
+  contents: read
+
 on:
+  workflow_dispatch:
+    inputs:
+      base:
+        description: 'Reviewed full current master SHA'
+        required: true
+        type: string
+      head:
+        description: 'Reviewed full candidate SHA already available in this repository'
+        required: true
+        type: string
+  push:
+    branches: [master]
   pull_request:
     branches: [master]
 
 concurrency:
-  group: ci-${{ github.ref }}
+  group: ci-${{ github.ref }}-${{ inputs.head || github.sha }}
   cancel-in-progress: true
 
 jobs:
@@ -23,6 +38,8 @@ jobs:
     steps:
       - uses: actions/checkout@v7
         with:
+          ref: ${{ inputs.head || github.sha }}
+          persist-credentials: false
           fetch-depth: 0
       - id: scopes
         name: Resolve owning scopes and CI effects
@@ -34,10 +51,14 @@ jobs:
           EVENT_BASE_REF: ${{ github.base_ref }}
           PR_STACK: ${{ toJSON(github.event.pull_request.stack) }}
           PUSH_BASE: ${{ github.event.before }}
+          DISPATCH_BASE: ${{ inputs.base }}
+          DISPATCH_HEAD: ${{ inputs.head }}
+          DISPATCH_REF: ${{ github.ref }}
+          CI_HEAD: ${{ inputs.head || github.sha }}
         run: |
           base=$(tool/dispatch/ci-base)
           echo "base=$base" >>"$GITHUB_OUTPUT"
-          scopes=$(tool/version-control/classify --range "$base" "$GITHUB_SHA")
+          scopes=$(tool/version-control/classify --range "$base" "$CI_HEAD")
           printf '%s\n' "$scopes"
           if grep -qx unclassified <<<"$scopes"; then
             echo "A changed path has no owning scope." >&2
@@ -50,12 +71,12 @@ jobs:
               echo "$scope=false" >>"$GITHUB_OUTPUT"
             fi
           done
-          git diff --name-status "$base" "$GITHUB_SHA" >"$RUNNER_TEMP/ci-changes"
+          git diff --name-status "$base" "$CI_HEAD" >"$RUNNER_TEMP/ci-changes"
           units=$(tool/dispatch/select ci <"$RUNNER_TEMP/ci-changes")
           printf 'Selected CI units:\n%s\n' "$units"
           while IFS= read -r unit; do
             case "$unit" in
-              ''|repository:fixtures|unixlike:suite|windows:suite) ;;
+              ''|repository:fixtures|unixlike:suite|windows:suite|windows:runtime) ;;
               *) echo "Unknown CI unit: $unit" >&2; exit 1 ;;
             esac
           done <<<"$units"
@@ -81,6 +102,9 @@ jobs:
       REQUIRE_NATIVE: "1"
     steps:
       - uses: actions/checkout@v7
+        with:
+          ref: ${{ inputs.head || github.sha }}
+          persist-credentials: false
       - uses: actions/setup-python@v6
         with:
           python-version: '3.13'
@@ -104,6 +128,9 @@ jobs:
       REQUIRE_NATIVE: "1"
     steps:
       - uses: actions/checkout@v7
+        with:
+          ref: ${{ inputs.head || github.sha }}
+          persist-credentials: false
       - uses: cachix/install-nix-action@v31.10.6
         with:
           install_url: https://releases.nixos.org/nix/nix-2.34.8/install
@@ -128,6 +155,9 @@ jobs:
       REQUIRE_NATIVE: "1"
     steps:
       - uses: actions/checkout@v7
+        with:
+          ref: ${{ inputs.head || github.sha }}
+          persist-credentials: false
       # INV repository/windows-ci-runtime-bound: hosted pwsh only acquires the
       # Windows-owned exact artifact; management runs its explicit executable.
       - name: Acquire declared Windows management runtime
@@ -165,6 +195,8 @@ jobs:
     steps:
       - uses: actions/checkout@v7
         with:
+          ref: ${{ inputs.head || github.sha }}
+          persist-credentials: false
           fetch-depth: 0
       - name: Install gitleaks
         env:
@@ -186,11 +218,8 @@ jobs:
         env:
           CI_BASE: ${{ needs.classify.outputs.base }}
         run: tool/version-control/work --range "$CI_BASE" HEAD
-      # Hooks are opt-in, so this is the complete check of the rule that
-      # .githooks/commit-msg applies early. The range is the pull request's own
-      # commits, base tip to head tip, not the synthetic merge. The tool reads
-      # it only when the base is dev and says so otherwise: a promotion's range
-      # holds commits from before the rule (INV repository/no-closing-keyword).
+      # Optional topic PRs check incoming messages; push history audit also
+      # applies commit-message checks to direct master commits.
       - name: Refuse closing keywords in the pull request's commits
         if: github.event_name == 'pull_request'
         env:
@@ -214,7 +243,7 @@ jobs:
           WINDOWS: ${{ needs.classify.outputs.windows }}
           REPOSITORY: ${{ needs.classify.outputs.repository }}
           HEAD_SHA: ${{ github.event.pull_request.head.sha }}
-          PUSH_SHA: ${{ github.sha }}
+          PUSH_SHA: ${{ inputs.head || github.sha }}
         run: |
           scopes=
           for scope in unixlike windows repository; do
@@ -239,12 +268,19 @@ jobs:
       # branch or a non-conventional subject is a property of the push, not of
       # a scope, and needs the fetch-depth: 0 checkout this job already takes.
       # HEAD is the commit under test: on a pull request the merge GitHub would
-      # make, whose own commits dev does not yet contain, so their subjects are
+      # make, whose own commits master does not yet contain, so their subjects are
       # judged before the pull request merges (INV repository/conventional-subject).
       - run: tool/version-control/audit --history HEAD
+      - name: Audit incoming source ownership
+        env:
+          CI_BASE: ${{ needs.classify.outputs.base }}
+        run: tool/version-control/audit --range "$CI_BASE" HEAD
 
-  promotion:
-    name: Promotion policy
+  topic:
+    name: Topic source policy
+    permissions:
+      contents: read
+      pull-requests: read
     if: github.event_name == 'pull_request' && github.base_ref == 'master'
     runs-on: ubuntu-latest
     # The merge gate is the one place where a check that could not run must not
@@ -254,36 +290,32 @@ jobs:
     steps:
       - uses: actions/checkout@v7
         with:
+          ref: ${{ inputs.head || github.sha }}
+          persist-credentials: false
           fetch-depth: 0
-      - name: Require dev promotion or a bounded Unix-like input patch
+      - name: Require a same-repository topic or bounded Unix-like input patch
         env:
-          PROMOTION_BASE_REF: ${{ github.base_ref }}
-          PROMOTION_HEAD_REF: ${{ github.head_ref }}
-          PROMOTION_BASE_SHA: ${{ github.event.pull_request.base.sha }}
-          PROMOTION_HEAD_SHA: ${{ github.event.pull_request.head.sha }}
-          PROMOTION_BASE_REPOSITORY: ${{ github.repository }}
-          PROMOTION_HEAD_REPOSITORY: ${{ github.event.pull_request.head.repo.full_name }}
-        run: tool/version-control/check-promotion
-      - name: Require one promotion pull request
-        env:
-          GH_TOKEN: ${{ github.token }}
-          PROMOTION_REPOSITORY: ${{ github.repository }}
-          PROMOTION_PULL_NUMBER: ${{ github.event.pull_request.number }}
-        run: tool/version-control/check-promotion-queue
+          TOPIC_BASE_REF: ${{ github.base_ref }}
+          TOPIC_HEAD_REF: ${{ github.head_ref }}
+          TOPIC_BASE_SHA: ${{ github.event.pull_request.base.sha }}
+          TOPIC_HEAD_SHA: ${{ github.event.pull_request.head.sha }}
+          TOPIC_BASE_REPOSITORY: ${{ github.repository }}
+          TOPIC_HEAD_REPOSITORY: ${{ github.event.pull_request.head.repo.full_name }}
+        run: tool/version-control/topic-source
       # The body is read from the pull request as it stands when the job runs,
       # not from the event that started it, so a re-run judges an edited body.
-      - name: Refuse closing keywords in the promotion body
+      - name: Refuse closing keywords in the topic body
         env:
           GH_TOKEN: ${{ github.token }}
-          PROMOTION_REPOSITORY: ${{ github.repository }}
-          PROMOTION_PULL_NUMBER: ${{ github.event.pull_request.number }}
+          TOPIC_REPOSITORY: ${{ github.repository }}
+          TOPIC_PULL_NUMBER: ${{ github.event.pull_request.number }}
         run: |
-          gh pr view "$PROMOTION_PULL_NUMBER" --repo "$PROMOTION_REPOSITORY" --json body --jq .body >"$RUNNER_TEMP/promotion-body"
+          gh pr view "$TOPIC_PULL_NUMBER" --repo "$TOPIC_REPOSITORY" --json body --jq .body >"$RUNNER_TEMP/promotion-body"
           tool/version-control/closing-keywords --text "$RUNNER_TEMP/promotion-body"
 
   required:
     name: Required checks
-    needs: [classify, repository, unix, windows, secrets, promotion]
+    needs: [classify, repository, unix, windows, secrets, topic]
     if: always()
     runs-on: ubuntu-latest
     env:
@@ -295,17 +327,25 @@ jobs:
       WINDOWS_SCOPE: ${{ needs.classify.outputs.windows_checks }}
       WINDOWS_RESULT: ${{ needs.windows.result }}
       SECRETS_RESULT: ${{ needs.secrets.result }}
-      PROMOTION_SCOPE: ${{ github.event_name == 'pull_request' && github.base_ref == 'master' }}
-      PROMOTION_RESULT: ${{ needs.promotion.result }}
+      TOPIC_SCOPE: ${{ github.event_name == 'pull_request' && github.base_ref == 'master' }}
+      TOPIC_RESULT: ${{ needs.topic.result }}
     steps:
       - uses: actions/checkout@v7
+        with:
+          ref: ${{ inputs.head || github.sha }}
+          persist-credentials: false
       - name: Enforce scoped results
         run: tool/version-control/required-checks
+      - uses: actions/checkout@v7
+        with:
+          ref: ${{ github.workflow_sha }}
+          path: accepted-tools
+          persist-credentials: false
       - name: Record the tested source
         if: success()
         env:
           CI_BASE: ${{ needs.classify.outputs.base }}
-        run: python3 .github/scripts/ci-source.py
+        run: python3 accepted-tools/.github/scripts/ci-source.py
       - uses: actions/upload-artifact@v7
         if: success()
         with:

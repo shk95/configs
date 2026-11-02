@@ -1,7 +1,7 @@
 #!/bin/sh
 #
-# Confirm a templated desired-state edit and commit locally in a dedicated
-# topic worktree. Ownership, quick-check selection and evidence come from the
+# Confirm a templated desired-state edit and commit locally in a selected
+# workspace. Ownership, quick-check selection and evidence come from the
 # existing classifier, dispatcher and hook library. No publication or cleanup.
 # INV repository/local-development-integration
 # usage: tool/version-control/commit [--dry-run] <command>
@@ -95,7 +95,6 @@ trap 'rm -rf "$work"' EXIT
 trap 'rm -rf "$work"; exit 130' INT HUP TERM
 
 dry_run=0
-plan_units_line=
 
 usage_text() {
   cat <<'EOF'
@@ -118,7 +117,7 @@ is the numeric App Store id the maintainer supplies (no lookup here); the mas
 CLI itself is already a declared Homebrew formula, so it needs no command of
 its own.
 
-Run in a dedicated topic worktree. The helper confirms and commits the edit
+Run in a selected workspace. The helper confirms and commits the edit
 locally. It never fetches, pushes, opens a PR, changes branches or prunes.
 EOF
 }
@@ -141,7 +140,7 @@ while [ "$#" -gt 0 ]; do
       shift
       ;;
     --publish)
-      refuse "--publish is retired." "Commit locally; push and master promotion are separate operations."
+      refuse "--publish is retired." "Commit locally; push and topic integration are separate operations."
       ;;
     -h | --help)
       usage_text
@@ -172,10 +171,9 @@ if [ "$group" = prune ]; then
   refuse "prune is retired." "Review named branches and worktrees before explicitly requested cleanup."
 fi
 
-# INV repository/change-authoring-in-linked-worktree
-# Help and standalone maintenance above do not author source. Refuse all edit
-# commands here, before their branch or payload can change.
-tool/version-control/require-linked-worktree
+# INV repository/workspace-choice
+# Validate master/topic authoring before any payload can change.
+tool/version-control/authoring
 
 item=
 input=
@@ -285,19 +283,13 @@ esac
 # Refusals that hold for every command. Checked before any work so that a
 # refusal leaves the clone exactly as it was found.
 branch=$(git symbolic-ref --quiet --short HEAD || echo detached)
-if [ "$branch" = master ]; then
-  refuse "Refusing to commit on master." \
-    "AGENTS.md: only this repository's dev may enter master, by pull request and merge commit. There is no operational bypass."
-fi
-
 if [ -n "$(git diff --cached --name-only)" ]; then
   refuse "The index already holds staged changes." \
     "This helper commits only the edit it makes. Commit or unstage the rest first."
 fi
-
 case "$branch" in
-  feature/*|fix/*) ;;
-  *) refuse "A dedicated topic branch is required." "Create a linked worktree from local dev before editing." ;;
+  master|feature/*|fix/*) ;;
+  *) refuse "Use master or a topic branch." "Run tool/configs workflow start with the user's workspace choice." ;;
 esac
 
 require_untouched() {
@@ -321,14 +313,12 @@ report_plan() {
   if hooks_enabled; then
     plan_units=$(selected_units "$@")
     printf '%s\n' "$plan_units" | sed 's/^/  /'
-    plan_units_line=$(printf '%s' "$plan_units" | tr '\n' ',' | sed 's/,/, /g')
   else
     # Listing units nothing will run is worse than saying so: the commit would
     # look gated when no check ran at all.
     evidence_unavailable "pre-commit checks" \
       "core.hooksPath is ${hooks_path:-unset}, does not resolve to .githooks; fix with tool/configs setup --fix" \
       || exit 1
-    plan_units_line="unavailable; this clone runs no hooks"
   fi
   printf 'message: %s\n' "$plan_message"
   evidence_summary

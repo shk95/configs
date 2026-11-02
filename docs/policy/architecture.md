@@ -350,6 +350,8 @@ suite for every affected platform input. Changes to workflows, dispatch,
 classification or the stable gate conservatively exercise all suites. Global
 policy scans remain required. Unknown inputs, failed selection and unsupported
 native stack events fail the stable gate rather than becoming intentional skips.
+Windows CI runtime-governance inputs additionally require exact hosted native
+proof for local integration; ordinary domain tests do not cover that wiring.
 
 Documents are owned the way code is. Everything the repository writes about
 itself lives under `docs/`: policy (the model, the definition of done, the
@@ -369,29 +371,31 @@ small coherent changes may record evidence in commit bodies or concise results.
 Issues and roadmap entries are optional. Evidence remains truthful and dated
 criteria amendments remain visible. Cancelled policy need not keep its old
 validators or all reports active. Source messages do not implicitly close
-issues at promotion; issue management is explicit.
+issues; issue management is explicit. Role assignment and orchestration are
+optional and do not add project obligations.
 
-Local dev is integration authority. Task worktrees isolate authoring. One
-integrator reflects current dev in the final candidate, verifies the combined
-result and advances clean primary dev to that exact SHA with ff-only. A changed
-base stops the attempt. Local implementation, required verification and
-integration complete development; remote push, protected master acceptance
-and domain releases are later operations. Checkpoints preserve interrupted
-work without proving liveness or authorizing deletion.
+Shared branch/workspace/merge/CI/remote values live in the validated
+`tool/version-control/policy.json`; workflow-only wiring lives in CI YAML.
+Each execution owner declares its mechanical values; agents use the relevant
+tracked operation rather than maintaining private policy. Execution records
+and local handoffs supply neither approval nor liveness or deletion authority.
 
-Reusable work-role orchestration is maintained in the external Agent Rack
-Work Cycle plugin. This repository owns policy, contributor procedures and
-deterministic tools; they remain usable without an installed plugin. No tracked
-local work-role skills, workflow aliases or plugin connection are supplied.
-Installation and invocation are an explicit later adoption, never an implicit
-source dependency. Model-specific instruction files carry no independent policy.
+Project operation is complete without installed role plugins. Reusable
+orchestration is externally owned and optional; model-specific adapters add
+no policy. Source separation and installation are separate decisions.
 See docs/policy/decisions/repository/external-work-role-orchestration.md.
 
-Master branch protection consumes one stable CI contract named `Required checks`.
-The gate validates classification, the repository-wide secret scan, and each
-job selected by effect. Individual domain jobs remain conditional and
-are not protection contracts, so adding or skipping a domain does not silently
-weaken or deadlock protected branches.
+CI runs for master pushes, explicit candidate dispatches and optional topic PRs and exposes `Required checks`
+as stable exact-source evidence. Direct master commits have no mandatory PR
+or status admission. Protection prevents deletion and ordinary force pushes and applies to
+administrators. The optional maintenance App alone may replace history after
+a live human-approved exact-source dispatch; its key is not available to
+ordinary tools. The executor leaves protection unchanged. The bounded patch writer consumes the successful
+PR result before its own merge and publication. An approved force exception
+combines classic safeguards with an exact-master non-fast-forward ruleset,
+whose sole bypass actor is the isolated App; default force denial needs no
+exception capability. Source acceptance, domain
+publication and host deployment remain separate events.
 
 ### Desired-state hygiene
 
@@ -537,12 +541,13 @@ without changing the tree.
 
 ## Version control and releases
 
-The repository keeps shared integration branches so history remains easy to
-inspect. Readiness and deployment are domain-scoped rather than repository-wide.
+The repository keeps master and optional topic branches so history remains
+easy to inspect. Readiness and deployment are domain-scoped rather than repository-wide.
 
-- `dev` integrates reviewed source changes.
-- `master` contains accepted repository history; it is not proof that every
-  domain at that commit was deployed.
+- `master` is the release and ordinary work branch; it is not proof that
+  every domain at that commit was deployed.
+- A topic groups several logical commits, or isolates a selected linked
+  workspace, with a no-ff merge into master.
 - `unixlike-vMAJOR.MINOR.PATCH` identifies a validated Unix-like release.
 - `windows-vMAJOR.MINOR.PATCH` identifies a validated Windows release.
 - `common-vMAJOR.MINOR.PATCH` identifies a validated common release.
@@ -587,35 +592,20 @@ every Unix-like derivation hash separable from the source change beside it.
 Only its fixed patch publication declaration may accompany an automatic refresh
 (`INV repository/conventional-subject`, `INV repository/flake-lock-isolated`).
 
-General development flows from topic branches through `dev` into `master`.
-Each source change is authored in a linked worktree for its topic branch.
-The primary checkout remains the integration point and a place for read-only
-inspection; its index and tracked files do not carry a task's edits. This
-keeps concurrent tasks separate while keeping source commits/topic work single-scope and allowing accumulated
-dev/promotion history to contain multiple scopes. A commit from the primary checkout is refused locally;
-editor writes are controlled by the start procedure because Git cannot
-intercept them. A separate native host clone may inspect and check an
-unpublished branch without becoming its authoring worktree.
-`master` accepts same-repository `dev` promotion or the narrowly validated
-Unix-like input patch lane, always through a protected PR and merge commit.
-An input patch is one commit based on the exact current master and changes
-only permitted lock data and its next patch declaration. Scheduled and manual
-entry points share this path and never integrate dev or publish Windows tags.
-General development promotion incorporates accepted input patch history first,
-so it cannot replace that history with an older lock or release declaration.
-Dev and master retain their own first-parent histories so development and
-accepted-source history remain separately readable. Current master history is
-reflected before a later promotion through a dev-based merge whose first
-parent continues the dev lane, including promotion merges when needed.
-Dev continues on its own lane after promotion. At most one master PR proceeds
-at a time; exact-source CI binds either lane without a protection bypass
-(`docs/policy/decisions/repository/master-input-patch-releases.md`).
+General development uses master and optional same-scope topics for several
+logical commits or selected workspace isolation. Workspace location is chosen
+with the user and retained while continuing the same task; neither a primary
+checkout nor a linked one has special authoring authority. Operation follows
+the relevant procedure and existing task authorization.
+The current contract is
+`docs/policy/decisions/repository/master-topic-workflow.md`.
 
-The routine edit helper commits locally on its existing topic branch after
-confirmation. It does not fetch, publish, integrate or prune. Dev has no PR
-or required remote checks. Master retains strict protected PR admission.
-Daily development never depends on an old backup branch or external extraction
-project. Remote basis replacement is a separately reviewed one-time operation.
+The automated Unix-like input patch retains its current-master, permitted-input,
+published-baseline, exact-CI, credential and immutable-tag boundaries. It uses
+a checked topic PR as its automation mechanism. Direct master changes may
+race it; stale candidates stop without automatic source repair. Routine edits
+never fetch, publish, integrate or prune implicitly. Dev promotion and separate
+dev/master first-parent lanes are retired without rewriting past history.
 
 ## Why the repository remains a monorepo
 

@@ -1,0 +1,78 @@
+{
+  "schema": 1,
+  "base_branch": "master",
+  "scopes": [
+    "repository",
+    "unixlike",
+    "windows"
+  ],
+  "topic_kinds": [
+    "feature",
+    "fix"
+  ],
+  "merge_method": "no-ff",
+  "workspace_choices": [
+    "current",
+    "linked"
+  ],
+  "workspace_record": "configs-work.json",
+  "remote": {
+    "enforce_admins": true,
+    "allow_deletions": false,
+    "required_status_checks": null,
+    "required_pull_request_reviews": null,
+    "required_conversation_resolution": false,
+    "allow_merge_commit": true,
+    "allow_squash_merge": false,
+    "allow_rebase_merge": false,
+    "lock_branch": false,
+    "required_linear_history": false,
+    "restrictions": null
+  },
+  "ci": {
+    "workflow": ".github/workflows/ci.yml",
+    "gate": "Required checks",
+    "artifact": "ci-source",
+    "events": [
+      "push",
+      "pull_request",
+      "workflow_dispatch"
+    ],
+    "suite_commands": {
+      "repository:fixtures": [
+        [
+          "tool/version-control/test"
+        ]
+      ],
+      "unixlike:suite": [
+        [
+          "unixlike/tool/checks/format"
+        ],
+        [
+          "unixlike/tool/checks/lint"
+        ],
+        [
+          "unixlike/tool/checks/test"
+        ]
+      ],
+      "windows:suite": [
+        [
+          "windows/win-env.ps1",
+          "validate"
+        ],
+        [
+          "windows/win-env.ps1",
+          "test"
+        ]
+      ]
+    }
+  },
+  "history_rewrite": {
+    "workflow": ".github/workflows/history-rewrite.yml",
+    "ruleset": "master-history-rewrite",
+    "environment": "history-rewrite",
+    "app_id_variable": "CONFIGS_HISTORY_APP_ID",
+    "app_node_variable": "CONFIGS_HISTORY_APP_NODE_ID",
+    "attempts": 1
+  }
+}

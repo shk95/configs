@@ -44,3 +44,10 @@ contracts; cited history is consulted for a needed rule or ambiguity rather
 than loaded as a default session obligation. Current invariant decision
 pointers name the adopted local-development contract; earlier decisions and
 their measurements remain historical records.
+
+## Amendment 2026-11-02: master and topics
+
+The accepted master-topic-workflow.md decision replaces dev authoring/integration,
+mandatory linked worktrees and general master PR-only admission in this record.
+Retained scope, evidence, preservation and bounded publication rules remain.
+Earlier operation and measurements above are historical.

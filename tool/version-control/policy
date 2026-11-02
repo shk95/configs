@@ -1,0 +1,19 @@
+#!/usr/bin/env python3
+# INV repository/mechanical-policy
+import sys
+sys.dont_write_bytecode = True
+import argparse
+import json
+import subprocess
+from repo_policy import authoring, load
+
+parser = argparse.ArgumentParser(description='Inspect the tracked mechanical policy or validate an authoring branch.')
+parser.add_argument('command', choices=['show', 'authoring'])
+args = parser.parse_args()
+policy = load()
+if args.command == 'show':
+    print(json.dumps(policy, indent=2))
+else:
+    branch = subprocess.check_output(['git', 'branch', '--show-current'], text=True).strip()
+    if not authoring(branch, policy):
+        raise SystemExit(f'Unsupported authoring branch {branch!r}; use {policy["base_branch"]} or a named topic')
