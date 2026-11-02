@@ -1,7 +1,7 @@
 {
-  "previous": "unixlike-v1.0.26",
-  "version": "1.1.0",
-  "summary": "Add Paneru on Darwin with a Lua configuration and managed user service.",
-  "compatibility": "minor",
-  "migration": "Darwin homes enable Paneru. Preserve any existing Paneru launchd plist before switching and confirm macOS Accessibility permission for the Nix binary; Lua replaces TOML."
+  "previous": "unixlike-v1.1.0",
+  "version": "1.1.1",
+  "summary": "Refresh permitted Unix-like inputs.",
+  "compatibility": "patch",
+  "migration": ""
 }
