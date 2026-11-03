@@ -2,7 +2,7 @@
 """Small Git/API fixtures for the finite release boundary; no operating writes.
 INV repository/bounded-release-automation
 INV repository/release-tag-contract
-INV repository/promotion-source
+INV repository/topic-source
 """
 import importlib.util
 import io
@@ -263,6 +263,16 @@ class ReleaseFixtures(unittest.TestCase):
             r.identity_from_zip(archive({**record, 'verified': True}))
         with self.assertRaises(ValueError):
             r.identity_from_zip(archive({**record, 'head': 'invalid'}))
+        with self.assertRaises(ValueError):
+            r.identity_from_zip(archive({**record, 'event': 'workflow_dispatch'}))
+        self.assertEqual(r.identity_from_zip(archive({**record, 'event': 'push'})),
+                         {**record, 'event': 'push'})
+        extra_entry = io.BytesIO()
+        with zipfile.ZipFile(extra_entry, 'w') as zipped:
+            zipped.writestr('source.json', json.dumps(record))
+            zipped.writestr('other.json', '{}')
+        with self.assertRaises(ValueError):
+            r.identity_from_zip(extra_entry.getvalue())
 
     def test_existing_tag_checks_content_not_recreated_object_id(self):
         value = r.declaration(self.head, 'unixlike')
@@ -479,7 +489,9 @@ class ReleaseFixtures(unittest.TestCase):
         r.git('checkout', '-q', '--detach', self.base)
         remote = LocalGitHub()
         r.git('checkout', '-q', '-b', 'independent-dev')
-        Path('unreleased-development').write_text('Unrelated work stays on dev.')
+        unrelated = Path('docs/reference/unreleased-development.md')
+        unrelated.parent.mkdir(parents=True, exist_ok=True)
+        unrelated.write_text('Unrelated work stays on dev.')
         dev = self.commit('feat(repository): independent development')
         r.git('push', '--quiet', 'origin', 'HEAD:refs/heads/dev')
         r.git('checkout', '-q', '--detach', self.base)
@@ -504,22 +516,20 @@ class ReleaseFixtures(unittest.TestCase):
             self.assertEqual(r.git('show', '-s', '--format=%P', source).split(), [self.base, candidate])
             self.assertEqual(remote.remote_git('rev-parse', 'unixlike-v1.0.1^{commit}'), source)
             self.assertEqual(r.tag_state('unixlike', source, r.declaration(source, 'unixlike')), 'done')
-            self.assertNotIn('unreleased-development', r.git('ls-tree', '--name-only', source))
+            self.assertNotIn(unrelated.as_posix(), r.git('ls-tree', '-r', '--name-only', source).splitlines())
             r.write_guard()
             before = list(remote.writes)
             self.assertEqual(r.refresh_pr(source, '.git/manual-lock.json'), {'action': 'none'})
             self.assertEqual(r.prepare_manual(), {'action': 'none'})
             self.assertEqual(remote.writes, before)
             # CI source admission permits the narrow branch, not arbitrary sources.
-            env = dict(os.environ, PROMOTION_BASE_REF='master', PROMOTION_HEAD_REF=r.PATCH_BRANCH+self.base[:12], PROMOTION_BASE_REPOSITORY='fixture/configs', PROMOTION_HEAD_REPOSITORY='fixture/configs', PROMOTION_BASE_SHA=self.base, PROMOTION_HEAD_SHA=candidate)
-            subprocess.check_call([str(ROOT/'tool/version-control/check-promotion')],env=env,stdout=subprocess.DEVNULL)
-            # Stale development cannot promote until patch history is incorporated.
-            env.update(PROMOTION_HEAD_REF='dev', PROMOTION_BASE_SHA=source, PROMOTION_HEAD_SHA=dev)
-            self.assertNotEqual(subprocess.call([str(ROOT/'tool/version-control/check-promotion')],env=env,stdout=subprocess.DEVNULL,stderr=subprocess.DEVNULL),0)
-            r.git('checkout','-q','independent-dev')
-            r.git('merge','--no-ff','-q',source,'-m','Merge master input patch into development')
-            env['PROMOTION_HEAD_SHA']=r.git('rev-parse','HEAD')
-            subprocess.check_call([str(ROOT/'tool/version-control/check-promotion')],env=env,stdout=subprocess.DEVNULL)
+            env = dict(os.environ, TOPIC_BASE_REF='master', TOPIC_HEAD_REF=r.PATCH_BRANCH+self.base[:12], TOPIC_BASE_REPOSITORY='fixture/configs', TOPIC_HEAD_REPOSITORY='fixture/configs', TOPIC_BASE_SHA=self.base, TOPIC_HEAD_SHA=candidate)
+            subprocess.check_call([str(ROOT/'tool/version-control/topic-source')],env=env,stdout=subprocess.DEVNULL)
+            # Dev is retired even after incorporating patch history.
+            env.update(TOPIC_HEAD_REF='dev', TOPIC_BASE_SHA=source, TOPIC_HEAD_SHA=dev)
+            self.assertNotEqual(subprocess.call([str(ROOT/'tool/version-control/topic-source')], env=env, stdout=subprocess.DEVNULL, stderr=subprocess.DEVNULL), 0)
+            env.update(TOPIC_HEAD_REF='feature/repository-example')
+            subprocess.check_call([str(ROOT/'tool/version-control/topic-source')], env=env, stdout=subprocess.DEVNULL)
             # One more patch increments only the patch component.
             r.git('checkout','-q','--detach',source)
             lock['nodes']['n']['locked']['rev']='second-upstream'
@@ -533,8 +543,8 @@ class ReleaseFixtures(unittest.TestCase):
         Path('unexpected').write_text('Forbidden payload')
         extra=self.commit('feat(repository): forbidden patch payload')
         self.assertFalse(r.automatic(self.base,extra))
-        with patch.dict(os.environ, PROMOTION_BASE_REF='master', PROMOTION_HEAD_REF=r.PATCH_BRANCH+'fake', PROMOTION_BASE_REPOSITORY='fixture/configs', PROMOTION_HEAD_REPOSITORY='fixture/configs', PROMOTION_BASE_SHA=self.base, PROMOTION_HEAD_SHA=extra):
-            self.assertNotEqual(subprocess.call([str(ROOT/'tool/version-control/check-promotion')],stdout=subprocess.DEVNULL,stderr=subprocess.DEVNULL),0)
+        with patch.dict(os.environ, TOPIC_BASE_REF='master', TOPIC_HEAD_REF=r.PATCH_BRANCH+'fake', TOPIC_BASE_REPOSITORY='fixture/configs', TOPIC_HEAD_REPOSITORY='fixture/configs', TOPIC_BASE_SHA=self.base, TOPIC_HEAD_SHA=extra):
+            self.assertNotEqual(subprocess.call([str(ROOT/'tool/version-control/topic-source')],stdout=subprocess.DEVNULL,stderr=subprocess.DEVNULL),0)
         with patch.object(r,'inspect',return_value={'action':'patch-merge','base':self.base,'head':self.head}),patch.object(r,'request') as writer:
             with self.assertRaisesRegex(ValueError,'candidate changed'):
                 r.advance('f'*40,self.base,manual=True)
@@ -607,8 +617,8 @@ class ReleaseFixtures(unittest.TestCase):
         r.git('update-ref','refs/remotes/origin/master',source)
         with self.assertRaisesRegex(ValueError,'not a bounded'):
             r.publish(source)
-        env=dict(os.environ,PROMOTION_BASE_REF='master',PROMOTION_HEAD_REF=r.PATCH_BRANCH+'fixture',PROMOTION_BASE_REPOSITORY='fixture/configs',PROMOTION_HEAD_REPOSITORY='fork/configs',PROMOTION_BASE_SHA=self.base,PROMOTION_HEAD_SHA=self.head)
-        self.assertNotEqual(subprocess.call([str(ROOT/'tool/version-control/check-promotion')],env=env,stdout=subprocess.DEVNULL,stderr=subprocess.DEVNULL),0)
+        env=dict(os.environ,TOPIC_BASE_REF='master',TOPIC_HEAD_REF=r.PATCH_BRANCH+'fixture',TOPIC_BASE_REPOSITORY='fixture/configs',TOPIC_HEAD_REPOSITORY='fork/configs',TOPIC_BASE_SHA=self.base,TOPIC_HEAD_SHA=self.head)
+        self.assertNotEqual(subprocess.call([str(ROOT/'tool/version-control/topic-source')],env=env,stdout=subprocess.DEVNULL,stderr=subprocess.DEVNULL),0)
 
     def test_general_publication_and_promotion_are_not_automated(self):
         r.git('checkout','-q','--detach',self.base)
@@ -617,7 +627,7 @@ class ReleaseFixtures(unittest.TestCase):
             self.assertEqual(r.inspect(),{'action':'none'})
             remote.prs.append({'head':{'ref':'dev','repo':{'full_name':'fixture/configs'}},'base':{'ref':'master'},'merged_at':None})
             self.assertEqual(r.inspect()['action'],'wait')
-            with self.assertRaisesRegex(ValueError,'development promotion'):
+            with self.assertRaisesRegex(ValueError,'master topic PR'):
                 r.inspect(manual=True,start=True)
             remote.prs.clear()
             self.write('unixlike/release.json',{'previous':'unixlike-v1.0.0','version':'2.0.0','summary':'General change','compatibility':'breaking','migration':'Review.'})

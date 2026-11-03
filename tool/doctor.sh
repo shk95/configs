@@ -127,6 +127,8 @@ hooks_enabled() {
 
 echo
 echo "Version control"
+command -v python3 >/dev/null 2>&1 && ok "Python 3 available for tracked workflow tools" \
+  || bad "Python 3 unavailable" "Install Python 3 before running workflow or release tools."
 
 if hooks_enabled; then
   ok "git hooks enabled"

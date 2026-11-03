@@ -27,6 +27,9 @@ summary of the outcomes the hooks have recorded on this clone;
 `windows`, `common`, or `repository` to check only that scope; omit the
 scope for a complete host inventory. A missing foreign-platform capability
 does not block scoped work.
+Use setup for clone preparation and doctor before relying on an unverified
+capability or after an environment change. These are not a startup sequence
+to repeat for every task.
 
 ## Classify the change
 
@@ -43,7 +46,8 @@ Every change belongs to one of these scopes:
 no release tag and must not contain platform behavior that belongs to
 `unixlike`, `windows`, or `common`.
 
-One scope per commit, and therefore per branch and pull request. A commit's
+One scope per source commit and topic. Master may accumulate independently
+scoped outcomes. A commit's
 scope is the classifier's answer over the paths it touches, and the release
 tag, the CI lanes and the right to change a path all follow from it. The
 subject's scope is a different thing: it names the domain the change
@@ -54,77 +58,100 @@ to the other.
 
 ## Branch and commit flow
 
-Start from local dev and select the local master snapshot to incorporate.
-If master adds history, merge it with `git merge --no-ff <master-SHA>` in a
-dev-based linked topic worktree. The merge's first parent continues the dev
-lane and its second parent is the selected master snapshot. Resolve and check
-the result there before exact-SHA integration. Remote fetching is an explicit
-synchronization operation, not task pickup.
+Master is the release and normal authoring branch. One logical commit normally
+stays there; several commits for one coherent same-scope result use a
+master-based topic and no-ff integration. A selected linked worktree also uses
+a topic for a one-commit task. An issue or ordinary PR is optional.
 
-Create a dedicated topic worktree from local dev:
+For new work, ask current checkout versus linked worktree if the user has not
+chosen. Keep that choice when continuing the same task; ask again only if it
+must change. Parallel authors need isolation. An explicit tool argument is not
+evidence of an unanswered preference.
 
 ```sh
-tool/configs worktree new repository-example feature
+tool/configs policy show
+tool/configs workflow inspect
+tool/configs workflow start --scope repository --commits one --workspace current
+tool/configs workflow start --scope repository --commits many --topic example --workspace current
+# If the user selected isolation instead:
+tool/configs workflow start --scope repository --commits many --topic example --workspace linked
 ```
 
-The helper neither fetches nor authenticates. One source commit belongs to one
-scope; a topic is one coherent same-scope result. Dev can accumulate multiple
-scopes for later push and promotion. Primary is for inspection and integration;
-source commits, including conflict resolution, are made in the topic worktree.
-Do not author directly on master or rebase published work.
+The start examples are alternatives. Policy show and inspect answer specific
+questions; they are not mandatory preliminary commands. Use start for a clean
+new task, and inspect existing Git state when resuming or continuing instead
+of rerunning start. Start records the chosen scope, count, workspace and base in Git-local
+operation data, visible through workflow inspect. The record is not approval
+or evidence of process liveness. Start neither fetches nor changes master; topic bases use the selected local master snapshot. Inspect
+and explicitly synchronize remote history when needed.
+Topic names are `feature/<scope>-<topic>` or `fix/<scope>-<topic>`.
 
-Keep dev and master on their own first-parent paths. Fast-forward integration
-advances dev to a verified dev-based candidate; it never advances dev directly
-to master or to a master promotion merge. After promotion, continue from dev
-and reflect master at the next explicit work/promotion synchronization.
+Use `workflow start --workspace linked` to create an isolated workspace;
+there is one creation path. Primary and linked workspaces use identical hooks
+and checks. Source commits remain single-scope.
 
-## Local integration and completion
+If direct master work grows into several logical commits, use an authorized
+in-place transition instead of rerunning clean-start initialization:
 
-1. One integrator handles local dev at a time. Confirm primary dev is clean and
-   has no merge/rebase operation in progress.
-2. In the candidate worktree, record current dev SHA and merge that dev when
-   needed. Resolve any conflicts there. Do not refresh every worker whenever
-   another task completes.
-3. Run the relevant checks on the final combined result. Commit any remaining
-   source change, then verify the exact final SHA and a clean candidate.
-4. Return to primary. Confirm dev still equals the recorded base and remains
-   clean; otherwise stop and return to the candidate for review/verification.
-5. Advance dev with `git merge --ff-only <verified-full-SHA>`.
-6. Record the result, SHA, verification, unavailable items and push status.
-   Local completion requires the agreed scope's evidence, not a remote PR.
+```sh
+git switch -c feature/<scope>-<topic>
+```
 
-The command in step 5 does not prove verification or cleanliness on its own.
-Its input is the exact candidate reviewed above. Push later when requested;
-ordinary push rejection stops without changing completed local work. Never
-retry an ordinary push with force. Domain release/activation remains separate.
+Run this on master at its current HEAD with no Git operation in progress.
+The new topic keeps staged, unstaged and untracked work in the same checkout;
+review `git status` before and after. If master already contains a completed
+commit, keep it there and group the remaining work on the topic. Do not reset
+master or rewrite accepted history to retroactively regroup it. The start
+record, if present, remains the original estimate rather than new approval.
 
-Routine desired-state edits use `tool/configs commit` in a dedicated topic
-worktree. It confirms an edit and commits locally with hooks. `--dry-run`
-writes nothing; `--publish` and `prune` are retired and refuse. The helper
-does not fetch, branch, push, open a PR or request auto-merge.
+## Local verification and integration
 
-Domain releases use immutable annotated tags. The target commit must be
-reachable from `master`. The annotation records the domain and reports
-evaluation, build, and native-runtime evidence separately, including explicit
-`unavailable` or `not applicable` values. A Windows annotation reports them
-once for each host the release speaks for, in a block opened by
-`Host: <label>`. Unix-like provider and `common` annotations report them
-once at domain level; neither certifies a private Unix-like host.
-`tool/configs plan-release` prints the template, and
-`tool/configs audit` refuses a tag that departs from it. A Windows
-label is lowercase letters, digits and hyphens and names a kind of host,
-never a machine; keep machine names, account names
-and machine identifiers out of the references too, because a pushed tag
-cannot be edited. A host whose check failed is not released around. Create
-and push a tag only when the user explicitly requests those mutations. Create
-no GitHub Release: the annotation is the whole record. Activation and Windows
-Apply happen after release and are not implied by a tag.
+Record the reviewed full master/base and candidate SHA. Commit only when
+authorized. On the exact clean topic checkout, run:
 
-Agents and people follow this document and tool/configs directly. There are no
-tracked local work-role skills or workflow command aliases. External workflow
-plugins are optional and must read the target policy; no replacement is
-installed by source separation. Audit and release planning are read-only by
-default. Installation and verified invocation are later consumer adoption.
+```sh
+# Verify only, without integration:
+tool/configs workflow check --base <full-master-SHA> --head <full-candidate-SHA>
+# Or, when integration is authorized, verify and merge in one operation:
+tool/configs workflow merge --base <full-master-SHA> --head <full-candidate-SHA>
+```
+
+These are alternatives; running check before merge repeats verification.
+Merge requires authorization covering the commit-producing integration. Existing
+authorization for that operation remains valid within the agreed task. It runs the
+checks itself, requires the candidate to contain the selected current master,
+and creates a no-ff merge with those exact first and second parents. It uses
+an existing master checkout or switches the chosen checkout back to master.
+A dirty checkout, missing evidence, conflict or changed base stops integration;
+reflect the new master in the topic, resolve there and verify again. No helper
+resets, force-pushes or discards work. An interrupted Git merge is preserved
+for inspection and normal explicit recovery.
+
+For direct master work, run the same check command against the pre-change
+master SHA and exact committed HEAD before publication. Pre-commit supplies
+quick staged checks; full suites are selected by tracked dispatch. `workflow
+check` refuses unavailable selected checks instead of calling them passed.
+Foreign native evidence may require the native Windows clone or hosted CI;
+record that boundary and do not claim a successful local integration check.
+
+Source preparation may stop staged when requested. Commit, topic merge, push,
+publication and activation are distinct operations: obtain authorization for
+those requested, and reuse it within the agreed scope rather than asking again
+at every step. Workspace selection supplies none of those authorizations.
+Ordinary push
+rejection preserves local work; inspect and reconcile, never retry with force.
+`tool/configs commit` supports master and topics, commits only after confirmation,
+and never publishes or prunes. Its `--dry-run` writes nothing; retired
+`--publish`, `prune` and dev promotion invocations refuse.
+
+Domain releases retain immutable annotated tags reachable from master.
+`tool/configs plan-release` prints an evidence template and `tool/configs audit`
+validates it. Report evaluation, build and native runtime separately, per host
+for Windows and at provider/domain level for Unix-like/common. Review labels
+and references for private machine/account identity before tag creation.
+Tags and tag pushes require explicit requests. No GitHub Release or host
+activation/Apply is implied.
+
 
 ### zellij overlay
 
@@ -167,72 +194,167 @@ source contains the replacement fix merged in upstream #5714. The original
 #5500 was closed in favour of that fix. The watch does not update the lock
 or retire the overlay; its manual dry-run mode performs no remote writes. GitHub runs a `schedule` only from the
 default branch, so the watcher does nothing until this file reaches `master`
-through the next promotion; before that its shell body is run by hand with
+through its next master adoption; before that its shell body is run by hand with
 `DRY_RUN=1`.
 
 ## Local work and handoff
 
-Inspect existing work with tool/configs records --table work. Define acceptance
-using "Plan and verify work" when needed. Pin local dev and the reviewed plan,
-use a dedicated worktree, run the relevant checks and record actual evidence.
-Review exact candidate/base SHA and perform sequential integration using
-"Local integration and completion". Explicit user Git authorization carries
-through the agreed task; these procedures require no installed plugin.
+When continuing planned work, read its relevant record; use
+`tool/configs records --table work` only when discovery is needed. Small clear
+tasks need no work inventory or role handoff. Define acceptance using "Plan
+and verify work" when a durable plan is useful. Record exact base/head at
+verification, integration or handoff rather than requiring a separate planning
+ritual before every edit. Use the agreed workspace and applicable checks.
 
-Use `tool/configs session start <spec-path-or-> <lane>` for a useful local
-checkpoint. Before interruption, `session checkpoint suspended` records the
-goal, exact state, evidence, unfinished work and next step. A checkpoint is
-neither a heartbeat nor proof of delivery. Changed acceptance returns to
-planning; uncertain liveness does not authorize cleanup.
+Before interruption, leave the goal, exact base/head, evidence, unfinished
+work and next step as plain handoff text. Optionally save it with
+`tool/configs session save < handoff.md` and read notes from registered
+workspaces with `tool/configs session inspect`. Save atomically replaces the
+ignored `.work-session.md` only on explicit invocation, refuses empty or unsafe
+writes, and preserves old-format notes until explicitly replaced. No lifecycle
+state, agent identity or model-specific resume command is maintained.
+Tracked policy and work documents remain the source of project context;
+local notes supply no policy, approval, heartbeat or delivery proof.
+Amend changed acceptance before relying on it; no separate planner role is
+required. Uncertain liveness does not authorize cleanup.
 
-Use tool/configs session inspect and read-only Git state for requested local
+Use session inspection and read-only Git state for requested local
 handoffs. Remote status is optional and must be relevant to an explicit remote
 operation or preservation review. Review unpushed/unique commits and tracked,
 untracked and ignored data before any requested non-force removal. Do not read
 notes/ content. Keep useful old worktrees; a clean diff is not preservation
 evidence. No automatic pruning.
 
+## Workspace preservation
+
+`tool/configs worktree review <path-or-topic-name>` reports the exact head,
+commits absent from master, tracked/untracked/ignored data and Git operations.
+The exact topic ref retained in this clone preserves source when only the
+worktree is removed; the tool checks it against registered metadata and HEAD
+before removal and confirms the ref remains afterward. Unique commits are
+reported without requiring an extra archive. Branch or clone deletion is a
+separate preservation decision and is never part of worktree removal.
+For additional external preservation, supply `--preserved-bundle <path>`.
+The bundle must be outside the workspace and have no missing prerequisites.
+The tool restores it into an independent disposable Git store and verifies
+object integrity before accepting it as preservation evidence.
+Ignored and untracked data still require separate preservation.
+It never reads notes content or queries remote status. Primary checkout and
+unsafe workspaces cannot be removed. Preserve reported data and source first;
+then explicitly request removal with `tool/configs worktree done <path-or-name>
+--expect-head <full-reviewed-SHA>`. Removal rechecks all blockers and retains
+the branch. No force/remove-ignored override exists. This is not a liveness test.
+
+## Candidate CI without a PR
+
+Push a named topic only when requested, then explicitly dispatch CI on master
+with the reviewed full `base` and `head` inputs. The head must already be
+available in this repository; the base must still be current master and an
+ancestor of the candidate. The CI workflow explicitly limits its token to
+Contents read, grants PR read only to the topic metadata job, and disables
+checkout credential persistence. Candidate code receives no write capability.
+
+```sh
+gh workflow run ci.yml --ref master -f base=<full-master-SHA> -f head=<full-candidate-SHA>
+# Verify only:
+tool/configs workflow check --base <full-master-SHA> --head <full-candidate-SHA> --ci-run <run-id>
+# Or verify and integrate when authorized:
+tool/configs workflow merge --base <full-master-SHA> --head <full-candidate-SHA> --ci-run <run-id>
+```
+
+The reader queries live same-repository successful CI, stable gate and exact
+base/head/tree/event artifact. It rejects stale, failed, expired, missing,
+wrong-workflow and wrong-source evidence. Local global scans still run; only
+selected suites use the external proof. Verification prints the run ID and
+source identities; put relevant evidence in the work report or handoff instead
+of maintaining another Git-local verification cache. Workflow inspect shows
+actual Git state and the start record. A changed master
+requires new combined-result verification. No PR is required for this path.
+Known Windows runtime-governance inputs additionally select `windows:runtime`,
+a proof-only unit: local validate/test cannot certify CI runtime acquisition
+and controller wiring, even on Windows. Those changes require exact hosted
+CI proof; ordinary Windows domain validate/test remain locally available.
+
 ## GitHub integration
 
-Dev is local integration followed by ordinary remote synchronization. It has
-no PR, required-check or conversation-resolution admission gate. Administrator
-enforcement and force-push/deletion prohibitions remain enabled.
+Master accepts direct commits and topic no-ff merges. CI runs on master push
+and optional same-repository topic PRs. The stable `Required checks` result
+validates selected jobs and global scans; it remains required evidence for
+the bounded automated patch writer, not PR-only admission for ordinary work.
+Master protection applies to administrators and disallows deletion. Ordinary
+credentials cannot force push; the optional reviewed maintenance App is the
+sole force exception. Master has no mandatory PR, status-check or conversation admission. Hosted PRs
+use merge commits only; squash and rebase merging remain disabled.
 
-Master retains PR admission, strict Required checks, resolved conversations,
-administrator enforcement and force-push/deletion prohibitions. Required
-approvals remain zero; merge commits are the only enabled merge method.
-General development uses same-repository dev to master. The bounded input
-patch is its independent exception. No operational protection bypass.
+Prepare policy and tools locally before explicitly migrating remote protection.
+`tool/configs audit-remote` reads actual settings when remote inspection is
+requested. It never repairs them. Changing source does not change GitHub
+settings. Retired dev may be retained; review preservation before separately
+authorized deletion. There is no dev-to-master promotion or automatic cutover.
 
-## Promote dev to master
 
-Promotion is a deliberate source-acceptance operation, not a release. The only
-valid promotion pull request has base `master` and head `dev` in this
-repository. Keep at most one such pull request open. The repository maintainer
-owns the promotion decision. There is no operational bypass; a different flow
-requires an accepted policy change first.
+## Explicitly approved history maintenance
 
-1. Explicitly fetch current remote master/dev and inspect differences against
-   completed local work. Do not replace local dev with origin/dev implicitly.
-2. If current master adds history, reflect it with `--no-ff` in the dev-based
-   candidate worktree, retaining the dev lane as the first parent. Resolve and
-   verify, then integrate into dev using the local procedure. Push dev normally.
-3. Run `tool/configs plan-promotion` on the selected local snapshots and
-   review every included commit/scope. Check for another open master PR.
-4. Create the same-repository dev to master PR. Required checks and resolved
-   conversations must pass against the current base/head before an explicitly
-   requested merge commit. If master moves or checks fail, stop and repair
-   manually through dev; no automatic base repair or retry controller.
-5. Confirm actual merged state and keep dev on its own lane. Domain publication
-   is a separate decision. Reflect accepted master history with the procedure
-   above at the next explicit work/promotion synchronization.
+Ordinary pre-push rejects non-fast-forward branch updates even when the Git
+command includes a force flag. No local `--approved` switch bypasses it.
+Read-only preparation is `tool/configs history-rewrite plan --old <full-SHA>
+--new <full-SHA> --reason <reason>`. Planning is not execution permission.
 
-The one-time reset-based cutover is recorded separately from routine promotion.
-It never becomes an everyday force option. Existing annotated tags stay fixed.
+For an authorized exception, dispatch `history-rewrite.yml` on master with
+immutable old/new/reason inputs. Review the displayed plan and uploaded
+`history-recovery` bundle before a human approves the `history-rewrite`
+environment. The protected job mints the dedicated App token and the executor
+checks the live approval, first run attempt, accepted tooling, declared App,
+unchanged remote old SHA and bundle hash. It pushes only the specified master
+ref with an explicit expected-old lease and confirms actual remote state.
+Protection is never disabled or edited. Published domain tag ancestry stays.
+A failed/ambiguous result preserves recovery and does not authorize another
+operation. A new target or retry requires a new reviewed dispatch.
+
+Adoption is separate and requires explicit authorization to change remote
+settings. The supported personal/public repository path combines classic
+protection with a branch ruleset:
+
+1. Keep classic force disabled while preparing the dedicated App and reviewed
+   environment. Declare its public IDs through policy.json's variable names;
+   keep its private key only in that environment. Require individual human
+   reviewers without administrator bypass and admit only the exact master
+   branch, with no wildcard branches or tags.
+2. Install the named active branch ruleset from policy.json for exactly
+   `refs/heads/master`, with only `non_fast_forward`, no extra conditions and
+   one bypass actor: the declared App's numeric ID as `Integration`, mode
+   `always`. No other effective or inherited ruleset is admitted by this
+   contract. Verify this restriction before enabling classic force; retain
+   classic administrator enforcement and deletion denial.
+3. Grant the App only Contents write, Actions read, Administration read and
+   Variables read. The protected workflow requests that same limited token.
+   GitHub's implicit Metadata read permission is also allowed.
+   These grants support source writes and the live run/approval, protection,
+   ruleset and variable reads. Do not increase write privileges merely to
+   bypass a failed preflight.
+4. Run `tool/configs history-rewrite preflight --app-slug <declared-app-slug>`
+   and `tool/configs audit-remote` with the intended
+   credentials. They require visible bypass actors and exact effective rules;
+   missing metadata or permissions refuse. Qualify the approved live path
+   separately before claiming operation. To retire the exception, disable
+   classic force first, then remove the ruleset or App capability.
+
+Ordinary tools must have no access to the App key. Neither planning nor
+preflight performs a write or grants execution approval. The executor never
+edits protection. Administrators able to change server settings remain a trust
+boundary; the rule is not an OS or credential sandbox.
+
+GitHub's [ruleset creation contract](https://docs.github.com/en/repositories/configuring-branches-and-merges-in-your-repository/managing-rulesets/creating-rulesets-for-a-repository)
+supports the App bypass on a public personal repository. The
+[ruleset read API](https://docs.github.com/en/rest/repos/rules#get-a-repository-ruleset)
+can hide bypass actors from callers without sufficient access; a hidden list
+is unavailable evidence. Source preparation and simulated API fixtures do not
+qualify the actual installed App or hosted execution.
 
 ## Add or change governance
 
-Before adding a rule, write a small governance decomposition:
+When changing a rule, identify these concerns in the relevant decision,
+invariant or work record; no additional decomposition document is required:
 
 1. Name the failure being prevented, owning scope, and decision owner.
 2. State rationale and tool-independent invariants.
@@ -243,8 +365,7 @@ Before adding a rule, write a small governance decomposition:
 5. Define evidence, positive and negative fixtures, current migration state,
    and the condition for removing superseded implementation.
 
-This repository owns the decomposition and its project decisions. External
-workflow instructions resolve those decisions instead of copying their policy.
+Project decisions and procedure stay here; optional orchestration reads them.
 
 ## Add or change an invariant
 
@@ -357,9 +478,10 @@ concise result instead. An issue and roadmap entry are optional.
 
 1. Classify the outcome and read relevant current work. Create the owning
    `docs/work/<scope>/<slug>/spec.md` and pending `report.md` together in a
-   dedicated worktree. State acceptance, evidence lanes and dependencies.
-2. Run `tool/configs work --working-tree docs/work/<scope>/<slug>` before
-   relying on the pair. Once staging is authorized, use `work --staged`.
+   user-selected workspace. State acceptance, evidence lanes and dependencies.
+2. Use `tool/configs work --working-tree docs/work/<scope>/<slug>` for feedback
+   before staging, or `work --staged` for the index. These are alternatives
+   for the state being checked.
 3. Work and record evidence with the source change that produced it. Keep
    unavailable/failed evidence distinct. Change existing criteria only through
    dated amendments. Remote Actions evidence stays in Actions/PR records.
@@ -388,17 +510,18 @@ invariant rests on it.
 
 ## Observe before adding or removing
 
-A sentence added to a policy document without a check behind it rots, and a
-deletion is as easy to get wrong as an addition. Both pass through
-`docs/policy/candidates/` first. `docs/policy/candidates/README.md` is the format; this is
-the procedure.
+Use `docs/policy/candidates/` for an unaccepted observation that needs more
+evidence before adoption or removal. Explicit maintainer-directed changes,
+corrections and already accepted work proceed directly through their owning
+scope; they do not wait for recurrence. The candidate format is
+`docs/policy/candidates/README.md`.
 
 1. Record what was met and where, not the rule you would like to exist.
 2. Add a dated line under `Occurrences` each time the same thing is met
    again, with the evidence.
 3. Promote when the criterion is met: make the change in its owning scope
-   through the flows above and delete the candidate in the same pull
-   request. The commit message names the candidate it promotes.
+   through the flows above and delete the candidate with the adopted change.
+   Reference the observation where it explains the decision; a PR is optional.
 4. Drop when the date passes or the event occurs without promotion: delete
    the file. History is the record either way.
 
@@ -539,7 +662,7 @@ is the host declaration path. Adding `-Save` explicitly writes complete host-own
 originals. Regenerate the selected environment before Check or Apply.
 See `windows/examples/README.md` for the declaration format and examples.
 Capture does not modify provider source or perform Git publication. Publish
-provider source edits through the ordinary topic-branch and pull-request flow.
+provider source edits through ordinary master commits or checked topic integration.
 
 The native Windows suite exercises host-original generation and capture in
 disposable fixtures. Foreign-host PowerShell results are fixture evidence;
@@ -629,7 +752,8 @@ tool/configs hook-evidence
 Push runs bounded `audit --range <base> <tip>` for transmitted commits and
 `audit --tag <name>` for a transmitted release tag. It does not rerun native
 suites from the current checkout. Final candidate verification precedes local
-integration; master CI verifies its actual PR result.
+integration; master-push, optional PR and candidate-dispatch CI report their
+actual tested source independently.
 
 The full audit and `audit --history` remain explicit diagnostics for clone
 and integration history. The history diagnostic uses fetched remote snapshots
@@ -641,8 +765,8 @@ operations. An unrelated local tag is not part of a branch push check.
 
 `.github/workflows/release.yml` is the shared Unix-like input patch workflow.
 `CONFIGS_RELEASE_ENABLED=1` enables operation; `CONFIGS_RELEASE_SCHEDULE_ENABLED=1`
-also enables its daily 05:00 Asia/Seoul schedule. Keep schedules off while rolling
-out changed policy and tooling through ordinary dev-to-master promotion.
+also enables its daily 01:17 Asia/Seoul schedule. Keep schedules off while rolling
+out changed policy and tooling through ordinary master commits or topic integration.
 Configure release-control for accepted master writers and either the existing
 CONFIGS_RELEASE_TOKEN or CONFIGS_RELEASE_APP_ID and CONFIGS_RELEASE_APP_PRIVATE_KEY.
 The writer needs Contents/PR write and Actions/Checks read with protected merge
@@ -663,12 +787,11 @@ promotion limit remain. Delayed/missing schedules have no guaranteed catch-up.
 Master Unix-like configuration source must match its published release before
 input patching; finish any unpublished development release first.
 
-At most one master PR may be open. Finish an existing development promotion before
-starting input patching. Development remains local topic-to-dev followed by protected master promotion.
-Incorporate accepted master patch history in a candidate worktree, preserving
-intended inputs/version, verify and fast-forward local dev. No patch adoption
-PR against dev or report-only delivery is required. Development release
-versions and tags remain the maintainer's responsibility.
+The automated writer defers while any master PR is open and refuses ambiguous
+multiple PR state. Ordinary development commits directly to master or merges
+a checked topic. A moved master makes an existing patch stale; preserve it for
+inspection and restart explicitly. There is no dev adoption or promotion step.
+Development release versions and tags remain the maintainer's responsibility.
 
 ### Manual operation and recovery
 

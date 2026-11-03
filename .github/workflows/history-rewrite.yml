@@ -1,0 +1,86 @@
+name: Approved master history rewrite
+on:
+  workflow_dispatch:
+    inputs:
+      old:
+        description: 'Reviewed full current master SHA'
+        required: true
+        type: string
+      new:
+        description: 'Reviewed full replacement SHA (must preserve released tags)'
+        required: true
+        type: string
+      reason:
+        description: 'Explicit reason shown to the approving maintainer'
+        required: true
+        type: string
+permissions:
+  contents: read
+  actions: read
+concurrency:
+  group: configs-history-rewrite
+  cancel-in-progress: false
+jobs:
+  plan:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v7
+        with:
+          ref: ${{ github.sha }}
+          fetch-depth: 0
+          persist-credentials: false
+      - name: Preserve and display the exact proposed operation
+        env:
+          GH_TOKEN: ${{ github.token }}
+          OLD: ${{ inputs.old }}
+          NEW: ${{ inputs.new }}
+          REASON: ${{ inputs.reason }}
+        run: |
+          test "$GITHUB_REF" = refs/heads/master
+          test "$GITHUB_RUN_ATTEMPT" = 1
+          git fetch --no-tags origin "$NEW"
+          tool/version-control/history-rewrite prepare --old "$OLD" --new "$NEW" --reason "$REASON" --directory "$RUNNER_TEMP/recovery" >"$RUNNER_TEMP/plan-summary"
+          cat "$RUNNER_TEMP/plan-summary" >>"$GITHUB_STEP_SUMMARY"
+      - uses: actions/upload-artifact@v7
+        with:
+          name: history-recovery
+          path: ${{ runner.temp }}/recovery
+          retention-days: 90
+  execute:
+    needs: plan
+    runs-on: ubuntu-latest
+    environment: history-rewrite
+    concurrency:
+      group: configs-release-writes
+      cancel-in-progress: false
+    steps:
+      - uses: actions/checkout@v7
+        with:
+          ref: ${{ github.sha }}
+          fetch-depth: 0
+          persist-credentials: false
+      - uses: actions/download-artifact@v8
+        with:
+          name: history-recovery
+          path: ${{ runner.temp }}/recovery
+      - uses: actions/create-github-app-token@v3
+        id: writer
+        # v3's generic permission handler accepts this API permission while
+        # its action metadata omits the named input. Request it explicitly:
+        # https://github.com/actions/create-github-app-token/blob/v3/lib/get-permissions-from-inputs.js
+        env:
+          INPUT_PERMISSION-VARIABLES: read
+        with:
+          app-id: ${{ vars.CONFIGS_HISTORY_APP_ID }}
+          private-key: ${{ secrets.CONFIGS_HISTORY_APP_PRIVATE_KEY }}
+          permission-contents: write
+          permission-actions: read
+          permission-administration: read
+      - name: Execute only the reviewed lease and confirm remote state
+        env:
+          GH_TOKEN: ${{ steps.writer.outputs.token }}
+          CONFIGS_HISTORY_APP_SLUG: ${{ steps.writer.outputs.app-slug }}
+          NEW: ${{ inputs.new }}
+        run: |
+          git fetch --no-tags origin "$NEW"
+          tool/version-control/history-rewrite execute --directory "$RUNNER_TEMP/recovery" >>"$GITHUB_STEP_SUMMARY"

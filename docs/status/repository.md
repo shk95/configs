@@ -1,5 +1,109 @@
 # Current state: repository
 
+## Local acceptance — 2026-11-02
+
+The maintainer accepted the completed policy redesign and authorized its local
+commit after verification. The staged-only descriptions below record preparation
+checkpoints; the resulting source revision is recorded in Git. Remote adoption
+and publication remain pending.
+
+## Master/topic source preparation — 2026-11-02
+
+The maintainer selected master as the release and ordinary authoring branch,
+optional topics for several logical commits with no-ff integration, and an
+explicit user choice of current versus linked workspace. The source contract
+is docs/policy/decisions/repository/master-topic-workflow.md. Tracked workflow
+commands carry start, inspection, check selection and exact-source integration.
+
+This change is prepared and staged only, at the maintainer's request. No source
+commit, topic integration, push, remote protection change, dev deletion, tag or
+host activation is performed. Existing local master already contains all dev
+source; this topic starts from that master without rewriting history.
+
+Remote adoption remains pending: install the source on master through the
+currently protected admission path with explicit authorization, then explicitly
+migrate master protection to ordinary direct writes while retaining administrator,
+force-push/deletion and merge-method safeguards. Run the read-only remote audit,
+confirm master-push/topic-PR CI and qualify patch automation. Retain dev until
+separately authorized preservation review. Do not bypass current protection.
+Local fixture proof is not actual GitHub adoption or publication evidence.
+See docs/work/repository/master-topic-workflow/report.md for verification.
+
+## Final review corrections — staged preparation
+
+The prepared source now shares topic ownership validation between local and
+PR paths and audits incoming commit ranges in CI. CI tokens are explicitly
+read-only with no persisted candidate credentials. Windows runtime-governance
+changes require exact hosted native proof. Scope growth has an in-place
+transition that preserves existing master commits and uncommitted work.
+
+Worktree removal accepts and verifies the retained exact topic ref without
+requiring an external archive. Approved history maintenance now uses the
+public personal-repository branch-ruleset path with isolated App bypass,
+minimum API grants and a read-only preflight. Unknown effective protection
+still refuses. No actual ruleset, App, credential, protection or remote ref
+is changed; hosted qualification remains pending.
+
+The final corrected combined suite passes: 13 workflow, 17 mechanics and
+21 release cases plus existing policy, handoff and retirement fixtures.
+Actionlint, Python/shell checks, 80 invariants and staged policy/secret/diff
+scans pass. This is source-preparation evidence with simulated API/receivers;
+it does not certify actual hosted approval, App visibility or deployment.
+
+## Mechanical follow-up — earlier staged checkpoints
+
+Agent context is also simplified in the prepared source. Continuing work keeps
+its workspace choice and explicit task authorization; capability discovery and
+new-work initialization are conditional. Role/plugin orchestration and local
+handoff files remain optional. Current guidance corrects isolation topics,
+classifier/evidence limits and adapter permission claims, and review checklists
+apply only to the requested scope. Executable behavior, permission allowlists,
+fresh maintenance approval and preservation boundaries are unchanged.
+Two independent reviews and staged policy/secret/diff checks pass, including
+all 9 manual evidence references. Earlier combined fixture results apply to
+unchanged executable mechanics; this context-only follow-up did not rerun
+those suites or perform remote adoption.
+
+Independent simplification review retained approval, exact-source CI/merge and
+preservation boundaries. The current source removes unused push selection,
+duplicate worktree creation and persisted verification receipts. Start records
+remain inspectable; session tooling saves/inspects plain handoff text without
+lifecycle state or Codex identity. Workflow-only secret/concurrency wiring
+stays in CI YAML with cross-workflow safety assertions. Configuration-editing
+commit helpers remain; only unused bookkeeping is removed. CI artifact parsing
+is shared without changing release-specific admission. This source remains
+staged preparation, not remote adoption. The final combined fixture suite,
+80 invariants, Python lint, shell syntax and staged policy/secret/diff scans
+pass. Earlier verification below records the pre-simplification checkpoint;
+the work report carries the final proof and evidence boundaries.
+
+The same current checkout now prepares a validated policy.json, inspectable
+Git-local work records, preservation-safe worktree review/removal, candidate CI
+dispatch with live exact-source proof, and an approved isolated-App maintenance
+workflow. Legacy linked-worktree/promotion tool names are removed. General
+work needs no PR; bounded input patch PR proof remains unchanged.
+
+Actual remote settings observed in the prior read-only review still require
+PR/strict checks and deny force/deletion, applying to administrators. No new
+remote writes, environment, App credentials, approval or maintenance run are
+performed by this source preparation. Default force denial remains until the
+separately approved App/environment adoption. Never expose the dedicated key
+to ordinary agent sessions. GitHub owner/admin authority remains outside the
+script enforcement boundary.
+
+Local combined verification passed: 7 workflow cases, 13 mechanical cases,
+21 release cases, 80 registered invariants, policy scans, secret scan, lint and
+workflow syntax. This certifies staged repository source and local fixtures;
+it does not certify actual hosted CI, approval, App installation or protection
+migration. The complete report carries the evidence and remaining boundary.
+
+## Historical adoption checkpoints
+
+The following sections retain earlier snapshots and are not current operating
+instructions. In particular their dev topology, worktree mandates and preparation
+state are superseded by the source contract and adoption boundary above.
+
+
 ## Local workflow redesign
 
 The adopted direction is local development completion with later optional

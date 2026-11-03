@@ -88,3 +88,10 @@ by `docs/policy/decisions/repository/provider-verification-evidence.md` and
 qualification evaluates API compositions and checks provider-owned generated
 files and source transformations without host closure or VM realization.
 Historical evidence and the Windows requirements in this record are retained.
+
+## Amendment 2026-11-02: master and topics
+
+The accepted master-topic-workflow.md decision replaces dev authoring/integration,
+mandatory linked worktrees and general master PR-only admission in this record.
+Retained scope, evidence, preservation and bounded publication rules remain.
+Earlier operation and measurements above are historical.

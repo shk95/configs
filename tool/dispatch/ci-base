@@ -9,14 +9,24 @@ case ${EVENT_NAME:-} in
       *) echo 'Native stacks are unsupported: trunk coverage is not proven' >&2; exit 1 ;;
     esac
     case ${PR_BASE_REF:-} in
-      dev|master) ;;
-      *) echo 'Only direct dev/master PRs are supported' >&2; exit 1 ;;
+      master) ;;
+      *) echo 'Only master topic PRs are supported' >&2; exit 1 ;;
     esac
     [ "${EVENT_BASE_REF:-}" = "$PR_BASE_REF" ] || {
       echo 'Event base differs from direct PR base; refusing layer-only coverage' >&2
       exit 1
     }
     base=${PR_BASE:-}
+    ;;
+  workflow_dispatch)
+    [ "${DISPATCH_REF:-}" = refs/heads/master ] || { echo 'Dispatch tooling must be accepted master' >&2; exit 1; }
+    head=${DISPATCH_HEAD:-}
+    case "$head" in ''|*[!0-9a-f]*) exit 1 ;; esac
+    [ "${#head}" -eq 40 ] || exit 1
+    [ "$(git rev-parse HEAD)" = "$head" ] || exit 1
+    base=${DISPATCH_BASE:-}
+    [ "$base" = "$(git rev-parse refs/remotes/origin/master)" ] || { echo 'Stale dispatch master base' >&2; exit 1; }
+    git merge-base --is-ancestor "$base" "$head" || exit 1
     ;;
   push)
     base=${PUSH_BASE:-}

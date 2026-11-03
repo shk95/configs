@@ -1,0 +1,23 @@
+#!/usr/bin/env python3
+# INV repository/topic-source
+import sys
+sys.dont_write_bytecode = True
+import os
+from pathlib import Path
+import subprocess
+from repo_policy import load
+from topic_scope import validate
+
+policy = load()
+if (os.environ['TOPIC_BASE_REF'] != policy['base_branch'] or
+        os.environ['TOPIC_HEAD_REPOSITORY'] != os.environ['TOPIC_BASE_REPOSITORY']):
+    raise SystemExit('Master requires a same-repository topic')
+head = os.environ['TOPIC_HEAD_REF']
+try:
+    validate(head, os.environ['TOPIC_BASE_SHA'], os.environ['TOPIC_HEAD_SHA'], policy)
+except ValueError as error:
+    raise SystemExit(str(error))
+if head.startswith('feature/unixlike-input-patch-'):
+    subprocess.check_call([sys.executable, str(Path(__file__).with_name('release.py')), 'verify-patch',
+                           '--base', os.environ['TOPIC_BASE_SHA'], '--head', os.environ['TOPIC_HEAD_SHA']])
+print('topic source passed')

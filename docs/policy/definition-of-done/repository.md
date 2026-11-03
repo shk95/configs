@@ -8,6 +8,12 @@ This file holds what every change and the repository scope owe; each domain's
 own list is the file named for it beside this one (`unixlike.md`,
 `windows.md`).
 
+Apply only the sections and items relevant to the requested change. Mechanical
+checks provide their results once; reviewers assess the remaining judgement
+and evidence rather than repeating each check by hand. Unrequested release,
+maintenance, archival, plugin or deployment operations are not completion
+requirements for ordinary source work.
+
 ## Every change
 
 - [ ] The owning scope is identified as `unixlike`, `windows`, `common`,
@@ -25,20 +31,21 @@ own list is the file named for it beside this one (`unixlike.md`,
       that carries only bookkeeping names where its evidence was produced
       (INV repository/pull-request-spans-an-evidence-lane).
 - [ ] No commit, push, tag, branch change, activation, or Apply occurred without
-      explicit authorization.
-- [ ] The source edit was authored in its task-dedicated linked worktree
-      (INV repository/change-authoring-in-linked-worktree).
+      explicit authorization; existing authorization within the agreed task
+      was honored and staged-only work remains uncommitted
+      (INV repository/local-development-integration).
 
 ## Repository governance
 
 - [ ] The change affects only version-control policy, check dispatch, hooks,
       CI wiring, or reusable agent workflow mechanics.
 - [ ] It creates no configuration output and receives no domain release tag.
-- [ ] Version-control fixture tests cover every changed invariant.
+- [ ] Version-control fixtures cover changed mechanical behavior; explanatory
+      corrections receive review without artificial behavior tests.
 - [ ] A Windows-only change can be prepared and checked without Nix.
 - [ ] An unrelated domain failure is not required to validate a domain change.
-- [ ] Master CI exposes the stable `Required checks` gate and master protection
-      requires it instead of conditional domain job names.
+- [ ] Master push and topic PR CI expose the stable `Required checks` result;
+      direct master commits need no mandatory PR/status admission.
 - [ ] Model-specific context, command and skill files point to authoritative
       project guidance or explicitly adopted skill sources and add no
       independent policy (INV repository/adapters-pointer-only).
@@ -75,27 +82,25 @@ own list is the file named for it beside this one (`unixlike.md`,
 - [ ] A cross-project skill contains no consuming repository identity, policy,
       path convention, or current state; adoption remains explicit.
 
-## Dev-to-master promotion
+## Master and topic work
 
-- [ ] The pull request is from this repository's `dev` to `master`, and no
-      other master pull request is open.
-- [ ] `tool/configs plan-promotion` reports all commits and scopes.
-- [ ] The promotion contains no source fix authored only for the promotion.
-- [ ] `Required checks` passes and conversations are resolved.
-- [ ] The pull request uses a merge commit and explicit merge authorization.
-- [ ] The merge is source acceptance, not domain certification or deployment.
-- [ ] Actual merge is confirmed; current master history can be reflected at
-      the next explicit local work/promotion synchronization, with dev remaining
-      on its own lane after promotion.
+- [ ] The workspace follows the user's existing answer for this task, with
+      isolated parallel authors (INV repository/workspace-choice).
+- [ ] One logical commit normally used master; multiple logical commits or a
+      selected linked workspace used a topic, merged no-ff when requested.
+      If work grew after a master commit, that commit was preserved and the
+      remaining work moved to a topic.
+- [ ] CI source identities and selected check results are reported separately
+      from actual remote protection adoption.
 
 ## Unix-like input patch
 
 - [ ] The same-repository patch head is one commit on the current master and
       changes only permitted Unix-like lock data and its next patch declaration.
-- [ ] Exact PR CI evidence and the actual merge parents/tree agree; protection
-      and the one-open-master-PR rule are retained.
-- [ ] Developer promotion incorporates accepted input patch history; neither
-      dev integration nor Windows publication occurs in the patch controller.
+- [ ] Exact PR CI evidence and the actual merge parents/tree agree; the writer
+      defers for other master PRs and uses ordinary protected history rules.
+- [ ] The patch remains based on current published master and stops on source
+      drift; no Windows publication occurs in the patch controller.
 - [ ] The immutable annotation and interrupted-publication recovery satisfy the
       release evidence items below; no host adoption or activation is inferred.
 
@@ -109,7 +114,8 @@ own list is the file named for it beside this one (`unixlike.md`,
 - [ ] It contains no platform path, package-manager behavior, host inventory,
       or deployment policy.
 - [ ] Consumer-independent checks pass.
-- [ ] A `common-v...` tag is assigned independently and deploys nothing.
+- [ ] When publication is requested, a `common-v...` tag is assigned
+      independently and deploys nothing.
 - [ ] Consumer adoption is a later, separate change in the consuming domain.
 - [ ] A copied adoption becomes destination-owned, or a direct import pins the
       common version and documents why coupling is justified.
@@ -122,22 +128,13 @@ own list is the file named for it beside this one (`unixlike.md`,
 - [ ] No expectation of future byte equality is implied for a copied adoption.
 - [ ] An unrelated domain is not made a release prerequisite.
 
-## Context and workflow
+## Context changes
 
-- [ ] Stable judgement belongs in `AGENTS.md`, not a model-specific adapter.
-- [ ] Domain ownership belongs in `docs/policy/architecture.md`.
-- [ ] Procedure belongs in `CONTRIBUTING.md`.
-- [ ] Important current state belongs in `docs/status/<scope>.md`; a decision
-      expensive to reverse belongs in its own record under `docs/policy/decisions/`.
-- [ ] A decision record's header carries `date`, `scope` (repeated for a
-      decision spanning domains) and `status`; a citation of a record names
-      an existing path; a `decision:` pointer names a record whose status is
-      `accepted`.
-- [ ] A recurring issue is indexed in `docs/reference/troubleshooting.md` by its literal
-      symptom.
-- [ ] Reusable role skills remain in their owning external plugin; project
-      procedure stays usable without installation and model-specific
-      instructions contain no independent project judgement.
+- [ ] New context follows the document ownership map and states each
+      obligation once; adapters and optional orchestration add no policy.
+- [ ] Current state, adopted decisions and historical work evidence are
+      distinguished. Agent guidance requires no unrelated reading, role
+      assignment, repeated authorization or plugin installation.
 
 ## Release evidence
 
@@ -159,21 +156,19 @@ own list is the file named for it beside this one (`unixlike.md`,
 - [ ] Tag creation and push each have explicit authorization.
 - [ ] Activation or Apply is reported separately and is not implied by the tag.
 
-## Local delivery and recovery
-
-- [ ] The integrator confirms exact candidate/base SHA, relevant combined-result
-      checks, clean worktrees and sequential ff-only dev integration
-      (INV repository/local-development-integration).
-- [ ] Master synchronization keeps the dev lane as the merge's first parent
-      and the selected master snapshot as its second parent; dev is not
-      fast-forwarded to master or its promotion merge
-      (INV repository/local-development-integration).
-- [ ] Local completion is independent of push, issue or PR state.
-- [ ] Interrupted work has a useful checkpoint; cleanup reviews unique commits
-      and ignored data, never inferring liveness or deletion permission.
-
 ## Terminal work archival
 
 - [ ] The repository maintainer reviewed the fixed remote original and absence
       of active references before archiving a valid terminal spec/report pair
       (INV repository/work-spec-has-report).
+
+## Mechanical operation and exception review
+
+- [ ] Requested integration or workspace removal used the tracked checks and
+      preservation review; missing notes or uncertain liveness supplied no
+      permission to discard data.
+- [ ] Before maintenance adoption, the maintainer confirms the dedicated App alone
+      bypasses an active exact-master non-fast-forward ruleset, its key exists
+      only in the reviewed environment, minimum API grants and preflight pass,
+      human reviewers cannot be bypassed, and actual execution/recovery evidence
+      is recorded separately (INV repository/approved-history-rewrite).

@@ -72,3 +72,10 @@ The prior minimal dev/master and unconsumed tag objects are temporary rollback
 material, not a second permanent source archive. Delete their backups after
 successful qualification and replacement. Preserve the earlier overengineered
 archive separately; original PR/Actions records retain historical proof.
+
+## Amendment 2026-11-02: master and topics
+
+The accepted master-topic-workflow.md decision replaces dev authoring/integration,
+mandatory linked worktrees and general master PR-only admission in this record.
+Retained scope, evidence, preservation and bounded publication rules remain.
+Earlier operation and measurements above are historical.

@@ -1,6 +1,6 @@
 # Work documents
 
-Work that needs more than one judgement is planned and verified here. A
+Work needing sustained planning or a durable evidence record is tracked here. A
 work item is one directory, `docs/work/<scope>/<slug>/`:
 
 | File | Nature | Holds |
@@ -26,8 +26,8 @@ because a format contract holds no argument.
 
 What does not belong here: current state, which is `docs/status/`; a
 sentence someone would like a policy document to carry, which waits in
-`docs/policy/candidates/`; and a change with one acceptance criterion and
-one pull request, whose evidence goes in the pull request's body. Scratch
+`docs/policy/candidates/`; and a small clear change that needs only concise
+results and verification, whether or not it uses a pull request. Scratch
 thinking that promises nothing stays untracked in `notes/`.
 
 `tool/version-control/work` checks every work item. A failure names its rule
@@ -54,14 +54,12 @@ several evidence lanes; lanes do not individually require branches or PRs.
 Carry the evidence and report changes with the result that produced them
 (INV repository/pull-request-spans-an-evidence-lane).
 
-The planner defines pickup lanes with outcome, scope, dependencies, inputs,
-acceptance, verification and replan conditions. An optional execution issue may link
-these outcomes without becoming a mandatory remote step. At pickup the worker
-records the current dev base separately from the reviewed plan revision and
-checks assumptions. Scope or acceptance changes return to the planner after a
-checkpoint. A standalone plan needs no roadmap entry; small single-criterion
-work needs neither. Planner manages priorities and initializes the pair;
-workers report evidence. Roadmap outcomes never certify deployment.
+State the outcome, scope, dependencies, acceptance and required evidence.
+When continuing, read the relevant record and check assumptions; amend changed
+criteria before relying on them. Record exact source identities when needed
+for verification or handoff. Role assignment, parallel lanes, issues and
+roadmaps are optional orchestration choices. This format requires no separate
+planner or worker, and roadmap outcomes never certify deployment.
 
 ## Format
 

@@ -3,7 +3,7 @@ statement: A change that belongs to a spec verifies at least one acceptance crit
 rationale: AGENTS.md § Governance design
 enforced-by: manual the reviewer confirms a coherent source outcome carries its produced evidence and result records, or names their external source without requiring a separate bookkeeping delivery
 owner: repository maintainer
-decision: docs/policy/decisions/repository/local-development-workflow.md § Decision
+decision: docs/policy/decisions/repository/master-topic-workflow.md § Decision
 
 A coherent outcome may span several evidence lanes. Evidence accompanies the
 result that produced it; concise local records follow the small-change

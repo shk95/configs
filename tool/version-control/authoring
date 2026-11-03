@@ -1,0 +1,6 @@
+#!/bin/sh
+# INV repository/workspace-choice
+set -eu
+script="$(dirname "$0")/policy"
+if command -v cygpath >/dev/null 2>&1; then script=$(cygpath -m "$script"); fi
+exec "${CONFIGS_CONTROLLER_PYTHON:-python3}" "$script" authoring

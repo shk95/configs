@@ -8,19 +8,14 @@
 # path and which release tag covers it. Local stages select check units;
 # CI selects whole suites conservatively, independently of ownership.
 #
-# INV repository/local-gate-selects-by-effect: a unit is selected only for a
-# change that can alter its result. The version-control fixture suite copies
-# .githooks, tool/dispatch and tool/version-control into its throwaway
-# repositories, exercises tool/configs, copies and scans tool/setup,
-# tool/doctor.sh and tool/worktree.sh, and greps the CI workflow, so only
-# those paths select it;
-# a documentation or registry change keeps the policy checks the hooks run
-# unconditionally and skips the suite.
+# INV repository/local-gate-selects-by-effect: commit selects fast staged
+# checks and CI selects affected suites. Documentation and registries keep
+# the unconditional policy scans without selecting a platform suite.
 #
 # Reads `<status><TAB><path>` lines as `git diff --name-status` produces them,
 # and writes one `<domain>:<check>` unit per line.
 #
-# usage: tool/dispatch/select <commit|push|ci>
+# usage: tool/dispatch/select <commit|ci>
 
 set -eu
 
@@ -32,9 +27,9 @@ export MSYS_NO_PATHCONV MSYS2_ARG_CONV_EXCL
 
 stage=${1:-}
 case "$stage" in
-  commit | push | ci) ;;
+  commit | ci) ;;
   *)
-    echo "usage: tool/dispatch/select <commit|push|ci>" >&2
+    echo "usage: tool/dispatch/select <commit|ci>" >&2
     exit 2
     ;;
 esac
@@ -83,7 +78,7 @@ has_scope() { printf '%s\n' "$scopes" | grep -qx "$1"; }
 # INV repository/windows-ci-runtime-bound: these repository-owned inputs are
 # executed by the native Windows job even when no workflow file changed.
 windows_runtime=0
-if grep -Eq '^\.github/(scripts/(WindowsCiRuntime\.psm1|(assert|prepare)-windows-ci-runtime\.ps1|windows-ci\.ps1)|tests/test-windows-ci-runtime\.ps1)$' "$paths"; then
+if grep -Eq '^\.github/(workflows/ci\.yml|scripts/(WindowsCiRuntime\.psm1|(assert|prepare)-windows-ci-runtime\.ps1|windows-ci\.ps1)|tests/test-windows-ci-runtime\.ps1)$' "$paths"; then
   windows_runtime=1
 fi
 
@@ -99,13 +94,16 @@ if [ "$stage" = ci ]; then
     echo 'Common CI suite is not defined' >&2
     exit 1
   fi
-  if grep -Eq '^(\.github/workflows/|tool/dispatch/|tool/version-control/(classify|required-checks)$)' "$paths"; then
+  if grep -Eq '^(\.github/workflows/|tool/dispatch/|tool/version-control/(classify|required-checks|policy\.json|repo_policy\.py)$)' "$paths"; then
     printf '%s\n' repository:fixtures unixlike:suite windows:suite
   else
     if has_scope repository; then echo repository:fixtures; fi
     if has_scope unixlike; then echo unixlike:suite; fi
     if has_scope windows || [ "$windows_runtime" -eq 1 ]; then echo windows:suite; fi
   fi
+  # CI runs its runtime-control fixtures on Windows. Domain validate/test alone
+  # cannot supply that evidence to local integration, even on Windows.
+  if [ "$windows_runtime" -eq 1 ]; then echo windows:runtime; fi
   exit 0
 fi
 
@@ -113,17 +111,9 @@ fi
 # can change what a module references, and a rename shows up as both, so only a
 # tree of modified payloads is allowed to skip evaluation.
 narrow=1
-fixtures=0
 tab=$(printf '\t')
 while IFS="$tab" read -r status path || [ -n "${status:-}" ]; do
   [ -n "${path:-}" ] || continue
-  case "$path" in
-    .githooks/* | .github/workflows/* | tool/dispatch/* | tool/version-control/* \
-      | .github/scripts/WindowsCiRuntime.psm1 | .github/scripts/windows-ci.ps1 \
-      | tool/configs | tool/setup | tool/doctor.sh | tool/worktree.sh | tool/work-session.sh)
-      fixtures=1
-      ;;
-  esac
   case "$path" in
     # A module is Nix and an evaluation reads it; anything else under the
     # module tree is a payload the evaluator copies without reading, which is
@@ -155,27 +145,12 @@ if has_scope unclassified; then
   echo unclassified
 fi
 
-if [ "$stage" = push ] && has_scope repository && [ "$fixtures" -eq 1 ]; then
-  echo repository:fixtures
-fi
-
 if has_scope unixlike; then
-  if [ "$stage" = commit ]; then
-    if [ "$narrow" -eq 1 ]; then
-      echo unixlike:payloads
-    else
-      echo unixlike:format
-      echo unixlike:lint
-      echo unixlike:payloads
-    fi
-  elif [ "$narrow" -eq 0 ]; then
-    echo unixlike:test
-  fi
-fi
-
-if [ "$stage" = push ]; then
-  if has_scope windows; then
-    echo windows:desired-state
-    echo windows:tests
+  if [ "$narrow" -eq 1 ]; then
+    echo unixlike:payloads
+  else
+    echo unixlike:format
+    echo unixlike:lint
+    echo unixlike:payloads
   fi
 fi

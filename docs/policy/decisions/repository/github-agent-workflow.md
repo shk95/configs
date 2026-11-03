@@ -68,3 +68,10 @@ The accepted local-development-workflow.md decision replaces conflicting dev
 PR admission, remote pickup/delivery, automatic closure and promotion-history
 restrictions. Retained domain and publication boundaries remain in force.
 The statements above record the earlier operation and its evidence.
+
+## Amendment 2026-11-02: master and topics
+
+The accepted master-topic-workflow.md decision replaces dev authoring/integration,
+mandatory linked worktrees and general master PR-only admission in this record.
+Retained scope, evidence, preservation and bounded publication rules remain.
+Earlier operation and measurements above are historical.

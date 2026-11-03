@@ -37,7 +37,7 @@ def main():
         git(root, 'init', '-q', '-b', 'dev')
         git(root, 'config', 'user.name', 'Fixture')
         git(root, 'config', 'user.email', 'fixture@example.invalid')
-        for name in ('tool/configs', 'tool/version-control/commit', 'tool/version-control/require-linked-worktree', '.githooks/evidence'):
+        for name in ('tool/configs', 'tool/version-control/commit', 'tool/version-control/authoring', 'tool/version-control/policy', 'tool/version-control/policy.json', 'tool/version-control/repo_policy.py', '.githooks/evidence'):
             destination = root / name
             destination.parent.mkdir(parents=True, exist_ok=True)
             shutil.copy2(SOURCE / name, destination)
@@ -52,7 +52,7 @@ def main():
         subprocess.check_call(['git', 'init', '-q', '--bare', str(remote)])
         git(root, 'remote', 'add', 'origin', str(remote))
         git(root, 'push', '-q', 'origin', 'dev')
-        # Normal unknown-group parsing also passes the real linked-worktree gate.
+        # Normal unknown-group parsing also passes the real authoring-branch guard.
         git(root, 'worktree', 'add', '-q', '-b', 'feature/repository-synthetic', str(base / 'linked'))
         root = base / 'linked'
         payload = root / 'unixlike/modules/programs/karabiner/karabiner.json'
@@ -112,7 +112,7 @@ def main():
                                         cwd=root, env=os.environ.copy(), capture_output=True, timeout=10)
                 assert result.returncode == status, (args, result.returncode, result.stderr)
                 assert b'capture karabiner is retired' not in result.stderr
-                assert b'usage: tool/configs commit' in result.stdout + result.stderr
+                assert b'usage: tool/configs commit' in result.stdout + result.stderr, (args, result.stdout, result.stderr)
                 assert snapshot(root, original) == before_grammar
                 assert git(remote, 'show-ref') == refs
             if state == 'unreadable':

@@ -105,8 +105,8 @@ Two consequences worth knowing before you go looking:
   open pull request's head branch is the cheapest one, since it fires
   `pull_request: synchronize` even when the branch itself is not in the
   workflow's `push` filter.
-- **It interacts badly with branch protection.** Both `dev` and `master`
-  require the `Required checks` job, which reports only after the classify,
+- **It interacts badly with branch protection.** Historically both `dev` and `master`
+  required the `Required checks` job, which reports only after the classify,
   scan and selected domain jobs have run. With Actions off nothing reports, so
   every pull request waits forever on something that cannot arrive — and the
   branch protection settings look perfectly correct while it happens.
@@ -691,19 +691,11 @@ because the desired state was actually wrong. It was bypassed with
 checks plus the `windows-latest` CI job as the real gate) that this repository
 never wrote down until now.
 
-`pre-push` now runs the Windows checks under this host's own `pwsh` on any
-Unix-like host, including WSL — the same binary
-`unixlike/modules/programs/powershell/module.nix` installs into every home this
-repository configures. `check-desired-state.ps1` and the Pester suite both run
-cleanly under it; the suite's `WIN_ENV_E2E` cases self-skip there, and
-`windows-latest` remains the native gate for what a Linux `pwsh` cannot
-exercise. `pre-push` reaches for `pwsh.exe` only when `uname -s` reports an
-actual Windows host (`MINGW*` / `MSYS*` / `CYGWIN*`, the same test
-`tool/version-control/commit`'s `--publish` guard uses) — never over WSL
-interop. A host with neither pwsh reports the Windows checks unverified (exit
-69) rather than failing, the same as any other missing prerequisite; see the `·
-unverified: this host has no nix` entry above. No `--no-verify` should be
-needed for a windows-scope push from WSL again.
+Current master/topic operation uses `tool/configs workflow check` for selected
+native suites before publication. Pre-push inspects transmitted history and
+tags; it does not run native suites from the current checkout. Hosted master
+push/topic PR CI supplies separate native evidence. The bypass described above
+was a historical session ruling, not authorization for a current bypass.
 
 ### `Unix-like tests failed` on a machine that has no Nix
 

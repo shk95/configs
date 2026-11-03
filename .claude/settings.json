@@ -1,8 +1,7 @@
 {
   "$comment": [
     "Claude Code permission adapter; project authority and safety live in AGENTS.md.",
-    "Tool permission never authorizes an unrequested Git or host mutation.",
-    "Publication, history rewrite, release, deletion, and host activation stay absent."
+    "Tool permissions reduce prompts; they do not grant task authorization or enforce project safety boundaries."
   ],
   "permissions": {
     "allow": [
