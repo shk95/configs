@@ -112,7 +112,7 @@ def main():
                                         cwd=root, env=os.environ.copy(), capture_output=True, timeout=10)
                 assert result.returncode == status, (args, result.returncode, result.stderr)
                 assert b'capture karabiner is retired' not in result.stderr
-                assert b'usage: tool/configs commit' in result.stdout + result.stderr
+                assert b'usage: tool/configs commit' in result.stdout + result.stderr, (args, result.stdout, result.stderr)
                 assert snapshot(root, original) == before_grammar
                 assert git(remote, 'show-ref') == refs
             if state == 'unreadable':

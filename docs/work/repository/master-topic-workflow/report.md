@@ -207,3 +207,16 @@ After the completed staged-source verification, the maintainer accepted the
 policy redesign and authorized a local commit. Earlier staged-only rows retain
 their preparation evidence. Git records the accepted source revision; remote
 adoption and publication remain separate.
+
+## Hosted adoption follow-up — 2026-11-03
+
+The maintainer authorized publication and remote policy migration in the current
+checkout. PR #579 first exercised the candidate on hosted runners. Its Windows
+policy job exposed an authoring guard that ignored the selected controller
+Python; its Linux workflow fixture exposed bytecode written by the dynamically
+loaded module before its own bytecode guard ran. The authoring launcher now
+uses the selected interpreter and converts its script path for native Windows.
+The workflow fixture disables bytecode before loading candidate tooling, and
+retirement grammar failures include subprocess output for diagnosis. These
+corrections support AC3 and AC17; the 13 local workflow cases pass. Hosted
+verification and the full policy suite remain required before adoption.
