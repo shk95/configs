@@ -1,5 +1,25 @@
 # Current state: repository
 
+## Remote master/topic adoption — 2026-11-03
+
+PR #579 installed the accepted source and hosted-portability corrections through
+the existing protected admission path, merging as
+`d1a3093e68b84ab456480beb554db8ba8a8e0d61`. CI run 41577858716 passed
+all selected repository, Unix-like and native Windows jobs and Required checks.
+The exact base/head/tree check accepted that hosted evidence.
+
+The maintainer-authorized protection migration removed mandatory PR, status
+check and conversation admission. Administrator enforcement, force-push and
+deletion denial, and merge-commit-only PR settings remain active. The live
+`tool/configs audit-remote` passed after migration. Local master was advanced
+without rewriting accepted history. Earlier pending-adoption statements below
+record preparation checkpoints rather than current protection state.
+
+Optional history-maintenance App adoption and actual bounded patch-writer
+qualification remain separate; no App, credential, tag, host activation or
+Windows Apply was performed. PR #578 remains a separate input patch. No related
+open issue required closure. Master-push CI reports its own tested revision.
+
 ## Local acceptance — 2026-11-02
 
 The maintainer accepted the completed policy redesign and authorized its local

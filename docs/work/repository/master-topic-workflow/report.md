@@ -220,3 +220,22 @@ The workflow fixture disables bytecode before loading candidate tooling, and
 retirement grammar failures include subprocess output for diagnosis. These
 corrections support AC3 and AC17; the 13 local workflow cases pass. Hosted
 verification and the full policy suite remain required before adoption.
+
+## Remote adoption evidence — 2026-11-03
+
+The corrected local full policy suite passed. Hosted CI run 41577858716 passed
+all selected jobs for base `033ff0a9add9983e11dea6d8e2fbd567313d4480`,
+head `989fcedc4bb86e968606f96646228cf3e991f288` and tree
+`5fd1add990b380fd7188a107e9b6d4277e1370e0`. The tracked workflow check
+validated its live exact-source artifact and local global scans. PR #579 merged
+through existing protection as `d1a3093e68b84ab456480beb554db8ba8a8e0d61`.
+
+After source adoption, the authorized master protection migration completed;
+the read-only remote audit returned verified with history rewrite disabled.
+Administrator enforcement and force-push/deletion denial remain enabled;
+mandatory PR/status/conversation admission is removed and repository merge
+methods already match policy. These are actual remote adoption facts, distinct
+from the earlier fixture proof. Native Windows management tests and Unix-like
+provider tests passed; no host activation, Apply or domain release is claimed.
+The optional maintenance capability and live patch-writer qualification were
+not adopted by this operation. No related open issue required closure.
