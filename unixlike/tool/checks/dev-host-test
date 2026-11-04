@@ -1,0 +1,14 @@
+#!/bin/sh
+# INV unixlike/local-consumer-development
+set -eu
+. "$(CDPATH= cd -- "$(dirname -- "$0")" && pwd)/prerequisite"
+require_command nix git
+# CI needs no preinstalled Just; use the same locked package as development.
+if ! command -v just >/dev/null 2>&1; then
+  fixture_just=$(nix build --no-link --print-out-paths --impure --expr \
+    'let f = builtins.getFlake (toString ./unixlike); in f.inputs.nixpkgs.legacyPackages.${builtins.currentSystem}.just.out')
+  PATH="$fixture_just/bin:$PATH"
+  export PATH
+fi
+exec "$(python_for_test)" -B -m unittest discover \
+  -s "$(CDPATH= cd -- "$(dirname -- "$0")" && pwd)" -p 'dev_host*test.py'

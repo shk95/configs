@@ -280,6 +280,9 @@ fi
 # directory, which removes jq and nix together and cannot be skipped on a
 # host that happens to ship jq in /usr/bin.
 
+# Invoke the selected interpreter explicitly: NixOS can wrap /bin/sh and
+# reintroduce Nix into the deliberately empty PATH through the shebang.
+fixture_shell=$(command -v sh)
 bare='PATH=/usr/bin:/bin'
 mkdir -p "$work/empty"
 
@@ -296,7 +299,7 @@ fi
 
 printf '→ a host with no jq and no nix is unverified\n'
 status=0
-env -i PATH="$work/empty" HOME="$HOME" KARABINER_PLATFORM=darwin "$tool" check \
+env -i PATH="$work/empty" HOME="$HOME" KARABINER_PLATFORM=darwin "$fixture_shell" "$tool" check \
   --host "$work/host.json" --hotkeys-host "$work/hotkeys-host.json" \
   >/dev/null 2>&1 || status=$?
 [ "$status" -eq 69 ] || bad "a host with no jq and no nix exited $status, expected 69"

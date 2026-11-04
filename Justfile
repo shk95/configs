@@ -448,3 +448,49 @@ switch-shell:
 
     chsh -s "$TARGET_SHELL"
     echo "Login shell updated. Restart the WSL terminal for it to take effect."
+
+############################################################################
+# Local consumer development (connection and evidence stay in Git metadata)
+############################################################################
+
+[group('development')]
+dev-connect consumer host:
+    @unixlike/tool/dev-host/run connect {{ quote(consumer) }} {{ quote(host) }}
+
+[group('development')]
+dev-disconnect:
+    @unixlike/tool/dev-host/run disconnect
+
+[group('development')]
+dev-info:
+    @unixlike/tool/dev-host/run info
+
+[group('development')]
+dev-configure recipe:
+    @unixlike/tool/dev-host/run configure {{ quote(recipe) }}
+
+[group('development')]
+[positional-arguments]
+dev-eval *args:
+    @unixlike/tool/dev-host/run eval "$@"
+
+[group('development')]
+[positional-arguments]
+dev-build *args:
+    @unixlike/tool/dev-host/run build "$@"
+
+# Explicit activation of the connected consumer using the local provider.
+[group('development')]
+dev-apply:
+    @unixlike/tool/dev-host/run apply
+
+[group('development')]
+[positional-arguments]
+dev-verify *args:
+    @unixlike/tool/dev-host/run verify "$@"
+
+# Review with --plan; execute/resume the reviewed publication with --execute.
+[group('development')]
+[positional-arguments]
+dev-promote *args:
+    @unixlike/tool/dev-host/run promote "$@"
