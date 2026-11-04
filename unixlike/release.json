@@ -1,7 +1,7 @@
 {
-  "previous": "unixlike-v1.1.0",
-  "version": "1.1.1",
-  "summary": "Avoid duplicate Fcitx5 startup in graphical Linux sessions.",
+  "previous": "unixlike-v1.1.1",
+  "version": "1.1.2",
+  "summary": "Refresh permitted Unix-like inputs.",
   "compatibility": "patch",
-  "migration": "No manual migration. Niri retains the packaged XDG autostart entry; the redundant Home Manager user service is disabled."
+  "migration": ""
 }
