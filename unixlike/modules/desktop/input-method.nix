@@ -6,6 +6,8 @@ _: {
       enable = true;
       type = "fcitx5";
       fcitx5 = {
+        # Niri runs the packaged XDG autostart entry; avoid a second daemon.
+        systemd.enable = false;
         waylandFrontend = true;
         addons = with pkgs; [
           fcitx5-gtk
