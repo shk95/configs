@@ -1,5 +1,15 @@
 # Current state: repository
 
+## Optimization integrated locally — 2026-11-06
+
+No-ff merge `a44a25bdcd80d617da6e2c6f7b27b9fa28dc2031` integrates the
+repository outcome after exact-base/head fixture verification. The Unix-like
+outcome is integrated separately on that base; see [its state](unixlike.md).
+All three completed task branches were deleted after proving every tip is
+reachable from master. `dev`, origin tracking refs, tags and the exploration
+stash/archive remain. No push, publication, activation or Apply occurred.
+The 2026-11-05 entry below records the earlier preparation state.
+
 ## Local development optimization — 2026-11-05
 
 `feature/repository-development-authoring` prepares shared hook/verification
