@@ -13,5 +13,9 @@ metadata. Provider checks need no private consumer.
 Development snapshots include tracked and nonignored new source files, exclude
 maintainer notes and ignored local data, and reject symlinks and submodules.
 The consumer owns native target checks, activation and release adoption.
+
+Info reads existing coordinated records without initializing local state or
+invoking a consumer adapter. Record creation belongs to explicit mutators;
+inspection does not qualify native/runtime or promotion evidence.
 Publication delegates to explicitly configured repository procedures and checks
 immutable release content and the final pinned closure before final activation.

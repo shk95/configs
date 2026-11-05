@@ -5,6 +5,7 @@ Real Git/Nix/local remotes; synthetic activation and synthetic release audit.
 No private consumer, privileged command or network publication is used.
 """
 import json
+import fcntl
 import os
 from pathlib import Path
 import shutil
@@ -191,6 +192,139 @@ with Path(os.environ['FIXTURE_RUNTIME'] + '.publications').open('a') as log:
         after = self.apply_and_verify('host-owned-candidate')
         self.assertEqual(before, after, 'Extraction must preserve the built output')
         self.promote(after)
+
+
+class ReadOnlyInfoTest(unittest.TestCase):
+    """Real CLI/Git/locks; queries need neither Nix nor an adapter invocation."""
+
+    def setUp(self):
+        self.temp = tempfile.TemporaryDirectory(prefix='configs-dev-info-')
+        self.addCleanup(self.temp.cleanup)
+        self.base = Path(self.temp.name)
+        self.provider = self.base / 'provider'
+        self.provider.mkdir()
+        self.env = {key: value for key, value in os.environ.items() if not key.startswith('GIT_')}
+        self.env.update(GIT_CONFIG_GLOBAL=os.devnull, GIT_CONFIG_NOSYSTEM='1',
+                        GIT_AUTHOR_NAME='Fixture', GIT_COMMITTER_NAME='Fixture',
+                        GIT_AUTHOR_EMAIL='fixture@example.invalid', GIT_COMMITTER_EMAIL='fixture@example.invalid')
+        run(['git', 'init', '-q', '-b', 'master'], self.provider, self.env)
+        for name in ('main.py', 'run'):
+            target = self.provider / 'unixlike/tool/dev-host' / name
+            target.parent.mkdir(parents=True, exist_ok=True)
+            shutil.copy2(SOURCE / name, target)
+        write(self.provider / 'tracked', 'same bytes')
+        run(['git', 'add', '.'], self.provider, self.env)
+        run(['git', 'commit', '-qm', 'fixture'], self.provider, self.env)
+        self.local = self.provider / '.git/configs-dev'
+        # Force a stat-cache refresh opportunity without changing source bytes.
+        path = self.provider / 'tracked'
+        os.utime(path, (1, 1))
+
+    def command(self, *args, success=True):
+        argv = [self.provider / 'unixlike/tool/dev-host/run', *args]
+        result = subprocess.run([str(v) for v in argv], cwd=self.provider, env=self.env,
+                                text=True, capture_output=True)
+        self.assertEqual(result.returncode == 0, success, result.stdout + result.stderr)
+        return json.loads(result.stdout) if success and args == ('info',) else result
+
+    def snapshot(self, root=None):
+        root = root or self.provider
+        return {str(path.relative_to(root)): (path.stat().st_mode, None if path.is_dir() else path.read_bytes())
+                for path in root.rglob('*')}
+
+    def connection(self):
+        consumer = self.base / 'consumer'
+        consumer.mkdir()
+        run(['git', 'init', '-q', '-b', 'master'], consumer, self.env)
+        write(consumer / 'tracked', 'consumer')
+        write(consumer / 'tool/configs-dev', "#!/bin/sh\ncase $1 in protocol) echo 1 ;; resolve) echo '{}' ;; *) exit 1 ;; esac\n", True)
+        run(['git', 'add', '.'], consumer, self.env)
+        run(['git', 'commit', '-qm', 'fixture consumer'], consumer, self.env)
+        self.command('connect', consumer, 'fixture-home')
+        # Query must not invoke the adapter, even when a connection exists.
+        write(consumer / 'tool/configs-dev', '#!/bin/sh\nexit 99\n', True)
+        return consumer
+
+    def test_uninitialized_info_creates_nothing_and_does_not_refresh_index(self):
+        before = self.snapshot()
+        value = self.command('info')
+        self.assertEqual(value['schema'], 1)
+        self.assertEqual(value['state'], 'uninitialized')
+        self.assertEqual(value['coordination'], 'no-records-observed')
+        self.assertIsNone(value['connection'])
+        self.assertIsNone(value['consumer_head'])
+        self.assertFalse(self.local.exists())
+        self.assertEqual(self.snapshot(), before)
+
+    def test_info_works_without_nix_or_consumer_adapter(self):
+        tools = self.base / 'query-bin'
+        tools.mkdir()
+        for name, binary in (('python3', sys.executable), ('git', shutil.which('git')),
+                             ('dirname', shutil.which('dirname'))):
+            (tools / name).symlink_to(Path(binary).resolve())
+        self.env['PATH'] = str(tools)
+        before = self.snapshot()
+        self.assertEqual(self.command('info')['state'], 'uninitialized')
+        self.assertEqual(self.snapshot(), before)
+
+    def test_connected_and_disconnected_info_preserve_all_bytes(self):
+        consumer = self.connection()
+        before = self.snapshot(), self.snapshot(consumer)
+        value = self.command('info')
+        self.assertEqual(value['state'], 'connected')
+        self.assertEqual(value['coordination'], 'shared-lock')
+        self.assertEqual(value['connection']['host'], 'fixture-home')
+        self.assertEqual((self.snapshot(), self.snapshot(consumer)), before)
+        self.command('disconnect')
+        before = self.snapshot()
+        self.assertEqual(self.command('info')['state'], 'disconnected')
+        self.assertEqual(self.snapshot(), before)
+
+    def test_writer_excludes_info_and_readers_exclude_mutation(self):
+        self.connection()
+        (self.local / 'lock').write_text('preserved lock contents')
+        with (self.local / 'lock').open('r') as lock:
+            fcntl.flock(lock, fcntl.LOCK_EX | fcntl.LOCK_NB)
+            before = self.snapshot()
+            result = self.command('info', success=False)
+            self.assertIn('Another development operation', result.stderr)
+            self.assertEqual(self.snapshot(), before)
+        with (self.local / 'lock').open('r') as lock:
+            fcntl.flock(lock, fcntl.LOCK_SH | fcntl.LOCK_NB)
+            before = self.snapshot()
+            self.assertEqual(self.command('info')['state'], 'connected')
+            result = self.command('disconnect', success=False)
+            self.assertIn('Another development operation', result.stderr)
+            self.assertEqual(self.snapshot(), before)
+
+    def test_unlocked_malformed_or_missing_consumer_state_refuses(self):
+        consumer = self.connection()
+        path = self.local / 'connection.json'
+        valid = path.read_bytes()
+        for mode in ('unlocked', 'malformed', 'missing-consumer'):
+            path.write_bytes(valid)
+            if mode == 'unlocked': (self.local / 'lock').unlink()
+            elif mode == 'malformed': path.write_text('{broken')
+            else: consumer.rename(self.base / 'moved-consumer')
+            before = self.snapshot()
+            self.command('info', success=False)
+            self.assertEqual(self.snapshot(), before)
+            if mode == 'unlocked': (self.local / 'lock').touch()
+
+    def test_invalid_connection_schema_refuses_without_rewriting_records(self):
+        self.connection()
+        path = self.local / 'connection.json'
+        valid = json.loads(path.read_text())
+        cases = [{'consumer': valid['consumer']}, {**valid, 'version': 99},
+                 {**valid, 'version': True}, {**valid, 'host': '../../invalid'},
+                 {**valid, 'host': None}, {**valid, 'consumer': []},
+                 {**valid, 'consumer': 'relative'}, {**valid, 'extra': 1}, []]
+        for value in cases:
+            with self.subTest(record=value):
+                path.write_text(json.dumps(value))
+                before = self.snapshot()
+                self.assertIn('Invalid local consumer connection', self.command('info', success=False).stderr)
+                self.assertEqual(self.snapshot(), before)
 
 
 if __name__ == '__main__':

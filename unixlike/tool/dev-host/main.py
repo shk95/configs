@@ -6,6 +6,7 @@ INV unixlike/local-consumer-development
 from __future__ import annotations
 
 import argparse
+from contextlib import contextmanager
 import fcntl
 import hashlib
 import json
@@ -30,7 +31,7 @@ def run(argv, cwd=None, capture=True, env=None):
 
 
 def git(root, *args):
-    return run(['git', '-C', root, *args])
+    return run(['git', '-C', root, *args], env=dict(os.environ, GIT_OPTIONAL_LOCKS='0'))
 
 
 def read_json(path):
@@ -114,15 +115,61 @@ class Development:
     def __init__(self, root):
         self.root = root
         self.local = Path(git(root, 'rev-parse', '--absolute-git-dir')) / 'configs-dev'
-        self.local.mkdir(mode=0o700, exist_ok=True)
         self.connection_file = self.local / 'connection.json'
         self.session_file = self.local / 'session.json'
         self.promotion_file = self.local / 'promotion.json'
+
+    @contextmanager
+    def operation_lock(self, read_only=False):
+        if read_only:
+            try:
+                lock = (self.local / 'lock').open('r')
+            except FileNotFoundError:
+                if any((self.local / name).exists() for name in
+                       ('connection.json', 'session.json', 'promotion.json', 'recipe.json')):
+                    raise Refused('Local development records have no coordination lock; preserve and inspect them before reconnecting.')
+                # No records are read without a lock. A later writer may
+                # initialize state; this result names the observed absence.
+                yield False
+                return
+        else:
+            self.local.mkdir(mode=0o700, exist_ok=True)
+            lock = (self.local / 'lock').open('a')
+        with lock:
+            try:
+                fcntl.flock(lock, (fcntl.LOCK_SH if read_only else fcntl.LOCK_EX) | fcntl.LOCK_NB)
+            except BlockingIOError as error:
+                raise Refused('Another development operation is running in this checkout.') from error
+            yield True
+
+    def info(self):
+        with self.operation_lock(read_only=True) as coordinated:
+            connection = consumer = None
+            if coordinated and self.connection_file.exists():
+                connection, consumer = self.connection()
+            return {
+                'schema': 1, 'state': 'connected' if consumer else 'disconnected' if coordinated else 'uninitialized',
+                'coordination': 'shared-lock' if coordinated else 'no-records-observed',
+                'connection': connection, 'local_state': str(self.local),
+                'provider_head': git(self.root, 'rev-parse', 'HEAD'),
+                'provider_branch': git(self.root, 'branch', '--show-current'),
+                'provider_status': git(self.root, 'status', '--short'),
+                'consumer_head': git(consumer, 'rev-parse', 'HEAD') if consumer else None,
+                'consumer_branch': git(consumer, 'branch', '--show-current') if consumer else None,
+                'consumer_status': git(consumer, 'status', '--short') if consumer else None,
+                'session': read_json(self.session_file) if coordinated and self.session_file.exists() else None,
+                'promotion': read_json(self.promotion_file) if coordinated and self.promotion_file.exists() else None,
+            }
 
     def connection(self):
         if not self.connection_file.exists():
             raise Refused('No local consumer connection. Run just dev-connect <checkout> <host>.')
         value = read_json(self.connection_file)
+        if (not isinstance(value, dict) or set(value) != {'version', 'consumer', 'host'} or
+                type(value['version']) is not int or value['version'] != 1 or
+                not isinstance(value['consumer'], str) or not Path(value['consumer']).is_absolute() or
+                not isinstance(value['host'], str) or not re.fullmatch(r'[A-Za-z0-9_-]+', value['host'])):
+            raise Refused('Invalid local consumer connection: expected version 1, an absolute consumer path and a host identifier.')
         consumer = Path(value['consumer'])
         if not consumer.is_dir() or git(consumer, 'rev-parse', '--show-toplevel') != str(consumer):
             raise Refused('The selected consumer checkout is missing or has moved; reconnect explicitly.')
@@ -429,12 +476,11 @@ def main():
     args = parser.parse_args()
     root = Path(__file__).resolve().parents[3]
     development = Development(root)
+    if args.operation == 'info':
+        print(json.dumps(development.info(), indent=2))
+        return
     # One operation per checkout: concurrent activation/promotion must not share receipts.
-    with (development.local / 'lock').open('w') as lock:
-        try:
-            fcntl.flock(lock, fcntl.LOCK_EX | fcntl.LOCK_NB)
-        except BlockingIOError as error:
-            raise Refused('Another development operation is running in this checkout.') from error
+    with development.operation_lock():
         if args.operation == 'connect':
             development.connect(args.consumer, args.host)
         elif args.operation == 'disconnect':
@@ -461,17 +507,6 @@ def main():
                 write_json(development.session_file, session)
             development.promotion_file.unlink(missing_ok=True)
             print('Local recipe saved. Publication commands run only with dev-promote --execute.')
-        elif args.operation == 'info':
-            connection, consumer = development.connection()
-            print(json.dumps({'connection': connection, 'local_state': str(development.local),
-                              'provider_head': git(root, 'rev-parse', 'HEAD'),
-                              'provider_branch': git(root, 'branch', '--show-current'),
-                              'provider_status': git(root, 'status', '--short'),
-                              'consumer_head': git(consumer, 'rev-parse', 'HEAD'),
-                              'consumer_branch': git(consumer, 'branch', '--show-current'),
-                              'consumer_status': git(consumer, 'status', '--short'),
-                              'session': read_json(development.session_file) if development.session_file.exists() else None,
-                              'promotion': read_json(development.promotion_file) if development.promotion_file.exists() else None}, indent=2))
         elif args.operation in ('eval', 'build'):
             pair = development.pair(args.pinned, args.host)
             getattr(development, 'evaluate' if args.operation == 'eval' else 'build')(pair)

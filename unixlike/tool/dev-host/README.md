@@ -1,5 +1,17 @@
 # Develop a provider with a local consumer
 
+`just dev-info` reads existing local state without connecting or initializing
+a session. With no records it reports `uninitialized` and creates no directory
+or lock. Existing records are read under a nonblocking shared lock; an active
+writer, records without their lock, or malformed connection data refuse and
+preserve the files. Git status observations suppress index refresh. Info runs
+neither Nix nor the consumer adapter, and reports observations rather than
+runtime readiness or permission to apply/promote.
+
+Mutators retain their exclusive lock and explicitly initialize local records.
+`dev-promote --plan` still writes its requested local plan; it is a different
+effect boundary from info.
+
 This Unix-like tool connects the current provider checkout to an explicitly
 selected consumer checkout. Connections, actual host names, local publication
 commands, source snapshots and receipts live in this checkout's Git directory

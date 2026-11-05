@@ -6,6 +6,13 @@ is recorded under `docs/policy/decisions/`; the model those decisions implement
 is `docs/policy/architecture.md`. The other scopes' state is in the files
 beside this one.
 
+## Local development optimization — 2026-11-05
+
+`feature/unixlike-development-optimization` prepares provider recipe cleanup,
+explicit flake paths and read-only consumer info. Provider checks pass; see
+[results](../work/unixlike/development-optimization/report.md). This local topic
+is not integrated, published or adopted by a host.
+
 ## Provider verification boundary
 
 The 2026-10-13 verification adjustment makes routine verification certify the

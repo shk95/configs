@@ -168,11 +168,13 @@ elif sys.argv[1] == 'resolve':
             self.work.verify('fixture functionality confirmed')
         self.assertTrue(dev.read_json(self.work.session_file)['verified'])
 
-    def test_plan_is_read_only_and_recipe_change_refuses(self):
+    def test_plan_writes_artifact_without_publication_and_recipe_change_refuses(self):
         self.applied()
         with patch.object(dev, 'run', wraps=dev.run) as commands, contextlib.redirect_stdout(io.StringIO()):
             self.work.promote()
         self.assertFalse(any(call.args[0][0] in ('fixture-publish-provider', 'fixture-publish-consumer') for call in commands.call_args_list))
+        self.assertTrue(self.work.promotion_file.is_file())
+        self.assertEqual(dev.read_json(self.work.promotion_file)['completed'], [])
         changed = {**self.recipe, 'verify': ['another-check']}
         dev.write_json(self.work.local / 'recipe.json', changed)
         with self.assertRaises(dev.Refused):
