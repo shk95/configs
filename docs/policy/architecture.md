@@ -36,16 +36,24 @@ paths, release cadence, or validation environments can diverge.
 The Unix-like domain covers Linux, WSL, NixOS, Home Manager, and macOS. Nix and
 the flake are its composition authority.
 
+### Unix-like module layout
+
 It owns one tree, `unixlike/`, which holds:
 
 - the flake and its lock;
 - feature and host modules under `modules/`, grouped for navigation as
-  `flake`, `machines`, `platforms`, `foundation`, `desktop`, and `programs`;
+  `flake`, `platforms`, `foundation`, `desktop`, and `programs`;
   a concern lives inside one group and the class a fragment reaches is read
   in the file that writes it;
 - the Unix-like source payloads those modules consume, each beside the module
   that delivers it, and any script a module interpolates beside the same one;
 - Unix-like evaluation, build, and activation tooling under `tool/`.
+
+Files below `unixlike/modules/` are flake-parts modules collected by import-tree.
+A concern with one fragment is one file; multiple fragments or a payload/script
+beside it form a directory. Class is declared in the file, not its directory.
+`unixlike/modules/flake/configurations.nix` alone decides which deferred classes
+reach a Unix-like host.
 
 `.envrc` and the `Justfile` are the exceptions and stay at the repository
 root: direnv reads the first there, and where the second belongs is a separate
@@ -54,6 +62,8 @@ scope directories under `docs/`, beside the other scopes' documents
 (`docs/policy/decisions/repository/documents-classified-by-scope.md`,
 `docs/policy/decisions/unixlike/unixlike-domain-owns-its-tree.md`,
 `docs/policy/decisions/unixlike/concern-first-inside-the-domain.md`).
+
+### Payloads and composition
 
 A payload is not only a file a domain owns. It has a format, and being well
 formed is a property of that format rather than of the domain holding it, so it

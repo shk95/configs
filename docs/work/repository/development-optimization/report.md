@@ -61,3 +61,29 @@ novice discovery and optional diagnostics are counted separately.
 | S4 continuation | A task already has workspace and authorization. | Actual Git state and relevant unfinished work recovered without reinitialization or renewed consent. |
 | S5 verification | Full base/head on a clean committed candidate. | Optional inspection exposes selected commands without executing them; requested execution binds evidence to that candidate. Dirty narrow checks are a separate subject. |
 | S6 publication | Local release/history snapshot needs inspection. | Read/refresh/write effects identified; no publication or rewrite follows from inspection. |
+
+## Loop 2: static concern navigation
+
+Move the existing procedure sections into six direct Markdown concerns, with
+an ordinary short index. Keep the original CONTRIBUTING headings/anchors as
+links and platform procedures there; place the existing overlay subsection
+with Unix-like work. There is one procedure body, no guide command, parser,
+JSON schema, whole-catalog validation or read-time dependency on other concerns.
+
+CONTRIBUTING falls from 832 lines after Loop 1 to approximately 300; combined
+procedure size increases with compatibility links and the short index, not a
+text-reduction claim. Experienced direct-section access still needs the same
+facts and may gain one compatibility-link hop. Novice repository navigation
+first groups eighteen repository sections into six concerns; three platform
+routes and subsequent section choices remain. An opened concern is 26–173
+lines; relevant-section reading remains available on both sides. These are
+source bounds, not measured token, time or total-decision savings.
+Independent review required this fair distinction and recommended omitting a
+CLI until an actual consumer justifies its code/help/test cost.
+
+Review found no missing section bodies and requested direct links to all three
+platform procedures plus preservation of the two old release subheading
+anchors. Both are retained. The Windows setup installer is now explicitly
+separate from read-only verification. Common entry guidance moves Unix-like
+layout details to their affected architecture section, keeping every costly
+boundary. No unrelated concern can block reading a selected Markdown file.

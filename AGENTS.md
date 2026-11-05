@@ -25,14 +25,8 @@ The Unix-like domain owns one tree, `unixlike/`, and everything the classifier
 answers `unixlike` for lives under it, except `.envrc` and the `Justfile`,
 which stay at the root because direnv reads the first there and where the
 second belongs is a separate decision, and the domain's documents, which
-live in the Unix-like scope directories under `docs/`. Files below `unixlike/modules/` are
-flake-parts modules collected by import-tree. The first level groups concerns
-as `flake`, `platforms`, `foundation`, `desktop`, and `programs`.
-Inside a group, a concern with one fragment is one file, and a concern with
-more, or with a payload or a script beside it, is a directory. The class a
-fragment reaches is read in the file that writes it, never from its directory.
-`unixlike/modules/flake/configurations.nix` is the only place that decides
-which deferred module classes reach a Unix-like host.
+live in the Unix-like scope directories under `docs/`. For module structure or
+composition, read [Unix-like module layout](docs/policy/architecture.md#unix-like-module-layout).
 
 ## Domain boundaries
 
@@ -138,6 +132,8 @@ existing history and data; never prune as incidental cleanup.
 2. Read only relevant current procedure, ownership, affected invariants and
    status. Consult decisions or work records when the task or an ambiguity
    calls for them; historical citations are not a session reading list.
+   The [procedure index](docs/development/README.md) selects one concern;
+   `CONTRIBUTING.md` retains platform procedures and existing section links.
 3. Use `tool/configs doctor <scope>` before depending on an unverified host
    capability or after the environment changes. Consult `policy show` when
    resolving mechanical rules and use `workflow start` for a clean new start,

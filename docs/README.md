@@ -6,6 +6,7 @@ is its format contract.
 
 ```
 docs/
+  development/                   task-concern procedures; read one as needed
   policy/                        what binds: observe → adopt → enforce
     architecture.md              the model and every rationale
     definition-of-done/<scope>.md  the evidence a change owes
