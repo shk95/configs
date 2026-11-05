@@ -6,6 +6,17 @@ is recorded under `docs/policy/decisions/`; the model those decisions implement
 is `docs/policy/architecture.md`. The other scopes' state is in the files
 beside this one.
 
+## Optimization integrated locally — 2026-11-06
+
+No-ff merge `544f0fafe1741bd6889b17b6302569b37944e626` integrates the
+provider recipe/query outcome after incorporating the repository outcome.
+Exact-candidate format/lint, twelve provider fixture suites and seven synthetic
+toplevel evaluations pass. The existing minimal-PATH fixture skips here;
+the final flake step runs zero checks and omits incompatible ARM systems.
+Host builds/runtime remain unverified. Actual input/release files are unchanged;
+no remote publication, host activation or Apply occurred. The 2026-11-05 entry below
+records the earlier preparation state.
+
 ## Local development optimization — 2026-11-05
 
 `feature/unixlike-development-optimization` prepares provider recipe cleanup,
