@@ -109,3 +109,45 @@ uses actual subprocess argv/order in an external log rather than printed
 intent. The final narrow suite passes 16 workflow and 17 mechanics cases
 (`/tmp/configs-optimization-loop3-workflow-proof.log`, exit 0). Rereview accepts
 the 31-line controller increase and finds no remaining blocker.
+
+## Loop 4: retire the absent provider inventory editor
+
+Branch `feature/repository-development-authoring` retains the first three
+loops as its parent; `feature/repository-development-optimization` preserves
+the pre-retirement comparison. The current provider has no app inventory.
+Remove brew/cask/mas success, including on modified inventories, and refuse
+the retained names before Git/host/scratch operations. This is an intentional
+interface reduction recorded in the amended criteria and adopted decision.
+No consumer source is edited and no replacement producer/protocol is created.
+
+The commit helper falls from 780 lines after hook consolidation to 319;
+its now-unused scratch directory is also removed. The old fixture block mixed
+inventory-specific editing with common commit safety. Replace only that block
+with an isolated flake fixture preserving confirmation, ownership, branch and
+index admission, real hooks/stderr, missing/absolute hooks, unverified checks,
+failed/unchanged updates, lock-only subjects and rejected-edit staged recovery.
+Inventory-specific sorting/format/parsing tests retire with their behavior.
+The 683-line block becomes a smaller isolated fixture plus a short driver call.
+Exact final category deltas are reported separately; test deletion alone is
+not counted as a simplification of retained behavior.
+
+Independent review caught capture-prefix grammar and input-name regressions;
+both are corrected without changing the old 256+20 retirement proof. It also
+required retaining native-required failure, missing-Nix and linked-topic
+positive evidence. Those cases remain; missing Nix is now deterministic through
+a private PATH rather than skipped on a Nix-equipped host.
+
+Corrected narrow fixtures pass and the staged cumulative repository suite
+exits 0 (`/tmp/configs-optimization-loop4-suite-proof.log`): 16 workflow,
+17 mechanics and 21 release cases, real flake admission/recovery and the
+unchanged 256 capture refusal plus 20 grammar cases. The missing-Nix fixture
+now executes instead of conditionally skipping. Independent rereview approves
+the corrected source and narrow evidence; the cumulative result is recorded
+by the author. Registry and staged work checks pass with 81 invariants and
+49 work items/45 paired specs. These are fixture/policy evidence only.
+
+For S6 the existing controller's refresh/hosted/object effects are documented
+explicitly and local orientation uses workflow inspect. Making the release
+controller a pure snapshot engine would change its recovery/proof semantics
+and add another freshness interface; that larger alternative is not required
+to remove the current ambiguity and is deferred.

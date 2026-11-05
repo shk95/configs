@@ -11,11 +11,13 @@ set -eu
 # INV repository/retired-capture-publication
 # Recognize the retired grammar before resolving Git, readers or scratch space.
 # Function positional parameters leave the normal parser's arguments intact.
-refuse_retired_capture() {
+refuse_retired_commands() {
+  inventory_prefix=1
   while [ "$#" -gt 0 ]; do
     case $1 in
       --dry-run | --publish) shift ;;
       --host | --hotkeys-host)
+        inventory_prefix=0
         [ "$#" -ge 2 ] || return 0
         shift 2
         ;;
@@ -29,13 +31,18 @@ refuse_retired_capture() {
       'Use the pinned host-document preview/review/save workflow in CONTRIBUTING.md.' >&2
     exit 1
   fi
+  [ "$inventory_prefix" -eq 1 ] || return 0
+  case ${1:-} in
+    brew|cask|mas)
+      printf '%s\n' 'brew/cask/mas editing is retired; no Git or host changes were performed.' \
+        'The provider has no app inventory. Edit app selection in its owning consumer.' >&2
+      exit 1
+      ;;
+  esac
 }
-refuse_retired_capture "$@"
+refuse_retired_commands "$@"
 
-# Guards the `sed -n '/^@@/,$p'` call below from Git for Windows' MSYS
-# argument conversion, which rewrites a leading-`/` argv element into a
-# Windows path before sed sees it. See tool/version-control/hygiene for the
-# full explanation and the observed failure (#79). Inert everywhere else.
+# The shared hook resolver uses text tools; preserve literal arguments on MSYS.
 MSYS_NO_PATHCONV=1
 MSYS2_ARG_CONV_EXCL='*'
 export MSYS_NO_PATHCONV MSYS2_ARG_CONV_EXCL
@@ -57,17 +64,6 @@ hooks_path=$(git config --get core.hooksPath 2>/dev/null || true)
 
 . "$script_dir/hooks.sh"
 
-homebrew_module=unixlike/modules/platforms/homebrew.nix
-
-# One scratch directory for the candidate edit. Trapped on the signals a prompt is interrupted
-# with as well as on EXIT, because a helper that stops at a question is exactly
-# the one an operator interrupts.
-work=$(mktemp -d)
-trap 'rm -rf "$work"' EXIT
-# POSIX sh resumes after a trap handler, so an interrupt handler that only
-# cleans up would leave the run going with its scratch files gone.
-trap 'rm -rf "$work"; exit 130' INT HUP TERM
-
 dry_run=0
 
 usage_text() {
@@ -78,18 +74,10 @@ options:
   --dry-run                show the edit and checks without writing
 
 commands:
-  brew add <formula>       declare a Homebrew formula in unixlike/modules/platforms/homebrew.nix
-  brew remove <formula>    remove a Homebrew formula
-  cask add <cask>          declare a Homebrew cask
-  cask remove <cask>       remove a Homebrew cask
-  mas add <name> <id>      declare a Mac App Store app in unixlike/modules/platforms/homebrew.nix
-  mas remove <name>        remove a Mac App Store app
-  flake refresh [<input>]  refresh flake.lock, every input or one
+  flake refresh [<input>]  refresh the Unix-like lock directly, every input or one
 
-mas add/remove edit the masApps attrset: <name> is the Nix attribute and <id>
-is the numeric App Store id the maintainer supplies (no lookup here); the mas
-CLI itself is already a declared Homebrew formula, so it needs no command of
-its own.
+brew/cask/mas editing is retired: the provider has no app inventory.
+App selection belongs to the consumer; edit its owned source there.
 
 Run in a selected workspace. The helper confirms and commits the edit
 locally. It never fetches, pushes, opens a PR, changes branches or prunes.
@@ -149,101 +137,19 @@ fi
 # Validate master/topic authoring before any payload can change.
 tool/version-control/authoring
 
-item=
-input=
-mas_id=
-case $group in
-  brew | cask)
-    [ "$#" -eq 2 ] || usage
-    action=$1
-    item=$2
-    case $action in
-      add | remove) ;;
-      *) usage ;;
-    esac
-    ;;
-  mas)
-    [ "$#" -ge 2 ] || usage
-    action=$1
-    item=$2
-    case $action in
-      add)
-        [ "$#" -eq 3 ] || usage
-        mas_id=$3
-        ;;
-      remove)
-        [ "$#" -eq 2 ] || usage
-        ;;
-      *) usage ;;
-    esac
-    ;;
-  flake)
-    [ "$#" -ge 1 ] || usage
-    [ "$#" -le 2 ] || usage
-    action=$1
-    shift
-    [ "$action" = refresh ] || usage
-    input=${1:-}
-    ;;
-  *) usage ;;
+[ "$group" = flake ] && [ "$#" -ge 1 ] && [ "$#" -le 2 ] || usage
+[ "$1" = refresh ] || usage
+shift
+input=${1:-}
+case $input in
+  -* | *[!A-Za-z0-9._/+-]*) refuse 'Not a usable flake input name.' 'Use a declared input name, not an option.' ;;
+  '' | *[A-Za-z0-9]*) ;;
+  *) refuse 'Not a usable flake input name.' 'An input name must contain a letter or digit.' ;;
 esac
+[ "$#" -eq 0 ] || [ -n "$input" ] || usage
+target=unixlike/flake.lock
 
-# A name reaches a Nix string literal and a shell argument list. Keep it to what
-# Homebrew and flake inputs actually spell.
-valid_name() {
-  case $1 in
-    '' | *[!A-Za-z0-9._/+-]*) return 1 ;;
-  esac
-  case $1 in
-    *[A-Za-z0-9]*) return 0 ;;
-    *) return 1 ;;
-  esac
-}
-
-# masApps is a Nix attrset, not a string list: <name> reaches a bare attribute
-# name rather than a quoted entry. Nix identifiers take digits, underscores and
-# dashes unquoted (`microsoft-onedrive = 823766827;` needs no quoting), but not
-# a leading digit or a slash; the quoting style a tapped cask uses is a list
-# convention that has no counterpart here, so a name that would need it is
-# refused rather than quoted.
-valid_attr_name() {
-  case $1 in
-    '' | [!A-Za-z_]* | *[!A-Za-z0-9_-]*) return 1 ;;
-  esac
-  return 0
-}
-
-# The maintainer supplies the numeric App Store id directly; this never looks
-# one up.
-valid_mas_id() {
-  case $1 in
-    '' | *[!0-9]*) return 1 ;;
-  esac
-  return 0
-}
-
-if [ "$group" = mas ]; then
-  valid_attr_name "$item" \
-    || refuse "Not a usable Nix attribute name: $item" \
-      "Use lowercase letters, digits, underscores and dashes, for example 'microsoft-onedrive'. A name needing real quoting is a list convention that masApps does not use."
-  [ "$action" != add ] || valid_mas_id "$mas_id" \
-    || refuse "Not a usable Mac App Store id: $mas_id" \
-      "Supply the numeric id mas or the App Store listing shows, for example 409183694 for Keynote. This never looks one up."
-else
-  [ -z "$item" ] || valid_name "$item" \
-    || refuse "Not a usable package name: $item" \
-      "Use the name as Homebrew spells it, for example 'displayplacer' or 'nikitabobko/tap/aerospace'."
-fi
-[ -z "$input" ] || valid_name "$input" \
-  || refuse "Not a usable flake input name: $input" \
-    "Use the input name as flake.nix declares it, for example 'nixpkgs'."
-
-case $group in
-  brew|cask|mas) target=$homebrew_module ;;
-  flake) target=unixlike/flake.lock ;;
-esac
-
-# classify still owns ownership and check selection.
+# The classifier owns ownership; the dispatcher selects checks by effect.
 scope_paths=$target
 scope=$("$classify" --files "$target")
 case $scope in
@@ -347,369 +253,6 @@ commit_staged() {
   commit_rejected "$@"
 }
 
-# The entries of one Nix string list, in file order. The pattern is strict, and
-# the strictness is only safe because require_readable_list refuses the whole
-# edit when the list holds a line neither this nor the editor can read. A reader
-# that quietly skipped `"displayplacer" # broken` would report that entry as
-# absent, and the editor would then add a second copy of it.
-list_entries() {
-  awk -v list="$1" '
-    $0 ~ "^[[:space:]]*" list " = \\[$" { inside = 1; next }
-    inside && /^[[:space:]]*\];[[:space:]]*$/ { inside = 0 }
-    inside && /^[[:space:]]*"[^"]*"$/ {
-      match($0, /"[^"]*"/)
-      print substr($0, RSTART + 1, RLENGTH - 2)
-    }
-  ' "$homebrew_module"
-}
-
-# Everything between the opener and `];` must be a blank line, a comment line,
-# or a bare quoted entry. Anything else is refused rather than skipped, because
-# skipping it is what turns an add into a silent duplicate.
-require_readable_list() {
-  unreadable=$(awk -v list="$1" '
-    $0 ~ "^[[:space:]]*" list " = \\[$" { inside = 1; next }
-    inside && /^[[:space:]]*\];[[:space:]]*$/ { inside = 0; next }
-    inside {
-      if ($0 ~ /^[[:space:]]*$/) next
-      if ($0 ~ /^[[:space:]]*#/) next
-      if ($0 ~ /^[[:space:]]*"[^"]*"$/) next
-      sub(/^[[:space:]]+/, "")
-      printf "%d: %s", NR, $0
-      exit
-    }
-  ' "$homebrew_module")
-
-  [ -z "$unreadable" ] || refuse \
-    "$homebrew_module line $unreadable" \
-    "An entry in $list must be a bare quoted name on its own line. Edit that line by hand; this helper refuses rather than skip it, because skipping it would duplicate an entry."
-}
-
-list_indent() {
-  awk -v list="$1" '
-    $0 ~ "^[[:space:]]*" list " = \\[$" {
-      match($0, /^[[:space:]]*/)
-      fallback = substr($0, 1, RLENGTH) "  "
-      inside = 1
-      next
-    }
-    inside && /^[[:space:]]*\];[[:space:]]*$/ { exit }
-    inside && /^[[:space:]]*"[^"]*"$/ {
-      match($0, /^[[:space:]]*/)
-      print substr($0, 1, RLENGTH)
-      found = 1
-      exit
-    }
-    END { if (!found) printf "%s", fallback }
-  ' "$homebrew_module"
-}
-
-# Insert or delete one entry line and nothing else.
-#
-# The sort key is the last slash-separated segment, not the whole string:
-# casks begins with "nikitabobko/tap/aerospace", sorted under aerospace, so a
-# raw-string comparison files a tapped cask in the wrong place.
-#
-# Comment lines are buffered rather than printed immediately, because a comment
-# block belongs to the entry below it. An insert therefore lands above that
-# block, and a removal takes the block with the entry: "bettercap" carries
-# "Broken on Darwin in the locked nixpkgs", and leaving that behind would
-# silently re-attach it to "displayplacer".
-edit_list() {
-  awk -v list="$1" -v mode="$2" -v item="$3" -v ind="$4" '
-    function key(s,   n, p) {
-      n = split(s, p, "/")
-      return p[n]
-    }
-    function flush(   i) {
-      for (i = 1; i <= buffered; i++) print buf[i]
-      buffered = 0
-    }
-    function insert() {
-      printf "%s\"%s\"\n", ind, item
-      done = 1
-    }
-    BEGIN { state = 0; buffered = 0; done = 0 }
-    state == 0 {
-      print
-      if ($0 ~ "^[[:space:]]*" list " = \\[$") state = 1
-      next
-    }
-    state == 1 && /^[[:space:]]*\];[[:space:]]*$/ {
-      flush()
-      if (mode == "add" && !done) insert()
-      print
-      state = 2
-      next
-    }
-    state == 1 && /^[[:space:]]*#/ {
-      buf[++buffered] = $0
-      next
-    }
-    state == 1 && /^[[:space:]]*"[^"]*"$/ {
-      match($0, /"[^"]*"/)
-      name = substr($0, RSTART + 1, RLENGTH - 2)
-      if (mode == "remove" && name == item) {
-        buffered = 0
-        next
-      }
-      if (mode == "add" && !done && key(name) > key(item)) insert()
-      flush()
-      print
-      next
-    }
-    { flush(); print }
-  ' "$homebrew_module"
-}
-
-homebrew_command() {
-  case $group in
-    brew)
-      list=brews
-      noun=formula
-      ;;
-    cask)
-      list=casks
-      noun=cask
-      ;;
-  esac
-
-  [ -f "$homebrew_module" ] || refuse "$homebrew_module is missing." \
-    "This helper edits the Homebrew inventory declared there."
-  grep -Eq "^[[:space:]]*$list = \[$" "$homebrew_module" \
-    || refuse "$homebrew_module declares no $list list." \
-      "Update the module or this helper; they disagree about the file's shape."
-  require_readable_list "$list"
-
-  require_untouched "$homebrew_module"
-
-  if list_entries "$list" | grep -Fxq -- "$item"; then
-    present=1
-  else
-    present=0
-  fi
-
-  case $action in
-    add)
-      [ "$present" -eq 0 ] || refuse "$item is already declared in $list." "Nothing to do."
-      message="feat(unixlike): add homebrew $noun $item"
-      ;;
-    remove)
-      [ "$present" -eq 1 ] || refuse "$item is not declared in $list." "Nothing to do."
-      message="chore(unixlike): remove homebrew $noun $item"
-      ;;
-  esac
-
-  require_classified "$homebrew_module"
-
-  candidate="$work/candidate"
-  edit_list "$list" "$action" "$item" "$(list_indent "$list")" >"$candidate"
-
-  if cmp -s "$homebrew_module" "$candidate"; then
-    refuse "The edit would change nothing in $homebrew_module." \
-      "The $list list is not shaped the way this helper reads it."
-  fi
-
-  printf 'edit: %s\n' "$homebrew_module"
-  git --no-pager diff --no-index --no-color -- "$homebrew_module" "$candidate" \
-    | sed -n '/^@@/,$p'
-  report_plan "$message" "$homebrew_module"
-
-  [ "$dry_run" -eq 0 ] || exit 0
-
-  confirm "Apply this edit and commit?"
-
-  # Written in place so the file keeps its mode and identity.
-  cat "$candidate" >"$homebrew_module"
-  git add -- "$homebrew_module"
-  commit_staged "$message" "$homebrew_module"
-}
-
-# The masApps attrset holds `name = id;` pairs rather than the quoted list
-# entries edit_list understands, and its main block is followed by a
-# `# safari extensions` section that a new entry never enters (issue #92: the
-# main block is alphabetized and insertion is alphabetical within it only). A
-# name is unique across both sections, so mas_entries and removal look at the
-# whole attrset while insertion tracks the boundary itself.
-mas_entries() {
-  awk '
-    $0 ~ "^[[:space:]]*masApps = \\{$" { inside = 1; next }
-    inside && /^[[:space:]]*\};[[:space:]]*$/ { inside = 0 }
-    inside && /^[[:space:]]*[A-Za-z_][A-Za-z0-9_-]*[[:space:]]*=[[:space:]]*[0-9]+;[[:space:]]*$/ {
-      line = $0
-      sub(/^[[:space:]]*/, "", line)
-      split(line, parts, "=")
-      name = parts[1]
-      gsub(/[[:space:]]/, "", name)
-      print name
-    }
-  ' "$homebrew_module"
-}
-
-# Everything between the opener and the matching `};` must be a blank line,
-# the `# safari extensions` marker, a comment, or a bare `name = id;` entry.
-# Anything else is refused rather than skipped, for the same reason
-# require_readable_list refuses: skipping it would turn an add into a silent
-# duplicate.
-require_readable_masapps() {
-  unreadable=$(awk '
-    $0 ~ "^[[:space:]]*masApps = \\{$" { inside = 1; next }
-    inside && /^[[:space:]]*\};[[:space:]]*$/ { inside = 0; next }
-    inside {
-      if ($0 ~ /^[[:space:]]*$/) next
-      if ($0 ~ /^[[:space:]]*#/) next
-      if ($0 ~ /^[[:space:]]*[A-Za-z_][A-Za-z0-9_-]*[[:space:]]*=[[:space:]]*[0-9]+;[[:space:]]*$/) next
-      sub(/^[[:space:]]+/, "")
-      printf "%d: %s", NR, $0
-      exit
-    }
-  ' "$homebrew_module")
-
-  [ -z "$unreadable" ] || refuse \
-    "$homebrew_module line $unreadable" \
-    "An entry in masApps must be a bare 'name = id;' line. Edit that line by hand; this helper refuses rather than skip it, because skipping it would duplicate an entry."
-}
-
-masapps_indent() {
-  awk '
-    $0 ~ "^[[:space:]]*masApps = \\{$" {
-      match($0, /^[[:space:]]*/)
-      fallback = substr($0, 1, RLENGTH) "  "
-      inside = 1
-      next
-    }
-    inside && /^[[:space:]]*\};[[:space:]]*$/ { exit }
-    inside && /^[[:space:]]*[A-Za-z_][A-Za-z0-9_-]*[[:space:]]*=[[:space:]]*[0-9]+;[[:space:]]*$/ {
-      match($0, /^[[:space:]]*/)
-      print substr($0, 1, RLENGTH)
-      found = 1
-      exit
-    }
-    END { if (!found) printf "%s", fallback }
-  ' "$homebrew_module"
-}
-
-# Insert or delete one `name = id;` entry. Unlike edit_list, an insertion is
-# only ever considered while still in the main block: once the
-# `# safari extensions` marker is seen, an add that has not landed yet is
-# placed immediately before it, and nothing after the marker is a candidate
-# insertion point even when its key would sort later. Removal has no such
-# restriction, because an existing entry belongs wherever it already is.
-#
-# The blank line that separates the two sections is buffered like a comment so
-# an insertion at the boundary lands above it rather than between it and the
-# marker; that is also why the marker rule inserts before it flushes, the
-# opposite order from the closing brace, where a trailing insertion belongs
-# after whatever is already buffered.
-edit_masapps() {
-  awk -v mode="$1" -v item="$2" -v id="$3" -v ind="$4" '
-    function flush(   i) {
-      for (i = 1; i <= buffered; i++) print buf[i]
-      buffered = 0
-    }
-    function insert() {
-      printf "%s%s = %s;\n", ind, item, id
-      done = 1
-    }
-    BEGIN { state = 0; buffered = 0; done = 0; main = 1 }
-    state == 0 {
-      print
-      if ($0 ~ "^[[:space:]]*masApps = \\{$") state = 1
-      next
-    }
-    state == 1 && /^[[:space:]]*\};[[:space:]]*$/ {
-      flush()
-      if (mode == "add" && !done) insert()
-      print
-      state = 2
-      next
-    }
-    state == 1 && /^[[:space:]]*# safari extensions[[:space:]]*$/ {
-      if (mode == "add" && !done) insert()
-      flush()
-      print
-      main = 0
-      next
-    }
-    state == 1 && /^[[:space:]]*#/ {
-      buf[++buffered] = $0
-      next
-    }
-    state == 1 && /^[[:space:]]*$/ {
-      buf[++buffered] = $0
-      next
-    }
-    state == 1 && /^[[:space:]]*[A-Za-z_][A-Za-z0-9_-]*[[:space:]]*=[[:space:]]*[0-9]+;[[:space:]]*$/ {
-      line = $0
-      sub(/^[[:space:]]*/, "", line)
-      split(line, parts, "=")
-      name = parts[1]
-      gsub(/[[:space:]]/, "", name)
-      if (mode == "remove" && name == item) {
-        buffered = 0
-        next
-      }
-      if (mode == "add" && main && !done && name > item) insert()
-      flush()
-      print
-      next
-    }
-    { flush(); print }
-  ' "$homebrew_module"
-}
-
-mas_command() {
-  [ -f "$homebrew_module" ] || refuse "$homebrew_module is missing." \
-    "This helper edits the Mac App Store inventory declared there."
-  grep -Eq '^[[:space:]]*masApps = \{$' "$homebrew_module" \
-    || refuse "$homebrew_module declares no masApps attrset." \
-      "Update the module or this helper; they disagree about the file's shape."
-  require_readable_masapps
-
-  require_untouched "$homebrew_module"
-
-  if mas_entries | grep -Fxq -- "$item"; then
-    present=1
-  else
-    present=0
-  fi
-
-  case $action in
-    add)
-      [ "$present" -eq 0 ] || refuse "$item is already declared in masApps." "Nothing to do."
-      message="feat(unixlike): add mas app $item"
-      ;;
-    remove)
-      [ "$present" -eq 1 ] || refuse "$item is not declared in masApps." "Nothing to do."
-      message="chore(unixlike): remove mas app $item"
-      ;;
-  esac
-
-  require_classified "$homebrew_module"
-
-  candidate="$work/candidate"
-  edit_masapps "$action" "$item" "$mas_id" "$(masapps_indent)" >"$candidate"
-
-  if cmp -s "$homebrew_module" "$candidate"; then
-    refuse "The edit would change nothing in $homebrew_module." \
-      "masApps is not shaped the way this helper reads it."
-  fi
-
-  printf 'edit: %s\n' "$homebrew_module"
-  git --no-pager diff --no-index --no-color -- "$homebrew_module" "$candidate" \
-    | sed -n '/^@@/,$p'
-  report_plan "$message" "$homebrew_module"
-
-  [ "$dry_run" -eq 0 ] || exit 0
-
-  confirm "Apply this edit and commit?"
-
-  # Written in place so the file keeps its mode and identity.
-  cat "$candidate" >"$homebrew_module"
-  git add -- "$homebrew_module"
-  commit_staged "$message" "$homebrew_module"
-}
-
 flake_command() {
   # AGENTS.md § Rules that are expensive to break: do not update flake inputs
   # unless the task calls for it. This is the only command that touches them,
@@ -773,8 +316,4 @@ flake_command() {
   commit_staged "$message" "$flake_lock"
 }
 
-case $group in
-  brew | cask) homebrew_command ;;
-  mas) mas_command ;;
-  flake) flake_command ;;
-esac
+flake_command

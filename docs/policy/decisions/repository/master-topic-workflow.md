@@ -131,6 +131,15 @@ capability. Share only CI artifact format parsing; release publication retains
 its narrower accepted events and writer proof. Tests still check shared writer
 serialization and secret/environment wiring declared in CI YAML.
 
+## Provider editor simplification — 2026-11-05
+
+The provider has no Homebrew formula, cask or Mac App Store inventory; app
+selection belongs to consumers. The specialized commit helper retains direct
+flake refresh and Git admission, but brew/cask/mas requests now refuse before
+Git or host work, including in modified inventories. Their former parser and
+synthetic editing contract are retired. Ordinary owned source edits use the
+normal authoring flow; this change neither edits nor provisions consumers.
+
 ## Final review corrections — 2026-11-02
 
 The maintainer authorized reuse of topic ownership and source-range checks

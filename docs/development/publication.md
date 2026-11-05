@@ -1,5 +1,12 @@
 # Publish and maintain history
 
+For local orientation use `tool/configs workflow inspect`. The release
+controller's `tool/configs release inspect`, when `CONFIGS_RELEASE_ENABLED=1`,
+refreshes origin/tags and reads hosted PR/check state; it may fetch a patch
+head and write synthetic merge-tree objects. It is not a local-only query.
+Its `advance`, `publish` and `refresh-pr` operations have separate write effects.
+Use them only for the requested release operation, not to prepare ordinary work.
+
 ## Candidate CI without a PR
 
 Push a named topic only when requested, then explicitly dispatch CI on master

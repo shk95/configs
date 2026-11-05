@@ -45,3 +45,10 @@ remote/native adoption are outside this outcome.
 | AC2 | Selected low-strength improvements remove actual duplicated decisions or misleading instructions while preserving ownership, authorization and recovery boundaries. | fixtures, policy checks, review |
 | AC3 | Evaluate deeper path/context changes in bounded loops, implement justified improvements, and explain retained/deferred alternatives using concrete costs. Independent findings are corrected and rereviewed. | fixtures, review |
 | AC4 | Final relevant checks pass with unavailable evidence stated separately; local commits/topics remain scope-pure, master stays at its baseline and no remote publication or deployment occurs. | fixtures, policy checks, review |
+
+Amended 2026-11-05: AC2 and AC3 include evaluating retirement of the specialized
+brew/cask/mas editor. The current provider has no app inventory and consumers
+own app selection. Retiring success even for modified synthetic inventories is
+an intentional interface reduction, not behavior-equivalent extraction.
+Retained command names must refuse clearly before Git/host effects; common
+commit admission, hook and recovery evidence must remain on the flake path.

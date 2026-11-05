@@ -74,3 +74,12 @@ review `git status` before and after. If master already contains a completed
 commit, keep it there and group the remaining work on the topic. Do not reset
 master or rewrite accepted history to retroactively regroup it. The start
 record, if present, remains the original estimate rather than new approval.
+
+## Specialized lock refresh
+
+`tool/configs commit [--dry-run] flake refresh [INPUT]` retains the explicit
+direct Nix update and confirmed local commit. It requires an untouched lock
+and empty index, uses tracked hooks, and leaves a rejected commit staged for
+recovery. This is distinct from exclusion-aware `just up`; neither publishes.
+brew/cask/mas editing is retired, including modified inventories: app selection
+belongs to consumers. Use ordinary authoring for their owned source.

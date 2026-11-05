@@ -1,0 +1,175 @@
+#!/bin/sh
+# INV repository/local-development-integration
+# INV repository/hooks-are-the-tracked-ones
+# INV repository/flake-lock-isolated
+# INV repository/workspace-choice
+# Real Git/hook admission with a fake Nix; no provider or host inputs change.
+set -eu
+MSYS_NO_PATHCONV=1
+MSYS2_ARG_CONV_EXCL='*'
+export MSYS_NO_PATHCONV MSYS2_ARG_CONV_EXCL
+source_root=$(CDPATH= cd -- "$(dirname -- "$0")/../.." && pwd)
+. "$source_root/tool/version-control/fixture-git-environment.sh"
+unset REQUIRE_NATIVE
+fixture=$(mktemp -d)
+trap 'rm -rf "$fixture"' EXIT
+trap 'exit 130' INT HUP TERM
+repo="$fixture/repo"
+mkdir -p "$repo/tool" "$repo/unixlike/tool/checks" "$fixture/bin"
+cp -R "$source_root/tool/version-control" "$repo/tool/version-control"
+cp -R "$source_root/tool/dispatch" "$repo/tool/dispatch"
+cp -R "$source_root/.githooks" "$repo/.githooks"
+for name in hygiene domain-reads design-citations records work invariants provisional; do
+  printf '#!/bin/sh\nexit 0\n' >"$repo/tool/version-control/$name"
+done
+for name in format lint payloads; do
+  printf '#!/bin/sh\necho "fixture check" >&2\nexit "${COMMIT_CHECK_STATUS:-0}"\n' >"$repo/unixlike/tool/checks/$name"
+  chmod +x "$repo/unixlike/tool/checks/$name"
+done
+printf '#!/bin/sh\nexit 0\n' >"$fixture/bin/gitleaks"
+cat >"$fixture/bin/nix" <<'STUB'
+#!/bin/sh
+[ "$1" = flake ] && [ "$2" = update ] || exit 97
+case ${COMMIT_NIX_MODE:-update} in
+  fail) printf 'partial\n' >unixlike/flake.lock; exit 1 ;;
+  unchanged) exit 0 ;;
+esac
+printf '{"fixture":"%s"}\n' "$*" >unixlike/flake.lock
+STUB
+chmod +x "$fixture/bin/gitleaks" "$fixture/bin/nix"
+printf '{"fixture":"baseline"}\n' >"$repo/unixlike/flake.lock"
+printf 'unrelated\n' >"$repo/unixlike/unrelated"
+git -C "$repo" init -q -b master
+git -C "$repo" config user.name Fixture
+git -C "$repo" config user.email fixture@example.invalid
+git -C "$repo" add .
+git -C "$repo" commit -qm 'test(repository): seed commit fixture'
+git -C "$repo" config core.hooksPath .githooks
+
+run() {
+  answer=$1; shift
+  printf '%s\n' "$answer" | (cd "$repo" && PATH="${COMMIT_PATH:-$fixture/bin:$PATH}" tool/version-control/commit "$@")
+}
+fail() { printf '%s\n' "$1" >&2; exit 1; }
+current_head() { git -C "$repo" rev-parse HEAD; }
+baseline=$(current_head)
+lock_before=$(git -C "$repo" hash-object unixlike/flake.lock)
+run n --dry-run flake refresh nixpkgs >"$fixture/out" 2>&1
+grep -q '^action: nix flake update nixpkgs$' "$fixture/out"
+[ "$(current_head)" = "$baseline" ] || fail 'dry run committed'
+[ "$(git -C "$repo" hash-object unixlike/flake.lock)" = "$lock_before" ] || fail 'dry run wrote source'
+if run n flake refresh >"$fixture/out" 2>&1; then fail 'declined confirmation succeeded'; fi
+[ "$(current_head)" = "$baseline" ] || fail 'declined confirmation committed'
+[ "$(git -C "$repo" hash-object unixlike/flake.lock)" = "$lock_before" ] || fail 'declined confirmation wrote source'
+
+printf 'dirty\n' >>"$repo/unixlike/flake.lock"
+if run y flake refresh >"$fixture/out" 2>&1; then fail 'dirty target admitted'; fi
+grep -q '^dirty$' "$repo/unixlike/flake.lock"
+git -C "$repo" restore unixlike/flake.lock
+printf 'staged\n' >>"$repo/unixlike/unrelated"
+git -C "$repo" add unixlike/unrelated
+if run y flake refresh >"$fixture/out" 2>&1; then fail 'unrelated staged data admitted'; fi
+[ "$(git -C "$repo" diff --cached --name-only)" = unixlike/unrelated ] || fail 'staged data changed'
+git -C "$repo" restore --staged --worktree unixlike/unrelated
+
+git -C "$repo" switch -qc dev
+if run y --dry-run flake refresh >"$fixture/out" 2>&1; then fail 'retired branch admitted'; fi
+git -C "$repo" switch -q master
+git -C "$repo" checkout -q --detach
+if run y --dry-run flake refresh >"$fixture/out" 2>&1; then fail 'detached authoring admitted'; fi
+git -C "$repo" switch -q master
+if run y --no-verify flake refresh >"$fixture/out" 2>&1; then fail 'hook bypass admitted'; fi
+if run y --publish flake refresh >"$fixture/out" 2>&1; then fail 'implicit publication admitted'; fi
+if run y flake refresh --all >"$fixture/out" 2>&1; then fail 'input option admitted'; fi
+for input in '' . / + _; do
+  if run y flake refresh "$input" >"$fixture/out" 2>&1; then fail 'invalid input name admitted'; fi
+done
+cp "$repo/tool/version-control/classify" "$fixture/classify"
+printf '#!/bin/sh\necho unclassified\n' >"$repo/tool/version-control/classify"
+if run y --dry-run flake refresh >"$fixture/out" 2>&1; then fail 'unclassified source admitted'; fi
+cp "$fixture/classify" "$repo/tool/version-control/classify"
+
+COMMIT_NIX_MODE=fail
+export COMMIT_NIX_MODE
+if run y flake refresh >"$fixture/out" 2>&1; then fail 'failed update committed'; fi
+[ "$(current_head)" = "$baseline" ] || fail 'failed update changed HEAD'
+[ "$(git -C "$repo" hash-object unixlike/flake.lock)" = "$lock_before" ] || fail 'failed update left partial source'
+COMMIT_NIX_MODE=unchanged
+run y flake refresh >"$fixture/out" 2>&1
+[ "$(current_head)" = "$baseline" ] || fail 'unchanged source committed'
+COMMIT_NIX_MODE=update
+unset COMMIT_NIX_MODE
+
+# Deterministic missing-Nix case even on a Nix-equipped host.
+mkdir "$fixture/no-nix"
+for name in sh env git python3 dirname grep sed awk tr head tail cut wc date mkdir cat basename uname sort mktemp rm; do
+  location=$(command -v "$name")
+  ln -s "$location" "$fixture/no-nix/$name"
+done
+missing_status=0
+COMMIT_PATH="$fixture/no-nix" run y flake refresh >"$fixture/out" 2>&1 || missing_status=$?
+[ "$missing_status" -eq 69 ] || { cat "$fixture/out"; fail 'missing Nix not reported unavailable'; }
+[ "$(current_head)" = "$baseline" ] || fail 'missing Nix committed'
+
+run y flake refresh nixpkgs >"$fixture/out" 2>"$fixture/err"
+[ "$(git -C "$repo" show -s --format=%s HEAD)" = 'chore(unixlike-deps): refresh nixpkgs in flake.lock' ] || fail 'wrong subject'
+[ "$(git -C "$repo" diff-tree --no-commit-id --name-only -r HEAD)" = unixlike/flake.lock ] || fail 'mixed refresh'
+grep -q 'fixture check' "$fixture/err"
+if grep -q 'fixture check' "$fixture/out"; then fail 'hook output captured into plan stream'; fi
+baseline=$(current_head)
+
+COMMIT_CHECK_STATUS=1
+export COMMIT_CHECK_STATUS
+if run y flake refresh another >"$fixture/out" 2>&1; then fail 'failing hook accepted'; fi
+[ "$(current_head)" = "$baseline" ] || fail 'rejected hook changed HEAD'
+[ "$(git -C "$repo" diff --cached --name-only)" = unixlike/flake.lock ] || fail 'rejected edit not retained staged'
+grep -q 'edit is left staged' "$fixture/out"
+git -C "$repo" restore --staged --worktree unixlike/flake.lock
+COMMIT_CHECK_STATUS=69
+run y flake refresh unverified >"$fixture/out" 2>&1
+grep -q 'unverified' "$fixture/out"
+[ "$(current_head)" != "$baseline" ] || fail 'unverified local check prevented commit'
+baseline=$(current_head)
+if REQUIRE_NATIVE=1 run y flake refresh native-required >"$fixture/out" 2>&1; then fail 'unverified native check accepted'; fi
+[ "$(current_head)" = "$baseline" ] || fail 'unverified native check changed HEAD'
+[ "$(git -C "$repo" diff --cached --name-only)" = unixlike/flake.lock ] || fail 'unverified native edit not retained'
+git -C "$repo" restore --staged --worktree unixlike/flake.lock
+unset COMMIT_CHECK_STATUS
+
+git -C "$repo" config --unset core.hooksPath
+run n --dry-run flake refresh >"$fixture/out" 2>&1
+grep -q 'pre-commit checks unverified' "$fixture/out"
+if REQUIRE_NATIVE=1 run n --dry-run flake refresh >"$fixture/out" 2>&1; then fail 'missing hooks qualified as native'; fi
+git -C "$repo" config core.hooksPath "$repo/.githooks"
+run n --dry-run flake refresh >"$fixture/out" 2>&1
+if grep -q 'pre-commit checks unverified' "$fixture/out"; then fail 'absolute tracked hooks unavailable'; fi
+
+primary=$repo
+baseline=$(current_head)
+git -C "$primary" worktree add -qb feature/unixlike-commit-fixture "$fixture/linked"
+repo="$fixture/linked"
+run y flake refresh linked >"$fixture/out" 2>&1
+[ "$(git -C "$repo" diff-tree --no-commit-id --name-only -r HEAD)" = unixlike/flake.lock ] || fail 'linked commit mixed source'
+[ "$(git -C "$primary" rev-parse HEAD)" = "$baseline" ] || fail 'linked commit changed primary HEAD'
+grep -q 'fixture check' "$fixture/out"
+
+# The retained interface refuses before Git, host tools or scratch creation,
+# including outside a checkout. Spies are evidence of no attempted execution.
+mkdir "$fixture/spies" "$fixture/outside"
+for name in git nix mktemp uname gh; do
+  printf '#!/bin/sh\necho invoked >>"$COMMIT_SPY_LOG"\nexit 97\n' >"$fixture/spies/$name"
+  chmod +x "$fixture/spies/$name"
+done
+COMMIT_SPY_LOG="$fixture/spy.log"
+export COMMIT_SPY_LOG
+for command in brew cask mas; do
+  for flag in plain --dry-run --publish; do
+    if [ "$flag" = plain ]; then set --; else set -- "$flag"; fi
+    if (cd "$fixture/outside" && PATH="$fixture/spies:$PATH" "$source_root/tool/version-control/commit" "$@" "$command" add sample) >"$fixture/out" 2>&1; then
+      fail 'retired inventory command succeeded'
+    fi
+    grep -q 'editing is retired' "$fixture/out"
+    [ ! -e "$COMMIT_SPY_LOG" ] || fail 'retirement executed a tool'
+  done
+done
+echo 'commit: flake admission, hooks, recovery and inventory retirement passed'
