@@ -1,0 +1,14 @@
+#!/bin/sh
+# INV unixlike/provider-entry-boundary
+set -eu
+checks=$(CDPATH= cd -- "$(dirname -- "$0")" && pwd)
+. "$checks/prerequisite"
+domain=$(CDPATH= cd -- "$checks/../.." && pwd)
+if ! command -v just >/dev/null 2>&1; then
+  require_command nix
+  fixture_just=$(nix build --no-link --print-out-paths --impure --expr \
+    "let f = builtins.getFlake \"path:$domain\"; in f.inputs.nixpkgs.legacyPackages.\${builtins.currentSystem}.just.out")
+  PATH="$fixture_just/bin:$PATH"
+  export PATH
+fi
+exec "$(python_for_test)" -B "$checks/just_entry_test.py"

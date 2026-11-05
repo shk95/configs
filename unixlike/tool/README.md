@@ -1,4 +1,21 @@
-# Unix-like input refresh
+# Unix-like development operations
+
+Use `just --list` for work/effect groups. Provider verification is separate
+from consumer development, source formatting/input edits, host observation,
+host maintenance and transfer. Compatibility host-realization names and aliases
+refuse immediately: real targets belong to reviewed consumer flakes.
+
+`upp INPUT` updates the provider's `unixlike/` flake directly, preserves one
+literal input argument and refuses empty/option inputs. It does not consult
+refresh exclusions. `fmt` runs from the same domain flake directory. Neither
+stages or commits source.
+
+`gc`, `switch-shell` and `nixos-stage` retain their existing store-deletion,
+shell-change and archive-copy effects. Their menu presence supplies no
+authorization. Generation queries and consumer operations keep their effects;
+see [consumer development](dev-host/README.md).
+
+## Unix-like input refresh
 
 Run `just up` or `unixlike/tool/refresh-inputs` to refresh this provider's
 independently locked direct inputs. The flake is resolved from the tool's
