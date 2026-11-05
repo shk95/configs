@@ -87,3 +87,25 @@ anchors. Both are retained. The Windows setup installer is now explicitly
 separate from read-only verification. Common entry guidance moves Unix-like
 layout details to their affected architecture section, keeping every costly
 boundary. No unrelated concern can block reading a selected Markdown file.
+
+## Loop 3: share the actual verification plan
+
+The baseline combines candidate validation, check selection, argv construction
+and execution. Inspecting intended effects requires reading that implementation
+or starting checks. Extract its assembly into `plan` inside the same controller;
+check consumes the resulting ordered local/hosted steps. The optional plan
+names exact base/head/tree, subjects and blockers without running suites or
+hosted proof. No new module, capability file, doctor mode, discovery mechanism
+or persistent receipt is added. Existing dirty narrow checks stay separate.
+
+This trades a small implementation increase for replacing source-code inference
+with actual selected commands in S5. It adds zero mandatory operator steps and
+one optional query. Tests exercise real disposable Git candidates, byte/mode
+preservation, ordered execution and unresolved hosted/native proof boundaries.
+
+Independent review corrected two weak fixtures: the gh spy now lives outside
+the candidate (rather than making its ownership invalid), and execution parity
+uses actual subprocess argv/order in an external log rather than printed
+intent. The final narrow suite passes 16 workflow and 17 mechanics cases
+(`/tmp/configs-optimization-loop3-workflow-proof.log`, exit 0). Rereview accepts
+the 31-line controller increase and finds no remaining blocker.

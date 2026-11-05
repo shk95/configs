@@ -13,6 +13,15 @@ tool/configs workflow merge --base <full-master-SHA> --head <full-candidate-SHA>
 ```
 
 These are alternatives; running check before merge repeats verification.
+To inspect the same selected command sequence without executing checks, use
+`tool/configs workflow plan --base <full-master-SHA> --head <full-candidate-SHA>`.
+Plan requires the same clean committed candidate, reports `not-run` commands,
+source subjects and known native/hosted blockers, and queries no hosted proof.
+It is optional, provides no verification/readiness/authorization evidence and
+is rebuilt by check; no saved plan is accepted as proof. Global scans remain
+local when `--ci-run` supplies suites. Dirty source uses narrow development
+checks instead of this exact-candidate operation.
+
 Merge requires authorization covering the commit-producing integration. Existing
 authorization for that operation remains valid within the agreed task. It runs the
 checks itself, requires the candidate to contain the selected current master,

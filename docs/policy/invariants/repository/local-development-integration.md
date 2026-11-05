@@ -11,3 +11,6 @@ enforced-by: fixture tool/version-control/test-local-workflow
 enforced-by: manual The reviewer confirms logical commit grouping and explicit Git authorization
 owner: repository maintainer
 decision: docs/policy/decisions/repository/master-topic-workflow.md § Decision
+
+An optional candidate plan exposes the same ordered steps consumed by check.
+Planning executes no checks or hosted proof and supplies no mutation authority.

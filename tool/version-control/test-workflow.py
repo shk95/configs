@@ -32,24 +32,30 @@ class Workflow(unittest.TestCase):
         self.git('config', 'user.email', 'fixture@example.invalid')
         (self.root / 'docs/status').mkdir(parents=True)
         (self.root / 'docs/status/repository.md').write_text('base\n')
+        trace = ('if [ -n "${FIXTURE_EXECUTION_LOG:-}" ]; then\n'
+                 ' python3 -c \'import json,os,sys; '
+                 'open(os.environ["FIXTURE_EXECUTION_LOG"],"a").write('
+                 'json.dumps(sys.argv[1:])+"\\n")\' "$0" "$@"\nfi\n')
         for name in ['workflow', 'authoring', 'policy', 'policy.json', 'repo_policy.py', 'github_proof.py', 'topic_scope.py', 'topic-source', 'audit', 'classify', 'closing-keywords', 'hooks.sh']:
             dest = self.root / 'tool/version-control' / name
             dest.parent.mkdir(parents=True, exist_ok=True)
             shutil.copy(ROOT / 'tool/version-control' / name, dest)
+            if name == 'audit':
+                dest.write_text(dest.read_text().replace('set -eu\n', 'set -eu\n' + trace, 1))
         (self.root / '.githooks').mkdir()
         shutil.copy(ROOT / '.githooks/commit-msg', self.root / '.githooks/commit-msg')
         # Real workflow invokes fixture-owned check commands; failure injection
         # proves checks and identities gate integration, not their semantics.
         for name in ['work', 'hygiene', 'domain-reads', 'design-citations', 'records', 'invariants', 'provisional', 'test']:
             dest = self.root / 'tool/version-control' / name
-            dest.write_text('#!/bin/sh\nexit "${FIXTURE_CHECK_STATUS:-0}"\n')
+            dest.write_text('#!/bin/sh\n' + trace + 'exit "${FIXTURE_CHECK_STATUS:-0}"\n')
             dest.chmod(0o755)
         dest = self.root / 'tool/dispatch/select'
         dest.parent.mkdir(parents=True)
         dest.write_text('#!/bin/sh\ncat >/dev/null\nprintf "repository:fixtures\\n"\n')
         dest.chmod(0o755)
         dest = self.root / 'tool/gitleaks'
-        dest.write_text('#!/bin/sh\nexit "${FIXTURE_SECRET_STATUS:-0}"\n')
+        dest.write_text('#!/bin/sh\n' + trace + 'exit "${FIXTURE_SECRET_STATUS:-0}"\n')
         dest.chmod(0o755)
         self.commit('chore(repository): seed fixture')
         self.base = self.git('rev-parse', 'HEAD')
@@ -152,6 +158,10 @@ class Workflow(unittest.TestCase):
         if os.name != 'nt':
             (self.root / 'tool/dispatch/select').write_text('#!/bin/sh\ncat >/dev/null\necho windows:suite\n')
             head = self.commit('test(repository): select native Windows checks')
+            planned = json.loads(self.workflow('plan', '--base', self.base, '--head', head))
+            self.assertTrue(planned['blockers'])
+            self.assertEqual(planned['steps'][-1]['argv'][:4],
+                             ['pwsh', '-NoProfile', '-File', 'windows/win-env.ps1'])
             self.workflow('check', '--base', self.base, '--head', head, ok=False)
             self.assertEqual(self.git('rev-parse', 'master'), self.base)
 
@@ -256,12 +266,70 @@ class Workflow(unittest.TestCase):
         previous = Path.cwd()
         os.chdir(self.root)
         try:
-            with patch.object(implementation, 'os', SimpleNamespace(name='nt')), \
+            with patch.object(implementation, 'os', SimpleNamespace(name='nt', environ=os.environ)), \
                  patch.dict(os.environ, PATH=str(self.root / 'tool') + os.pathsep + os.environ['PATH']):
                 with self.assertRaisesRegex(ValueError, 'runtime wiring requires exact hosted evidence'):
                     implementation.check(self.root, self.base, head)
         finally:
             os.chdir(previous)
+
+    def test_plan_reads_exact_candidate_without_checks_or_git_writes(self):
+        # INV repository/local-development-integration
+        self.topic()
+        def snapshot():
+            return {str(path.relative_to(self.root)): (path.stat().st_mode, path.read_bytes())
+                    for path in self.root.rglob('*') if path.is_file()}
+        before = snapshot()
+        result = json.loads(self.workflow('plan', '--base', self.base, '--head', self.head,
+                            env=dict(os.environ, FIXTURE_CHECK_STATUS='1', FIXTURE_SECRET_STATUS='1')))
+        self.assertEqual(snapshot(), before)
+        self.assertEqual((result['state'], result['base'], result['head']),
+                         ('not-run', self.base, self.head))
+        self.assertEqual(result['tree'], self.git('rev-parse', self.head + '^{tree}'))
+        self.assertEqual(result['units'], ['repository:fixtures'])
+        self.assertEqual(result['blockers'], [])
+        self.assertEqual(result['steps'][-1]['argv'], ['tool/version-control/test'])
+        (self.root / 'docs/status/repository.md').write_text('dirty preparation\n')
+        self.workflow('plan', '--base', self.base, '--head', self.head, ok=False)
+
+    def test_check_executes_the_ordered_local_plan(self):
+        # INV repository/local-gate-selects-by-effect
+        self.topic()
+        args = ['--base', self.base, '--head', self.head]
+        planned = json.loads(self.workflow('plan', *args))
+        trace = Path(self.tmp.name) / 'executed.jsonl'
+        self.workflow('check', *args, env=dict(os.environ, FIXTURE_EXECUTION_LOG=str(trace)))
+        observed = [json.loads(line) for line in trace.read_text().splitlines()]
+        expected = []
+        for step in planned['steps']:
+            command = step['argv'][:]
+            if command[0].startswith('tool/'):
+                command[0] = str(self.root / command[0])
+            else:
+                command[0] = str(self.root / 'tool' / command[0])
+            expected.append(command)
+        self.assertEqual(observed, expected)
+
+    def test_plan_exposes_native_blocker_and_hosted_alternative_without_gh(self):
+        # INV repository/windows-ci-runtime-bound
+        self.topic()
+        bin_dir = Path(self.tmp.name) / 'hosted-spy'
+        bin_dir.mkdir()
+        gh = bin_dir / 'gh'
+        gh.write_text('#!/bin/sh\nexit 97\n')
+        gh.chmod(0o755)
+        env = dict(os.environ, PATH=str(bin_dir) + os.pathsep + os.environ['PATH'])
+        (self.root / 'tool/dispatch/select').write_text('#!/bin/sh\ncat >/dev/null\necho windows:runtime\n')
+        head = self.commit('test(repository): select hosted runtime evidence')
+        args = ['--base', self.base, '--head', head]
+        blocked = json.loads(self.workflow('plan', *args, env=env))
+        self.assertIn('runtime wiring', blocked['blockers'][0])
+        # A proof identifier is not queried or accepted as successful evidence.
+        hosted = json.loads(self.workflow('plan', *args, '--ci-run', '123', env=env))
+        self.assertEqual(hosted['blockers'], [])
+        self.assertEqual([step['id'] for step in hosted['steps'] if step['source'] == 'hosted'],
+                         ['ci-proof', 'windows:runtime'])
+        self.assertIn('hygiene', [step['id'] for step in hosted['steps'] if step['source'] == 'local'])
 
     def test_remote_contract_accepts_direct_master_and_refuses_unsafe_settings(self):
         # INV repository/local-development-integration

@@ -25,7 +25,8 @@ def run(*args, cwd=None, capture=True):
 
 
 def git(*args, cwd=None):
-    return run('git', *args, cwd=cwd)
+    return subprocess.check_output(['git', *args], cwd=cwd, text=True,
+                                   env=dict(os.environ, GIT_OPTIONAL_LOCKS='0')).strip()
 
 
 def clean(root):
@@ -58,55 +59,83 @@ def inspect(root):
             'workspace_choice': 'ask the user, then pass an explicit --workspace to start'}
 
 
-def check(root, base, head, ci_run=None):
+def plan(root, base, head, ci_run=None):
+    """Build the exact check sequence without running checks or hosted proof."""
     clean(root)
     base, head = sha(base), sha(head)
     if git('rev-parse', 'HEAD') != head:
         raise ValueError('Check the exact candidate in its checkout first.')
     git('merge-base', '--is-ancestor', base, head)
-    tools = root / 'tool'
     changes = git('diff', '--name-status', base, head)
-    units = subprocess.run([str(tools / 'dispatch/select'), 'ci'], input=changes + '\n', text=True,
-                           stdout=subprocess.PIPE, check=True).stdout.splitlines()
-    scopes = run(str(tools / 'version-control/classify'), '--range', base, head).splitlines()
+    units = subprocess.run(
+        [str(root / 'tool/dispatch/select'), 'ci'], input=changes + '\n', text=True,
+        stdout=subprocess.PIPE, check=True).stdout.splitlines()
+    scopes = run(str(root / 'tool/version-control/classify'), '--range', base, head).splitlines()
     branch = git('branch', '--show-current')
     if branch != BASE:
         validate_topic(branch, base, head, POLICY)
-    commands = [('version-control/audit', '--range', base, head),
-                ('version-control/work', '--range', base, head)]
-    commands += [(f'version-control/{name}',) for name in
-                 ('hygiene', 'domain-reads', 'design-citations', 'records', 'invariants')]
-    commands.append(('version-control/provisional', '--scopes', ','.join(scope for scope in scopes if scope != 'none')))
-    run('gitleaks', 'git', '--log-opts=' + base + '..' + head, '--redact', '--no-banner', cwd=root, capture=False)
-    proof = None
+    steps = []
+
+    def local(identifier, argv, subject):
+        if argv[0].endswith('.ps1'):
+            argv = ['pwsh', '-NoProfile', '-File', *argv]
+        steps.append(dict(id=identifier, source='local', argv=list(argv), subject=subject))
+
+    local('secrets', ['gitleaks', 'git', '--log-opts=' + base + '..' + head,
+                      '--redact', '--no-banner'], 'incoming-history-range')
     if ci_run:
-        proof = verify(ci_run, base, head, git('rev-parse', head + '^{tree}'))
-    # Local global scans always run. Live exact-source proof may supply suites.
+        steps.append(dict(id='ci-proof', source='hosted', run=ci_run, subject='exact-base-head-tree'))
+    for name in ('audit', 'work'):
+        local(name, ['tool/version-control/' + name, '--range', base, head], 'incoming-range')
+    for name in ('hygiene', 'domain-reads', 'design-citations', 'records', 'invariants'):
+        local(name, ['tool/version-control/' + name], 'candidate-index')
+    local('provisional', ['tool/version-control/provisional', '--scopes',
+                         ','.join(scope for scope in scopes if scope != 'none')],
+          'candidate-index; current date; affected scopes')
+    blockers = []
     for unit in units:
-        if unit == 'windows:runtime':
-            if not proof:
-                raise ValueError('Windows CI runtime wiring requires exact hosted evidence via --ci-run')
+        if unit == 'windows:runtime' and not ci_run:
+            blockers.append('Windows CI runtime wiring requires exact hosted evidence via --ci-run')
+        elif unit not in POLICY['ci']['suite_commands'] and unit != 'windows:runtime':
+            raise ValueError('Unknown selected check: ' + unit)
+        elif unit == 'windows:suite' and os.name != 'nt' and not ci_run:
+            blockers.append('Native Windows checks unavailable: use --ci-run with exact hosted evidence')
+        if ci_run or unit == 'windows:runtime':
+            steps.append(dict(id=unit, source='hosted', subject='exact-base-head-tree'))
+        else:
+            for index, argv in enumerate(POLICY['ci']['suite_commands'][unit]):
+                local(unit + ':' + str(index + 1), argv, 'candidate-tree')
+    result = dict(state='not-run', base=base, head=head, tree=git('rev-parse', head + '^{tree}'),
+                  units=units, steps=steps, blockers=blockers)
+    clean(root)
+    if git('rev-parse', 'HEAD') != head:
+        raise ValueError('Candidate changed while planning.')
+    return result
+
+
+def check(root, base, head, ci_run=None):
+    selected = plan(root, base, head, ci_run)
+    if selected['blockers']:
+        raise ValueError('; '.join(selected['blockers']))
+    proof = None
+    for step in selected['steps']:
+        if step['source'] == 'hosted':
+            if step['id'] == 'ci-proof':
+                proof = verify(ci_run, selected['base'], selected['head'], selected['tree'])
+            elif not proof:
+                raise ValueError('Selected suite requires successful exact hosted proof')
             continue
-        if unit not in POLICY['ci']['suite_commands']:
-            raise ValueError(f'Unknown selected check: {unit}')
-        if proof:
-            continue
-        if unit == 'windows:suite' and os.name != 'nt':
-            raise ValueError('Native Windows checks unavailable: use --ci-run with exact hosted evidence')
-        commands += POLICY['ci']['suite_commands'][unit]
-    for command in commands:
-        path = root / command[0] if command[0].startswith(('tool/', 'unixlike/', 'windows/')) else tools / command[0]
-        argv = [str(path), *command[1:]]
-        if path.suffix == '.ps1':
-            argv = ['pwsh', '-NoProfile', '-File', str(path), *command[1:]]
+        argv = step['argv'][:]
+        for index in (0, 3) if argv[:3] == ['pwsh', '-NoProfile', '-File'] else (0,):
+            if argv[index].startswith(('tool/', 'unixlike/', 'windows/')):
+                argv[index] = str(root / argv[index])
         print('check:', ' '.join(argv), flush=True)
         run(*argv, cwd=root, capture=False)
     clean(root)
-    if git('rev-parse', 'HEAD') != head:
+    if git('rev-parse', 'HEAD') != selected['head']:
         raise ValueError('Candidate changed while checks were running.')
-    receipt = {'verified_base': base, 'verified_head': head, 'tree': git('rev-parse', head + '^{tree}'),
-               'units': units, 'ci': proof}
-    print(json.dumps(receipt))
+    print(json.dumps(dict(verified_base=selected['base'], verified_head=selected['head'],
+                          tree=selected['tree'], units=selected['units'], ci=proof)))
 
 
 def main():
@@ -121,8 +150,8 @@ def main():
     start.add_argument('--topic')
     start.add_argument('--kind', choices=POLICY['topic_kinds'], default=POLICY['topic_kinds'][0])
     start.add_argument('--dry-run', action='store_true')
-    for name in ('check', 'merge'):
-        command = sub.add_parser(name)
+    for name in ('plan', 'check', 'merge'):
+        command = sub.add_parser(name, help='Inspect planned checks' if name == 'plan' else None)
         command.add_argument('--base', required=True)
         command.add_argument('--head', required=True)
         command.add_argument('--ci-run', help='Live successful GitHub CI run covering the exact base/head/tree')
@@ -160,6 +189,8 @@ def main():
         temporary = path.with_suffix('.tmp')
         with temporary.open('x') as stream: json.dump(data, stream, indent=2)
         os.replace(temporary, path)
+    elif args.command == 'plan':
+        print(json.dumps(plan(root, args.base, args.head, args.ci_run), indent=2))
     elif args.command == 'check':
         check(root, args.base, args.head, args.ci_run)
     else:
