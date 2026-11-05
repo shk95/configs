@@ -56,7 +56,7 @@ def inspect(root):
             'changes': git('status', '--short'), 'remote': 'not queried',
             'policy': 'tool/version-control/policy.json', 'work_record': value,
             'record_authority': 'execution evidence only; not approval, liveness or cleanup permission',
-            'workspace_choice': 'ask the user, then pass an explicit --workspace to start'}
+            'workspace_choice': 'retain the agreed workspace; ask only if missing or changed; use explicit --workspace for a clean new start'}
 
 
 def plan(root, base, head, ci_run=None):

@@ -1,16 +1,16 @@
 # Incremental development environment optimization results
 kind: report
 spec: docs/work/repository/development-optimization/spec.md
-status: pending
+status: done
 
 ## Acceptance
 
 | ID | State | Evidence |
 | --- | --- | --- |
-| AC1 | pending | |
+| AC1 | verified | All 104 exploratory payloads match retained archive/stash; the final six-task table compares identical starts/finishes against master, including unchanged expert/Windows costs. |
 | AC2 | verified | Loop 1 corrects baseline guidance and consolidates four identical hook decisions; existing primary/linked and refusal fixtures pass in the cumulative repository suite after fixture dependency corrections. Independent review accepts the production change. |
-| AC3 | pending | |
-| AC4 | pending | |
+| AC3 | verified | Loops 2–4 and the independent Unix-like topic address static context, shared execution plans, absent inventory behavior and implicit query writes. Independent findings are corrected/rereviewed; final alternatives and costs are explicit. |
+| AC4 | verified | Full repository suite, narrow workflow/commit/retirement fixtures and global checks pass; the independent Unix-like provider suite passes with native limits disclosed. Scope-pure local commits preserve master/inputs; no project-origin push, publication or deployment occurred. |
 
 ## Baseline and preservation
 
@@ -151,3 +151,92 @@ explicitly and local orientation uses workflow inspect. Making the release
 controller a pure snapshot engine would change its recovery/proof semantics
 and add another freshness interface; that larger alternative is not required
 to remove the current ambiguity and is deferred.
+
+## Final routes and stopping decision
+
+The same task starts/finishes defined above apply on both sides. A procedure
+hop is not a mandatory command; each side permits relevant-section access.
+
+| Task | Baseline route | Final route and actual difference |
+| --- | --- | --- |
+| S1 prose | AGENTS and the relevant classification/governance/verification sections of CONTRIBUTING; edit the authoritative paragraph and run applicable global/document checks. | AGENTS points to the selected authoring/governance concern; the same paragraph and checks remain. The misleading ownership/CI equivalence is corrected. Expert reading is not proven shorter. |
+| S2 Unix-like | CONTRIBUTING Unix-like/Verify sections and the affected module/payload source; root Just input/format paths require inference despite the nested flake; host recipes reach refusal helpers before dead bodies. | Platform procedure plus verification concern and owning source; Unix-like topic binds input/format to the actual flake and makes compatibility refusals immediate. Parser/provider evidence and consumer-owned build/runtime remain distinct. |
+| S3 Windows | CONTRIBUTING Windows/Verify sections, Windows-owned source, native parser/Pester/Check evidence; foreign execution is unavailable. | Same Windows section and source, linked from the concern index; installer setup is explicitly separate from read-only checks. No new Nix dependency, Apply, native evidence or measured runtime improvement. |
+| S4 continuation | AGENTS/Branch flow/Local work sections and actual Git state; existing tool hints still suggest asking again and running doctor every session. | Handoff/authoring concerns, actual Git state and the relevant unfinished record; retain the known workspace/authorization. Doctor is conditional; start is only a clean new task. No added command or role. |
+| S5 verification | To know exact selected commands, infer workflow assembly from source or execute check on a clean full-SHA candidate. | Optional workflow plan exposes the exact assembly consumed by check, with not-run state and blockers; check remains the execution/proof path. Zero mandatory steps added. Dirty narrow checks remain separate. |
+| S6 publication | Release/history inspection can refresh refs, inspect hosted proof and create synthetic objects, effects requiring implementation reading; no publication follows automatically. | Publication concern states these effects and distinguishes local workflow inspection. Execution/evidence requirements remain; the release controller is not made a pure query. |
+
+Decision and maintenance locations decrease where actually duplicated: hook
+resolution four to one; check/plan share one assembly; provider-host recipes
+share one early refusal. Source selection remains explicit in the owning domain.
+The procedure map is six static concerns plus three platform routes, not a new
+composition or discovery authority. Windows operation and expert reading costs
+are not claimed improved without evidence.
+
+Stop after these bounded loops. A guide CLI/schema would add parser, help and
+whole-catalog failure dependencies to static reading. A capability engine adds
+an independent declaration beside the existing checks. An app source producer
+would replace an absent feature with a new protocol. A pure release snapshot
+engine introduces freshness/recovery interfaces for S6. None is needed for the
+selected tasks. Broad fixture redistribution or caching has no demonstrated
+benefit here. These are evaluated alternatives, not unfinished acceptance work.
+
+Independent Astra high review accepts the final source direction and U2's
+six query tests plus corrected promotion-plan evidence; its whole-goal review
+finds no further implementation blocker. Final documentation and source bounds
+are reviewed separately from actual process evidence. Prose was also read for
+undeclared account/machine identity; no new desired-state identity is added.
+
+## Final evidence and local delivery
+
+The repository outcome is on `feature/repository-development-authoring`;
+`feature/repository-development-optimization` preserves the earlier three-loop
+comparison. The independent Unix-like outcome is
+`feature/unixlike-development-optimization` at
+`76fbd3932ed84ef9c0a84a5d1c937b79f413094f`, with its own spec/report under
+`docs/work/unixlike/development-optimization/` on that branch. Both topics start
+at the same unchanged master. No synthetic mixed-scope topic or integration
+commit is created; arithmetic totals below are not combined-runtime evidence.
+
+Repository cumulative tests exit 0 as recorded in Loop 4. The final two edits
+only correct doctor/inspect continuation wording; actual inspect succeeds and
+independent review accepts the text without artificial new behavior tests.
+Unix-like format/lint and the twelve-suite provider run exit 0, followed by
+seven synthetic toplevel evaluations. Its final flake step runs zero checks on
+x86_64-linux and omits incompatible aarch64-linux/aarch64-darwin checks; no native
+artifact or host build is claimed. Tiny Nix fixture realization is separate.
+The wrapped-shell minimal-PATH fixture skip is disclosed. Windows native,
+macOS/ARM runtime, hosted CI, activation and Apply are unperformed. Existing
+policy checks/hooks provide local evidence, not remote adoption.
+
+All commits run the real tracked hooks, including applicable staged checks,
+global registries and secret scanning. Final prose was manually read for
+undeclared identity. No real input/release file, master, origin ref or retained
+exploration is changed. Local-file fixture remotes are disposable test data;
+the project origin is never pushed. The goal ends with source prepared and
+committed locally; integration and publication remain separate operations.
+
+## Physical line comparison with master
+
+Count physical lines including blanks in changed paths, separately per topic;
+README/AGENTS/CONTRIBUTING and docs outside docs/work are operating documents.
+Tests include runners; other changed implementation paths are execution code.
+New work records are counted in full. This is source size, not timing or
+maintainability measurement. Final numeric counts follow after all records.
+
+| Category | Repository topic | Unix-like topic | Arithmetic total |
+| --- | ---: | ---: | ---: |
+| Implementation/configuration | -504 | -92 | -596 |
+| Tests/runners | -436 | +281 | -155 |
+| Operating documents | +163 | +50 | +213 |
+| Work records | +296 | +129 | +425 |
+| All changed paths | -481 | +368 | -113 |
+
+Implementation removes 596 lines: hook consolidation -74, shared plan +31,
+inventory retirement -461, Just cleanup -127 and read-only info +35. The largest
+reduction is deliberate feature retirement; it is not all behavior-preserving
+refactoring. The remaining source-boundary changes have a net -135 lines.
+Static navigation adds links/index text, and evidence adds work records; neither
+is hidden in the execution-code result. Windows runtime and operator reading
+speed are not measured improvements. Retaining these distinctions is the final
+stopping criterion, rather than requiring every document or topic to shrink.

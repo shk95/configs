@@ -1,5 +1,12 @@
 # Current state: repository
 
+## Local development optimization — 2026-11-05
+
+`feature/repository-development-authoring` prepares shared hook/verification
+logic, concern-based procedures and retirement of the absent inventory editor.
+See [results](../work/repository/development-optimization/report.md). This local
+topic and the separate Unix-like topic are not integrated or published.
+
 ## Remote master/topic adoption — 2026-11-03
 
 PR #579 installed the accepted source and hosted-portability corrections through

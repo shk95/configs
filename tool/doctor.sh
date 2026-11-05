@@ -3,8 +3,8 @@
 # Checks this machine can work in a requested scope and says plainly what is
 # missing. Foreign-domain capabilities do not block a scoped change.
 #
-# Run it at the start of a session. The failure it exists to prevent is the
-# quiet one: a clone with no git hooks commits without a secret scan, and a
+# Run before relying on an unverified host capability or after the environment
+# changes. A clone with no git hooks commits without a secret scan, and a
 # machine with flakes disabled fails every command in a way that looks like a
 # broken flake rather than a missing setting.
 
