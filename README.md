@@ -106,12 +106,13 @@ workspace choice. For example:
 
 ```sh
 tool/configs workflow start --scope unixlike --commits one --workspace current
-tool/configs commit --dry-run brew add <formula>
-tool/configs commit brew add <formula>
+unixlike/tool/checks/format
+unixlike/tool/checks/lint
 ```
 
-The helper previews and confirms the edit, runs commit hooks and stops at the
-local commit. It does not fetch, publish or prune. For a larger outcome, use
+Edit the owning source, then run the relevant checks above. Homebrew app
+selection belongs to the consumer; this provider has no package inventory for
+the specialized brew/cask/mas editor. Commit only when authorized. For a larger outcome, use
 `workflow start --commits many` with a topic and the user's workspace choice,
 then verify and merge its exact SHA with `workflow merge` as described in
 CONTRIBUTING. Push and domain release remain separate authorized operations.

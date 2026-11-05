@@ -1941,6 +1941,7 @@ hooks_root="$test_root/hooks-path"
 mkdir -p "$hooks_root/tool/version-control" "$hooks_root/.githooks"
 cp "$root/tool/setup" "$hooks_root/tool/setup"
 cp "$root/tool/doctor.sh" "$hooks_root/tool/doctor.sh"
+cp "$root/tool/version-control/hooks.sh" "$hooks_root/tool/version-control/hooks.sh"
 git -C "$hooks_root" init -q -b dev
 git -C "$hooks_root" config user.name Fixture
 git -C "$hooks_root" config user.email fixture@example.invalid
@@ -1978,9 +1979,10 @@ git -C "$hooks_root" add seed
 git -C "$hooks_root" commit -q -m 'feat(repository): seed hooks fixture'
 hooks_wt="$test_root/hooks-path-wt"
 git -C "$hooks_root" worktree add -q -b feature/repository-hooks-wt "$hooks_wt"
-mkdir -p "$hooks_wt/tool"
+mkdir -p "$hooks_wt/tool/version-control"
 cp "$root/tool/setup" "$hooks_wt/tool/setup"
 cp "$root/tool/doctor.sh" "$hooks_wt/tool/doctor.sh"
+cp "$root/tool/version-control/hooks.sh" "$hooks_wt/tool/version-control/hooks.sh"
 if ! (cd "$hooks_wt" && tool/setup) | grep -q '✓ core.hooksPath'; then
   echo "tool/setup rejected the main clone's .githooks from a linked worktree" >&2
   exit 1

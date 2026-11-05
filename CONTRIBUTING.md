@@ -48,8 +48,10 @@ no release tag and must not contain platform behavior that belongs to
 
 One scope per source commit and topic. Master may accumulate independently
 scoped outcomes. A commit's
-scope is the classifier's answer over the paths it touches, and the release
-tag, the CI lanes and the right to change a path all follow from it. The
+scope is the classifier's answer over the paths it touches; it determines
+ownership and domain release scope. Check selection follows change effect:
+domain documents may select no suite, while repository dispatch changes can
+select several suites. Global scans still apply. The
 subject's scope is a different thing: it names the domain the change
 describes, so `docs(windows)` over `docs/policy/architecture.md`, which classifies
 `repository`, is correct. If a common change and its platform adoption are
@@ -183,7 +185,8 @@ upstream tag before a refresh brings it in. When they refuse:
    both.
 2. Refresh the lock again after it.
 
-After a refresh that moves zellij, `just darwin-build` on the Mac and the
+After a refresh that moves zellij, a native build from the reviewed consumer
+flake on the Mac and the
 reproduction in `docs/policy/decisions/unixlike/zellij-patched-on-darwin-until-upstream.md`
 are the build and runtime evidence; the checks prove only that the range
 applies.

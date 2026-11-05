@@ -32,7 +32,7 @@ class Workflow(unittest.TestCase):
         self.git('config', 'user.email', 'fixture@example.invalid')
         (self.root / 'docs/status').mkdir(parents=True)
         (self.root / 'docs/status/repository.md').write_text('base\n')
-        for name in ['workflow', 'authoring', 'policy', 'policy.json', 'repo_policy.py', 'github_proof.py', 'topic_scope.py', 'topic-source', 'audit', 'classify', 'closing-keywords']:
+        for name in ['workflow', 'authoring', 'policy', 'policy.json', 'repo_policy.py', 'github_proof.py', 'topic_scope.py', 'topic-source', 'audit', 'classify', 'closing-keywords', 'hooks.sh']:
             dest = self.root / 'tool/version-control' / name
             dest.parent.mkdir(parents=True, exist_ok=True)
             shutil.copy(ROOT / 'tool/version-control' / name, dest)

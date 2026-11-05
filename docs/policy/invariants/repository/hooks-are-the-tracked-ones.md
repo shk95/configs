@@ -2,6 +2,7 @@ id: repository/hooks-are-the-tracked-ones
 statement: A clone that opted into local hooks runs the tracked hooks directory of one of its worktrees, however the setting is spelled.
 rationale: docs/policy/architecture.md § Repository governance plane
 enforced-by: tool tool/version-control/audit
+enforced-by: schema tool/version-control/hooks.sh
 enforced-by: fixture tool/version-control/test
 
 The setting is compared as a directory, not as a string: an absolute value,

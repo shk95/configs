@@ -37,7 +37,7 @@ def main():
         git(root, 'init', '-q', '-b', 'dev')
         git(root, 'config', 'user.name', 'Fixture')
         git(root, 'config', 'user.email', 'fixture@example.invalid')
-        for name in ('tool/configs', 'tool/version-control/commit', 'tool/version-control/authoring', 'tool/version-control/policy', 'tool/version-control/policy.json', 'tool/version-control/repo_policy.py', '.githooks/evidence'):
+        for name in ('tool/configs', 'tool/version-control/commit', 'tool/version-control/hooks.sh', 'tool/version-control/authoring', 'tool/version-control/policy', 'tool/version-control/policy.json', 'tool/version-control/repo_policy.py', '.githooks/evidence'):
             destination = root / name
             destination.parent.mkdir(parents=True, exist_ok=True)
             shutil.copy2(SOURCE / name, destination)
