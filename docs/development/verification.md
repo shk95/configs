@@ -1,5 +1,26 @@
 # Verify and integrate a change
 
+## Development feedback before a commit
+
+Choose the source state and effect, then use existing checks. Continuing work
+does not need workflow initialization, a clean checkout or commit permission.
+
+| Source/task | Development feedback | Final boundary |
+| --- | --- | --- |
+| Repository prose | Review the changed text and applicable document/global scans. For a new work pair, `tool/configs work --working-tree docs/work/<scope>/<slug>` checks that pair, including untracked files. | Default global scans read the index; their success does not verify unstaged prose. No artificial behavior suite is needed for explanatory corrections. |
+| Unix-like payload | Run `unixlike/tool/checks/payloads` and the fixture for the affected behavior. | These read the working tree. Run the provider suite for a final implementation result; consumer build/runtime stays separate. |
+| Unix-like Nix behavior | Run `unixlike/tool/checks/format`, `lint` and the affected fixture under the same checks directory. | The final provider suite is `unixlike/tool/checks/test`. |
+| Windows behavior | Use the native `windows/win-env.ps1 validate` and `test` verbs; use read-only `check` for relevant host observations. | A foreign host leaves native evidence unavailable. Setup installs tools; Apply is a separate requested deployment. |
+| Staged-only delivery | Stage only authorized source, inspect `git diff --cached`, and run the applicable index scans listed below; use `tool/configs work --staged` for work records. | Do not commit to make workflow check available. On a later authorized commit, the hook runs selected quick domain checks against an index snapshot, preserving unstaged work. Working-tree parser evidence must be labeled separately. |
+| Clean committed candidate | Use workflow check, or workflow merge when integration is requested, with reviewed full base/head SHA. | These alternatives run selected final suites and bind evidence to the candidate. Plan is optional inspection. |
+
+The index scans are `tool/configs hygiene`, `invariants`, `provisional`,
+`domain-reads`, `design-citations`, `records` and `work --staged`; select those
+applicable to the requested feedback. They do not run native parsers. The
+commit hook runs its required global scans once; do not repeat successful
+checks merely to reproduce its checklist. Final candidate verification still
+has its own exact-source subject.
+
 ## Local verification and integration
 
 Record the reviewed full master/base and candidate SHA. Commit only when
@@ -21,6 +42,12 @@ It is optional, provides no verification/readiness/authorization evidence and
 is rebuilt by check; no saved plan is accepted as proof. Global scans remain
 local when `--ci-run` supplies suites. Dirty source uses narrow development
 checks instead of this exact-candidate operation.
+
+The staged quick checks materialize the index once and execute the staged
+checker implementations there. They exclude unstaged and untracked content
+and leave the caller's worktree/index intact. This applies only to the selected
+quick checks; it does not turn a hook pass into final suite or native runtime
+evidence.
 
 Merge requires authorization covering the commit-producing integration. Existing
 authorization for that operation remains valid within the agreed task. It runs the

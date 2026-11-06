@@ -1,5 +1,19 @@
 # Current state: repository
 
+## Current snapshot — 2026-11-06
+
+The existing optimization is integrated locally, as recorded below. The
+maintainer accepted the methodology correction for local commit, verified
+master integration and preservation-reviewed task cleanup. Staged quick checks
+use index snapshots, capability output names verification limits, and
+development routes distinguish source states.
+Its [comparison and verification report](../work/repository/agent-methodology-validation/report.md)
+separates the pre-optimization, analyzed and corrected source states.
+Source and local integration identities belong to Git history. Push,
+publication and deployment remain outside this adoption.
+The dated entries below retain their original adoption checkpoints; they are
+not a startup sequence or new evidence for a different source revision.
+
 ## Optimization integrated locally — 2026-11-06
 
 No-ff merge `a44a25bdcd80d617da6e2c6f7b27b9fa28dc2031` integrates the

@@ -363,6 +363,11 @@ native stack events fail the stable gate rather than becoming intentional skips.
 Windows CI runtime-governance inputs additionally require exact hosted native
 proof for local integration; ordinary domain tests do not cover that wiring.
 
+A staged gate checks the content selected for the commit. Unstaged edits and
+untracked replacements cannot supply or invalidate that evidence. Domain quick
+checks run against an isolated materialization of the index, including their
+staged implementations; the caller's files and index remain unchanged.
+
 Documents are owned the way code is. Everything the repository writes about
 itself lives under `docs/`: policy (the model, the definition of done, the
 candidates, the decision records and the invariant registry) under

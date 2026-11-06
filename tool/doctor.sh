@@ -31,10 +31,11 @@ esac
 
 red='\033[31m'; yellow='\033[33m'; green='\033[32m'; dim='\033[2m'; off='\033[0m'
 failed=0
+candidate_unavailable=0
 
 ok()   { printf "  ${green}✓${off} %s\n" "$1"; }
 warn() { printf "  ${yellow}!${off} %s\n     ${dim}%s${off}\n" "$1" "$2"; }
-bad()  { printf "  ${red}✗${off} %s\n     ${dim}%s${off}\n" "$1" "$2"; failed=1; }
+bad()  { printf "  ${red}✗${off} %s\n     ${dim}%s${off}\n" "$1" "$2"; failed=1; candidate_unavailable=1; }
 
 echo "Toolchain ($scope)"
 
@@ -94,6 +95,7 @@ if [ "$scope" = windows ] || [ "$scope" = all ]; then
     # Linux and macOS clones, and the windows-latest CI job is its merge gate.
     warn "native PowerShell is unavailable" \
       "Windows checks stay unverified here; CI supplies that evidence."
+    candidate_unavailable=1
   fi
 fi
 
@@ -101,7 +103,8 @@ fi
 
 echo
 echo "Version control"
-command -v python3 >/dev/null 2>&1 && ok "Python 3 available for tracked workflow tools" \
+command -v python3 >/dev/null 2>&1 && python3 -c 'pass' >/dev/null 2>&1 \
+  && ok "Python 3 executable for tracked workflow tools" \
   || bad "Python 3 unavailable" "Install Python 3 before running workflow or release tools."
 
 if hooks_enabled; then
@@ -127,8 +130,18 @@ else
   bad "git identity is incomplete" "Set user.name and user.email at the appropriate local or user scope before committing."
 fi
 
-command -v gitleaks >/dev/null 2>&1 && ok "gitleaks" \
-  || warn "gitleaks not installed — commits will not be scanned for secrets" "CI scans too, but only after you have pushed."
+if command -v gitleaks >/dev/null 2>&1; then
+  if gitleaks git --help >/dev/null 2>&1; then
+    ok "gitleaks git available for candidate verification"
+  else
+    warn "gitleaks lacks the git command" "Workflow candidate verification requires a gitleaks version with 'git'."
+    candidate_unavailable=1
+  fi
+else
+  warn "gitleaks not installed — commits will not be scanned for secrets" \
+    "Local candidate verification requires it; CI scans only after you have pushed."
+  candidate_unavailable=1
+fi
 
 if command -v gh >/dev/null 2>&1; then
   if gh auth status --hostname github.com >/dev/null 2>&1; then
@@ -177,7 +190,14 @@ fi
 
 echo
 if [ "$failed" -eq 1 ]; then
-  printf "${red}Not ready.${off} Fix the ✗ items above before starting work.\n"
+  printf "${red}Host inventory incomplete.${off} Fix the ✗ prerequisites before relying on those operations.\n"
+fi
+if [ "$candidate_unavailable" -eq 1 ]; then
+  printf "${yellow}Local candidate verification unavailable.${off} See missing prerequisites above; source preparation can continue.\n"
+else
+  printf "${green}Local candidate prerequisites available.${off} Selected checks have not run.\n"
+fi
+if [ "$failed" -eq 1 ]; then
   exit 1
 fi
-printf "${green}Ready.${off} Warnings above limit which provider checks run here.\n"
+printf 'Host inventory complete. This is capability evidence, not candidate or deployment verification.\n'

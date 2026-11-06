@@ -43,14 +43,26 @@ run_check() {
   name=$1
   hint=$2
   script="unixlike/tool/checks/$name"
-  if [ ! -x "$script" ]; then
+  if [ ! -x "$staged_tree/$script" ]; then
     # Not a pass: a selected check this host cannot run is unverified, and
     # .githooks/evidence decides what that means here and in CI.
-    evidence_unavailable "$name" "$script is not runnable here" || exit 1
+    evidence_unavailable "$name" "$script is not runnable in the index snapshot" || exit 1
     return 0
   fi
-  evidence_run "$name" "$script" || abort "$hint"
+  evidence_run "$name" run_staged_check "$script" || abort "$hint"
 }
+
+# INV repository/staged-checks-use-index
+# Materialize the index once for selected domain checks. Never stash, refresh
+# the index or replace the caller's files, including in a linked worktree.
+# These quick checks need files, not a Git repository or a synthetic commit.
+run_staged_check() (
+  for staged_git_name in $(git rev-parse --local-env-vars); do
+    unset "$staged_git_name"
+  done
+  cd "$staged_tree"
+  "$@"
+)
 
 # Which checks this change needs, which is not the same question as who owns
 # it. tool/dispatch/select answers the first; classify still answers the second
@@ -61,6 +73,14 @@ selected() { printf '%s\n' "$units" | grep -qx "$1"; }
 
 if selected unclassified; then
   fail "A staged path has no owning scope. Update tool/version-control/classify."
+fi
+
+if selected unixlike:format || selected unixlike:lint || selected unixlike:payloads; then
+  staged_tree=$(mktemp -d)
+  trap 'rm -rf "$staged_tree"' EXIT
+  trap 'exit 130' INT
+  trap 'exit 143' HUP TERM
+  git checkout-index --all --prefix="$staged_tree/"
 fi
 
 if selected unixlike:format; then

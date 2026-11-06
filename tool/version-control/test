@@ -2321,9 +2321,11 @@ if ! printf '%s\n' "$inv_hook_output" | grep -q 'invariants unverified'; then
 fi
 
 # INV repository/evidence-three-states
-# A selected check whose script this host cannot run is unverified, not
+# INV repository/staged-checks-use-index
+# A selected check whose staged script this host cannot run is unverified, not
 # silently passed: the hook says so, and REQUIRE_NATIVE turns it into failure.
 rm "$inv_hook_root/unixlike/tool/checks/format"
+git -C "$inv_hook_root" add -u -- unixlike/tool/checks/format
 stub_invariants 0
 if ! inv_hook_output=$(run_inv_pre_commit); then
   printf '%s\n' "$inv_hook_output" >&2
@@ -2347,6 +2349,7 @@ if ! printf '%s\n' "$inv_hook_output" | grep -q 'format is unverified'; then
 fi
 printf '#!/bin/sh\nexit 0\n' >"$inv_hook_root/unixlike/tool/checks/format"
 chmod +x "$inv_hook_root/unixlike/tool/checks/format"
+git -C "$inv_hook_root" add unixlike/tool/checks/format
 
 # INV repository/hook-evidence-recorded
 inv_hook_log="$inv_hook_primary/.git/hooks-evidence.log"
@@ -3498,6 +3501,9 @@ fi
 
 # INV repository/local-development-integration
 "$root/tool/version-control/test-local-workflow"
+
+# INV repository/staged-checks-use-index
+python3 "$root/tool/version-control/test-staged-checks.py"
 
 # INV repository/worker-checkpoint
 "$root/tool/version-control/session-test"

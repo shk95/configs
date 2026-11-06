@@ -3,6 +3,7 @@ statement: A check reports verified, failed, or unverified and nothing else; a f
 rationale: docs/policy/architecture.md § Repository governance plane
 enforced-by: tool .githooks/pre-push
 enforced-by: fixture tool/version-control/test
+enforced-by: fixture tool/version-control/test-staged-checks.py
 decision: docs/policy/decisions/repository/check-evidence-three-states.md § A check reports verified, failed or unverified
 
 Exit 0, 69 and any other status carry the three answers. `.githooks/evidence`

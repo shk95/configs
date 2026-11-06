@@ -71,12 +71,16 @@ Master is the release and normal work branch. One logical commit stays on
 master; several logical commits for one outcome use a master-based topic and
 `--no-ff` integration. Agents ask whether to use the current checkout or a
 linked worktree; parallel authors use isolation. Start with `tool/configs
-workflow inspect`, then `workflow start --scope <scope> --commits one|many
---workspace current|linked` (add `--topic <slug>` for a topic). Use the tracked
+workflow inspect` when orientation is needed. Continue an existing task from
+its actual Git state, retaining its workspace and authorization. For a clean
+new task only, use `workflow start --scope <scope> --commits one|many
+--workspace current|linked` after the user's workspace choice (add
+`--topic <slug>` for a topic). Use the tracked
 `workflow check` and `workflow merge` commands with reviewed full base/head
 SHA. CONTRIBUTING.md defines authorization, verification and recovery.
 
-Prepare the clone and inspect available host capabilities:
+For a new clone, prepare hooks; inspect unverified capabilities before relying
+on them or after the environment changes:
 
 `tool/configs help` lists the repository commands intended for direct use.
 
@@ -87,9 +91,12 @@ tool/configs doctor
 ```
 
 Pass a scope such as `tool/configs doctor repository` when a foreign-platform
-capability is irrelevant to the current change.
+capability is irrelevant to the current change. The [environment procedure](docs/development/environment.md)
+lists prerequisites and explains the capability summary. These commands are
+not a sequence to repeat when continuing work.
 
-Allow the repository's committed direnv environment once per clone:
+For Unix-like development, allow the committed direnv environment once per
+clone, or enter it explicitly with `nix develop ./unixlike`:
 
 ```sh
 direnv allow
@@ -101,19 +108,19 @@ present and is intentionally ignored by Git.
 
 Run checks for the domain you changed. `CONTRIBUTING.md` lists the workflows.
 
-For one logical edit, use the current master checkout after the user's
-workspace choice. For example:
+For a new one-commit task whose selected workspace is the current master
+checkout, for example:
 
 ```sh
 tool/configs workflow start --scope unixlike --commits one --workspace current
+# Edit the owning source, then run the applicable development checks.
 unixlike/tool/checks/format
 unixlike/tool/checks/lint
 ```
 
-Edit the owning source, then run the relevant checks above. Homebrew app
-selection belongs to the consumer; this provider has no package inventory for
-an app-inventory editor. Those specialized commands now refuse. Commit only
-when authorized. For a larger outcome, use
+The [verification procedure](docs/development/verification.md#development-feedback-before-a-commit)
+maps dirty-source, staged-only and committed-candidate work to existing checks.
+Commit only when authorized. For a larger outcome, use
 `workflow start --commits many` with a topic and the user's workspace choice,
 then verify and merge its exact SHA with `workflow merge` as described in
 CONTRIBUTING. Push and domain release remain separate authorized operations.
