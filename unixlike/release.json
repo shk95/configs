@@ -1,7 +1,7 @@
 {
-  "previous": "unixlike-v1.1.3",
-  "version": "1.2.0",
-  "summary": "Add local consumer development and verification, simplify provider commands, and refresh Paneru and Karabiner settings.",
-  "compatibility": "minor",
-  "migration": "No constructor API migration is required. Review the updated Paneru and Karabiner behavior before explicit consumer adoption and activation."
+  "previous": "unixlike-v1.2.0",
+  "version": "1.2.1",
+  "summary": "Refresh permitted Unix-like inputs.",
+  "compatibility": "patch",
+  "migration": ""
 }
