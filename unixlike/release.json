@@ -1,7 +1,7 @@
 {
-  "previous": "unixlike-v1.2.5",
-  "version": "1.2.6",
-  "summary": "Run Darwin Paneru without a Bash wrapper while preserving Lua configuration.",
+  "previous": "unixlike-v1.2.6",
+  "version": "1.2.7",
+  "summary": "Refresh permitted Unix-like inputs.",
   "compatibility": "patch",
-  "migration": "Darwin: grant Accessibility access to the Paneru executable; Bash access is no longer required. Additional executable or Lua search paths require a native wrapper."
+  "migration": ""
 }
