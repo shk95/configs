@@ -89,6 +89,16 @@ next activation manages the Paneru service. Replacing an independently
 installed service also requires preserving its existing launchd plist and
 checking macOS Accessibility permission for the Nix executable.
 
+PROV unixlike/paneru-unwrapped: The Darwin module currently selects the
+unwrapped Lua-enabled Paneru package, preserving the Lua configuration while
+allowing Accessibility permission to be granted to Paneru instead of Nix Bash.
+Additional executable or Lua search paths are refused until a native wrapper
+is verified for them. The upstream issue, runtime comparison and retirement
+condition are recorded in
+`docs/policy/decisions/unixlike/paneru-unwrapped-until-upstream.md` and
+`docs/provisional/unixlike/paneru-unwrapped.md`. Consumer adoption still
+requires a separately requested activation.
+
 ## Historical pre-U1 state and host evidence
 
 The following observations describe older provider pins and host generations.
