@@ -290,6 +290,13 @@ label omits its default dimming to preserve contrast on the light page.
 These source changes require a separately authorized host activation;
 source preparation and temporary previews do not update an installed home.
 
+File listings retain ANSI colours without filled backgrounds: GNU dircolors
+uses foreground/bold/underline for special permissions and writable/sticky
+directories, macOS `ls` uses default backgrounds throughout `LSCOLORS`, and
+eza's multiple-hardlink count uses bold magenta instead of red on yellow.
+The rules apply to both `xterm-ghostty` and `xterm-256color`, including Zellij;
+over SSH they belong to the host running the listing command. These source
+settings take effect on each host's next separately authorized activation.
 
 Karabiner's configuration is desired state and the application is not:
 `unixlike/modules/programs/karabiner/karabiner.json` and
