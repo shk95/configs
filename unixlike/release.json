@@ -1,7 +1,7 @@
 {
-  "previous": "unixlike-v1.2.7",
-  "version": "1.2.8",
-  "summary": "Refresh permitted Unix-like inputs.",
-  "compatibility": "patch",
-  "migration": ""
+  "previous": "unixlike-v1.2.8",
+  "version": "1.3.0",
+  "summary": "Adopt Bluegray Light terminal colours and remove filled file-listing backgrounds.",
+  "compatibility": "minor",
+  "migration": "Activate the adopted host configuration separately; start a fresh shell for listing colour variables and restart Zellij sessions for the updated UI."
 }
