@@ -7,22 +7,43 @@ _: {
       icons = "auto";
       enableZshIntegration = true;
 
-      # Neither `theme` nor `colors` is set, and the default is already right
-      # on a light background. eza's built-in palette emits nothing but the
-      # sixteen ANSI SGR codes: `eza --color=always -l` on the pinned eza
-      # 0.23.5 produces `1;34` for a directory, `33`/`31`/`32` across the
-      # permission bits, `1;90` for their placeholders and `34` for the date.
-      # Every one of those is an index into the terminal's own palette, so eza
-      # renders in whatever colours the terminal declares — the same deference
-      # `modules/programs/bat.nix` makes with its `ansi` theme. The familiar "dark blue
-      # directories on white" complaint is about a terminal whose ANSI blue is
-      # #0000ee; under Modus Operandi it is #0031a9, which reaches 10.4:1
-      # against that scheme's #ffffff page.
-      #
-      # `programs.eza.theme` would write $XDG_CONFIG_HOME/eza/theme.yml with
-      # fixed values and end that deference, which is precisely what a module
-      # in `homeManager.shared` cannot honestly do: this class also reaches the
-      # WSL homes, whose terminal scheme is declared in the Windows domain.
+      # Keep the terminal's ANSI palette rather than fixing RGB colours here.
+      # This also follows the local terminal when the shell runs over SSH.
     };
+
+    # eza 0.23.5 puts red on yellow behind multiple-hardlink counts. Retain
+    # their emphasis without a filled rectangle, including with --links.
+    # Use EZA_COLORS separately: its `tw`/`su` mean permission characters,
+    # whereas GNU LS_COLORS uses those names for directory/file categories.
+    home.sessionVariables.EZA_COLORS = "lm=1;35";
+
+    # GNU ls otherwise adds backgrounds for writable/sticky directories,
+    # special permissions, devices and broken links. Preserve file-extension
+    # colours and signal exceptional entries with foreground/bold/underline.
+    # No TERM override: these ANSI styles work inside and outside Zellij,
+    # with both xterm-ghostty and xterm-256color.
+    programs.dircolors = {
+      enable = true;
+      settings = {
+        FIFO = "33";
+        BLK = "01;33";
+        CHR = "01;33";
+        ORPHAN = "01;31";
+        MISSING = "01;31";
+        SETUID = "01;31";
+        SETGID = "01;35";
+        CAPABILITY = "01;31";
+        STICKY_OTHER_WRITABLE = "01;04;34";
+        OTHER_WRITABLE = "01;04;34";
+        STICKY = "04;34";
+      };
+    };
+  };
+
+  modules.homeManager.darwin = {
+    # macOS /bin/ls reads LSCOLORS instead of LS_COLORS. Every pair uses
+    # `x` for the default background, including special permissions,
+    # writable directories and the final macOS dataless-file category.
+    home.sessionVariables.LSCOLORS = "ExgxfxdxCxDxDxBxFxExExfx";
   };
 }
