@@ -24,25 +24,46 @@ _: {
         # installs terminfo on SSH destinations when possible, and falls back to
         # xterm-256color when the remote host cannot run tic.
         enableZshIntegration = true;
+        themes."Bluegray Light" = {
+          background = "#ECEFF3";
+          # Let the desktop show through softly while keeping the light page.
+          background-opacity = 0.90;
+          background-blur = 20;
+          foreground = "#303640";
+          cursor-color = "#303640";
+          cursor-text = "#ECEFF3";
+          selection-background = "#D6E1F0";
+          selection-foreground = "#303640";
+          # Bright accents retain their hue and contrast on the light page.
+          # ANSI white is a readable neutral, not a pale foreground.
+          palette = [
+            "0=#303640"
+            "1=#9A3F4A"
+            "2=#35604A"
+            "3=#76561F"
+            "4=#355A87"
+            "5=#664C82"
+            "6=#2D626D"
+            "7=#576474"
+            "8=#576474"
+            "9=#9A3F4A"
+            "10=#35604A"
+            "11=#76561F"
+            "12=#355A87"
+            "13=#664C82"
+            "14=#2D626D"
+            "15=#303640"
+          ];
+        };
         settings = {
           shell-integration = "detect";
           shell-integration-features = "sudo,ssh-env,ssh-terminfo,path";
 
           font-family = "D2KodingLigature Nerd Font Mono";
           font-size = 14;
-          # Modus Operandi is the light member of the same family WezTerm
-          # selects in modules/wezterm/config/appearance.lua; keeping both
-          # terminals in one family is what stops a graphical host from looking
-          # like two different machines. Ghostty ships both "Modus Operandi"
-          # and "Modus Vivendi" as built-in themes; both names were verified in
-          # the pinned nixpkgs ghostty package's share/ghostty/themes/. That
-          # same directory is where WezTerm's inline copy of the light half is
-          # transcribed from, which is what makes the two terminals exact
-          # rather than merely similar. So the dual form here needs no extra
-          # file: Ghostty answers the terminal's own light/dark appearance
-          # rather than the colour-scheme query modules/programs/zellij/module.nix describes,
-          # and switches between the two names on its own.
-          theme = "light:Modus Operandi,dark:Modus Vivendi";
+          # Keep all light colours in the theme so they cannot override the
+          # dark member when Ghostty follows the system appearance.
+          theme = "light:Bluegray Light,dark:Modus Vivendi";
           minimum-contrast = 1.1;
 
           cursor-style = "block";
