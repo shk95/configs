@@ -141,51 +141,6 @@ reviewed, and activation requires an explicit request. The retired repository
 changing Git; it never redirects to Save. The historical domain projection tool,
 `just karabiner-check` and `just karabiner-test` remain independently available.
 
-### zellij overlay
-
-This subsection is disposable and carries the tag
-`PROV unixlike/zellij-combining-marks`, so it is deleted with the measure it
-describes.
-
-`unixlike/modules/programs/zellij/module.nix` carries upstream zellij-org/zellij#5500
-for Darwin until nixpkgs ships a zellij whose source already has the fix;
-`docs/provisional/unixlike/zellij-combining-marks.md` registers the measure and
-names the condition that ends it. The overlay names no zellij version: it
-applies the range with no fuzz to whatever zellij the lock brings in, so a
-`unixlike/flake.lock` refresh that moves zellij is the ordinary one commit,
-`tool/configs commit flake refresh`.
-
-The flake checks `zellij-combining-marks`,
-`zellij-combining-marks-refuses-a-patched-tree` and
-`zellij-combining-marks-refuses-a-stale-vendor`, declared beside the overlay,
-are what judge that refresh. `unixlike/tool/checks/test` builds them on every
-system, so the refresh's pre-push and the merge gate refuse a lock whose
-zellij the range no longer applies to; `just zellij-patch-check` builds the
-first alone, and `just zellij-patch-check v<ver>` applies the range to an
-upstream tag before a refresh brings it in. When they refuse:
-
-1. Rebase the range in a fork and repoint the overlay's `url` and `hash` in a
-   `fix(unixlike):` commit made before the refresh. The pin is the pull
-   request's commit range `base...head` in the overlay's compare URL; a
-   re-pin to a branch that gained commits moves the head, and a rebase moves
-   both.
-2. Refresh the lock again after it.
-
-After a refresh that moves zellij, a native build from the reviewed consumer
-flake on the Mac and the
-reproduction in `docs/policy/decisions/unixlike/zellij-patched-on-darwin-until-upstream.md`
-are the build and runtime evidence; the checks prove only that the range
-applies.
-
-`.github/workflows/zellij-upstream-5500.yml` watches the branch tracked by
-the nixpkgs input and opens one issue, then disables itself, when its Zellij
-source contains the replacement fix merged in upstream #5714. The original
-#5500 was closed in favour of that fix. The watch does not update the lock
-or retire the overlay; its manual dry-run mode performs no remote writes. GitHub runs a `schedule` only from the
-default branch, so the watcher does nothing until this file reaches `master`
-through its next master adoption; before that its shell body is run by hand with
-`DRY_RUN=1`.
-
 ## Windows changes
 
 Windows declarations, payloads, checks, and Apply logic live inside `windows/`

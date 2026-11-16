@@ -1,4 +1,3 @@
-# PROV unixlike/zellij-combining-marks
 # Keep this filename: the provisional registry refers to it. #5500 was closed
 # in favour of #5714. Watch the nixpkgs input's moving branch until its Zellij
 # source contains #5714, then open one issue and disable this disposable watch.

@@ -164,7 +164,6 @@ just payloads
 just test
 just check
 
-just zellij-patch-check v0.45.1
 just karabiner-check   # target Mac only; compares the Karabiner payloads
 just karabiner-test
 ```
