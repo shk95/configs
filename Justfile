@@ -142,33 +142,6 @@ upp input:
 fmt:
     cd {{ quote(justfile_directory() + "/unixlike") }} && nix fmt .
 
-# PROV unixlike/zellij-combining-marks
-# Check that the zellij combining-marks patch applies with no fuzz: with no argument to the lock's zellij as nixpkgs builds it, or to an upstream tag, e.g. `just zellij-patch-check v0.45.1`.
-[group('provider-verification')]
-zellij-patch-check tag="":
-    #!/usr/bin/env bash
-    set -euo pipefail
-    system=$(nix eval --raw --impure --expr builtins.currentSystem)
-    check="path:./unixlike#checks.${system}.zellij-combining-marks"
-    if [[ -z '{{ tag }}' ]]; then
-      # The flake check itself: nixpkgs' source and patches, the range applied
-      # by stdenv's patch phase with -F0, and the vendor Cargo.lock comparison.
-      nix build --no-link "${check}"
-      printf 'the pinned range applies with -F0 to the lock'\''s zellij %s\n' "$(nix eval --raw "${check}.version")"
-      exit 0
-    fi
-    patch=$(nix build --no-link --print-out-paths "${check}.patch")
-    gnupatch=$(nix build --no-link --print-out-paths --inputs-from path:./unixlike nixpkgs#gnupatch)
-    work=$(mktemp -d)
-    trap 'rm -rf "${work}"' EXIT
-    git -c advice.detachedHead=false clone --quiet --depth 1 --branch '{{ tag }}' https://github.com/zellij-org/zellij "${work}/zellij"
-    # A real apply in the throwaway clone, not --dry-run: the range patches
-    # grid.rs three times, and a dry run never applies the earlier sections
-    # the later ones build on. --forward refuses an already-applied hunk
-    # instead of asking whether to reverse it.
-    "${gnupatch}/bin/patch" -d "${work}/zellij" -p1 -F0 --forward --quiet -i "${patch}" </dev/null
-    printf 'the pinned range applies with -F0 to %s\n' '{{ tag }}'
-
 # Compatibility refusal: real hosts belong to configs-hosts.
 [group('compatibility')]
 darwin-eval:
