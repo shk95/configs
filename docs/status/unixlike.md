@@ -204,30 +204,11 @@ on 2026-09-05 and does not answer the colour-scheme query the pair depends
 on, and every terminal this repository declares for a composed home is light
 (`docs/policy/decisions/unixlike/composed-homes-render-in-declared-terminals.md`).
 
-Also since 2026-09-05, Darwin's zellij carries upstream PR
-zellij-org/zellij#5500, which attaches combining marks instead of dropping
-them, so a decomposed Hangul syllable is expected to survive a pane; without it
-only the leading jamo arrives, which was reproduced on Linux against the pinned
-unpatched build. The patch is an overlay in
-`unixlike/modules/programs/zellij/module.nix`, applies with no fuzz to whatever zellij
-the lock brings in, and yields nothing on Linux, where every toplevel
-derivation path is unchanged; since 2026-09-14 three flake checks built on every
-system refuse a lock whose zellij the patch no longer applies to. The measure is registered as temporary
-in `docs/provisional/unixlike/zellij-combining-marks.md`. Evaluation and the two
-fixed-output hashes are Linux evidence. On 2026-09-06 the Mac built and
-activated it twice. Generation 34 showed the jamo still dropped, because the
-pull request attaches general-category Mark code points and a syllable's medial
-vowel and final consonant are letters that `unicode-width` gives zero width;
-the overlay then gained a `postPatch` that accepts those jamo ranges and a
-Hangul grid test, and generation 35 rendered a decomposed syllable whole in a
-real session, with the build's check now running the combining-mark tests in
-`zellij-server`. The pull request's author folded that addition into the branch
-the same day, with a fix to the readback paths (`dump-screen`, copy, serialize)
-found on the way; the overlay now pins the branch's commit range instead of its
-first commit, and generation 36 runs it, with the client stream and
-`dump-screen` agreeing on the whole syllable. The dated paragraphs in
-`docs/policy/decisions/unixlike/zellij-patched-on-darwin-until-upstream.md` record the
-readings.
+Since 2026-11-16 the provider pins Zellij 0.46.0, including upstream #5714
+(grapheme cluster support). The Darwin-only combining-mark overlay, its
+source-patch checks and upstream watcher have been retired. Host adoption
+and Hangul rendering/readback verification belong to consumers; no host
+activation is part of this provider change.
 
 WezTerm and Ghostty are the desktop terminals; Home Manager installs the
 D2Coding Nerd Font package and configures `D2KodingLigature Nerd Font Mono`
@@ -507,10 +488,3 @@ generation rather than a fifth, because Nix reuses the one that already holds
 the path. The binfmt_misc mount is read-only in this distribution and a
 Windows executable runs from a fresh shell; one long-lived shell session
 failed to run one earlier the same evening, unexplained and not seen since.
-
-## Open conditions
-
-- The Darwin zellij overlay (`PROV unixlike/zellij-combining-marks`) stands
-  until a nixpkgs zellij whose source already contains
-  zellij-org/zellij#5500 reaches `unixlike/flake.lock`; review by 2026-12-04
-  (`docs/provisional/unixlike/zellij-combining-marks.md`).

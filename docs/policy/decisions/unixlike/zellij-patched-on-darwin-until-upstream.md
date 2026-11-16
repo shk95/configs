@@ -305,3 +305,18 @@ builds the same derivation over nixpkgs' own vendor set and passes only when
 every patch applied and the hook printed its `Cargo.lock is not the same in`
 line; with the hook removed in a scratch copy it failed, and with the hook in
 place it passed.
+
+## 2026-11-16 — retired after upstream release
+
+Upstream #5500 closed in favour of #5714, merged on 2026-10-14 as
+`519a23715c6b0f65a3ffada64e738ed6ec9380fc`. Zellij v0.46.0, released on
+2026-11-11, contains that commit (GitHub comparison: ahead, behind_by=0).
+The nixpkgs input now packages 0.46.0. The isolated lock refresh precedes
+retirement of the overlay, its three patch checks, watcher, recipe and
+provisional registration. The repository status no longer has a provisional
+count to adjust. Earlier sections retain the historical implementation and
+evidence. Provider verification is separate from consumer host builds,
+Hangul rendering/readback and activation; those host lanes were not run.
+
+Sources: https://github.com/zellij-org/zellij/pull/5714 and
+https://github.com/zellij-org/zellij/releases/tag/v0.46.0.
