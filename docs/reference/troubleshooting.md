@@ -555,15 +555,15 @@ grep -a -o 'NFD:\[[^]]*\]' /tmp/repro.ts | grep -av '…' | head -1 | hexdump -C
 That `script` line is macOS's; GNU `script` spells it `script -q -c 'zellij
 attach repro' /tmp/repro.ts`. An unpatched zellij 0.45.0 answers `4e 46 44 3a
 5b e1 84 92 5d`; a grid that keeps the jamo answers `4e 46 44 3a 5b e1 84 92 e1
-85 a1 e1 86 ab 5d`. This repository patches Darwin's zellij with upstream PR
-[zellij-org/zellij#5500](https://github.com/zellij-org/zellij/pull/5500) while
-that PR is unmerged; `docs/provisional/unixlike/zellij-combining-marks.md` says
-until when, and `docs/policy/decisions/unixlike/zellij-patched-on-darwin-until-upstream.md`
-says why. On 2026-09-06 the pull request's first commit alone still answered
-the short form — it attached general-category Mark code points and Hangul jamo
-are letters — and the branch gained the jamo ranges the same day; generation 35
-answers the full form. The decision record's Evidence has the readings. On a
-host the overlay does not reach, there is no local fix.
+85 a1 e1 86 ab 5d`. The Darwin overlay formerly carried
+[zellij-org/zellij#5500](https://github.com/zellij-org/zellij/pull/5500).
+On 2026-11-16 it was retired after the lock adopted Zellij 0.46.0, which
+includes the replacement [grapheme cluster fix #5714](https://github.com/zellij-org/zellij/pull/5714).
+The historical implementation and reproduction evidence remain in
+`docs/policy/decisions/unixlike/zellij-patched-on-darwin-until-upstream.md`.
+Consumer hosts must adopt the updated provider and separately verify Hangul
+rendering and readback; provider release evidence does not establish their
+runtime state.
 
 ### `msedit` opens with `b2b` already typed into the buffer
 
