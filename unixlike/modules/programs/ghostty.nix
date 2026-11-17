@@ -8,6 +8,9 @@ _: {
     pkgs,
     ...
   }: {
+    configs.editableFiles = lib.mkIf config.programs.ghostty.enable {
+      "${config.xdg.configHome}/ghostty/config" = lib.mkDefault true;
+    };
     programs.ghostty =
       lib.mkIf (
         pkgs.stdenv.hostPlatform.isLinux

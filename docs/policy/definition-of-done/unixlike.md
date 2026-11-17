@@ -15,10 +15,14 @@ file, which every change owes.
       copies these files without reading them.
 - [ ] A key written into a generated configuration exists in the pinned
       tool's schema at the locked version, and a tool that rewrites its own
-      configuration in place was started once against the rendered file —
-      Home Manager installs that file as a read-only store symlink, so an
-      in-place migration fails closed (INV unixlike/generated-config-key-in-schema).
+      configuration in place was started once against the rendered file.
+      Normal deployment uses a read-only store symlink; an explicit writable-file
+      opt-out still requires valid generated keys and applicable migration
+      evidence (INV unixlike/generated-config-key-in-schema).
 - [ ] Activation is performed only when explicitly requested.
+- [ ] A writable-file opt-out is declared for each selected file; incoming-relative
+      numbered backups, retained baselines, dry-run behavior and failure
+      preservation are verified (INV unixlike/editable-file-generation-backup).
 - [ ] Any optional runtime reproduction names its system and exact selection;
       ordinary provider verification makes no host runtime claim.
 - [ ] A `unixlike-v...` tag certifies the public API, synthetic composition

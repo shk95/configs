@@ -1,6 +1,18 @@
 # Darwin user service, package and Lua configuration have one owner.
 {inputs, ...}: {
   modules.homeManager.darwin = {
+    config,
+    lib,
+    ...
+  }: {
+    configs.editableFiles = lib.mkIf (config.services.paneru.enable && config.services.paneru.config != null) {
+      ${
+        if config.xdg.enable
+        then "${config.xdg.configHome}/paneru/init.lua"
+        else ".paneru.lua"
+      } =
+        lib.mkDefault true;
+    };
     imports = [
       inputs.paneru.homeModules.paneru
       # PROV unixlike/paneru-unwrapped

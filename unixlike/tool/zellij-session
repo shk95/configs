@@ -1,0 +1,50 @@
+#!/usr/bin/env python3
+"""Launch bare Zellij using the live configuration and named-session resurrection."""
+# INV unixlike/editable-file-generation-backup
+import os
+from pathlib import Path
+import sys
+
+import kdl
+
+
+def main():
+    if os.environ.get("ZELLIJ_CONFIG_FILE"):
+        source = Path(os.environ["ZELLIJ_CONFIG_FILE"])
+    elif os.environ.get("ZELLIJ_CONFIG_DIR"):
+        source = Path(os.environ["ZELLIJ_CONFIG_DIR"]) / "config.kdl"
+    elif os.environ.get("XDG_CONFIG_HOME"):
+        source = Path(os.environ["XDG_CONFIG_HOME"]) / "zellij" / "config.kdl"
+    else:
+        source = Path(sys.argv[1])
+    try:
+        arguments = ["zellij"]
+        if source.exists():
+            document = kdl.parse(source.read_text(encoding="utf-8"))
+            # Explicitly use the file we parsed. Native Zellij may otherwise
+            # prefer an existing ~/.config directory over XDG_CONFIG_HOME.
+            arguments += ["--config", str(source)]
+            for node in document.nodes:
+                if node.name == "session_name":
+                    value = node.args[0] if node.args else None
+                    if isinstance(value, (kdl.String, kdl.RawString)):
+                        value = value.value
+                    if not isinstance(value, str):
+                        raise ValueError("session_name requires a string")
+                    if value:
+                        # Since 0.46, attach reserves everything after -- for
+                        # an initial command. Keep the name in its positional
+                        # slot, and reject names parsed as options/subcommands.
+                        if value.startswith("-") or value in ("options", "help"):
+                            raise ValueError("session_name cannot be an attach option or subcommand")
+                        arguments += ["attach", "--create", value]
+                    break
+        os.execvp("zellij", arguments)
+    except (OSError, ValueError, kdl.ParseError) as exc:
+        print(f"zellij-session: {source}: {exc}", file=sys.stderr)
+        return 1
+    return 0
+
+
+if __name__ == "__main__":
+    sys.exit(main())

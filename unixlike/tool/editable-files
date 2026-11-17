@@ -1,0 +1,286 @@
+#!/usr/bin/env python3
+"""Install explicitly selected writable text files, retaining incoming-relative diffs."""
+# INV unixlike/editable-file-generation-backup
+import argparse
+from contextlib import contextmanager
+from datetime import datetime, timezone
+import fcntl
+import hashlib
+import json
+import os
+from pathlib import Path
+import re
+import stat
+import subprocess
+import sys
+import tempfile
+
+sys.dont_write_bytecode = True
+
+
+class Refused(Exception):
+    pass
+
+
+def digest(data):
+    return hashlib.sha256(data).hexdigest()
+
+
+def snapshot(path):
+    """Distinguish missing files, links and regular files, including empty files."""
+    try:
+        node = path.lstat()
+    except FileNotFoundError:
+        return None
+    if not (stat.S_ISREG(node.st_mode) or stat.S_ISLNK(node.st_mode)):
+        raise Refused(f"Not a regular configuration file: {path}")
+    try:
+        resolved = path.stat()
+        if not stat.S_ISREG(resolved.st_mode):
+            raise Refused(f"Not a regular configuration file: {path}")
+        data = path.read_bytes()
+    except FileNotFoundError as exc:
+        raise Refused(f"Dangling configuration link: {path}") from exc
+    if b"\0" in data:
+        raise Refused(f"Binary configuration is unsupported: {path}")
+    return dict(data=data, mode=stat.S_IMODE(node.st_mode),
+                link=os.readlink(path) if path.is_symlink() else None)
+
+
+def within(path, parent):
+    return path == parent or parent in path.parents
+
+
+def store_root(source, store):
+    resolved = source.resolve(strict=True)
+    if not within(resolved, store) or resolved == store:
+        raise Refused(f"Incoming configuration is outside the store: {source}")
+    return store / resolved.relative_to(store).parts[0]
+
+
+def parents(path, home):
+    current = home
+    for part in path.relative_to(home).parts[:-1]:
+        current = current / part
+        yield current
+
+
+def validate_parents(path, home, store):
+    for parent in parents(path, home):
+        if parent.is_symlink() and not parent.exists():
+            raise Refused(f"Dangling parent link: {parent}")
+        if parent.exists() and not parent.is_dir():
+            raise Refused(f"Configuration parent is not a directory: {parent}")
+        if parent.is_symlink() and not within(parent.resolve(strict=True), store):
+            raise Refused(f"Configuration parent links outside the store: {parent}")
+
+
+def prepare(manifest, diff):
+    if manifest.get("schemaVersion") != 1:
+        raise Refused("Unsupported editable-file manifest")
+    home = Path(manifest["home"]).resolve(strict=True)
+    store = Path(manifest["storeDir"]).resolve(strict=True)
+    result = []
+    targets = set()
+    for entry in manifest["files"]:
+        raw = Path(entry["target"])
+        declared_home = Path(manifest["home"])
+        if not raw.is_absolute() or ".." in raw.parts or not within(raw, declared_home):
+            raise Refused(f"Configuration target must be inside the managed home: {raw}")
+        target = home / raw.relative_to(declared_home)
+        if target == home or target in targets:
+            raise Refused(f"Duplicate or invalid configuration target: {target}")
+        targets.add(target)
+        validate_parents(target, home, store)
+        source = Path(entry["source"]).resolve(strict=True)
+        root = store_root(source, store)
+        incoming = snapshot(source)
+        if incoming is None:
+            raise Refused(f"Missing incoming configuration: {source}")
+        old = snapshot(target)
+        patch = b""
+        if old is not None:
+            compared = subprocess.run(
+                [diff, "-u", "-L", "new-generation", "-L", "before-switch", str(source), "-"],
+                input=old["data"], stdout=subprocess.PIPE, stderr=subprocess.PIPE, check=False)
+            if compared.returncode not in (0, 1):
+                raise Refused(f"Cannot diff {target}: {compared.stderr.decode(errors='replace')}")
+            patch = compared.stdout
+        result.append(dict(target=target, source=source, root=root, old=old,
+                           incoming=incoming["data"], patch=patch,
+                           mode=0o700 if entry.get("executable", False) else 0o600))
+    if any(a in b.parents for a in targets for b in targets if a != b):
+        raise Refused("Configuration file targets overlap")
+    return home, store, result
+
+
+def sync_dir(path):
+    descriptor = os.open(path, os.O_RDONLY)
+    try:
+        os.fsync(descriptor)
+    finally:
+        os.close(descriptor)
+
+
+def write_file(path, data, mode=0o600):
+    with path.open("xb") as stream:
+        os.chmod(path, mode)
+        stream.write(data)
+        stream.flush()
+        os.fsync(stream.fileno())
+
+
+def retain_root(root, link, nix_store):
+    if link.exists() or link.is_symlink():
+        if not link.is_symlink() or link.resolve() != root:
+            raise Refused(f"Refusing to replace an occupied baseline root: {link}")
+    subprocess.run([nix_store, "--add-root", str(link), "--indirect",
+                    "--realise", str(root)], check=True, stdout=subprocess.DEVNULL)
+    if not link.is_symlink() or link.resolve() != root:
+        raise Refused(f"Baseline root was not preserved: {link}")
+
+
+def materialize_parents(target, home, store, root_directory, nix_store):
+    """Split old store-directory links without changing unselected leaf ownership."""
+    for parent in parents(target, home):
+        if parent.is_symlink() and within(parent.resolve(strict=True), store):
+            origin = parent.resolve(strict=True)
+            link = os.readlink(parent)
+            # Leaf links created below must remain valid after the old Home
+            # Manager generation is collected, including after partial failure.
+            root = store_root(origin, store)
+            root_directory.mkdir(parents=True, exist_ok=True, mode=0o700)
+            retain_root(root, root_directory / root.name, nix_store)
+            sync_dir(root_directory)
+            temporary = Path(tempfile.mkdtemp(prefix=".configs-directory-", dir=parent.parent))
+            try:
+                for child in origin.iterdir():
+                    (temporary / child.name).symlink_to(child)
+                if not parent.is_symlink() or os.readlink(parent) != link:
+                    raise Refused(f"Configuration directory changed during activation: {parent}")
+                parent.unlink()
+                try:
+                    temporary.rename(parent)
+                except BaseException:
+                    parent.symlink_to(link)
+                    raise
+                sync_dir(parent.parent)
+            finally:
+                if temporary.exists():
+                    for child in temporary.iterdir():
+                        child.unlink()
+                    temporary.rmdir()
+        else:
+            parent.mkdir(exist_ok=True)
+
+
+def unchanged(plan):
+    current = snapshot(plan["target"])
+    old = plan["old"]
+    # Materializing an old directory link creates leaf symlinks. The contents
+    # must still match the original; inode/link identities can legitimately move.
+    if (current is None) != (old is None) or (current is not None and current["data"] != old["data"]):
+        raise Refused(f"Configuration changed during activation: {plan['target']}")
+    if plan["source"].read_bytes() != plan["incoming"]:
+        raise Refused(f"Incoming configuration changed: {plan['source']}")
+
+
+def reserve_backup(target):
+    pattern = re.compile(re.escape(target.name) + r"\.backup-([0-9]+)$")
+    numbers = [int(match.group(1)) for child in target.parent.iterdir()
+               if (match := pattern.fullmatch(child.name))]
+    number = max(numbers, default=0) + 1
+    while True:
+        backup = target.with_name(f"{target.name}.backup-{number:06d}")
+        try:
+            backup.mkdir(mode=0o700)
+            return backup, number
+        except FileExistsError:
+            number += 1
+
+
+def backup_file(plan, generation, nix_store):
+    backup, number = reserve_backup(plan["target"])
+    # A failure may leave an incomplete numbered backup. It is never reused or
+    # deleted automatically, and the original configuration is still untouched.
+    write_file(backup / "changes.patch", plan["patch"])
+    retain_root(plan["root"], backup / "baseline", nix_store)
+    metadata = dict(schemaVersion=1, sequence=number,
+                    createdAt=datetime.now(timezone.utc).isoformat(),
+                    generation=generation, target=str(plan["target"]),
+                    source=str(plan["source"]), direction="new-generation-to-before-switch",
+                    sourceSha256=digest(plan["incoming"]), previousSha256=digest(plan["old"]["data"]),
+                    previousMode=plan["old"]["mode"], previousLink=plan["old"]["link"])
+    write_file(backup / "metadata.json", (json.dumps(metadata, indent=2) + "\n").encode())
+    sync_dir(backup)
+    sync_dir(backup.parent)
+    print(f"Backed up {plan['target']} -> {backup}")
+
+
+@contextmanager
+def locked(path):
+    path.parent.mkdir(parents=True, exist_ok=True)
+    # Refuse a foreign lock symlink; the lock contents carry no configuration.
+    descriptor = os.open(path, os.O_CREAT | os.O_RDWR | os.O_NOFOLLOW, 0o600)
+    try:
+        fcntl.flock(descriptor, fcntl.LOCK_EX | fcntl.LOCK_NB)
+        yield
+    except BlockingIOError as exc:
+        raise Refused("Another editable-file activation is running") from exc
+    finally:
+        os.close(descriptor)
+
+
+def install(manifest, diff, nix_store, generation):
+    with locked(Path(manifest["lock"])):
+        home, store, plans = prepare(manifest, diff)
+        for plan in plans:
+            materialize_parents(plan["target"], home, store,
+                                Path(manifest["lock"]).parent / "directory-baselines", nix_store)
+            unchanged(plan)
+        # Preserve all pre-existing files before replacing the first one.
+        for plan in plans:
+            if plan["old"] is not None:
+                unchanged(plan)
+                backup_file(plan, generation, nix_store)
+        for plan in plans:
+            unchanged(plan)
+            descriptor, name = tempfile.mkstemp(prefix=".configs-file-", dir=plan["target"].parent)
+            temporary = Path(name)
+            try:
+                with os.fdopen(descriptor, "wb") as stream:
+                    os.fchmod(stream.fileno(), plan["mode"])
+                    stream.write(plan["incoming"])
+                    stream.flush()
+                    os.fsync(stream.fileno())
+                unchanged(plan)
+                os.replace(temporary, plan["target"])
+                sync_dir(plan["target"].parent)
+                print(f"Installed writable configuration: {plan['target']}")
+            finally:
+                temporary.unlink(missing_ok=True)
+
+
+def main():
+    parser = argparse.ArgumentParser(description=__doc__)
+    parser.add_argument("--manifest", type=Path, required=True)
+    parser.add_argument("--diff", default="diff")
+    parser.add_argument("--nix-store", default="nix-store")
+    parser.add_argument("--generation", default="unspecified")
+    parser.add_argument("--check", action="store_true")
+    args = parser.parse_args()
+    try:
+        manifest = json.loads(args.manifest.read_text())
+        if args.check:
+            _, _, plans = prepare(manifest, args.diff)
+            print(f"Checked {len(plans)} editable configuration files; no writes")
+        else:
+            install(manifest, args.diff, args.nix_store, args.generation)
+    except (Refused, OSError, ValueError, KeyError, subprocess.CalledProcessError) as exc:
+        print(f"editable-files: {exc}", file=sys.stderr)
+        return 1
+    return 0
+
+
+if __name__ == "__main__":
+    sys.exit(main())

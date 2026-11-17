@@ -6,6 +6,20 @@ is recorded under `docs/policy/decisions/`; the model those decisions implement
 is `docs/policy/architecture.md`. The other scopes' state is in the files
 beside this one.
 
+## Editable configuration files prepared on master — 2026-11-17
+
+The provider prepares file-specific writable copies
+for Zellij `config.kdl`, Ghostty `config`, Paneru's active Lua file and the ten
+current WezTerm configuration files. Ghostty's theme and future WezTerm files
+retain normal store links. Each activation resets selected files to its incoming
+generation after preserving existing contents as adjacent numbered diffs with
+retained incoming baselines. The accepted choice is in
+`docs/policy/decisions/unixlike/editable-files-reset-on-switch.md`;
+verification is in [the report](../work/unixlike/editable-files/report.md).
+The original topic implementation is adopted into the current master source with
+Zellij 0.46 compatibility and provider-internal file-ownership regression checks.
+This source preparation does not certify consumer adoption or host activation.
+
 ## Optimization integrated locally — 2026-11-06
 
 No-ff merge `544f0fafe1741bd6889b17b6302569b37944e626` integrates the

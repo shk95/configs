@@ -21,3 +21,7 @@ Focused Linux flake checks realize Niri and Noctalia configuration sources,
 including Niri repeat-delay rendering, and prove native parser refusal of
 malformed inputs. These checks do not build a host closure or prove a session.
 Other generated keys and in-place migrations retain the manual obligation.
+
+Individually selected writable files use the separate deployment contract in
+`docs/policy/invariants/unixlike/editable-file-generation-backup.md`. Their
+writability does not waive schema or applicable runtime migration evidence.

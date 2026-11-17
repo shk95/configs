@@ -1,0 +1,110 @@
+#!/bin/sh
+# INV unixlike/editable-file-generation-backup
+set -eu
+checks=$(CDPATH= cd -- "$(dirname -- "$0")" && pwd)
+. "$checks/prerequisite"
+require_command nix nix-store
+cd "$checks/../../.."
+runtime=$(nix build --no-link --print-out-paths --impure --expr '
+  let p = (builtins.getFlake (toString ./unixlike)).inputs.nixpkgs.legacyPackages.${builtins.currentSystem};
+  in p.buildEnv { name = "editable-files-test-runtime"; paths = [(p.python3.withPackages (ps: [ps.kdl-py])) p.diffutils p.patch p.zsh p.zellij]; }')
+export PATH="$runtime/bin:$PATH"
+python3 -B "$checks/editable-files-test.py"
+python3 -B "$checks/zellij-session-test.py"
+nix eval --impure --json --expr '
+  import ./unixlike/tool/checks/fixtures/editable-files.nix {
+    provider = builtins.getFlake (toString ./unixlike);
+  }' | python3 -c 'import json, sys; r = json.load(sys.stdin); assert r["failures"] == [], r; print("✓ editable-file composition: %s cases" % r["count"])'
+
+# Exercise the real Nix GC-root registration using only disposable home files.
+baseline=$(nix build --no-link --print-out-paths --impure --expr '
+  let p = (builtins.getFlake (toString ./unixlike)).inputs.nixpkgs.legacyPackages.${builtins.currentSystem};
+  in p.writeText "editable-files-fixture" "incoming generation\n"')
+old_directory=$(nix build --no-link --print-out-paths --impure --expr '
+  let p = (builtins.getFlake (toString ./unixlike)).inputs.nixpkgs.legacyPackages.${builtins.currentSystem};
+  in p.runCommand "editable-files-old-directory" {} "mkdir -p $out; echo old > $out/config; echo unselected > $out/extra.lua"')
+python3 -B - "$checks/../editable-files" "$baseline" "$old_directory" <<'PY'
+import json, os, pathlib, subprocess, sys, tempfile
+tool, source, old_directory = sys.argv[1:]
+with tempfile.TemporaryDirectory() as temporary:
+    home = pathlib.Path(temporary).resolve()
+    target = home / 'config'
+    target.write_text('previous file\n')
+    manifest = home / 'manifest.json'
+    manifest.write_text(json.dumps(dict(schemaVersion=1, home=str(home), storeDir=str(pathlib.Path(source).parent),
+        lock=str(home / 'state' / 'lock'), files=[dict(source=source, target=str(target))])))
+    subprocess.run([sys.executable, tool, '--manifest', str(manifest), '--check'], check=True)
+    assert sorted(p.name for p in home.iterdir()) == ['config', 'manifest.json']
+    subprocess.run([sys.executable, tool, '--manifest', str(manifest)], check=True)
+    backup = home / 'config.backup-000001'
+    assert (backup / 'baseline').resolve() == pathlib.Path(source)
+    roots = subprocess.check_output(['nix-store', '--query', '--roots', source], text=True)
+    assert str(backup / 'baseline') in roots, roots
+    subprocess.run(['patch', '-s', '-o', str(home / 'restored'), source, str(backup / 'changes.patch')], check=True)
+    assert (home / 'restored').read_text() == 'previous file\n'
+    assert target.read_text() == 'incoming generation\n' and not target.is_symlink()
+    target.write_text('an immediate local edit\n')
+    assert target.read_text() == 'an immediate local edit\n'
+    linked = home / 'linked'
+    linked.symlink_to(old_directory)
+    data = json.loads(manifest.read_text())
+    data['files'][0]['target'] = str(linked / 'config')
+    manifest.write_text(json.dumps(data))
+    subprocess.run([sys.executable, tool, '--manifest', str(manifest)], check=True)
+    retained = home / 'state' / 'directory-baselines' / pathlib.Path(old_directory).name
+    assert retained.is_symlink() and retained.resolve() == pathlib.Path(old_directory)
+    roots = subprocess.check_output(['nix-store', '--query', '--roots', old_directory], text=True)
+    assert str(retained) in roots, roots
+    assert not linked.is_symlink() and (linked / 'extra.lua').is_symlink()
+    assert (linked / 'extra.lua').read_text() == 'unselected\n'
+    linked_again = home / 'linked-again'
+    linked_again.symlink_to(old_directory)
+    data['files'][0]['target'] = str(linked_again / 'config')
+    manifest.write_text(json.dumps(data))
+    subprocess.run([sys.executable, tool, '--manifest', str(manifest)], check=True)
+    assert (linked_again / 'extra.lua').read_text() == 'unselected\n'
+print('✓ real backup/directory GC roots, reversible diff, writable copy and read-only preflight in temporary home')
+PY
+
+# Build the native manifest and pinned writer dependencies, then execute
+# only that placement command with every destination redirected to a temp home.
+# This is not a Home Manager or host activation.
+activation=$(nix build --no-link --print-out-paths --impure --expr '
+  let
+    provider = builtins.getFlake (toString ./unixlike);
+    pkgs = provider.inputs.nixpkgs.legacyPackages.${builtins.currentSystem};
+    identity = {system = builtins.currentSystem; user = "example"; git = {name = "Example"; email = "example@example.invalid";};};
+    home = if pkgs.stdenv.hostPlatform.isDarwin then
+      (provider.lib.mkDarwin (identity // {
+        systemModules = [{system.primaryUser = "example"; users.users.example.home = "/Users/" + "example"; homebrew.casks = ["ghostty"]; }];
+      })).config.home-manager.users.example
+    else (provider.lib.mkHome (identity // {homeDirectory = "/home/" + "example"; environment.graphical = true;})).config;
+  in pkgs.writeText "editable-files-activation-command" home.home.activation.installEditableFiles.data')
+python3 -B - "$activation" <<'PY'
+import json, pathlib, shlex, subprocess, sys, tempfile
+command = shlex.split(pathlib.Path(sys.argv[1]).read_text())
+assert command.pop(0) == 'run'
+manifest_index = command.index('--manifest') + 1
+original = json.loads(pathlib.Path(command[manifest_index]).read_text())
+count = 13 if sys.platform == 'darwin' else 12
+assert len(original['files']) == count
+with tempfile.TemporaryDirectory() as temporary:
+    home = pathlib.Path(temporary).resolve()
+    old_home = pathlib.Path(original['home'])
+    for entry in original['files']:
+        entry['target'] = str(home / pathlib.Path(entry['target']).relative_to(old_home))
+    original['home'] = str(home)
+    original['lock'] = str(home / 'state' / 'lock')
+    manifest = home / 'manifest.json'
+    manifest.write_text(json.dumps(original))
+    command[manifest_index] = str(manifest)
+    command[command.index('--generation') + 1] = 'fixture-generation'
+    subprocess.run(command + ['--check'], check=True)
+    subprocess.run(command, check=True, stdout=subprocess.DEVNULL)
+    for entry in original['files']:
+        target = pathlib.Path(entry['target'])
+        assert target.is_file() and not target.is_symlink()
+        assert target.read_bytes() == pathlib.Path(entry['source']).read_bytes()
+        assert target.stat().st_mode & 0o200
+print('✓ generated %s-file manifest and exact pinned placement command in temporary home' % count)
+PY
