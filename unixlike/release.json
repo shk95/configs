@@ -1,7 +1,7 @@
 {
-  "previous": "unixlike-v1.3.0",
-  "version": "1.3.1",
-  "summary": "Adopt Zellij 0.46.0 grapheme support and retire the Darwin combining-mark workaround.",
+  "previous": "unixlike-v1.3.1",
+  "version": "1.3.2",
+  "summary": "Refresh permitted Unix-like inputs.",
   "compatibility": "patch",
-  "migration": "Adopt the updated provider in the consumer flake and activate separately; restart Zellij sessions and verify Hangul rendering and readback."
+  "migration": ""
 }
