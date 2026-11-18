@@ -75,6 +75,15 @@ if selected unclassified; then
   fail "A staged path has no owning scope. Update tool/version-control/classify."
 fi
 
+# INV repository/scope-ownership
+# Merge parents may carry commits from several owners. The range audit
+# checks those ordinary commits individually.
+set -- --staged
+if [ ! -f "$(git rev-parse --git-path MERGE_HEAD)" ]; then
+  set -- --single-scope "$@"
+fi
+staged_scopes=$(tool/version-control/classify "$@") || exit 1
+
 if selected unixlike:format || selected unixlike:lint || selected unixlike:payloads; then
   staged_tree=$(mktemp -d)
   trap 'rm -rf "$staged_tree"' EXIT
@@ -139,11 +148,7 @@ evidence_run invariants tool/version-control/invariants \
 # can name no measure. Only its overdue rule is scope-selective, so the
 # classifier — which answers ownership — supplies the scopes an overdue entry
 # may fail here; `none` (nothing staged) leaves that list empty.
-# Two steps, not one pipeline: a pipeline's status is its last command's, so
-# a classifier that failed would reach the checker as an empty scope list.
-provisional_scopes_raw=$(tool/version-control/classify --staged) \
-  || fail "The classifier could not read the staged paths."
-provisional_scopes=$(printf '%s\n' "$provisional_scopes_raw" \
+provisional_scopes=$(printf '%s\n' "$staged_scopes" \
   | grep -vx none | tr '\n' ',' | sed 's/,$//')
 evidence_run provisional tool/version-control/provisional --scopes "$provisional_scopes" \
   || abort "See docs/provisional/README.md."

@@ -130,14 +130,13 @@ if [ "$mode" = full ]; then
       master) ;;
       dev) ;; # retained legacy ref, never an authoring basis
       backup|backup/*) warn "local backup branch remains: $local_branch" ;;
-      feature/*|fix/*)
-        if printf '%s\n' "$local_branch" | grep -Eq '^(feature|fix)/(unixlike|windows|common|repository)-[a-z0-9][a-z0-9-]*$'; then
+      *)
+        if "$audit_tools/authoring" -- "$local_branch"; then
           ok "branch name follows policy: $local_branch"
         else
           fail "branch name does not follow policy: $local_branch"
         fi
         ;;
-      *) fail "unexpected local branch name: $local_branch" ;;
     esac
   done
 fi
@@ -305,14 +304,14 @@ root_commit=$(git rev-list --max-parents=0 HEAD | head -1)
 lock_commits=$(git log --no-merges --format='%H' -- flake.lock unixlike/flake.lock)
 if [ "$mode" = range ]; then
   # INV repository/local-development-integration
+  # INV repository/scope-ownership
   scopes=$("$audit_tools/classify" --range "$range_base" "$range_tip")
   if printf '%s\n' "$scopes" | grep -qx unclassified; then
     fail "transmitted content has an unclassified path"
   fi
   for commit in $(git rev-list --no-merges "$range_walk"); do
-    commit_scopes=$(git diff-tree --root --no-commit-id --name-only -r "$commit" | "$audit_tools/classify" --stdin)
-    count=$(printf '%s\n' "$commit_scopes" | awk 'NF { n++ } END { print n+0 }')
-    if [ "$count" -gt 1 ] || printf '%s\n' "$commit_scopes" | grep -qx unclassified; then
+    commit_paths=$(git diff-tree --root --no-renames --no-commit-id --name-only -r "$commit")
+    if ! printf '%s\n' "$commit_paths" | "$audit_tools/classify" --single-scope --stdin >/dev/null; then
       fail "source commit has mixed or unclassified ownership: $commit"
     fi
   done

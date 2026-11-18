@@ -14,7 +14,7 @@ root=$(git rev-parse --show-toplevel)
 cd "$root"
 
 usage() {
-  echo "usage: tool/configs classify [--staged | --range <base> <head> | --stdin | --files <path> ...]" >&2
+  echo "usage: tool/configs classify [--single-scope] [--staged | --range <base> <head> | --stdin | --files <path> ...]" >&2
   exit 2
 }
 
@@ -22,14 +22,20 @@ paths=$(mktemp)
 scopes=$(mktemp)
 trap 'rm -f "$paths" "$scopes"' EXIT
 
+single_scope=false
+if [ "${1:-}" = --single-scope ]; then
+  single_scope=true
+  shift
+fi
+
 case "${1:-}" in
   --staged)
     [ "$#" -eq 1 ] || usage
-    git diff --cached --name-only --relative >"$paths"
+    git diff --no-renames --cached --name-only --relative >"$paths"
     ;;
   --range)
     [ "$#" -eq 3 ] || usage
-    git diff --name-only --relative "$2" "$3" >"$paths"
+    git diff --no-renames --name-only --relative "$2" "$3" >"$paths"
     ;;
   --stdin)
     [ "$#" -eq 1 ] || usage
@@ -42,17 +48,12 @@ case "${1:-}" in
     ;;
   "")
     {
-      git diff --name-only --relative HEAD
+      git diff --no-renames --name-only --relative HEAD
       git ls-files --others --exclude-standard
     } | sort -u >"$paths"
     ;;
   *) usage ;;
 esac
-
-if [ ! -s "$paths" ]; then
-  echo none
-  exit 0
-fi
 
 while IFS= read -r path; do
   [ -n "$path" ] || continue
@@ -99,6 +100,18 @@ while IFS= read -r path; do
     *) echo unclassified ;;
   esac
 done <"$paths" | sort -u >"$scopes"
+
+if [ ! -s "$scopes" ]; then
+  echo none
+  exit 0
+fi
+
+if "$single_scope" &&
+    { grep -qx unclassified "$scopes" || [ "$(wc -l <"$scopes")" -gt 1 ]; }; then
+  echo 'An ordinary source commit must contain paths in one owning scope. Found:' >&2
+  cat "$scopes" >&2
+  exit 1
+fi
 
 for scope in unixlike windows repository unclassified; do
   if grep -qx "$scope" "$scopes"; then

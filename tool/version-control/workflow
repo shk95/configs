@@ -11,7 +11,9 @@ import os
 import re
 import subprocess
 from pathlib import Path
-from repo_policy import load, topic_pattern
+from git_workflow import (TOPIC_PREFIX, TOPIC_SEPARATOR, TOPIC_SLUG, git, linked_workspace,
+                          topic_destination, topic_pattern, unfinished_operations)
+from repo_policy import load
 from github_proof import verify
 from topic_scope import validate as validate_topic
 
@@ -24,17 +26,12 @@ def run(*args, cwd=None, capture=True):
     return result.stdout.strip() if capture else ''
 
 
-def git(*args, cwd=None):
-    return subprocess.check_output(['git', *args], cwd=cwd, text=True,
-                                   env=dict(os.environ, GIT_OPTIONAL_LOCKS='0')).strip()
-
-
 def clean(root):
     if git('status', '--porcelain', cwd=root):
         raise ValueError('Commit or preserve staged, unstaged and untracked changes first; nothing was discarded.')
-    for operation in ('MERGE_HEAD', 'rebase-merge', 'rebase-apply', 'CHERRY_PICK_HEAD'):
-        if Path(git('rev-parse', '--path-format=absolute', '--git-path', operation, cwd=root)).exists():
-            raise ValueError('Finish the existing Git operation first.')
+    operations = unfinished_operations(root)
+    if operations:
+        raise ValueError('Finish the existing Git operation first: ' + ', '.join(operations))
 
 
 def sha(value):
@@ -43,37 +40,40 @@ def sha(value):
     return git('rev-parse', '--verify', value + '^{commit}')
 
 
-def record_path():
-    return Path(git('rev-parse', '--path-format=absolute', '--git-path', POLICY['workspace_record']))
+def branch_head(branch):
+    return git('rev-parse', '--verify', f'refs/heads/{branch}^{{commit}}')
+
+
+def require_candidate(root, head):
+    clean(root)
+    if git('rev-parse', 'HEAD') != head:
+        raise ValueError('Use the exact reviewed candidate in its checkout.')
 
 
 def inspect(root):
-    path = record_path()
-    value = json.loads(path.read_text()) if path.is_file() and not path.is_symlink() else None
-    return {'branch': git('branch', '--show-current'), 'head': git('rev-parse', 'HEAD'),
+    branch = git('branch', '--show-current')
+    return {'branch': branch, 'head': git('rev-parse', 'HEAD'), 'merge_target': topic_destination(branch, POLICY),
             'master': git('rev-parse', BASE), 'workspace': str(root),
-            'linked': git('rev-parse', '--git-dir') != git('rev-parse', '--git-common-dir'),
+            'linked': linked_workspace(),
             'changes': git('status', '--short'), 'remote': 'not queried',
-            'policy': 'tool/version-control/policy.json', 'work_record': value,
-            'record_authority': 'execution evidence only; not approval, liveness or cleanup permission',
-            'workspace_choice': 'retain the agreed workspace; ask only if missing or changed; use explicit --workspace for a clean new start'}
+            'policy': 'tool/version-control/policy.json',
+            'workspace_choice': 'retain the agreed workspace; choose --workspace for a clean new start'}
 
 
 def plan(root, base, head, ci_run=None):
     """Build the exact check sequence without running checks or hosted proof."""
-    clean(root)
     base, head = sha(base), sha(head)
-    if git('rev-parse', 'HEAD') != head:
-        raise ValueError('Check the exact candidate in its checkout first.')
+    require_candidate(root, head)
     git('merge-base', '--is-ancestor', base, head)
     changes = git('diff', '--name-status', base, head)
     units = subprocess.run(
         [str(root / 'tool/dispatch/select'), 'ci'], input=changes + '\n', text=True,
         stdout=subprocess.PIPE, check=True).stdout.splitlines()
-    scopes = run(str(root / 'tool/version-control/classify'), '--range', base, head).splitlines()
     branch = git('branch', '--show-current')
-    if branch != BASE:
-        validate_topic(branch, base, head, POLICY)
+    if branch == BASE:
+        scopes = run(str(root / 'tool/version-control/classify'), '--range', base, head).splitlines()
+    else:
+        scopes = validate_topic(branch, base, head, POLICY)
     steps = []
 
     def local(identifier, argv, subject):
@@ -143,12 +143,12 @@ def main():
     sub = parser.add_subparsers(dest='command', required=True)
     sub.add_parser('inspect')
     start = sub.add_parser('start')
-    start.add_argument('--scope', choices=POLICY['scopes'], required=True)
-    start.add_argument('--commits', choices=['one', 'many'], required=True)
+    start.add_argument('--parent', help='Start a subtopic from this local topic branch')
+    start.add_argument('--commits', choices=['one', 'many'],
+                       help='Use one for direct master work; optional when a topic is named')
     start.add_argument('--workspace', choices=POLICY['workspace_choices'], required=True,
-                       help="Pass the user's answer; agents must ask before choosing.")
+                       help='The agreed checkout for this task')
     start.add_argument('--topic')
-    start.add_argument('--kind', choices=POLICY['topic_kinds'], default=POLICY['topic_kinds'][0])
     start.add_argument('--dry-run', action='store_true')
     for name in ('plan', 'check', 'merge'):
         command = sub.add_parser(name, help='Inspect planned checks' if name == 'plan' else None)
@@ -162,33 +162,35 @@ def main():
         print(json.dumps(inspect(root), indent=2))
     elif args.command == 'start':
         clean(root)
-        master = git('rev-parse', BASE)
-        branch = git('branch', '--show-current')
-        if args.workspace == 'current' and branch != BASE:
-            raise ValueError('Start current-workspace work from master; preserve existing work first.')
-        needs_topic = args.commits == 'many' or args.workspace == 'linked'
-        if needs_topic and (not args.topic or not re.fullmatch('[a-z0-9][a-z0-9-]*', args.topic)):
-            raise ValueError('A topic slug is required for multiple commits or a linked workspace.')
-        target = f'{args.kind}/{args.scope}-{args.topic}' if needs_topic else BASE
-        print(json.dumps({'base': master, 'scope': args.scope, 'branch': target, 'workspace': args.workspace, 'commits': args.commits}))
+        parent = args.parent
+        if parent is not None and not (parent.startswith(TOPIC_PREFIX) and re.fullmatch(topic_pattern(POLICY), parent)):
+            raise ValueError('Start a subtopic from a named topic/ branch.')
+        base_branch = parent or BASE
+        if args.workspace == 'current' and git('branch', '--show-current') != base_branch:
+            raise ValueError(f'Start current-workspace work from {base_branch}; preserve existing work first.')
+        if args.topic is None:
+            if parent or args.commits != 'one' or args.workspace != 'current':
+                raise ValueError('Pass --topic for topic work or --commits one for direct master work.')
+            target = BASE
+        elif not re.fullmatch(TOPIC_SLUG, args.topic):
+            raise ValueError('Use a topic slug made of lowercase letters, digits, and hyphens.')
+        elif parent:
+            target = parent + TOPIC_SEPARATOR + args.topic
+        else:
+            target = TOPIC_PREFIX + args.topic
+        base = branch_head(base_branch)
+        data = dict(base=base, branch=target, workspace=args.workspace)
+        if parent is not None:
+            data['parent'] = parent
+        print(json.dumps(data))
         if args.dry_run:
             return
-        selected = root
         if args.workspace == 'linked':
             primary = Path(git('worktree', 'list', '--porcelain').splitlines()[0][9:])
             destination = primary.parent / (primary.name + '-wt') / target.replace('/', '-', 1)
-            run('git', 'worktree', 'add', '-b', target, str(destination), master, capture=False)
-            selected = destination
-        elif needs_topic:
-            run('git', 'switch', '-c', target, master, capture=False)
-        path = selected / git('rev-parse', '--git-path', POLICY['workspace_record'], cwd=selected)
-        if path.is_symlink(): raise ValueError('Refuse symlink operation record')
-        data = dict(schema=1, base=master, scope=args.scope, branch=target,
-                    commits=args.commits, workspace=args.workspace, selection='explicit caller argument')
-        # This is public operation state, not an assertion that approval occurred.
-        temporary = path.with_suffix('.tmp')
-        with temporary.open('x') as stream: json.dump(data, stream, indent=2)
-        os.replace(temporary, path)
+            run('git', 'worktree', 'add', '-b', target, str(destination), base, capture=False)
+        elif target != BASE:
+            run('git', 'switch', '-c', target, base, capture=False)
     elif args.command == 'plan':
         print(json.dumps(plan(root, args.base, args.head, args.ci_run), indent=2))
     elif args.command == 'check':
@@ -196,27 +198,48 @@ def main():
     else:
         base, head = sha(args.base), sha(args.head)
         branch = git('branch', '--show-current')
-        if not re.fullmatch(topic_pattern(POLICY), branch):
+        destination = topic_destination(branch, POLICY)
+        if not destination:
             raise ValueError('Merge must start in the reviewed topic checkout.')
-        if base == head or git('rev-parse', BASE) != base:
-            raise ValueError('Empty candidate or changed master base; reflect master and verify again.')
-        check(root, base, head, args.ci_run)
-        # Find an existing master checkout. Otherwise reuse the chosen workspace.
-        target = None
-        for record in git('worktree', 'list', '--porcelain').split('\n\n'):
-            if ('\nbranch refs/heads/' + BASE) in record:
-                target = Path(record.splitlines()[0][9:])
-        if target is None:
-            run('git', 'switch', BASE, cwd=root, capture=False)
+        if base == head or branch_head(destination) != base:
+            raise ValueError(f'Empty candidate or changed {destination} base; review the current branch and retry.')
+        source_linked = linked_workspace()
+        if source_linked and not git('for-each-ref', '--format=%(worktreepath)', f'refs/heads/{destination}'):
+            raise ValueError(f'Check out {destination} in its destination workspace before merging from a linked worktree.')
+        if destination == BASE:
+            check(root, base, head, args.ci_run)
+        else:
+            if args.ci_run:
+                raise ValueError('Hosted proof applies to the top-level master candidate.')
+            require_candidate(root, head)
+            if git('merge-base', base, head) == head:
+                raise ValueError(f'{destination} already contains the reviewed subtopic head.')
+            validate_topic(branch, base, head, POLICY)
+            run(str(root / 'tool/version-control/audit'), '--range', base, head, capture=False)
+            require_candidate(root, head)
+        if git('branch', '--show-current') != branch:
+            raise ValueError('The source branch changed during verification.')
+        target_path = git('for-each-ref', '--format=%(worktreepath)', f'refs/heads/{destination}')
+        if target_path:
+            target = Path(target_path)
+        elif source_linked:
+            raise ValueError(f'The {destination} checkout disappeared during verification.')
+        else:
+            run('git', 'switch', '--no-guess', destination, cwd=root, capture=False)
             target = root
         clean(target)
-        if git('rev-parse', 'HEAD', cwd=target) != base or git('branch', '--show-current', cwd=target) != BASE:
-            raise ValueError('Master changed during verification; integration stopped.')
-        run('git', 'merge', '--' + POLICY['merge_method'], '--no-edit', head, cwd=target, capture=False)
+        if git('rev-parse', 'HEAD', cwd=target) != base or git('branch', '--show-current', cwd=target) != destination:
+            raise ValueError(f'{destination} changed during verification; integration stopped.')
+        run('git', '-c', f'branch.{destination}.mergeOptions=', 'merge',
+            '--' + POLICY['merge_method'], '-m', f"Merge branch '{branch}' into {destination}",
+            head, cwd=target, capture=False)
         parents = git('show', '-s', '--format=%P', 'HEAD', cwd=target).split()
         if parents != [base, head]:
             raise ValueError('Unexpected merge identity; preserve and inspect the result.')
-        print(json.dumps({'merge': git('rev-parse', 'HEAD', cwd=target), 'parents': parents, 'push': 'not performed'}))
+        if destination == BASE and git('rev-parse', 'HEAD^{tree}', cwd=target) != git('rev-parse', head + '^{tree}'):
+            raise ValueError('Master merge differs from the verified tree; preserve and inspect the result.')
+        print(json.dumps({'merge': git('rev-parse', 'HEAD', cwd=target), 'destination': destination,
+                          'parents': parents, 'push': 'not performed'}))
 
 
 if __name__ == '__main__':

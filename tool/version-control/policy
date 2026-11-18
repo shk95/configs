@@ -5,15 +5,21 @@ sys.dont_write_bytecode = True
 import argparse
 import json
 import subprocess
-from repo_policy import authoring, load
+from git_workflow import authoring
+from repo_policy import load
 
 parser = argparse.ArgumentParser(description='Inspect the tracked mechanical policy or validate an authoring branch.')
 parser.add_argument('command', choices=['show', 'authoring'])
+parser.add_argument('branch', nargs='?', help='Name to validate instead of the checked-out branch')
 args = parser.parse_args()
 policy = load()
 if args.command == 'show':
+    if args.branch is not None:
+        parser.error('show takes no branch')
     print(json.dumps(policy, indent=2))
 else:
-    branch = subprocess.check_output(['git', 'branch', '--show-current'], text=True).strip()
+    branch = args.branch
+    if branch is None:
+        branch = subprocess.check_output(['git', 'branch', '--show-current'], text=True).strip()
     if not authoring(branch, policy):
         raise SystemExit(f'Unsupported authoring branch {branch!r}; use {policy["base_branch"]} or a named topic')

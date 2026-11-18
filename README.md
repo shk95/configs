@@ -67,17 +67,9 @@ Nix to author, validate, or consume.
 
 ## Develop
 
-Master is the release and normal work branch. One logical commit stays on
-master; several logical commits for one outcome use a master-based topic and
-`--no-ff` integration. Agents ask whether to use the current checkout or a
-linked worktree; parallel authors use isolation. Start with `tool/configs
-workflow inspect` when orientation is needed. Continue an existing task from
-its actual Git state, retaining its workspace and authorization. For a clean
-new task only, use `workflow start --scope <scope> --commits one|many
---workspace current|linked` after the user's workspace choice (add
-`--topic <slug>` for a topic). Use the tracked
-`workflow check` and `workflow merge` commands with reviewed full base/head
-SHA. CONTRIBUTING.md defines authorization, verification and recovery.
+Use `tool/configs workflow inspect` to see the current branch, changes and
+integration target. Follow the [branch and commit procedure](docs/development/authoring.md#branch-and-commit-flow)
+to start or continue work in the agreed checkout.
 
 For a new clone, prepare hooks; inspect unverified capabilities before relying
 on them or after the environment changes:
@@ -112,7 +104,7 @@ For a new one-commit task whose selected workspace is the current master
 checkout, for example:
 
 ```sh
-tool/configs workflow start --scope unixlike --commits one --workspace current
+tool/configs workflow start --commits one --workspace current
 # Edit the owning source, then run the applicable development checks.
 unixlike/tool/checks/format
 unixlike/tool/checks/lint
@@ -120,10 +112,9 @@ unixlike/tool/checks/lint
 
 The [verification procedure](docs/development/verification.md#development-feedback-before-a-commit)
 maps dirty-source, staged-only and committed-candidate work to existing checks.
-Commit only when authorized. For a larger outcome, use
-`workflow start --commits many` with a topic and the user's workspace choice,
-then verify and merge its exact SHA with `workflow merge` as described in
-CONTRIBUTING. Push and domain release remain separate authorized operations.
+Commit only when authorized. Start a larger outcome with
+`workflow start --topic <outcome>` and the agreed workspace, then verify and
+merge its exact SHA with `workflow merge` as described in CONTRIBUTING. Push and domain release remain separate authorized operations.
 CI runs on master pushes and optional topic PRs; ordinary master work needs
 no mandatory PR admission.
 

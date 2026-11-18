@@ -107,7 +107,7 @@ for name in sh env git python3 dirname grep sed awk tr head tail cut wc date mkd
   ln -s "$location" "$fixture/no-nix/$name"
 done
 missing_status=0
-COMMIT_PATH="$fixture/no-nix" run y flake refresh >"$fixture/out" 2>&1 || missing_status=$?
+(COMMIT_PATH="$fixture/no-nix" run y flake refresh) >"$fixture/out" 2>&1 || missing_status=$?
 [ "$missing_status" -eq 69 ] || { cat "$fixture/out"; fail 'missing Nix not reported unavailable'; }
 [ "$(current_head)" = "$baseline" ] || fail 'missing Nix committed'
 
@@ -130,7 +130,7 @@ run y flake refresh unverified >"$fixture/out" 2>&1
 grep -q 'unverified' "$fixture/out"
 [ "$(current_head)" != "$baseline" ] || fail 'unverified local check prevented commit'
 baseline=$(current_head)
-if REQUIRE_NATIVE=1 run y flake refresh native-required >"$fixture/out" 2>&1; then fail 'unverified native check accepted'; fi
+if (REQUIRE_NATIVE=1 run y flake refresh native-required) >"$fixture/out" 2>&1; then fail 'unverified native check accepted'; fi
 [ "$(current_head)" = "$baseline" ] || fail 'unverified native check changed HEAD'
 [ "$(git -C "$repo" diff --cached --name-only)" = unixlike/flake.lock ] || fail 'unverified native edit not retained'
 git -C "$repo" restore --staged --worktree unixlike/flake.lock
@@ -139,14 +139,14 @@ unset COMMIT_CHECK_STATUS
 git -C "$repo" config --unset core.hooksPath
 run n --dry-run flake refresh >"$fixture/out" 2>&1
 grep -q 'pre-commit checks unverified' "$fixture/out"
-if REQUIRE_NATIVE=1 run n --dry-run flake refresh >"$fixture/out" 2>&1; then fail 'missing hooks qualified as native'; fi
+if (REQUIRE_NATIVE=1 run n --dry-run flake refresh) >"$fixture/out" 2>&1; then fail 'missing hooks qualified as native'; fi
 git -C "$repo" config core.hooksPath "$repo/.githooks"
 run n --dry-run flake refresh >"$fixture/out" 2>&1
 if grep -q 'pre-commit checks unverified' "$fixture/out"; then fail 'absolute tracked hooks unavailable'; fi
 
 primary=$repo
 baseline=$(current_head)
-git -C "$primary" worktree add -qb feature/unixlike-commit-fixture "$fixture/linked"
+git -C "$primary" worktree add -qb topic/commit-fixture "$fixture/linked"
 repo="$fixture/linked"
 run y flake refresh linked >"$fixture/out" 2>&1
 [ "$(git -C "$repo" diff-tree --no-commit-id --name-only -r HEAD)" = unixlike/flake.lock ] || fail 'linked commit mixed source'

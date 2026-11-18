@@ -15,7 +15,6 @@
     "current",
     "linked"
   ],
-  "workspace_record": "configs-work.json",
   "remote": {
     "enforce_admins": true,
     "allow_deletions": false,

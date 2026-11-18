@@ -431,7 +431,7 @@ while IFS= read -r item; do
     END {
       if (count["kind"] != 1) bad("W3", "needs exactly one kind")
       if (count["date"] != 1) bad("W3", "needs exactly one date")
-      if (count["scope"] != 1) bad("W3", "needs exactly one scope; a spec whose outcome spans scopes is one spec per scope")
+      if (count["scope"] != 1) bad("W3", "needs exactly one scope matching its owning directory")
       if (count["status"] != 1) bad("W3", "needs exactly one status")
       if (count["review-by"] != 1) bad("W3", "needs exactly one review-by")
       if (count["issue"] > 1) bad("W3", "at most one issue")

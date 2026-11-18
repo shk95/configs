@@ -4,12 +4,14 @@
 from pathlib import Path
 import re
 import subprocess
-from repo_policy import load, topic_pattern
+from git_workflow import topic_pattern
+from repo_policy import load
 
 
 def validate(branch, base, head, policy=None):
     policy = policy or load()
-    if not re.fullmatch(topic_pattern(policy), branch):
+    topic = re.fullmatch(topic_pattern(policy), branch)
+    if not topic:
         raise ValueError('Invalid topic source: ' + branch)
     if any(not re.fullmatch('[0-9a-f]{40}', value) for value in (base, head)):
         raise ValueError('Use full topic base/head SHA identities')
@@ -18,12 +20,17 @@ def validate(branch, base, head, policy=None):
     source_base = subprocess.check_output(['git', 'merge-base', base, head], text=True).strip()
     classifier = Path(__file__).with_name('classify')
     scopes = subprocess.check_output([str(classifier), '--range', source_base, head], text=True).splitlines()
-    # A reverted edit still belongs to the topic's authored history. Exclude
+    if scopes == ['none'] or 'unclassified' in scopes:
+        raise ValueError('A topic must contain classified source changes.')
+    scope = topic.group('scope')
+    if scope is None:
+        return scopes
+    # A reverted edit still belongs to a legacy topic's authored history. Exclude
     # commits already accepted on the target base, including newer PR base work.
-    authored = subprocess.check_output(['git', 'log', '--no-merges', '--format=', '--name-only',
+    authored = subprocess.check_output(['git', 'log', '--no-merges', '--no-renames', '--format=', '--name-only',
                                         base + '..' + head], text=True)
     authored_scopes = subprocess.check_output([str(classifier), '--stdin'], input=authored,
                                               text=True).splitlines() if authored.strip() else []
-    scope = branch.split('/', 1)[1].split('-', 1)[0]
     if scopes != [scope] or any(value != scope for value in authored_scopes):
         raise ValueError('A topic must contain exactly its named owning scope.')
+    return scopes

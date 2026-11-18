@@ -32,7 +32,8 @@ evidence. No automatic pruning.
 
 `tool/configs worktree review <path-or-topic-name>` reports the exact head,
 commits absent from master, tracked/untracked/ignored data and Git operations.
-The exact topic ref retained in this clone preserves source when only the
+Use the full branch name or workspace path when the short name matches
+several worktrees. The exact topic ref retained in this clone preserves source when only the
 worktree is removed; the tool checks it against registered metadata and HEAD
 before removal and confirms the ref remains afterward. Unique commits are
 reported without requiring an extra archive. Branch or clone deletion is a
@@ -56,7 +57,8 @@ concise result instead. An issue and roadmap entry are optional.
 
 1. Classify the outcome and read relevant current work. Create the owning
    `docs/work/<scope>/<slug>/spec.md` and pending `report.md` together in a
-   user-selected workspace. State acceptance, evidence lanes and dependencies.
+   user-selected workspace. State acceptance and evidence lanes. Record any
+   prerequisite that blocks later work and the evidence that will satisfy it.
 2. Use `tool/configs work --working-tree docs/work/<scope>/<slug>` for feedback
    before staging, or `work --staged` for the index. These are alternatives
    for the state being checked.

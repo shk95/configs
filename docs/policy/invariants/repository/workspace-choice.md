@@ -10,4 +10,4 @@ decision: docs/policy/decisions/repository/master-topic-workflow.md § Decision
 
 Workspace location is selected with the user and retained when continuing the
 same task. Ask when the choice is missing or must change. A clean start takes
-an explicit choice and records it; the argument does not attest human consent.
+an explicit workspace choice. The argument does not attest human consent.

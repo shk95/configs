@@ -33,8 +33,8 @@ composition, read [Unix-like module layout](docs/policy/architecture.md#unix-lik
 - Classify a change as `unixlike`, `windows`, or `common` before editing.
 - Classify root version-control governance as `repository`; do not use that
   scope for configuration or deployment behavior.
-- Keep a change inside one domain unless transfer between domains is the
-  explicit purpose of the work.
+- Keep each source commit within its owning scope. Transfers between domains
+  are explicit.
 - Do not introduce implicit imports, generated dependencies, or shared mutable
   payloads across domains.
 - Do not recreate plugin or addon discovery between repository domains.
@@ -104,11 +104,9 @@ When changing governance:
 
 ## Version control
 
-Master is the release and ordinary work branch. Several logical commits for
-one same-scope outcome use a topic and no-ff integration. A selected linked
-worktree also uses a topic, even for one commit. Follow the workspace and
-authorization boundaries above throughout the agreed task; do not request the
-same answer or approval again. A workspace choice is not commit/push consent.
+Follow the [branch and commit procedure](docs/development/authoring.md#branch-and-commit-flow)
+and the workspace and authorization boundaries above throughout the agreed
+task. Reuse the agreed workspace and authorization. A workspace choice is not commit/push consent.
 History maintenance still needs fresh approval for its exact operation.
 If work grows after a master commit, keep that commit and group remaining
 work on a topic rather than rewriting accepted history.

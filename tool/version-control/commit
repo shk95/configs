@@ -156,21 +156,16 @@ case $scope in
   unixlike | windows | common | repository) ;;
   *)
     refuse "$scope_paths has no owning scope: $(printf '%s' "$scope" | tr '\n' ' ')" \
-      "Update tool/version-control/classify before committing it. Both gates reject an unclassified path, and a path owned by more than one scope has no single branch to publish from."
+      "Update tool/version-control/classify before committing it. Every path needs one owning scope."
     ;;
 esac
 
 # Refusals that hold for every command. Checked before any work so that a
 # refusal leaves the clone exactly as it was found.
-branch=$(git symbolic-ref --quiet --short HEAD || echo detached)
 if [ -n "$(git diff --cached --name-only)" ]; then
   refuse "The index already holds staged changes." \
     "This helper commits only the edit it makes. Commit or unstage the rest first."
 fi
-case "$branch" in
-  master|feature/*|fix/*) ;;
-  *) refuse "Use master or a topic branch." "Run tool/configs workflow start with the user's workspace choice." ;;
-esac
 
 require_untouched() {
   if [ -n "$(git status --porcelain -- "$1")" ]; then
