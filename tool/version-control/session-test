@@ -15,7 +15,7 @@ git config user.name Fixture
 git config user.email fixture@example.invalid
 mkdir -p tool/version-control
 cp "$root/tool/work-session.sh" tool/
-for source in authoring policy policy.json repo_policy.py; do
+for source in authoring policy policy.json repo_policy.py git_workflow.py; do
   cp "$root/tool/version-control/$source" tool/version-control/
 done
 printf '/.work-session.md\n/.work-session.lock/\n' > .gitignore

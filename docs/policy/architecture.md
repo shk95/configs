@@ -561,8 +561,8 @@ easy to inspect. Readiness and deployment are domain-scoped rather than reposito
 
 - `master` is the release and ordinary work branch; it is not proof that
   every domain at that commit was deployed.
-- A topic groups several logical commits, or isolates a selected linked
-  workspace, with a no-ff merge into master.
+- A top-level topic groups the logical commits for one outcome with a no-ff
+  merge into master.
 - `unixlike-vMAJOR.MINOR.PATCH` identifies a validated Unix-like release.
 - `windows-vMAJOR.MINOR.PATCH` identifies a validated Windows release.
 - `common-vMAJOR.MINOR.PATCH` identifies a validated common release.
@@ -607,11 +607,11 @@ every Unix-like derivation hash separable from the source change beside it.
 Only its fixed patch publication declaration may accompany an automatic refresh
 (`INV repository/conventional-subject`, `INV repository/flake-lock-isolated`).
 
-General development uses master and optional same-scope topics for several
-logical commits or selected workspace isolation. Workspace location is chosen
-with the user and retained while continuing the same task; neither a primary
-checkout nor a linked one has special authoring authority. Operation follows
-the relevant procedure and existing task authorization.
+Branch grouping follows the intended outcome. Ownership applies to individual
+source commits, so a feature and the repository entry point it needs can reach
+master together. Domain release and deployment retain their own evidence and
+timing. Primary and linked checkouts have the same authoring authority.
+Operation follows the relevant procedure and task authorization.
 The current contract is
 `docs/policy/decisions/repository/master-topic-workflow.md`.
 

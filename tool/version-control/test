@@ -603,6 +603,7 @@ expect_units 'unixlike:suite
 windows:suite' ci "$(printf 'R100\tunixlike/modules/old.ps1\twindows/desired/new.ps1')"
 expect_units 'windows:suite' ci "$windows_modified"
 expect_units 'repository:fixtures' ci "$(printf 'M\ttool/work-session.sh')"
+expect_units 'repository:fixtures' ci "$(printf 'M\ttool/version-control/git_workflow.py')"
 for path in tool/dispatch/select tool/dispatch/ci-base tool/version-control/classify tool/version-control/required-checks; do
   expect_units 'repository:fixtures
 unixlike:suite

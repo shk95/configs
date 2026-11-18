@@ -2,23 +2,23 @@
 
 ## Classify the change
 
-Every change belongs to one of these scopes:
+The classifier recognizes three active owners.
 
-- `unixlike`: Nix, Home Manager, NixOS, WSL guest, or nix-darwin behavior.
-- `windows`: native Windows desired state and reconciliation.
-- `common`: explicitly platform-neutral material with its own contract.
-- `adopt`: an explicit copy or pinned import from one domain into another.
-- `repository`: version-control policy, hooks, CI dispatch, or reusable agent
-  workflow support with no configuration or deployment output.
+- `unixlike` owns Nix, Home Manager, NixOS, WSL guest, and nix-darwin behavior.
+- `windows` owns native Windows desired state and reconciliation.
+- `repository` owns version-control policy, hooks, CI dispatch, and reusable
+  workflow support.
+
+The `common` boundary needs its own contract and checks before it can own
+paths. An explicit adoption modifies files owned by the receiving domain.
 
 `repository` is a governance scope, not a fourth configuration domain. It has
 no release tag and must not contain platform behavior that belongs to
 `unixlike`, `windows`, or `common`.
 
-One scope per source commit and topic. Master may accumulate independently
-scoped outcomes. A commit's
-scope is the classifier's answer over the paths it touches; it determines
-ownership and domain release scope. Check selection follows change effect:
+Each source commit has one owning scope. The classifier answers over the
+paths a commit touches. That scope determines ownership and domain release
+scope. Check selection follows change effect:
 domain documents may select no suite, while repository dispatch changes can
 select several suites. Global scans still apply. The
 subject's scope is a different thing: it names the domain the change
@@ -29,51 +29,68 @@ to the other.
 
 ## Branch and commit flow
 
-Master is the release and normal authoring branch. One logical commit normally
-stays there; several commits for one coherent same-scope result use a
-master-based topic and no-ff integration. A selected linked worktree also uses
-a topic for a one-commit task. An issue or ordinary PR is optional.
+Use one top-level topic when the commits need to be reviewed together to
+deliver one result. For example, the implementation of a command and the
+repository entry point that exposes it belong to the same topic. Use separate
+topics for independently deliverable results.
 
-For new work, ask current checkout versus linked worktree if the user has not
-chosen. Keep that choice when continuing the same task; ask again only if it
-must change. Parallel authors need isolation. An explicit tool argument is not
-evidence of an unanswered preference.
+At topic start, agree on the result and identify any prerequisite that blocks
+later work. State what will show that each prerequisite is met. Settle a
+foundational policy or interface before relying on it in implementation.
+Use the existing [work plan](handoff.md#plan-and-verify-work) when the
+dependency needs a durable record. Express actual source dependencies through
+commit ancestry.
+
+Master is the release and normal authoring branch. One logical commit normally
+stays there. Use `--commits one` for direct master work or `--topic` to name
+a topic. Linked worktrees use a named topic. An issue or ordinary PR is
+optional.
+
+Agree on the current checkout or a linked worktree before starting. Keep that
+choice while continuing the same task and isolate parallel authors.
 
 ```sh
 tool/configs policy show
 tool/configs workflow inspect
-tool/configs workflow start --scope repository --commits one --workspace current
-tool/configs workflow start --scope repository --commits many --topic example --workspace current
-# If the user selected isolation instead:
-tool/configs workflow start --scope repository --commits many --topic example --workspace linked
+tool/configs workflow start --commits one --workspace current
+tool/configs workflow start --topic program-supply --workspace current
+# If the user selected isolation:
+tool/configs workflow start --topic program-supply --workspace linked
 ```
 
 The start examples are alternatives. Policy show and inspect answer specific
 questions; they are not mandatory preliminary commands. Use start for a clean
 new task, and inspect existing Git state when resuming or continuing instead
-of rerunning start. Start records the chosen scope, count, workspace and base in Git-local
-operation data, visible through workflow inspect. The record is not approval
-or evidence of process liveness. Start neither fetches nor changes master; topic bases use the selected local master snapshot. Inspect
-and explicitly synchronize remote history when needed.
-Topic names are `feature/<scope>-<topic>` or `fix/<scope>-<topic>`.
+of rerunning start. Top-level topics start at the local master snapshot.
+Workflow inspect reports live Git state and the merge destination.
 
-Use `workflow start --workspace linked` to create an isolated workspace;
-there is one creation path. Primary and linked workspaces use identical hooks
-and checks. Source commits remain single-scope.
+Start ordinary topics as `topic/<outcome>`. Work on existing
+`feature/<scope>-<topic>` and `fix/<scope>-<topic>` follows their named scope.
+
+Use `workflow start --workspace linked` to create an isolated workspace.
+When a part needs its own branch, pass the immediate parent:
+
+```sh
+tool/configs workflow start --parent topic/program-supply --topic inventory --workspace linked
+```
+
+This creates `topic/program-supply+inventory` at the parent's current commit.
+A deeper branch can start from that branch and append another segment. For
+`--workspace current`, run start in the checked-out parent. Integrate each
+subtopic into its parent using the [integration procedure](verification.md#local-verification-and-integration).
 
 If direct master work grows into several logical commits, use an authorized
 in-place transition instead of rerunning clean-start initialization:
 
 ```sh
-git switch -c feature/<scope>-<topic>
+git switch -c topic/<outcome>
 ```
 
 Run this on master at its current HEAD with no Git operation in progress.
 The new topic keeps staged, unstaged and untracked work in the same checkout;
 review `git status` before and after. If master already contains a completed
 commit, keep it there and group the remaining work on the topic. Do not reset
-master or rewrite accepted history to retroactively regroup it. The start
-record, if present, remains the original estimate rather than new approval.
+master or rewrite accepted history to retroactively regroup it.
 
 ## Specialized lock refresh
 

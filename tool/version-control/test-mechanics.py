@@ -107,15 +107,21 @@ class Mechanics(unittest.TestCase):
         for checkout in candidate_checkouts:
             self.assertIn('persist-credentials: false', checkout.split('\n      -', 1)[0])
 
-    def test_start_record_is_inspectable_and_preview_does_not_replace_it(self):
-        # INV repository/mechanical-policy
-        self.workflow('start', '--scope', 'repository', '--commits', 'one', '--workspace', 'current')
-        state = json.loads(self.workflow('inspect'))['work_record']
-        self.assertEqual(state['base'], self.base)
-        self.assertEqual(state['workspace'], 'current')
-        self.workflow('start', '--scope', 'repository', '--commits', 'many', '--topic', 'preview', '--workspace', 'linked', '--dry-run')
-        self.assertEqual(json.loads(self.workflow('inspect'))['work_record'], state)
+    def test_start_uses_live_git_state_with_legacy_records_present(self):
+        # INV repository/workspace-choice
+        administrative = Path(self.git('rev-parse', '--absolute-git-dir'))
+        for name in ('configs-work.json', 'configs-work.tmp'):
+            (administrative / name).write_text('old operation data\n')
+        refs = self.git('show-ref')
+        preview = json.loads(self.workflow('start', '--topic', 'example', '--workspace', 'current', '--dry-run'))
+        self.assertEqual(preview, dict(base=self.base, branch='topic/example', workspace='current'))
+        self.assertEqual(self.git('show-ref'), refs)
+        self.workflow('start', '--topic', 'example', '--workspace', 'current')
+        state = json.loads(self.workflow('inspect'))
+        self.assertEqual((state['branch'], state['head']), ('topic/example', self.base))
         self.assertEqual(self.git('status', '--porcelain'), '')
+        for name in ('configs-work.json', 'configs-work.tmp'):
+            self.assertEqual((administrative / name).read_text(), 'old operation data\n')
 
     def test_removal_preserves_unique_dirty_ignored_and_primary_workspaces(self):
         # INV repository/workspace-preservation
@@ -123,16 +129,16 @@ class Mechanics(unittest.TestCase):
         refs = self.git('show-ref')
         self.call(tool, 'new', 'repository-disposable', ok=False)
         self.assertEqual(self.git('show-ref'), refs)
-        self.workflow('start', '--scope', 'repository', '--commits', 'many',
+        self.workflow('start', '--commits', 'many',
                       '--topic', 'disposable', '--workspace', 'linked')
-        linked = self.root.parent / 'repo-wt/feature-repository-disposable'
+        linked = self.root.parent / 'repo-wt/topic-disposable'
         (linked / 'docs/status/repository.md').write_text('unique\n')
         self.git('add', '.', cwd=linked)
         self.git('commit', '-qm', 'feat(repository): unique work', cwd=linked)
         head = self.git('rev-parse', 'HEAD', cwd=linked)
         review = json.loads(self.call(tool, 'review', str(linked)))
         self.assertEqual(review['unique_commits'], [head])
-        self.assertEqual(review['retained_branch'], {'ref': 'refs/heads/feature/repository-disposable', 'head': head})
+        self.assertEqual(review['retained_branch'], {'ref': 'refs/heads/topic/disposable', 'head': head})
         self.assertTrue(review['removable'], 'The retained exact branch preserves unique Git history')
         self.call(tool, 'done', str(linked), '--expect-head', self.base, ok=False)
         exclude = self.root / '.git/info/exclude'
@@ -166,20 +172,58 @@ class Mechanics(unittest.TestCase):
         self.call(tool, 'done', str(self.root), '--expect-head', self.git('rev-parse', 'HEAD'), ok=False)
         self.call(tool, 'done', str(linked), '--expect-head', head)
         self.assertFalse(linked.exists())
-        self.assertEqual(self.git('rev-parse', 'feature/repository-disposable'), head)
+        self.assertEqual(self.git('rev-parse', 'topic/disposable'), head)
+
+    def test_workspace_alias_must_identify_one_branch(self):
+        # INV repository/workspace-preservation
+        tool = str(self.root / 'tool/version-control/workspaces')
+        for branch in ('feature/repository-supply', 'topic/repository-supply'):
+            self.git('worktree', 'add', '-qb', branch, str(self.root.parent / branch.replace('/', '-')))
+        refs = self.git('show-ref')
+        self.call(tool, 'review', 'repository-supply', ok=False)
+        self.call(tool, 'done', 'repository-supply', '--expect-head', self.base, ok=False)
+        self.assertEqual(self.git('show-ref'), refs)
+        for branch in ('feature/repository-supply', 'topic/repository-supply'):
+            self.assertEqual(json.loads(self.call(tool, 'review', branch))['branch'], branch)
+            self.call(tool, 'done', branch, '--expect-head', self.base)
+            self.assertFalse((self.root.parent / branch.replace('/', '-')).exists())
+        self.assertEqual(self.git('show-ref'), refs)
+
+    def test_clean_conflicted_revert_still_blocks_workflow_and_removal(self):
+        # INV repository/workspace-preservation
+        self.workflow('start', '--topic', 'revert', '--workspace', 'linked')
+        linked = self.root.parent / 'repo-wt/topic-revert'
+        file = 'docs/status/repository.md'
+        (linked / file).write_text('first edit\n')
+        self.git('commit', '-qam', 'test(repository): first edit', cwd=linked)
+        reverted = self.git('rev-parse', 'HEAD', cwd=linked)
+        (linked / file).write_text('competing edit\n')
+        self.git('commit', '-qam', 'test(repository): competing edit', cwd=linked)
+        head = self.git('rev-parse', 'HEAD', cwd=linked)
+        self.git('revert', '--no-edit', reverted, cwd=linked, ok=False)
+        self.git('checkout', '--ours', '--', file, cwd=linked)
+        self.git('add', '--', file, cwd=linked)
+        self.assertEqual(self.git('status', '--porcelain', cwd=linked), '')
+        tool = str(self.root / 'tool/version-control/workspaces')
+        review = json.loads(self.call(tool, 'review', 'topic/revert'))
+        self.assertIn('REVERT_HEAD', review['operations'])
+        self.assertFalse(review['removable'])
+        self.workflow('plan', '--base', self.base, '--head', head, cwd=linked, ok=False)
+        self.call(tool, 'done', 'topic/revert', '--expect-head', head, ok=False)
+        self.assertEqual(self.git('rev-parse', 'REVERT_HEAD', cwd=linked), reverted)
 
     def test_optional_external_recovery_is_validated_when_supplied(self):
         # INV repository/workspace-preservation
         tool = str(self.root / 'tool/version-control/workspaces')
-        self.workflow('start', '--scope', 'repository', '--commits', 'many',
+        self.workflow('start', '--commits', 'many',
                       '--topic', 'archived', '--workspace', 'linked')
-        linked = self.root.parent / 'repo-wt/feature-repository-archived'
+        linked = self.root.parent / 'repo-wt/topic-archived'
         (linked / 'docs/status/repository.md').write_text('cancelled but preserved\n')
         self.git('add', '.', cwd=linked)
         self.git('commit', '-qm', 'feat(repository): preserved cancelled work', cwd=linked)
         head = self.git('rev-parse', 'HEAD', cwd=linked)
         bundle = self.root.parent / 'preserved.bundle'
-        self.git('bundle', 'create', str(bundle), 'feature/repository-archived')
+        self.git('bundle', 'create', str(bundle), 'topic/archived')
         damaged = self.root.parent / 'damaged.bundle'
         damaged.write_bytes(bundle.read_bytes()[:-10])
         self.call(tool, 'done', str(linked), '--expect-head', head, '--preserved-bundle', str(damaged), ok=False)
@@ -188,15 +232,15 @@ class Mechanics(unittest.TestCase):
         self.call(tool, 'done', str(linked), '--expect-head', head, '--preserved-bundle', str(bundle))
         self.assertTrue(bundle.exists())
         self.assertFalse(linked.exists())
-        self.assertEqual(self.git('rev-parse', 'feature/repository-archived'), head)
+        self.assertEqual(self.git('rev-parse', 'topic/archived'), head)
 
     def test_retained_branch_must_match_reviewed_workspace_identity(self):
         # INV repository/workspace-preservation
         tool = str(self.root / 'tool/version-control/workspaces')
-        self.workflow('start', '--scope', 'repository', '--commits', 'many',
+        self.workflow('start', '--commits', 'many',
                       '--topic', 'identity', '--workspace', 'linked')
-        linked = self.root.parent / 'repo-wt/feature-repository-identity'
-        branch = 'feature/repository-identity'
+        linked = self.root.parent / 'repo-wt/topic-identity'
+        branch = 'topic/identity'
         ref = 'refs/heads/' + branch
         (linked / 'docs/status/repository.md').write_text('unique retained work\n')
         self.git('add', '.', cwd=linked)

@@ -24,7 +24,7 @@ has its own exact-source subject.
 ## Local verification and integration
 
 Record the reviewed full master/base and candidate SHA. Commit only when
-authorized. On the exact clean topic checkout, run:
+authorized. On the exact clean top-level topic checkout, run:
 
 ```sh
 # Verify only, without integration:
@@ -49,15 +49,26 @@ and leave the caller's worktree/index intact. This applies only to the selected
 quick checks; it does not turn a hook pass into final suite or native runtime
 evidence.
 
-Merge requires authorization covering the commit-producing integration. Existing
-authorization for that operation remains valid within the agreed task. It runs the
-checks itself, requires the candidate to contain the selected current master,
-and creates a no-ff merge with those exact first and second parents. It uses
-an existing master checkout or switches the chosen checkout back to master.
-A dirty checkout, missing evidence, conflict or changed base stops integration;
-reflect the new master in the topic, resolve there and verify again. No helper
-resets, force-pushes or discards work. An interrupted Git merge is preserved
-for inspection and normal explicit recovery.
+Merge requires authorization covering the integration. Run it from the
+source topic checkout. The tool selects the destination shown by
+`workflow inspect` and takes its reviewed current head as `--base`.
+The reviewed source head is `--head`. The merge records those commits as
+its first and second parents and names the topic in its subject. From a
+linked worktree, open the destination branch in its own checkout first.
+
+- **Top-level topic.** The destination is master. The source must contain the
+  reviewed master commit. Merge verifies the entire candidate with the selected
+  suites, accepts exact hosted evidence with `--ci-run`, and checks that the
+  resulting tree matches the verified candidate.
+- **Subtopic.** The destination is its immediate parent. Merge audits the
+  incoming history and ownership. Pass the parent's current SHA even if the
+  parent has advanced since the subtopic started. The combined candidate
+  receives the selected suites when it reaches master.
+
+A changed base or dirty checkout stops the operation. For a conflict while
+assembling a subtopic, the destination checkout retains the interrupted merge
+for review and explicit recovery. A stale master must be reflected in the
+top-level topic before verifying it again.
 
 For direct master work, run the same check command against the pre-change
 master SHA and exact committed HEAD before publication. Pre-commit supplies

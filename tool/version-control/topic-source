@@ -5,6 +5,7 @@ sys.dont_write_bytecode = True
 import os
 from pathlib import Path
 import subprocess
+from git_workflow import topic_destination
 from repo_policy import load
 from topic_scope import validate
 
@@ -14,6 +15,11 @@ if (os.environ['TOPIC_BASE_REF'] != policy['base_branch'] or
     raise SystemExit('Master requires a same-repository topic')
 head = os.environ['TOPIC_HEAD_REF']
 try:
+    destination = topic_destination(head, policy)
+    if not destination:
+        raise ValueError(f'Invalid topic source: {head!r}')
+    if destination != policy['base_branch']:
+        raise ValueError(f'Integrate the subtopic into {destination} before opening a master pull request.')
     validate(head, os.environ['TOPIC_BASE_SHA'], os.environ['TOPIC_HEAD_SHA'], policy)
 except ValueError as error:
     raise SystemExit(str(error))

@@ -9,12 +9,9 @@ import json
 from pathlib import Path
 import re
 import subprocess
-from repo_policy import load, topic_pattern
+from git_workflow import git, topic_pattern, unfinished_operations
+from repo_policy import load
 from recovery import validate_bundle
-
-
-def git(*args, cwd=None):
-    return subprocess.check_output(['git', *args], cwd=cwd).decode().strip()
 
 
 def registered():
@@ -47,8 +44,7 @@ def inventory(path, policy=None, preserved_bundle=None):
         ignored.append('notes/ (maintainer scratch: contents not inspected)')
     unique = git('rev-list', head, '--not', policy['base_branch'], cwd=path).splitlines()
     changes = git('status', '--porcelain', '--untracked-files=all', cwd=path).splitlines()
-    operations = [name for name in ('MERGE_HEAD', 'rebase-merge', 'rebase-apply', 'CHERRY_PICK_HEAD')
-                  if Path(git('rev-parse', '--path-format=absolute', '--git-path', name, cwd=path)).exists()]
+    operations = unfinished_operations(path)
     recovery = None
     if preserved_bundle:
         bundle = Path(preserved_bundle)
@@ -88,17 +84,22 @@ def main():
         print(json.dumps(registered(), indent=2))
     else:
         target = args.path_or_name
+        path = Path(target).resolve()
+        matches = []
         for item in registered():
-            if item.get('branch', '').removeprefix('refs/heads/').split('/', 1)[-1] == target:
-                target = item['worktree']
-                break
-        result = inventory(target, policy, args.preserved_bundle)
+            branch = item.get('branch', '').removeprefix('refs/heads/')
+            worktree = item['worktree']
+            if Path(worktree).resolve() == path or (branch and target in (branch, branch.split('/', 1)[-1])):
+                matches.append(worktree)
+        if len(matches) > 1:
+            raise ValueError('Ambiguous workspace; use its full branch name or absolute path.')
+        result = inventory(matches[0] if matches else path, policy, args.preserved_bundle)
         print(json.dumps(result, indent=2))
         if args.command == 'done':
             if not re.fullmatch('[0-9a-f]{40}', args.expect_head) or result['head'] != args.expect_head:
                 raise ValueError('Workspace head changed or was not reviewed by full SHA')
             if not result['removable']: raise ValueError('Preserve every reported item before removal; no force option exists')
-            if inventory(target, policy, args.preserved_bundle) != result: raise ValueError('Workspace changed during preservation review')
+            if inventory(result['path'], policy, args.preserved_bundle) != result: raise ValueError('Workspace changed during preservation review')
             common = git('rev-parse', '--path-format=absolute', '--git-common-dir', cwd=result['path'])
             subprocess.check_call(['git', 'worktree', 'remove', result['path']])
             try:

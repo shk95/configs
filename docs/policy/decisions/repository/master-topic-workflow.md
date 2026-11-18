@@ -10,13 +10,12 @@ source: docs/work/repository/master-topic-workflow/spec.md
 
 Master is the release and ordinary development branch. A single logical
 commit normally stays there; a selected linked workspace also uses a topic.
-Estimate the work before editing: when one coherent
-outcome needs several logical commits, start a same-scope topic from master
-and retain the group through a no-ff merge into master. Worktrees are optional;
-agents ask the user whether to use the current checkout or a linked worktree.
-Keep an existing choice when continuing the same task. Parallel authors need
-isolated workspaces. Never infer a user's workspace
-choice or Git mutation permission from a tool allowlist.
+Estimate the work before editing. When one coherent outcome needs several
+logical commits, start one topic from master and retain the group through a
+no-ff merge into master. Agree on the current checkout or a linked
+worktree before starting.
+Keep the agreed workspace while continuing the task. Parallel authors need
+isolated workspaces. A tool allowlist supplies no Git mutation permission.
 
 Dev is retired from the operating model. Preserve existing refs and published
 objects until separately authorized retention review; do not rewrite history.
@@ -26,9 +25,11 @@ accepted source; domain publication and deployment remain separate decisions.
 ## Mechanical operation
 
 Tracked repository tools expose start, inspection, effect-selected checks and
-exact-base/head no-ff integration. Start requires explicit scope, estimated
-commit count and workspace choice. A tool cannot determine logical scope or
-whether a human answered, so those decisions remain user/agent procedure.
+exact-base/head no-ff integration. Start requires an explicit workspace choice
+and either a topic name or a one-commit estimate for direct master work.
+People determine whether the commits serve one result and agree on the
+workspace. At topic start they identify any blocking prerequisite and the
+condition that satisfies it.
 Merge checks clean state, full source identities and current master ancestry;
 changed bases or failed/unavailable checks stop it. No helper implicitly
 fetches, commits source edits, pushes, publishes or prunes. Merge is an explicit
@@ -41,12 +42,9 @@ second JSON copy. Agents use `tool/configs policy show` and the tracked
 operator commands; private skills, memory, shell configuration and installed
 plugins contribute no project obligation or approval. Human judgements remain
 explicit: logical scope, size estimate, workspace answer and mutation approval.
-Start records its inputs/base in the workspace's Git administrative directory;
-inspect reports this record alongside actual Git state. It is execution data,
-not approval, process liveness or cleanup eligibility. Missing data is unknown.
-Verification prints source identities and proof rather than persisting another
-work-record receipt. Merge verifies the candidate itself; a prior check is
-optional and supplies no cached permission.
+Start prints the chosen branch, base and workspace. Inspection reads live
+Git state. Verification prints source identities and proof. Merge verifies
+the candidate itself; a prior check is optional.
 
 CI runs on master pushes, optional PRs and explicit candidate dispatch from
 accepted master tooling. Hosted proof is read live for a run ID and must bind
@@ -56,6 +54,23 @@ ordinary work or candidate native checks. Direct master writes have no PR or
 status admission. The bounded input patch retains its PR-based proof/recovery
 as an explicit automation contract. Ordinary pre-push rejects non-fast-forward
 updates, including forced refspecs, without trusting an agent approval flag.
+
+## Branch grouping — 2026-11-18
+
+A scope in the branch name forced supporting repository commits and domain
+implementation commits for one feature onto peer branches. Group those
+commits on the same top-level topic while keeping ownership review on each
+source commit. When work needs an intermediate branch, base it on the
+immediate parent. A single integration command derives the destination
+from the branch name and checks the reviewed pair of commits. A linked
+source keeps its branch during integration, and the merge subject retains the
+source topic name. Intermediate merges audit incoming history. The assembled topic is the unit for
+effect-selected suites before master integration. Reviewers judge whether
+the commits serve the same outcome.
+
+Ordinary start uses the outcome topic name. Existing scoped branch names
+keep their scope checks. Domain release and deployment remain separate, and
+the bounded input patch retains its existing source contract.
 
 ## History maintenance exception
 
@@ -123,7 +138,7 @@ CI stages; pre-push audits transmitted history without a separate selection
 stage. Optional session tooling saves and inspects plain handoff text, with
 atomic nonempty writes and no lifecycle state or model identity. Existing
 notes are preserved until explicitly replaced. Tracked project documents
-remain the authority; these notes and start records supply no private policy.
+remain the authority for project policy.
 
 Keep the configuration-editing commit helper and its hooks, exact-source CI
 and merge checks, independent recovery restoration and isolated approval

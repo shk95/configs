@@ -25,7 +25,7 @@ class Workflow(unittest.TestCase):
     def setUp(self):
         self.tmp = tempfile.TemporaryDirectory()
         self.addCleanup(self.tmp.cleanup)
-        self.root = Path(self.tmp.name) / 'repo'
+        self.root = Path(self.tmp.name).resolve() / 'repo'
         self.root.mkdir()
         self.git('init', '-q', '-b', 'master')
         self.git('config', 'user.name', 'Fixture')
@@ -36,7 +36,7 @@ class Workflow(unittest.TestCase):
                  ' python3 -c \'import json,os,sys; '
                  'open(os.environ["FIXTURE_EXECUTION_LOG"],"a").write('
                  'json.dumps(sys.argv[1:])+"\\n")\' "$0" "$@"\nfi\n')
-        for name in ['workflow', 'authoring', 'policy', 'policy.json', 'repo_policy.py', 'github_proof.py', 'topic_scope.py', 'topic-source', 'audit', 'classify', 'closing-keywords', 'hooks.sh']:
+        for name in ['workflow', 'authoring', 'policy', 'policy.json', 'repo_policy.py', 'git_workflow.py', 'github_proof.py', 'topic_scope.py', 'topic-source', 'audit', 'classify', 'closing-keywords', 'hooks.sh']:
             dest = self.root / 'tool/version-control' / name
             dest.parent.mkdir(parents=True, exist_ok=True)
             shutil.copy(ROOT / 'tool/version-control' / name, dest)
@@ -82,21 +82,25 @@ class Workflow(unittest.TestCase):
         return self.git('rev-parse', 'HEAD')
 
     def topic(self):
-        self.workflow('start', '--scope', 'repository', '--commits', 'many', '--topic', 'example', '--workspace', 'current')
+        self.workflow('start', '--commits', 'many', '--topic', 'example', '--workspace', 'current')
         for n in range(2):
             (self.root / 'docs/status/repository.md').write_text(f'change {n}\n')
             self.head = self.commit(f'feat(repository): change {n}')
 
     def test_start_requires_workspace_and_preserves_dirty_or_invalid_state(self):
         refs = self.git('show-ref')
-        self.workflow('start', '--scope', 'repository', '--commits', 'many', '--topic', 'example', ok=False)
-        self.workflow('start', '--scope', 'repository', '--commits', 'many', '--workspace', 'current', ok=False)
-        self.workflow('start', '--scope', 'repository', '--commits', 'one', '--workspace', 'current')
+        self.workflow('start', '--scope', 'repository', '--topic', 'example', '--workspace', 'linked', ok=False)
+        self.workflow('start', '--commits', 'many', '--topic', 'example', ok=False)
+        self.workflow('start', '--commits', 'many', '--workspace', 'current', ok=False)
+        self.workflow('start', '--commits', 'one', '--workspace', 'current')
         self.assertEqual(self.git('show-ref'), refs)
-        self.workflow('start', '--scope', 'repository', '--commits', 'many', '--topic', 'example', '--workspace', 'linked', '--dry-run')
+        self.workflow('start', '--commits', 'many', '--topic', 'example', '--workspace', 'linked', '--dry-run')
+        preview = json.loads(self.workflow('start', '--commits', 'one', '--topic', 'example',
+                                           '--workspace', 'current', '--dry-run'))
+        self.assertEqual(preview['branch'], 'topic/example')
         self.assertEqual(self.git('show-ref'), refs)
         (self.root / 'untracked').write_text('preserve')
-        self.workflow('start', '--scope', 'repository', '--commits', 'many', '--topic', 'example', '--workspace', 'current', ok=False)
+        self.workflow('start', '--commits', 'many', '--topic', 'example', '--workspace', 'current', ok=False)
         self.assertEqual(self.git('show-ref'), refs)
         self.assertEqual((self.root / 'untracked').read_text(), 'preserve')
 
@@ -116,6 +120,105 @@ class Workflow(unittest.TestCase):
         self.git('checkout', '-q', '--detach')
         self.call(str(self.root / 'tool/version-control/authoring'), ok=False)
 
+    def test_topic_keeps_separately_owned_commits_in_one_master_merge(self):
+        # INV repository/local-development-integration
+        # INV repository/topic-source
+        self.workflow('start', '--topic', 'program-supply', '--workspace', 'current')
+        branch = 'topic/program-supply'
+        self.assertEqual(self.git('branch', '--show-current'), branch)
+        self.call(str(self.root / 'tool/version-control/authoring'))
+
+        (self.root / 'unixlike').mkdir()
+        (self.root / 'unixlike/probe.txt').write_text('implementation\n')
+        implementation = self.commit('feat(unixlike): implement program supply')
+        (self.root / 'docs/status/repository.md').write_text('support the implementation\n')
+        head = self.commit('docs(unixlike): explain program supply')
+        source = str(self.root / 'tool/version-control/topic-source')
+        env = dict(os.environ, TOPIC_BASE_REF='master', TOPIC_BASE_SHA=self.base,
+                   TOPIC_HEAD_SHA=head, TOPIC_HEAD_REF=branch,
+                   TOPIC_BASE_REPOSITORY='fixture/configs', TOPIC_HEAD_REPOSITORY='fixture/configs')
+        self.call(source, env=env)
+        self.call(source, env=dict(env, TOPIC_HEAD_REF='feature/unixlike-program-supply'), ok=False)
+        (self.root / 'unowned').write_text('unclassified fixture\n')
+        unclassified = self.commit('test(repository): add unclassified fixture')
+        self.call(source, env=dict(env, TOPIC_HEAD_SHA=unclassified), ok=False)
+        self.workflow('merge', '--base', self.base, '--head', unclassified, ok=False)
+        self.git('reset', '--hard', head)
+        self.workflow('merge', '--base', self.base, '--head', head)
+        self.assertEqual(self.git('show', '-s', '--format=%P', 'HEAD'), f'{self.base} {head}')
+        self.assertEqual(self.git('rev-list', '--no-merges', 'master', '--not', self.base).splitlines(),
+                         [head, implementation])
+
+    def test_subtopics_follow_their_immediate_parent(self):
+        # INV repository/workspace-choice
+        # INV repository/local-development-integration
+        # INV repository/topic-source
+        topic = 'topic/supply'
+        child = topic + '+inventory'
+        grandchild = child + '+darwin'
+        self.workflow('start', '--commits', 'many', '--topic', 'supply', '--workspace', 'current')
+        document = self.root / 'docs/status/repository.md'
+        document.write_text('top-level change\n')
+        root_head = self.commit('feat(repository): start supply')
+        start_child = ('start', '--parent', topic, '--topic', 'inventory', '--workspace', 'current')
+        refs = self.git('show-ref')
+        self.workflow('start', '--parent', 'master', '--topic', 'inventory',
+                      '--commits', 'one', '--workspace', 'linked', ok=False)
+        self.workflow('start', '--topic', 'supply+inventory', '--commits', 'many',
+                      '--workspace', 'linked', ok=False)
+        self.assertEqual(self.git('show-ref'), refs)
+        self.workflow(*start_child)
+        self.assertEqual(self.git('branch', '--show-current'), child)
+        self.assertEqual(self.git('rev-parse', 'HEAD'), root_head)
+        document.write_text('inventory change\n')
+        child_head = self.commit('feat(repository): inventory source')
+
+        self.workflow('start', '--parent', child, '--topic', 'darwin', '--workspace', 'linked')
+        linked = self.root.parent / 'repo-wt/topic-supply+inventory+darwin'
+        self.assertEqual(self.git('branch', '--show-current', cwd=linked), grandchild)
+        self.assertEqual(self.git('rev-parse', 'HEAD', cwd=linked), child_head)
+        inspection = json.loads(self.workflow('inspect', cwd=linked))
+        self.assertEqual(inspection['merge_target'], child)
+        self.assertEqual(inspection['head'], child_head)
+        self.call(str(self.root / 'tool/version-control/authoring'), cwd=linked)
+        self.git('config', 'core.hooksPath', '.githooks')
+        self.call(str(self.root / 'tool/version-control/audit'), cwd=linked)
+        (linked / 'docs/status/repository.md').write_text('darwin change\n')
+        self.git('commit', '-qam', 'feat(repository): darwin source', cwd=linked)
+        deepest = self.git('rev-parse', 'HEAD', cwd=linked)
+        env = dict(os.environ, TOPIC_BASE_REF='master', TOPIC_BASE_SHA=self.base,
+                   TOPIC_HEAD_SHA=deepest, TOPIC_HEAD_REF=grandchild,
+                   TOPIC_BASE_REPOSITORY='fixture/configs', TOPIC_HEAD_REPOSITORY='fixture/configs')
+        self.call(str(self.root / 'tool/version-control/topic-source'), env=env, ok=False)
+        self.workflow('merge', '--base', self.base, '--head', deepest, cwd=linked, ok=False)
+        self.assertEqual(self.git('rev-parse', 'master'), self.base)
+
+        (self.root / 'README.md').write_text('parallel inventory work\n')
+        advanced = self.commit('feat(repository): advance inventory independently')
+        refs = self.git('show-ref')
+        self.workflow('merge', '--base', child_head, '--head', deepest, cwd=linked, ok=False)
+        self.assertEqual(self.git('show-ref'), refs)
+        # Intermediate integration audits ownership and history. Full suite
+        # execution is deferred to the combined top-level candidate.
+        env = dict(os.environ, FIXTURE_CHECK_STATUS='1')
+        self.workflow('merge', '--base', advanced, '--head', deepest, cwd=linked, env=env)
+        assembled_child = self.git('rev-parse', 'HEAD')
+        self.assertEqual(self.git('show', '-s', '--format=%P', 'HEAD'), f'{advanced} {deepest}')
+        self.assertEqual(self.git('rev-parse', topic), root_head)
+        self.assertEqual(self.git('rev-parse', 'master'), self.base)
+        self.workflow('merge', '--base', assembled_child, '--head', deepest, cwd=linked, ok=False)
+        self.assertEqual(self.git('rev-parse', child), assembled_child)
+
+        self.workflow('merge', '--base', root_head, '--head', assembled_child, env=env)
+        head = self.git('rev-parse', 'HEAD')
+        self.assertEqual(self.git('branch', '--show-current'), topic)
+        self.assertEqual(self.git('show', '-s', '--format=%P', 'HEAD'), f'{root_head} {assembled_child}')
+        self.assertEqual(self.git('show', '-s', '--format=%s', 'HEAD'), f"Merge branch '{child}' into {topic}")
+        self.workflow('merge', '--base', self.base, '--head', head, env=env, ok=False)
+        self.assertEqual(self.git('rev-parse', 'master'), self.base)
+        self.workflow('merge', '--base', self.base, '--head', head)
+        self.assertEqual(self.git('show', '-s', '--format=%P', 'master'), f'{self.base} {head}')
+
     def test_no_ff_merge_exact_parents_and_failure_preservation(self):
         self.topic()
         args = ('merge', '--base', self.base, '--head', self.head)
@@ -126,8 +229,12 @@ class Workflow(unittest.TestCase):
         self.workflow(*args, ok=False, env=dict(os.environ, FIXTURE_SECRET_STATUS='1'))
         self.assertEqual(self.git('show-ref'), refs)
         self.workflow('merge', '--base', self.base[:8], '--head', self.head, ok=False)
+        # A configured ours strategy could keep master content while recording
+        # the correct parents. Integration must preserve the verified tree.
+        self.git('config', 'branch.master.mergeOptions', '--strategy=ours')
         self.workflow(*args)
         self.assertEqual(self.git('show', '-s', '--format=%P', 'HEAD'), f'{self.base} {self.head}')
+        self.assertEqual(self.git('rev-parse', 'HEAD^{tree}'), self.git('rev-parse', self.head + '^{tree}'))
         self.assertEqual(self.git('branch', '--show-current'), 'master')
         self.assertEqual(self.git('status', '--porcelain'), '')
 
@@ -141,7 +248,7 @@ class Workflow(unittest.TestCase):
         self.git('switch', '-q', 'master')
         (self.root / 'docs/status/repository.md').write_text('competing master\n')
         new_base = self.commit('feat(repository): competing result')
-        self.git('switch', '-q', 'feature/repository-example')
+        self.git('switch', '-q', 'topic/example')
         self.workflow('merge', '--base', self.base, '--head', self.head, ok=False)
         self.workflow('merge', '--base', new_base, '--head', self.head, ok=False)
         self.assertEqual(self.git('rev-parse', 'master'), new_base)
@@ -154,7 +261,7 @@ class Workflow(unittest.TestCase):
         self.topic()
         self.git('branch', '-m', 'feature/windows-wrong-scope')
         self.workflow('merge', '--base', self.base, '--head', self.head, ok=False)
-        self.git('branch', '-m', 'feature/repository-example')
+        self.git('branch', '-m', 'topic/example')
         if os.name != 'nt':
             (self.root / 'tool/dispatch/select').write_text('#!/bin/sh\ncat >/dev/null\necho windows:suite\n')
             head = self.commit('test(repository): select native Windows checks')
@@ -168,6 +275,7 @@ class Workflow(unittest.TestCase):
     def test_pr_and_local_topic_scope_agree_without_counting_new_base_work(self):
         # INV repository/topic-source
         self.topic()
+        self.git('branch', '-m', 'feature/repository-example')
         source = str(self.root / 'tool/version-control/topic-source')
         env = dict(os.environ, TOPIC_BASE_REF='master', TOPIC_BASE_SHA=self.base,
                    TOPIC_HEAD_SHA=self.head, TOPIC_HEAD_REF='feature/repository-example',
@@ -186,8 +294,10 @@ class Workflow(unittest.TestCase):
 
     def test_incoming_range_rejects_mixed_commit_hidden_by_final_scope(self):
         # INV repository/local-development-integration
+        # INV repository/scope-ownership
         # INV repository/topic-source
         self.topic()
+        self.git('branch', '-m', 'feature/repository-example')
         (self.root / 'unixlike').mkdir()
         path = self.root / 'unixlike/probe.txt'
         path.write_text('temporary cross-scope edit\n')
@@ -206,10 +316,17 @@ class Workflow(unittest.TestCase):
         self.assertNotEqual(result.returncode, 0)
         self.assertIn('source commit has mixed or unclassified ownership', result.stderr)
         self.workflow('check', '--base', self.base, '--head', head, ok=False)
+        self.git('branch', '-m', 'topic/example')
+        # A scope-neutral topic is eligible by name and final path ownership,
+        # but the common CI/local range audit still refuses the mixed commit.
+        self.call(str(self.root / 'tool/version-control/topic-source'),
+                  env=dict(env, TOPIC_HEAD_REF='topic/example'))
+        self.workflow('check', '--base', self.base, '--head', head, ok=False)
 
     def test_topic_refuses_reverted_foreign_scope_even_when_each_commit_is_pure(self):
         # INV repository/topic-source
         self.topic()
+        self.git('branch', '-m', 'feature/repository-example')
         (self.root / 'windows').mkdir()
         path = self.root / 'windows/probe.txt'
         path.write_text('foreign-scope source\n')
@@ -388,8 +505,8 @@ esac
                 self.assertEqual(self.git('branch', '--show-current'), 'master')
 
     def test_linked_workspace_base_and_integration_to_existing_master(self):
-        self.workflow('start', '--scope', 'repository', '--commits', 'many', '--topic', 'linked', '--workspace', 'linked')
-        linked = self.root.parent / 'repo-wt/feature-repository-linked'
+        self.workflow('start', '--commits', 'many', '--topic', 'linked', '--workspace', 'linked')
+        linked = self.root.parent / 'repo-wt/topic-linked'
         self.assertTrue(linked.is_dir())
         self.assertEqual(self.git('rev-parse', 'HEAD', cwd=linked), self.base)
         self.assertEqual(self.git('branch', '--show-current'), 'master')
@@ -397,8 +514,15 @@ esac
         self.git('add', '.', cwd=linked)
         self.git('commit', '-qm', 'feat(repository): linked change', cwd=linked)
         head = self.git('rev-parse', 'HEAD', cwd=linked)
+        self.git('switch', '-qc', 'topic/parked')
+        self.workflow('merge', '--base', self.base, '--head', head, cwd=linked, ok=False)
+        self.assertEqual(self.git('branch', '--show-current', cwd=linked), 'topic/linked')
+        self.assertEqual(self.git('rev-parse', 'master'), self.base)
+        self.git('switch', '-q', 'master')
         self.workflow('merge', '--base', self.base, '--head', head, cwd=linked)
         self.assertEqual(self.git('show', '-s', '--format=%P', 'HEAD'), f'{self.base} {head}')
+        self.assertEqual(self.git('show', '-s', '--format=%s', 'HEAD'), "Merge branch 'topic/linked' into master")
+        self.assertEqual(self.git('branch', '--show-current', cwd=linked), 'topic/linked')
 
 
 if __name__ == '__main__':

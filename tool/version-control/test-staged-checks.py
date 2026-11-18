@@ -175,6 +175,47 @@ class StagedChecks(unittest.TestCase):
         self.hook(True)
         self.assertFalse(Path(self.env['CASE_TRACE']).exists())
 
+    def test_source_commit_refuses_several_owners(self):
+        # INV repository/scope-ownership
+        self.stage('unixlike change')
+        self.write(self.repo / 'README.md', 'repository change\n')
+        self.git('add', 'README.md')
+        self.assertIn('one owning scope', self.hook(False))
+        self.assertFalse(Path(self.env['CASE_TRACE']).exists())
+
+    def test_cross_scope_rename_counts_both_paths(self):
+        # INV repository/scope-ownership
+        self.write(self.repo / 'windows/README.md', 'windows fixture\n')
+        self.git('mv', str(self.target.relative_to(self.repo)), 'windows/probe.lua')
+        diff = self.git('diff', '--cached', '--name-status', '--find-renames')
+        self.assertTrue(diff.startswith('R100'), diff)
+        self.assertEqual(self.git('diff', '--cached', '--name-only', '--find-renames'), 'windows/probe.lua')
+        self.assertIn('one owning scope', self.hook(False))
+        self.assertEqual(self.git('diff', '--cached', '--name-status', '--find-renames'), diff)
+
+    def test_merge_resolution_can_span_scopes(self):
+        # INV repository/scope-ownership
+        readme = self.repo / 'README.md'
+        self.write(readme, 'initial prose\n')
+        self.git('add', 'README.md')
+        self.git('commit', '-qm', 'docs(repository): add fixture readme')
+        self.git('switch', '-qc', 'topic/fixture')
+        self.stage('source on topic')
+        self.write(readme, 'topic prose\n')
+        self.git('add', 'README.md')
+        self.git('commit', '-qm', 'test(repository): synthesize topic conflict')
+        self.git('switch', '-q', 'master')
+        self.stage('source on master')
+        self.write(readme, 'master prose\n')
+        self.git('add', 'README.md')
+        self.git('commit', '-qm', 'test(repository): synthesize master conflict')
+        with self.assertRaises(subprocess.CalledProcessError):
+            self.git('merge', '--no-ff', 'topic/fixture')
+        self.stage('resolved source')
+        self.write(readme, 'resolved prose\n')
+        self.git('add', 'README.md')
+        self.hook(True)
+
     def test_doctor_names_missing_candidate_prerequisite(self):
         # INV repository/evidence-three-states
         self.copy('tool/doctor.sh')

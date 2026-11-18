@@ -73,5 +73,7 @@ The statements above record the earlier operation and its evidence.
 
 The accepted master-topic-workflow.md decision replaces dev authoring/integration,
 mandatory linked worktrees and general master PR-only admission in this record.
-Retained scope, evidence, preservation and bounded publication rules remain.
-Earlier operation and measurements above are historical.
+Retained commit ownership, evidence, preservation and bounded publication
+rules remain. The 2026-11-18 branch grouping rule in that decision also
+supersedes the single-scope topic and pull request rules above. Earlier
+operation and measurements are historical.

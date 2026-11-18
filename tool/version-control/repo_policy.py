@@ -10,14 +10,11 @@ def load():
     if path.is_symlink(): raise ValueError('Policy must be tracked local content, not an external symlink')
     value = json.loads(path.read_text())
     expected = {'schema', 'base_branch', 'scopes', 'topic_kinds', 'merge_method', 'workspace_choices',
-                'workspace_record', 'remote', 'ci', 'history_rewrite'}
+                'remote', 'ci', 'history_rewrite'}
     if set(value) != expected:
         raise ValueError('Unknown or missing mechanical policy fields')
     if value['schema'] != 1 or value['base_branch'] != 'master' or value['merge_method'] != 'no-ff':
         raise ValueError('Unsupported policy schema or merge method')
-    for key in ('base_branch', 'workspace_record'):
-        if not re.fullmatch('[a-zA-Z0-9_.-]+', value[key]):
-            raise ValueError('Unsafe policy identifier: ' + key)
     if len(value['workspace_choices']) != len(set(value['workspace_choices'])):
         raise ValueError('Duplicate workspace choice')
     for key in ('scopes', 'topic_kinds', 'workspace_choices'):
@@ -46,14 +43,3 @@ def load():
                                or '..' in Path(command[0]).parts or Path(command[0]).is_absolute() or not command[0].startswith(('tool/', 'unixlike/', 'windows/')) for command in commands):
             raise ValueError('Unsafe suite command')
     return value
-
-
-def topic_pattern(policy):
-    kinds = '|'.join(re.escape(x) for x in policy['topic_kinds'])
-    scopes = '|'.join(re.escape(x) for x in policy['scopes'])
-    return rf'({kinds})/({scopes})-[a-z0-9][a-z0-9-]*'
-
-
-def authoring(branch, policy=None):
-    policy = policy or load()
-    return branch == policy['base_branch'] or bool(re.fullmatch(topic_pattern(policy), branch))

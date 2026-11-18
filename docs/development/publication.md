@@ -30,8 +30,8 @@ wrong-workflow and wrong-source evidence. Local global scans still run; only
 selected suites use the external proof. Verification prints the run ID and
 source identities; put relevant evidence in the work report or handoff instead
 of maintaining another Git-local verification cache. Workflow inspect shows
-actual Git state and the start record. A changed master
-requires new combined-result verification. No PR is required for this path.
+current Git state and the merge destination. A changed master requires new
+combined-result verification. No PR is required for this path.
 Known Windows runtime-governance inputs additionally select `windows:runtime`,
 a proof-only unit: local validate/test cannot certify CI runtime acquisition
 and controller wiring, even on Windows. Those changes require exact hosted

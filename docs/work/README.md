@@ -42,19 +42,19 @@ verify an untracked pair.
 
 ## Scope
 
-A spec has one scope, the scope of its outcome, and that scope names its
-directory; the classifier reads the same position, so a Unix-like spec and
-its report are a `unixlike` change. The increments of a spec may classify
-differently — a Unix-like spec whose procedure lives in `CONTRIBUTING.md` has
-a `repository` increment — and each increment's commit and pull request
-stays single-scope. Work whose outcome spans scopes is one spec per scope.
+A spec and its report have one owning scope, named by their directory.
+For example, the spec and report for a Unix-like feature classify as
+`unixlike`. Its separately owned repository entry point can be part of that
+spec's outcome. Each source commit follows its own file ownership. The topic
+and its optional PR group the commits needed for the outcome.
 
-An increment is a coherent reviewable outcome within one scope. It may need
-several evidence lanes; lanes do not individually require branches or PRs.
-Carry the evidence and report changes with the result that produced them
+Use a separate spec for an independently reviewable outcome with its own
+acceptance, and link any prerequisite outcomes. Carry the evidence and
+report changes with the result that produced them
 (INV repository/pull-request-spans-an-evidence-lane).
 
-State the outcome, scope, dependencies, acceptance and required evidence.
+State the outcome, scope, acceptance and required evidence. Record any
+dependency that blocks a later step and how to tell when it is satisfied.
 When continuing, read the relevant record and check assumptions; amend changed
 criteria before relying on them. Record exact source identities when needed
 for verification or handoff. Role assignment, parallel lanes, issues and
