@@ -98,5 +98,6 @@ master or rewrite accepted history to retroactively regroup it.
 direct Nix update and confirmed local commit. It requires an untouched lock
 and empty index, uses tracked hooks, and leaves a rejected commit staged for
 recovery. This is distinct from exclusion-aware `just up`; neither publishes.
-brew/cask/mas editing is retired, including modified inventories: app selection
-belongs to consumers. Use ordinary authoring for their owned source.
+Imperative brew/cask/mas editing is retired. Use ordinary authoring for
+individual program declarations and their suppliers in the Unix-like provider and for host-owned selection overrides, App Store entries and lifecycle
+policy.

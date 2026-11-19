@@ -19,6 +19,21 @@ produce, refusals included; `tool/configs doctor` shows the count.
 
 ## Architecture
 
+Run `just browse` to explore the current checkout in a terminal. Use `/` to
+search, Enter to expand an item or jump to a match, and `p` to preview its
+source. The tree includes Unix-like modules, Windows desired state, and
+repository tools and documentation. Python 3.9 or newer with curses runs the
+TUI.
+
+```sh
+just browse --query ghostty
+just browse --host 'path:./unixlike#homeConfigurations.example'
+just browse --tree --query 'Windows Terminal'
+```
+
+The optional host view overlays the Unix-like program inventory on the source
+tree. The Windows view shows declarations from its manifest.
+
 ```text
 unixlike
   flake.nix                   flake definition and lock (unixlike/flake.lock)
@@ -53,12 +68,78 @@ any implementation is planned.
 Ghostty is installed by Homebrew on Darwin while Home Manager owns its shared
 Unix-like configuration.
 
-Portable interactive programs are declared once in `homeManager.shared` and
-reach the consumer outputs through the provider constructors. Platform Home
-Manager classes add only
-platform-specific behavior. Darwin Homebrew declarations are reserved for
-macOS applications, Mac App Store items, and explicit exceptions that the
-locked nixpkgs cannot provide on Darwin.
+Provider constructors compose shared and platform-specific Home Manager
+classes. Nix manages the environment and its settings, including settings
+for programs supplied by Homebrew on macOS or mise on Linux. Hosts can
+override selections and control the Homebrew lifecycle. See
+[tool supply and configuration](docs/policy/architecture.md#tool-supply-and-configuration).
+
+Each selectable program has an individual declaration under
+`unixlike/modules/programs/<group>/`. The group is the first directory below
+`programs/`, such as `terminal/`, `development/`, or `network/`.
+Each module registers its program ID once. That declaration names its default
+profiles and its Nix, Homebrew or mise suppliers, including any platform
+defaults. Program-specific settings and payloads live with the declaration.
+
+Program definitions are exposed in `lib.programCatalog`; final configurations
+expose `config.providerTools.inventory`. Inspect them without installing tools:
+
+```sh
+tool/configs programs --catalog
+tool/configs programs path:./unixlike#homeConfigurations.example
+tool/configs programs path:./unixlike#darwinConfigurations.fixture-mac --json
+```
+
+In a consumer `homeModules` extension, use a directory name under
+`providerTools.groups` to override selection for that group. Use
+`providerTools.programs` for individual choices:
+
+```nix
+homeModules = [{
+  providerTools.groups.terminal = false;
+  providerTools.programs.zellij.enable = true;
+}];
+```
+
+An individual choice takes precedence over its group. A group set to
+`null` or left unset uses the program's default profiles. Existing
+environment choices determine the active profiles, such as `shared`,
+`desktop`, `darwin` and `wsl`. A program needs only one of its profiles to
+be active by default. Group selection applies to programs available on the
+host's platform and native module classes. Selected mise tools also enable
+their Nix-supplied manager by default.
+
+Use `providerTools.agents.enable` to change the default coding-agent profile.
+Native module options and `providerTools.excludedPackages` remain available.
+On Darwin, `providerDarwin.appSettings` controls settings for the selected
+Homebrew apps. Ghostty and Karabiner settings follow the final enabled cask
+list.
+
+In the inventory, `selected` identifies the supply chosen by evaluation,
+`source` identifies the declaration, and `deployment` names the home or
+system layer that supplies it. Homebrew entries use the system layer.
+When a native declaration supplies an ID directly, its selected row takes
+the place of an inactive catalog row with that ID. The inventory reports
+requested and evaluated versions. Installed versions are unknown.
+
+Linux defaults Claude Code and Codex to mise; macOS keeps their Nix supply.
+To use Nix on Linux, set `providerTools.programs.codex.provider = "nix"` (and
+likewise for `claude-code`). A mise version request is optional:
+`providerTools.programs.codex.version = "0.100"`; absent requests use stable
+`latest`. Aqua supplies architecture/libc-aware distributions on supported Linux
+systems; NixOS retains `nix-ld`. Native CLI and sandbox compatibility is separate
+from successful evaluation.
+
+Nix supplies mise and `~/.config/mise/conf.d/10-provider.toml`. Keep temporary
+local tools in writable `~/.config/mise/config.toml`, for example using
+`mise use --global jq@latest`. Managed zsh appends mise shims after existing Nix
+commands, before the existing optional SDKMAN hook. Configuration application
+installs missing declared tools only and reports installation failure. Run
+`mise upgrade --global` explicitly to update supplementary tools; automatic
+updates and pruning are disabled. Current Aqua metadata supplies release
+layout and platform mappings independently of the locked mise binary. Local configuration and previous versions
+are preserved. Ordinary upgrades keep version requests; changing a managed
+request belongs in Nix, because the provider fragment is read-only.
 
 Windows desired state is declared directly in
 `windows/desired/manifest.json`. Its payloads, including the Windows-owned
@@ -174,7 +255,7 @@ consumer flake under `configs-hosts/hosts/<host>/`.
 
 ### Git commands that get no alias
 
-`unixlike/modules/programs/git.nix` declares this repository's
+`unixlike/modules/programs/development/git.nix` declares this repository's
 `programs.git.settings.alias` set and, beside it, a comment naming the Git
 commands that deliberately stay unaliased because knowing them is more useful
 than shortening them:
@@ -188,14 +269,14 @@ than shortening them:
 - `git show HEAD@{1}` with `git reflog` to recover a previous position.
 - `git range-diff` to compare two versions of a series.
 
-See the comment in `unixlike/modules/programs/git.nix` for the reasoning; this list only
+See the comment in `unixlike/modules/programs/development/git.nix` for the reasoning; this list only
 repeats the names so a maintainer can find them without opening a Nix module.
 
 ### Markdown and fuzzy search
 
 `glow README.md` renders a document; `glow` opens the Markdown browser (Enter
 opens a document, Esc returns, q quits). Both use the bundled `light` style.
-The generated `glow/glow.yml` is read-only: edit `unixlike/modules/programs/glow.nix`,
+The generated `glow/glow.yml` is read-only: edit `unixlike/modules/programs/text/glow.nix`,
 not `glow config`. XDG configuration is installed on every home; Darwin also
 gets the native `~/Library/Preferences/glow/glow.yml` fallback.
 `GLOW_CONFIG_HOME` can select an alternative config directory. The glow wrapper

@@ -22,7 +22,7 @@
       {
         system.primaryUser = "example";
         users.users.example.home = macPath;
-        homebrew.casks = ["ghostty"];
+        homebrew.enable = true;
       }
     ];
   };

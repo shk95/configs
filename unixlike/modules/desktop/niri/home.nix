@@ -45,8 +45,8 @@ _: {
       spawn-at-startup "noctalia"
 
       binds {
-          Mod+Return { spawn "ghostty"; }
-          Mod+Shift+Return { spawn "wezterm"; }
+          ${lib.optionalString config.programs.ghostty.enable ''Mod+Return { spawn "ghostty"; }''}
+          ${lib.optionalString config.programs.wezterm.enable ''Mod+Shift+Return { spawn "wezterm"; }''}
           Mod+D { spawn "noctalia" "msg" "panel-toggle" "launcher"; }
           Mod+S { spawn "noctalia" "msg" "panel-toggle" "control-center"; }
           Mod+Shift+V { spawn "noctalia" "msg" "panel-toggle" "clipboard"; }

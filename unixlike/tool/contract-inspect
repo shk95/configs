@@ -27,6 +27,8 @@ def read_contract(tree):
             raise ValueError(f"{path}: missing {key}")
     if not all(isinstance(contract[key], dict) for key in ("entryPoints", "constraints", "compatibilityDefaults")):
         raise ValueError(f"{path}: contract sections must be objects")
+    if "programSelection" in contract and not isinstance(contract["programSelection"], dict):
+        raise ValueError(f"{path}: programSelection must be an object")
     if not isinstance(contract["changes"], list) or any(
         not isinstance(change, dict)
         or not isinstance(change.get("id"), str)
@@ -54,12 +56,19 @@ def compare_contracts(old, new):
         return {"changedPaths": [], "defaultChanges": [], "availableMigrationIds": [
             change["id"] for change in new["changes"]
         ]}
-    before = dict(flatten("", {k: old[k] for k in ("entryPoints", "constraints", "compatibilityDefaults")}))
-    after = dict(flatten("", {k: new[k] for k in ("entryPoints", "constraints", "compatibilityDefaults")}))
-    changed = sorted(key for key in before.keys() | after.keys() if before.get(key) != after.get(key))
+    sections = ("entryPoints", "constraints", "compatibilityDefaults", "programSelection")
+    before = dict(flatten("", {key: old[key] for key in sections if key in old}))
+    after = dict(flatten("", {key: new[key] for key in sections if key in new}))
+    missing = object()
+    changed = sorted(key for key in before.keys() | after.keys()
+                     if before.get(key, missing) != after.get(key, missing))
     return {
         "changedPaths": changed,
-        "defaultChanges": [key for key in changed if ".defaults." in key or key.startswith("compatibilityDefaults.")],
+        "defaultChanges": [
+            key for key in changed
+            if ".defaults." in key or key.startswith("compatibilityDefaults.")
+            or (key.startswith("programSelection.") and key.endswith((".default", ".profiles")))
+        ],
         "availableMigrationIds": [change["id"] for change in new["changes"]],
     }
 

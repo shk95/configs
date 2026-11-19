@@ -13,10 +13,11 @@ usage() {
 usage: tool/configs <command> [arguments]
 
 Clone and task:  setup  doctor  workflow  worktree  session  commit
-Review:          policy  classify  work  records  invariants  provisional
+Review:          browse  policy  classify  work  records  invariants  provisional
                 hygiene  domain-reads  design-citations  test
 Integration:     audit  audit-remote  plan-release  release
 Evidence:        hook-evidence  history-rewrite
+Unix-like:       programs
 
 Use 'tool/configs <command> --help' where the target supports it.
 Windows host operations use windows/win-env.ps1; Unix-like host operations
@@ -34,6 +35,8 @@ case "$command" in
     ;;
   setup) target=setup ;;
   doctor) target=doctor.sh ;;
+  browse) target=version-control/browse ;;
+  programs) exec "$tool_dir/../unixlike/tool/programs" "$@" ;;
   policy) target=version-control/policy ;;
   history-rewrite) target=version-control/history-rewrite ;;
   workflow) target=version-control/workflow ;;

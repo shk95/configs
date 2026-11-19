@@ -162,7 +162,7 @@ if [ "$scope" = all ] || [ "$scope" = unixlike ]; then
   echo
   echo "Karabiner (Darwin only)"
 # Karabiner-Elements is a Homebrew cask that rewrites its own configuration
-# file, so unixlike/modules/programs/karabiner/tool compares that file rather than
+# file, so unixlike/modules/programs/desktop-tools/karabiner/tool compares that file rather than
 # delivering it.
 # These say whether this machine can run that comparison at all; they are
 # warnings everywhere, because a clone that is not a Mac is not broken.
@@ -170,7 +170,7 @@ if [ "$scope" = all ] || [ "$scope" = unixlike ]; then
     [ -d /Applications/Karabiner-Elements.app ] \
       && ok "Karabiner-Elements.app installed" \
       || warn "Karabiner-Elements.app is not installed" \
-             "The cask is declared in unixlike/modules/platforms/homebrew.nix; 'just karabiner-check' reports drift until it is installed."
+             "The cask is declared in unixlike/modules/programs/desktop-tools/karabiner/module.nix; 'just karabiner-check' reports drift until it is installed."
     # The cask installs it below the application's own support directory and
     # puts nothing on PATH, so the absolute path is the only probe that can
     # answer.
@@ -184,7 +184,7 @@ if [ "$scope" = all ] || [ "$scope" = unixlike ]; then
              "'just karabiner-check' reports that as drift, not as unverified. Start Karabiner-Elements once, or apply the desired state."
   else
     warn "Karabiner probes are Darwin-only" \
-         "unixlike/modules/programs/karabiner/tool reports unverified here; the Mac supplies that evidence."
+         "unixlike/modules/programs/desktop-tools/karabiner/tool reports unverified here; the Mac supplies that evidence."
   fi
 fi
 

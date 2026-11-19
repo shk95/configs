@@ -1,0 +1,9 @@
+#!/bin/sh
+# INV unixlike/tool-supply-ownership
+set -eu
+checks=$(CDPATH= cd -- "$(dirname -- "$0")" && pwd)
+. "$checks/prerequisite"
+require_command nix zsh
+cd "$checks/../../.."
+python_cmd=$(python_for_test)
+exec "$python_cmd" "$checks/programs-test.py"

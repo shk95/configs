@@ -23,7 +23,7 @@ concerns for navigation as `flake`, `machines`, `platforms`, `foundation`,
 `desktop`, and `programs`; the concern is the file or directory inside a
 group. The class a fragment reaches is read in the file that writes it and
 never from a directory. A concern that is one fragment stays one file, such
-as `modules/programs/bat.nix`; a directory is for a concern with more than
+as `modules/programs/text/bat.nix`; a directory is for a concern with more than
 one fragment or with material beside its module.
 What a concern owns sits beside its module: the payload the module
 delivers and the script it interpolates. Karabiner's earlier three-directory
@@ -90,3 +90,9 @@ attribution `modules.<class>.<name>` stays as it is. The Windows domain
 groups the same way by declaration, in `windows/desired/manifest.json`, and
 stays as it is: two local implementations, not one abstraction
 (`AGENTS.md § Domain boundaries`).
+
+Extended 2026-11-19: group program modules by purpose. The first directory
+under `programs/` names the host selection group. Profiles on each declaration
+express defaults for environments. The path within the group orders the
+program's class contributions, so moving between groups preserves package
+ordering. Errors and inventory report the actual source path.

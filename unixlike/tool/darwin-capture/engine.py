@@ -23,7 +23,7 @@ class Unavailable(Refusal):
 
 
 HERE = Path(__file__).resolve().parent
-CONCERN = Path(os.environ.get("CONFIGS_CAPTURE_CONCERN", HERE.parent.parent / "modules/programs/karabiner"))
+CONCERN = Path(os.environ.get("CONFIGS_CAPTURE_CONCERN", HERE.parent.parent / "modules/programs/desktop-tools/karabiner"))
 
 
 def pairs(items):

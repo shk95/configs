@@ -76,7 +76,7 @@ activation=$(nix build --no-link --print-out-paths --impure --expr '
     identity = {system = builtins.currentSystem; user = "example"; git = {name = "Example"; email = "example@example.invalid";};};
     home = if pkgs.stdenv.hostPlatform.isDarwin then
       (provider.lib.mkDarwin (identity // {
-        systemModules = [{system.primaryUser = "example"; users.users.example.home = "/Users/" + "example"; homebrew.casks = ["ghostty"]; }];
+        systemModules = [{system.primaryUser = "example"; users.users.example.home = "/Users/" + "example"; homebrew.enable = true; }];
       })).config.home-manager.users.example
     else (provider.lib.mkHome (identity // {homeDirectory = "/home/" + "example"; environment.graphical = true;})).config;
   in pkgs.writeText "editable-files-activation-command" home.home.activation.installEditableFiles.data')

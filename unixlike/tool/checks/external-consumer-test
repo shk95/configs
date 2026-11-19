@@ -30,13 +30,19 @@ cat > "$consumer_dir/flake.nix" <<EOF
     omitted = configs.lib.mkHome (builtins.removeAttrs base ["environment"]);
     wsl = configs.lib.mkHome (base // {environment = {wsl = true;};});
     override = configs.lib.mkHome (base // {
-      homeModules = [{home.stateVersion = "26.05"; home.sessionVariables.CONSUMER = "yes";}];
+      homeModules = [{
+        home.stateVersion = "26.05";
+        home.sessionVariables.CONSUMER = "yes";
+        providerTools.groups.terminal = false;
+        providerTools.programs.zellij.enable = true;
+      }];
     });
   in {
     homeConfigurations = {inherit cli omitted wsl override;};
     probe = {
       contractFormat = contract.formatVersion;
       contractPath = contract.entryPoints.mkHome.path;
+      programContract = contract.programSelection;
       cli = {
         system = cli.pkgs.stdenv.hostPlatform.system;
         user = cli.config.home.username;
@@ -54,6 +60,10 @@ cat > "$consumer_dir/flake.nix" <<EOF
       override = {
         stateVersion = override.config.home.stateVersion;
         extension = override.config.home.sessionVariables.CONSUMER;
+        inherit (override.config.programs.zellij) enable;
+        selectedTerminal = map (row: row.id) (builtins.filter
+          (row: (row.group or null) == "terminal" && row.selected)
+          override.config.providerTools.inventory);
       };
     };
     bad = {
@@ -88,7 +98,18 @@ nix eval --json "path:$consumer_dir#probe" | jq -e --arg fixture_home "/home/$fi
   .cli.email == "example@example.invalid" and .cli.stateVersion == "25.11" and
   .cli.ghostty == false and .cli.fontconfig == false and
   .omitted.ghostty == true and .wsl.ghostty == false and .wsl.fontconfig == true and
-  .override.stateVersion == "26.05" and .override.extension == "yes"
+  .override.stateVersion == "26.05" and .override.extension == "yes" and
+  .programContract.moduleArgument == "homeModules" and
+  .programContract.constructors == ["mkDarwin", "mkHome", "mkNixos"] and
+  .programContract.groups.terminal == {"type":"nullOr","elementType":"bool","default":null} and
+  .programContract.programs.zellij.group == "terminal" and
+  .programContract.programs.codex.defaults.linux == "mise" and
+  (.programContract.groups | has("desktop") | not) and
+  .programContract.programs.ghostty.requiredClasses == ["desktop"] and
+  .programContract.programs.ghostty.supplierPlatforms.nix == ["aarch64-linux", "x86_64-linux"] and
+  .programContract.programs.bettercap.supplierPlatforms.homebrew == ["aarch64-darwin"] and
+  .programContract.programs.codex.supplierPlatforms.mise == ["aarch64-linux", "x86_64-linux"] and
+  .override.enable and .override.selectedTerminal == ["zellij"]
 ' >/dev/null
 nix eval --raw "path:$consumer_dir#homeConfigurations.cli.activationPackage.drvPath" >/dev/null
 
@@ -111,7 +132,8 @@ refuse unknownEnvironment "desktop"
 refuse graphicalWsl "environment.graphical cannot be true"
 refuse relativeHome "homeDirectory"
 
-generated=$(nix eval --json --impure --expr 'import ./unixlike/api/contract.nix' | jq -S .)
+generated=$(nix eval --no-write-lock-file --impure --json --file unixlike/api/render-contract.nix)
+generated=$(printf '%s\n' "$generated" | jq -S .)
 checked=$(jq -S . unixlike/api/contract.json)
 [ "$generated" = "$checked" ] || {
   echo 'external consumer: checked contract data has drifted' >&2

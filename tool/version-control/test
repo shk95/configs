@@ -18,7 +18,7 @@ topic_source="$root/tool/version-control/topic-source"
 # Every published repository command selects exactly its own implementation,
 # preserving the caller's arguments and status. Unknown commands execute none.
 operator_fixture=$(mktemp -d)
-mkdir -p "$operator_fixture/tool/version-control"
+mkdir -p "$operator_fixture/tool/version-control" "$operator_fixture/unixlike/tool"
 cp "$root/tool/configs" "$operator_fixture/tool/configs"
 for route in \
   setup:setup doctor:doctor.sh worktree:worktree.sh session:work-session.sh \
@@ -30,7 +30,8 @@ for route in \
   audit:version-control/audit audit-remote:version-control/audit-remote \
   release:version-control/release.py \
   plan-release:version-control/plan-release \
-  hook-evidence:version-control/hook-evidence; do
+  hook-evidence:version-control/hook-evidence programs:../unixlike/tool/programs \
+  browse:version-control/browse; do
   command=${route%%:*}
   target=${route#*:}
   printf '#!/bin/sh\nprintf "operator-target=%%s\\n%%s\\n%%s\\n" %s "$1" "$2"\nexit 37\n' "$target" >"$operator_fixture/tool/$target"
@@ -385,20 +386,20 @@ expect() {
   fi
 }
 
-expect unixlike "$classify" --files unixlike/modules/programs/git.nix
+expect unixlike "$classify" --files unixlike/modules/programs/development/git.nix
 # INV repository/scope-ownership
-# unixlike/modules/programs/karabiner/tool is the Unix-like domain's own Mac tooling:
+# unixlike/modules/programs/desktop-tools/karabiner/tool is the Unix-like domain's own Mac tooling:
 # it reads and writes a Unix-like payload, its evidence lane is a Mac, and
 # no governance host can produce it. Owned by unixlike, like the modules
 # and the checks beside it.
-expect unixlike "$classify" --files unixlike/modules/programs/karabiner/tool
+expect unixlike "$classify" --files unixlike/modules/programs/desktop-tools/karabiner/tool
 # INV repository/scope-ownership
 # The domain owns one tree. .envrc and the Justfile answer from the same arm,
 # because those two stay at the root: direnv reads the first there, and where
 # the second belongs is a separate decision. A similar prefix outside the
 # domain has no owner, and neither do the locations the tree was moved from.
 expect unixlike "$classify" --files unixlike/flake.nix
-expect unixlike "$classify" --files unixlike/modules/programs/git.nix
+expect unixlike "$classify" --files unixlike/modules/programs/development/git.nix
 expect unixlike "$classify" --files unixlike/payloads.json
 expect unixlike "$classify" --files unixlike/tool/checks/test
 expect unixlike "$classify" --files .envrc
@@ -497,8 +498,8 @@ if printf '' | "$root/tool/dispatch/select" push >/dev/null 2>&1; then
   exit 1
 fi
 
-kdl_modified=$(printf 'M\tunixlike/modules/programs/zellij/config.kdl')
-kdl_added=$(printf 'A\tunixlike/modules/programs/zellij/extra.kdl')
+kdl_modified=$(printf 'M\tunixlike/modules/programs/terminal/zellij/config.kdl')
+kdl_added=$(printf 'A\tunixlike/modules/programs/terminal/zellij/extra.kdl')
 windows_modified=$(printf 'M\twindows/setup.ps1')
 docs_modified=$(printf 'M\tdocs/status/repository.md')
 unknown_modified=$(printf 'M\tunexpected.file')
@@ -515,10 +516,10 @@ unixlike:payloads' commit "$kdl_added"
 
 
 # INV repository/local-gate-selects-by-effect
-# unixlike/modules/programs/karabiner/tool holds the projection the Karabiner
+# unixlike/modules/programs/desktop-tools/karabiner/tool holds the projection the Karabiner
 # payloads are compared and applied by, so a change to it can alter what
 # the Unix-like suite says; it selects the same units a module does.
-darwin_tool_modified=$(printf 'M\tunixlike/modules/programs/karabiner/tool')
+darwin_tool_modified=$(printf 'M\tunixlike/modules/programs/desktop-tools/karabiner/tool')
 expect_units 'unixlike:format
 unixlike:lint
 unixlike:payloads' commit "$darwin_tool_modified"
@@ -527,10 +528,10 @@ unixlike:payloads' commit "$darwin_tool_modified"
 # A payload beside its module narrows the same way a payload tree used to, and
 # the module next to it does not: under the concern-first layout the file's
 # suffix is what separates what the evaluator reads from what it copies.
-unixlike_module_modified=$(printf 'M\tunixlike/modules/programs/git.nix')
-concern_kdl_modified=$(printf 'M\tunixlike/modules/programs/zellij/config.kdl')
+unixlike_module_modified=$(printf 'M\tunixlike/modules/programs/development/git.nix')
+concern_kdl_modified=$(printf 'M\tunixlike/modules/programs/terminal/zellij/config.kdl')
 expect_units 'unixlike:payloads' commit "$concern_kdl_modified"
-concern_module_modified=$(printf 'M\tunixlike/modules/programs/zellij/module.nix')
+concern_module_modified=$(printf 'M\tunixlike/modules/programs/terminal/zellij/module.nix')
 expect_units 'unixlike:format
 unixlike:lint
 unixlike:payloads' commit "$concern_module_modified"
@@ -2786,10 +2787,10 @@ printf '%s\n' "$domain_reads_output" | grep -q '^✓ domain reads: [1-9][0-9]* U
 
 domain_reads_fixture=$(mktemp -d)
 git -C "$domain_reads_fixture" init -q
-mkdir -p "$domain_reads_fixture/unixlike/tool/checks" "$domain_reads_fixture/unixlike/modules/programs/karabiner" \
+mkdir -p "$domain_reads_fixture/unixlike/tool/checks" "$domain_reads_fixture/unixlike/modules/programs/desktop-tools/karabiner" \
   "$domain_reads_fixture/windows/probe" "$domain_reads_fixture/unixlike/modules"
 printf '#!/bin/sh\ncat windows/desired/manifest.json\n' >"$domain_reads_fixture/unixlike/tool/checks/probe"
-printf '#!/bin/sh\ncat windows/desired/files/probe.json\n' >"$domain_reads_fixture/unixlike/modules/programs/karabiner/probe"
+printf '#!/bin/sh\ncat windows/desired/files/probe.json\n' >"$domain_reads_fixture/unixlike/modules/programs/desktop-tools/karabiner/probe"
 printf '_: {\n  home.file."probe".source = ../windows/desired/files/probe;\n}\n' >"$domain_reads_fixture/unixlike/modules/probe.nix"
 printf '$fonts = Get-Content (Join-Path $root %s)\n' "'unixlike\\modules\\wezterm\\fonts.json'" >"$domain_reads_fixture/windows/probe/probe.ps1"
 printf 'Import-Module (Join-Path $root %s)\n' "'unixlike/modules/flake/probe.nix'" >"$domain_reads_fixture/windows/probe/module.psm1"
@@ -2801,7 +2802,7 @@ if domain_reads_output=$(cd "$domain_reads_fixture" && "$domain_reads" 2>&1); th
 fi
 for domain_reads_hit in \
   'unixlike/tool/checks/probe:2:' \
-  'unixlike/modules/programs/karabiner/probe:2:' \
+  'unixlike/modules/programs/desktop-tools/karabiner/probe:2:' \
   'unixlike/modules/probe.nix:2:' \
   'windows/probe/probe.ps1:1:' \
   'windows/probe/module.psm1:1:'; do
@@ -2817,8 +2818,8 @@ domain_reads_fixture=$(mktemp -d)
 git -C "$domain_reads_fixture" init -q
 mkdir -p "$domain_reads_fixture/windows/src" "$domain_reads_fixture/windows/desired/files" "$domain_reads_fixture/unixlike/modules"
 printf '# The Windows domain declares this terminal in windows/desired/files/terminal/settings.json.\n_: {\n  home.file."probe".text = "windows-terminal"; # not windows/\n}\n' >"$domain_reads_fixture/unixlike/modules/probe.nix"
-printf '<#\n    .SYNOPSIS\n    Copied from unixlike/modules/programs/powershell/profile.ps1; see its module and the flake.\n#>\n# unixlike/tool/checks/payloads parses the Unix-like copy.\n$own = Join-Path $root %s <# not unixlike/ #>\nif ($args.Count -ne $#) { $x = ${#own} }\n' "'desired\\files\\profile.ps1'" >"$domain_reads_fixture/windows/src/probe.psm1"
-printf '$profile = %s\n' "'unixlike/modules/programs/powershell/profile.ps1'" >"$domain_reads_fixture/windows/desired/files/payload.ps1"
+printf '<#\n    .SYNOPSIS\n    Copied from unixlike/modules/programs/terminal/powershell/profile.ps1; see its module and the flake.\n#>\n# unixlike/tool/checks/payloads parses the Unix-like copy.\n$own = Join-Path $root %s <# not unixlike/ #>\nif ($args.Count -ne $#) { $x = ${#own} }\n' "'desired\\files\\profile.ps1'" >"$domain_reads_fixture/windows/src/probe.psm1"
+printf '$profile = %s\n' "'unixlike/modules/programs/terminal/powershell/profile.ps1'" >"$domain_reads_fixture/windows/desired/files/payload.ps1"
 git -C "$domain_reads_fixture" add -A
 if ! domain_reads_output=$(cd "$domain_reads_fixture" && "$domain_reads" 2>&1); then
   printf '%s\n' "$domain_reads_output" >&2

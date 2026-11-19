@@ -55,6 +55,15 @@ beside it form a directory. Class is declared in the file, not its directory.
 `unixlike/modules/flake/configurations.nix` alone decides which deferred classes
 reach a Unix-like host.
 
+Use subdirectories to keep related concerns discoverable while preserving the
+top-level responsibilities. `programs/` groups individual programs by purpose
+and keeps each program's payloads beside its module. `foundation/program-supply/`
+owns the catalog and package-ownership checks, `platforms/darwin/` owns Darwin
+integration, and `flake/checks/` contains flake-level artifact checks.
+`desktop/` owns graphical session integration. Each program's navigation
+group also defines its host selection group. Program declarations name the
+profiles that select them by default.
+
 `.envrc` and the `Justfile` are the exceptions and stay at the repository
 root: direnv reads the first there, and where the second belongs is a separate
 decision. The domain's documents are the third: they live in the Unix-like
@@ -84,7 +93,7 @@ members decides drift, what is written and what may be captured, leaving
 whatever the application keeps beside them as runtime
 (`docs/policy/decisions/unixlike/karabiner-desired-state-by-projection.md`).
 
-Composition, identity, and ownership in this domain rest on ten rules, each
+Composition, identity, and ownership in this domain rest on rules, each
 registered under `docs/policy/invariants/unixlike/`. One file maps module classes to
 hosts, and a feature file writes into a class without naming a host or
 forcing another class's decision, so where a program reaches is read in one
@@ -105,12 +114,14 @@ fixtures covering each machine kind; real host identities and final outputs
 live in the private consumer. An evaluator refuses a wrong shape before any
 host is composed, and no untyped argument carries identity around the module system. Module
 files are collected by a directory walk, so nothing order-sensitive may depend
-on that order. A package has one declaring module: a feature module when it
-generates the package's configuration, otherwise the shared list, and a system
-module only when a service, activation script, or system account needs it,
-because two owners on one PATH make precedence an accident; the one accepted
-imperative exception is a version manager the user installs, which is never
-declared as a package and runs last so declared packages keep precedence.
+on that order. A package supplied by the evaluator has one declaring module:
+the feature module when it generates the package's configuration, or the
+program declaration for a package-only program. A system module owns it
+only when a service, activation script or system account needs it,
+because two owners on one PATH make precedence an accident. Externally supplied
+programs follow the ownership boundary below. The existing adopted JVM version
+manager remains user-installed, is never declared as a package and runs last
+so declared packages keep precedence.
 Finally, evaluation is evidence only when it reached every configuration: a
 check that found nothing to evaluate has failed, not passed.
 
@@ -161,6 +172,56 @@ the provider retain focused build checks. Optional host realizations are
 reproductions and never consumer adoption evidence. The provider and the public
 configs-host-template each verify their own source and lock; provider CI uses an
 independent synthetic consumer rather than fetching a moving template.
+
+### Tool supply and configuration
+
+Nix is the center of both configuration management and program supply in the
+Unix-like domain. Supplementary suppliers support cases such as rapid updates
+and temporary program installation and management without moving the overall
+package inventory out of Nix. An externally supplied program can still have
+its maintained settings managed by Nix. Frequently updated supplementary tools
+may follow their supplier's releases without a provider release or flake input
+refresh for each application update. Their version constraints are optional
+and can be introduced for compatibility, project requirements or an explicit
+preference. System services and programs coupled to system realization remain
+evaluator-owned where that integration requires it.
+
+Each tool has one installation owner on a host. Its configuration owner may
+be different; generating settings alone does not require enabling a module
+that also installs another copy. Switching suppliers must account for the
+previous installation and command resolution. Tool selection and owned settings
+belong in maintained declarations where supported; installation state, resolved
+versions and application runtime state may remain mutable. Settings the
+application rewrites follow the existing payload projection boundary, leaving
+authentication, sessions and caches with their runtime owner.
+
+Homebrew is the supplementary package tool on macOS for rapid updates and
+temporary installation and management. Each directly selectable program has
+its own source definition and a stable program ID. That definition contains
+its provider-specific identifiers and platform defaults. Hosts can choose
+groups by directory name and set individual exceptions or suppliers.
+Environment profiles supply the default selection and may overlap.
+Platform support, native module availability and home or system deployment
+scope are determined separately. Existing constructors
+continue to select native environment classes. The consumer owns
+account-dependent App Store entries, Homebrew preparation, activation,
+updates and cleanup policy. Homebrew is scoped to macOS.
+
+Supported Linux homes use Nix-supplied mise as a supplementary supplier for
+Claude Code and Codex. Other existing Nix tools retain their installation
+owners. Nix owns a mise configuration fragment; local configuration remains
+writable. Configuration application installs missing declared tools, while
+updates are explicit and old versions and local tools are preserved by default.
+Supplementary application installation and updates do not run during
+evaluation or build. Mutable shims follow Nix
+commands in the managed shell; SDKMAN keeps its separate user-installed JVM
+and final shell-initialization contract.
+
+Supplier changes do not alter the SDKMAN installation and shell-order
+contract; source preparation, package updates, configuration
+deployment and host activation remain distinct operations. The adoption
+rationale is in
+`docs/policy/decisions/unixlike/tool-supply-separated-from-configuration.md`.
 
 
 ## Windows domain

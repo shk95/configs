@@ -1,7 +1,7 @@
 id: unixlike/package-ownership
-statement: A package is declared by exactly one module: a feature module when that module generates its configuration, otherwise the shared package list, and a system module only when a service, activation script, or system account needs it.
+statement: A package is declared by exactly one module: a feature module when that module generates its configuration, otherwise the program's package-only supply declaration, and a system module only when a service, activation script, or system account needs it.
 rationale: docs/policy/architecture.md § Unix-like domain
-enforced-by: schema unixlike/modules/foundation/packages.nix
+enforced-by: schema unixlike/modules/foundation/program-supply/package-ownership.nix
 enforced-by: fixture unixlike/tool/checks/provider-api-test
 decision: docs/policy/decisions/unixlike/package-ownership-by-generating-module.md § A package is owned by the module that configures it
 
@@ -11,7 +11,7 @@ a module for the package: enabling an unused module is a behaviour change
 (shell integration, generated files, environment variables), and a rule keyed
 to the pinned input's module catalogue would break on a lock refresh. The
 maintainer chose this wording on 2026-09-03; the twelve packages that have an
-unused module stay in the shared list. The shared list's file asserts, per
+unused module stay in the shared list. The package-ownership module asserts, per
 home, that no package name is defined from two owners — a file of this
 repository, or the evaluator's own modules taken together — and, per system
 layer, that no name this repository declares is in both the system packages

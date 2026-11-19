@@ -118,7 +118,7 @@ violation() {
 
 # A name, in the sense of an account or host label. `$` and `{` are outside the
 # class on purpose: `/home/${user}` in unixlike/modules/foundation/home-account.nix and
-# `/Users/${user}` in unixlike/modules/platforms/darwin.nix are interpolations of
+# `/Users/${user}` in unixlike/modules/platforms/darwin/home.nix are interpolations of
 # a declared value, not names, and do not match at all.
 name='[A-Za-z0-9._-]+'
 

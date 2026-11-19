@@ -164,5 +164,2927 @@
       "path": "lib.mkNixos"
     }
   },
-  "formatVersion": 1
+  "formatVersion": 1,
+  "programSelection": {
+    "agents": {
+      "enable": {
+        "default": true,
+        "type": "bool"
+      }
+    },
+    "catalog": "lib.programCatalog",
+    "constructors": [
+      "mkDarwin",
+      "mkHome",
+      "mkNixos"
+    ],
+    "groups": {
+      "coding-agents": {
+        "default": null,
+        "elementType": "bool",
+        "type": "nullOr"
+      },
+      "desktop-tools": {
+        "default": null,
+        "elementType": "bool",
+        "type": "nullOr"
+      },
+      "development": {
+        "default": null,
+        "elementType": "bool",
+        "type": "nullOr"
+      },
+      "files": {
+        "default": null,
+        "elementType": "bool",
+        "type": "nullOr"
+      },
+      "fonts": {
+        "default": null,
+        "elementType": "bool",
+        "type": "nullOr"
+      },
+      "media": {
+        "default": null,
+        "elementType": "bool",
+        "type": "nullOr"
+      },
+      "network": {
+        "default": null,
+        "elementType": "bool",
+        "type": "nullOr"
+      },
+      "productivity": {
+        "default": null,
+        "elementType": "bool",
+        "type": "nullOr"
+      },
+      "security": {
+        "default": null,
+        "elementType": "bool",
+        "type": "nullOr"
+      },
+      "system": {
+        "default": null,
+        "elementType": "bool",
+        "type": "nullOr"
+      },
+      "terminal": {
+        "default": null,
+        "elementType": "bool",
+        "type": "nullOr"
+      },
+      "text": {
+        "default": null,
+        "elementType": "bool",
+        "type": "nullOr"
+      }
+    },
+    "inventory": "config.providerTools.inventory",
+    "moduleArgument": "homeModules",
+    "optionsPrefix": "providerTools",
+    "precedence": [
+      "program",
+      "group",
+      "profile"
+    ],
+    "programOptions": {
+      "enable": {
+        "type": "bool"
+      },
+      "provider": {
+        "type": "enum"
+      },
+      "version": {
+        "default": null,
+        "elementType": "nonEmptyStr",
+        "supplier": "mise",
+        "type": "nullOr"
+      }
+    },
+    "programs": {
+      "R": {
+        "group": "development",
+        "platforms": [
+          "aarch64-darwin",
+          "aarch64-linux",
+          "x86_64-linux"
+        ],
+        "profiles": [
+          "shared"
+        ],
+        "requiredClasses": [],
+        "supplierPlatforms": {
+          "nix": [
+            "aarch64-darwin",
+            "aarch64-linux",
+            "x86_64-linux"
+          ]
+        },
+        "suppliers": [
+          "nix"
+        ]
+      },
+      "android-commandlinetools": {
+        "group": "development",
+        "platforms": [
+          "aarch64-darwin"
+        ],
+        "profiles": [
+          "darwin"
+        ],
+        "requiredClasses": [],
+        "supplierPlatforms": {
+          "homebrew": [
+            "aarch64-darwin"
+          ]
+        },
+        "suppliers": [
+          "homebrew"
+        ]
+      },
+      "android-platform-tools": {
+        "group": "development",
+        "platforms": [
+          "aarch64-darwin"
+        ],
+        "profiles": [
+          "darwin"
+        ],
+        "requiredClasses": [],
+        "supplierPlatforms": {
+          "homebrew": [
+            "aarch64-darwin"
+          ]
+        },
+        "suppliers": [
+          "homebrew"
+        ]
+      },
+      "anki": {
+        "group": "productivity",
+        "platforms": [
+          "aarch64-darwin"
+        ],
+        "profiles": [
+          "darwin"
+        ],
+        "requiredClasses": [],
+        "supplierPlatforms": {
+          "homebrew": [
+            "aarch64-darwin"
+          ]
+        },
+        "suppliers": [
+          "homebrew"
+        ]
+      },
+      "appcleaner": {
+        "group": "files",
+        "platforms": [
+          "aarch64-darwin"
+        ],
+        "profiles": [
+          "darwin"
+        ],
+        "requiredClasses": [],
+        "supplierPlatforms": {
+          "homebrew": [
+            "aarch64-darwin"
+          ]
+        },
+        "suppliers": [
+          "homebrew"
+        ]
+      },
+      "aria2": {
+        "group": "network",
+        "platforms": [
+          "aarch64-darwin",
+          "aarch64-linux",
+          "x86_64-linux"
+        ],
+        "profiles": [
+          "shared"
+        ],
+        "requiredClasses": [],
+        "supplierPlatforms": {
+          "nix": [
+            "aarch64-darwin",
+            "aarch64-linux",
+            "x86_64-linux"
+          ]
+        },
+        "suppliers": [
+          "nix"
+        ]
+      },
+      "bat": {
+        "group": "text",
+        "platforms": [
+          "aarch64-darwin",
+          "aarch64-linux",
+          "x86_64-linux"
+        ],
+        "profiles": [
+          "shared"
+        ],
+        "requiredClasses": [],
+        "supplierPlatforms": {
+          "nix": [
+            "aarch64-darwin",
+            "aarch64-linux",
+            "x86_64-linux"
+          ]
+        },
+        "suppliers": [
+          "nix"
+        ]
+      },
+      "bettercap": {
+        "defaults": {
+          "darwin": "homebrew",
+          "linux": "nix"
+        },
+        "group": "network",
+        "platforms": [
+          "aarch64-darwin",
+          "aarch64-linux",
+          "x86_64-linux"
+        ],
+        "profiles": [
+          "shared"
+        ],
+        "requiredClasses": [],
+        "supplierPlatforms": {
+          "homebrew": [
+            "aarch64-darwin"
+          ],
+          "nix": [
+            "aarch64-linux",
+            "x86_64-linux"
+          ]
+        },
+        "suppliers": [
+          "homebrew",
+          "nix"
+        ]
+      },
+      "betterzip": {
+        "group": "files",
+        "platforms": [
+          "aarch64-darwin"
+        ],
+        "profiles": [
+          "darwin"
+        ],
+        "requiredClasses": [],
+        "supplierPlatforms": {
+          "homebrew": [
+            "aarch64-darwin"
+          ]
+        },
+        "suppliers": [
+          "homebrew"
+        ]
+      },
+      "bitwarden-cli": {
+        "group": "security",
+        "platforms": [
+          "aarch64-darwin",
+          "aarch64-linux",
+          "x86_64-linux"
+        ],
+        "profiles": [
+          "shared"
+        ],
+        "requiredClasses": [],
+        "supplierPlatforms": {
+          "nix": [
+            "aarch64-darwin",
+            "aarch64-linux",
+            "x86_64-linux"
+          ]
+        },
+        "suppliers": [
+          "nix"
+        ]
+      },
+      "brave-browser": {
+        "group": "productivity",
+        "platforms": [
+          "aarch64-darwin"
+        ],
+        "profiles": [
+          "darwin"
+        ],
+        "requiredClasses": [],
+        "supplierPlatforms": {
+          "homebrew": [
+            "aarch64-darwin"
+          ]
+        },
+        "suppliers": [
+          "homebrew"
+        ]
+      },
+      "brightnessctl": {
+        "group": "desktop-tools",
+        "platforms": [
+          "aarch64-linux",
+          "x86_64-linux"
+        ],
+        "profiles": [
+          "linuxGraphical"
+        ],
+        "requiredClasses": [
+          "linuxGraphical"
+        ],
+        "supplierPlatforms": {
+          "nix": [
+            "aarch64-linux",
+            "x86_64-linux"
+          ]
+        },
+        "suppliers": [
+          "nix"
+        ]
+      },
+      "btop": {
+        "group": "system",
+        "platforms": [
+          "aarch64-darwin",
+          "aarch64-linux",
+          "x86_64-linux"
+        ],
+        "profiles": [
+          "shared"
+        ],
+        "requiredClasses": [],
+        "supplierPlatforms": {
+          "nix": [
+            "aarch64-darwin",
+            "aarch64-linux",
+            "x86_64-linux"
+          ]
+        },
+        "suppliers": [
+          "nix"
+        ]
+      },
+      "caddy": {
+        "group": "network",
+        "platforms": [
+          "aarch64-darwin",
+          "aarch64-linux",
+          "x86_64-linux"
+        ],
+        "profiles": [
+          "shared"
+        ],
+        "requiredClasses": [],
+        "supplierPlatforms": {
+          "nix": [
+            "aarch64-darwin",
+            "aarch64-linux",
+            "x86_64-linux"
+          ]
+        },
+        "suppliers": [
+          "nix"
+        ]
+      },
+      "chatgpt": {
+        "group": "productivity",
+        "platforms": [
+          "aarch64-darwin"
+        ],
+        "profiles": [
+          "darwin"
+        ],
+        "requiredClasses": [],
+        "supplierPlatforms": {
+          "homebrew": [
+            "aarch64-darwin"
+          ]
+        },
+        "suppliers": [
+          "homebrew"
+        ]
+      },
+      "claude": {
+        "group": "productivity",
+        "platforms": [
+          "aarch64-darwin"
+        ],
+        "profiles": [
+          "darwin"
+        ],
+        "requiredClasses": [],
+        "supplierPlatforms": {
+          "homebrew": [
+            "aarch64-darwin"
+          ]
+        },
+        "suppliers": [
+          "homebrew"
+        ]
+      },
+      "claude-code": {
+        "defaults": {
+          "darwin": "nix",
+          "linux": "mise"
+        },
+        "group": "coding-agents",
+        "platforms": [
+          "aarch64-darwin",
+          "aarch64-linux",
+          "x86_64-linux"
+        ],
+        "profiles": [
+          "agents"
+        ],
+        "requiredClasses": [],
+        "supplierPlatforms": {
+          "mise": [
+            "aarch64-linux",
+            "x86_64-linux"
+          ],
+          "nix": [
+            "aarch64-darwin",
+            "aarch64-linux",
+            "x86_64-linux"
+          ]
+        },
+        "suppliers": [
+          "mise",
+          "nix"
+        ]
+      },
+      "cmatrix": {
+        "group": "terminal",
+        "platforms": [
+          "aarch64-darwin"
+        ],
+        "profiles": [
+          "darwin"
+        ],
+        "requiredClasses": [],
+        "supplierPlatforms": {
+          "homebrew": [
+            "aarch64-darwin"
+          ]
+        },
+        "suppliers": [
+          "homebrew"
+        ]
+      },
+      "codex": {
+        "defaults": {
+          "darwin": "nix",
+          "linux": "mise"
+        },
+        "group": "coding-agents",
+        "platforms": [
+          "aarch64-darwin",
+          "aarch64-linux",
+          "x86_64-linux"
+        ],
+        "profiles": [
+          "agents"
+        ],
+        "requiredClasses": [],
+        "supplierPlatforms": {
+          "mise": [
+            "aarch64-linux",
+            "x86_64-linux"
+          ],
+          "nix": [
+            "aarch64-darwin",
+            "aarch64-linux",
+            "x86_64-linux"
+          ]
+        },
+        "suppliers": [
+          "mise",
+          "nix"
+        ]
+      },
+      "cowsay": {
+        "group": "terminal",
+        "platforms": [
+          "aarch64-darwin"
+        ],
+        "profiles": [
+          "darwin"
+        ],
+        "requiredClasses": [],
+        "supplierPlatforms": {
+          "homebrew": [
+            "aarch64-darwin"
+          ]
+        },
+        "suppliers": [
+          "homebrew"
+        ]
+      },
+      "croc": {
+        "group": "network",
+        "platforms": [
+          "aarch64-darwin",
+          "aarch64-linux",
+          "x86_64-linux"
+        ],
+        "profiles": [
+          "shared"
+        ],
+        "requiredClasses": [],
+        "supplierPlatforms": {
+          "nix": [
+            "aarch64-darwin",
+            "aarch64-linux",
+            "x86_64-linux"
+          ]
+        },
+        "suppliers": [
+          "nix"
+        ]
+      },
+      "cryptomator": {
+        "group": "security",
+        "platforms": [
+          "aarch64-darwin"
+        ],
+        "profiles": [
+          "darwin"
+        ],
+        "requiredClasses": [],
+        "supplierPlatforms": {
+          "homebrew": [
+            "aarch64-darwin"
+          ]
+        },
+        "suppliers": [
+          "homebrew"
+        ]
+      },
+      "curl": {
+        "group": "network",
+        "platforms": [
+          "aarch64-darwin",
+          "aarch64-linux",
+          "x86_64-linux"
+        ],
+        "profiles": [
+          "shared"
+        ],
+        "requiredClasses": [],
+        "supplierPlatforms": {
+          "nix": [
+            "aarch64-darwin",
+            "aarch64-linux",
+            "x86_64-linux"
+          ]
+        },
+        "suppliers": [
+          "nix"
+        ]
+      },
+      "d2coding-nerd-font": {
+        "group": "fonts",
+        "platforms": [
+          "aarch64-darwin",
+          "aarch64-linux",
+          "x86_64-linux"
+        ],
+        "profiles": [
+          "desktop",
+          "wsl"
+        ],
+        "requiredClasses": [
+          "desktop",
+          "wsl"
+        ],
+        "supplierPlatforms": {
+          "nix": [
+            "aarch64-darwin",
+            "aarch64-linux",
+            "x86_64-linux"
+          ]
+        },
+        "suppliers": [
+          "nix"
+        ]
+      },
+      "dbeaver-community": {
+        "group": "development",
+        "platforms": [
+          "aarch64-darwin"
+        ],
+        "profiles": [
+          "darwin"
+        ],
+        "requiredClasses": [],
+        "supplierPlatforms": {
+          "homebrew": [
+            "aarch64-darwin"
+          ]
+        },
+        "suppliers": [
+          "homebrew"
+        ]
+      },
+      "direnv": {
+        "group": "development",
+        "platforms": [
+          "aarch64-darwin",
+          "aarch64-linux",
+          "x86_64-linux"
+        ],
+        "profiles": [
+          "shared"
+        ],
+        "requiredClasses": [],
+        "supplierPlatforms": {
+          "nix": [
+            "aarch64-darwin",
+            "aarch64-linux",
+            "x86_64-linux"
+          ]
+        },
+        "suppliers": [
+          "nix"
+        ]
+      },
+      "discord": {
+        "group": "productivity",
+        "platforms": [
+          "aarch64-darwin"
+        ],
+        "profiles": [
+          "darwin"
+        ],
+        "requiredClasses": [],
+        "supplierPlatforms": {
+          "homebrew": [
+            "aarch64-darwin"
+          ]
+        },
+        "suppliers": [
+          "homebrew"
+        ]
+      },
+      "displayplacer": {
+        "group": "desktop-tools",
+        "platforms": [
+          "aarch64-darwin"
+        ],
+        "profiles": [
+          "darwin"
+        ],
+        "requiredClasses": [],
+        "supplierPlatforms": {
+          "homebrew": [
+            "aarch64-darwin"
+          ]
+        },
+        "suppliers": [
+          "homebrew"
+        ]
+      },
+      "dnsutils": {
+        "group": "network",
+        "platforms": [
+          "aarch64-darwin",
+          "aarch64-linux",
+          "x86_64-linux"
+        ],
+        "profiles": [
+          "shared"
+        ],
+        "requiredClasses": [],
+        "supplierPlatforms": {
+          "nix": [
+            "aarch64-darwin",
+            "aarch64-linux",
+            "x86_64-linux"
+          ]
+        },
+        "suppliers": [
+          "nix"
+        ]
+      },
+      "doggo": {
+        "group": "network",
+        "platforms": [
+          "aarch64-darwin",
+          "aarch64-linux",
+          "x86_64-linux"
+        ],
+        "profiles": [
+          "shared"
+        ],
+        "requiredClasses": [],
+        "supplierPlatforms": {
+          "nix": [
+            "aarch64-darwin",
+            "aarch64-linux",
+            "x86_64-linux"
+          ]
+        },
+        "suppliers": [
+          "nix"
+        ]
+      },
+      "duf": {
+        "group": "files",
+        "platforms": [
+          "aarch64-darwin",
+          "aarch64-linux",
+          "x86_64-linux"
+        ],
+        "profiles": [
+          "shared"
+        ],
+        "requiredClasses": [],
+        "supplierPlatforms": {
+          "nix": [
+            "aarch64-darwin",
+            "aarch64-linux",
+            "x86_64-linux"
+          ]
+        },
+        "suppliers": [
+          "nix"
+        ]
+      },
+      "dust": {
+        "group": "files",
+        "platforms": [
+          "aarch64-darwin",
+          "aarch64-linux",
+          "x86_64-linux"
+        ],
+        "profiles": [
+          "shared"
+        ],
+        "requiredClasses": [],
+        "supplierPlatforms": {
+          "nix": [
+            "aarch64-darwin",
+            "aarch64-linux",
+            "x86_64-linux"
+          ]
+        },
+        "suppliers": [
+          "nix"
+        ]
+      },
+      "eza": {
+        "group": "files",
+        "platforms": [
+          "aarch64-darwin",
+          "aarch64-linux",
+          "x86_64-linux"
+        ],
+        "profiles": [
+          "shared"
+        ],
+        "requiredClasses": [],
+        "supplierPlatforms": {
+          "nix": [
+            "aarch64-darwin",
+            "aarch64-linux",
+            "x86_64-linux"
+          ]
+        },
+        "suppliers": [
+          "nix"
+        ]
+      },
+      "fastfetch": {
+        "group": "system",
+        "platforms": [
+          "aarch64-darwin"
+        ],
+        "profiles": [
+          "darwin"
+        ],
+        "requiredClasses": [],
+        "supplierPlatforms": {
+          "homebrew": [
+            "aarch64-darwin"
+          ]
+        },
+        "suppliers": [
+          "homebrew"
+        ]
+      },
+      "fd": {
+        "group": "text",
+        "platforms": [
+          "aarch64-darwin",
+          "aarch64-linux",
+          "x86_64-linux"
+        ],
+        "profiles": [
+          "shared"
+        ],
+        "requiredClasses": [],
+        "supplierPlatforms": {
+          "nix": [
+            "aarch64-darwin",
+            "aarch64-linux",
+            "x86_64-linux"
+          ]
+        },
+        "suppliers": [
+          "nix"
+        ]
+      },
+      "file": {
+        "group": "files",
+        "platforms": [
+          "aarch64-darwin",
+          "aarch64-linux",
+          "x86_64-linux"
+        ],
+        "profiles": [
+          "shared"
+        ],
+        "requiredClasses": [],
+        "supplierPlatforms": {
+          "nix": [
+            "aarch64-darwin",
+            "aarch64-linux",
+            "x86_64-linux"
+          ]
+        },
+        "suppliers": [
+          "nix"
+        ]
+      },
+      "firefox": {
+        "group": "productivity",
+        "platforms": [
+          "aarch64-linux",
+          "x86_64-linux"
+        ],
+        "profiles": [
+          "linuxGraphical"
+        ],
+        "requiredClasses": [
+          "linuxGraphical"
+        ],
+        "supplierPlatforms": {
+          "nix": [
+            "aarch64-linux",
+            "x86_64-linux"
+          ]
+        },
+        "suppliers": [
+          "nix"
+        ]
+      },
+      "font-hack-nerd-font": {
+        "group": "fonts",
+        "platforms": [
+          "aarch64-darwin"
+        ],
+        "profiles": [
+          "darwin"
+        ],
+        "requiredClasses": [],
+        "supplierPlatforms": {
+          "homebrew": [
+            "aarch64-darwin"
+          ]
+        },
+        "suppliers": [
+          "homebrew"
+        ]
+      },
+      "freerdp": {
+        "group": "network",
+        "platforms": [
+          "aarch64-linux",
+          "x86_64-linux"
+        ],
+        "profiles": [
+          "linuxGraphical"
+        ],
+        "requiredClasses": [
+          "linuxGraphical"
+        ],
+        "supplierPlatforms": {
+          "nix": [
+            "aarch64-linux",
+            "x86_64-linux"
+          ]
+        },
+        "suppliers": [
+          "nix"
+        ]
+      },
+      "fzf": {
+        "group": "text",
+        "platforms": [
+          "aarch64-darwin",
+          "aarch64-linux",
+          "x86_64-linux"
+        ],
+        "profiles": [
+          "shared"
+        ],
+        "requiredClasses": [],
+        "supplierPlatforms": {
+          "nix": [
+            "aarch64-darwin",
+            "aarch64-linux",
+            "x86_64-linux"
+          ]
+        },
+        "suppliers": [
+          "nix"
+        ]
+      },
+      "gawk": {
+        "group": "text",
+        "platforms": [
+          "aarch64-darwin",
+          "aarch64-linux",
+          "x86_64-linux"
+        ],
+        "profiles": [
+          "shared"
+        ],
+        "requiredClasses": [],
+        "supplierPlatforms": {
+          "nix": [
+            "aarch64-darwin",
+            "aarch64-linux",
+            "x86_64-linux"
+          ]
+        },
+        "suppliers": [
+          "nix"
+        ]
+      },
+      "gh": {
+        "group": "development",
+        "platforms": [
+          "aarch64-darwin",
+          "aarch64-linux",
+          "x86_64-linux"
+        ],
+        "profiles": [
+          "shared"
+        ],
+        "requiredClasses": [],
+        "supplierPlatforms": {
+          "nix": [
+            "aarch64-darwin",
+            "aarch64-linux",
+            "x86_64-linux"
+          ]
+        },
+        "suppliers": [
+          "nix"
+        ]
+      },
+      "ghostscript": {
+        "group": "media",
+        "platforms": [
+          "aarch64-darwin",
+          "aarch64-linux",
+          "x86_64-linux"
+        ],
+        "profiles": [
+          "shared"
+        ],
+        "requiredClasses": [],
+        "supplierPlatforms": {
+          "nix": [
+            "aarch64-darwin",
+            "aarch64-linux",
+            "x86_64-linux"
+          ]
+        },
+        "suppliers": [
+          "nix"
+        ]
+      },
+      "ghostty": {
+        "defaults": {
+          "darwin": "homebrew",
+          "linux": "nix"
+        },
+        "group": "terminal",
+        "platforms": [
+          "aarch64-darwin",
+          "aarch64-linux",
+          "x86_64-linux"
+        ],
+        "profiles": [
+          "desktop"
+        ],
+        "requiredClasses": [
+          "desktop"
+        ],
+        "supplierPlatforms": {
+          "homebrew": [
+            "aarch64-darwin"
+          ],
+          "nix": [
+            "aarch64-linux",
+            "x86_64-linux"
+          ]
+        },
+        "suppliers": [
+          "homebrew",
+          "nix"
+        ]
+      },
+      "git": {
+        "group": "development",
+        "platforms": [
+          "aarch64-darwin",
+          "aarch64-linux",
+          "x86_64-linux"
+        ],
+        "profiles": [
+          "shared"
+        ],
+        "requiredClasses": [],
+        "supplierPlatforms": {
+          "nix": [
+            "aarch64-darwin",
+            "aarch64-linux",
+            "x86_64-linux"
+          ]
+        },
+        "suppliers": [
+          "nix"
+        ]
+      },
+      "gitflow": {
+        "group": "development",
+        "platforms": [
+          "aarch64-darwin",
+          "aarch64-linux",
+          "x86_64-linux"
+        ],
+        "profiles": [
+          "shared"
+        ],
+        "requiredClasses": [],
+        "supplierPlatforms": {
+          "nix": [
+            "aarch64-darwin",
+            "aarch64-linux",
+            "x86_64-linux"
+          ]
+        },
+        "suppliers": [
+          "nix"
+        ]
+      },
+      "gitleaks": {
+        "group": "development",
+        "platforms": [
+          "aarch64-darwin",
+          "aarch64-linux",
+          "x86_64-linux"
+        ],
+        "profiles": [
+          "shared"
+        ],
+        "requiredClasses": [],
+        "supplierPlatforms": {
+          "nix": [
+            "aarch64-darwin",
+            "aarch64-linux",
+            "x86_64-linux"
+          ]
+        },
+        "suppliers": [
+          "nix"
+        ]
+      },
+      "glow": {
+        "group": "text",
+        "platforms": [
+          "aarch64-darwin",
+          "aarch64-linux",
+          "x86_64-linux"
+        ],
+        "profiles": [
+          "shared"
+        ],
+        "requiredClasses": [],
+        "supplierPlatforms": {
+          "nix": [
+            "aarch64-darwin",
+            "aarch64-linux",
+            "x86_64-linux"
+          ]
+        },
+        "suppliers": [
+          "nix"
+        ]
+      },
+      "gnupg": {
+        "group": "security",
+        "platforms": [
+          "aarch64-darwin",
+          "aarch64-linux",
+          "x86_64-linux"
+        ],
+        "profiles": [
+          "shared"
+        ],
+        "requiredClasses": [],
+        "supplierPlatforms": {
+          "nix": [
+            "aarch64-darwin",
+            "aarch64-linux",
+            "x86_64-linux"
+          ]
+        },
+        "suppliers": [
+          "nix"
+        ]
+      },
+      "gnused": {
+        "group": "text",
+        "platforms": [
+          "aarch64-darwin",
+          "aarch64-linux",
+          "x86_64-linux"
+        ],
+        "profiles": [
+          "shared"
+        ],
+        "requiredClasses": [],
+        "supplierPlatforms": {
+          "nix": [
+            "aarch64-darwin",
+            "aarch64-linux",
+            "x86_64-linux"
+          ]
+        },
+        "suppliers": [
+          "nix"
+        ]
+      },
+      "gnutar": {
+        "group": "files",
+        "platforms": [
+          "aarch64-darwin",
+          "aarch64-linux",
+          "x86_64-linux"
+        ],
+        "profiles": [
+          "shared"
+        ],
+        "requiredClasses": [],
+        "supplierPlatforms": {
+          "nix": [
+            "aarch64-darwin",
+            "aarch64-linux",
+            "x86_64-linux"
+          ]
+        },
+        "suppliers": [
+          "nix"
+        ]
+      },
+      "go": {
+        "group": "development",
+        "platforms": [
+          "aarch64-darwin",
+          "aarch64-linux",
+          "x86_64-linux"
+        ],
+        "profiles": [
+          "shared"
+        ],
+        "requiredClasses": [],
+        "supplierPlatforms": {
+          "nix": [
+            "aarch64-darwin",
+            "aarch64-linux",
+            "x86_64-linux"
+          ]
+        },
+        "suppliers": [
+          "nix"
+        ]
+      },
+      "google-drive": {
+        "group": "productivity",
+        "platforms": [
+          "aarch64-darwin"
+        ],
+        "profiles": [
+          "darwin"
+        ],
+        "requiredClasses": [],
+        "supplierPlatforms": {
+          "homebrew": [
+            "aarch64-darwin"
+          ]
+        },
+        "suppliers": [
+          "homebrew"
+        ]
+      },
+      "gping": {
+        "group": "network",
+        "platforms": [
+          "aarch64-darwin",
+          "aarch64-linux",
+          "x86_64-linux"
+        ],
+        "profiles": [
+          "shared"
+        ],
+        "requiredClasses": [],
+        "supplierPlatforms": {
+          "nix": [
+            "aarch64-darwin",
+            "aarch64-linux",
+            "x86_64-linux"
+          ]
+        },
+        "suppliers": [
+          "nix"
+        ]
+      },
+      "gradle": {
+        "group": "development",
+        "platforms": [
+          "aarch64-darwin",
+          "aarch64-linux",
+          "x86_64-linux"
+        ],
+        "profiles": [
+          "shared"
+        ],
+        "requiredClasses": [],
+        "supplierPlatforms": {
+          "nix": [
+            "aarch64-darwin",
+            "aarch64-linux",
+            "x86_64-linux"
+          ]
+        },
+        "suppliers": [
+          "nix"
+        ]
+      },
+      "grandperspective": {
+        "group": "files",
+        "platforms": [
+          "aarch64-darwin"
+        ],
+        "profiles": [
+          "darwin"
+        ],
+        "requiredClasses": [],
+        "supplierPlatforms": {
+          "homebrew": [
+            "aarch64-darwin"
+          ]
+        },
+        "suppliers": [
+          "homebrew"
+        ]
+      },
+      "hammerspoon": {
+        "group": "desktop-tools",
+        "platforms": [
+          "aarch64-darwin"
+        ],
+        "profiles": [
+          "darwin"
+        ],
+        "requiredClasses": [],
+        "supplierPlatforms": {
+          "homebrew": [
+            "aarch64-darwin"
+          ]
+        },
+        "suppliers": [
+          "homebrew"
+        ]
+      },
+      "hiddenbar": {
+        "group": "desktop-tools",
+        "platforms": [
+          "aarch64-darwin"
+        ],
+        "profiles": [
+          "darwin"
+        ],
+        "requiredClasses": [],
+        "supplierPlatforms": {
+          "homebrew": [
+            "aarch64-darwin"
+          ]
+        },
+        "suppliers": [
+          "homebrew"
+        ]
+      },
+      "hyperfine": {
+        "group": "system",
+        "platforms": [
+          "aarch64-darwin",
+          "aarch64-linux",
+          "x86_64-linux"
+        ],
+        "profiles": [
+          "shared"
+        ],
+        "requiredClasses": [],
+        "supplierPlatforms": {
+          "nix": [
+            "aarch64-darwin",
+            "aarch64-linux",
+            "x86_64-linux"
+          ]
+        },
+        "suppliers": [
+          "nix"
+        ]
+      },
+      "iina": {
+        "group": "media",
+        "platforms": [
+          "aarch64-darwin"
+        ],
+        "profiles": [
+          "darwin"
+        ],
+        "requiredClasses": [],
+        "supplierPlatforms": {
+          "homebrew": [
+            "aarch64-darwin"
+          ]
+        },
+        "suppliers": [
+          "homebrew"
+        ]
+      },
+      "imv": {
+        "group": "media",
+        "platforms": [
+          "aarch64-linux",
+          "x86_64-linux"
+        ],
+        "profiles": [
+          "linuxGraphical"
+        ],
+        "requiredClasses": [
+          "linuxGraphical"
+        ],
+        "supplierPlatforms": {
+          "nix": [
+            "aarch64-linux",
+            "x86_64-linux"
+          ]
+        },
+        "suppliers": [
+          "nix"
+        ]
+      },
+      "insomnia": {
+        "group": "network",
+        "platforms": [
+          "aarch64-darwin"
+        ],
+        "profiles": [
+          "darwin"
+        ],
+        "requiredClasses": [],
+        "supplierPlatforms": {
+          "homebrew": [
+            "aarch64-darwin"
+          ]
+        },
+        "suppliers": [
+          "homebrew"
+        ]
+      },
+      "jc": {
+        "group": "text",
+        "platforms": [
+          "aarch64-darwin",
+          "aarch64-linux",
+          "x86_64-linux"
+        ],
+        "profiles": [
+          "shared"
+        ],
+        "requiredClasses": [],
+        "supplierPlatforms": {
+          "nix": [
+            "aarch64-darwin",
+            "aarch64-linux",
+            "x86_64-linux"
+          ]
+        },
+        "suppliers": [
+          "nix"
+        ]
+      },
+      "jq": {
+        "group": "text",
+        "platforms": [
+          "aarch64-darwin",
+          "aarch64-linux",
+          "x86_64-linux"
+        ],
+        "profiles": [
+          "shared"
+        ],
+        "requiredClasses": [],
+        "supplierPlatforms": {
+          "nix": [
+            "aarch64-darwin",
+            "aarch64-linux",
+            "x86_64-linux"
+          ]
+        },
+        "suppliers": [
+          "nix"
+        ]
+      },
+      "just": {
+        "group": "development",
+        "platforms": [
+          "aarch64-darwin",
+          "aarch64-linux",
+          "x86_64-linux"
+        ],
+        "profiles": [
+          "shared"
+        ],
+        "requiredClasses": [],
+        "supplierPlatforms": {
+          "nix": [
+            "aarch64-darwin",
+            "aarch64-linux",
+            "x86_64-linux"
+          ]
+        },
+        "suppliers": [
+          "nix"
+        ]
+      },
+      "karabiner-elements": {
+        "group": "desktop-tools",
+        "platforms": [
+          "aarch64-darwin"
+        ],
+        "profiles": [
+          "darwin"
+        ],
+        "requiredClasses": [
+          "darwin"
+        ],
+        "supplierPlatforms": {
+          "homebrew": [
+            "aarch64-darwin"
+          ]
+        },
+        "suppliers": [
+          "homebrew"
+        ]
+      },
+      "keepassxc": {
+        "group": "security",
+        "platforms": [
+          "aarch64-darwin"
+        ],
+        "profiles": [
+          "darwin"
+        ],
+        "requiredClasses": [],
+        "supplierPlatforms": {
+          "homebrew": [
+            "aarch64-darwin"
+          ]
+        },
+        "suppliers": [
+          "homebrew"
+        ]
+      },
+      "keka": {
+        "group": "files",
+        "platforms": [
+          "aarch64-darwin"
+        ],
+        "profiles": [
+          "darwin"
+        ],
+        "requiredClasses": [],
+        "supplierPlatforms": {
+          "homebrew": [
+            "aarch64-darwin"
+          ]
+        },
+        "suppliers": [
+          "homebrew"
+        ]
+      },
+      "keyboardcleantool": {
+        "group": "desktop-tools",
+        "platforms": [
+          "aarch64-darwin"
+        ],
+        "profiles": [
+          "darwin"
+        ],
+        "requiredClasses": [],
+        "supplierPlatforms": {
+          "homebrew": [
+            "aarch64-darwin"
+          ]
+        },
+        "suppliers": [
+          "homebrew"
+        ]
+      },
+      "lazygit": {
+        "group": "development",
+        "platforms": [
+          "aarch64-darwin",
+          "aarch64-linux",
+          "x86_64-linux"
+        ],
+        "profiles": [
+          "shared"
+        ],
+        "requiredClasses": [],
+        "supplierPlatforms": {
+          "nix": [
+            "aarch64-darwin",
+            "aarch64-linux",
+            "x86_64-linux"
+          ]
+        },
+        "suppliers": [
+          "nix"
+        ]
+      },
+      "maccy": {
+        "group": "desktop-tools",
+        "platforms": [
+          "aarch64-darwin"
+        ],
+        "profiles": [
+          "darwin"
+        ],
+        "requiredClasses": [],
+        "supplierPlatforms": {
+          "homebrew": [
+            "aarch64-darwin"
+          ]
+        },
+        "suppliers": [
+          "homebrew"
+        ]
+      },
+      "mise": {
+        "group": "development",
+        "platforms": [
+          "aarch64-linux",
+          "x86_64-linux"
+        ],
+        "profiles": [
+          "shared"
+        ],
+        "requiredClasses": [],
+        "supplierPlatforms": {
+          "nix": [
+            "aarch64-linux",
+            "x86_64-linux"
+          ]
+        },
+        "suppliers": [
+          "nix"
+        ]
+      },
+      "mkcert": {
+        "group": "security",
+        "platforms": [
+          "aarch64-darwin",
+          "aarch64-linux",
+          "x86_64-linux"
+        ],
+        "profiles": [
+          "shared"
+        ],
+        "requiredClasses": [],
+        "supplierPlatforms": {
+          "nix": [
+            "aarch64-darwin",
+            "aarch64-linux",
+            "x86_64-linux"
+          ]
+        },
+        "suppliers": [
+          "nix"
+        ]
+      },
+      "monolith": {
+        "group": "network",
+        "platforms": [
+          "aarch64-darwin",
+          "aarch64-linux",
+          "x86_64-linux"
+        ],
+        "profiles": [
+          "shared"
+        ],
+        "requiredClasses": [],
+        "supplierPlatforms": {
+          "nix": [
+            "aarch64-darwin",
+            "aarch64-linux",
+            "x86_64-linux"
+          ]
+        },
+        "suppliers": [
+          "nix"
+        ]
+      },
+      "mpv": {
+        "group": "media",
+        "platforms": [
+          "aarch64-linux",
+          "x86_64-linux"
+        ],
+        "profiles": [
+          "linuxGraphical"
+        ],
+        "requiredClasses": [
+          "linuxGraphical"
+        ],
+        "supplierPlatforms": {
+          "nix": [
+            "aarch64-linux",
+            "x86_64-linux"
+          ]
+        },
+        "suppliers": [
+          "nix"
+        ]
+      },
+      "mtr": {
+        "group": "network",
+        "platforms": [
+          "aarch64-darwin",
+          "aarch64-linux",
+          "x86_64-linux"
+        ],
+        "profiles": [
+          "shared"
+        ],
+        "requiredClasses": [],
+        "supplierPlatforms": {
+          "nix": [
+            "aarch64-darwin",
+            "aarch64-linux",
+            "x86_64-linux"
+          ]
+        },
+        "suppliers": [
+          "nix"
+        ]
+      },
+      "neovim": {
+        "group": "development",
+        "platforms": [
+          "aarch64-darwin",
+          "aarch64-linux",
+          "x86_64-linux"
+        ],
+        "profiles": [
+          "shared"
+        ],
+        "requiredClasses": [],
+        "supplierPlatforms": {
+          "nix": [
+            "aarch64-darwin",
+            "aarch64-linux",
+            "x86_64-linux"
+          ]
+        },
+        "suppliers": [
+          "nix"
+        ]
+      },
+      "ngrok": {
+        "group": "network",
+        "platforms": [
+          "aarch64-darwin"
+        ],
+        "profiles": [
+          "darwin"
+        ],
+        "requiredClasses": [],
+        "supplierPlatforms": {
+          "homebrew": [
+            "aarch64-darwin"
+          ]
+        },
+        "suppliers": [
+          "homebrew"
+        ]
+      },
+      "nix-index": {
+        "group": "system",
+        "platforms": [
+          "aarch64-darwin",
+          "aarch64-linux",
+          "x86_64-linux"
+        ],
+        "profiles": [
+          "shared"
+        ],
+        "requiredClasses": [],
+        "supplierPlatforms": {
+          "nix": [
+            "aarch64-darwin",
+            "aarch64-linux",
+            "x86_64-linux"
+          ]
+        },
+        "suppliers": [
+          "nix"
+        ]
+      },
+      "nix-ld": {
+        "group": "system",
+        "platforms": [
+          "aarch64-linux",
+          "x86_64-linux"
+        ],
+        "profiles": [
+          "system-common"
+        ],
+        "requiredClasses": [
+          "nixos"
+        ],
+        "supplierPlatforms": {
+          "nix": [
+            "aarch64-linux",
+            "x86_64-linux"
+          ]
+        },
+        "suppliers": [
+          "nix"
+        ]
+      },
+      "nix-output-monitor": {
+        "group": "system",
+        "platforms": [
+          "aarch64-darwin",
+          "aarch64-linux",
+          "x86_64-linux"
+        ],
+        "profiles": [
+          "shared"
+        ],
+        "requiredClasses": [],
+        "supplierPlatforms": {
+          "nix": [
+            "aarch64-darwin",
+            "aarch64-linux",
+            "x86_64-linux"
+          ]
+        },
+        "suppliers": [
+          "nix"
+        ]
+      },
+      "nix-tree": {
+        "group": "system",
+        "platforms": [
+          "aarch64-darwin",
+          "aarch64-linux",
+          "x86_64-linux"
+        ],
+        "profiles": [
+          "shared"
+        ],
+        "requiredClasses": [],
+        "supplierPlatforms": {
+          "nix": [
+            "aarch64-darwin",
+            "aarch64-linux",
+            "x86_64-linux"
+          ]
+        },
+        "suppliers": [
+          "nix"
+        ]
+      },
+      "nmap": {
+        "group": "network",
+        "platforms": [
+          "aarch64-darwin",
+          "aarch64-linux",
+          "x86_64-linux"
+        ],
+        "profiles": [
+          "shared"
+        ],
+        "requiredClasses": [],
+        "supplierPlatforms": {
+          "nix": [
+            "aarch64-darwin",
+            "aarch64-linux",
+            "x86_64-linux"
+          ]
+        },
+        "suppliers": [
+          "nix"
+        ]
+      },
+      "nodejs": {
+        "group": "development",
+        "platforms": [
+          "aarch64-darwin",
+          "aarch64-linux",
+          "x86_64-linux"
+        ],
+        "profiles": [
+          "shared"
+        ],
+        "requiredClasses": [],
+        "supplierPlatforms": {
+          "nix": [
+            "aarch64-darwin",
+            "aarch64-linux",
+            "x86_64-linux"
+          ]
+        },
+        "suppliers": [
+          "nix"
+        ]
+      },
+      "obsidian": {
+        "group": "productivity",
+        "platforms": [
+          "aarch64-darwin"
+        ],
+        "profiles": [
+          "darwin"
+        ],
+        "requiredClasses": [],
+        "supplierPlatforms": {
+          "homebrew": [
+            "aarch64-darwin"
+          ]
+        },
+        "suppliers": [
+          "homebrew"
+        ]
+      },
+      "orbstack": {
+        "group": "system",
+        "platforms": [
+          "aarch64-darwin"
+        ],
+        "profiles": [
+          "darwin"
+        ],
+        "requiredClasses": [],
+        "supplierPlatforms": {
+          "homebrew": [
+            "aarch64-darwin"
+          ]
+        },
+        "suppliers": [
+          "homebrew"
+        ]
+      },
+      "p7zip": {
+        "group": "files",
+        "platforms": [
+          "aarch64-darwin",
+          "aarch64-linux",
+          "x86_64-linux"
+        ],
+        "profiles": [
+          "shared"
+        ],
+        "requiredClasses": [],
+        "supplierPlatforms": {
+          "nix": [
+            "aarch64-darwin",
+            "aarch64-linux",
+            "x86_64-linux"
+          ]
+        },
+        "suppliers": [
+          "nix"
+        ]
+      },
+      "paneru": {
+        "group": "desktop-tools",
+        "platforms": [
+          "aarch64-darwin"
+        ],
+        "profiles": [
+          "darwin"
+        ],
+        "requiredClasses": [
+          "darwin"
+        ],
+        "supplierPlatforms": {
+          "nix": [
+            "aarch64-darwin"
+          ]
+        },
+        "suppliers": [
+          "nix"
+        ]
+      },
+      "pavucontrol": {
+        "group": "media",
+        "platforms": [
+          "aarch64-linux",
+          "x86_64-linux"
+        ],
+        "profiles": [
+          "linuxGraphical"
+        ],
+        "requiredClasses": [
+          "linuxGraphical"
+        ],
+        "supplierPlatforms": {
+          "nix": [
+            "aarch64-linux",
+            "x86_64-linux"
+          ]
+        },
+        "suppliers": [
+          "nix"
+        ]
+      },
+      "pocketbase": {
+        "group": "development",
+        "platforms": [
+          "aarch64-darwin",
+          "aarch64-linux",
+          "x86_64-linux"
+        ],
+        "profiles": [
+          "shared"
+        ],
+        "requiredClasses": [],
+        "supplierPlatforms": {
+          "nix": [
+            "aarch64-darwin",
+            "aarch64-linux",
+            "x86_64-linux"
+          ]
+        },
+        "suppliers": [
+          "nix"
+        ]
+      },
+      "poppler": {
+        "group": "media",
+        "platforms": [
+          "aarch64-darwin",
+          "aarch64-linux",
+          "x86_64-linux"
+        ],
+        "profiles": [
+          "shared"
+        ],
+        "requiredClasses": [],
+        "supplierPlatforms": {
+          "nix": [
+            "aarch64-darwin",
+            "aarch64-linux",
+            "x86_64-linux"
+          ]
+        },
+        "suppliers": [
+          "nix"
+        ]
+      },
+      "powershell": {
+        "group": "terminal",
+        "platforms": [
+          "aarch64-darwin",
+          "aarch64-linux",
+          "x86_64-linux"
+        ],
+        "profiles": [
+          "shared"
+        ],
+        "requiredClasses": [],
+        "supplierPlatforms": {
+          "nix": [
+            "aarch64-darwin",
+            "aarch64-linux",
+            "x86_64-linux"
+          ]
+        },
+        "suppliers": [
+          "nix"
+        ]
+      },
+      "procs": {
+        "group": "system",
+        "platforms": [
+          "aarch64-darwin",
+          "aarch64-linux",
+          "x86_64-linux"
+        ],
+        "profiles": [
+          "shared"
+        ],
+        "requiredClasses": [],
+        "supplierPlatforms": {
+          "nix": [
+            "aarch64-darwin",
+            "aarch64-linux",
+            "x86_64-linux"
+          ]
+        },
+        "suppliers": [
+          "nix"
+        ]
+      },
+      "pstree": {
+        "group": "system",
+        "platforms": [
+          "aarch64-darwin",
+          "aarch64-linux",
+          "x86_64-linux"
+        ],
+        "profiles": [
+          "shared"
+        ],
+        "requiredClasses": [],
+        "supplierPlatforms": {
+          "nix": [
+            "aarch64-darwin",
+            "aarch64-linux",
+            "x86_64-linux"
+          ]
+        },
+        "suppliers": [
+          "nix"
+        ]
+      },
+      "pup": {
+        "group": "text",
+        "platforms": [
+          "aarch64-darwin",
+          "aarch64-linux",
+          "x86_64-linux"
+        ],
+        "profiles": [
+          "shared"
+        ],
+        "requiredClasses": [],
+        "supplierPlatforms": {
+          "nix": [
+            "aarch64-darwin",
+            "aarch64-linux",
+            "x86_64-linux"
+          ]
+        },
+        "suppliers": [
+          "nix"
+        ]
+      },
+      "python3": {
+        "group": "development",
+        "platforms": [
+          "aarch64-linux",
+          "x86_64-linux"
+        ],
+        "profiles": [
+          "shared"
+        ],
+        "requiredClasses": [],
+        "supplierPlatforms": {
+          "nix": [
+            "aarch64-linux",
+            "x86_64-linux"
+          ]
+        },
+        "suppliers": [
+          "nix"
+        ]
+      },
+      "qlmarkdown": {
+        "group": "media",
+        "platforms": [
+          "aarch64-darwin"
+        ],
+        "profiles": [
+          "darwin"
+        ],
+        "requiredClasses": [],
+        "supplierPlatforms": {
+          "homebrew": [
+            "aarch64-darwin"
+          ]
+        },
+        "suppliers": [
+          "homebrew"
+        ]
+      },
+      "rclone": {
+        "group": "network",
+        "platforms": [
+          "aarch64-darwin",
+          "aarch64-linux",
+          "x86_64-linux"
+        ],
+        "profiles": [
+          "shared"
+        ],
+        "requiredClasses": [],
+        "supplierPlatforms": {
+          "nix": [
+            "aarch64-darwin",
+            "aarch64-linux",
+            "x86_64-linux"
+          ]
+        },
+        "suppliers": [
+          "nix"
+        ]
+      },
+      "remmina": {
+        "group": "network",
+        "platforms": [
+          "aarch64-linux",
+          "x86_64-linux"
+        ],
+        "profiles": [
+          "linuxGraphical"
+        ],
+        "requiredClasses": [
+          "linuxGraphical"
+        ],
+        "supplierPlatforms": {
+          "nix": [
+            "aarch64-linux",
+            "x86_64-linux"
+          ]
+        },
+        "suppliers": [
+          "nix"
+        ]
+      },
+      "ripgrep": {
+        "group": "text",
+        "platforms": [
+          "aarch64-darwin",
+          "aarch64-linux",
+          "x86_64-linux"
+        ],
+        "profiles": [
+          "shared"
+        ],
+        "requiredClasses": [],
+        "supplierPlatforms": {
+          "nix": [
+            "aarch64-darwin",
+            "aarch64-linux",
+            "x86_64-linux"
+          ]
+        },
+        "suppliers": [
+          "nix"
+        ]
+      },
+      "rstudio": {
+        "group": "development",
+        "platforms": [
+          "aarch64-darwin"
+        ],
+        "profiles": [
+          "darwin"
+        ],
+        "requiredClasses": [],
+        "supplierPlatforms": {
+          "homebrew": [
+            "aarch64-darwin"
+          ]
+        },
+        "suppliers": [
+          "homebrew"
+        ]
+      },
+      "rsync": {
+        "group": "files",
+        "platforms": [
+          "aarch64-darwin",
+          "aarch64-linux",
+          "x86_64-linux"
+        ],
+        "profiles": [
+          "shared"
+        ],
+        "requiredClasses": [],
+        "supplierPlatforms": {
+          "nix": [
+            "aarch64-darwin",
+            "aarch64-linux",
+            "x86_64-linux"
+          ]
+        },
+        "suppliers": [
+          "nix"
+        ]
+      },
+      "sad": {
+        "group": "text",
+        "platforms": [
+          "aarch64-darwin",
+          "aarch64-linux",
+          "x86_64-linux"
+        ],
+        "profiles": [
+          "shared"
+        ],
+        "requiredClasses": [],
+        "supplierPlatforms": {
+          "nix": [
+            "aarch64-darwin",
+            "aarch64-linux",
+            "x86_64-linux"
+          ]
+        },
+        "suppliers": [
+          "nix"
+        ]
+      },
+      "skim": {
+        "group": "text",
+        "platforms": [
+          "aarch64-darwin",
+          "aarch64-linux",
+          "x86_64-linux"
+        ],
+        "profiles": [
+          "shared"
+        ],
+        "requiredClasses": [],
+        "supplierPlatforms": {
+          "nix": [
+            "aarch64-darwin",
+            "aarch64-linux",
+            "x86_64-linux"
+          ]
+        },
+        "suppliers": [
+          "nix"
+        ]
+      },
+      "socat": {
+        "group": "network",
+        "platforms": [
+          "aarch64-darwin",
+          "aarch64-linux",
+          "x86_64-linux"
+        ],
+        "profiles": [
+          "shared"
+        ],
+        "requiredClasses": [],
+        "supplierPlatforms": {
+          "nix": [
+            "aarch64-darwin",
+            "aarch64-linux",
+            "x86_64-linux"
+          ]
+        },
+        "suppliers": [
+          "nix"
+        ]
+      },
+      "starship": {
+        "group": "terminal",
+        "platforms": [
+          "aarch64-darwin",
+          "aarch64-linux",
+          "x86_64-linux"
+        ],
+        "profiles": [
+          "shared"
+        ],
+        "requiredClasses": [],
+        "supplierPlatforms": {
+          "nix": [
+            "aarch64-darwin",
+            "aarch64-linux",
+            "x86_64-linux"
+          ]
+        },
+        "suppliers": [
+          "nix"
+        ]
+      },
+      "swift-shift": {
+        "group": "desktop-tools",
+        "platforms": [
+          "aarch64-darwin"
+        ],
+        "profiles": [
+          "darwin"
+        ],
+        "requiredClasses": [],
+        "supplierPlatforms": {
+          "homebrew": [
+            "aarch64-darwin"
+          ]
+        },
+        "suppliers": [
+          "homebrew"
+        ]
+      },
+      "syntax-highlight": {
+        "group": "development",
+        "platforms": [
+          "aarch64-darwin"
+        ],
+        "profiles": [
+          "darwin"
+        ],
+        "requiredClasses": [],
+        "supplierPlatforms": {
+          "homebrew": [
+            "aarch64-darwin"
+          ]
+        },
+        "suppliers": [
+          "homebrew"
+        ]
+      },
+      "tailscale-app": {
+        "group": "network",
+        "platforms": [
+          "aarch64-darwin"
+        ],
+        "profiles": [
+          "darwin"
+        ],
+        "requiredClasses": [],
+        "supplierPlatforms": {
+          "homebrew": [
+            "aarch64-darwin"
+          ]
+        },
+        "suppliers": [
+          "homebrew"
+        ]
+      },
+      "tealdeer": {
+        "group": "text",
+        "platforms": [
+          "aarch64-darwin",
+          "aarch64-linux",
+          "x86_64-linux"
+        ],
+        "profiles": [
+          "shared"
+        ],
+        "requiredClasses": [],
+        "supplierPlatforms": {
+          "nix": [
+            "aarch64-darwin",
+            "aarch64-linux",
+            "x86_64-linux"
+          ]
+        },
+        "suppliers": [
+          "nix"
+        ]
+      },
+      "telegram": {
+        "group": "productivity",
+        "platforms": [
+          "aarch64-darwin"
+        ],
+        "profiles": [
+          "darwin"
+        ],
+        "requiredClasses": [],
+        "supplierPlatforms": {
+          "homebrew": [
+            "aarch64-darwin"
+          ]
+        },
+        "suppliers": [
+          "homebrew"
+        ]
+      },
+      "tig": {
+        "group": "development",
+        "platforms": [
+          "aarch64-darwin",
+          "aarch64-linux",
+          "x86_64-linux"
+        ],
+        "profiles": [
+          "shared"
+        ],
+        "requiredClasses": [],
+        "supplierPlatforms": {
+          "nix": [
+            "aarch64-darwin",
+            "aarch64-linux",
+            "x86_64-linux"
+          ]
+        },
+        "suppliers": [
+          "nix"
+        ]
+      },
+      "tmux": {
+        "group": "terminal",
+        "platforms": [
+          "aarch64-darwin",
+          "aarch64-linux",
+          "x86_64-linux"
+        ],
+        "profiles": [
+          "shared"
+        ],
+        "requiredClasses": [],
+        "supplierPlatforms": {
+          "nix": [
+            "aarch64-darwin",
+            "aarch64-linux",
+            "x86_64-linux"
+          ]
+        },
+        "suppliers": [
+          "nix"
+        ]
+      },
+      "trash-cli": {
+        "group": "files",
+        "platforms": [
+          "aarch64-linux",
+          "x86_64-linux"
+        ],
+        "profiles": [
+          "shared"
+        ],
+        "requiredClasses": [],
+        "supplierPlatforms": {
+          "nix": [
+            "aarch64-linux",
+            "x86_64-linux"
+          ]
+        },
+        "suppliers": [
+          "nix"
+        ]
+      },
+      "tree": {
+        "group": "files",
+        "platforms": [
+          "aarch64-darwin",
+          "aarch64-linux",
+          "x86_64-linux"
+        ],
+        "profiles": [
+          "shared"
+        ],
+        "requiredClasses": [],
+        "supplierPlatforms": {
+          "nix": [
+            "aarch64-darwin",
+            "aarch64-linux",
+            "x86_64-linux"
+          ]
+        },
+        "suppliers": [
+          "nix"
+        ]
+      },
+      "unzip": {
+        "group": "files",
+        "platforms": [
+          "aarch64-darwin",
+          "aarch64-linux",
+          "x86_64-linux"
+        ],
+        "profiles": [
+          "shared"
+        ],
+        "requiredClasses": [],
+        "supplierPlatforms": {
+          "nix": [
+            "aarch64-darwin",
+            "aarch64-linux",
+            "x86_64-linux"
+          ]
+        },
+        "suppliers": [
+          "nix"
+        ]
+      },
+      "uv": {
+        "group": "development",
+        "platforms": [
+          "aarch64-darwin",
+          "aarch64-linux",
+          "x86_64-linux"
+        ],
+        "profiles": [
+          "shared"
+        ],
+        "requiredClasses": [],
+        "supplierPlatforms": {
+          "nix": [
+            "aarch64-darwin",
+            "aarch64-linux",
+            "x86_64-linux"
+          ]
+        },
+        "suppliers": [
+          "nix"
+        ]
+      },
+      "veracrypt-fuse-t": {
+        "group": "security",
+        "platforms": [
+          "aarch64-darwin"
+        ],
+        "profiles": [
+          "darwin"
+        ],
+        "requiredClasses": [],
+        "supplierPlatforms": {
+          "homebrew": [
+            "aarch64-darwin"
+          ]
+        },
+        "suppliers": [
+          "homebrew"
+        ]
+      },
+      "visual-studio-code": {
+        "group": "development",
+        "platforms": [
+          "aarch64-darwin"
+        ],
+        "profiles": [
+          "darwin"
+        ],
+        "requiredClasses": [],
+        "supplierPlatforms": {
+          "homebrew": [
+            "aarch64-darwin"
+          ]
+        },
+        "suppliers": [
+          "homebrew"
+        ]
+      },
+      "wezterm": {
+        "group": "terminal",
+        "platforms": [
+          "aarch64-darwin",
+          "aarch64-linux",
+          "x86_64-linux"
+        ],
+        "profiles": [
+          "desktop"
+        ],
+        "requiredClasses": [
+          "desktop"
+        ],
+        "supplierPlatforms": {
+          "nix": [
+            "aarch64-darwin",
+            "aarch64-linux",
+            "x86_64-linux"
+          ]
+        },
+        "suppliers": [
+          "nix"
+        ]
+      },
+      "wf-recorder": {
+        "group": "media",
+        "platforms": [
+          "aarch64-linux",
+          "x86_64-linux"
+        ],
+        "profiles": [
+          "linuxGraphical"
+        ],
+        "requiredClasses": [
+          "linuxGraphical"
+        ],
+        "supplierPlatforms": {
+          "nix": [
+            "aarch64-linux",
+            "x86_64-linux"
+          ]
+        },
+        "suppliers": [
+          "nix"
+        ]
+      },
+      "wget": {
+        "group": "network",
+        "platforms": [
+          "aarch64-darwin",
+          "aarch64-linux",
+          "x86_64-linux"
+        ],
+        "profiles": [
+          "shared"
+        ],
+        "requiredClasses": [],
+        "supplierPlatforms": {
+          "nix": [
+            "aarch64-darwin",
+            "aarch64-linux",
+            "x86_64-linux"
+          ]
+        },
+        "suppliers": [
+          "nix"
+        ]
+      },
+      "which": {
+        "group": "system",
+        "platforms": [
+          "aarch64-darwin",
+          "aarch64-linux",
+          "x86_64-linux"
+        ],
+        "profiles": [
+          "shared"
+        ],
+        "requiredClasses": [],
+        "supplierPlatforms": {
+          "nix": [
+            "aarch64-darwin",
+            "aarch64-linux",
+            "x86_64-linux"
+          ]
+        },
+        "suppliers": [
+          "nix"
+        ]
+      },
+      "wireshark-app": {
+        "group": "network",
+        "platforms": [
+          "aarch64-darwin"
+        ],
+        "profiles": [
+          "darwin"
+        ],
+        "requiredClasses": [],
+        "supplierPlatforms": {
+          "homebrew": [
+            "aarch64-darwin"
+          ]
+        },
+        "suppliers": [
+          "homebrew"
+        ]
+      },
+      "wl-clipboard": {
+        "group": "media",
+        "platforms": [
+          "aarch64-linux",
+          "x86_64-linux"
+        ],
+        "profiles": [
+          "linuxGraphical"
+        ],
+        "requiredClasses": [
+          "linuxGraphical"
+        ],
+        "supplierPlatforms": {
+          "nix": [
+            "aarch64-linux",
+            "x86_64-linux"
+          ]
+        },
+        "suppliers": [
+          "nix"
+        ]
+      },
+      "xz": {
+        "group": "files",
+        "platforms": [
+          "aarch64-darwin",
+          "aarch64-linux",
+          "x86_64-linux"
+        ],
+        "profiles": [
+          "shared"
+        ],
+        "requiredClasses": [],
+        "supplierPlatforms": {
+          "nix": [
+            "aarch64-darwin",
+            "aarch64-linux",
+            "x86_64-linux"
+          ]
+        },
+        "suppliers": [
+          "nix"
+        ]
+      },
+      "yazi": {
+        "group": "files",
+        "platforms": [
+          "aarch64-darwin",
+          "aarch64-linux",
+          "x86_64-linux"
+        ],
+        "profiles": [
+          "shared"
+        ],
+        "requiredClasses": [],
+        "supplierPlatforms": {
+          "nix": [
+            "aarch64-darwin",
+            "aarch64-linux",
+            "x86_64-linux"
+          ]
+        },
+        "suppliers": [
+          "nix"
+        ]
+      },
+      "yq-go": {
+        "group": "text",
+        "platforms": [
+          "aarch64-darwin",
+          "aarch64-linux",
+          "x86_64-linux"
+        ],
+        "profiles": [
+          "shared"
+        ],
+        "requiredClasses": [],
+        "supplierPlatforms": {
+          "nix": [
+            "aarch64-darwin",
+            "aarch64-linux",
+            "x86_64-linux"
+          ]
+        },
+        "suppliers": [
+          "nix"
+        ]
+      },
+      "yt-dlp": {
+        "group": "media",
+        "platforms": [
+          "aarch64-darwin",
+          "aarch64-linux",
+          "x86_64-linux"
+        ],
+        "profiles": [
+          "shared"
+        ],
+        "requiredClasses": [],
+        "supplierPlatforms": {
+          "nix": [
+            "aarch64-darwin",
+            "aarch64-linux",
+            "x86_64-linux"
+          ]
+        },
+        "suppliers": [
+          "nix"
+        ]
+      },
+      "zellij": {
+        "group": "terminal",
+        "platforms": [
+          "aarch64-darwin",
+          "aarch64-linux",
+          "x86_64-linux"
+        ],
+        "profiles": [
+          "shared"
+        ],
+        "requiredClasses": [],
+        "supplierPlatforms": {
+          "nix": [
+            "aarch64-darwin",
+            "aarch64-linux",
+            "x86_64-linux"
+          ]
+        },
+        "suppliers": [
+          "nix"
+        ]
+      },
+      "zen": {
+        "group": "productivity",
+        "platforms": [
+          "aarch64-darwin"
+        ],
+        "profiles": [
+          "darwin"
+        ],
+        "requiredClasses": [],
+        "supplierPlatforms": {
+          "homebrew": [
+            "aarch64-darwin"
+          ]
+        },
+        "suppliers": [
+          "homebrew"
+        ]
+      },
+      "zip": {
+        "group": "files",
+        "platforms": [
+          "aarch64-darwin",
+          "aarch64-linux",
+          "x86_64-linux"
+        ],
+        "profiles": [
+          "shared"
+        ],
+        "requiredClasses": [],
+        "supplierPlatforms": {
+          "nix": [
+            "aarch64-darwin",
+            "aarch64-linux",
+            "x86_64-linux"
+          ]
+        },
+        "suppliers": [
+          "nix"
+        ]
+      },
+      "zoxide": {
+        "group": "files",
+        "platforms": [
+          "aarch64-darwin",
+          "aarch64-linux",
+          "x86_64-linux"
+        ],
+        "profiles": [
+          "shared"
+        ],
+        "requiredClasses": [],
+        "supplierPlatforms": {
+          "nix": [
+            "aarch64-darwin",
+            "aarch64-linux",
+            "x86_64-linux"
+          ]
+        },
+        "suppliers": [
+          "nix"
+        ]
+      },
+      "zstd": {
+        "group": "files",
+        "platforms": [
+          "aarch64-darwin",
+          "aarch64-linux",
+          "x86_64-linux"
+        ],
+        "profiles": [
+          "shared"
+        ],
+        "requiredClasses": [],
+        "supplierPlatforms": {
+          "nix": [
+            "aarch64-darwin",
+            "aarch64-linux",
+            "x86_64-linux"
+          ]
+        },
+        "suppliers": [
+          "nix"
+        ]
+      }
+    }
+  }
 }
