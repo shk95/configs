@@ -41,7 +41,7 @@ def main():
             destination = root / name
             destination.parent.mkdir(parents=True, exist_ok=True)
             shutil.copy2(SOURCE / name, destination)
-        payload = root / 'unixlike/modules/programs/karabiner/karabiner.json'
+        payload = root / 'unixlike/modules/programs/desktop-tools/karabiner/karabiner.json'
         payload.parent.mkdir(parents=True)
         payload.write_bytes(b'{"synthetic":"desired"}\n')
         hotkeys = payload.with_name('symbolic-hotkeys.json')
@@ -55,7 +55,7 @@ def main():
         # Normal unknown-group parsing also passes the real authoring-branch guard.
         git(root, 'worktree', 'add', '-q', '-b', 'feature/repository-synthetic', str(base / 'linked'))
         root = base / 'linked'
-        payload = root / 'unixlike/modules/programs/karabiner/karabiner.json'
+        payload = root / 'unixlike/modules/programs/desktop-tools/karabiner/karabiner.json'
         hotkeys = payload.with_name('symbolic-hotkeys.json')
         spies = base / 'spies'
         spies.mkdir()
