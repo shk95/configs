@@ -3,7 +3,8 @@
 set -eu
 checks=$(CDPATH= cd -- "$(dirname -- "$0")" && pwd)
 . "$checks/prerequisite"
-require_command nix zsh
+require_command nix
 cd "$checks/../../.."
 python_cmd=$(python_for_test)
-exec "$python_cmd" "$checks/programs-test.py"
+exec nix shell --inputs-from "path:$PWD/unixlike" nixpkgs#zsh \
+  -c "$python_cmd" "$checks/programs-test.py"
