@@ -27,7 +27,7 @@ _: {
     ...
   }: let
     contract = builtins.fromJSON (builtins.readFile ./units.json);
-    validation = import ../../../tool/darwin-capture/validation.nix {inherit lib contract;};
+    validation = import ../../../../tool/darwin-capture/validation.nix {inherit lib contract;};
     capture = config.providerDarwin.capture;
     selected =
       builtins.elem "karabiner-elements" config.providerDarwin.selectedApps
@@ -66,7 +66,7 @@ _: {
       home.activation = lib.mkIf (karabiner || hotkeys) {
         karabinerDesiredState = lib.hm.dag.entryAfter ["writeBoundary"] ''
           CONFIGS_CAPTURE_CONCERN=${./.} run ${pkgs.python3}/bin/python3 \
-            ${../../../tool/darwin-capture}/adapter.py apply \
+            ${../../../../tool/darwin-capture}/adapter.py apply \
             ${lib.optionalString karabiner "--unit karabiner --settings ${settings "karabiner" capture.karabiner ./karabiner.json}"} \
             ${lib.optionalString hotkeys "--unit symbolic-hotkeys --settings ${settings "symbolic-hotkeys" capture.symbolicHotkeys ./symbolic-hotkeys.json}"}
         '';

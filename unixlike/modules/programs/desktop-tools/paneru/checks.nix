@@ -16,7 +16,7 @@
         inherit inputs;
         outPath = inputs.self.outPath;
       };
-      witness = (import ../../../tool/checks/composition-witnesses.nix {inherit provider;})
+      witness = (import ../../../../tool/checks/composition-witnesses.nix {inherit provider;})
         .witnesses."mkDarwin/${system}/graphical";
       home = witness.configuration.config.home-manager.users.example;
       package = home.services.paneru.finalPackage;

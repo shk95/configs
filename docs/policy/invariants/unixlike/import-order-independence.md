@@ -7,9 +7,8 @@ enforced-by: fixture unixlike/tool/checks/import-order-test
 Module files are gathered by a directory walk. A value that is correct only
 because two files happen to sort a certain way breaks on a rename. The
 structural half is the class merge: the fragments a class collects are
-merged in the order of the files that define them, so a list two feature
-files contribute to — `home.packages` was the case the check found — is
-keyed by file rather than by the walk. The proof is by evaluation: every
+merged by concern path, so list contributions such as `home.packages` have
+a stable order. Program navigation categories are excluded from that key. The proof is by evaluation: every
 host is composed twice, in walk order and reversed, and each toplevel
 derivation path must be identical, because that path hashes everything that
 reaches the host. The detector fixture uses minimal synthetic outputs for all

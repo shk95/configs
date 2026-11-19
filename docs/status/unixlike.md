@@ -87,7 +87,7 @@ or activation.
 
 The Darwin Home Manager class imports the locked upstream Paneru module and
 owns its package, launchd agent and Lua configuration together. The source
-payload is `unixlike/modules/programs/paneru/init.lua`; edit that file to
+payload is `unixlike/modules/programs/desktop-tools/paneru/init.lua`; edit that file to
 change the configuration. On 2026-11-06, its complete active configuration
 was replaced from the maintainer-selected local TOML, with command-string
 binding keys and Lua table syntax. It retains no settings from the previous

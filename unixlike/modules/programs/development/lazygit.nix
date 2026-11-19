@@ -36,7 +36,7 @@ _: {
       settings = {
         gui = {
           # Both sides of the domain boundary declare a Nerd Font for the
-          # terminals this repository configures: modules/programs/ghostty.nix and
+          # terminals this repository configures: modules/programs/terminal/ghostty.nix and
           # WezTerm's font list (modules/wezterm/fonts.json) set
           # D2KodingLigature Nerd Font Mono on the Unix-like side, and the
           # Windows Terminal payload
@@ -81,7 +81,7 @@ _: {
             #
             # No `--dark` or `--light` flag on the command itself.
             # `programs.delta` already carries a `[delta]` section in git
-            # config (modules/programs/git.nix) that answers that question per Home
+            # config (modules/programs/development/git.nix) that answers that question per Home
             # Manager class — `light = true` in `homeManager.desktop`, left
             # unset in `shared` because the WSL homes render inside a
             # Windows-owned terminal this flake cannot inspect. delta reads

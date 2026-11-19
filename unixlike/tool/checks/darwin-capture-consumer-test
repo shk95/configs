@@ -112,7 +112,7 @@ if [ "${1:-}" = --build ]; then
   # Prove the default artifact remains the exact corrected provider rendering.
   default_karabiner=$(sed -n 's/.*--unit karabiner --settings \([^ ]*karabiner.json\).*/\1/p' "$work/defaults.activation")
   [ -n "$default_karabiner" ]
-  cmp "$default_karabiner" "$domain/modules/programs/karabiner/karabiner.json"
+  cmp "$default_karabiner" "$domain/modules/programs/desktop-tools/karabiner/karabiner.json"
   # The selected system includes the regenerated host-document artifacts.
   for file in $(sed -n 's/.*--settings \([^ ]*host-settings.json\).*/\1/p' "$work/host.activation"); do
     jq -e 'type == "object"' "$file" >/dev/null

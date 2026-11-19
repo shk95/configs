@@ -36,7 +36,7 @@ class JustEntry(unittest.TestCase):
                      'nix-collect-garbage', 'chsh', 'defaults', 'plutil']:
             self.spy(self.bin / name)
         for relative in ['unixlike/tool/dev-host/run', 'unixlike/tool/refresh-inputs',
-                         'unixlike/modules/programs/karabiner/tool']:
+                         'unixlike/modules/programs/desktop-tools/karabiner/tool']:
             self.spy(self.repo / relative)
 
     def spy(self, path):

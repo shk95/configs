@@ -42,10 +42,9 @@
 # hosts, and tool/checks/composition refuses a feature file that does either.
 #
 # INV unixlike/import-order-independence — the fragments a class collects are
-# imported in the order of the files that define them, not the order the walk
-# found them in. Without that key, every list-valued Home Manager option two
-# feature files contribute to — `home.packages` from the shared list and the
-# PowerShell module, for one — is concatenated in walk order, and the host's
+# imported by concern path. Program selection groups are omitted from that
+# sort key. Without a stable key, list-valued
+# Home Manager options such as `home.packages` merge in walk order, and the host's
 # toplevel derivation changes when the walk changes. tool/checks/import-order
 # composes every exported example in walk order and reversed and requires the same
 # toplevels; keying the imports is what makes that hold by construction. The
@@ -55,10 +54,26 @@
 {lib, ...}: let
   inherit (lib) mapAttrs mkOption sort types;
 
+  concernPath = file: let
+    program = builtins.match "(.*modules/programs/)[^/]+/(.*)" file;
+  in
+    if program == null
+    then file
+    else builtins.concatStringsSep "" program;
+
   keyedByFile = module:
     module
     // {
-      imports = sort (a: b: (a._file or "") < (b._file or "")) (module.imports or []);
+      imports = sort (a: b: let
+        aFile = a._file or "";
+        bFile = b._file or "";
+        aConcern = concernPath aFile;
+        bConcern = concernPath bFile;
+      in
+        if aConcern == bConcern
+        then aFile < bFile
+        else aConcern < bConcern)
+      (module.imports or []);
     };
 
   # Mirrors what flake-parts does for its own `flake.nixosModules`. `_class` makes

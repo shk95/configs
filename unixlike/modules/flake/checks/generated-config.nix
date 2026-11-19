@@ -17,7 +17,7 @@
         inherit inputs;
         outPath = inputs.self.outPath;
       };
-      witness = (import ../../tool/checks/composition-witnesses.nix {inherit provider;})
+      witness = (import ../../../tool/checks/composition-witnesses.nix {inherit provider;})
         .witnesses."mkNixos/${system}/graphical";
       home = witness.configuration.config.home-manager.users.example;
       repeated =

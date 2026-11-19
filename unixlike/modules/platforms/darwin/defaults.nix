@@ -1,5 +1,5 @@
 {lib, ...}: let
-  contract = import ../../api/contract.nix;
+  contract = import ../../../api/contract.nix;
   environment = {
     # Set your time zone.
     time.timeZone = "Asia/Seoul";

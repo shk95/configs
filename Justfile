@@ -174,7 +174,7 @@ darwin-generations:
 # Compare this Mac's Karabiner file and symbolic hotkeys with the payloads.
 [group('host-observation')]
 karabiner-check:
-    unixlike/modules/programs/karabiner/tool check
+    unixlike/modules/programs/desktop-tools/karabiner/tool check
 
 # Retired publication entry; use explicit pinned host-document preview/review/save.
 [group('compatibility')]

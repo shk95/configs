@@ -118,7 +118,7 @@ not been observed, because no activation has yet had a reason to write.
 ## Host-document ownership transfer, 2026-09-30
 
 The version-1 managed units declare ownership in
-`unixlike/modules/programs/karabiner/units.json`: Karabiner global/profiles are
+`unixlike/modules/programs/desktop-tools/karabiner/units.json`: Karabiner global/profiles are
 required whole parents, and symbolic hotkey entries60/61 are required whole
 entries. Missing required data, null deletion, empty profiles and unsupported
 app-normalized shapes refuse. Optional nested absence removes that member by

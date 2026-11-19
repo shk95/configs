@@ -65,7 +65,7 @@ in {
     programs.zsh.initContent = ''
       zellij() {
         if (( $# == 0 )); then
-          ${sessionReader}/bin/python3 ${../../../tool/zellij-session} ${lib.escapeShellArg "${config.xdg.configHome}/zellij/config.kdl"}
+          ${sessionReader}/bin/python3 ${../../../../tool/zellij-session} ${lib.escapeShellArg "${config.xdg.configHome}/zellij/config.kdl"}
         else
           command zellij "$@"
         fi

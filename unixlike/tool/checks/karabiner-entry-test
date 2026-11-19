@@ -51,7 +51,7 @@ with tempfile.TemporaryDirectory(prefix="karabiner-entry-") as directory:
     shutil.copyfile(source / "Justfile", repo / "Justfile")
     for relative, label in [
         ("tool/version-control/commit", "commit"),
-        ("unixlike/modules/programs/karabiner/tool", "legacy-projection"),
+        ("unixlike/modules/programs/desktop-tools/karabiner/tool", "legacy-projection"),
         ("unixlike/tool/checks/karabiner-test", "projection-fixture"),
         ("unixlike/tool/darwin-capture/adapter.py", "adapter"),
         ("unixlike/tool/darwin-capture/engine.py", "new-cli")]:
@@ -62,7 +62,7 @@ with tempfile.TemporaryDirectory(prefix="karabiner-entry-") as directory:
     originals = repo / "synthetic-originals"
     originals.mkdir()
     for name in ["karabiner.json", "symbolic-hotkeys.json"]:
-        for parent in [originals, repo / "unixlike/modules/programs/karabiner"]:
+        for parent in [originals, repo / "unixlike/modules/programs/desktop-tools/karabiner"]:
             path = parent / name
             path.write_text('{"synthetic":"unchanged"}\n')
             path.chmod(0o600)
@@ -93,7 +93,7 @@ with tempfile.TemporaryDirectory(prefix="karabiner-entry-") as directory:
     assert listing.returncode == 0
     for recipe in ["karabiner-capture", "karabiner-check", "karabiner-test"]:
         assert recipe in listing.stdout
-    for recipe, command in [("karabiner-check", "unixlike/modules/programs/karabiner/tool check"),
+    for recipe, command in [("karabiner-check", "unixlike/modules/programs/desktop-tools/karabiner/tool check"),
                             ("karabiner-test", "unixlike/tool/checks/karabiner-test")]:
         shown = invoke("--show", recipe)
         assert shown.returncode == 0 and command in shown.stdout

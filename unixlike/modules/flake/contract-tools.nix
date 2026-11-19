@@ -22,7 +22,7 @@ _: {
       name = "darwin-capture";
       runtimeInputs = [pkgs.python3];
       text = ''
-        export CONFIGS_CAPTURE_CONCERN=${../programs/karabiner}
+        export CONFIGS_CAPTURE_CONCERN=${../programs/desktop-tools/karabiner}
         exec ${pkgs.python3}/bin/python3 ${../../tool/darwin-capture/engine.py} "$@"
       '';
     };

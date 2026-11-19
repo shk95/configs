@@ -23,7 +23,7 @@ concerns for navigation as `flake`, `machines`, `platforms`, `foundation`,
 `desktop`, and `programs`; the concern is the file or directory inside a
 group. The class a fragment reaches is read in the file that writes it and
 never from a directory. A concern that is one fragment stays one file, such
-as `modules/programs/bat.nix`; a directory is for a concern with more than
+as `modules/programs/text/bat.nix`; a directory is for a concern with more than
 one fragment or with material beside its module.
 What a concern owns sits beside its module: the payload the module
 delivers and the script it interpolates. Karabiner's earlier three-directory
