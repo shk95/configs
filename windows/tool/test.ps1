@@ -12,6 +12,9 @@ repositories and do not apply desired state to the host.
 Requires the pinned Pester version to be installed. Missing Pester becomes exit
 1 instead of exit 69. Setting REQUIRE_NATIVE=1 has the same effect.
 
+.PARAMETER SettingsOnly
+Runs the PowerToys audit and Windows Terminal projection against repository settings.
+
 .EXAMPLE
 PS> .\windows\win-env.ps1 test
 
@@ -38,7 +41,8 @@ https://github.com/shk95/configs/blob/dev/CONTRIBUTING.md#windows-changes
 param(
     # CI passes this, as does the REQUIRE_NATIVE variable, so a runner that
     # somehow lacks Pester fails rather than reporting an untested suite.
-    [switch] $RequireNativeTooling
+    [switch] $RequireNativeTooling,
+    [switch] $SettingsOnly
 )
 
 # INV windows/automation-tools-standalone: direct automation invocation
@@ -85,6 +89,25 @@ Import-Module -FullyQualifiedName @{
 # The suite creates fixture repositories; it must never inherit the caller's.
 . (Join-Path $PSScriptRoot 'isolate-git.ps1')
 
+$tests = Join-Path (Split-Path -Parent $PSScriptRoot) 'tests'
+if ($SettingsOnly) {
+    $config = New-PesterConfiguration
+    $config.Run.Path = Join-Path $tests 'WinEnv.Tests.ps1'
+    $config.Run.PassThru = $true
+    $settingsTests = @('PowerToys payload audit.*',
+        'capture.drops a generated Windows Terminal profile and keeps the declared ones')
+    $config.Filter.FullName = $settingsTests
+    $result = Invoke-Pester -Configuration $config
+    if ($result.Result -ne 'Passed') { exit 1 }
+    foreach ($pattern in $settingsTests) {
+        if (-not ($result.Tests | Where-Object { $_.Result -eq 'Passed' -and $_.ExpandedPath -like $pattern })) {
+            [Console]::Error.WriteLine("Expected settings test did not pass: $pattern")
+            exit 1
+        }
+    }
+    exit 0
+}
+
 # Every script below windows/ must parse before the suite runs. The suite
 # imports the module and drives the entry points. Runtime-specific cases may
 # be skipped on a foreign host, so a syntax error
@@ -104,7 +127,6 @@ if ($parseErrors.Count) {
     exit 1
 }
 
-$tests = Join-Path (Split-Path -Parent $PSScriptRoot) 'tests'
 $result = Invoke-Pester -Path $tests -PassThru
 # Reuse Pester's measurements: no second execution and no timing thresholds.
 # Container durations include discovery/setup; test durations do not account

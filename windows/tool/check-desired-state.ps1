@@ -12,6 +12,9 @@ unverified after those checks finish. This script reads repository files only.
 Requires complete parser evidence. Missing native tooling becomes exit 1
 instead of exit 69. Setting REQUIRE_NATIVE=1 has the same effect.
 
+.PARAMETER SettingsOnly
+Validates registered PowerToys and Windows Terminal JSON settings.
+
 .EXAMPLE
 PS> .\windows\win-env.ps1 validate
 
@@ -42,7 +45,8 @@ param(
     # The merge gate must not accept a payload nobody parsed. CI passes this,
     # and the REQUIRE_NATIVE variable the rest of the repository already uses
     # means the same thing.
-    [switch] $RequireNativeTooling
+    [switch] $RequireNativeTooling,
+    [switch] $SettingsOnly
 )
 
 # Every source this host can parse is parsed, and only the ones it cannot are
@@ -68,6 +72,7 @@ Import-Module (Join-Path $windowsRoot 'src\WinEnv.psm1') -Force
 
 $requireNative = $RequireNativeTooling.IsPresent -or ($env:REQUIRE_NATIVE -eq '1')
 $unverified = [System.Collections.Generic.List[string]]::new()
+$settingsSources = [System.Collections.Generic.HashSet[string]]::new([StringComparer]::OrdinalIgnoreCase)
 
 $manifest = Get-WinEnvManifest -Path $manifestPath
 
@@ -77,6 +82,12 @@ foreach ($definition in $manifest.ManagedFiles) {
     # is never the local answer, and the merge gate must not accept a payload
     # nobody parsed.
     foreach ($variant in (Get-WinEnvManagedFileVariant -Definition $definition)) {
+        if ($SettingsOnly) {
+            if ($variant.Source -notlike 'files/powertoys/*.json' -and
+                $variant.Source -ine 'files/terminal/settings.json') { continue }
+            if ($variant.Parser -ne 'Json') { throw "Invalid JSON parser registration: $($variant.Source)" }
+            [void]$settingsSources.Add($variant.Source)
+        }
         $sourcePath = Join-Path $desiredStateRoot $variant.Source
         if (-not (Test-Path -LiteralPath $sourcePath -PathType Leaf)) {
             throw "Managed source is missing: $sourcePath"
@@ -86,6 +97,22 @@ foreach ($definition in $manifest.ManagedFiles) {
         $message = "$($definition.Id) [$($definition.Parser)]: $reason"
         if ($reason -and -not $unverified.Contains($message)) { $unverified.Add($message) }
     }
+}
+
+if ($SettingsOnly) {
+    $powerToysRoot = Join-Path $desiredStateRoot 'files/powertoys'
+    foreach ($file in Get-ChildItem -LiteralPath $powerToysRoot -Filter '*.json' -File -Recurse) {
+        $relativePath = [IO.Path]::GetRelativePath($desiredStateRoot, $file.FullName).Replace('\', '/')
+        if (-not $settingsSources.Contains($relativePath)) {
+            throw "Unregistered PowerToys source: $relativePath"
+        }
+    }
+    if (-not $settingsSources.Contains('files/terminal/settings.json')) {
+        throw 'Unregistered Windows Terminal settings.'
+    }
+    if ($unverified.Count) { throw ('Application settings validation is incomplete. ' + ($unverified -join '; ')) }
+    Write-Host 'Windows application JSON settings are valid.'
+    exit 0
 }
 
 # Templates are not managed files, but a broken one is still a broken payload.
