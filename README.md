@@ -122,9 +122,8 @@ When a native declaration supplies an ID directly, its selected row takes
 the place of an inactive catalog row with that ID. The inventory reports
 requested and evaluated versions. Installed versions are unknown.
 
-Linux defaults Claude Code and Codex to mise; macOS keeps their Nix supply.
-To use Nix on Linux, set `providerTools.programs.codex.provider = "nix"` (and
-likewise for `claude-code`). A mise version request is optional:
+Linux uses mise for Claude Code and Codex. macOS uses the Homebrew casks
+`claude-code` and `codex`. A mise version request is optional:
 `providerTools.programs.codex.version = "0.100"`; absent requests use stable
 `latest`. Aqua supplies architecture/libc-aware distributions on supported Linux
 systems; NixOS retains `nix-ld`. Native CLI and sandbox compatibility is separate
