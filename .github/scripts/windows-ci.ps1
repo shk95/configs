@@ -1,5 +1,9 @@
 # INV repository/windows-ci-runtime-bound
-param([string] $RuntimePath, [string] $RepositoryRoot = (Get-Location).Path)
+param(
+    [string] $RuntimePath,
+    [Parameter(Mandatory)] [ValidateSet('Runtime', 'Suite')] [string] $Check,
+    [string] $RepositoryRoot = (Get-Location).Path
+)
 $ErrorActionPreference = 'Stop'
 try {
     Import-Module (Join-Path $PSScriptRoot 'WindowsCiRuntime.psm1') -Force
@@ -10,8 +14,11 @@ try {
         throw 'The management CI orchestrator itself must use the declared executable.'
     }
     Write-Host ('Management CI runtime: ' + ($actual | ConvertTo-Json -Compress))
-    Invoke-CiProcess -Executable $RuntimePath -Arguments @('-NoProfile', '-NonInteractive', '-File',
-        (Join-Path $RepositoryRoot '.github/tests/test-windows-ci-runtime.ps1'), '-RuntimePath', $RuntimePath)
+    if ($Check -eq 'Runtime') {
+        Invoke-CiProcess -Executable $RuntimePath -Arguments @('-NoProfile', '-NonInteractive', '-File',
+            (Join-Path $RepositoryRoot '.github/tests/test-windows-ci-runtime.ps1'), '-RuntimePath', $RuntimePath)
+        exit 0
+    }
     Invoke-CiProcess -Executable $RuntimePath -Arguments @('-NoProfile', '-NonInteractive', '-File',
         (Join-Path $RepositoryRoot 'windows/tool/setup-dev.ps1'))
     & winget.exe install --id Zellij.Zellij --exact --source winget --accept-source-agreements --accept-package-agreements --disable-interactivity

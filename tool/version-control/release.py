@@ -4,6 +4,7 @@ INV repository/bounded-release-automation
 INV repository/release-tag-contract
 """
 import argparse
+from itertools import count
 import json
 import os
 from pathlib import Path
@@ -13,11 +14,11 @@ import sys
 import time
 
 sys.dont_write_bytecode = True
-from github_proof import source_record
+from github_proof import find_pr
+from release_version import VERSION
 
 PATCH_BRANCH = 'feature/unixlike-input-patch-'
 FIELDS = {'previous', 'version', 'summary', 'compatibility', 'migration'}
-VERSION = re.compile(r'(0|[1-9][0-9]*)\.(0|[1-9][0-9]*)\.(0|[1-9][0-9]*)\Z')
 SHA = re.compile(r'[0-9a-f]{40}\Z')
 REFRESH_SUMMARY = 'Refresh permitted Unix-like inputs.'
 LEGACY = {
@@ -50,11 +51,6 @@ def api(path, data=None, binary=False):
     return output if binary else json.loads(output)
 
 
-def request(path, method, data):
-    output = subprocess.check_output(['gh', 'api', f'repos/{repository()}/{path}', '--method', method, '--input', '-'], input=json.dumps(data).encode())
-    return json.loads(output) if output.strip() else None
-
-
 def source_json(source, path):
     return json.loads(git('show', f'{source}:{path}'))
 
@@ -85,7 +81,7 @@ def latest(domain):
     return max(names, key=lambda name: tuple(map(int, name[len(domain) + 2:].split('.')))) if names else None
 
 
-def tag_state(domain, source, value, *, generated=True, allow_legacy_generated=False):
+def tag_state(domain, source, value, *, generated=True, allow_legacy_generated=False, proof=None):
     name = tag_name(domain, value)
     found = api(f'git/matching-refs/tags/{name}')
     exact = [ref for ref in found if ref['ref'] == f'refs/tags/{name}']
@@ -101,7 +97,7 @@ def tag_state(domain, source, value, *, generated=True, allow_legacy_generated=F
         # Writer confirmation binds the exact evidence it generated, including
         # retries after an ambiguous write. A baseline may be developer-authored.
         lines = tag['message'].splitlines()
-        expected = annotation_fields(domain, source, value)
+        expected = annotation_fields(domain, source, value, proof)
         forms = [expected]
         if allow_legacy_generated:
             # Recognize the one previously published writer format only while
@@ -135,43 +131,20 @@ def tag_state(domain, source, value, *, generated=True, allow_legacy_generated=F
     return 'done'
 
 
-def annotation_fields(domain, source, value):
+def annotation_fields(domain, source, value, proof=None):
     lines = [f'Domain: {domain}', f"Version: {value['version']}", f'Source: {source}',
              f"Previous: {value['previous']}", f"Summary: {value['summary']}",
              f"Compatibility: {value['compatibility']}", f"Migration: {value['migration']}"]
     lines += ['Evaluation: passed; provider CI',
               'Build: passed; provider-owned artifact checks on CI system',
               'Native runtime: not applicable; host runtime belongs to consumers']
+    if proof:
+        lines.append(f"CI run: {proof['url']} (attempt {proof['attempt']})")
     return lines + ['Deployment: not performed by release', f'Evidence: https://github.com/{repository()}/commit/{source}']
 
 
-def identity_from_zip(data):
-    value = source_record(data)
-    # Release publication keeps its narrower event boundary; candidate dispatch
-    # proof is available to local work but cannot authorize the patch writer.
-    if value['event'] not in ('push', 'pull_request'):
-        raise ValueError('invalid release CI event')
-    return value
-
-
-def checked(base, head, tree, event):
-    checks = api(f'commits/{head}/check-runs?per_page=100')['check_runs']
-    for check in sorted(checks, key=lambda value: value['id'], reverse=True):
-        if check['name'] != 'Required checks' or check['app']['id'] != 15368 or check['conclusion'] != 'success':
-            continue
-        match = re.fullmatch(re.escape(f'https://github.com/{repository()}/actions/runs/') + r'([0-9]+)/job/[0-9]+', check['details_url'])
-        if not match:
-            continue
-        run_id = match[1]
-        run = api(f'actions/runs/{run_id}')
-        if run['path'] != '.github/workflows/ci.yml' or run['event'] != event or run['conclusion'] != 'success':
-            continue
-        for artifact in api(f'actions/runs/{run_id}/artifacts')['artifacts']:
-            if artifact['name'] == 'ci-source' and not artifact['expired']:
-                value = identity_from_zip(api(f"actions/artifacts/{artifact['id']}/zip", binary=True))
-                if value == {'event': event, 'base': base, 'head': head, 'tree': tree}:
-                    return True
-    return False
+def checked(base, head, tree, pull):
+    return find_pr(base, head, tree, pull=pull, repo=repository(), read=api)
 
 
 def merge_tree(base, head):
@@ -247,11 +220,59 @@ def patch_version(previous):
     return f'{major}.{minor}.{patch + 1}'
 
 
-def manual_active():
-    # Filter active states server-side so an old running job is not hidden by a
-    # page of newer completed runs. No process/session liveness is inferred.
-    return any(api(f'actions/workflows/manual-release.yml/runs?status={status}&per_page=1')['workflow_runs']
+def release_active(workflow):
+    # Filter on the server so completed runs cannot hide a live writer.
+    return any(api(f'actions/workflows/{workflow}/runs?status={status}&per_page=1')['workflow_runs']
                for status in ('queued', 'in_progress', 'waiting', 'pending', 'requested'))
+
+
+def manual_active():
+    return release_active('manual-release.yml')
+
+
+def declaration_origin(master):
+    return git('log', '-1', '--first-parent', '--format=%H', master, '--', 'unixlike/release.json')
+
+
+def open_prs(base='master'):
+    pulls = []
+    for page in count(1):
+        batch = api(f'pulls?state=open&base={base}&per_page=100&page={page}')
+        if not isinstance(batch, list):
+            raise ValueError('invalid open pull request inventory')
+        pulls.extend(batch)
+        if len(batch) < 100:
+            return pulls
+
+
+def same_repo_head(pr):
+    head_repo = pr['head'].get('repo') or {}
+    return head_repo.get('full_name') == repository()
+
+
+def managed_patch(pr):
+    return pr['head']['ref'].startswith(PATCH_BRANCH) and same_repo_head(pr)
+
+
+def upgrade_readiness():
+    """Read-only cutover check before deploying a new proof format."""
+    master = git('rev-parse', 'origin/master')
+    blockers = []
+    if api('actions/variables/CONFIGS_RELEASE_ENABLED')['value'] != '0':
+        blockers.append('Pause the input patch writer before changing proof formats.')
+    for workflow in ('release.yml', 'manual-release.yml'):
+        if release_active(workflow):
+            blockers.append(f'{workflow} still has an active run.')
+    for pr in open_prs():
+        if managed_patch(pr):
+            blockers.append(f'Input patch pull request #{pr["number"]} is still open.')
+    origin = declaration_origin(master)
+    if origin and patch_merge(origin):
+        value = declaration(origin, 'unixlike')
+        if tag_state('unixlike', origin, value, allow_legacy_generated=True) == 'missing':
+            blockers.append(f'Complete {tag_name("unixlike", value)} using accepted pre-upgrade tooling first.')
+    require_remote_head('master', master)
+    return {'master': master, 'ready': not blockers, 'blockers': blockers}
 
 
 def require_published_base(base):
@@ -268,6 +289,10 @@ def require_published_base(base):
     return prior
 
 
+def competing_prs():
+    return [pr for pr in open_prs() if not pr.get('draft') or managed_patch(pr)]
+
+
 def inspect(manual=False, start=False):
     if not manual and manual_active():
         return {'action': 'wait', 'reason': 'manual input patch is active'}
@@ -276,13 +301,14 @@ def inspect(manual=False, start=False):
     if latest('unixlike') is None:
         raise ValueError('initial Unix-like release must exist')
     if tag_name('unixlike', value) not in git('tag', '--list').splitlines():
-        if not patch_merge(master):
+        source = declaration_origin(master)
+        if not source or not patch_merge(source) or subprocess.call([
+                'git', 'diff', '--quiet', source, master, '--', 'unixlike', '.envrc', 'Justfile']):
             return {'action': 'wait', 'reason': 'general Unix-like publication belongs to the developer'}
-        return {'action': 'publish', 'source': master, 'base': master, 'head': master}
+        return {'action': 'publish', 'source': source, 'base': master, 'head': source}
     require_published_base(master)
-    prs = api('pulls?state=open&base=master&per_page=100')
-    patches = [pr for pr in prs if pr['head']['ref'].startswith(PATCH_BRANCH)
-               and pr['head']['repo']['full_name'] == repository()]
+    prs = competing_prs()
+    patches = [pr for pr in prs if managed_patch(pr)]
     if len(patches) > 1:
         raise ValueError('multiple input patch PRs')
     if len(prs) != len(patches):
@@ -291,6 +317,8 @@ def inspect(manual=False, start=False):
         return {'action': 'wait', 'reason': 'a master topic PR is open'}
     if patches:
         pr = patches[0]
+        if pr.get('draft'):
+            return {'action': 'wait', 'reason': 'the input patch PR is a draft'}
         head = pr['head']['sha']
         if not SHA.fullmatch(head):
             raise ValueError('invalid input patch head')
@@ -299,7 +327,7 @@ def inspect(manual=False, start=False):
         if not automatic(master, head):
             raise ValueError('stale or unpermitted input patch; close it and rerun against current master')
         tree = merge_tree(master, head)
-        if checked(master, head, tree, 'pull_request'):
+        if checked(master, head, tree, pr['number']):
             return {'action': 'patch-merge', 'number': pr['number'], 'base': master, 'head': head, 'tree': tree}
         return {'action': 'wait', 'reason': 'input patch Required checks pending', 'base': master, 'head': head}
     if start:
@@ -313,11 +341,46 @@ def write_guard():
     git('fetch', '--quiet', 'origin', '+refs/heads/master:refs/remotes/origin/master', '--tags')
     if subprocess.call(['git', 'merge-base', '--is-ancestor', 'HEAD', 'origin/master'], stdout=subprocess.DEVNULL, stderr=subprocess.DEVNULL):
         raise ValueError('writer implementation is not accepted master source')
+    if git('status', '--porcelain', '--untracked-files=all', '--', '.githooks', 'tool/version-control'):
+        raise ValueError('writer tools and hooks must match the accepted checkout')
+
+
+def require_remote_head(branch, expected):
+    if api(f'git/ref/heads/{branch}')['object']['sha'] != expected:
+        raise ValueError(f'remote {branch} changed before publication')
+
+
+def guard_patch_merge(action):
+    pr = api(f"pulls/{action['number']}")
+    if (pr['state'] != 'open' or pr.get('draft') or not managed_patch(pr) or pr['head']['sha'] != action['head']
+            or pr['base']['ref'] != 'master' or pr['base']['sha'] != action['base']):
+        raise ValueError('current pull request does not match the reviewed patch')
+    if [item['number'] for item in competing_prs()] != [action['number']]:
+        raise ValueError('master pull request set changed before the merge')
+    subprocess.run(['tool/version-control/closing-keywords', '--text', '-'],
+                   input=pr['body'] or '', text=True, stdout=subprocess.DEVNULL, check=True)
+    require_remote_head('master', action['base'])
+
+
+def push_target():
+    return f'https://github.com/{repository()}.git'
+
+
+def push_patch_merge(base, source):
+    # Only this process supplies the existing writer credential to Git. The
+    # tracked hook compares the old ref advertised on this same connection.
+    if not os.access('.githooks/pre-push', os.X_OK):
+        raise ValueError('bounded release requires its executable pre-push hook')
+    env = dict(os.environ, CONFIGS_PATCH_BASE=base, CONFIGS_PATCH_MERGE=source, GIT_TERMINAL_PROMPT='0')
+    subprocess.run(['git', '-c', 'credential.helper=', '-c', 'credential.helper=!gh auth git-credential',
+                    '-c', 'core.hooksPath=.githooks', 'push', '--no-follow-tags', '--recurse-submodules=no',
+                    push_target(), f'{source}:refs/heads/master'], env=env, check=True)
 
 
 def publish(source):
     source = git('rev-parse', '--verify', f'{source}^{{commit}}')
-    git('merge-base', '--is-ancestor', source, 'origin/master')
+    master = git('rev-parse', 'origin/master')
+    git('merge-base', '--is-ancestor', source, master)
     if not patch_merge(source):
         raise ValueError('source is not a bounded Unix-like input patch merge')
     domains = ['unixlike']
@@ -328,26 +391,35 @@ def publish(source):
     tree = git('rev-parse', f'{source}^{{tree}}')
     # GitHub's commit-to-PR association can lag its successful merge response.
     # Retry read-only proof briefly; never relax source/check agreement.
-    verified = False
+    proof = None
     for attempt in range(3):
         prs = api(f'commits/{source}/pulls')
-        verified = any(pr['merged_at'] and pr['base']['ref'] == 'master' and pr['head']['ref'].startswith(PATCH_BRANCH) and pr['head']['repo']['full_name'] == repository() and pr['merge_commit_sha'] == source for pr in prs) and checked(parents[0], parents[1], tree, 'pull_request')
-        if verified:
+        for pr in prs:
+            if (pr['merged_at'] and pr['base']['ref'] == 'master' and managed_patch(pr)
+                    and pr['merge_commit_sha'] == source):
+                proof = checked(parents[0], parents[1], tree, pr['number'])
+                if proof:
+                    break
+        if proof:
             break
         if attempt < 2:
             time.sleep(5)
-    if not verified:
+    if not proof:
         raise ValueError('publication lacks matching Required checks for its actual source tree')
     for domain in missing:
         value = declaration(source, domain)
-        lines = annotation_fields(domain, source, value)
-        obj = api('git/tags', {'tag': tag_name(domain, value), 'message': '\n'.join(lines), 'object': source, 'type': 'commit'})
+        require_remote_head('master', master)
+        lines = annotation_fields(domain, source, value, proof)
+        message = '\n'.join(lines)
+        subprocess.run(['tool/version-control/scan-secrets', '--text'], input=message, text=True, check=True)
+        obj = api('git/tags', {'tag': tag_name(domain, value), 'message': message, 'object': source, 'type': 'commit'})
+        require_remote_head('master', master)
         try:
             api('git/refs', {'ref': f'refs/tags/{tag_name(domain, value)}', 'sha': obj['sha']})
         except subprocess.CalledProcessError:
-            if tag_state(domain, source, value) != 'done':
+            if tag_state(domain, source, value, proof=proof) != 'done':
                 raise
-        if tag_state(domain, source, value) != 'done':
+        if tag_state(domain, source, value, proof=proof) != 'done':
             raise ValueError('remote publication not confirmed')
 
 
@@ -362,20 +434,19 @@ def advance(expected_head, expected_base, manual=False):
     if action['action'] == 'publish':
         publish(action['source'])
     elif action['action'] == 'patch-merge':
+        source = git('-c', 'user.name=configs release', '-c', 'user.email=configs-release@users.noreply.github.com',
+                     'commit-tree', action['tree'], '-p', action['base'], '-p', action['head'],
+                     '-m', f"Merge verified Unix-like input patch (#{action['number']})")
+        guard_patch_merge(action)
         try:
-            result = request(f"pulls/{action['number']}/merge", 'PUT', {'sha': action['head'], 'merge_method': 'merge'})
-            if not result['merged']:
-                raise ValueError('protected merge did not complete')
+            push_patch_merge(action['base'], source)
         except subprocess.CalledProcessError:
-            pass
-        remote = api(f"pulls/{action['number']}")
-        if not remote['merged'] or remote['head']['sha'] != action['head']:
-            raise ValueError('remote merge is not confirmed')
-        merged = remote['merge_commit_sha']
-        git('fetch', '--quiet', 'origin')
-        if git('show', '-s', '--format=%P', merged).split() != [action['base'], action['head']] or git('rev-parse', f'{merged}^{{tree}}') != action['tree']:
-            raise ValueError('actual merge changed; no tags published')
-        publish(merged)
+            # A lost response may still have delivered this exact commit.
+            require_remote_head('master', source)
+        git('fetch', '--quiet', 'origin', '+refs/heads/master:refs/remotes/origin/master')
+        if git('rev-parse', 'origin/master') != source:
+            raise ValueError('remote merge is not confirmed at the reviewed commit')
+        publish(source)
     else:
         raise ValueError('unexpected input patch action')
     return action
@@ -413,18 +484,21 @@ def prepare_manual(timeout=3600, interval=30):
             raise ValueError('manual input patch wait expired; remote work is preserved')
 
 
-def ensure_pr(head, base, title, body):
-    existing = [pr for pr in api(f'pulls?state=open&base={base}&per_page=100')
-                if pr['head']['ref'] == head and pr['head']['repo']['full_name'] == repository()]
+def ensure_pr(head, base, title, body, *, expected_base, expected_head):
+    def matches():
+        return [pr for pr in open_prs(base) if pr['head']['ref'] == head and same_repo_head(pr)]
+
+    existing = matches()
     if len(existing) > 1:
         raise ValueError('multiple matching pull requests')
     if existing:
         return existing[0]
+    require_remote_head(head, expected_head)
+    require_remote_head(base, expected_base)
     try:
         return api('pulls', {'head': head, 'base': base, 'title': title, 'body': body})
     except subprocess.CalledProcessError:
-        existing = [pr for pr in api(f'pulls?state=open&base={base}&per_page=100')
-                    if pr['head']['ref'] == head and pr['head']['repo']['full_name'] == repository()]
+        existing = matches()
         if len(existing) != 1:
             raise ValueError('remote PR creation is not confirmed')
         return existing[0]
@@ -444,7 +518,7 @@ def refresh_pr(base, lock_path):
     validate_lock(before, lock, allowed)
     if before == lock:
         return {'action': 'none'}
-    if api('pulls?state=open&base=master&per_page=100'):
+    if competing_prs():
         raise ValueError('a master PR opened during refresh; rerun after it completes')
     value = {'previous': prior, 'version': patch_version(prior), 'summary': REFRESH_SUMMARY,
              'compatibility': 'patch', 'migration': ''}
@@ -456,20 +530,29 @@ def refresh_pr(base, lock_path):
         git('fetch', '--quiet', 'origin', head)
         if not automatic(base, head) or source_json(head, 'unixlike/flake.lock') != lock:
             raise ValueError('input patch branch conflicts; inspect it before retrying')
-        return ensure_pr(branch, 'master', 'Patch permitted Unix-like inputs', 'Automatic Unix-like patch: four permitted inputs only; no host deployment.')
+        return ensure_pr(branch, 'master', 'Patch permitted Unix-like inputs', 'Automatic Unix-like patch: four permitted inputs only; no host deployment.',
+                         expected_base=base, expected_head=head)
+    files = {'unixlike/flake.lock': data, 'unixlike/release.json': json.dumps(value, indent=2) + '\n'}
+    message = 'chore(unixlike-deps): refresh permitted inputs'
+    # GitHub API writes bypass the pre-push hook. Inspect the exact text
+    # that will leave the runner before even creating a remote blob.
+    subprocess.run(['tool/version-control/scan-secrets', '--text'],
+                   input='\n'.join([*files.values(), message]), text=True, check=True)
     entries = []
-    for name, content in [('unixlike/flake.lock', data), ('unixlike/release.json', json.dumps(value, indent=2) + '\n')]:
+    for name, content in files.items():
         blob = api('git/blobs', {'content': content, 'encoding': 'utf-8'})
         entries.append({'path': name, 'mode': '100644', 'type': 'blob', 'sha': blob['sha']})
     tree = api('git/trees', {'base_tree': git('rev-parse', f'{base}^{{tree}}'), 'tree': entries})
-    commit = api('git/commits', {'message': 'chore(unixlike-deps): refresh permitted inputs', 'tree': tree['sha'], 'parents': [base]})
+    commit = api('git/commits', {'message': message, 'tree': tree['sha'], 'parents': [base]})
+    require_remote_head('master', base)
     try:
         api('git/refs', {'ref': 'refs/heads/' + branch, 'sha': commit['sha']})
     except subprocess.CalledProcessError:
         pass
     if api('git/ref/heads/' + branch)['object']['sha'] != commit['sha']:
         raise ValueError('input patch branch conflicts; inspect it before retrying')
-    return ensure_pr(branch, 'master', 'Patch permitted Unix-like inputs', 'Automatic Unix-like patch: four permitted inputs only; no host deployment.')
+    return ensure_pr(branch, 'master', 'Patch permitted Unix-like inputs', 'Automatic Unix-like patch: four permitted inputs only; no host deployment.',
+                     expected_base=base, expected_head=commit['sha'])
 
 
 def main():
@@ -479,6 +562,7 @@ def main():
     modes = diagnosis.add_mutually_exclusive_group()
     modes.add_argument('--manual-start', action='store_true')
     modes.add_argument('--scheduled-start', action='store_true')
+    modes.add_argument('--upgrade-readiness', action='store_true')
     modes.add_argument('--source')
     proof = sub.add_parser('verify-patch')
     proof.add_argument('--base')
@@ -496,12 +580,19 @@ def main():
     refresh.add_argument('--lock', required=True)
     args = parser.parse_args()
     try:
+        os.environ['GIT_NO_REPLACE_OBJECTS'] = '1'
+        os.chdir(git('rev-parse', '--show-toplevel'))
         if args.operation == 'verify-patch':
             valid = patch_merge(args.merge) if args.merge and not args.base and not args.head else automatic(args.base, args.head) if args.base and args.head and not args.merge else False
             if not valid:
                 raise ValueError('not a single-commit permitted Unix-like input patch')
             print('Unix-like input patch boundary passed')
         elif args.operation == 'inspect':
+            if args.upgrade_readiness:
+                git('fetch', '--quiet', 'origin', '+refs/heads/master:refs/remotes/origin/master', '--tags')
+                readiness = upgrade_readiness()
+                print(json.dumps(readiness))
+                return 0 if readiness['ready'] else 1
             if os.environ.get('CONFIGS_RELEASE_ENABLED') != '1':
                 result = {'action': 'disabled'}
             else:

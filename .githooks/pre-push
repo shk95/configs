@@ -1,19 +1,47 @@
 #!/bin/sh
-# Inspect transmitted history only. Final candidate suites run before local
-# topic integration; this hook never runs suites from an unrelated checkout.
+# Inspect transmitted Git objects. Native suites belong to exact-candidate
+# verification; a push must have the scanner that can veto outbound secrets.
 # INV repository/local-development-integration
 # INV repository/local-gate-selects-by-effect
 # INV repository/conventional-subject
 # INV repository/release-tag-contract
 # INV repository/evidence-three-states
 set -eu
+export GIT_NO_REPLACE_OBJECTS=1 REQUIRE_NATIVE=1
 MSYS_NO_PATHCONV=1
 MSYS2_ARG_CONV_EXCL='*'
 export MSYS_NO_PATHCONV MSYS2_ARG_CONV_EXCL
 hooks_dir=$(CDPATH= cd -- "$(dirname -- "$0")" && pwd)
 . "$hooks_dir/evidence"
 
+bounded_push=false
+if [ -n "${CONFIGS_PATCH_BASE:-}${CONFIGS_PATCH_MERGE:-}" ]; then
+  bounded_push=true
+fi
+bounded_seen=false
+
+remote_master=
+remote_master_loaded=false
+read_remote_master() {
+  if ! "$remote_master_loaded"; then
+    result=$(git ls-remote --refs -- "$1" refs/heads/master) || return
+    remote_master=${result%%[[:space:]]*}
+    remote_master_loaded=true
+  fi
+}
+
 while read -r local_ref local_sha remote_ref remote_sha; do
+  # Git sends the advertised old object to receive-pack, which compares it
+  # with the stored ref under lock. Admit only the reviewed update here.
+  if "$bounded_push"; then
+    if "$bounded_seen" || [ "$remote_ref" != refs/heads/master ] ||
+      [ "$remote_sha" != "${CONFIGS_PATCH_BASE:-}" ] ||
+      [ "$local_sha" != "${CONFIGS_PATCH_MERGE:-}" ]; then
+      echo 'Bounded release push does not match the reviewed master update' >&2
+      exit 1
+    fi
+    bounded_seen=true
+  fi
   case "$local_sha" in
     0000000000000000000000000000000000000000)
       case "$remote_ref" in
@@ -36,23 +64,36 @@ while read -r local_ref local_sha remote_ref remote_sha; do
         echo 'Tag source does not match the transmitted object' >&2; exit 1;
       }
       evidence_run "release tag" tool/version-control/audit --tag "$tag" || exit 1
+      evidence_run "release tag secrets" tool/version-control/scan-secrets --tag "$local_sha" || exit 1
+      read_remote_master "$2"
+      if [ -z "$remote_master" ] || ! git merge-base --is-ancestor "$local_sha^{commit}" "$remote_master"; then
+        echo 'Publish the release commit to remote master before pushing its tag' >&2
+        exit 1
+      fi
       ;;
     refs/heads/*)
       if [ "$remote_sha" = 0000000000000000000000000000000000000000 ]; then
-        base=$(git merge-base "$local_sha" master)
+        read_remote_master "$2"
+        # A local master can contain commits that the remote has never seen.
+        base=${remote_master:-$(git hash-object -t tree --stdin </dev/null)}
       else
         base=$remote_sha
       fi
-      git rev-parse --verify "$base^{commit}" >/dev/null || {
+      if [ "$base" != "$(git hash-object -t tree --stdin </dev/null)" ] && ! git rev-parse --verify "$base^{commit}" >/dev/null; then
         echo 'Fetch the remote target explicitly before checking this push' >&2; exit 1;
-      }
+      fi
       if [ "$remote_sha" != 0000000000000000000000000000000000000000 ] && ! git merge-base --is-ancestor "$remote_sha" "$local_sha"; then
         echo 'Non-fast-forward push refused; use the separately approved history-rewrite workflow' >&2
         exit 1
       fi
       evidence_run "transmitted history" tool/version-control/audit --range "$base" "$local_sha" || exit 1
+      evidence_run "transmitted secrets" tool/version-control/scan-secrets --range "$base" "$local_sha" || exit 1
       ;;
     *) echo "Unsupported destination ref: $remote_ref" >&2; exit 1 ;;
   esac
 done
+if "$bounded_push" && ! "$bounded_seen"; then
+  echo 'Bounded release push has no matching ref update' >&2
+  exit 1
+fi
 evidence_summary

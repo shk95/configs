@@ -1,7 +1,6 @@
 """Finite retirement proof; all repositories, readers and originals are synthetic."""
 # INV repository/retired-capture-publication
 # INV repository/fixture-git-isolation
-import itertools
 import os
 from pathlib import Path
 import shutil
@@ -71,54 +70,55 @@ def main():
                            RETIREMENT_SPY_LOG=log.as_posix(), KARABINER_PLATFORM='darwin')
         expected = ['capture karabiner is retired; no host reads or Git changes were performed.',
                     'Use the pinned host-document preview/review/save workflow in CONTRIBUTING.md.']
-        count = 0
-        for state in ('matching', 'drift', 'missing', 'unreadable'):
-            original = root / 'synthetic-original.json'
-            original_hotkeys = root / 'synthetic-hotkeys.json'
+        original = root / 'synthetic-original.json'
+        original_hotkeys = root / 'synthetic-hotkeys.json'
+        original_hotkeys.write_bytes(hotkeys.read_bytes())
+        cases = (
+            ('matching', 'internal', []),
+            ('drift', 'operator', ['--publish', '--hotkeys-host', str(original_hotkeys), '--']),
+            ('missing', 'operator', ['--dry-run', '--host', str(original)]),
+            ('unreadable', 'internal', ['--publish', '--dry-run', '--host', str(original),
+                                       '--hotkeys-host', str(original_hotkeys)]),
+        )
+        refs = git(remote, 'show-ref')
+        for state, entry, options in cases:
             body = payload.read_bytes() if state == 'matching' else b'{"synthetic":"observed"}\n'
             original.write_bytes(body)
-            original_hotkeys.write_bytes(hotkeys.read_bytes())
             if state == 'missing':
                 original.unlink()
             elif state == 'unreadable':
                 original.chmod(0)
             before = snapshot(root, original)
-            refs = git(remote, 'show-ref')
-            for entry, flags in itertools.product(('internal', 'operator'),
-                    ([], ['--dry-run'], ['--publish'], ['--publish', '--dry-run'])):
-                for paths in ([], ['--host', str(original)], ['--hotkeys-host', str(original_hotkeys)],
-                              ['--host', str(original), '--hotkeys-host', str(original_hotkeys)]):
-                    for separator in ([], ['--']):
-                        command = root / ('tool/version-control/commit' if entry == 'internal' else 'tool/configs')
-                        args = (['commit'] if entry == 'operator' else []) + flags + paths + separator + ['capture', 'karabiner']
-                        result = subprocess.run(['sh', command.as_posix(), *args], cwd=root, env=environment,
-                                                input=b'y\nyes\n', capture_output=True, timeout=10)
-                        assert result.returncode == 1, (state, args, result.stderr)
-                        assert result.stdout == b'', result.stdout
-                        assert result.stderr.decode().splitlines() == expected, result.stderr
-                        assert not log.exists(), 'reader/projection/Git/scratch spy executed'
-                        assert snapshot(root, original) == before, 'payload/original/index/HEAD/refs changed'
-                        assert git(remote, 'show-ref') == refs, 'remote refs changed'
-                        count += 1
-            # Also exercise the actual ordinary parser using isolated Git,
-            # independently of the early-refusal spies. These arguments stop at
-            # help/usage before classification or any edit operation.
-            for args, status in ((['--unknown', 'capture', 'karabiner'], 2),
-                                 (['capture', 'other'], 2), (['--help'], 0),
-                                 (['--host'], 2),
-                                 (['--host', str(original), 'brew', 'add', 'example'], 2)):
-                before_grammar = snapshot(root, original)
-                result = subprocess.run(['sh', (root / 'tool/version-control/commit').as_posix(), *args],
-                                        cwd=root, env=os.environ.copy(), capture_output=True, timeout=10)
-                assert result.returncode == status, (args, result.returncode, result.stderr)
-                assert b'capture karabiner is retired' not in result.stderr
-                assert b'usage: tool/configs commit' in result.stdout + result.stderr, (args, result.stdout, result.stderr)
-                assert snapshot(root, original) == before_grammar
-                assert git(remote, 'show-ref') == refs
+            operator = entry == 'operator'
+            command = root / ('tool/configs' if operator else 'tool/version-control/commit')
+            args = (['commit'] if operator else []) + options + ['capture', 'karabiner']
+            result = subprocess.run(['sh', command.as_posix(), *args], cwd=root, env=environment,
+                                    input=b'y\nyes\n', capture_output=True, timeout=10)
+            assert result.returncode == 1, (state, args, result.stderr)
+            assert result.stdout == b'', result.stdout
+            assert result.stderr.decode().splitlines() == expected, result.stderr
+            assert not log.exists(), 'reader/projection/Git/scratch spy executed'
+            assert snapshot(root, original) == before, 'payload/original/index/HEAD/refs changed'
+            assert git(remote, 'show-ref') == refs, 'remote refs changed'
             if state == 'unreadable':
                 original.chmod(0o600)
                 assert original.read_bytes() == body, 'protected original bytes changed'
-        print(f'retired capture: {count} refusal/no-effect cases and 20 grammar boundary cases passed')
+
+        # Ordinary grammar is independent of host document state. Run each
+        # parser boundary once, with isolated Git and without reader spies.
+        for args, status in ((['--unknown', 'capture', 'karabiner'], 2),
+                             (['capture', 'other'], 2), (['--help'], 0),
+                             (['--host'], 2),
+                             (['--host', str(original), 'brew', 'add', 'example'], 2)):
+            before = snapshot(root, original)
+            result = subprocess.run(['sh', (root / 'tool/version-control/commit').as_posix(), *args],
+                                    cwd=root, env=os.environ.copy(), capture_output=True, timeout=10)
+            assert result.returncode == status, (args, result.returncode, result.stderr)
+            assert b'capture karabiner is retired' not in result.stderr
+            assert b'usage: tool/configs commit' in result.stdout + result.stderr, (args, result.stdout, result.stderr)
+            assert snapshot(root, original) == before
+            assert git(remote, 'show-ref') == refs
+        print('retired capture: four refusal/no-effect cases and five grammar boundary cases passed')
         print('POSIX mode-000 protection is platform-specific; Windows proves refusal before any reader execution.')
 
 

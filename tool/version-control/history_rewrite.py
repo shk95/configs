@@ -201,6 +201,12 @@ def execute(directory):
     artifacts = api(f'repos/{value["repository"]}/actions/runs/{approval["run"]}/artifacts')['artifacts']
     if not any(a['name'] == 'history-recovery' and not a['expired'] for a in artifacts):
         raise ValueError('Recovery must be uploaded before execution')
+    # Approval and the lease do not inspect commits newly entering master.
+    scanner = Path(__file__).resolve().with_name('scan-secrets')
+    try:
+        subprocess.check_call([str(scanner), '--range', value['old'], value['new']])
+    except subprocess.CalledProcessError as error:
+        raise ValueError('History replacement requires a successful incoming secret scan') from error
     # No raw --force, ref deletion, tag rewrite or branch-protection mutation.
     command = ['git', '-c', 'credential.helper=!gh auth git-credential', 'push', '--no-mirror', '--no-follow-tags', '--recurse-submodules=no', 'origin',
                value['new'] + ':refs/heads/' + value['branch'],

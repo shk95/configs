@@ -1,0 +1,17 @@
+#!/bin/sh
+# INV repository/required-checks-gate
+# INV repository/no-secret-in-history
+set -eu
+
+if [ "$#" -ne 2 ]; then
+  echo 'usage: verify-policy <base> <head>' >&2
+  exit 2
+fi
+
+tools=$(CDPATH= cd -- "$(dirname -- "$0")" && pwd)
+for check in audit scan-secrets work; do
+  "$tools/$check" --range "$1" "$2"
+done
+for check in hygiene domain-reads invariants provisional; do
+  "$tools/$check"
+done

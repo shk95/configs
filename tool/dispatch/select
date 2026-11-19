@@ -5,12 +5,11 @@
 # payload ran a whole flake evaluation even though Nix only copied that file.
 #
 # tool/version-control/classify answers ownership: which domain may change a
-# path and which release tag covers it. Local stages select check units;
-# CI selects whole suites conservatively, independently of ownership.
+# path and which release tag covers it. Hooks select quick payload checks;
+# CI runs the affected platform suite.
 #
 # INV repository/local-gate-selects-by-effect: commit selects fast staged
-# checks and CI selects affected suites. Documentation and registries keep
-# the unconditional policy scans without selecting a platform suite.
+# checks and CI selects affected suites.
 #
 # Reads `<status><TAB><path>` lines as `git diff --name-status` produces them,
 # and writes one `<domain>:<check>` unit per line.
@@ -29,7 +28,7 @@ stage=${1:-}
 case "$stage" in
   commit | ci) ;;
   *)
-    echo "usage: tool/dispatch/select <commit|ci>" >&2
+    echo "usage: tool/dispatch/select <commit|ci [base candidate]>" >&2
     exit 2
     ;;
 esac
@@ -67,7 +66,11 @@ cut -f2- <"$changes" | sort -u >"$paths"
 # whole list.
 effect=$(mktemp)
 trap 'rm -f "$changes" "$paths" "$effect"' EXIT
-grep -v -E '^docs/' "$paths" >"$effect" || [ "$?" -eq 1 ]
+awk -F '\t' '
+  $2 ~ /^docs\// || $2 ~ /^(unixlike|windows)\/release\.json$/ { next }
+  $1 == "M" && $2 ~ /^(README|CONTRIBUTING|AGENTS)\.md$/ { next }
+  { print $2 }
+' "$changes" | sort -u >"$effect"
 scopes=$("$root/tool/version-control/classify" --stdin <"$effect")
 if "$root/tool/version-control/classify" --stdin <"$paths" | grep -qx unclassified; then
   scopes=$(printf '%s\nunclassified\n' "$scopes")
@@ -77,14 +80,10 @@ has_scope() { printf '%s\n' "$scopes" | grep -qx "$1"; }
 
 # INV repository/windows-ci-runtime-bound: these repository-owned inputs are
 # executed by the native Windows job even when no workflow file changed.
-windows_runtime=0
-if grep -Eq '^\.github/(workflows/ci\.yml|scripts/(WindowsCiRuntime\.psm1|(assert|prepare)-windows-ci-runtime\.ps1|windows-ci\.ps1)|tests/test-windows-ci-runtime\.ps1)$' "$paths"; then
-  windows_runtime=1
-fi
+runtime_inputs='^(\.github/scripts/(WindowsCiRuntime\.psm1|(assert|prepare)-windows-ci-runtime\.ps1|windows-ci\.ps1)|windows/tool/(ci-runtime\.json|read-ci-runtime\.ps1))$'
+windows_git_inputs='^(tool/configs|tool/version-control/(commit|fixture-git-environment\.sh|test-retired-capture(\.py)?))$'
+unixlike_tools_inputs='^(Justfile$|\.envrc$|unixlike/(tool/|automatic-refresh-inputs\.json$))'
 
-# CI deliberately keeps platform payloads broad. No transitive dependency
-# model is claimed. Governance changes which can alter selection or gating
-# exercise every suite; unknown ownership is a failure, never an empty plan.
 if [ "$stage" = ci ]; then
   if has_scope unclassified; then
     echo 'Unclassified CI input' >&2
@@ -94,16 +93,24 @@ if [ "$stage" = ci ]; then
     echo 'Common CI suite is not defined' >&2
     exit 1
   fi
-  if grep -Eq '^(\.github/workflows/|tool/dispatch/|tool/version-control/(classify|required-checks|policy\.json|repo_policy\.py)$)' "$paths"; then
-    printf '%s\n' repository:fixtures unixlike:suite windows:suite
-  else
-    if has_scope repository; then echo repository:fixtures; fi
-    if has_scope unixlike; then echo unixlike:suite; fi
-    if has_scope windows || [ "$windows_runtime" -eq 1 ]; then echo windows:suite; fi
+  if grep -Fxq '.github/workflows/ci.yml' "$paths"; then
+    printf '%s\n' repository:fixtures repository:windows-git \
+      unixlike:suite unixlike:tools windows:suite windows:runtime
+    exit 0
   fi
-  # CI runs its runtime-control fixtures on Windows. Domain validate/test alone
-  # cannot supply that evidence to local integration, even on Windows.
-  if [ "$windows_runtime" -eq 1 ]; then echo windows:runtime; fi
+  if has_scope repository; then echo repository:fixtures; fi
+  if grep -Eq "$windows_git_inputs" "$paths"; then echo repository:windows-git; fi
+  if has_scope unixlike; then
+    if grep -E '^[^[:space:]]+[[:space:]](unixlike/|\.envrc$|Justfile$)' "$changes" |
+       grep -Ev '^M[[:space:]]unixlike/(release\.json$|tool/dev-host/|tool/refresh-inputs$)' >/dev/null; then
+      echo unixlike:suite
+    fi
+  fi
+  if grep -Eq "$unixlike_tools_inputs" "$paths"; then echo unixlike:tools; fi
+  if has_scope windows || grep -Eq "$runtime_inputs" "$paths"; then
+    echo windows:suite
+  fi
+  if grep -Eq "$runtime_inputs|^\.github/tests/test-windows-ci-runtime\.ps1$" "$paths"; then echo windows:runtime; fi
   exit 0
 fi
 

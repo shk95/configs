@@ -6,6 +6,8 @@ enforced-by: fixture tool/version-control/test
 
 A lock refresh changes every derivation hash in the Unix-like domain; mixed
 with a source change it hides which of the two moved an output.
+An incoming merge may select a parent's lock value. A new lock value belongs
+in an isolated source commit so it remains visible in the incoming history.
 
 The automatic patch declaration is publication input, not a configuration
 implementation change. The bounded release writer validates its fixed content.

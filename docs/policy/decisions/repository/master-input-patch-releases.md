@@ -36,8 +36,9 @@ continuations and the thin manual dispatch entry. Manual execution waits up to
 60 minutes for the one patch PR; scheduled execution releases the runner and
 resumes on the next event. The former 06/07 clock stages, daily development
 promotion cap and general Environment approval are retired from this lane.
-General promotion competes through the one-open-master-PR rule, not by silently
-joining the input patch. Active manual runs defer scheduled writes.
+Ready master topics compete with the input-patch PR for the destination.
+Unrelated Draft PRs allow patching to proceed. A draft input patch waits for
+review readiness. Active manual runs defer scheduled writes.
 
 Accepted master tooling validates candidate artifacts without granting execution
 writer credentials. Only the protected writer obtains release-control

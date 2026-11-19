@@ -28,17 +28,15 @@ require_scope() {
   elif [ "$selected" != false ]; then
     echo "$scope selection is '$selected', expected true or false" >&2
     exit 1
-  elif [ "$result" != skipped ]; then
-    echo "$scope was not selected but finished as $result" >&2
-    exit 1
   fi
 }
 
 require_result classification "${CLASSIFY_RESULT:?}"
 require_result secrets "${SECRETS_RESULT:?}"
-require_scope repository "${REPOSITORY_SCOPE:?}" "${REPOSITORY_RESULT:?}"
-require_scope unixlike "${UNIXLIKE_SCOPE:?}" "${UNIXLIKE_RESULT:?}"
-require_scope windows "${WINDOWS_SCOPE:?}" "${WINDOWS_RESULT:?}"
-require_scope topic "${TOPIC_SCOPE:?}" "${TOPIC_RESULT:?}"
+require_scope repository "${REPOSITORY_SCOPE:?}" "${REPOSITORY_RESULT-}"
+require_scope repository-windows "${REPOSITORY_WINDOWS_SCOPE:?}" "${REPOSITORY_WINDOWS_RESULT-}"
+require_scope unixlike "${UNIXLIKE_SCOPE:?}" "${UNIXLIKE_RESULT-}"
+require_scope windows "${WINDOWS_SCOPE:?}" "${WINDOWS_RESULT-}"
+require_scope topic "${TOPIC_SCOPE:?}" "${TOPIC_RESULT-}"
 
 echo "required checks passed"

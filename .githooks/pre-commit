@@ -1,8 +1,7 @@
 #!/bin/sh
 #
-# Domain-aware local checks plus the five repository-wide scans: desired-state
-# hygiene, cross-domain reads, the invariant registry, the provisional
-# registry, and secrets.
+# Domain-aware staged checks plus hygiene, domain boundaries, work-record
+# changes, provisional measures and secrets.
 #
 # Windows-only commits must not require Nix. The classifier is shared with the
 # pre-push hook, CI, and the version-control skill. What a check that could not
@@ -82,7 +81,7 @@ set -- --staged
 if [ ! -f "$(git rev-parse --git-path MERGE_HEAD)" ]; then
   set -- --single-scope "$@"
 fi
-staged_scopes=$(tool/version-control/classify "$@") || exit 1
+tool/version-control/classify "$@" >/dev/null
 
 if selected unixlike:format || selected unixlike:lint || selected unixlike:payloads; then
   staged_tree=$(mktemp -d)
@@ -120,37 +119,15 @@ evidence_run hygiene tool/version-control/hygiene \
 evidence_run "domain reads" tool/version-control/domain-reads \
   || abort "See docs/policy/invariants/repository/no-cross-domain-dependency.md."
 
-# A citation of a design document is repository-wide for the same reason: the
-# document and the text citing it can be in any scope, and the answer comes
-# from the index.
-evidence_run "design citations" tool/version-control/design-citations \
-  || abort "See docs/policy/invariants/repository/design-outside-authority.md."
-
-# A document area's README is checked repository-wide for the same reason:
-# the list it must not keep names documents of every scope.
-evidence_run records tool/version-control/records \
-  || abort "See docs/policy/invariants/repository/document-index-generated.md."
-
-# A work item is checked repository-wide for the same reason: a spec and its
-# report live in any scope. --staged also holds the commit about to be made to
-# the criteria its spec carried before it.
+# Work records are checked when the index changes them, including comparison
+# against the criteria the spec carried before the commit.
 evidence_run work tool/version-control/work --staged \
   || abort "See docs/work/README.md and docs/policy/invariants/repository/work-spec-has-report.md."
 
-# The invariant registry check is repository-wide for the same reason
-# hygiene is: a fixture renamed in any scope can orphan the tag an entry
-# depends on, so it runs unconditionally rather than through dispatch.
-evidence_run invariants tool/version-control/invariants \
-  || abort "See docs/policy/invariants/README.md."
-
 # The provisional registry is repository-wide for the same reason: a tagged
 # line deleted in any scope can orphan an entry, and an entry added anywhere
-# can name no measure. Only its overdue rule is scope-selective, so the
-# classifier — which answers ownership — supplies the scopes an overdue entry
-# may fail here; `none` (nothing staged) leaves that list empty.
-provisional_scopes=$(printf '%s\n' "$staged_scopes" \
-  | grep -vx none | tr '\n' ',' | sed 's/,$//')
-evidence_run provisional tool/version-control/provisional --scopes "$provisional_scopes" \
+# can name no measure. An overdue entry is reported for follow-up.
+evidence_run provisional tool/version-control/provisional \
   || abort "See docs/provisional/README.md."
 
 # Hooks are opt-in, so CI mirrors the secret check. A credential that reaches

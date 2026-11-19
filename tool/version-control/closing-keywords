@@ -1,8 +1,6 @@
 #!/bin/sh
 #
-# Enforce INV repository/no-closing-keyword: no commit message on its way to
-# dev and no promotion pull request body carries a GitHub closing keyword
-# before an issue reference.
+# Enforce INV repository/no-closing-keyword on incoming commits and PR text.
 #
 # GitHub closes a referenced issue when a closing keyword reaches the default
 # branch. Here that is a promotion, which accepts source history and certifies
@@ -20,20 +18,14 @@
 #                      comment lines, and everything below the scissors line
 #                      of `git commit -v`, are not part of the message
 #   --text <file>      a text taken as it stands: a promotion's body
-#   --range <base> <head> --base-ref <name>
-#                      every commit message in <base>..<head>, merges
-#                      included, when the pull request's base is dev. A
-#                      promotion's range is not read: dev carries commits
-#                      from before this rule, history is not rewritten, and
-#                      every later commit was read on its way into dev; the
-#                      promotion answers for its body instead.
+#   --range <base> <head>   every incoming commit message, including merges
 #
 # Hooks are opt-in, so the merge gate is the complete check and commit-msg is
 # the early one.
 #
 # usage: tool/version-control/closing-keywords --message <file>
 #        tool/version-control/closing-keywords --text <file>
-#        tool/version-control/closing-keywords --range <base> <head> --base-ref <name>
+#        tool/version-control/closing-keywords --range <base> <head>
 #
 # Exit 0 verified, 69 unverified, any other status failed. See
 # docs/policy/architecture.md, "Repository governance plane", and .githooks/evidence,
@@ -71,7 +63,7 @@ require_command() {
 usage() {
   echo "usage: tool/version-control/closing-keywords --message <file>" >&2
   echo "       tool/version-control/closing-keywords --text <file>" >&2
-  echo "       tool/version-control/closing-keywords --range <base> <head> --base-ref <name>" >&2
+  echo "       tool/version-control/closing-keywords --range <base> <head>" >&2
   exit 2
 }
 
@@ -114,22 +106,23 @@ case "${1:-}" in
   --text)
     [ "$#" -eq 2 ] || usage
     require_command grep
-    [ -r "$2" ] || { echo "cannot read $2" >&2; exit 2; }
-    scan "$2" "$2" || { explain; exit 1; }
+    text=$2
+    if [ "$text" = - ]; then
+      text="$tmp/input"
+      cat >"$text"
+    fi
+    [ -r "$text" ] || { echo "cannot read $2" >&2; exit 2; }
+    scan "$2" "$text" || { explain; exit 1; }
     echo "✓ closing keywords: the text carries none"
     ;;
   --range)
-    [ "$#" -eq 5 ] && [ "$4" = --base-ref ] || usage
+    [ "$#" -eq 3 ] || usage
     require_command git grep
-    if [ "$5" != dev ] && [ "$5" != master ]; then
-      echo "· closing keywords: the range of a pull request into $5 is not read; a promotion answers for its body"
-      exit 0
-    fi
-    git rev-parse -q --verify "$2^{commit}" >/dev/null ||
-      { printf '\033[31m✗ scan did not run: %s is not a commit\033[0m\n' "$2" >&2; exit 1; }
-    git rev-parse -q --verify "$3^{commit}" >/dev/null ||
-      { printf '\033[31m✗ scan did not run: %s is not a commit\033[0m\n' "$3" >&2; exit 1; }
-    git rev-list "$2..$3" >"$tmp/commits"
+    export GIT_NO_REPLACE_OBJECTS=1
+    tools=$(CDPATH= cd -- "$(dirname -- "$0")" && pwd)
+    . "$tools/incoming-range.sh"
+    incoming_range "$2" "$3"
+    git rev-list "$range_walk" >"$tmp/commits"
     read_count=0
     failed=0
     while IFS= read -r sha; do

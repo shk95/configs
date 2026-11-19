@@ -2,6 +2,12 @@
 # Resolve the event range before selection or work-record checks.
 # INV repository/local-gate-selects-by-effect
 set -eu
+export GIT_NO_REPLACE_OBJECTS=1
+valid_sha() {
+  case "$1" in ''|*[!0-9a-f]*) return 1 ;; esac
+  [ "${#1}" -eq 40 ]
+}
+
 case ${EVENT_NAME:-} in
   pull_request)
     case ${PR_STACK:-} in
@@ -17,15 +23,20 @@ case ${EVENT_NAME:-} in
       exit 1
     }
     base=${PR_BASE:-}
+    head=${PR_HEAD:-}
+    valid_sha "$head" && [ "$(git show -s --format=%P HEAD)" = "$base $head" ] || {
+      echo 'PR checkout must be the synthetic merge of the event base and head' >&2
+      exit 1
+    }
     ;;
   workflow_dispatch)
     [ "${DISPATCH_REF:-}" = refs/heads/master ] || { echo 'Dispatch tooling must be accepted master' >&2; exit 1; }
     head=${DISPATCH_HEAD:-}
-    case "$head" in ''|*[!0-9a-f]*) exit 1 ;; esac
-    [ "${#head}" -eq 40 ] || exit 1
+    valid_sha "$head" || exit 1
     [ "$(git rev-parse HEAD)" = "$head" ] || exit 1
     base=${DISPATCH_BASE:-}
     [ "$base" = "$(git rev-parse refs/remotes/origin/master)" ] || { echo 'Stale dispatch master base' >&2; exit 1; }
+    [ "${GITHUB_WORKFLOW_SHA:-}" = "$base" ] || { echo 'Dispatch workflow revision differs from the reviewed base' >&2; exit 1; }
     git merge-base --is-ancestor "$base" "$head" || exit 1
     ;;
   push)
@@ -33,14 +44,14 @@ case ${EVENT_NAME:-} in
     ;;
   *) echo 'Unsupported CI event' >&2; exit 1 ;;
 esac
-case $base in
-  ''|*[!0-9a-f]*) echo 'Invalid event base SHA' >&2; exit 1 ;;
-esac
-[ "${#base}" -eq 40 ] || { echo 'Invalid event base SHA length' >&2; exit 1; }
+valid_sha "$base" || { echo 'Invalid event base SHA' >&2; exit 1; }
 case $base in
   0000000000000000000000000000000000000000)
     [ "$EVENT_NAME" = push ] || exit 1
-    git hash-object -t tree /dev/null
+    git hash-object -t tree --stdin </dev/null
     ;;
-  *) git rev-parse --verify "$base^{commit}" ;;
+  *) git rev-parse --verify --quiet "$base^{commit}" || {
+       echo "Event base $base is unavailable in the checkout; its incoming range cannot be verified" >&2
+       exit 1
+     } ;;
 esac

@@ -30,9 +30,9 @@ sentence someone would like a policy document to carry, which waits in
 results and verification, whether or not it uses a pull request. Scratch
 thinking that promises nothing stays untracked in `notes/`.
 
-`tool/version-control/work` checks every work item. A failure names its rule
-as `W1` to `W7`; the checker's header defines each. It runs on every commit
-and in CI. With no argument it reads the index. For early feedback before
+`tool/version-control/work` checks work records on commit and in CI when the
+candidate changes them. A failure names its rule as `W1` to `W7`; the checker's
+header defines each. With no argument it checks the whole index. For early feedback before
 staging, run `tool/configs work --working-tree
 docs/work/<scope>/<slug>`: it reads that one item from the filesystem,
 including untracked files, and applies W1-W6. It does not replace the staged

@@ -165,6 +165,22 @@ require_command git awk
 root=$(git rev-parse --show-toplevel)
 cd "$root"
 
+# Range modes guard changes to work records. The argument-free diagnostic
+# checks the whole index, including records outside the current change.
+if [ "$mode" = range ]; then
+  if [ -z "$head" ]; then
+    if git diff --cached --quiet --no-renames -- docs/work; then
+      echo '✓ work: no staged work-record changes'
+      exit 0
+    fi
+  elif git rev-parse -q --verify "$base^{commit}" >/dev/null &&
+       git diff --quiet --no-renames "$base" "$head" -- docs/work &&
+       git diff --cached --quiet --no-renames "$head" -- docs/work; then
+    echo '✓ work: no work-record changes in the candidate'
+    exit 0
+  fi
+fi
+
 tmp=$(mktemp -d)
 trap 'rm -rf "$tmp"' EXIT
 

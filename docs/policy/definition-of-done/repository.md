@@ -100,7 +100,7 @@ requirements for ordinary source work.
 - [ ] The same-repository patch head is one commit on the current master and
       changes only permitted Unix-like lock data and its next patch declaration.
 - [ ] Exact PR CI evidence and the actual merge parents/tree agree; the writer
-      defers for other master PRs and uses ordinary protected history rules.
+      defers for other ready master PRs and uses ordinary protected history rules.
 - [ ] The patch remains based on current published master and stops on source
       drift; no Windows publication occurs in the patch controller.
 - [ ] The immutable annotation and interrupted-publication recovery satisfy the
@@ -140,8 +140,8 @@ requirements for ordinary source work.
 
 ## Release evidence
 
-- [ ] The release tag is annotated, matches the domain naming convention, and
-      targets a commit reachable from `master`.
+- [ ] The release tag is annotated, matches the domain's version declaration
+      at its target, and targets a commit reachable from `master`.
 - [ ] The annotation names the domain and reports evaluation, build, and native
       runtime evidence separately: per host for Windows, and once for Unix-like
       provider or common releases.
