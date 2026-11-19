@@ -1,7 +1,7 @@
 {
-  "previous": "unixlike-v1.3.2",
-  "version": "1.3.3",
-  "summary": "Refresh permitted Unix-like inputs.",
-  "compatibility": "patch",
-  "migration": ""
+  "previous": "unixlike-v1.3.3",
+  "version": "2.0.0",
+  "summary": "Add a program catalog and host selection, move coding agents to mise on Linux and Homebrew on macOS, support writable settings with generation diff backups, and adopt the upstream Paneru Accessibility fix.",
+  "compatibility": "breaking",
+  "migration": "Enable Homebrew on macOS consumers that use provider-managed Codex and Claude Code. Linux supplies both through mise. Remove overlapping installation declarations and verify command resolution in a fresh shell. Selected Ghostty, Paneru, WezTerm and Zellij settings reset to the incoming generation on switch after numbered diff backups. Check Accessibility access for the new Paneru executable."
 }
