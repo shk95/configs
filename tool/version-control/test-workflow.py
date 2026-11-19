@@ -412,6 +412,9 @@ class Workflow(unittest.TestCase):
         scanner.write_text('''#!/usr/bin/env python3
 import subprocess
 import sys
+if sys.argv[1] == 'stdin':
+    sys.stdin.read()
+    sys.exit(0)
 options = next(arg.split('=', 1)[1].split() for arg in sys.argv if arg.startswith('--log-opts='))
 patch = subprocess.check_output(['git', '-C', sys.argv[-1], 'log', '-p', '-U0', *options], text=True)
 print(patch)
@@ -466,6 +469,33 @@ print(patch)
         self.git('push', '-q', str(receiver), 'refs/heads/master')
         self.git('push', '-q', str(receiver), ref)
         self.assertIn(self.git('rev-parse', ref), self.git('ls-remote', str(receiver), ref))
+
+    def test_push_scans_commit_messages_and_annotated_tags(self):
+        # INV repository/no-secret-in-history
+        scanner = self.root / 'tool/gitleaks'
+        scanner.write_text('''#!/usr/bin/env python3
+import sys
+if sys.argv[1] == 'stdin' and 'private-fixture-marker' in sys.stdin.read():
+    raise SystemExit(1)
+''')
+        receiver = Path(self.tmp.name) / 'receiver.git'
+        self.git('init', '-q', '--bare', str(receiver))
+        self.git('push', '-q', '--no-verify', str(receiver), self.base + ':refs/heads/master')
+        self.git('config', 'core.hooksPath', '.githooks')
+        self.git('-c', 'core.hooksPath=/dev/null', 'commit', '-q', '--allow-empty',
+                 '-m', 'test(repository): metadata fixture', '-m', 'private-fixture-marker')
+        self.git('push', '-q', str(receiver), 'master', ok=False)
+        self.assertIn(self.base, self.git('ls-remote', str(receiver), 'refs/heads/master'))
+
+        annotation = 'Domain: unixlike\nEvaluation: unavailable\nBuild: unavailable\nNative runtime: unavailable'
+        rejected = 'refs/tags/unixlike-v0.0.1'
+        accepted = 'refs/tags/unixlike-v0.0.2'
+        self.git('tag', '-a', 'unixlike-v0.0.1', self.base, '-m', annotation + '\nprivate-fixture-marker')
+        self.git('tag', '-a', 'unixlike-v0.0.2', self.base, '-m', annotation)
+        self.git('push', '-q', str(receiver), rejected, ok=False)
+        self.assertEqual(self.git('ls-remote', str(receiver), rejected), '')
+        self.git('push', '-q', str(receiver), accepted)
+        self.assertIn(self.git('rev-parse', accepted), self.git('ls-remote', str(receiver), accepted))
 
     def test_runtime_governance_requires_hosted_proof_even_on_native_windows(self):
         # INV repository/windows-ci-runtime-bound

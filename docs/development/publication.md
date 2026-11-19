@@ -120,8 +120,15 @@ qualify the actual installed App or hosted execution.
 
 `.github/workflows/release.yml` is the shared Unix-like input patch workflow.
 `CONFIGS_RELEASE_ENABLED=1` enables operation; `CONFIGS_RELEASE_SCHEDULE_ENABLED=1`
-also enables its daily 01:17 Asia/Seoul schedule. Keep schedules off while rolling
-out changed policy and tooling through ordinary master commits or topic integration.
+also enables its daily 01:17 Asia/Seoul schedule. Before adopting a new CI proof
+format, finish any unpublished automatic patch with the currently accepted
+writer. Have the maintainer pause automatic and manual writers by setting
+`CONFIGS_RELEASE_ENABLED=0`, let any existing runs finish, and run
+`tool/configs release inspect --upgrade-readiness`. The command checks the
+live setting, active runs, managed PRs and the last patch declaration on the
+first-parent history, including after repository-only changes. It does not edit
+remote settings. Legacy runs keep their original workflow when rerun. Resume
+the writer after the new proof format and workflow have been adopted.
 Configure release-control for accepted master writers and either the existing
 CONFIGS_RELEASE_TOKEN or CONFIGS_RELEASE_APP_ID and CONFIGS_RELEASE_APP_PRIVATE_KEY.
 The writer needs Contents/PR write and Actions/Checks read with protected merge
@@ -134,9 +141,13 @@ The workflow selects current master and refreshes nixpkgs, home-manager,
 nix-darwin and nixos-wsl. Unchanged inputs produce no PR or tag. Changed inputs
 produce one single-commit branch feature/unixlike-input-patch-<base SHA prefix>
 with only the lock and the next patch release declaration. It opens a master PR,
-requires matching PR CI proof from the shared reader, rechecks master and the
-current PR body and head, merges through protection, and confirms the actual
-parents and tree. The immutable Unix-like tag names the verified CI run and
+requires matching PR CI proof from the shared reader, and rechecks the current
+PR body and head. The writer creates a merge commit with the exact reviewed
+parents and tree and sends it through a protected fast-forward Git update. The
+push hook compares the receiver's advertised `master` to the reviewed base.
+The receiver compares that old object while applying the ref update. The writer
+confirms the delivered commit and waits for GitHub's PR merge association before
+tagging. The immutable Unix-like tag names the verified CI run and
 attempt. CI completion events
 resume scheduled operation; no 06/07 development-promotion stages or daily
 promotion limit remain. Delayed/missing schedules have no guaranteed catch-up.

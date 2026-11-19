@@ -157,7 +157,8 @@ tool/configs hook-evidence
 Push checks the complete messages, ownership and secret scan of the transmitted
 range. A new branch uses the receiver's master as the baseline. Fetch explicitly
 when its commit is missing locally. Install gitleaks for branch publication.
-Push checks a transmitted release tag and its reachability from remote master.
+Push checks a transmitted release tag, scans its annotation, and verifies its
+reachability from remote master.
 Candidate verification owns native suites. Master-push, optional PR and
 candidate-dispatch CI report their actual tested source independently.
 

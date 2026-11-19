@@ -43,3 +43,12 @@ published history.
 | AC3 | Merge and bounded release consume the same attempt-aware reader. It binds successful jobs and artifact to the workflow definition, required units and platforms, and exact source identity. | fixtures, affected dispatch |
 | AC4 | Hosted evidence replaces covered local checks and CI reuses evidence only for equivalent obligations. Each writer retains immediate source, destination, metadata and immutable publication checks. | fixtures, review |
 | AC5 | Current policy, operator procedure, enforcement, and positive and negative fixtures agree. Provider checks, runtime, and deployment evidence retain separate meanings. | fixtures, review |
+| AC6 | A racing master update cannot land a bounded patch on an unreviewed base. Publication checks commit and tag metadata. Proof-format cutover detects unfinished automatic publications. | fixtures, review |
+
+## Amendment 2026-11-19
+
+Amended 2026-11-19 AC6: review of the draft identified a race between the last
+master read and the GitHub merge call, a gap in metadata secret scanning, and
+an unpublished-patch recovery risk during proof-format rollout. The follow-up
+preserves the reviewed parent and tree in the actual ref transaction and
+checks cutover readiness without editing remote controls.

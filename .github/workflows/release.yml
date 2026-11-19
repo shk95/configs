@@ -130,6 +130,8 @@ jobs:
         with:
           name: refreshed-lock
           path: ${{ runner.temp }}/refreshed
+      - name: Install outbound secret scanner
+        run: sh .github/scripts/install-gitleaks
       - uses: actions/create-github-app-token@v3
         id: app
         if: vars.CONFIGS_RELEASE_APP_ID != ''

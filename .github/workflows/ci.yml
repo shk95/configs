@@ -240,16 +240,12 @@ jobs:
           persist-credentials: false
           fetch-depth: 0
       - name: Install gitleaks
-        env:
-          GITLEAKS_VERSION: 8.30.1
-        run: |
-          curl -sSfL "https://github.com/gitleaks/gitleaks/releases/download/v${GITLEAKS_VERSION}/gitleaks_${GITLEAKS_VERSION}_linux_x64.tar.gz" |
-            sudo tar -xz -C /usr/local/bin gitleaks
+        run: sh .github/scripts/install-gitleaks
       - name: Audit incoming commits and merges
         env:
           CI_BASE: ${{ needs.classify.outputs.base }}
         run: tool/version-control/audit --range "$CI_BASE" HEAD
-      - name: Scan incoming patches for secrets
+      - name: Scan incoming commits for secrets
         env:
           CI_BASE: ${{ needs.classify.outputs.base }}
         run: tool/version-control/scan-secrets --range "$CI_BASE" HEAD

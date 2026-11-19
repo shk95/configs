@@ -9,6 +9,7 @@ import importlib.util
 import json
 import os
 import shutil
+import shlex
 from pathlib import Path
 import subprocess
 import sys
@@ -23,6 +24,7 @@ ROOT = Path(__file__).resolve().parents[2]
 spec = importlib.util.spec_from_file_location('release', ROOT / 'tool/version-control/release.py')
 r = importlib.util.module_from_spec(spec)
 spec.loader.exec_module(r)
+REAL_PUSH = r.push_patch_merge
 
 
 class LocalGitHub:
@@ -44,6 +46,8 @@ class LocalGitHub:
         self.writes = []
         self.sleeps = 0
         self.proofs = {}
+        self.writer_enabled = '0'
+        self.active = set()
 
     def remote_git(self, *args, data=None, env=None):
         return subprocess.check_output(['git', '--git-dir', str(self.remote), *args], input=data, env=env).decode().strip()
@@ -63,6 +67,12 @@ class LocalGitHub:
             prefix = 'refs/' + path.removeprefix('git/matching-refs/')
             lines = self.remote_git('for-each-ref', '--format=%(refname) %(objectname) %(objecttype)', prefix)
             return [{'ref': ref, 'object': {'sha': sha, 'type': kind}} for ref, sha, kind in (line.split() for line in lines.splitlines())]
+        if path == 'actions/variables/CONFIGS_RELEASE_ENABLED':
+            return {'value': self.writer_enabled}
+        if path.startswith('actions/workflows/'):
+            workflow, query = path.split('/')[2:]
+            status = query.split('status=', 1)[1].split('&', 1)[0]
+            return {'workflow_runs': [{'id': 1}] if (workflow, status) in self.active else []}
         if path.startswith('git/ref/heads/'):
             return {'object': {'sha': self.remote_git('rev-parse', 'refs/heads/' + path.removeprefix('git/ref/heads/'))}}
         if path == 'git/blobs':
@@ -124,21 +134,16 @@ class LocalGitHub:
             return next(proof.commit for proof in self.proofs.values() if proof.commit['sha'] == sha)
         raise AssertionError(path)
 
-    def request(self, path, method, data):
-        self.writes.append(path)
-        if path.startswith('git/refs/heads/'):
-            self.remote_git('update-ref', 'refs/heads/' + path.removeprefix('git/refs/heads/'), data['sha'])
-            return {}
-        pr = self.pr(int(path.split('/')[1]))
-        if data['sha'] != pr['head']['sha'] or not pr['ready']:
-            return {'merged': False}
-        base = self.remote_git('rev-parse', 'refs/heads/' + pr['base']['ref'])
-        if base != pr['base']['sha']:
-            return {'merged': False}
-        source = self.remote_git('commit-tree', pr['tree'], '-p', base, '-p', data['sha'], data=b'Merge checked fixture PR\n')
-        self.remote_git('update-ref', 'refs/heads/' + pr['base']['ref'], source, base)
-        pr.update(state='closed', merged=True, merged_at='2026-10-06T00:00:00Z', merge_commit_sha=source)
-        return {'merged': True}
+    def push_merge(self, base, source):
+        # Use the real Git update and tracked pre-push hook. Only the
+        # production HTTPS destination and GitHub PR association are simulated.
+        with patch.object(r, 'push_target', return_value=str(self.remote)):
+            REAL_PUSH(base, source)
+        self.writes.append('push master')
+        parents = self.remote_git('show', '-s', '--format=%P', source).split()
+        assert self.remote_git('rev-parse', 'refs/heads/master') == source
+        pr = next(pr for pr in self.prs if pr['head']['sha'] == parents[1])
+        pr.update(state='closed', merged=True, merged_at='fixture', merge_commit_sha=source)
 
 
 class ReleaseFixtures(unittest.TestCase):
@@ -170,8 +175,18 @@ class ReleaseFixtures(unittest.TestCase):
             Path(domain).mkdir()
             self.write(domain + '/release.json', {'previous': seed, 'version': '1.0.0', 'summary': 'First release',
                        'compatibility': 'breaking', 'migration': 'Explicit consumer adoption.'})
-        Path('.githooks').mkdir()
-        shutil.copy(ROOT / '.githooks/commit-msg', '.githooks/commit-msg')
+        for name in ('.githooks/commit-msg', '.githooks/pre-push', '.githooks/evidence',
+                     'tool/version-control/scan-secrets', 'tool/version-control/incoming-range.sh',
+                     'tool/version-control/audit', 'tool/version-control/hooks.sh'):
+            target = Path(name)
+            target.parent.mkdir(parents=True, exist_ok=True)
+            shutil.copy2(ROOT / name, target)
+        tools = Path('.git/fixture-bin').resolve()
+        tools.mkdir()
+        scanner = tools / 'gitleaks'
+        scanner.write_text('#!/bin/sh\nif [ "$1" = stdin ]; then cat >/dev/null; fi\n')
+        scanner.chmod(0o755)
+        os.environ['PATH'] = str(tools) + os.pathsep + os.environ['PATH']
         self.write('unixlike/automatic-refresh-inputs.json', ['nixpkgs'])
         self.commit('feat(repository): initial fixture')
         self.write('unixlike/flake.lock', self.lock)
@@ -395,7 +410,7 @@ class ReleaseFixtures(unittest.TestCase):
         r.git('update-ref', 'refs/heads/master', general)
         subprocess.check_call([str(ROOT / 'tool/version-control/audit'), '--tag', 'unixlike-v1.1.0'], stdout=subprocess.DEVNULL)
         baseline_tag = remote.remote_git('rev-parse', 'unixlike-v1.1.0')
-        with patch.dict(os.environ, CONFIGS_RELEASE_ENABLED='1', GH_TOKEN='fixture-only'), patch.object(r, 'api', side_effect=remote.api), patch.object(r, 'request', side_effect=remote.request):
+        with patch.dict(os.environ, CONFIGS_RELEASE_ENABLED='1', GH_TOKEN='fixture-only'), patch.object(r, 'api', side_effect=remote.api), patch.object(r, 'push_patch_merge', side_effect=remote.push_merge):
             for manual in (False, True):
                 with self.subTest(manual=manual):
                     self.assertEqual(r.inspect(manual=manual, start=True), {'action': 'refresh', 'base': general, 'head': general})
@@ -486,7 +501,7 @@ class ReleaseFixtures(unittest.TestCase):
         lock = json.loads(json.dumps(self.lock))
         lock['nodes']['n']['locked']['rev'] = 'new-upstream'
         self.write('.git/manual-lock.json', lock)
-        with patch.dict(os.environ, {'CONFIGS_RELEASE_ENABLED': '1', 'GH_TOKEN': 'fixture-only'}), patch.object(r, 'api', side_effect=remote.api), patch.object(r, 'request', side_effect=remote.request), patch.object(r.time, 'sleep', side_effect=remote.complete_ci):
+        with patch.dict(os.environ, {'CONFIGS_RELEASE_ENABLED': '1', 'GH_TOKEN': 'fixture-only'}), patch.object(r, 'api', side_effect=remote.api), patch.object(r, 'push_patch_merge', side_effect=remote.push_merge), patch.object(r.time, 'sleep', side_effect=remote.complete_ci):
             r.write_guard()
             start = r.inspect(manual=True, start=True)
             self.assertEqual(start, {'action': 'refresh', 'base': self.base, 'head': self.base})
@@ -535,7 +550,7 @@ class ReleaseFixtures(unittest.TestCase):
         self.assertFalse(r.automatic(self.base,extra))
         with patch.dict(os.environ, TOPIC_BASE_REF='master', TOPIC_HEAD_REF=r.PATCH_BRANCH+'fake', TOPIC_BASE_REPOSITORY='fixture/configs', TOPIC_HEAD_REPOSITORY='fixture/configs', TOPIC_BASE_SHA=self.base, TOPIC_HEAD_SHA=extra):
             self.assertNotEqual(subprocess.call([str(ROOT/'tool/version-control/topic-source')],stdout=subprocess.DEVNULL,stderr=subprocess.DEVNULL),0)
-        with patch.object(r,'inspect',return_value={'action':'patch-merge','base':self.base,'head':self.head}),patch.object(r,'request') as writer:
+        with patch.object(r,'inspect',return_value={'action':'patch-merge','base':self.base,'head':self.head}),patch.object(r,'push_patch_merge') as writer:
             with self.assertRaisesRegex(ValueError,'candidate changed'):
                 r.advance('f'*40,self.base,manual=True)
             writer.assert_not_called()
@@ -545,7 +560,7 @@ class ReleaseFixtures(unittest.TestCase):
         remote=LocalGitHub()
         lock=json.loads(json.dumps(self.lock));lock['nodes']['n']['locked']['rev']='new'
         self.write('.git/manual-lock.json',lock)
-        with patch.dict(os.environ,CONFIGS_RELEASE_ENABLED='1',GH_TOKEN='fixture-only'),patch.object(r,'api',side_effect=remote.api),patch.object(r,'request',side_effect=remote.request),patch.object(r.time,'sleep',side_effect=remote.complete_ci):
+        with patch.dict(os.environ,CONFIGS_RELEASE_ENABLED='1',GH_TOKEN='fixture-only'),patch.object(r,'api',side_effect=remote.api),patch.object(r,'push_patch_merge',side_effect=remote.push_merge),patch.object(r.time,'sleep',side_effect=remote.complete_ci):
             r.write_guard();r.refresh_pr(self.base,'.git/manual-lock.json')
             remote.complete_ci(0);r.write_guard()
             plan=r.inspect(manual=True)
@@ -569,7 +584,7 @@ class ReleaseFixtures(unittest.TestCase):
         remote=LocalGitHub()
         lock=json.loads(json.dumps(self.lock));lock['nodes']['n']['locked']['rev']='next'
         self.write('.git/manual-lock.json',lock)
-        with patch.dict(os.environ,CONFIGS_RELEASE_ENABLED='1',GH_TOKEN='fixture-only'),patch.object(r,'api',side_effect=remote.api),patch.object(r,'request',side_effect=remote.request):
+        with patch.dict(os.environ,CONFIGS_RELEASE_ENABLED='1',GH_TOKEN='fixture-only'),patch.object(r,'api',side_effect=remote.api),patch.object(r,'push_patch_merge',side_effect=remote.push_merge):
             r.write_guard();r.refresh_pr(self.base,'.git/manual-lock.json')
             Path('accepted-doc').write_text('Master advanced independently.')
             advanced=self.commit('docs(repository): move accepted master')
@@ -590,7 +605,7 @@ class ReleaseFixtures(unittest.TestCase):
         lock['nodes']['n']['locked']['rev'] = 'fresh-patch'
         self.write('.git/manual-lock.json', lock)
         with patch.dict(os.environ, CONFIGS_RELEASE_ENABLED='1', GH_TOKEN='fixture-only'), \
-                patch.object(r, 'api', side_effect=remote.api), patch.object(r, 'request') as writer:
+                patch.object(r, 'api', side_effect=remote.api), patch.object(r, 'push_patch_merge') as writer:
             r.write_guard()
             pr = r.refresh_pr(self.base, '.git/manual-lock.json')
             remote.complete_ci(0)
@@ -604,6 +619,56 @@ class ReleaseFixtures(unittest.TestCase):
             with patch.object(r, 'api', side_effect=changed_master), self.assertRaisesRegex(ValueError, 'remote master changed'):
                 r.advance(action['head'], action['base'], manual=True)
             writer.assert_not_called()
+
+    def test_exact_push_refuses_a_move_before_and_after_advertisement(self):
+        # INV repository/bounded-release-automation
+        r.git('checkout', '-q', '--detach', self.base)
+        remote = LocalGitHub()
+        source = r.git('commit-tree', self.tree, '-p', self.base, '-p', self.head, '-m', 'Merge verified fixture')
+        r.git('push', '--quiet', 'origin', f'{self.head}:refs/heads/fixture/patch')
+        # The racing value is an ancestor of the merge, so an unrestricted
+        # fast-forward push would accept it as the receiver's old base.
+        remote.remote_git('update-ref', 'refs/heads/master', self.head, self.base)
+        with patch.object(r, 'push_target', return_value=str(remote.remote)):
+            with self.assertRaises(subprocess.CalledProcessError):
+                REAL_PUSH(self.base, source)
+            self.assertEqual(remote.remote_git('rev-parse', 'refs/heads/master'), self.head)
+
+            remote.remote_git('update-ref', 'refs/heads/master', self.base, self.head)
+            hook = Path('.githooks/pre-push')
+            hook.write_text(hook.read_text() + '\nunset GIT_DIR GIT_WORK_TREE\n' + shlex.join([
+                'git', '--git-dir', str(remote.remote), 'update-ref', 'refs/heads/master', self.head, self.base]) + '\n')
+            with self.assertRaises(subprocess.CalledProcessError):
+                REAL_PUSH(self.base, source)
+            self.assertEqual(remote.remote_git('rev-parse', 'refs/heads/master'), self.head)
+
+    def test_upgrade_blocks_legacy_unpublished_patch_behind_governance_commits(self):
+        # INV repository/bounded-release-automation
+        r.git('checkout', '-q', '--detach', self.base)
+        remote = LocalGitHub()
+        lock = json.loads(json.dumps(self.lock))
+        lock['nodes']['n']['locked']['rev'] = 'legacy-patch'
+        self.write('.git/manual-lock.json', lock)
+        with patch.object(r, 'api', side_effect=remote.api):
+            self.assertTrue(r.upgrade_readiness()['ready'])
+            remote.writer_enabled = '1'
+            remote.active.add(('release.yml', 'waiting'))
+            self.assertEqual(len(r.upgrade_readiness()['blockers']), 2)
+            remote.writer_enabled = '0'
+            remote.active.clear()
+            pr = r.refresh_pr(self.base, '.git/manual-lock.json')
+            self.assertIn('still open', r.upgrade_readiness()['blockers'][0])
+            r.git('fetch', '--quiet', 'origin', pr['head']['sha'])
+            source = r.git('commit-tree', pr['tree'], '-p', self.base, '-p', pr['head']['sha'], '-m', 'Merge legacy patch')
+            later = r.git('commit-tree', pr['tree'], '-p', source, '-m', 'docs(repository): later governance')
+            remote.push_merge(self.base, source)
+            r.git('push', '--quiet', 'origin', f'{later}:refs/heads/master')
+            before = list(remote.writes)
+            readiness = r.upgrade_readiness()
+            self.assertEqual(readiness['master'], later)
+            self.assertFalse(readiness['ready'])
+            self.assertIn('Complete unixlike-v1.0.1 using accepted pre-upgrade tooling', readiness['blockers'][0])
+            self.assertEqual(remote.writes, before)
 
     def test_unpublished_master_development_cannot_be_relabelled_patch(self):
         r.git('checkout','-q','--detach',self.base)
@@ -666,7 +731,7 @@ class ReleaseFixtures(unittest.TestCase):
         remote=LocalGitHub()
         lock=json.loads(json.dumps(self.lock));lock['nodes']['n']['locked']['rev']='scheduled'
         self.write('.git/manual-lock.json',lock)
-        with patch.dict(os.environ,CONFIGS_RELEASE_ENABLED='1',GH_TOKEN='fixture-only'),patch.object(r,'api',side_effect=remote.api),patch.object(r,'request',side_effect=remote.request):
+        with patch.dict(os.environ,CONFIGS_RELEASE_ENABLED='1',GH_TOKEN='fixture-only'),patch.object(r,'api',side_effect=remote.api),patch.object(r,'push_patch_merge',side_effect=remote.push_merge):
             r.write_guard()
             start=r.inspect(start=True)
             self.assertEqual(start['head'],self.base)
@@ -675,10 +740,10 @@ class ReleaseFixtures(unittest.TestCase):
             self.assertEqual(r.inspect()['action'],'wait')
             remote.complete_ci(0)
             plan=r.inspect()
-            def lost_response(path,method,data):
-                remote.request(path,method,data)
+            def lost_response(base, source):
+                remote.push_merge(base, source)
                 raise subprocess.CalledProcessError(1,'gh')
-            with patch.object(r,'request',side_effect=lost_response):
+            with patch.object(r,'push_patch_merge',side_effect=lost_response):
                 r.advance(plan['head'],plan['base'])
             r.write_guard()
             self.assertEqual(r.inspect(),{'action':'none'})
@@ -689,7 +754,7 @@ class ReleaseFixtures(unittest.TestCase):
         r.git('checkout','-q','--detach',self.base)
         remote=LocalGitHub()
         self.write('.git/manual-lock.json',self.lock)
-        with patch.object(r,'api',side_effect=remote.api),patch.object(r,'request',side_effect=remote.request):
+        with patch.object(r,'api',side_effect=remote.api),patch.object(r,'push_patch_merge',side_effect=remote.push_merge):
             self.assertEqual(r.refresh_pr(self.base,'.git/manual-lock.json'),{'action':'none'})
             self.assertEqual(remote.writes,[])
             lock=json.loads(json.dumps(self.lock));lock['nodes']['n']['locked']['rev']='next'

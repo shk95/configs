@@ -27,7 +27,7 @@ UNITS = {
                         ('Acquire declared Windows management runtime', 'Verify Windows CI runtime fixtures')),
 }
 POLICY_JOB = 'Incoming history and repository policy'
-POLICY_STEPS = ('Audit incoming commits and merges', 'Scan incoming patches for secrets',
+POLICY_STEPS = ('Audit incoming commits and merges', 'Scan incoming commits for secrets',
                 'Run tool/version-control/hygiene', 'Run tool/version-control/domain-reads',
                 'Run tool/version-control/design-citations', 'Run tool/version-control/records',
                 'Check the work items', 'Run tool/version-control/invariants', 'Check the provisional registry')

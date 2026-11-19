@@ -12,6 +12,7 @@ status: done
 | AC3 | verified | The local workflow command and the bounded release reader accepted PR 592 run 44490447228, attempt 1, for base `78b19ff`, head `296a8fd`, synthetic merge and workflow revision `ad63434`, and tree `4d2ed29`. Live checks refused a legacy artifact and a different PR number. Fixtures refuse wrong workflow content, checkout, source, unit, platform, job, attempt and artifact. |
 | AC4 | verified | In a disposable clone, the real PR artifact supplied both provider suites for an exact two-parent merge. A different tree and a direct commit received no reuse. Fixtures exercise unavailable evidence, the current-date provisional veto and release write guards for changed PR metadata and master. A simulated bounded patch publishes an immutable tag with the verified run and attempt. |
 | AC5 | verified | The complete repository suite passed locally and the scoped GitHub jobs passed. Reviewed procedure and invariant references against the actual entry points. Reviewed the added prose and release evidence format for private account and machine values. Domain sources and consumer runtime and deployment procedures retain their separate ownership. |
+| AC6 | verified | Bare Git receiver fixtures refuse a competing fast-forward before advertisement and a ref move after advertisement. The normal verified update and lost-response recovery use the real push and tracked hook. Gitleaks 8.30.1 refused synthetic credentials in commit bodies and tag annotations. The cutover check refused a missing legacy patch tag behind a later repository commit, an open patch PR, pending writer runs and an enabled writer. |
 
 ## Qualification
 
@@ -26,3 +27,7 @@ hosted platforms. The master-push reuse decision was replayed with a temporary
 Git merge and live reference evidence. Remote publication guards were exercised
 in fixtures. Host runtime and deployment remain consumer operations. The
 change is available for review in [Draft PR #592](https://github.com/shk95/configs/pull/592).
+
+The review follow-up uses ordinary protected Git transport. Bare-repository
+fixtures exercise the receiver's ref comparison with a real competing move.
+GitHub PR association and release writes remain simulated in those fixtures.

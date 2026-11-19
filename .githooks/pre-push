@@ -14,6 +14,12 @@ export MSYS_NO_PATHCONV MSYS2_ARG_CONV_EXCL
 hooks_dir=$(CDPATH= cd -- "$(dirname -- "$0")" && pwd)
 . "$hooks_dir/evidence"
 
+bounded_push=false
+if [ -n "${CONFIGS_PATCH_BASE:-}${CONFIGS_PATCH_MERGE:-}" ]; then
+  bounded_push=true
+fi
+bounded_seen=false
+
 remote_master=
 remote_master_loaded=false
 read_remote_master() {
@@ -25,6 +31,17 @@ read_remote_master() {
 }
 
 while read -r local_ref local_sha remote_ref remote_sha; do
+  # Git sends the advertised old object to receive-pack, which compares it
+  # with the stored ref under lock. Admit only the reviewed update here.
+  if "$bounded_push"; then
+    if "$bounded_seen" || [ "$remote_ref" != refs/heads/master ] ||
+      [ "$remote_sha" != "${CONFIGS_PATCH_BASE:-}" ] ||
+      [ "$local_sha" != "${CONFIGS_PATCH_MERGE:-}" ]; then
+      echo 'Bounded release push does not match the reviewed master update' >&2
+      exit 1
+    fi
+    bounded_seen=true
+  fi
   case "$local_sha" in
     0000000000000000000000000000000000000000)
       case "$remote_ref" in
@@ -47,6 +64,7 @@ while read -r local_ref local_sha remote_ref remote_sha; do
         echo 'Tag source does not match the transmitted object' >&2; exit 1;
       }
       evidence_run "release tag" tool/version-control/audit --tag "$tag" || exit 1
+      evidence_run "release tag secrets" tool/version-control/scan-secrets --tag "$local_sha" || exit 1
       read_remote_master "$2"
       if [ -z "$remote_master" ] || ! git merge-base --is-ancestor "$local_sha^{commit}" "$remote_master"; then
         echo 'Publish the release commit to remote master before pushing its tag' >&2
@@ -74,4 +92,8 @@ while read -r local_ref local_sha remote_ref remote_sha; do
     *) echo "Unsupported destination ref: $remote_ref" >&2; exit 1 ;;
   esac
 done
+if "$bounded_push" && ! "$bounded_seen"; then
+  echo 'Bounded release push has no matching ref update' >&2
+  exit 1
+fi
 evidence_summary
