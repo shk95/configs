@@ -10,9 +10,10 @@ Commit uses fast staged checks. Tracked workflow checks and CI select affected
 suites through the same dispatcher. Pre-push reads transmitted history and
 tags only; native/fixture execution never depends on an unrelated checkout.
 Master push and optional topic PR CI fail unknown inputs and missing selected
-evidence. Document-only changes select no platform suite; global index scans
-remain required. Known Windows runtime wiring selects the native Windows suite.
-History diagnostics require no dev ref and never fetch implicitly.
-Incoming source ranges receive the same per-commit ownership audit in local
-delivery and CI. Windows runtime-governance inputs add a native proof-only
-unit; ordinary local Windows domain tests do not certify CI runtime wiring.
+evidence. Documentation and release declarations retain the global policy checks
+without selecting a provider suite independently. CI wiring exercises every
+hosted lane. Repository Git for Windows fixtures, Windows desired state and
+CI runtime-control fixtures are individually selected. Changes to the runtime
+declaration, reader or controller can affect both Windows units. History
+diagnostics require no dev ref and never fetch implicitly. Incoming source
+ranges receive the same ownership audit in local delivery and CI.

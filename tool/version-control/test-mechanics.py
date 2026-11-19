@@ -17,13 +17,13 @@ import shutil
 import subprocess
 import unittest
 from unittest.mock import patch
-import zipfile
 
 ROOT = Path(__file__).resolve().parents[2]
 SOURCE = ROOT / 'tool/version-control'
 sys.path.insert(0, str(SOURCE))
 import repo_policy
 import github_proof
+from ci_test import Evidence, archive
 import history_rewrite as history
 
 
@@ -36,13 +36,6 @@ def module(name, path):
 
 base_tests = module('workflow_fixtures', SOURCE / 'test-workflow.py')
 workspaces = module('workspace_implementation', SOURCE / 'workspaces')
-
-
-def archive(value):
-    stream = io.BytesIO()
-    with zipfile.ZipFile(stream, 'w') as zipped:
-        zipped.writestr('source.json', json.dumps(value))
-    return stream.getvalue()
 
 
 class Mechanics(unittest.TestCase):
@@ -286,60 +279,117 @@ class Mechanics(unittest.TestCase):
         self.call(tool, 'done', str(linked), '--expect-head', head, cwd=linked)
         self.assertEqual(self.git('rev-parse', ref), head)
 
-    def proof_fixture(self):
+    def proof_fixture(self, units=None):
         self.topic()
-        tree = self.git('rev-parse', 'HEAD^{tree}')
-        source = dict(base=self.base, head=self.head, tree=tree, event='workflow_dispatch')
-        run = dict(repository={'full_name': 'fixture/configs'}, path='.github/workflows/ci.yml',
-                   head_branch='master', head_sha=self.base, run_attempt=1, status='completed',
-                   conclusion='success', event='workflow_dispatch', html_url='https://github.com/fixture/configs/actions/runs/7')
-        jobs = {'jobs': [{'name': 'Required checks', 'conclusion': 'success'}]}
-        artifacts = {'artifacts': [{'id': 8, 'name': 'ci-source', 'expired': False}]}
-        def api(path, binary=False):
-            if path.endswith('/runs/7'): return run
-            if path.endswith('/attempts/1/jobs?per_page=100'): return jobs
-            if path.endswith('/runs/7/artifacts?per_page=100'): return artifacts
-            if path.endswith('/artifacts/8/zip'): return archive(source)
-            raise AssertionError('Unexpected remote read: ' + path)
-        return source, run, jobs, artifacts, api
+        if units is not None:
+            (self.root / 'tool/dispatch/select').write_text(
+                '#!/bin/sh\ncat >/dev/null\nprintf "%s\\n" ' + ' '.join(units) + '\n')
+            self.head = self.commit('test(repository): select requested CI units')
+        return Evidence(self.git, self.base, self.head, self.git('rev-parse', 'HEAD^{tree}'),
+                        units or ['repository:fixtures'])
 
     def test_live_ci_proof_accepts_exact_dispatch_and_rejects_mismatches(self):
         # INV repository/exact-ci-proof
-        source, run, jobs, artifacts, api = self.proof_fixture()
-        with patch.object(github_proof, 'api', api), patch.object(github_proof, 'repository', return_value='fixture/configs'):
-            proof = github_proof.verify('7', self.base, self.head, source['tree'])
-            self.assertEqual(proof['head'], self.head)
-            for mapping, key, wrong in [(source, 'base', 'a'*40), (source, 'head', 'b'*40),
-                                        (source, 'tree', 'c'*40), (source, 'event', 'push'),
-                                        (run, 'path', '.github/workflows/other.yml'),
-                                        (run, 'repository', {'full_name': 'fork/configs'}),
-                                        (run, 'head_branch', 'feature/repository-untrusted'),
-                                        (run, 'conclusion', 'failure'), (run, 'status', 'in_progress'),
-                                        (jobs['jobs'][0], 'conclusion', 'failure'),
-                                        (artifacts['artifacts'][0], 'expired', True)]:
-                old = mapping[key]
-                mapping[key] = wrong
-                with self.assertRaises((ValueError, subprocess.CalledProcessError)):
-                    github_proof.verify('7', self.base, self.head, self.git('rev-parse', 'HEAD^{tree}'))
-                mapping[key] = old
-            artifacts['artifacts'].append(copy.deepcopy(artifacts['artifacts'][0]))
-            with self.assertRaises(ValueError): github_proof.verify('7', self.base, self.head, source['tree'])
-        with self.assertRaises(ValueError): github_proof.source_record(archive(dict(source, extra='field')))
+        fixture = self.proof_fixture()
+        source = fixture.source
+        job = fixture.jobs['Version-control policy (Linux)']
+        def read():
+            return github_proof.verify('7', self.base, self.head, self.git('rev-parse', 'HEAD^{tree}'),
+                                       repo='fixture/configs', read=fixture.read)
+        self.assertEqual(read()['head'], self.head)
+        for mapping, key, wrong in [(source, 'base', 'a'*40), (source, 'head', 'b'*40),
+                                    (source, 'tree', 'c'*40), (source, 'event', 'push'),
+                                    (source, 'checkout', self.base), (source, 'workflow_sha', self.head),
+                                    (source, 'workflow_blob', 'd'*40), (source, 'run_id', 8),
+                                    (source, 'attempt', 2), (source, 'units', []),
+                                    (fixture.run, 'path', '.github/workflows/other.yml'),
+                                    (fixture.run, 'head_repository', {'full_name': 'fork/configs'}),
+                                    (fixture.run, 'head_branch', 'topic/untrusted'),
+                                    (fixture.run, 'head_sha', self.head),
+                                    (fixture.run, 'conclusion', 'failure'), (fixture.run, 'status', 'in_progress'),
+                                    (job, 'labels', ['windows-latest']), (job, 'steps', []),
+                                    (job, 'run_attempt', 2), (job, 'conclusion', 'skipped'),
+                                    (fixture.artifacts[0], 'name', 'ci-source'),
+                                    (fixture.artifacts[0], 'expired', True)]:
+            with self.subTest(key=key, wrong=wrong):
+                with patch.dict(mapping, {key: wrong}), self.assertRaises(ValueError):
+                    read()
+        fixture.artifacts.append(copy.deepcopy(fixture.artifacts[0]))
+        with self.assertRaises(ValueError):
+            read()
+        with self.assertRaises(ValueError):
+            github_proof.source_record(archive(dict(source, extra='field')))
 
-    def test_hosted_proof_supplies_selected_suite_but_global_scans_still_run(self):
+    def test_hosted_proof_replaces_equivalent_checks_and_rechecks_current_policy(self):
         # INV repository/exact-ci-proof
-        source, run, jobs, artifacts, api = self.proof_fixture()
+        fixture = self.proof_fixture(['windows:suite', 'windows:runtime'])
         implementation = module('workflow_implementation', SOURCE / 'workflow')
-        # Select native Windows, unavailable on this host, without executing it.
-        (self.root / 'tool/dispatch/select').write_text('#!/bin/sh\ncat >/dev/null\nprintf "windows:suite\\nwindows:runtime\\n"\n')
-        head = self.commit('test(repository): native selection')
-        source.update(head=head, tree=self.git('rev-parse', 'HEAD^{tree}'))
-        with patch.object(implementation, 'verify', side_effect=lambda *a: github_proof.verify(*a)), \
-             patch.object(github_proof, 'api', api), patch.object(github_proof, 'repository', return_value='fixture/configs'), \
-             patch.dict(os.environ, PATH=str(self.root / 'tool') + os.pathsep + os.environ['PATH']):
-            implementation.check(self.root, self.base, head, '7')
+        trace = Path(self.tmp.name) / 'hosted-commands.jsonl'
+        with patch.object(implementation, 'verify', side_effect=lambda *a: github_proof.verify(
+                *a, repo='fixture/configs', read=fixture.read)), patch.dict(
+                os.environ, FIXTURE_EXECUTION_LOG=str(trace),
+                PATH=str(self.root / 'tool') + os.pathsep + os.environ['PATH']):
+            implementation.check(self.root, self.base, self.head, '7')
+            self.assertEqual([Path(json.loads(line)[0]).name for line in trace.read_text().splitlines()],
+                             ['provisional'])
             with patch.dict(os.environ, FIXTURE_CHECK_STATUS='1'):
-                with self.assertRaises(subprocess.CalledProcessError): implementation.check(self.root, self.base, head, '7')
+                with self.assertRaises(subprocess.CalledProcessError):
+                    implementation.check(self.root, self.base, self.head, '7')
+
+    def test_master_push_reuses_only_exact_prior_provider_units(self):
+        # INV repository/exact-ci-proof
+        units = ['repository:fixtures', 'unixlike:suite', 'windows:suite', 'windows:runtime']
+        topic = self.proof_fixture(units).source
+        base, head, tree = (topic[key] for key in ('base', 'head', 'tree'))
+        prior = Evidence(self.git, base, head, tree, units, pull=5, event='pull_request')
+        master = self.git('commit-tree', tree, '-p', base, '-p', head, '-m', 'Merge published topic')
+        current = Evidence(self.git, base, master, tree, units, run_id=8, event='push')
+
+        def read(path, binary=False):
+            if path.startswith(f'commits/{head}/check-runs'):
+                return {'check_runs': [{'name': 'Required checks', 'id': 1, 'app': {'id': 15368},
+                                        'details_url': prior.run['html_url'] + '/job/3', 'conclusion': 'success'}]}
+            fixture = current if '/runs/8' in path or '/artifacts/8/' in path else prior
+            return fixture.read(path, binary)
+
+        expected = {'run_id': 7, 'attempt': 1, 'units': ['unixlike:suite', 'windows:suite']}
+        primary = dict(repo='fixture/configs', read=read)
+        self.assertEqual(github_proof.reusable_provider_units(base, master, units, **primary), expected)
+        self.assertIsNone(github_proof.reusable_provider_units(base, head, units, **primary))
+        with patch.dict(prior.source, {'tree': 'f' * 40}):
+            self.assertIsNone(github_proof.reusable_provider_units(base, master, units, **primary))
+
+        current.source['reuse'] = expected
+        current.set_job('Unix-like provider contract', 'ubuntu-latest', selected=False)
+        name, runner, steps = github_proof.UNITS['windows:runtime']
+        current.set_job(name, runner, *steps)
+        self.assertEqual(github_proof.verify(8, base, master, tree, **primary)['reuse'], expected)
+        failures = [(prior.artifacts[0], {'expired': True}), (prior.source, {'attempt': 2}),
+                    (prior.jobs['Windows desired state'], {'labels': ['ubuntu-latest']}),
+                    (current.source, {'reuse': dict(expected, units=['windows:runtime'])}),
+                    (current.jobs[name], {'steps': []}),
+                    (current.jobs[github_proof.POLICY_JOB], {'steps': []})]
+        for item, change in failures:
+            with self.subTest(change=change), patch.dict(item, change), self.assertRaises(ValueError):
+                github_proof.verify(8, base, master, tree, **primary)
+
+    def test_source_record_uses_the_runner_and_actual_workflow_checkout(self):
+        # INV repository/exact-ci-proof
+        fixture = self.proof_fixture()
+        workflow = Path(self.tmp.name) / 'workflow-definition'
+        self.git('worktree', 'add', '-q', '--detach', str(workflow), self.base)
+        script = workflow / '.github/scripts/ci-source.py'
+        script.parent.mkdir()
+        shutil.copy(ROOT / '.github/scripts/ci-source.py', script)
+        event = Path(self.tmp.name) / 'event.json'
+        event.write_text(json.dumps({'inputs': {'base': self.base, 'head': self.head}}))
+        env = dict(os.environ, GITHUB_EVENT_PATH=str(event), GITHUB_EVENT_NAME='workflow_dispatch',
+                   GITHUB_WORKFLOW_SHA=self.base, GITHUB_WORKFLOW_REF='fixture/configs/.github/workflows/ci.yml@refs/heads/master',
+                   GITHUB_RUN_ID='7', GITHUB_RUN_ATTEMPT='1', CI_BASE=self.base, CI_UNITS='repository:fixtures',
+                   RUNNER_TEMP=self.tmp.name)
+        self.call(sys.executable, str(script), env=env)
+        self.assertEqual(json.loads((Path(self.tmp.name) / 'source.json').read_text()), fixture.source)
+        self.call(sys.executable, str(script), env=dict(env, GITHUB_WORKFLOW_SHA=self.head), ok=False)
 
     def history_fixture(self):
         (self.root / 'docs/status/repository.md').write_text('old unreleased result\n')
@@ -411,11 +461,26 @@ class Mechanics(unittest.TestCase):
         self.topic()
         self.git('update-ref', 'refs/remotes/origin/master', self.base)
         env = dict(os.environ, EVENT_NAME='workflow_dispatch', DISPATCH_REF='refs/heads/master',
-                   DISPATCH_BASE=self.base, DISPATCH_HEAD=self.head)
+                   DISPATCH_BASE=self.base, DISPATCH_HEAD=self.head, GITHUB_WORKFLOW_SHA=self.base)
         command = str(ROOT / 'tool/dispatch/ci-base')
         self.assertEqual(self.call(command, env=env).strip(), self.base)
         for key, wrong in [('DISPATCH_REF', 'refs/heads/feature/repository-untrusted'),
+                           ('GITHUB_WORKFLOW_SHA', self.head),
                            ('DISPATCH_BASE', self.head), ('DISPATCH_HEAD', self.base), ('DISPATCH_HEAD', 'invalid')]:
+            self.call(command, env=dict(env, **{key: wrong}), ok=False)
+
+    def test_pr_selection_requires_exact_synthetic_merge(self):
+        # INV repository/local-gate-selects-by-effect
+        self.topic()
+        command = str(ROOT / 'tool/dispatch/ci-base')
+        env = dict(os.environ, EVENT_NAME='pull_request', PR_BASE_REF='master', EVENT_BASE_REF='master',
+                   PR_BASE=self.base, PR_HEAD=self.head, PR_STACK='null')
+        self.call(command, env=env, ok=False)
+        merged = self.git('commit-tree', 'HEAD^{tree}', '-p', self.base, '-p', self.head, '-m', 'Merge synthetic')
+        self.git('checkout', '-q', '--detach', merged)
+        self.assertEqual(self.call(command, env=env).strip(), self.base)
+        for key, wrong in [('PR_BASE_REF', 'topic/parent'), ('EVENT_BASE_REF', 'topic/parent'),
+                           ('PR_STACK', '{"native":true}'), ('PR_HEAD', self.base), ('PR_BASE', self.head)]:
             self.call(command, env=dict(env, **{key: wrong}), ok=False)
 
     def test_history_approval_rejects_missing_replayed_wrong_or_bypassed_authority(self):

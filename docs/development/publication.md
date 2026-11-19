@@ -24,25 +24,29 @@ tool/configs workflow check --base <full-master-SHA> --head <full-candidate-SHA>
 tool/configs workflow merge --base <full-master-SHA> --head <full-candidate-SHA> --ci-run <run-id>
 ```
 
-The reader queries live same-repository successful CI, stable gate and exact
-base/head/tree/event artifact. It rejects stale, failed, expired, missing,
-wrong-workflow and wrong-source evidence. Local global scans still run; only
-selected suites use the external proof. Verification prints the run ID and
-source identities; put relevant evidence in the work report or handoff instead
-of maintaining another Git-local verification cache. Workflow inspect shows
-current Git state and the merge destination. A changed master requires new
-combined-result verification. No PR is required for this path.
-Known Windows runtime-governance inputs additionally select `windows:runtime`,
-a proof-only unit: local validate/test cannot certify CI runtime acquisition
-and controller wiring, even on Windows. Those changes require exact hosted
-CI proof; ordinary Windows domain validate/test remain locally available.
+The shared reader verifies the live run and attempt, workflow revision and
+file, base, head, checkout, tree, selected jobs, steps and runner platforms.
+The artifact name includes its attempt. Use a complete CI run or rerun all jobs
+to refresh the evidence. A dispatch uses the reviewed master's workflow. For a
+candidate that changes the workflow file, use same-repository PR CI to exercise
+that definition. `workflow check` prints the accepted evidence and refreshes
+the current-date provisional policy check. `workflow merge` also rechecks the
+destination, clean state and resulting tree. A changed master requires new
+combined-result verification.
+The independent units `windows:runtime` and `repository:windows-git` require
+hosted proof when selected. The runtime unit verifies CI acquisition and
+controller behavior. Local native Windows validate/test supply the domain
+suite for ordinary Windows inputs.
 
 ## GitHub integration
 
 Master accepts direct commits and topic no-ff merges. CI runs on master push
-and optional same-repository topic PRs. The stable `Required checks` result
-validates selected jobs and global scans; it remains required evidence for
-the bounded automated patch writer, not PR-only admission for ordinary work.
+and optional same-repository topic PRs. A push checks its own incoming history
+and repository policy. It can reuse a PR's Unix-like or Windows provider suite
+when the pushed commit has the reviewed PR parents and identical tree and
+workflow. An unavailable proof runs the suite. Repository fixtures and the
+Windows runtime-controller unit run when selected. The stable `Required
+checks` result remains required evidence for the bounded automated patch writer.
 Master protection applies to administrators and disallows deletion. Ordinary
 credentials cannot force push; the optional reviewed maintenance App is the
 sole force exception. Master has no mandatory PR, status-check or conversation admission. Hosted PRs
@@ -130,8 +134,10 @@ The workflow selects current master and refreshes nixpkgs, home-manager,
 nix-darwin and nixos-wsl. Unchanged inputs produce no PR or tag. Changed inputs
 produce one single-commit branch feature/unixlike-input-patch-<base SHA prefix>
 with only the lock and the next patch release declaration. It opens a master PR,
-requires exact-base/head/tree CI proof, merges through protection, confirms actual
-merge identity and publishes an immutable Unix-like tag. CI completion events
+requires matching PR CI proof from the shared reader, rechecks master and the
+current PR body and head, merges through protection, and confirms the actual
+parents and tree. The immutable Unix-like tag names the verified CI run and
+attempt. CI completion events
 resume scheduled operation; no 06/07 development-promotion stages or daily
 promotion limit remain. Delayed/missing schedules have no guaranteed catch-up.
 

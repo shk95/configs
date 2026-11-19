@@ -27,7 +27,8 @@ def validate(branch, base, head, policy=None):
         return scopes
     # A reverted edit still belongs to a legacy topic's authored history. Exclude
     # commits already accepted on the target base, including newer PR base work.
-    authored = subprocess.check_output(['git', 'log', '--no-merges', '--no-renames', '--format=', '--name-only',
+    authored = subprocess.check_output(['git', 'log', '--full-history', '--diff-merges=first-parent',
+                                        '--no-renames', '--format=', '--name-only',
                                         base + '..' + head], text=True)
     authored_scopes = subprocess.check_output([str(classifier), '--stdin'], input=authored,
                                               text=True).splitlines() if authored.strip() else []

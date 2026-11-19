@@ -39,9 +39,10 @@ To inspect the same selected command sequence without executing checks, use
 Plan requires the same clean committed candidate, reports `not-run` commands,
 source subjects and known native/hosted blockers, and queries no hosted proof.
 It is optional, provides no verification/readiness/authorization evidence and
-is rebuilt by check; no saved plan is accepted as proof. Global scans remain
-local when `--ci-run` supplies suites. Dirty source uses narrow development
-checks instead of this exact-candidate operation.
+is rebuilt by check. With `--ci-run`, exact CI evidence supplies the covered
+incoming checks, repository policy and selected suites. The current-date
+provisional check and the integration safety checks still run locally. Dirty
+source uses narrow development checks.
 
 The staged quick checks materialize the index once and execute the staged
 checker implementations there. They exclude unstaged and untracked content
@@ -153,14 +154,15 @@ tool/configs audit-remote  # for a requested remote inspection
 tool/configs hook-evidence
 ```
 
-Push runs bounded `audit --range <base> <tip>` for transmitted commits and
-`audit --tag <name>` for a transmitted release tag. It does not rerun native
-suites from the current checkout. Final candidate verification precedes local
-integration; master-push, optional PR and candidate-dispatch CI report their
-actual tested source independently.
+Push checks the complete messages, ownership and secret scan of the transmitted
+range. A new branch uses the receiver's master as the baseline. Fetch explicitly
+when its commit is missing locally. Install gitleaks for branch publication.
+Push checks a transmitted release tag and its reachability from remote master.
+Candidate verification owns native suites. Master-push, optional PR and
+candidate-dispatch CI report their actual tested source independently.
 
-The full audit and `audit --history` remain explicit diagnostics for clone
-and integration history. The history diagnostic uses fetched remote snapshots
-when available; it is not proof of the current local candidate. Release
-planning uses selected local master. Refresh snapshots explicitly for remote
-operations. An unrelated local tag is not part of a branch push check.
+`tool/configs audit` and `tool/configs audit --history` are explicit diagnostics
+for clone and integration history. The history diagnostic uses fetched remote
+snapshots when available. `tool/configs audit --secrets-history` scans the
+patches reachable from local refs. Release planning uses selected local master.
+Refresh snapshots explicitly for remote operations.

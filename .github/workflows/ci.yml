@@ -27,14 +27,23 @@ jobs:
   classify:
     name: Classify change
     runs-on: ubuntu-latest
+    permissions:
+      contents: read
+      actions: read
+      checks: read
     outputs:
       unixlike: ${{ steps.scopes.outputs.unixlike }}
       windows: ${{ steps.scopes.outputs.windows }}
       repository: ${{ steps.scopes.outputs.repository }}
-      unixlike_checks: ${{ steps.scopes.outputs.unixlike_checks }}
-      windows_checks: ${{ steps.scopes.outputs.windows_checks }}
+      unixlike_checks: ${{ steps.scopes.outputs.unixlike_checks == 'true' && steps.reuse.outputs.unixlike != 'true' }}
+      windows_checks: ${{ steps.scopes.outputs.windows_runtime == 'true' || (steps.scopes.outputs.windows_suite == 'true' && steps.reuse.outputs.windows != 'true') }}
+      windows_suite: ${{ steps.scopes.outputs.windows_suite == 'true' && steps.reuse.outputs.windows != 'true' }}
+      windows_runtime: ${{ steps.scopes.outputs.windows_runtime }}
       repository_checks: ${{ steps.scopes.outputs.repository_checks }}
+      repository_windows: ${{ steps.scopes.outputs.repository_windows }}
       base: ${{ steps.scopes.outputs.base }}
+      units: ${{ steps.scopes.outputs.units }}
+      reuse: ${{ steps.reuse.outputs.record }}
     steps:
       - uses: actions/checkout@v7
         with:
@@ -47,6 +56,7 @@ jobs:
         env:
           EVENT_NAME: ${{ github.event_name }}
           PR_BASE: ${{ github.event.pull_request.base.sha }}
+          PR_HEAD: ${{ github.event.pull_request.head.sha }}
           PR_BASE_REF: ${{ github.event.pull_request.base.ref }}
           EVENT_BASE_REF: ${{ github.base_ref }}
           PR_STACK: ${{ toJSON(github.event.pull_request.stack) }}
@@ -71,31 +81,42 @@ jobs:
               echo "$scope=false" >>"$GITHUB_OUTPUT"
             fi
           done
-          git diff --name-status "$base" "$CI_HEAD" >"$RUNNER_TEMP/ci-changes"
+          git diff --no-renames --name-status "$base" "$CI_HEAD" >"$RUNNER_TEMP/ci-changes"
           units=$(tool/dispatch/select ci <"$RUNNER_TEMP/ci-changes")
           printf 'Selected CI units:\n%s\n' "$units"
           while IFS= read -r unit; do
             case "$unit" in
-              ''|repository:fixtures|unixlike:suite|windows:suite|windows:runtime) ;;
+              ''|repository:fixtures|repository:windows-git|unixlike:suite|windows:suite|windows:runtime) ;;
               *) echo "Unknown CI unit: $unit" >&2; exit 1 ;;
             esac
           done <<<"$units"
-          for scope in unixlike windows repository; do
-            if grep -q "^$scope:" <<<"$units"; then
-              echo "${scope}_checks=true" >>"$GITHUB_OUTPUT"
+          echo "units=${units//$'\n'/ }" >>"$GITHUB_OUTPUT"
+          selected() {
+            if grep -Eq "^($2)$" <<<"$units"; then
+              echo "$1=true" >>"$GITHUB_OUTPUT"
             else
-              echo "${scope}_checks=false" >>"$GITHUB_OUTPUT"
+              echo "$1=false" >>"$GITHUB_OUTPUT"
             fi
-          done
+          }
+          selected repository_checks repository:fixtures
+          selected repository_windows repository:windows-git
+          selected unixlike_checks unixlike:suite
+          selected windows_suite windows:suite
+          selected windows_runtime windows:runtime
+      - name: Resolve previous provider evidence
+        id: reuse
+        if: github.event_name == 'push'
+        env:
+          GH_TOKEN: ${{ github.token }}
+          CI_BASE: ${{ steps.scopes.outputs.base }}
+          CI_UNITS: ${{ steps.scopes.outputs.units }}
+        run: python3 .github/scripts/ci-reuse.py
 
   repository:
-    name: Version-control policy (${{ matrix.os }})
+    name: Version-control policy (Linux)
     needs: classify
     if: needs.classify.outputs.repository_checks == 'true'
-    strategy:
-      matrix:
-        os: [ubuntu-latest, windows-latest]
-    runs-on: ${{ matrix.os }}
+    runs-on: ubuntu-latest
     # The merge gate is the one place where a check that could not run must not
     # pass.
     env:
@@ -109,9 +130,23 @@ jobs:
         with:
           python-version: '3.13'
       - run: tool/version-control/test
-        if: runner.os == 'Linux'
+
+  repository_windows:
+    name: Version-control policy (Windows Git)
+    needs: classify
+    if: needs.classify.outputs.repository_windows == 'true'
+    runs-on: windows-latest
+    env:
+      REQUIRE_NATIVE: "1"
+    steps:
+      - uses: actions/checkout@v7
+        with:
+          ref: ${{ inputs.head || github.sha }}
+          persist-credentials: false
+      - uses: actions/setup-python@v6
+        with:
+          python-version: '3.13'
       - name: Retired capture guard on native Git for Windows
-        if: runner.os == 'Windows'
         shell: bash
         env:
           CONFIGS_CONTROLLER_PYTHON: python
@@ -166,19 +201,25 @@ jobs:
         run: |
           & .\.github\scripts\prepare-windows-ci-runtime.ps1
           if ($LASTEXITCODE -ne 0) { exit $LASTEXITCODE }
-      - name: Verify native runtimes and run Windows management checks
+      - name: Verify Windows CI runtime fixtures
+        if: needs.classify.outputs.windows_runtime == 'true'
         shell: pwsh
         env:
           CONFIGS_CI_PWSH: ${{ steps.runtime.outputs.pwsh }}
         run: |
-          & $env:CONFIGS_CI_PWSH -NoLogo -NoProfile -NonInteractive -File .\.github\scripts\windows-ci.ps1 -RuntimePath $env:CONFIGS_CI_PWSH
+          & $env:CONFIGS_CI_PWSH -NoLogo -NoProfile -NonInteractive -File .\.github\scripts\windows-ci.ps1 -RuntimePath $env:CONFIGS_CI_PWSH -Check Runtime
+          if ($LASTEXITCODE -ne 0) { exit $LASTEXITCODE }
+      - name: Validate and test Windows desired state
+        if: needs.classify.outputs.windows_suite == 'true'
+        shell: pwsh
+        env:
+          CONFIGS_CI_PWSH: ${{ steps.runtime.outputs.pwsh }}
+        run: |
+          & $env:CONFIGS_CI_PWSH -NoLogo -NoProfile -NonInteractive -File .\.github\scripts\windows-ci.ps1 -RuntimePath $env:CONFIGS_CI_PWSH -Check Suite
           if ($LASTEXITCODE -ne 0) { exit $LASTEXITCODE }
 
-  # The job key stays `secrets`: the required-checks gate, its SECRETS_RESULT
-  # input, and the `needs:` list below all key off it. Only the display name
-  # widens, because the job carries the seven repository-wide scans.
   secrets:
-    name: Secret, hygiene, domain-read, design-citation, invariant, provisional and history scan
+    name: Incoming history and repository policy
     # Only for the classifier's scope outputs: the provisional check fails an
     # overdue entry solely in a scope this change touches.
     needs: classify
@@ -204,7 +245,14 @@ jobs:
         run: |
           curl -sSfL "https://github.com/gitleaks/gitleaks/releases/download/v${GITLEAKS_VERSION}/gitleaks_${GITLEAKS_VERSION}_linux_x64.tar.gz" |
             sudo tar -xz -C /usr/local/bin gitleaks
-      - run: gitleaks git --redact --no-banner
+      - name: Audit incoming commits and merges
+        env:
+          CI_BASE: ${{ needs.classify.outputs.base }}
+        run: tool/version-control/audit --range "$CI_BASE" HEAD
+      - name: Scan incoming patches for secrets
+        env:
+          CI_BASE: ${{ needs.classify.outputs.base }}
+        run: tool/version-control/scan-secrets --range "$CI_BASE" HEAD
       - run: tool/version-control/hygiene
       - run: tool/version-control/domain-reads
       - run: tool/version-control/design-citations
@@ -218,15 +266,6 @@ jobs:
         env:
           CI_BASE: ${{ needs.classify.outputs.base }}
         run: tool/version-control/work --range "$CI_BASE" HEAD
-      # Optional topic PRs check incoming messages; push history audit also
-      # applies commit-message checks to direct master commits.
-      - name: Refuse closing keywords in the pull request's commits
-        if: github.event_name == 'pull_request'
-        env:
-          PR_BASE: ${{ github.event.pull_request.base.sha }}
-          PR_HEAD: ${{ github.event.pull_request.head.sha }}
-          BASE_REF: ${{ github.base_ref }}
-        run: tool/version-control/closing-keywords --range "$PR_BASE" "$PR_HEAD" --base-ref "$BASE_REF"
       - run: tool/version-control/invariants
       # An overdue entry fails only the scopes this change owns, so the scope
       # list comes from the classify job rather than from this one.
@@ -262,19 +301,6 @@ jobs:
           SCOPES: ${{ steps.provisional.outputs.scopes }}
           REFERENCE_DATE: ${{ steps.provisional.outputs.date }}
         run: tool/version-control/provisional --scopes "$SCOPES" --date "$REFERENCE_DATE"
-      # The clone-local half of the audit has nothing to say about a runner,
-      # which configures no hooks and checks out no branch; history is what a
-      # merge gate can and must judge. Unconditional because a badly named
-      # branch or a non-conventional subject is a property of the push, not of
-      # a scope, and needs the fetch-depth: 0 checkout this job already takes.
-      # HEAD is the commit under test: on a pull request the merge GitHub would
-      # make, whose own commits master does not yet contain, so their subjects are
-      # judged before the pull request merges (INV repository/conventional-subject).
-      - run: tool/version-control/audit --history HEAD
-      - name: Audit incoming source ownership
-        env:
-          CI_BASE: ${{ needs.classify.outputs.base }}
-        run: tool/version-control/audit --range "$CI_BASE" HEAD
 
   topic:
     name: Topic source policy
@@ -315,13 +341,15 @@ jobs:
 
   required:
     name: Required checks
-    needs: [classify, repository, unix, windows, secrets, topic]
+    needs: [classify, repository, repository_windows, unix, windows, secrets, topic]
     if: always()
     runs-on: ubuntu-latest
     env:
       CLASSIFY_RESULT: ${{ needs.classify.result }}
       REPOSITORY_SCOPE: ${{ needs.classify.outputs.repository_checks }}
       REPOSITORY_RESULT: ${{ needs.repository.result }}
+      REPOSITORY_WINDOWS_SCOPE: ${{ needs.classify.outputs.repository_windows }}
+      REPOSITORY_WINDOWS_RESULT: ${{ needs.repository_windows.result }}
       UNIXLIKE_SCOPE: ${{ needs.classify.outputs.unixlike_checks }}
       UNIXLIKE_RESULT: ${{ needs.unix.result }}
       WINDOWS_SCOPE: ${{ needs.classify.outputs.windows_checks }}
@@ -334,21 +362,24 @@ jobs:
         with:
           ref: ${{ inputs.head || github.sha }}
           persist-credentials: false
-      - name: Enforce scoped results
-        run: tool/version-control/required-checks
       - uses: actions/checkout@v7
         with:
           ref: ${{ github.workflow_sha }}
           path: accepted-tools
           persist-credentials: false
+      - name: Enforce scoped results
+        working-directory: accepted-tools
+        run: tool/version-control/required-checks
       - name: Record the tested source
         if: success()
         env:
           CI_BASE: ${{ needs.classify.outputs.base }}
+          CI_UNITS: ${{ needs.classify.outputs.units }}
+          CI_REUSE: ${{ needs.classify.outputs.reuse }}
         run: python3 accepted-tools/.github/scripts/ci-source.py
       - uses: actions/upload-artifact@v7
         if: success()
         with:
-          name: ci-source
+          name: ci-source-${{ github.run_attempt }}
           path: ${{ runner.temp }}/source.json
           retention-days: 90

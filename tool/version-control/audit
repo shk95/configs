@@ -4,11 +4,8 @@
 #
 # usage: tool/version-control/audit [--history [<revision>...]]
 #
-# `--history` is the merge-gate and pre-push form, which audits committed
-# history alone, because a runner has no clone-local configuration to audit.
-# History diagnostics use fetched origin/master when available; full local
-# diagnostics prefer local master. Explicit publication ranges inspect only
-# transmitted commits, and tag checks only the selected tag.
+# Full and history modes diagnose accepted history on request. The delivery
+# range checks incoming commits and merge effects without revisiting that history.
 #
 # INV repository/flake-lock-isolated, INV repository/release-tag-contract
 # INV repository/hooks-are-the-tracked-ones
@@ -18,13 +15,10 @@
 # Exit 0 verified, 69 unverified (no master ref), any other status failed.
 
 set -eu
+export GIT_NO_REPLACE_OBJECTS=1
 
-# The clone-local half (working tree, core.hooksPath, local branch names) is
-# only answerable where a clone was configured by a person. A CI checkout is
-# a detached, hook-less, branch-less shape by construction, so the merge gate
-# asks for history alone rather than for findings it would have to ignore.
 usage() {
-  echo "usage: tool/configs audit [--history [<revision>...] | --range <base> <tip> | --tag <name>]" >&2
+  echo "usage: tool/configs audit [--history [<revision>...] | --secrets-history | --range <base> <tip> | --tag <name>]" >&2
   exit 2
 }
 mode=full
@@ -34,6 +28,7 @@ selected_tag=
 if [ "$#" -gt 0 ]; then
   case "$1" in
     --history) mode=history; shift ;;
+    --secrets-history) [ "$#" -eq 1 ] || usage; mode=secrets; shift ;;
     --range)
       [ "$#" -eq 3 ] || usage
       mode=range; range_base=$2; range_tip=$3; shift 3 ;;
@@ -58,6 +53,9 @@ export MSYS_NO_PATHCONV MSYS2_ARG_CONV_EXCL
 audit_tools=$(CDPATH= cd -- "$(dirname -- "$0")" && pwd)
 root=$(git rev-parse --show-toplevel)
 cd "$root"
+if [ "$mode" = secrets ]; then
+  exec "$audit_tools/scan-secrets" --all
+fi
 
 warnings=0
 failures=0
@@ -88,6 +86,7 @@ if [ "$mode" = full ]; then
 fi
 
 . "$audit_tools/hooks.sh"
+. "$audit_tools/incoming-range.sh"
 
 if [ "$mode" = full ]; then
   if hooks_enabled; then
@@ -145,32 +144,24 @@ commit_msg_hook="$root/.githooks/commit-msg"
 commits=$(mktemp)
 subject_file=$(mktemp)
 trap 'rm -f "$commits" "$subject_file"' EXIT
-# Include HEAD and explicit revisions so direct master and topic subjects
-# receive the same commit-message checks, even in a detached CI checkout.
-subject_tips=$(git rev-parse HEAD)
-subject_scope=master,HEAD
-for revision in "$@"; do
-  if resolved_revision=$(git rev-parse --verify --quiet "$revision^{commit}"); then
-    subject_tips="$subject_tips $resolved_revision"
-    subject_scope="$subject_scope, $revision"
-  else
-    fail "revision to judge does not name a commit: $revision"
-  fi
-done
 if [ "$mode" = range ]; then
-  git rev-parse --verify "$range_tip^{commit}" >/dev/null
-  empty_tree=$(git hash-object -t tree /dev/null)
-  if [ "$range_base" = "$empty_tree" ]; then
-    # The initial push event has no previous commit. Only Git's exact empty
-    # tree is admitted as that basis; arbitrary tree objects still refuse.
-    range_walk=$range_tip
-  else
-    git rev-parse --verify "$range_base^{commit}" >/dev/null
-    range_walk="$range_base..$range_tip"
-  fi
+  incoming_range "$range_base" "$range_tip"
   subject_scope=$range_walk
   git log "$range_walk" --no-merges --format='%H%x09%s' >"$commits"
-elif [ "$mode" != tag ] && [ -n "$master_ref$subject_tips" ]; then
+  # The full body, including merges, is checked once by the grammar owner.
+  "$audit_tools/closing-keywords" --range "$range_base" "$range_tip" ||
+    fail "incoming history has a refused or unverified commit message"
+elif [ "$mode" != tag ]; then
+  subject_tips=$(git rev-parse HEAD)
+  subject_scope=master,HEAD
+  for revision in "$@"; do
+    if resolved_revision=$(git rev-parse --verify --quiet "$revision^{commit}"); then
+      subject_tips="$subject_tips $resolved_revision"
+      subject_scope="$subject_scope, $revision"
+    else
+      fail "revision to judge does not name a commit: $revision"
+    fi
+  done
   git log $master_ref $subject_tips --no-merges --format='%H%x09%s' >"$commits"
 fi
 if [ "$mode" != tag ] && [ -s "$commits" ] && [ ! -x "$commit_msg_hook" ]; then
@@ -181,7 +172,7 @@ elif [ "$mode" != tag ] && [ -s "$commits" ]; then
   commit_failures=$failures
   while IFS="$tab" read -r sha subject; do
     printf '%s\n' "$subject" >"$subject_file"
-    if "$commit_msg_hook" "$subject_file" >/dev/null 2>&1; then
+    if "$commit_msg_hook" "$subject_file" --subject-only >/dev/null 2>&1; then
       :
     else
       fail "commit subject rejected by .githooks/commit-msg $sha: $subject"
@@ -295,13 +286,10 @@ if [ "$mode" != range ] && [ "$tag_count" -eq 0 ]; then
   warn "no domain release tags exist; release workflow is unexercised"
 fi
 
-root_commit=$(git rev-list --max-parents=0 HEAD | head -1)
 # Both spellings, permanently. The lock moved into the domain, and this rule
 # reads history: the refreshes made before the move are still at the old path
 # and always will be, because history is not rewritten.
-# Merge/adoption commits carry already authored input history. Inspect the
-# original non-merge refresh commits, not a merge that combines their history.
-lock_commits=$(git log --no-merges --format='%H' -- flake.lock unixlike/flake.lock)
+lock_commits=
 if [ "$mode" = range ]; then
   # INV repository/local-development-integration
   # INV repository/scope-ownership
@@ -309,17 +297,43 @@ if [ "$mode" = range ]; then
   if printf '%s\n' "$scopes" | grep -qx unclassified; then
     fail "transmitted content has an unclassified path"
   fi
-  for commit in $(git rev-list --no-merges "$range_walk"); do
-    commit_paths=$(git diff-tree --root --no-renames --no-commit-id --name-only -r "$commit")
-    if ! printf '%s\n' "$commit_paths" | "$audit_tools/classify" --single-scope --stdin >/dev/null; then
-      fail "source commit has mixed or unclassified ownership: $commit"
+  git rev-list --parents "$range_walk" >"$commits"
+  while read -r commit parents; do
+    set -- $parents
+    if [ "$#" -lt 2 ]; then
+      commit_paths=$(git diff-tree --root --no-renames --no-commit-id --name-only -r "$commit")
+      if ! printf '%s\n' "$commit_paths" | "$audit_tools/classify" --single-scope --stdin >/dev/null; then
+        fail "source commit has mixed or unclassified ownership: $commit"
+      fi
+      continue
     fi
-  done
-  lock_commits=$(git log --no-merges --format='%H' "$range_walk" -- flake.lock unixlike/flake.lock)
+    # Merges can span scopes. Their integration result still owns every path,
+    # including a merge-only path removed before the final tip.
+    commit_paths=$(git diff --no-renames --name-only "$1" "$commit")
+    scopes=$(printf '%s\n' "$commit_paths" | "$audit_tools/classify" --stdin)
+    if printf '%s\n' "$scopes" | grep -qx unclassified; then
+      fail "merge commit has an unclassified path: $commit"
+    fi
+    # A combined history may select a parent's lock. A novel lock value needs
+    # an isolated refresh commit of its own, even if later removed.
+    for lock in flake.lock unixlike/flake.lock; do
+      merged=$(git ls-tree "$commit" -- "$lock")
+      inherited=false
+      for parent in "$@"; do
+        if [ "$merged" = "$(git ls-tree "$parent" -- "$lock")" ]; then
+          inherited=true
+          break
+        fi
+      done
+      "$inherited" || fail "merge introduced a lock value outside a source refresh: $commit ($lock)"
+    done
+  done <"$commits"
+  lock_commits=$(git log --full-history --no-merges --format='%H' "$range_walk" -- flake.lock unixlike/flake.lock)
+elif [ "$mode" != tag ]; then
+  lock_commits=$(git log --no-merges --format='%H' $master_ref $subject_tips -- flake.lock unixlike/flake.lock)
 fi
-[ "$mode" != tag ] || lock_commits=
 for sha in $lock_commits; do
-  [ "$sha" = "$root_commit" ] && continue
+  [ -n "$(git show -s --format=%P "$sha")" ] || continue
   # A commit that only moves the lock is not a refresh, and the rule is about
   # refreshes. Rename detection answers that directly: a pure rename is R100
   # and is skipped, while a rename carrying a content change scores lower and

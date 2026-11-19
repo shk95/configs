@@ -6,6 +6,9 @@ enforced-by: fixture tool/version-control/test-release.py
 owner: repository maintainer
 decision: docs/policy/decisions/repository/master-input-patch-releases.md § Operation
 
-The five properties are the complete initial operating obligation. Recover one
-unfinished input patch publication, then continue. Losing the original source stops automation
-until a person identifies its SHA. There is no private execution-state store.
+The writer rechecks the current branches and PR metadata before the merge and
+confirms the actual parents and tree. It rechecks source reachability through
+current master while creating an immutable tag that names the verified PR run
+and attempt. The same checks govern recovery of the original patch merge.
+Losing the original source stops automation until a person identifies its SHA.
+There is no private execution-state store.

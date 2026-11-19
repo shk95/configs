@@ -1,5 +1,5 @@
 id: repository/required-checks-gate
-statement: The stable CI result fails unless classification and global scans passed, each selected job succeeded and every unselected job skipped.
+statement: The stable CI result requires successful classification and incoming policy checks, successful execution or qualified reuse of every selected check, and skips for unselected execution.
 rationale: docs/policy/architecture.md § Repository governance plane
 enforced-by: tool tool/version-control/required-checks
 enforced-by: fixture tool/version-control/test

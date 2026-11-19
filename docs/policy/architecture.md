@@ -406,23 +406,24 @@ This scope is deliberately narrow:
 Check dispatch uses three evidence states rather than two. A check reports
 verified with exit status 0, failed with any other status, and unverified with
 69 when the host cannot supply one of its prerequisites. A failure outranks an
-unverified result. `REQUIRE_NATIVE=1` turns unverified into failure; CI sets it
-so the merge gate never accepts an unchecked change, and hooks leave it unset
-so a clone is never blocked from pushing work for a domain it cannot verify.
+unverified result. `REQUIRE_NATIVE=1` turns unverified into failure. CI requires
+its selected checks and pre-push requires outbound source and secret checks.
+Native domain prerequisites belong to candidate verification.
 The governance plane owns this contract and the hooks that consume it. Each
 domain owns the detection of its own prerequisites and reports through the
 contract rather than deciding what a missing tool means.
 
 Ownership and check selection answer different questions. Ownership determines
 which domain may author a path and which policy-scan scope applies. Gates select
-checks by change effect. Local gates select individual units for fast feedback;
-CI excludes documentation from suite selection and runs the complete native
-suite for every affected platform input. Changes to workflows, dispatch,
-classification or the stable gate conservatively exercise all suites. Global
-policy scans remain required. Unknown inputs, failed selection and unsupported
-native stack events fail the stable gate rather than becoming intentional skips.
-Windows CI runtime-governance inputs additionally require exact hosted native
-proof for local integration; ordinary domain tests do not cover that wiring.
+checks by change effect. Commit selects quick staged checks. Candidate
+verification excludes documentation and release declarations from provider
+suite selection and runs the complete native suite for affected platform
+inputs. Changes to the CI workflow exercise all its hosted lanes. Selection
+and policy tools are tested by repository fixtures. Repository Git for Windows
+fixtures and the Windows CI runtime-controller fixtures have their own effects
+and require native hosted proof. Global policy scans and incoming history
+checks cover each candidate. Unknown inputs, failed selection and unsupported
+native stack events fail the stable result.
 
 A staged gate checks the content selected for the commit. Unstaged edits and
 untracked replacements cannot supply or invalidate that evidence. Domain quick

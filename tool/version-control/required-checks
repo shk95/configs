@@ -37,6 +37,7 @@ require_scope() {
 require_result classification "${CLASSIFY_RESULT:?}"
 require_result secrets "${SECRETS_RESULT:?}"
 require_scope repository "${REPOSITORY_SCOPE:?}" "${REPOSITORY_RESULT:?}"
+require_scope repository-windows "${REPOSITORY_WINDOWS_SCOPE:?}" "${REPOSITORY_WINDOWS_RESULT:?}"
 require_scope unixlike "${UNIXLIKE_SCOPE:?}" "${UNIXLIKE_RESULT:?}"
 require_scope windows "${WINDOWS_SCOPE:?}" "${WINDOWS_RESULT:?}"
 require_scope topic "${TOPIC_SCOPE:?}" "${TOPIC_RESULT:?}"

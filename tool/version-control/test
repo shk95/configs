@@ -185,7 +185,7 @@ case "$msys_fixture" in /tmp/*) rm -rf -- "$msys_fixture" ;; esac
 
 grep -q '^  required:$' "$root/.github/workflows/ci.yml"
 grep -q '^    name: Required checks$' "$root/.github/workflows/ci.yml"
-grep -q 'needs: \[classify, repository, unix, windows, secrets, topic\]' \
+grep -q 'needs: \[classify, repository, repository_windows, unix, windows, secrets, topic\]' \
   "$root/.github/workflows/ci.yml"
 grep -q 'run: tool/version-control/required-checks' \
   "$root/.github/workflows/ci.yml"
@@ -195,8 +195,10 @@ grep -q 'run: tool/version-control/required-checks' \
 # INV repository/conventional-subject: each gate names what it publishes, the
 # pushed tips or the commit under test, so their own subjects are judged.
 grep -q 'tool/version-control/audit --range' "$root/.githooks/pre-push"
-grep -q 'run: tool/version-control/audit --history HEAD$' "$root/.github/workflows/ci.yml"
+grep -q 'tool/version-control/scan-secrets --range' "$root/.githooks/pre-push"
+! grep -q 'run: tool/version-control/audit --history' "$root/.github/workflows/ci.yml" || exit 1
 grep -q 'run: tool/version-control/audit --range "\$CI_BASE" HEAD$' "$root/.github/workflows/ci.yml"
+grep -q 'run: tool/version-control/scan-secrets --range "\$CI_BASE" HEAD$' "$root/.github/workflows/ci.yml"
 # INV repository/local-gate-selects-by-effect: CI selects whole suites by
 # effect, retaining ownership separately for unconditional policy scans.
 grep -q 'run: tool/version-control/test$' "$root/.github/workflows/ci.yml"
@@ -288,6 +290,8 @@ run_gate() {
   env \
     CLASSIFY_RESULT=${CLASSIFY_RESULT:-success} \
     REPOSITORY_SCOPE=${REPOSITORY_SCOPE:-false} \
+    REPOSITORY_WINDOWS_SCOPE=${REPOSITORY_WINDOWS_SCOPE:-false} \
+    REPOSITORY_WINDOWS_RESULT=${REPOSITORY_WINDOWS_RESULT:-skipped} \
     REPOSITORY_RESULT=${REPOSITORY_RESULT:-skipped} \
     UNIXLIKE_SCOPE=${UNIXLIKE_SCOPE:-false} \
     UNIXLIKE_RESULT=${UNIXLIKE_RESULT:-skipped} \
@@ -307,6 +311,11 @@ run_gate() {
 # persist it, which is why CI never saw this.
 run_gate >/dev/null
 (REPOSITORY_SCOPE=true REPOSITORY_RESULT=success run_gate) >/dev/null
+(REPOSITORY_WINDOWS_SCOPE=true REPOSITORY_WINDOWS_RESULT=success run_gate) >/dev/null
+if (REPOSITORY_WINDOWS_SCOPE=true run_gate) >/dev/null 2>&1; then
+  echo 'required-checks accepted a skipped selected native Git fixture' >&2
+  exit 1
+fi
 (UNIXLIKE_SCOPE=true UNIXLIKE_RESULT=success run_gate) >/dev/null
 (WINDOWS_SCOPE=true WINDOWS_RESULT=success run_gate) >/dev/null
 (TOPIC_SCOPE=true TOPIC_RESULT=success run_gate) >/dev/null
@@ -604,16 +613,20 @@ expect_units 'unixlike:suite
 windows:suite' ci "$(printf 'R100\tunixlike/modules/old.ps1\twindows/desired/new.ps1')"
 expect_units 'windows:suite' ci "$windows_modified"
 expect_units 'repository:fixtures' ci "$(printf 'M\ttool/work-session.sh')"
-expect_units 'repository:fixtures' ci "$(printf 'M\ttool/version-control/git_workflow.py')"
+expect_units 'repository:fixtures
+repository:windows-git' ci "$(printf 'M\ttool/version-control/git_workflow.py')"
 for path in tool/dispatch/select tool/dispatch/ci-base tool/version-control/classify tool/version-control/required-checks; do
-  expect_units 'repository:fixtures
-unixlike:suite
-windows:suite' ci "$(printf 'M\t%s' "$path")"
+  expect_units 'repository:fixtures' ci "$(printf 'M\t%s' "$path")"
 done
 expect_units 'repository:fixtures
+repository:windows-git
 unixlike:suite
 windows:suite
 windows:runtime' ci "$(printf 'M\t.github/workflows/ci.yml')"
+expect_units 'repository:fixtures' ci "$(printf 'M\t.github/workflows/release.yml')"
+expect_units 'repository:fixtures
+repository:windows-git' ci "$(printf 'M\ttool/version-control/test-retired-capture.py')"
+expect_units '' ci "$(printf 'M\tunixlike/release.json\nM\twindows/release.json')"
 for input in "$unknown_modified" "$(printf 'M\tdocs/status/linux.md')" 'M' "$(printf 'R100\tdocs/a.md')"; do
   if printf '%s\n' "$input" | "$root/tool/dispatch/select" ci >/dev/null 2>&1; then
     echo 'CI selector accepted unknown or malformed input' >&2; exit 1
@@ -621,29 +634,19 @@ for input in "$unknown_modified" "$(printf 'M\tdocs/status/linux.md')" 'M' "$(pr
 done
 
 # INV repository/local-gate-selects-by-effect
-# Native stack events can advertise trunk base_ref with a layer base SHA.
-# Refuse them before producing any range rather than silently testing a layer.
+# Push uses the exact before object, or the empty tree for first publication.
+# PR and dispatch event constraints are exercised in test-mechanics.py.
 event_sha=$(git -C "$root" rev-parse HEAD)
 event_base() {
-  EVENT_NAME=${EVENT_NAME:-pull_request} PR_BASE=$event_sha \
-    PR_BASE_REF=${PR_BASE_REF:-master} EVENT_BASE_REF=${EVENT_BASE_REF:-master} \
-    PR_STACK=${PR_STACK:-null} PUSH_BASE=${PUSH_BASE:-$event_sha} \
-    "$root/tool/dispatch/ci-base"
+  EVENT_NAME=push PUSH_BASE=${PUSH_BASE:-$event_sha} "$root/tool/dispatch/ci-base"
 }
 [ "$(event_base)" = "$event_sha" ]
-[ "$(EVENT_NAME=push event_base)" = "$event_sha" ]
-[ "$(EVENT_NAME=push PUSH_BASE=0000000000000000000000000000000000000000 event_base)" = "$(git hash-object -t tree /dev/null)" ]
-if (PR_STACK='{"base":{"ref":"dev"}}' event_base) >/dev/null 2>&1; then
-  echo 'CI accepted an unsupported native stack' >&2; exit 1
-fi
-if (PR_BASE_REF=feature/repository-layer event_base) >/dev/null 2>&1; then
-  echo 'CI accepted layer-only stack coverage' >&2; exit 1
-fi
-if (EVENT_BASE_REF=dev event_base) >/dev/null 2>&1; then
-  echo 'CI accepted mismatched event bases' >&2; exit 1
-fi
-if (EVENT_NAME=push PUSH_BASE=bad event_base) >/dev/null 2>&1; then
+[ "$(PUSH_BASE=0000000000000000000000000000000000000000 event_base)" = "$(git hash-object -t tree --stdin </dev/null)" ]
+if (PUSH_BASE=bad event_base) >/dev/null 2>&1; then
   echo 'CI accepted an invalid event SHA' >&2; exit 1
+fi
+if (PUSH_BASE=ffffffffffffffffffffffffffffffffffffffff event_base) >/dev/null 2>&1; then
+  echo 'CI accepted an unavailable push base' >&2; exit 1
 fi
 
 # INV repository/local-gate-selects-by-effect
@@ -2748,7 +2751,7 @@ windows_ci_controller="$root/.github/scripts/windows-ci.ps1"
 for path in .github/scripts/WindowsCiRuntime.psm1 \
   .github/scripts/assert-windows-ci-runtime.ps1 \
   .github/scripts/prepare-windows-ci-runtime.ps1 \
-  .github/scripts/windows-ci.ps1 .github/tests/test-windows-ci-runtime.ps1; do
+  .github/scripts/windows-ci.ps1; do
   for status in M A D; do
     expect_units 'repository:fixtures
 windows:suite
@@ -2756,8 +2759,11 @@ windows:runtime' ci "$(printf '%s\t%s' "$status" "$path")"
   done
 done
 expect_units 'repository:fixtures
-windows:suite
 windows:runtime' ci "$(printf 'R100\tdocs/fixture.md\t.github/tests/test-windows-ci-runtime.ps1')"
+for path in windows/tool/ci-runtime.json windows/tool/read-ci-runtime.ps1; do
+  expect_units 'windows:suite
+windows:runtime' ci "$(printf 'M\t%s' "$path")"
+done
 expect_units 'repository:fixtures' ci "$(printf 'M\t.github/CODEOWNERS')"
 expect_units 'repository:fixtures' ci "$(printf 'M\t.github/scripts/unrelated.ps1')"
 expect_units '' commit "$(printf 'M\t.github/scripts/WindowsCiRuntime.psm1')"
@@ -2765,6 +2771,8 @@ expect_units '' commit "$(printf 'M\t.github/scripts/windows-ci.ps1')"
 expect_units '' commit "$(printf 'M\t.github/CODEOWNERS')"
 grep -Fq 'CONFIGS_CI_PWSH: ${{ steps.runtime.outputs.pwsh }}' "$windows_ci_workflow"
 grep -Fq '& $env:CONFIGS_CI_PWSH -NoLogo -NoProfile -NonInteractive -File' "$windows_ci_workflow"
+grep -Fq -- '-Check Runtime' "$windows_ci_workflow"
+grep -Fq -- '-Check Suite' "$windows_ci_workflow"
 grep -Fq '.github/tests/test-windows-ci-runtime.ps1' "$windows_ci_controller"
 grep -Fq 'Invoke-CiProcess -Executable $RuntimePath' "$windows_ci_controller"
 grep -Fq 'if ($LASTEXITCODE -ne 0) { throw' "$windows_ci_module"
@@ -3373,30 +3381,25 @@ work_overdue=$(cd "$work_repo" && "$work_check" --overdue --date 2026-03-01)
 # tool/version-control/closing-keywords owns the grammar. Every listed form —
 # nine keywords, with and without a colon, before `#<n>` and before
 # `<owner>/<repo>#<n>` — is refused in a subject and in a body by the real
-# commit-msg hook, in a commit of a range whose base is dev, and in a text
-# taken as a promotion's body. `Refs #<n>`, a keyword that does not stand
-# before the reference and a keyword that is the tail of a longer word are
-# accepted by all three. The same range is left unread when the base is
-# master, because dev carries commits from before the rule.
+# commit-msg hook, in an incoming commit, and in pull request text. `Refs #<n>`,
+# a keyword separated from the reference and the tail of a longer word pass.
 closing_keywords="$root/tool/version-control/closing-keywords"
 
-# Wired three ways: the hook, the merge gate's scan job for every pull
-# request, and the promotion job for the body.
+# Wired three ways: the hook, every incoming audit and the PR metadata job.
 grep -q 'tool/version-control/closing-keywords' "$root/.githooks/commit-msg"
-grep -q 'closing-keywords --range "$PR_BASE" "$PR_HEAD" --base-ref "$BASE_REF"' "$root/.github/workflows/ci.yml"
+grep -q 'closing-keywords" --range "$range_base" "$range_tip"' "$root/tool/version-control/audit"
 grep -q 'closing-keywords --text "$RUNNER_TEMP/promotion-body"' "$root/.github/workflows/ci.yml"
 
 closing_repo="$test_root/closing-keywords"
 mkdir -p "$closing_repo"
-git -C "$closing_repo" init -q -b dev
+git -C "$closing_repo" init -q -b master
 git -C "$closing_repo" config user.name Fixture
 git -C "$closing_repo" config user.email fixture@example.invalid
 git -C "$closing_repo" commit -q --allow-empty -m 'chore(repository): start'
 closing_base=$(git -C "$closing_repo" rev-parse HEAD)
 closing_file="$test_root/closing-keywords-message"
 
-# closing_refused <label> <message>: the hook, the text form and a range
-# based on dev each refuse it, and the range based on master leaves it unread.
+# closing_refused <label> <message>: the hook, text and incoming range refuse it.
 closing_refused() {
   printf '%s\n' "$2" >"$closing_file"
   if "$commit_msg" "$closing_file" >/dev/null 2>&1; then
@@ -3409,12 +3412,8 @@ closing_refused() {
   fi
   git -C "$closing_repo" reset -q --hard "$closing_base"
   git -C "$closing_repo" commit -q --allow-empty -F "$closing_file"
-  if (cd "$closing_repo" && "$closing_keywords" --range "$closing_base" HEAD --base-ref dev) >/dev/null 2>&1; then
-    echo "closing-keywords --range accepted a closing keyword on its way to dev: $1" >&2
-    exit 1
-  fi
-  if (cd "$closing_repo" && "$closing_keywords" --range "$closing_base" HEAD --base-ref master) >/dev/null 2>&1; then
-    echo "closing-keywords --range missed a keyword in promotion history: $1" >&2
+  if (cd "$closing_repo" && "$closing_keywords" --range "$closing_base" HEAD) >/dev/null 2>&1; then
+    echo "closing-keywords --range accepted a closing keyword: $1" >&2
     exit 1
   fi
 }
@@ -3427,7 +3426,7 @@ closing_accepted() {
     { echo "closing-keywords --text refused a text with no closing keyword: $1" >&2; exit 1; }
   git -C "$closing_repo" reset -q --hard "$closing_base"
   git -C "$closing_repo" commit -q --allow-empty -F "$closing_file"
-  (cd "$closing_repo" && "$closing_keywords" --range "$closing_base" HEAD --base-ref dev) >/dev/null 2>&1 ||
+  (cd "$closing_repo" && "$closing_keywords" --range "$closing_base" HEAD) >/dev/null 2>&1 ||
     { echo "closing-keywords --range refused a commit with no closing keyword: $1" >&2; exit 1; }
 }
 
@@ -3471,7 +3470,7 @@ git -C "$closing_repo" commit -q --allow-empty -m 'feat(repository): first' -m '
 git -C "$closing_repo" commit -q --allow-empty -m 'feat(repository): second' -m 'Fixes #13'
 closing_bad=$(git -C "$closing_repo" rev-parse --short HEAD)
 git -C "$closing_repo" commit -q --allow-empty -m 'feat(repository): third'
-if closing_output=$(cd "$closing_repo" && "$closing_keywords" --range "$closing_base" HEAD --base-ref dev 2>&1); then
+if closing_output=$(cd "$closing_repo" && "$closing_keywords" --range "$closing_base" HEAD 2>&1); then
   printf '%s\n' "$closing_output" >&2
   echo "closing-keywords --range missed a keyword in the middle of a range" >&2
   exit 1
@@ -3484,13 +3483,13 @@ printf '%s\n' "$closing_output" | grep -qF "$closing_bad:3:Fixes #13" || {
 git -C "$closing_repo" reset -q --hard "$closing_base"
 git -C "$closing_repo" commit -q --allow-empty -m 'feat(repository): first' -m 'Refs #12'
 git -C "$closing_repo" commit -q --allow-empty -m 'feat(repository): second'
-closing_output=$(cd "$closing_repo" && "$closing_keywords" --range "$closing_base" HEAD --base-ref dev)
+closing_output=$(cd "$closing_repo" && "$closing_keywords" --range "$closing_base" HEAD)
 printf '%s\n' "$closing_output" | grep -qF '2 commit messages carry none' || {
   printf '%s\n' "$closing_output" >&2
   echo "closing-keywords --range did not count the commits it read" >&2
   exit 1
 }
-if (cd "$closing_repo" && "$closing_keywords" --range 0000000000000000000000000000000000000000 HEAD --base-ref dev) >/dev/null 2>&1; then
+if (cd "$closing_repo" && "$closing_keywords" --range 0000000000000000000000000000000000000000 HEAD) >/dev/null 2>&1; then
   echo "closing-keywords --range passed a base that is no commit" >&2
   exit 1
 fi

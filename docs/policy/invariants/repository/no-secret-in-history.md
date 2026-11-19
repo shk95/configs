@@ -1,11 +1,14 @@
 id: repository/no-secret-in-history
-statement: Committed content carries no credential, and the staged state is scanned before it becomes history.
+statement: Credentials are refused before publication. The scan covers incoming side history and merge diffs as well as ordinary commits.
 rationale: docs/policy/architecture.md § Desired-state hygiene
 enforced-by: tool .githooks/pre-commit
+enforced-by: tool tool/version-control/scan-secrets
 enforced-by: fixture tool/version-control/test
+enforced-by: fixture tool/version-control/test-workflow.py
 
 The secret scan owns detection; the hygiene scan deliberately does not
-duplicate it. The hook runs the scanner on the staged state and CI runs it
-on history. The fixture proves the hook's wiring — that a scanner refusal
-blocks the commit — with a stand-in scanner; what counts as a secret is the
-scanner's rule set, not this repository's.
+duplicate it. The commit hook runs the scanner on the staged state when
+available. Push requires it before outbound branch updates. Candidate checks
+and CI scan incoming patches from the reviewed event base, including merges.
+The scanner defines which content is a credential. Fixtures check the patch
+stream, the outbound base and the veto when scanning fails or is unavailable.

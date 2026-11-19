@@ -22,9 +22,11 @@ export MSYS_NO_PATHCONV MSYS2_ARG_CONV_EXCL
 # request's commits, which is the complete check.
 #
 # INV repository/no-closing-keyword
-closing_keywords="$(git rev-parse --show-toplevel)/tool/version-control/closing-keywords"
-if [ -x "$closing_keywords" ]; then
-  "$closing_keywords" --message "$1" || exit 1
+if [ "${2:-}" != --subject-only ]; then
+  closing_keywords="$(git rev-parse --show-toplevel)/tool/version-control/closing-keywords"
+  if [ -x "$closing_keywords" ]; then
+    "$closing_keywords" --message "$1" || exit 1
+  fi
 fi
 
 subject=$(grep -v '^#' "$1" | sed '/^[[:space:]]*$/d' | head -1)

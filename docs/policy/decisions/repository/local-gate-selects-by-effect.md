@@ -85,3 +85,12 @@ selection. Local fixtures now read the runtime module/controller wiring, so
 those two source paths select repository fixtures at commit and push. This
 applies existing effect selection to the newly consumed inputs without changing
 configuration ownership, runtime version authority or the public interface.
+
+2026-11-19: the verification redesign bounds routine history checks to the
+commits entering the destination, including merge changes. Pre-push checks
+outgoing secrets before transfer. The CI workflow still exercises all its
+hosted lanes when its orchestration changes. Other workflow and dispatch
+changes exercise repository fixtures. Separate Git for Windows and Windows
+runtime-controller selections follow their inputs. A metadata-only release
+declaration receives policy checks. See the verification gates work record
+for implementation and qualification evidence.

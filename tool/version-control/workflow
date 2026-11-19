@@ -14,7 +14,7 @@ from pathlib import Path
 from git_workflow import (TOPIC_PREFIX, TOPIC_SEPARATOR, TOPIC_SLUG, git, linked_workspace,
                           topic_destination, topic_pattern, unfinished_operations)
 from repo_policy import load
-from github_proof import verify
+from github_proof import selected_units, verify
 from topic_scope import validate as validate_topic
 
 POLICY = load()
@@ -65,10 +65,8 @@ def plan(root, base, head, ci_run=None):
     base, head = sha(base), sha(head)
     require_candidate(root, head)
     git('merge-base', '--is-ancestor', base, head)
-    changes = git('diff', '--name-status', base, head)
-    units = subprocess.run(
-        [str(root / 'tool/dispatch/select'), 'ci'], input=changes + '\n', text=True,
-        stdout=subprocess.PIPE, check=True).stdout.splitlines()
+    tree = git('rev-parse', head + '^{tree}')
+    units = selected_units(base, tree, root)
     branch = git('branch', '--show-current')
     if branch == BASE:
         scopes = run(str(root / 'tool/version-control/classify'), '--range', base, head).splitlines()
@@ -81,31 +79,32 @@ def plan(root, base, head, ci_run=None):
             argv = ['pwsh', '-NoProfile', '-File', *argv]
         steps.append(dict(id=identifier, source='local', argv=list(argv), subject=subject))
 
-    local('secrets', ['gitleaks', 'git', '--log-opts=' + base + '..' + head,
-                      '--redact', '--no-banner'], 'incoming-history-range')
     if ci_run:
-        steps.append(dict(id='ci-proof', source='hosted', run=ci_run, subject='exact-base-head-tree'))
-    for name in ('audit', 'work'):
-        local(name, ['tool/version-control/' + name, '--range', base, head], 'incoming-range')
-    for name in ('hygiene', 'domain-reads', 'design-citations', 'records', 'invariants'):
-        local(name, ['tool/version-control/' + name], 'candidate-index')
+        steps.append(dict(id='ci-proof', source='hosted', run=ci_run, subject='definition, exact source and selected units'))
+    else:
+        local('secrets', ['tool/version-control/scan-secrets', '--range', base, head], 'incoming-history-range')
+        for name in ('audit', 'work'):
+            local(name, ['tool/version-control/' + name, '--range', base, head], 'incoming-range')
+        for name in ('hygiene', 'domain-reads', 'design-citations', 'records', 'invariants'):
+            local(name, ['tool/version-control/' + name], 'candidate-index')
     local('provisional', ['tool/version-control/provisional', '--scopes',
                          ','.join(scope for scope in scopes if scope != 'none')],
           'candidate-index; current date; affected scopes')
     blockers = []
+    hosted_only = {'windows:runtime': 'Windows CI runtime wiring', 'repository:windows-git': 'Native Windows Git fixtures'}
     for unit in units:
-        if unit == 'windows:runtime' and not ci_run:
-            blockers.append('Windows CI runtime wiring requires exact hosted evidence via --ci-run')
-        elif unit not in POLICY['ci']['suite_commands'] and unit != 'windows:runtime':
+        if unit in hosted_only and not ci_run:
+            blockers.append(hosted_only[unit] + ' requires exact hosted evidence via --ci-run')
+        elif unit not in POLICY['ci']['suite_commands'] and unit not in hosted_only:
             raise ValueError('Unknown selected check: ' + unit)
         elif unit == 'windows:suite' and os.name != 'nt' and not ci_run:
             blockers.append('Native Windows checks unavailable: use --ci-run with exact hosted evidence')
-        if ci_run or unit == 'windows:runtime':
+        if ci_run or unit in hosted_only:
             steps.append(dict(id=unit, source='hosted', subject='exact-base-head-tree'))
         else:
             for index, argv in enumerate(POLICY['ci']['suite_commands'][unit]):
                 local(unit + ':' + str(index + 1), argv, 'candidate-tree')
-    result = dict(state='not-run', base=base, head=head, tree=git('rev-parse', head + '^{tree}'),
+    result = dict(state='not-run', base=base, head=head, tree=tree,
                   units=units, steps=steps, blockers=blockers)
     clean(root)
     if git('rev-parse', 'HEAD') != head:
@@ -244,6 +243,7 @@ def main():
 
 if __name__ == '__main__':
     try:
+        os.environ['GIT_NO_REPLACE_OBJECTS'] = '1'
         main()
     except (ValueError, OSError, subprocess.CalledProcessError) as error:
         raise SystemExit(str(error))
