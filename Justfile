@@ -30,6 +30,12 @@ _nixos-host:
 doctor:
     tool/doctor.sh
 
+# Browse source declarations and an optional evaluated program inventory.
+[group('source-navigation')]
+[positional-arguments]
+browse *args:
+    @{{ quote(justfile_directory() + "/tool/configs") }} browse "$@"
+
 # Run formatting, lint and the complete provider verification suite.
 [group('provider-verification')]
 check:
