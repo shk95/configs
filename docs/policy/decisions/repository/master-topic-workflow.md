@@ -10,11 +10,13 @@ source: docs/work/repository/master-topic-workflow/spec.md
 
 Master is the release and ordinary development branch. A single logical
 commit normally stays there; a selected linked workspace also uses a topic.
-Estimate the work before editing. When one coherent outcome needs several
-logical commits, start one topic from master and retain the group through a
-no-ff merge into master. Agree on the current checkout or a linked
-worktree before starting.
-Keep the agreed workspace while continuing the task. Parallel authors need
+For a new task, estimate the work before editing. When one coherent outcome
+needs several logical commits, start one topic from master and retain the
+group through a no-ff merge into master. Agree on the current checkout or a
+linked worktree before starting.
+Keep the agreed branch and workspace while continuing the same task. Moving
+remaining master work to a topic requires the maintainer to explicitly choose
+that transition. Preserve existing master commits. Parallel authors need
 isolated workspaces. A tool allowlist supplies no Git mutation permission.
 
 Dev is retired from the operating model. Preserve existing refs and published
@@ -161,8 +163,8 @@ The maintainer authorized reuse of topic ownership and source-range checks
 between local and CI paths. Windows CI runtime-governance changes require
 exact hosted evidence; local domain tests retain their narrower meaning.
 Candidate token permissions are explicitly read-only and checkout credentials
-are not persisted. Scope growth uses an authorized in-place topic transition;
-existing master commits are retained and only remaining work is grouped.
+are not persisted. The in-place topic transition preserves existing master
+commits and groups the remaining work.
 
 Removing a worktree retains and verifies its exact topic ref, so it needs no
 mandatory external archive. Branch or clone deletion remains separate.

@@ -85,8 +85,8 @@ See docs/work/repository/master-topic-workflow/report.md for verification.
 The prepared source now shares topic ownership validation between local and
 PR paths and audits incoming commit ranges in CI. CI tokens are explicitly
 read-only with no persisted candidate credentials. Windows runtime-governance
-changes require exact hosted native proof. Scope growth has an in-place
-transition that preserves existing master commits and uncommitted work.
+changes require exact hosted native proof. The in-place topic transition
+preserves existing master commits and uncommitted work.
 
 Worktree removal accepts and verifies the retained exact topic ref without
 requiring an external archive. Approved history maintenance now uses the

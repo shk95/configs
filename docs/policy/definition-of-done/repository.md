@@ -86,13 +86,12 @@ requirements for ordinary source work.
 
 - [ ] The workspace follows the user's existing answer for this task, with
       isolated parallel authors (INV repository/workspace-choice).
-- [ ] One logical commit normally used master. A linked workspace or several
-      logical commits for one outcome used one top-level topic, merged no-ff
-      when requested. The reviewer confirmed the common result and any
-      prerequisite that blocks later work, including how to verify it. If
-      work grew after a master commit, that commit was
-      preserved and the remaining work moved to a topic
-      (INV repository/local-development-integration).
+- [ ] The initial branch choice followed the authoring procedure. For any
+      transition of continuing master work to a topic, the reviewer confirmed
+      the maintainer's explicit choice and preservation of existing master
+      commits. For topic work, the reviewer confirmed the common result,
+      any blocking prerequisite and its verification, and no-ff integration
+      when requested (INV repository/local-development-integration).
 - [ ] CI source identities and selected check results are reported separately
       from actual remote protection adoption.
 

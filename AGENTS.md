@@ -108,8 +108,7 @@ Follow the [branch and commit procedure](docs/development/authoring.md#branch-an
 and the workspace and authorization boundaries above throughout the agreed
 task. Reuse the agreed workspace and authorization. A workspace choice is not commit/push consent.
 History maintenance still needs fresh approval for its exact operation.
-If work grows after a master commit, keep that commit and group remaining
-work on a topic rather than rewriting accepted history.
+Preserve existing master commits when continuing a task.
 
 Use the relevant operation in `CONTRIBUTING.md` through tracked tools instead
 of reproducing their checks or inventing agent-only exceptions. Integration,

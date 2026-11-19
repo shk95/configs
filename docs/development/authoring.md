@@ -29,10 +29,10 @@ to the other.
 
 ## Branch and commit flow
 
-Use one top-level topic when the commits need to be reviewed together to
-deliver one result. For example, the implementation of a command and the
-repository entry point that exposes it belong to the same topic. Use separate
-topics for independently deliverable results.
+When starting a task, use one top-level topic when its commits need to be
+reviewed together to deliver one result. For example, the implementation of a
+command and the repository entry point that exposes it belong to the same
+topic. Use separate topics for independently deliverable results.
 
 At topic start, agree on the result and identify any prerequisite that blocks
 later work. State what will show that each prerequisite is met. Settle a
@@ -79,8 +79,12 @@ A deeper branch can start from that branch and append another segment. For
 `--workspace current`, run start in the checked-out parent. Integrate each
 subtopic into its parent using the [integration procedure](verification.md#local-verification-and-integration).
 
-If direct master work grows into several logical commits, use an authorized
-in-place transition instead of rerunning clean-start initialization:
+Continue an existing task on its agreed branch. For an authorized, in-scope
+fix after CI fails on a master push, commit the fix on master and follow the
+[direct master verification procedure](verification.md#local-verification-and-integration).
+
+Move remaining work from master to a topic only when the maintainer explicitly
+chooses that transition. Create the topic in place:
 
 ```sh
 git switch -c topic/<outcome>
@@ -88,9 +92,8 @@ git switch -c topic/<outcome>
 
 Run this on master at its current HEAD with no Git operation in progress.
 The new topic keeps staged, unstaged and untracked work in the same checkout;
-review `git status` before and after. If master already contains a completed
-commit, keep it there and group the remaining work on the topic. Do not reset
-master or rewrite accepted history to retroactively regroup it.
+review `git status` before and after. Preserve all existing master commits and
+group the remaining work on the topic.
 
 ## Specialized lock refresh
 
