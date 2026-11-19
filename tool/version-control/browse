@@ -1,0 +1,470 @@
+#!/usr/bin/env python3
+"""Browse the checkout's declarations and, optionally, an evaluated program inventory."""
+from __future__ import annotations
+
+import argparse
+from collections import Counter
+from dataclasses import dataclass, field
+import json
+import os
+from pathlib import Path, PurePosixPath
+import subprocess
+import sys
+import textwrap
+
+
+ROOT = Path(__file__).resolve().parents[2]
+MANIFEST = "windows/desired/manifest.json"
+CONTRACT = "unixlike/api/contract.json"
+UNIX_SECTIONS = {
+    "programs": ("Programs", "Search program declarations by purpose and inspect their suppliers."),
+    "desktop": ("Desktop", "Graphical sessions, audio, input methods and desktop integration."),
+    "foundation": ("Foundation", "Shared settings such as shells, SSH, Nix and editable files."),
+    "platforms": ("Platforms", "Darwin and WSL integration."),
+    "flake": ("Flake composition", "Constructors, module classes and provider checks."),
+}
+
+
+@dataclass
+class Item:
+    name: str
+    summary: str = ""
+    path: str = ""
+    facts: list[tuple[str, str]] = field(default_factory=list)
+    badge: str = ""
+    children: dict[str, Item] = field(default_factory=dict)
+
+    def branch(self, name: str) -> Item:
+        return self.children.setdefault(name, Item(name))
+
+
+def checkout_files() -> list[str]:
+    paths = subprocess.check_output(
+        ["git", "ls-files", "-z", "--cached", "--others", "--exclude-standard",
+         "--", ".", ":(exclude)notes", ":(exclude)notes/**"], cwd=ROOT,
+    )
+    return sorted({os.fsdecode(path) for path in paths.split(b"\0")
+                   if path and (ROOT / os.fsdecode(path)).is_file()})
+
+
+def add_file(parent: Item, parts: tuple[str, ...], path: str) -> None:
+    for name in parts[:-1]:
+        parent = parent.branch(name)
+    parent.branch(parts[-1]).path = path
+
+
+def query_programs(*args):
+    result = subprocess.run(
+        [sys.executable, str(ROOT / "unixlike/tool/programs"), *args],
+        cwd=ROOT, capture_output=True, text=True, timeout=30, check=True,
+    )
+    return json.loads(result.stdout)
+
+
+def program_state(row: dict) -> str:
+    if row.get("selected"):
+        return "supplied"
+    if not row.get("supported", True):
+        return "unsupported"
+    if not row.get("available", True):
+        return "class unavailable"
+    return "unselected"
+
+
+def add_supply(item: Item, row: dict) -> None:
+    state = program_state(row)
+    provider = row["provider"]
+    deployment = row["deployment"]
+    item.badge = provider if row.get("selected") else state
+    item.facts += [
+        ("Evaluated state", state),
+        ("Supplier" if row.get("selected") else "Supplier choice", provider),
+        ("Deployment", deployment),
+    ]
+    for key, label in [("identifier", "Supplier ID"), ("requestedVersion", "Requested version"),
+                       ("lockedVersion", "Locked version"), ("owner", "Declared by")]:
+        if row.get(key) and (key != "owner" or row[key] != item.path.removeprefix("unixlike/")):
+            item.facts.append((label, str(row[key])))
+
+
+def add_programs(programs: Item, catalog: dict, inventory: list[dict]) -> tuple[set[str], dict[str, Item]]:
+    catalog_rows = {row["id"]: row for row in inventory if row["source"] == "catalog"}
+    native_rows = {row["id"] for row in inventory if row["source"] != "catalog"}
+    sources = set()
+    folders = {}
+    for program_id, entry in sorted(catalog.items(), key=lambda pair: (pair[1]["group"], pair[0].casefold())):
+        item = programs.branch(entry["group"]).branch(program_id)
+        item.path = "unixlike/" + entry["owner"]
+        item.summary = "Program declaration"
+        item.facts = [
+            ("Group", entry["group"]),
+            ("Default profiles", ", ".join(entry["profiles"])),
+            ("Required classes", ", ".join(entry["requiredClasses"]) or "Any"),
+        ]
+        if entry["defaults"]:
+            item.facts.append(("Default suppliers", ", ".join(
+                f"{platform}: {supplier}" for platform, supplier in entry["defaults"].items()
+            )))
+        for provider, supply in entry["providers"].items():
+            attributes = [supply["identifier"], ", ".join(supply["platforms"])]
+            if supply.get("kind"):
+                attributes.insert(1, supply["kind"])
+            item.facts.append((provider, " · ".join(attributes)))
+        if program_id in catalog_rows:
+            add_supply(item, catalog_rows[program_id])
+        elif program_id in native_rows:
+            item.badge = "native declaration"
+        sources.add(item.path)
+        if item.path.endswith("/module.nix"):
+            folders[item.path.rsplit("/", 1)[0]] = item
+    return sources, folders
+
+
+def add_constructors(flake: Item) -> None:
+    contract = json.loads((ROOT / CONTRACT).read_text(encoding="utf-8"))
+    constructors = flake.branch("Constructors")
+    constructors.path = CONTRACT
+    constructors.summary = "Public Unix-like configuration entry points."
+    for name, entry in contract["entryPoints"].items():
+        item = constructors.branch(name)
+        item.path = "unixlike/modules/flake/configurations.nix"
+        item.facts = [
+            ("Entry point", entry["path"]),
+            ("Inputs", ", ".join(entry["inputs"])),
+            ("Consumer output", entry["output"]),
+            ("Contract", CONTRACT),
+        ]
+
+
+def add_windows(desired: Item) -> None:
+    manifest = json.loads((ROOT / MANIFEST).read_text(encoding="utf-8"))
+    desired.summary = "Windows-owned feature, package and file declarations."
+    for key, name in [("Features", "Features"), ("Packages", "Packages"),
+                      ("ManagedFiles", "Managed files")]:
+        group = desired.branch(name)
+        for entry in manifest[key]:
+            identity = entry["Id"]
+            label = entry.get("Name", identity)
+            if label in group.children:
+                label = f"{label} ({identity})"
+            item = group.branch(label)
+            item.summary = name.removesuffix("s")
+            item.path = MANIFEST
+            item.facts = [("ID", identity)]
+            for field_name in ("Feature", "Required", "Requires", "AppxName", "Command", "Parser", "Target"):
+                if field_name in entry:
+                    value = entry[field_name]
+                    item.facts.append((field_name, str(value) if isinstance(value, str) else json.dumps(value)))
+            if "Source" in entry:
+                item.facts.append(("Payload", "windows/desired/" + entry["Source"]))
+                payload = item.branch(PurePosixPath(entry["Source"]).name)
+                payload.path = "windows/desired/" + entry["Source"]
+    for key, label, summary in [
+        ("Terminal", "Windows Terminal", "Default profiles and Windows terminal delegation."),
+        ("Font", manifest["Font"]["Name"], "The configured Windows font family and its files."),
+    ]:
+        item = desired.branch(label)
+        item.path = MANIFEST
+        item.summary = summary
+        item.facts = [(name, str(value)) for name, value in manifest[key].items()
+                      if isinstance(value, (str, bool, int))]
+        if key == "Terminal":
+            for entry in manifest["ManagedFiles"]:
+                if entry["Feature"] == manifest[key]["Feature"]:
+                    source = entry["Source"]
+                    item.branch(PurePosixPath(source).name).path = "windows/desired/" + source
+        else:
+            item.facts.append(("Files", ", ".join(record["FileName"] for record in manifest[key]["Files"])))
+
+
+def build_tree(paths: list[str], catalog: dict, inventory: list[dict]) -> Item:
+    root = Item("configs")
+    unixlike = root.branch("Unix-like")
+    unixlike.summary = "Nix modules for Linux, WSL and macOS."
+    windows = root.branch("Windows")
+    windows.summary = "Native Windows desired state and reconciliation."
+    repository = root.branch("Repository")
+    repository.summary = "Workflow tools, policies and repository documentation."
+    sections = {}
+    for key, (name, summary) in UNIX_SECTIONS.items():
+        sections[key] = unixlike.branch(name)
+        sections[key].summary = summary
+    sources, program_folders = add_programs(sections["programs"], catalog, inventory)
+    if CONTRACT in paths:
+        add_constructors(sections["flake"])
+    if MANIFEST in paths:
+        desired = windows.branch("Desired state")
+        desired.path = MANIFEST
+        try:
+            add_windows(desired)
+        except (OSError, ValueError, KeyError, TypeError):
+            desired.summary = "The manifest could not be read. Open its source to inspect it."
+
+    for path in paths:
+        parts = PurePosixPath(path).parts
+        if path == MANIFEST or path in sources:
+            continue
+        if len(parts) >= 4 and parts[:2] == ("unixlike", "modules") and parts[2] in sections:
+            program_folder = program_folders.get("/".join(parts[:5])) if len(parts) > 5 else None
+            if program_folder:
+                add_file(program_folder, parts[5:], path)
+            else:
+                add_file(sections[parts[2]], parts[3:], path)
+        elif parts[0] == "unixlike":
+            add_file(unixlike.branch("Provider files"), parts[1:], path)
+        elif parts[:3] == ("windows", "desired", "files"):
+            add_file(windows.branch("Payload files"), parts[3:], path)
+        elif parts[0] == "windows":
+            add_file(windows.branch("Windows files"), parts[1:], path)
+        elif parts[0] == "common" and len(parts) > 1:
+            add_file(root.branch("Common"), parts[1:], path)
+        else:
+            category = {"tool": "Tools", "docs": "Documentation",
+                        ".github": "Automation", ".githooks": "Git hooks"}.get(parts[0])
+            add_file(repository.branch(category or "Workspace"), parts[1:] if category else parts, path)
+
+    extras = [row for row in inventory if row["source"] != "catalog"]
+    if extras:
+        native = unixlike.branch("Native declarations")
+        native.summary = "Additional packages and apps supplied by the evaluated native configuration."
+        for row in extras:
+            group = native.branch(row["deployment"]).branch(row["provider"])
+            label = row["id"]
+            if label in group.children:
+                label = f"{label} ({len(group.children) + 1})"
+            item = group.branch(label)
+            add_supply(item, row)
+    return root
+
+
+def walk(item: Item, prefix: tuple[str, ...] = (), expanded: set | None = None):
+    for child in item.children.values():
+        path = (*prefix, child.name)
+        yield path, child
+        if expanded is None or path in expanded:
+            yield from walk(child, path, expanded)
+
+
+def matches(root: Item, query: str):
+    words = query.casefold().replace("-", " ").split()
+    results = []
+    for path, item in walk(root):
+        name = item.name.casefold().replace("-", " ")
+        searchable = " ".join((name, item.path, item.summary, *(value for _, value in item.facts)))
+        searchable = searchable.casefold().replace("-", " ")
+        if all(word in searchable for word in words):
+            rank = 0 if name == " ".join(words) else 1 if all(word in name for word in words) else 2
+            results.append((rank, path, item))
+    results.sort(key=lambda row: (row[0], len(row[1]), row[1]))
+    return [(path, item) for _, path, item in results]
+
+
+def source_lines(item: Item) -> list[str]:
+    try:
+        path = (ROOT / item.path).resolve()
+        relative = path.relative_to(ROOT)
+        if not relative.parts or relative.parts[0] in (".git", "notes") or not path.is_file():
+            return ["Source preview unavailable."]
+        with path.open("rb") as stream:
+            data = stream.read(8193)
+    except (OSError, ValueError):
+        return ["Source preview unavailable."]
+    if b"\0" in data:
+        return ["Binary source"]
+    lines = data[:8192].decode("utf-8", errors="replace").expandtabs(4).splitlines()
+    return lines + (["", "Preview limited to the first 8 KiB."] if len(data) > 8192 else [])
+
+
+def details(path: tuple[str, ...], item: Item, preview: bool) -> list[str]:
+    lines = [" / ".join(path), ""]
+    if item.summary:
+        lines += [item.summary, ""]
+    if item.path:
+        lines += ["Source  " + item.path, ""]
+    if preview and item.path:
+        return lines + source_lines(item)
+    lines += [f"{key}  {value}" for key, value in item.facts]
+    if item.children:
+        lines += ["", f"Contents ({len(item.children)})", *item.children]
+    elif item.path and not item.facts:
+        lines += source_lines(item)[:16]
+    return lines
+
+
+def tui(screen, root: Item, query: str, heading: str) -> None:
+    import curses
+
+    expanded = {("Unix-like",), ("Windows",), ("Repository",)}
+    cursor = offset = detail_offset = 0
+    editing = preview = False
+    curses.set_escdelay(100)
+    try:
+        curses.curs_set(0)
+    except curses.error:
+        pass
+
+    def draw(y, x, value, width, style=0):
+        value = "".join(char if char.isprintable() else " " for char in value)
+        try:
+            screen.addnstr(y, x, value, width, style)
+        except curses.error:
+            # The terminal can resize between measuring it and drawing.
+            pass
+
+    while True:
+        height, width = screen.getmaxyx()
+        screen.erase()
+        if height < 9 or width < 44:
+            draw(0, 0, "Resize terminal to at least 44 x 9, or press q.", width - 1)
+            screen.refresh()
+            if screen.get_wch() == "q":
+                return
+            continue
+
+        filtered = bool(query.strip())
+        rows = matches(root, query) if filtered else list(walk(root, expanded=expanded))
+        names = Counter(item.name for _, item in rows) if filtered else Counter()
+        cursor = min(cursor, max(0, len(rows) - 1))
+        selected = rows[cursor] if rows else None
+        left = min(52, max(20, width * 40 // 100))
+        page = height - 5
+        offset = max(0, min(cursor, max(offset, cursor - page + 1)))
+        draw(0, 1, "configs / " + heading, width - 2, curses.A_BOLD)
+        draw(1, 1, "Search  " + query + ("_" if editing else "") if filtered or editing else
+             "Configuration tree", left - 2, curses.A_BOLD)
+        for y in range(1, height - 2):
+            draw(y, left, "│", 1, curses.A_DIM)
+        for index, (path, item) in enumerate(rows[offset:offset + page], start=offset):
+            marker = ("▾ " if path in expanded else "▸ ") if item.children else "  "
+            indent = "" if filtered else "  " * (len(path) - 1)
+            label = indent + marker + item.name
+            if names[item.name] > 1 and len(path) > 1:
+                label += " · " + path[-2]
+            if item.badge:
+                room = left - len(item.badge) - 4
+                if room >= 8:
+                    label = f"{label[:room]:<{room}}  {item.badge}"
+            draw(index - offset + 3, 1, label.ljust(left - 2), left - 2,
+                 curses.A_REVERSE if index == cursor else curses.A_NORMAL)
+
+        if selected:
+            path, item = selected
+            lines = []
+            for line in details(path, item, preview):
+                lines.extend(textwrap.wrap(line, width - left - 3) if line else [""])
+            detail_offset = min(detail_offset, max(0, len(lines) - page))
+            for index, line in enumerate(lines[detail_offset:detail_offset + page]):
+                draw(index + 3, left + 2, line, width - left - 3,
+                     curses.A_BOLD if index == 0 and detail_offset == 0 else curses.A_NORMAL)
+        else:
+            draw(3, left + 2, "No matching items", width - left - 3)
+        if editing:
+            help_text = "Enter Accept  Esc Clear"
+        else:
+            help_text = "↑↓ Navigate  Enter Open  / Search  p Preview  PgUp/PgDn Detail  q Quit"
+        draw(height - 2, 1, help_text, width - 2, curses.A_DIM)
+        draw(height - 1, 1, f"{len(rows)} matches" if filtered else f"{len(rows)} visible items", width - 2)
+        screen.refresh()
+
+        key = screen.get_wch()
+        old_cursor = cursor
+        if editing:
+            if key in ("\n", "\r", curses.KEY_ENTER):
+                editing = False
+            elif key == "\x1b":
+                query, editing = "", False
+            elif key in ("\b", "\x7f", curses.KEY_BACKSPACE):
+                query = query[:-1]
+            elif isinstance(key, str) and key.isprintable():
+                query += key
+            else:
+                continue
+            cursor = offset = detail_offset = 0
+            preview = False
+        elif key in ("q", "Q"):
+            return
+        elif key == "/":
+            editing = True
+        elif key == "\x1b" and filtered:
+            query = ""
+            cursor = offset = detail_offset = 0
+            preview = False
+        elif key in (curses.KEY_DOWN, "j") and rows:
+            cursor = min(cursor + 1, len(rows) - 1)
+        elif key in (curses.KEY_UP, "k"):
+            cursor = max(cursor - 1, 0)
+        elif key in (curses.KEY_NPAGE, curses.KEY_PPAGE):
+            detail_offset = max(0, detail_offset + (page if key == curses.KEY_NPAGE else -page))
+        elif selected and key == "p":
+            preview = not preview
+            detail_offset = 0
+        elif selected and key in ("\n", "\r", curses.KEY_ENTER, curses.KEY_RIGHT):
+            path, item = selected
+            if filtered:
+                expanded.update(path[:size] for size in range(1, len(path)))
+                query = ""
+                cursor = next(index for index, (candidate, _) in
+                              enumerate(walk(root, expanded=expanded)) if candidate == path)
+                detail_offset = 0
+            elif item.children:
+                if path in expanded and key != curses.KEY_RIGHT:
+                    expanded.remove(path)
+                else:
+                    expanded.add(path)
+            elif item.path:
+                preview = not preview
+                detail_offset = 0
+        elif selected and key == curses.KEY_LEFT and not filtered:
+            path, _ = selected
+            if path in expanded:
+                expanded.remove(path)
+            elif len(path) > 1:
+                cursor = next(index for index, (candidate, _) in enumerate(rows) if candidate == path[:-1])
+        if cursor != old_cursor:
+            preview = False
+            detail_offset = 0
+
+
+def main() -> int:
+    parser = argparse.ArgumentParser(description=__doc__)
+    parser.add_argument("--host", metavar="FLAKE#OUTPUT", help="overlay a Unix-like program inventory")
+    parser.add_argument("--query", default="", help="search at startup")
+    parser.add_argument("--tree", action="store_true", help="print the tree without opening the TUI")
+    args = parser.parse_args()
+    try:
+        paths = checkout_files()
+        try:
+            catalog = query_programs("--catalog")
+        except (OSError, subprocess.SubprocessError, ValueError):
+            catalog = {}
+        inventory = query_programs(args.host, "--json") if args.host else []
+        root = build_tree(paths, catalog, inventory)
+    except (OSError, subprocess.SubprocessError, ValueError, KeyError) as exc:
+        diagnostic = getattr(exc, "stderr", None)
+        if isinstance(diagnostic, bytes):
+            diagnostic = os.fsdecode(diagnostic)
+        parser.exit(1, f"Could not read the configuration: {diagnostic or exc}\n")
+    heading = ("Program inventory / " + args.host.partition("#")[2]) if args.host else "Checkout declarations"
+    if not catalog:
+        heading += " · Program metadata unavailable"
+    if args.tree:
+        rows = matches(root, args.query) if args.query.strip() else walk(root)
+        for path, item in rows:
+            print(" / ".join(path) + (f"  [{item.path}]" if item.path else "") +
+                  (f"  ({item.badge})" if item.badge else ""))
+        return 0
+    if not sys.stdin.isatty() or not sys.stdout.isatty():
+        parser.exit(1, "An interactive terminal is required. Use --tree for plain text.\n")
+    try:
+        import curses
+    except ImportError:
+        parser.exit(1, "Python curses is required for the TUI. Use --tree for plain text.\n")
+    try:
+        curses.wrapper(tui, root, args.query, heading)
+    except curses.error as exc:
+        parser.exit(1, f"Could not open the terminal browser: {exc}. Use --tree for plain text.\n")
+    return 0
+
+
+if __name__ == "__main__":
+    raise SystemExit(main())

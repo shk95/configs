@@ -30,7 +30,8 @@ for route in \
   audit:version-control/audit audit-remote:version-control/audit-remote \
   release:version-control/release.py \
   plan-release:version-control/plan-release \
-  hook-evidence:version-control/hook-evidence programs:../unixlike/tool/programs; do
+  hook-evidence:version-control/hook-evidence programs:../unixlike/tool/programs \
+  browse:version-control/browse; do
   command=${route%%:*}
   target=${route#*:}
   printf '#!/bin/sh\nprintf "operator-target=%%s\\n%%s\\n%%s\\n" %s "$1" "$2"\nexit 37\n' "$target" >"$operator_fixture/tool/$target"

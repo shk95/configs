@@ -19,6 +19,21 @@ produce, refusals included; `tool/configs doctor` shows the count.
 
 ## Architecture
 
+Run `just browse` to explore the current checkout in a terminal. Use `/` to
+search, Enter to expand an item or jump to a match, and `p` to preview its
+source. The tree includes Unix-like modules, Windows desired state, and
+repository tools and documentation. Python 3.9 or newer with curses runs the
+TUI.
+
+```sh
+just browse --query ghostty
+just browse --host 'path:./unixlike#homeConfigurations.example'
+just browse --tree --query 'Windows Terminal'
+```
+
+The optional host view overlays the Unix-like program inventory on the source
+tree. The Windows view shows declarations from its manifest.
+
 ```text
 unixlike
   flake.nix                   flake definition and lock (unixlike/flake.lock)
