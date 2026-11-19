@@ -1,6 +1,7 @@
 id: unixlike/generated-config-key-in-schema
 statement: A key written into a generated configuration exists in the pinned tool's schema at the locked version, and a tool that migrates its own configuration in place is started once against the rendered file before the change is accepted.
 rationale: docs/policy/architecture.md § Unix-like domain
+enforced-by: fixture unixlike/modules/flake/checks/programs.nix
 enforced-by: fixture unixlike/modules/flake/checks/generated-config.nix
 enforced-by: manual the reviewer reads each new or changed key against the pinned tool's source or documentation at the locked version, starts a tool that migrates its own configuration once against the rendered file, and reports both beside the evaluation and build evidence
 owner: repository maintainer

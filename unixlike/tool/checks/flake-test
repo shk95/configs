@@ -48,6 +48,6 @@ done
 # options. The positive and negative constructor probes live in provider-api-test.
 list=$(packages homeConfigurations.example.config.home.packages)
 contains "$list" ripgrep || fail 'common package list did not reach standalone home'
-contains "$list" codex || fail 'coding-agent default did not reach standalone home'
+[ "$(nix eval --json "path:$repo#homeConfigurations.example.config.providerTools.programs.codex.provider")" = '"mise"' ] || fail 'coding-agent supplier did not reach standalone home'
 
 printf '✓ synthetic public-constructor fixtures and graphical boundary\n'

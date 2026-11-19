@@ -66,6 +66,7 @@ cat > "$consumer_dir/flake.nix" <<EOF
         networking.hostName = "fixture-mac";
         system.primaryUser = "example";
         users.users.example.home = "/Users/$fixture_user";
+        homebrew.enable = true;
         homebrew.casks = ["ghostty" "karabiner-elements" "unknown-app"];
       }];
     };
@@ -77,6 +78,7 @@ cat > "$consumer_dir/flake.nix" <<EOF
         networking.hostName = "fixture-mac";
         system.primaryUser = "example";
         users.users.example.home = "/Users/$fixture_user";
+        homebrew.enable = true;
         homebrew.casks = ["ghostty" "karabiner-elements"];
       }];
       homeModules = [{providerDarwin.appSettings.enable = false;}];
@@ -105,7 +107,7 @@ fi
 [ "$(nix eval --json "path:$consumer_dir#darwinConfigurations.example-mac.config.home-manager.users.example.programs.ghostty.enable")" = false ]
 [ "$(nix eval --json "path:$consumer_dir#darwinConfigurations.selected-mac.config.home-manager.users.example.programs.ghostty.enable")" = true ]
 [ "$(nix eval --json "path:$consumer_dir#darwinConfigurations.opted-out.config.home-manager.users.example.programs.ghostty.enable")" = false ]
-nix eval --json "path:$consumer_dir#darwinConfigurations.selected-mac.config.home-manager.users.example.providerDarwin.selectedApps" | grep -Fq 'unknown-app'
+nix eval --json "path:$consumer_dir#darwinConfigurations.selected-mac.config.home-manager.users.example.providerDarwin.selectedApps" | grep -Fq 'ghostty'
 [ "$(nix eval --json "path:$consumer_dir#darwinConfigurations.example-mac.config.home-manager.users.example.home.activation" --apply 'entries: builtins.hasAttr "karabinerDesiredState" entries')" = false ]
 [ "$(nix eval --json "path:$consumer_dir#darwinConfigurations.selected-mac.config.home-manager.users.example.home.activation" --apply 'entries: builtins.hasAttr "karabinerDesiredState" entries')" = true ]
 [ "$(nix eval --json "path:$consumer_dir#darwinConfigurations.opted-out.config.home-manager.users.example.home.activation" --apply 'entries: builtins.hasAttr "karabinerDesiredState" entries')" = false ]
@@ -147,7 +149,7 @@ accept 'NixOS compatibility override' 26.05 '(provider.lib.mkNixos {system = "x8
 accept 'NixOS home override' 26.05 '(provider.lib.mkNixos {system = "x86_64-linux"; user = "example"; inherit git systemModules; environment.graphical = false; homeModules = [{home.stateVersion = "26.05";}];}).config.home-manager.users.example.home.stateVersion'
 accept 'NixOS system extension' yes '(provider.lib.mkNixos {system = "x86_64-linux"; user = "example"; inherit git; environment.graphical = false; systemModules = systemModules ++ [{environment.variables.CONSUMER = "yes";}];}).config.environment.variables.CONSUMER'
 accept 'NixOS home extension' yes '(provider.lib.mkNixos {system = "x86_64-linux"; user = "example"; inherit git systemModules; environment.graphical = false; homeModules = [{home.sessionVariables.CONSUMER = "yes";}];}).config.home-manager.users.example.home.sessionVariables.CONSUMER'
-accept 'default coding agents' yes 'if builtins.elem "codex" (names (provider.lib.mkHome homeInput)) && builtins.elem "claude-code" (names (provider.lib.mkHome homeInput)) then "yes" else "no"'
+accept 'default coding agents' yes 'if (provider.lib.mkHome homeInput).config.providerTools.mise.tools ? "aqua:openai/codex" && (provider.lib.mkHome homeInput).config.providerTools.mise.tools ? "aqua:anthropics/claude-code" then "yes" else "no"'
 accept 'coding agents opt-out' yes 'if !(builtins.elem "codex" (names (provider.lib.mkHome (homeInput // {homeModules = [{providerTools.agents.enable = false;}];})))) then "yes" else "no"'
 accept 'bounded package exclusion' yes 'if !(builtins.elem "ripgrep" (names (provider.lib.mkHome (homeInput // {homeModules = [{providerTools.excludedPackages = ["ripgrep"];}];})))) then "yes" else "no"'
 

@@ -1,10 +1,20 @@
 _: {
-  modules.homeManager.shared = {pkgs, ...}: {
+  programCatalog.bat = {
+    profiles = ["shared"];
+    nativeEnable = ["programs" "bat" "enable"];
+    providers.nix.identifier = "bat";
+  };
+  modules.homeManager.shared = {
+    lib,
+    config,
+    pkgs,
+    ...
+  }: {
     # Declared as a program rather than a package, which is what writes the config
     # below — and `programs.bat` contributes the package itself, so it does not
-    # also belong in modules/foundation/packages.nix.
+    # have a separate package-only supply declaration.
     programs.bat = {
-      enable = true;
+      enable = lib.mkDefault config.providerTools.programs.bat.enable;
 
       config = {
         # Follow the terminal's ANSI palette, including Bluegray Light and

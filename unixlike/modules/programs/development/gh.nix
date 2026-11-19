@@ -7,9 +7,18 @@ _: {
   #
   # The hosts are named explicitly rather than left to the default so that a
   # change in that default cannot silently drop one.
+  programCatalog.gh = {
+    profiles = ["shared"];
+    nativeEnable = ["programs" "gh" "enable"];
+    providers.nix.identifier = "gh";
+  };
   modules.homeManager.shared = {
+    config,
+    lib,
+    ...
+  }: {
     programs.gh = {
-      enable = true;
+      enable = lib.mkDefault config.providerTools.programs.gh.enable;
 
       settings.aliases = {
         # Was in an unmanaged ~/.config/gh/config.yml, which this replaces.

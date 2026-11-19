@@ -33,11 +33,11 @@ cat > "$work/flake.nix" <<EOF
       git = {name = "Example"; email = "example@example.invalid";};
       systemModules = [{
         networking.hostName = "fixture-mac";
+        homebrew.enable = true;
         system.primaryUser = "example";
         users.users.example.home = "/Users/" + "example";
-        homebrew.casks = if selected then ["karabiner-elements"] else [];
       }];
-      homeModules = [{providerDarwin.capture = capture;}];
+      homeModules = [{providerDarwin.capture = capture; providerTools.programs.karabiner-elements.enable = selected;}];
     };
     absent = builtins.toPath "$work/never-read.json";
   in {

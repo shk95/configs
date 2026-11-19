@@ -1,13 +1,6 @@
-# Configured media applications. Unconfigured graphical tools remain in the
-# package concern.
+# Media and removable-volume integration for the graphical session.
 _: {
-  modules.homeManager.linuxGraphical = {pkgs, ...}: {
-    programs.mpv = {
-      enable = true;
-      defaultProfiles = ["gpu-hq"];
-      scripts = [pkgs.mpvScripts.mpris];
-    };
-
+  modules.homeManager.linuxGraphical = {
     services = {
       playerctld.enable = true;
       udiskie.enable = true;

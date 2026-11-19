@@ -1,7 +1,16 @@
 _: {
+  programCatalog.fzf = {
+    profiles = ["shared"];
+    nativeEnable = ["programs" "fzf" "enable"];
+    providers.nix.identifier = "fzf";
+  };
   modules.homeManager.shared = {
+    config,
+    lib,
+    ...
+  }: {
     programs.fzf = {
-      enable = true;
+      enable = lib.mkDefault config.providerTools.programs.fzf.enable;
       enableZshIntegration = true;
       enableBashIntegration = false;
       enableFishIntegration = false;

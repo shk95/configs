@@ -20,6 +20,17 @@
 # the separate capture-to-Git caller until its repository-owned retirement.
 # It is not the host-document adapter or a dependency of the new capture command.
 _: {
+  programCatalog.karabiner-elements = {
+    profiles = ["darwin"];
+    requiredClasses = ["darwin"];
+    platforms = ["aarch64-darwin"];
+    providers = {
+      homebrew = {
+        identifier = "karabiner-elements";
+        kind = "cask";
+      };
+    };
+  };
   modules.homeManager.darwin = {
     pkgs,
     lib,
@@ -30,7 +41,8 @@ _: {
     validation = import ../../../../tool/darwin-capture/validation.nix {inherit lib contract;};
     capture = config.providerDarwin.capture;
     selected =
-      builtins.elem "karabiner-elements" config.providerDarwin.selectedApps
+      config.providerTools.programs.karabiner-elements.enable
+      && builtins.elem "karabiner-elements" config.providerDarwin.homebrew.casks
       && config.providerDarwin.appSettings.enable
       && config.providerDarwin.appSettings.karabiner;
     effective = unit: selected && unit.enable;

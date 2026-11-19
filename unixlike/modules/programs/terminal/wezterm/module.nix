@@ -3,17 +3,23 @@
 _: {
   # A terminal emulator is a desktop application. WSL sessions use a
   # Windows-owned terminal and carry no Linux GUI applications.
+  programCatalog.wezterm = {
+    profiles = ["desktop"];
+    requiredClasses = ["desktop"];
+    nativeEnable = ["programs" "wezterm" "enable"];
+    providers.nix.identifier = "wezterm";
+  };
   modules.homeManager.desktop = {
     config,
     lib,
     ...
   }: {
     programs.wezterm = {
-      enable = true;
+      enable = lib.mkDefault config.providerTools.programs.wezterm.enable;
       enableZshIntegration = true;
     };
 
-    xdg.configFile = {
+    xdg.configFile = lib.mkIf config.programs.wezterm.enable {
       "wezterm/wezterm.lua".source = ./wezterm.lua;
       "wezterm/config/appearance.lua".source = ./config/appearance.lua;
       "wezterm/config/behavior.lua".source = ./config/behavior.lua;

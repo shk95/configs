@@ -1,8 +1,18 @@
 _: {
   # terminal file manager
-  modules.homeManager.shared = {pkgs, ...}: {
+  programCatalog.yazi = {
+    profiles = ["shared"];
+    nativeEnable = ["programs" "yazi" "enable"];
+    providers.nix.identifier = "yazi";
+  };
+  modules.homeManager.shared = {
+    lib,
+    config,
+    pkgs,
+    ...
+  }: {
     programs.yazi = {
-      enable = true;
+      enable = lib.mkDefault config.providerTools.programs.yazi.enable;
       enableZshIntegration = true;
       shellWrapperName = "yy";
 
@@ -18,7 +28,7 @@ _: {
         # declare under `manager` rendered into `yazi.toml` but were
         # silently dropped at load on the pinned version. The pinned Home
         # Manager module's own `settings` example (line 154 of the pinned
-        # Home Manager source at `modules/programs/yazi.nix`) writes
+        # Home Manager source at `modules/programs/files/yazi.nix`) writes
         # `mgr = { show_hidden = ...; }` directly — the closer witness, since
         # it is the same option this module sets — and its `keymap` example uses
         # `mgr.prepend_keymap`, confirming the same rename on the keymap

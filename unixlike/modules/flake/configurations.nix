@@ -1,3 +1,4 @@
+# INV unixlike/tool-supply-ownership: refuse declared duplicate Nix/mise owners.
 # Public Unix-like constructors and synthetic output examples. This is the
 # only place that maps environment selections to deferred module classes.
 # Machine realization is supplied by consumer systemModules and homeModules.
@@ -9,7 +10,7 @@
   withSystem,
   ...
 }: let
-  inherit (lib) attrNames attrValues mkOption types unique;
+  inherit (lib) attrNames attrValues mkOption types;
   home = config.modules.homeManager;
   nixos = config.modules.nixos;
   providerConfig = config;
@@ -84,17 +85,87 @@
     config.providerIdentity.user = account;
   };
 
-  selectedDarwinApps = brew: let
-    nameOf = value:
-      if builtins.isString value
-      then value
-      else value.name;
-    normalize = value: lib.toLower (builtins.baseNameOf (nameOf value));
-  in
-    unique (
-      map normalize (brew.casks ++ brew.brews)
-      ++ map lib.toLower (attrNames brew.masApps)
-    );
+  systemInventory = darwin: user: {
+    config,
+    lib,
+    options,
+    ...
+  }: let
+    home = config.home-manager.users.${user};
+    # Read the merged system options so disabled Homebrew and host overrides
+    # determine which declared packages the provider actually supplies.
+    brew = {
+      brews = lib.optionals (darwin && config.homebrew.enable) (map (item: item.name or item) config.homebrew.brews);
+      casks = lib.optionals (darwin && config.homebrew.enable) (map (item: item.name or item) config.homebrew.casks);
+      masApps = lib.optionalAttrs (darwin && config.homebrew.enable) config.homebrew.masApps;
+    };
+    extra = provider: kind: identifier: owner: {
+      id = identifier;
+      area = "host";
+      inherit kind provider identifier owner;
+      deployment = "system";
+      supported = true;
+      selected = true;
+      requestedVersion = null;
+      lockedVersion = null;
+      installedVersion = null;
+      source = "native-system";
+    };
+    brewExtras =
+      map (name: extra "homebrew" "formula" name "homebrew.brews") (lib.subtractLists home.providerTools.homebrew.brews brew.brews)
+      ++ map (name: extra "homebrew" "cask" name "homebrew.casks") (lib.subtractLists home.providerTools.homebrew.casks brew.casks)
+      ++ lib.mapAttrsToList (name: id: (extra "mas" "program" (toString id) "homebrew.masApps") // {id = name;}) brew.masApps;
+    declaredSystemNames = map (row: row.packageName) (builtins.filter
+      (row: row.source == "catalog" && row.deployment == "system" && row.selected)
+      home.providerTools.inventory);
+    systemPackages = lib.concatMap (definition:
+      map (p:
+        (extra "nix" "program" (lib.getName p) definition.file) // {lockedVersion = p.version or null;})
+      (builtins.filter (p: lib.isDerivation p && !(builtins.elem (lib.getName p) declaredSystemNames)) definition.value))
+    options.environment.systemPackages.definitionsWithLocations;
+    systemExtras = brewExtras ++ systemPackages;
+    systemIds = map (row: row.id) systemExtras;
+    inventory =
+      builtins.filter (row: row.selected || !(builtins.elem row.id systemIds)) home.providerTools.inventory
+      ++ systemExtras;
+    nixRows = builtins.filter (row: row.selected && row.provider == "nix") inventory;
+    brewConflicts = lib.concatMap (row: let
+      alternative = providerConfig.resolvedProgramCatalog.${row.id}.providers.homebrew or {};
+      matches = kind: names:
+        lib.unique (lib.intersectLists names (
+          [row.id (row.packageName or row.identifier)]
+          ++ lib.optional ((alternative.kind or null) == kind) alternative.identifier
+        ));
+      describe = option: name: "${row.id} from Nix (${row.owner}) and ${option} (${name})";
+    in
+      map (describe "homebrew.brews") (matches "formula" brew.brews)
+      ++ map (describe "homebrew.casks") (matches "cask" brew.casks))
+    nixRows;
+  in {
+    options.providerTools.inventory = lib.mkOption {
+      type = lib.types.listOf lib.types.attrs;
+      readOnly = true;
+    };
+    config =
+      {
+        providerTools.inventory = inventory;
+        assertions = [
+          {
+            assertion = lib.all (r: !(r.selected && r.provider == "mise" && lib.any (p: p.id == r.id) systemPackages)) home.providerTools.inventory;
+            message = "providerTools: duplicate Nix/mise ownership across system and home";
+          }
+          {
+            assertion = brewConflicts == [];
+            message = "providerTools: duplicate Nix/Homebrew ownership: ${lib.concatStringsSep "; " brewConflicts}";
+          }
+        ];
+      }
+      // lib.optionalAttrs darwin {
+        home-manager.users.${user}.providerDarwin.homebrew = brew;
+        homebrew.brews = home.providerTools.homebrew.brews;
+        homebrew.casks = home.providerTools.homebrew.casks;
+      };
+  };
 
   # Public environment selection is independent of the host's hardware,
   # account creation and access policy. Synthetic fixtures exercise the
@@ -133,7 +204,7 @@
       values;
     selected = spec.environment;
     homeModules =
-      [home.shared]
+      [home.shared {providerTools.areas = ["nixos" "system-common"];}]
       ++ lib.optionals selected.wsl [home.wsl]
       ++ lib.optionals selected.graphical [home.desktop home.linuxGraphical]
       ++ [home.agents (homeIdentity spec.git spec.user)]
@@ -154,6 +225,7 @@
                 inputs.home-manager.nixosModules.home-manager
                 nixos.environment
                 (nixosUserIdentity spec.user)
+                (systemInventory false spec.user)
               ]
               ++ lib.optionals selected.graphical [nixos.graphical]
               ++ [
@@ -263,6 +335,7 @@
                 inputs.home-manager.darwinModules.home-manager
                 config.modules.darwin.environment
                 (darwinUserIdentity spec.user)
+                (systemInventory true spec.user)
                 ({
                   config,
                   lib,
@@ -278,7 +351,6 @@
                     users.${spec.user}.imports =
                       homeModules
                       ++ [
-                        {providerDarwin.selectedApps = selectedDarwinApps config.homebrew;}
                         {
                           home.username = lib.mkDefault spec.user;
                           home.homeDirectory = lib.mkDefault (
@@ -378,7 +450,10 @@
   };
 in {
   flake = {
-    lib = {inherit mkNixos mkDarwin mkHome;};
+    lib = {
+      inherit mkNixos mkDarwin mkHome;
+      programCatalog = config.resolvedProgramCatalog;
+    };
     nixosConfigurations = {
       fixture-cli = mkNixos {
         system = "x86_64-linux";
@@ -426,6 +501,7 @@ in {
       systemModules = [
         {
           networking.hostName = "fixture-mac";
+          homebrew.enable = true;
           system.primaryUser = "example";
           users.users.example.home = "/Users/${fixtureUser}";
         }

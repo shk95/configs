@@ -23,6 +23,14 @@ file, which every change owes.
 - [ ] A writable-file opt-out is declared for each selected file; incoming-relative
       numbered backups, retained baselines, dry-run behavior and failure
       preservation are verified (INV unixlike/editable-file-generation-backup).
+- [ ] For a tool supply or settings ownership change, the Unix-like maintainer
+      records the selected platform and installation owner, configuration owner,
+      optional version constraint, duplicate-command disposition and applicable
+      native compatibility evidence; Nix remains central to configuration and
+      program supply, with Homebrew supplementing it on macOS and mise supplying selected Linux
+      tools; local tools and old versions remain preserved by default
+      (INV unixlike/tool-supply-ownership). A policy-only adoption records the
+      existing implementation and does not imply a supplier migration.
 - [ ] Any optional runtime reproduction names its system and exact selection;
       ordinary provider verification makes no host runtime claim.
 - [ ] A `unixlike-v...` tag certifies the public API, synthetic composition

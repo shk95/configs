@@ -1,5 +1,13 @@
 # Darwin user service, package and Lua configuration have one owner.
 {inputs, ...}: {
+  programCatalog.paneru = {
+    profiles = ["darwin"];
+    platforms = ["aarch64-darwin"];
+    requiredClasses = ["darwin"];
+    nativeEnable = ["services" "paneru" "enable"];
+    kind = "service";
+    providers.nix.identifier = "paneru";
+  };
   modules.homeManager.darwin = {
     config,
     lib,
@@ -39,7 +47,7 @@
     ];
 
     services.paneru = {
-      enable = true;
+      enable = lib.mkDefault config.providerTools.programs.paneru.enable;
       luaConfig.enable = true;
       config = ./init.lua;
     };

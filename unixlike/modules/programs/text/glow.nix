@@ -1,5 +1,10 @@
 _: {
+  programCatalog.glow = {
+    profiles = ["shared"];
+    providers.nix.identifier = "glow";
+  };
   modules.homeManager.shared = {
+    config,
     lib,
     pkgs,
     ...
@@ -16,11 +21,13 @@ _: {
       '';
     };
   in {
-    home.packages = [glow];
+    home.packages = lib.optional config.providerTools.programs.glow.enable glow;
     # XDG takes precedence on both platforms. go-app-paths 0.2.2 also
     # searches ~/Library/Preferences/glow on Darwin when XDG is unset.
-    xdg.configFile."glow/glow.yml".source = settings;
-    home.file."Library/Preferences/glow/glow.yml" = lib.mkIf pkgs.stdenv.hostPlatform.isDarwin {
+    xdg.configFile."glow/glow.yml" = lib.mkIf config.providerTools.programs.glow.enable {
+      source = settings;
+    };
+    home.file."Library/Preferences/glow/glow.yml" = lib.mkIf (pkgs.stdenv.hostPlatform.isDarwin && config.providerTools.programs.glow.enable) {
       source = settings;
     };
   };

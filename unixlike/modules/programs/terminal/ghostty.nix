@@ -2,6 +2,25 @@
 # module writes the same XDG config on Linux and macOS; package ownership is the
 # platform-specific part.
 _: {
+  programCatalog.ghostty = {
+    profiles = ["desktop"];
+    requiredClasses = ["desktop"];
+    nativeEnable = ["programs" "ghostty" "enable"];
+    defaults = {
+      linux = "nix";
+      darwin = "homebrew";
+    };
+    providers = {
+      nix = {
+        identifier = "ghostty";
+        platforms = ["x86_64-linux" "aarch64-linux"];
+      };
+      homebrew = {
+        identifier = "ghostty";
+        kind = "cask";
+      };
+    };
+  };
   modules.homeManager.desktop = {
     config,
     lib,
@@ -13,14 +32,15 @@ _: {
     };
     programs.ghostty =
       lib.mkIf (
-        pkgs.stdenv.hostPlatform.isLinux
+        (pkgs.stdenv.hostPlatform.isLinux && config.providerTools.programs.ghostty.enable)
         || (
-          builtins.elem "ghostty" config.providerDarwin.selectedApps
+          config.providerTools.programs.ghostty.enable
+          && builtins.elem "ghostty" config.providerDarwin.homebrew.casks
           && config.providerDarwin.appSettings.enable
           && config.providerDarwin.appSettings.ghostty
         )
       ) {
-        enable = true;
+        enable = lib.mkDefault true;
 
         # Manual integration survives switching shells inside Ghostty. The
         # feature list keeps Ghostty's precise xterm-ghostty capabilities locally,
@@ -93,7 +113,8 @@ _: {
   }: {
     programs.ghostty =
       lib.mkIf (
-        builtins.elem "ghostty" config.providerDarwin.selectedApps
+        config.providerTools.programs.ghostty.enable
+        && builtins.elem "ghostty" config.providerDarwin.homebrew.casks
         && config.providerDarwin.appSettings.enable
         && config.providerDarwin.appSettings.ghostty
       ) {

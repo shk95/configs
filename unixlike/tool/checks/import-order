@@ -49,7 +49,7 @@ printf '→ composing every host in walk order and reversed%s\n' "${extra:+ (wit
 
 # `self` is the real flake, so a module that read `inputs.self.<output>`
 # would see the walk-order composition in both runs; today only `outPath` is
-# read (modules/foundation/packages.nix), which is the same either way.
+# read (modules/foundation/program-supply/package-ownership.nix), which is the same either way.
 # Pass the path as data, not interpolated Nix source (quotes and backslashes
 # are legal directory names). Always overwrite the internal environment value.
 result=$(IMPORT_ORDER_MODULE_ROOT="$module_root" nix eval --impure --json --expr "

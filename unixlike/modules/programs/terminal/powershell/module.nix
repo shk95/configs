@@ -12,7 +12,16 @@
 # 5.7.1 that `windows/toolchain.json` declares for Windows contributors, as an
 # independent copy: each domain pins its own and may move on its own schedule.
 _: {
-  modules.homeManager.shared = {pkgs, ...}: let
+  programCatalog.powershell = {
+    profiles = ["shared"];
+    providers.nix.identifier = "powershell";
+  };
+  modules.homeManager.shared = {
+    pkgs,
+    config,
+    lib,
+    ...
+  }: let
     pester = pkgs.fetchzip {
       name = "pester-5.7.1";
       url = "https://www.powershellgallery.com/api/v2/package/Pester/5.7.1";
@@ -22,9 +31,9 @@ _: {
     };
   in {
     home = {
-      packages = [pkgs.powershell];
+      packages = lib.optional config.providerTools.programs.powershell.enable pkgs.powershell;
 
-      file = {
+      file = lib.mkIf config.providerTools.programs.powershell.enable {
         ".config/powershell/profile.ps1".source = ./profile.ps1;
 
         # pwsh resolves a versioned module directory by name, so the version is

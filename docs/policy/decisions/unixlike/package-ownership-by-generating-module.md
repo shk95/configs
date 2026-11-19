@@ -37,3 +37,8 @@ that home alone (`homeManager.agents`, `modules/agents.nix`). The rule's
 substance — one declaring module — is unchanged; the class, not a second
 list, decides where the package reaches
 (`docs/policy/decisions/unixlike/home-manager-platform-classes.md`).
+
+Extended 2026-11-18: independently selectable package-only programs have
+individual source definitions and Nix supply records. The provider builds
+the Home Manager package list from those records. A configured program's
+native module remains its package contributor.

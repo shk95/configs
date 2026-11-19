@@ -5,9 +5,7 @@
 # This does not enable WSL GUI support. Windows Terminal renders WSL text with
 # a Windows font configured on Windows, not with fonts from the Linux profile.
 _: {
-  modules.homeManager.wsl = {pkgs, ...}: {
+  modules.homeManager.wsl = {
     fonts.fontconfig.enable = true;
-
-    home.packages = [pkgs.nerd-fonts.d2coding];
   };
 }

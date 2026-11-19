@@ -1,11 +1,13 @@
 id: unixlike/version-manager-last
-statement: An imperative version manager is never declared as a package, and its hook runs after every declarative PATH entry.
+statement: The adopted user-installed JVM manager and its toolchain are not also evaluator packages, and its hook runs after every declarative PATH entry.
 rationale: docs/policy/architecture.md § Unix-like domain
 enforced-by: schema unixlike/modules/foundation/shell/shared.nix
 enforced-by: fixture unixlike/tool/checks/provider-api-test
 decision: docs/policy/decisions/unixlike/sdkman-adopted-not-owned.md § SDKMAN is adopted but not owned
 
-The version manager rewrites PATH. Running it last is what lets declared
+This contract concerns SDKMAN and its JVM toolchain. Nix-supplied mise manages
+supplementary tools through appended shims, without a later PATH-prepending
+prompt hook. SDKMAN rewrites PATH. Running it last is what lets declared
 packages keep precedence on a name collision, and not declaring its
 toolchain is what keeps one version authority per name. The shell module
 contributes the hook at `mkAfter` and asserts on the merged initialisation

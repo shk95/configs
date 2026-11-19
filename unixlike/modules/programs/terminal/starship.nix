@@ -15,9 +15,18 @@
 # Worth re-running after a starship upgrade: a moved default turns a line here
 # into a no-op, or a deletion into a change.
 _: {
+  programCatalog.starship = {
+    profiles = ["shared"];
+    nativeEnable = ["programs" "starship" "enable"];
+    providers.nix.identifier = "starship";
+  };
   modules.homeManager.shared = {
+    config,
+    lib,
+    ...
+  }: {
     programs.starship = {
-      enable = true;
+      enable = lib.mkDefault config.providerTools.programs.starship.enable;
       enableZshIntegration = true;
 
       settings = {

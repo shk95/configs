@@ -1,8 +1,17 @@
 _: {
+  programCatalog.lazygit = {
+    profiles = ["shared"];
+    nativeEnable = ["programs" "lazygit" "enable"];
+    providers.nix.identifier = "lazygit";
+  };
   modules.homeManager.shared = {
+    config,
+    lib,
+    ...
+  }: {
     # `programs.lazygit` contributes its own package, so INV
-    # unixlike/package-ownership keeps lazygit out of modules/foundation/packages.nix —
-    # the same shape modules/programs/bat.nix uses for bat. `settings` below is the
+    # The native module owns the package and settings together.
+    # `settings` below is the
     # pinned Home Manager module's freeform passthrough; it renders to
     # ~/.config/lazygit/config.yml (Darwin without xdg:
     # Library/Application Support/lazygit/config.yml). lazygit itself is
@@ -23,13 +32,13 @@ _: {
     # lazygit plugin, `gui.theme.inactiveViewSelectedLineBgColor` (0.64.1
     # already defaults it to `["bold"]`, so setting it here would only
     # restate a default rather than decide anything), and any hex colour in
-    # the theme. Removing `tig` from modules/foundation/packages.nix is a separate
+    # the theme. Removing the standalone tig declaration is a separate
     # decision the maintainer has not made; both stay until then.
     programs.lazygit = {
-      enable = true;
+      enable = lib.mkDefault config.providerTools.programs.lazygit.enable;
 
       # Writes the `lg` shell function into the generated zsh initialisation
-      # — the same wrapper shape modules/programs/yazi.nix uses for `yy`.
+      # — the same wrapper shape modules/programs/files/yazi.nix uses for `yy`.
       # `shellWrapperName` is left at its default (`lg`) rather than renamed.
       enableZshIntegration = true;
 
@@ -61,7 +70,7 @@ _: {
             # problem. `reverse` sidesteps the question rather than
             # answering it with another guess: it swaps the terminal's own
             # foreground and background for the row instead of naming a
-            # colour of its own, the same bargain modules/programs/skim.nix makes with
+            # colour of its own, the same bargain modules/programs/text/skim.nix makes with
             # `--color=16` for its selected line. lazygit 0.64.1's
             # docs/Config.md lists `reverse` as a valid theme attribute and
             # calls it out as "useful for high-contrast".

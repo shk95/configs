@@ -1,4 +1,9 @@
 _: {
+  programCatalog.git = {
+    profiles = ["shared"];
+    nativeEnable = ["programs" "git" "enable"];
+    providers.nix.identifier = "git";
+  };
   modules.homeManager.shared = {
     lib,
     config,
@@ -14,17 +19,19 @@ _: {
     # that rule — the file it removes is exactly the kind nobody has a copy of.
     # The inventory before M2 found a gh credential helper in it that nothing
     # here reproduced; the next surprise will not be caught by reading.
-    home.activation.backupExistingGitconfig = lib.hm.dag.entryBefore ["checkLinkTargets"] ''
-      if [ -e "$HOME/.gitconfig" ]; then
-        backup="$HOME/.gitconfig.before-home-manager.$(date +%Y%m%d%H%M%S)"
-        run mv $VERBOSE_ARG "$HOME/.gitconfig" "$backup"
-        echo "Moved an unmanaged ~/.gitconfig to $backup"
-      fi
-    '';
+    home.activation = lib.mkIf config.programs.git.enable {
+      backupExistingGitconfig = lib.hm.dag.entryBefore ["checkLinkTargets"] ''
+        if [ -e "$HOME/.gitconfig" ]; then
+          backup="$HOME/.gitconfig.before-home-manager.$(date +%Y%m%d%H%M%S)"
+          run mv $VERBOSE_ARG "$HOME/.gitconfig" "$backup"
+          echo "Moved an unmanaged ~/.gitconfig to $backup"
+        fi
+      '';
+    };
 
     programs = {
       git = {
-        enable = true;
+        enable = lib.mkDefault config.providerTools.programs.git.enable;
         lfs.enable = false;
 
         ignores = [
@@ -128,7 +135,7 @@ _: {
           # deferring to the terminal's sixteen colours, because no ANSI colour
           # is faint enough to sit behind a whole diff line; `true-color` is
           # what lets it choose one. That is the opposite bargain from
-          # modules/programs/bat.nix, and the difference is deliberate: bat can defer
+          # modules/programs/text/bat.nix, and the difference is deliberate: bat can defer
           # because syntax highlighting is foreground-only, delta cannot
           # because its subject is a background.
           true-color = "always";
@@ -172,7 +179,7 @@ _: {
       # bundled bat theme from the same family as the two terminals, the way
       # `light` above still does for the diff bands. Modus has no such bundled
       # delta/bat theme to name — no more than Flexoki did before it — and
-      # modules/programs/bat.nix already declines to guess a named theme for the same
+      # modules/programs/text/bat.nix already declines to guess a named theme for the same
       # reason: `ansi` defers to the terminal's own sixteen colours instead,
       # which on this class is Modus Operandi because WezTerm and Ghostty
       # declare it, and needs no bundled theme to track it.

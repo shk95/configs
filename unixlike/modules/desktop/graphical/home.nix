@@ -3,9 +3,14 @@
 _: {
   modules.homeManager.linuxGraphical = {
     config,
+    lib,
     pkgs,
     ...
-  }: {
+  }: let
+    terminals =
+      lib.optional config.programs.ghostty.enable "com.mitchellh.ghostty.desktop"
+      ++ lib.optional config.programs.wezterm.enable "org.wezfurlong.wezterm.desktop";
+  in {
     home.sessionVariables = {
       ELECTRON_OZONE_PLATFORM_HINT = "auto";
       MOZ_ENABLE_WAYLAND = "1";
@@ -23,43 +28,35 @@ _: {
       size = 24;
     };
 
-    programs.firefox = {
-      enable = true;
-      # Firefox is new to the managed Linux graphical home, so it can adopt
-      # Home Manager's current XDG location without migrating host state.
-      configPath = "${config.xdg.configHome}/mozilla/firefox";
-    };
-
     xdg = {
       enable = true;
       mimeApps = {
         enable = true;
-        defaultApplications = {
-          "application/pdf" = ["firefox.desktop"];
-          "audio/*" = ["mpv.desktop"];
-          "image/gif" = ["imv.desktop"];
-          "image/jpeg" = ["imv.desktop"];
-          "image/png" = ["imv.desktop"];
-          "image/webp" = ["imv.desktop"];
-          "inode/directory" = ["thunar.desktop"];
-          "text/html" = ["firefox.desktop"];
-          "video/*" = ["mpv.desktop"];
-          "x-scheme-handler/http" = ["firefox.desktop"];
-          "x-scheme-handler/https" = ["firefox.desktop"];
-        };
+        defaultApplications =
+          {"inode/directory" = ["thunar.desktop"];}
+          // lib.optionalAttrs config.providerTools.programs.imv.enable {
+            "image/gif" = ["imv.desktop"];
+            "image/jpeg" = ["imv.desktop"];
+            "image/png" = ["imv.desktop"];
+            "image/webp" = ["imv.desktop"];
+          }
+          // lib.optionalAttrs config.programs.firefox.enable {
+            "application/pdf" = ["firefox.desktop"];
+            "text/html" = ["firefox.desktop"];
+            "x-scheme-handler/http" = ["firefox.desktop"];
+            "x-scheme-handler/https" = ["firefox.desktop"];
+          }
+          // lib.optionalAttrs config.programs.mpv.enable {
+            "audio/*" = ["mpv.desktop"];
+            "video/*" = ["mpv.desktop"];
+          };
       };
 
       terminal-exec = {
         enable = true;
-        settings = {
-          default = [
-            "com.mitchellh.ghostty.desktop"
-            "org.wezfurlong.wezterm.desktop"
-          ];
-          niri = [
-            "com.mitchellh.ghostty.desktop"
-            "org.wezfurlong.wezterm.desktop"
-          ];
+        settings = lib.mkIf (terminals != []) {
+          default = terminals;
+          niri = terminals;
         };
       };
 

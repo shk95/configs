@@ -90,3 +90,9 @@ attribution `modules.<class>.<name>` stays as it is. The Windows domain
 groups the same way by declaration, in `windows/desired/manifest.json`, and
 stays as it is: two local implementations, not one abstraction
 (`AGENTS.md § Domain boundaries`).
+
+Extended 2026-11-19: group program modules by purpose. The first directory
+under `programs/` names the host selection group. Profiles on each declaration
+express defaults for environments. The path within the group orders the
+program's class contributions, so moving between groups preserves package
+ordering. Errors and inventory report the actual source path.

@@ -1,8 +1,17 @@
 _: {
-  # Keep sk independently usable; modules/programs/fzf.nix owns zsh's fuzzy shortcuts.
+  # Keep sk independently usable; modules/programs/text/fzf.nix owns zsh's fuzzy shortcuts.
+  programCatalog.skim = {
+    profiles = ["shared"];
+    nativeEnable = ["programs" "skim" "enable"];
+    providers.nix.identifier = "skim";
+  };
   modules.homeManager.shared = {
+    config,
+    lib,
+    ...
+  }: {
     programs.skim = {
-      enable = true;
+      enable = lib.mkDefault config.providerTools.programs.skim.enable;
       enableZshIntegration = false;
 
       # skim's default theme is `dark`, and it is 256-colour indices chosen for
@@ -10,14 +19,14 @@ _: {
       # count — so it is wrong the moment the terminal is light. Base `16` is
       # the deferring alternative: it sets ANSI colour *names* as foregrounds
       # and never sets a background at all, so the terminal's palette decides,
-      # which is the same bargain `modules/programs/bat.nix` makes with `ansi`. That is
+      # which is the same bargain `modules/programs/text/bat.nix` makes with `ansi`. That is
       # what lets a colour choice live in `homeManager.shared` at all, since
       # this class also reaches the WSL homes, whose terminal scheme is
       # declared in the Windows domain.
       #
       # The three overrides are the components base `16` gets wrong at one end
       # or the other. `info` is ANSI white, invisible on a light background —
-      # the same defect `modules/programs/starship.nix` carried in its clock — while
+      # the same defect `modules/programs/terminal/starship.nix` carried in its clock — while
       # `border` and `scrollbar` are ANSI black, invisible on a dark one. A
       # scheme designed to a WCAG AAA target does not rescue ANSI white
       # either: Modus Operandi's is #a6a6a6, only 2.43:1 against its own

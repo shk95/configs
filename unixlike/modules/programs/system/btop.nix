@@ -1,8 +1,17 @@
 _: {
+  programCatalog.btop = {
+    profiles = ["shared"];
+    nativeEnable = ["programs" "btop" "enable"];
+    providers.nix.identifier = "btop";
+  };
   modules.homeManager.shared = {
+    config,
+    lib,
+    ...
+  }: {
     # `programs.btop` contributes its own package, so INV
-    # unixlike/package-ownership keeps btop out of modules/foundation/packages.nix — the
-    # same shape modules/programs/bat.nix and modules/programs/lazygit.nix use for their
+    # The native module owns the package and settings together, as do bat and
+    # lazygit for their
     # packages (docs/policy/decisions/unixlike/package-ownership-by-generating-module.md).
     #
     # btop uses a truecolour theme rather than the terminal ANSI palette.
@@ -10,7 +19,7 @@ _: {
     # theme_background=false the terminal still owns the page background.
     # Reserve ochre for elevated temperature; ordinary graphs stay cool.
     programs.btop = {
-      enable = true;
+      enable = lib.mkDefault config.providerTools.programs.btop.enable;
       settings = {
         color_theme = "bluegray-light";
         theme_background = false;

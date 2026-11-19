@@ -78,7 +78,7 @@ _: {
     #
     # Previously nothing declared it: neither `bindkey -e` nor `bindkey -v`
     # ran, so zsh fell back to inspecting $VISUAL/$EDITOR and picked `viins`
-    # because modules/programs/neovim.nix sets `programs.neovim.defaultEditor = true`,
+    # because modules/programs/development/neovim.nix sets `programs.neovim.defaultEditor = true`,
     # exporting EDITOR=nvim, and "nvim" contains the substring "vi".
     # Replacing Neovim with an editor whose name lacks "vi" would silently
     # revert the shell to emacs bindings, with no error and nothing in the
@@ -113,7 +113,7 @@ _: {
         # Neither zsh nor readline shows the current mode by default, so
         # there is no on-screen answer to "insert or normal". zsh's answer (a
         # prompt segment) is excluded from this change — it belongs in
-        # modules/programs/starship.nix, whose header requires every key to change a
+        # modules/programs/terminal/starship.nix, whose header requires every key to change a
         # default, and starship only sets `enableZshIntegration` here, so
         # bash has no starship segment to add a glyph to anyway. readline's
         # own `show-mode-in-prompt` has no such dependency: it is the only
@@ -167,7 +167,7 @@ _: {
           # editors feel the same.
           KEYTIMEOUT=20
 
-          # modules/programs/fzf.nix supplies Ctrl-R in viins and vicmd after the
+          # modules/programs/text/fzf.nix supplies Ctrl-R in viins and vicmd after the
           # default keymap is selected. Command-mode / and n/N retain zsh's
           # native vi history search; no later bindkey -v resets the widgets.
 

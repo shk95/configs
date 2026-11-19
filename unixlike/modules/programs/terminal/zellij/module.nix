@@ -45,6 +45,11 @@ _: let
   # editing its session_name does not require rebuilding the shell function.
   kdl = builtins.readFile ./config.kdl;
 in {
+  programCatalog.zellij = {
+    profiles = ["shared"];
+    nativeEnable = ["programs" "zellij" "enable"];
+    providers.nix.identifier = "zellij";
+  };
   modules.homeManager.shared = {
     config,
     lib,
@@ -57,12 +62,12 @@ in {
       "${config.xdg.configHome}/zellij/config.kdl" = lib.mkDefault true;
     };
     programs.zellij = {
-      enable = true;
+      enable = lib.mkDefault config.providerTools.programs.zellij.enable;
       package = pkgs.zellij;
       extraConfig = kdl;
     };
 
-    programs.zsh.initContent = ''
+    programs.zsh.initContent = lib.mkIf config.programs.zellij.enable ''
       zellij() {
         if (( $# == 0 )); then
           ${sessionReader}/bin/python3 ${../../../../tool/zellij-session} ${lib.escapeShellArg "${config.xdg.configHome}/zellij/config.kdl"}
