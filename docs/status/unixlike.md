@@ -26,7 +26,8 @@ modules. The directory selects the group and environment profiles set the
 defaults. The public host options allow group and individual overrides.
 The evaluated inventory reports effective supply and its owner.
 
-Linux uses mise for Claude Code and Codex, and macOS uses Nix for both.
+Linux uses mise for Claude Code and Codex. On macOS, the provider selects the
+Homebrew casks `claude-code` and `codex` and leaves their versions to Homebrew.
 Reusable Darwin Homebrew selections come from the provider. Account-owned
 App Store entries and Homebrew operating policy stay with the consumer,
 which must adopt a provider release containing the catalog before deployment.

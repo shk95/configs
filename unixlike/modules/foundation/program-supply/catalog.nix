@@ -324,6 +324,14 @@ in {
               ]
               ++ lib.concatLists (lib.mapAttrsToList (id: entry: let
                   choice = cfg.programs.${id};
+                  nixPackage =
+                    if entry.providers ? nix
+                    then packageFor entry
+                    else null;
+                  nixName =
+                    if nixPackage == null
+                    then id
+                    else lib.getName nixPackage;
                 in [
                   {
                     assertion = !choice.enable || supported entry;
@@ -338,7 +346,7 @@ in {
                     message = "providerTools: version constraints require mise for ${id}; Nix versions come from the lock";
                   }
                   {
-                    assertion = !(choice.enable && choice.provider == "mise" && entry.providers ? nix && builtins.elem (lib.getName (packageFor entry)) nixNames);
+                    assertion = !(choice.enable && choice.provider == "mise" && builtins.elem nixName nixNames);
                     message = "providerTools: duplicate Nix/mise ownership for ${id}";
                   }
                   {

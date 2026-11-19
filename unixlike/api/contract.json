@@ -592,7 +592,7 @@
       },
       "claude-code": {
         "defaults": {
-          "darwin": "nix",
+          "darwin": "homebrew",
           "linux": "mise"
         },
         "group": "coding-agents",
@@ -606,19 +606,17 @@
         ],
         "requiredClasses": [],
         "supplierPlatforms": {
-          "mise": [
-            "aarch64-linux",
-            "x86_64-linux"
+          "homebrew": [
+            "aarch64-darwin"
           ],
-          "nix": [
-            "aarch64-darwin",
+          "mise": [
             "aarch64-linux",
             "x86_64-linux"
           ]
         },
         "suppliers": [
-          "mise",
-          "nix"
+          "homebrew",
+          "mise"
         ]
       },
       "cmatrix": {
@@ -641,7 +639,7 @@
       },
       "codex": {
         "defaults": {
-          "darwin": "nix",
+          "darwin": "homebrew",
           "linux": "mise"
         },
         "group": "coding-agents",
@@ -655,19 +653,17 @@
         ],
         "requiredClasses": [],
         "supplierPlatforms": {
-          "mise": [
-            "aarch64-linux",
-            "x86_64-linux"
+          "homebrew": [
+            "aarch64-darwin"
           ],
-          "nix": [
-            "aarch64-darwin",
+          "mise": [
             "aarch64-linux",
             "x86_64-linux"
           ]
         },
         "suppliers": [
-          "mise",
-          "nix"
+          "homebrew",
+          "mise"
         ]
       },
       "cowsay": {

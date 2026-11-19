@@ -3,14 +3,14 @@ _: {
     profiles = ["agents"];
     defaults = {
       linux = "mise";
-      darwin = "nix";
+      darwin = "homebrew";
     };
     providers = {
-      nix = {
-        identifier = "claude-code";
-        packageOnly = true;
-      };
       mise.identifier = "aqua:anthropics/claude-code";
+      homebrew = {
+        identifier = "claude-code";
+        kind = "cask";
+      };
     };
   };
   modules.homeManager.agents = {

@@ -103,12 +103,15 @@ nix eval --json "path:$consumer_dir#probe" | jq -e --arg fixture_home "/home/$fi
   .programContract.constructors == ["mkDarwin", "mkHome", "mkNixos"] and
   .programContract.groups.terminal == {"type":"nullOr","elementType":"bool","default":null} and
   .programContract.programs.zellij.group == "terminal" and
-  .programContract.programs.codex.defaults.linux == "mise" and
+  (.programContract.programs | [.codex, .["claude-code"]] | all(
+    .defaults == {darwin: "homebrew", linux: "mise"} and
+    .suppliers == ["homebrew", "mise"] and
+    .supplierPlatforms == {homebrew: ["aarch64-darwin"], mise: ["aarch64-linux", "x86_64-linux"]}
+  )) and
   (.programContract.groups | has("desktop") | not) and
   .programContract.programs.ghostty.requiredClasses == ["desktop"] and
   .programContract.programs.ghostty.supplierPlatforms.nix == ["aarch64-linux", "x86_64-linux"] and
   .programContract.programs.bettercap.supplierPlatforms.homebrew == ["aarch64-darwin"] and
-  .programContract.programs.codex.supplierPlatforms.mise == ["aarch64-linux", "x86_64-linux"] and
   .override.enable and .override.selectedTerminal == ["zellij"]
 ' >/dev/null
 nix eval --raw "path:$consumer_dir#homeConfigurations.cli.activationPackage.drvPath" >/dev/null

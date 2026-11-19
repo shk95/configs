@@ -31,7 +31,6 @@ positive = '''let
   off = cfg [{providerTools.programs = {codex.enable = false; ripgrep.enable = false; bat.enable = false;};}];
   native = cfg [{programs.bat.enable = false;}];
   nativeBat = cfg [{providerTools.groups.text = false; programs.bat.enable = true;}];
-  nixAgent = cfg [{providerTools.programs.codex.provider = "nix";}];
   versioned = cfg [{providerTools.programs.codex.version = "0.100";}];
   excluded = cfg [{providerTools.excludedPackages = ["ripgrep"];}];
   allOff = cfg [{providerTools.agents.enable = false;}];
@@ -39,7 +38,7 @@ positive = '''let
   m = (mac []).config;
   macWith = module: ((mac []).extendModules {modules = [module];}).config;
   forcedCasks = macWith {homebrew.casks = lib.mkForce ["obsidian"];};
-  disabledBrew = macWith {homebrew.enable = lib.mkForce false; homebrew.casks = ["codex"];};
+  disabledBrew = macWith {homebrew.enable = lib.mkForce false;};
   skipBrewSettings = c: let h = c.home-manager.users.example;
   in !h.programs.ghostty.enable && !(h.home.activation ? karabinerDesiredState)
     && !(row "ghostty" c).selected && !(row "karabiner-elements" c).selected
@@ -84,15 +83,21 @@ positive = '''let
   sys = p.nixosConfigurations.fixture-cli.config;
   linuxOff = graphical [desktopOff];
   macHome = m.home-manager.users.example;
+  macNoAgents = (mac [{providerTools.agents.enable = false;}]).config;
   macOff = (mac [desktopOff]).config.home-manager.users.example;
   editable = c: lib.attrNames (lib.filterAttrs (_: enabled: enabled) c.configs.editableFiles);
   linkedZellij = cfg [{configs.editableFiles.${"/home/" + "example/.config/zellij/config.kdl"} = false;}];
   names = c: map lib.getName c.home.packages;
+  casks = c: map (cask: cask.name) c.homebrew.casks;
+  codingAgents = ["claude-code" "codex"];
   inventoryNames = c: map (r: r.packageName or r.identifier) (builtins.filter (r: r.selected && r.provider == "nix") c.providerTools.inventory);
 in {
   shared = (row "ripgrep" c).selected && (row "bat" c).selected;
   cli = !(row "ghostty" c).selected && !(row "remmina" c).selected;
-  agents = c.providerTools.mise.tools."aqua:openai/codex" == "latest" && !(builtins.elem "codex" (names c));
+  agents = lib.all (id: (row id c).selected && (row id c).provider == "mise"
+    && !(builtins.elem id (names c))) codingAgents
+    && c.providerTools.mise.tools."aqua:openai/codex" == "latest"
+    && c.providerTools.mise.tools."aqua:anthropics/claude-code" == "latest";
   version = versioned.providerTools.mise.tools."aqua:openai/codex" == "0.100";
   optOut = !(row "codex" off).selected && !(builtins.elem "ripgrep" (names off)) && !off.programs.bat.enable;
   nativeOverride = !(row "bat" native).selected;
@@ -109,7 +114,7 @@ in {
     && forcedCasks.system.build.toplevel.drvPath != "";
   inactiveBrew = skipBrewSettings disabledBrew
     && !(lib.any (r: r.selected && builtins.elem r.provider ["homebrew" "mas"]) disabledBrew.providerTools.inventory)
-    && (row "codex" disabledBrew).selected && (row "codex" disabledBrew).provider == "nix"
+    && lib.all (id: !(row id disabledBrew).selected && (row id disabledBrew).provider == "homebrew") codingAgents
     && disabledBrew.system.build.toplevel.drvPath != "";
   nativeInventory = let rows = builtins.filter (r: r.id == "bat") nativeBat.providerTools.inventory;
   in builtins.length rows == 1 && (row "bat" nativeBat).selected
@@ -127,10 +132,14 @@ in {
   managerOptOut = !(builtins.elem "mise" (names (cfg [{providerTools.agents.enable = false; providerTools.programs.mise.enable = false;}])));
   excluded = !(row "ripgrep" excluded).selected;
   groupOverride = allOff.providerTools.mise.tools == {} && !(allOff.home.activation ? providerMiseInstall);
-  supplierSwitch = builtins.elem "codex" (names nixAgent) && !(nixAgent.providerTools.mise.tools ? "aqua:openai/codex");
   extra = (row "hello" extra).source == "native-home";
   complete = lib.all (n: builtins.elem n (inventoryNames c)) (names c);
-  darwin = builtins.length m.homebrew.casks == 37 && builtins.length m.homebrew.brews == 6;
+  darwin = builtins.length m.homebrew.casks == 39 && builtins.length m.homebrew.brews == 6;
+  darwinAgents = lib.all (id: builtins.elem id (casks m) && (row id m).selected
+    && (row id m).provider == "homebrew" && (row id m).deployment == "system"
+    && !(builtins.elem id (names macHome)) && !(builtins.elem id (map lib.getName m.environment.systemPackages))) codingAgents
+    && macHome.providerTools.mise.tools == {} && macHome.home.sessionVariables.DISABLE_AUTOUPDATER == "1";
+  darwinAgentsOptOut = lib.all (id: !(builtins.elem id (casks macNoAgents)) && !(row id macNoAgents).selected) codingAgents;
   settingsOnly = builtins.elem "ghostty" (map (x: x.name) settingsOff.homebrew.casks) && !settingsOff.home-manager.users.example.programs.ghostty.enable;
   appOptOut = !(builtins.elem "ghostty" (map (x: x.name) appOff.homebrew.casks)) && !appOff.home-manager.users.example.programs.ghostty.enable;
   hostExceptions = lib.any (r: r.provider == "mas" && r.id == "Example") m.providerTools.inventory
@@ -230,16 +239,23 @@ refusals = [
     """, 'duplicate Nix/Homebrew ownership: fd'),
     ('duplicate Nix/Homebrew cask', """
       ((mac []).extendModules {
-        modules = [{homebrew.casks = ["codex"];}];
+        modules = [({pkgs,...}: {environment.systemPackages = [pkgs.codex];})];
       }).config.system.build.toplevel.drvPath
     """, 'duplicate Nix/Homebrew ownership: codex'),
     ('system duplicate', '(p.nixosConfigurations.fixture-cli.extendModules {modules=[({pkgs,...}: {environment.systemPackages=[pkgs.codex];})];}).config.system.build.toplevel.drvPath', 'duplicate Nix/mise ownership'),
     ('Darwin Nix Ghostty', '(mac [{providerTools.programs.ghostty.provider="nix";}]).system.drvPath', 'unsupported supplier platform'),
 ]
+for agent in ['claude-code', 'codex']:
+    override = f'{{providerTools.programs.{agent}.provider = "nix";}}'
+    refusals.extend([
+        (f'Linux Nix {agent}', f'(home [{override}]).activationPackage.drvPath', 'not of type'),
+        (f'Darwin Nix {agent}', f'(mac [{override}]).system.drvPath', 'not of type'),
+    ])
 for label, module, message in [
     ('unknown group', '{providerTools.groups.not-a-program-group = true;}', 'providerTools.groups.not-a-program-group'),
     ('unknown ID', '{providerTools.programs.unknown.enable = true;}', 'unknown program ID'),
-    ('unsupported supplier', '{providerTools.programs.codex.provider = "homebrew";}', 'not of type'),
+    ('unknown supplier', '{providerTools.programs.codex.provider = "unknown";}', 'not of type'),
+    ('Linux Homebrew Codex', '{providerTools.programs.codex.provider = "homebrew";}', 'unsupported supplier platform for codex'),
     ('unsupported platform', '{providerTools.programs.anki.enable = true;}', 'unsupported platform'),
     ('supplier platform', '{providerTools.programs.bettercap.provider = "homebrew";}', 'unsupported supplier platform'),
     ('class unavailable', '{providerTools.programs.remmina.enable = true;}', 'remmina requires a host class from linuxGraphical'),

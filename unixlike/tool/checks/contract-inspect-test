@@ -67,7 +67,7 @@ jq '.programSelection.groups.shell = .programSelection.groups.terminal
     | .programSelection.programs.ghostty.supplierPlatforms.nix = ["aarch64-linux"]
     | .programSelection.programs.zoxide.platforms = ["x86_64-linux"]
     | .programSelection.programs.remmina.requiredClasses = ["desktop"]
-    | .programSelection.programs.codex.defaults.linux = "nix"' \
+    | del(.programSelection.programs.codex.defaults.linux)' \
   unixlike/api/contract.json > "$scratch/changed-programs/api/contract.json"
 "$reader" --candidate-tree "$scratch/changed-programs" --current-tree "$scratch/candidate" \
   --host-declaration "$scratch/omitted.json" \

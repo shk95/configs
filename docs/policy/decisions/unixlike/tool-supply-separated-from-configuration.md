@@ -26,11 +26,18 @@ tied to their presence. Existing session integration owns its dependent
 components.
 
 Supported Linux homes use Nix-supplied mise for Claude Code and Codex.
-macOS keeps their Nix packages. Nix owns their mise configuration fragment,
-while local tool configuration stays writable. Configuration application
-installs missing requests. Updates use `mise upgrade --global` explicitly,
-and old versions are retained. SDKMAN keeps its existing ownership and shell
-order.
+Nix owns their mise configuration fragment, while local tool configuration
+stays writable. Configuration application installs missing requests. Updates
+use `mise upgrade --global` explicitly, and old versions are retained. SDKMAN
+keeps its existing ownership and shell order.
+
+On 2026-11-19, the provider adopted mise as the sole supplier for both CLIs on
+Linux and the Homebrew casks `claude-code` and `codex` on macOS. Homebrew
+manages their versions through the consumer's lifecycle policy. Home Manager
+still sets `DISABLE_AUTOUPDATER` for Claude Code. When adopting the change,
+remove any previous Nix supplier overrides or direct Nix package declarations
+for the CLIs and check command resolution in a fresh shell. Existing
+generations and local installations are preserved.
 
 The ownership and compatibility contract is in
 [Tool supply and configuration](../../architecture.md#tool-supply-and-configuration).

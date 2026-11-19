@@ -3,14 +3,14 @@ _: {
     profiles = ["agents"];
     defaults = {
       linux = "mise";
-      darwin = "nix";
+      darwin = "homebrew";
     };
     providers = {
-      nix = {
-        identifier = "codex";
-        packageOnly = true;
-      };
       mise.identifier = "aqua:openai/codex";
+      homebrew = {
+        identifier = "codex";
+        kind = "cask";
+      };
     };
   };
 }
