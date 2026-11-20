@@ -505,7 +505,9 @@ class Mechanics(unittest.TestCase):
         inputs = dict(old=old, new=self.base, reason='explicit fixture correction')
         event = self.root.parent / 'event.json'
         event.write_text(json.dumps({'inputs': inputs}))
-        env = dict(GITHUB_ACTIONS='true', GITHUB_EVENT_NAME='workflow_dispatch', GITHUB_REPOSITORY='fixture/configs',
+        # history.execute runs in this process, outside Workflow.call's fixture PATH.
+        env = dict(PATH=str(self.root / 'tool') + os.pathsep + os.environ['PATH'], FIXTURE_SECRET_STATUS='0',
+                   GITHUB_ACTIONS='true', GITHUB_EVENT_NAME='workflow_dispatch', GITHUB_REPOSITORY='fixture/configs',
                    GITHUB_REF='refs/heads/master', GITHUB_WORKFLOW_REF='fixture/configs/.github/workflows/history-rewrite.yml@refs/heads/master',
                    GITHUB_RUN_ATTEMPT='1', GITHUB_SHA=old, GITHUB_WORKFLOW_SHA=old,
                    GITHUB_EVENT_PATH=str(event), GITHUB_RUN_ID='9', CONFIGS_HISTORY_APP_SLUG='fixture-writer')
@@ -620,12 +622,11 @@ class Mechanics(unittest.TestCase):
             with self.assertRaises(ValueError): history.execute(destination)
             self.assertEqual(self.git('--git-dir', str(remote), 'rev-parse', 'master'), inputs['old'])
             artifacts['artifacts'].append({'name': 'history-recovery', 'expired': False})
-            with patch.dict(os.environ, PATH=str(self.root / 'tool') + os.pathsep + os.environ['PATH']):
-                for status in ('1', '69'):
-                    with patch.dict(os.environ, FIXTURE_SECRET_STATUS=status):
-                        with self.assertRaisesRegex(ValueError, 'successful incoming secret scan'):
-                            history.execute(destination)
-                    self.assertEqual(self.git('--git-dir', str(remote), 'rev-parse', 'master'), inputs['old'])
+            for status in ('1', '69'):
+                with patch.dict(os.environ, FIXTURE_SECRET_STATUS=status):
+                    with self.assertRaisesRegex(ValueError, 'successful incoming secret scan'):
+                        history.execute(destination)
+                self.assertEqual(self.git('--git-dir', str(remote), 'rev-parse', 'master'), inputs['old'])
             result = history.execute(destination)
             self.assertEqual(result['new'], inputs['new'])
             self.assertEqual(result['protection'], 'unchanged')
