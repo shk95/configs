@@ -20,6 +20,17 @@ _: {
           Ctrl+Alt+L { spawn "noctalia" "msg" "session" "lock"; }
           Mod+Escape allow-inhibiting=false { toggle-keyboard-shortcuts-inhibit; }
 
+          Mod+Left { focus-column-left; }
+          Mod+Right { focus-column-right; }
+          Mod+Up { focus-window-up; }
+          Mod+Down { focus-window-down; }
+          Mod+Ctrl+Left { move-column-left; }
+          Mod+Ctrl+Right { move-column-right; }
+          Mod+Ctrl+Up { move-window-up; }
+          Mod+Ctrl+Down { move-window-down; }
+          Mod+Q repeat=false { close-window; }
+          Ctrl+Alt+Delete { quit; }
+
           XF86AudioRaiseVolume allow-when-locked=true { spawn "noctalia" "msg" "volume-up"; }
           XF86AudioLowerVolume allow-when-locked=true { spawn "noctalia" "msg" "volume-down"; }
           XF86AudioMute allow-when-locked=true { spawn "noctalia" "msg" "volume-mute"; }

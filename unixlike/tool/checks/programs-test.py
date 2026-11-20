@@ -137,6 +137,10 @@ in {
   extra = (row "hello" extra).source == "native-home";
   complete = lib.all (n: builtins.elem n (inventoryNames c)) (names c);
   darwin = builtins.length m.homebrew.casks == 34 && builtins.length m.homebrew.brews == 6;
+  darwinTrashAlias = macHome.home.shellAliases.rm == "trash"
+    && (mac [{home.shellAliases.rm = "rm -i";}]).config.home-manager.users.example.home.shellAliases.rm == "rm -i";
+  linuxIdleLock = linuxDesktop.services.hypridle.settings.listener == [{timeout = 900; on-timeout = "noctalia msg session lock";}]
+    && (graphical [{services.hypridle.settings.listener = [];}]).services.hypridle.settings.listener == [];
   darwinAgents = lib.all (id: builtins.elem id (casks m) && (row id m).selected
     && (row id m).provider == "homebrew" && (row id m).deployment == "system"
     && !(builtins.elem id (names macHome)) && !(builtins.elem id (map lib.getName m.environment.systemPackages))) codingAgents

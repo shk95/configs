@@ -30,6 +30,12 @@
       validateNiri = name: source:
         pkgs.runCommand name {} ''
           ${lib.getExe pkgs.niri} validate -c ${source}
+          for action in focus-column-left move-column-left close-window quit; do
+            if ! grep -Fq "{ $action; }" ${source}; then
+              printf 'Default Niri configuration is missing the %s binding\n' "$action" >&2
+              exit 1
+            fi
+          done
           cp ${source} "$out"
         '';
     in {

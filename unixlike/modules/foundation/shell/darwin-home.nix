@@ -1,5 +1,12 @@
 _: {
-  modules.homeManager.darwin = {pkgs, ...}: {
-    home.packages = [pkgs.darwin.trash];
+  modules.homeManager.darwin = {
+    lib,
+    pkgs,
+    ...
+  }: {
+    home = {
+      packages = [pkgs.darwin.trash];
+      shellAliases.rm = lib.mkDefault "trash";
+    };
   };
 }
