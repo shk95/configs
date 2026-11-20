@@ -1,10 +1,8 @@
-# Linux desktop integration shared by Niri applications. Fonts stay in the
-# existing homeManager.desktop concern and are deliberately untouched here.
+# Provide the XDG and Wayland integration used by the Linux graphical session.
 _: {
   modules.homeManager.linuxGraphical = {
     config,
     lib,
-    pkgs,
     ...
   }: let
     terminals =
@@ -19,52 +17,20 @@ _: {
     };
 
     gtk.enable = true;
-    home.pointerCursor = {
-      enable = true;
-      gtk.enable = true;
-      x11.enable = true;
-      package = pkgs.bibata-cursors;
-      name = "Bibata-Modern-Ice";
-      size = 24;
-    };
-
     xdg = {
       enable = true;
-      mimeApps = {
-        enable = true;
-        defaultApplications =
-          {"inode/directory" = ["thunar.desktop"];}
-          // lib.optionalAttrs config.providerTools.programs.imv.enable {
-            "image/gif" = ["imv.desktop"];
-            "image/jpeg" = ["imv.desktop"];
-            "image/png" = ["imv.desktop"];
-            "image/webp" = ["imv.desktop"];
-          }
-          // lib.optionalAttrs config.programs.firefox.enable {
-            "application/pdf" = ["firefox.desktop"];
-            "text/html" = ["firefox.desktop"];
-            "x-scheme-handler/http" = ["firefox.desktop"];
-            "x-scheme-handler/https" = ["firefox.desktop"];
-          }
-          // lib.optionalAttrs config.programs.mpv.enable {
-            "audio/*" = ["mpv.desktop"];
-            "video/*" = ["mpv.desktop"];
-          };
-      };
-
+      mimeApps.enable = true;
       terminal-exec = {
         enable = true;
         settings = lib.mkIf (terminals != []) {
-          default = terminals;
-          niri = terminals;
+          default = lib.mkDefault terminals;
+          niri = lib.mkDefault terminals;
         };
       };
-
       userDirs = {
         enable = true;
         createDirectories = true;
         setSessionVariables = true;
-        extraConfig.SCREENSHOTS = "${config.xdg.userDirs.pictures}/Screenshots";
       };
     };
   };

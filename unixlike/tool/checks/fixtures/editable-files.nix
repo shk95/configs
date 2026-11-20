@@ -90,22 +90,10 @@
       ordinary = {inherit target enable;};
     };
   };
-  weztermNames = [
-    "wezterm.lua"
-    "fonts.json"
-    "config/appearance.lua"
-    "config/behavior.lua"
-    "config/bindings.lua"
-    "config/fonts.lua"
-    "config/startup.lua"
-    "platform/darwin.lua"
-    "platform/linux.lua"
-    "platform/windows.lua"
-  ];
   expected = root: paneru:
     lib.sort builtins.lessThan (
       ["${root}/.config/zellij/config.kdl" "${root}/.config/ghostty/config"]
-      ++ map (name: "${root}/.config/wezterm/${name}") weztermNames
+      ++ ["${root}/.config/wezterm/wezterm.lua"]
       ++ lib.optional paneru ".paneru.lua"
     );
   check = name: passed: {inherit name passed;};
@@ -116,7 +104,7 @@
       (check "externally managed Nix package" (lib.hasSuffix ".drv" unmanagedNix.config.system.build.toplevel.drvPath))
       (check "XDG Paneru follows actual target" (builtins.elem "${macPath}/.config/paneru/init.lua" (selected xdgMac) && !(builtins.elem ".paneru.lua" (selected xdgMac))))
       (check "selected files bypass ordinary links" (builtins.all (name: !mac.home.file.${name}.enable) (selected mac)))
-      (check "Ghostty theme retains normal link" mac.xdg.configFile."ghostty/themes/Bluegray Light".enable)
+      (check "The provider supplies no fixed Ghostty theme" (!(mac.xdg.configFile ? "ghostty/themes/Bluegray Light")))
       (check "new WezTerm files retain normal links" (future.xdg.configFile."wezterm/future.lua".enable && !(builtins.elem "${homePath}/.config/wezterm/future.lua" (selected future))))
       (check "per-file opt-in to links" restored.xdg.configFile."zellij/config.kdl".enable)
       (check "preflight is before write boundary" (builtins.elem "writeBoundary" mac.home.activation.checkEditableFiles.before))

@@ -1,9 +1,6 @@
--- Paneru configuration adopted from the local paneru.toml on 2026-11-06.
--- Keep this Lua payload authoritative; Paneru ignores TOML when Lua is present.
--- Binding names use command strings; other settings mirror the TOML sections.
-
+-- Start the Nix-managed service with Paneru's built-in settings.
 paneru.setup {
-  options = {
+    options = {
     focus_follows_mouse = false,
     mouse_follows_focus = true,
     animation_speed = 13.0,
@@ -97,68 +94,7 @@ paneru.setup {
       title = ".*",
       horizontal_padding = 3,
       width = 0.99,
-      dont_focus = true,
+      dont_focus = false,
     },
-    wezterm = {
-      title = ".*",
-      bundle_id = "com.github.wez.wezterm",
-      width = 0.5,
-      index = 0,
-    },
-    safari = {
-      title = ".*",
-      bundle_id = "com.apple.Safari",
-      index = 1,
-    },
-    dictionary = {
-      bundle_id = "com.apple.Dictionary",
-      title = ".*",
-      floating = true,
-      grid = "16:10:0:0:6:8",
-    },
-    calculator = {
-      title = ".*",
-      bundle_id = "com.apple.calculator",
-      floating = true,
-      grid = "16:10:6:0:3:4",
-    },
-    terminal = {
-      title = ".*",
-      bundle_id = "com.apple.Terminal",
-      floating = true,
-      manage = true,
-      width = 0.5,
-    },
-    finder = {
-      bundle_id = "com.apple.finder",
-      title = "^Copy$",
-      floating = true,
-    },
-    stickies = {
-      bundle_id = "com.apple.Stickies",
-      title = ".*",
-      floating = true,
-      manage = true,
-    },
-    karabiner_elements = {
-      bundle_id = "org.pqrs.Karabiner-Elements.Settings",
-      title = ".*",
-      floating = true,
-    },
-    tailscale = {
-      bundle_id = "io.tailscale.ipn.macsys",
-      title = ".*",
-      floating = true,
-    },
-    windows_app = {
-      bundle_id = "com.microsoft.rdc.macos",
-      title = ".*",
-      floating = true,
-    },
-    system_settings = {
-      bundle_id = "com.apple.systempreferences",
-      title = ".*",
-      floating = true,
-    },
-  },
+  }
 }

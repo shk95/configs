@@ -40,6 +40,21 @@ def test(work):
     hotkeys = work / "observed-hotkeys.json"
     desired = c.defaults("karabiner")
     wanted_hotkeys = c.defaults("symbolic-hotkeys")
+    c.validate_settings("karabiner", desired)
+    c.validate_settings("symbolic-hotkeys", wanted_hotkeys)
+    # Exercise capture of a customised profile independently of the example.
+    desired["profiles"][0]["virtual_hid_keyboard"] = {"keyboard_type_v2": "ansi"}
+    desired["profiles"][0]["complex_modifications"] = {
+        "rules": [{
+            "description": "Synthetic remap",
+            "manipulators": [{
+                "type": "basic",
+                "from": {"key_code": "f13", "modifiers": {"optional": ["any"]}},
+                "to": [{"key_code": "f14"}],
+            }],
+        }],
+    }
+    wanted_hotkeys["AppleSymbolicHotKeys"]["60"]["enabled"] = True
     host.write_bytes(c.encoded({**desired, "unmanaged": {"runtime": True, "nul": "x\x00", "integer": 1 << 63}, "runtime\x00key": "excluded"}))
     observed_hotkeys = copy.deepcopy(wanted_hotkeys)
     observed_hotkeys["AppleSymbolicHotKeys"]["7"] = {"enabled": True, "value": None, "runtime": [-((1 << 63) + 1), "\x00"]}

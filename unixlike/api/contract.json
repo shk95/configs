@@ -321,24 +321,6 @@
           "homebrew"
         ]
       },
-      "anki": {
-        "group": "productivity",
-        "platforms": [
-          "aarch64-darwin"
-        ],
-        "profiles": [
-          "darwin"
-        ],
-        "requiredClasses": [],
-        "supplierPlatforms": {
-          "homebrew": [
-            "aarch64-darwin"
-          ]
-        },
-        "suppliers": [
-          "homebrew"
-        ]
-      },
       "appcleaner": {
         "group": "files",
         "platforms": [
@@ -753,10 +735,7 @@
           "aarch64-linux",
           "x86_64-linux"
         ],
-        "profiles": [
-          "desktop",
-          "wsl"
-        ],
+        "profiles": [],
         "requiredClasses": [
           "desktop",
           "wsl"
@@ -1047,9 +1026,7 @@
         "platforms": [
           "aarch64-darwin"
         ],
-        "profiles": [
-          "darwin"
-        ],
+        "profiles": [],
         "requiredClasses": [],
         "supplierPlatforms": {
           "homebrew": [
@@ -1377,24 +1354,6 @@
           "nix"
         ]
       },
-      "google-drive": {
-        "group": "productivity",
-        "platforms": [
-          "aarch64-darwin"
-        ],
-        "profiles": [
-          "darwin"
-        ],
-        "requiredClasses": [],
-        "supplierPlatforms": {
-          "homebrew": [
-            "aarch64-darwin"
-          ]
-        },
-        "suppliers": [
-          "homebrew"
-        ]
-      },
       "gping": {
         "group": "network",
         "platforms": [
@@ -1458,24 +1417,6 @@
         ]
       },
       "hammerspoon": {
-        "group": "desktop-tools",
-        "platforms": [
-          "aarch64-darwin"
-        ],
-        "profiles": [
-          "darwin"
-        ],
-        "requiredClasses": [],
-        "supplierPlatforms": {
-          "homebrew": [
-            "aarch64-darwin"
-          ]
-        },
-        "suppliers": [
-          "homebrew"
-        ]
-      },
-      "hiddenbar": {
         "group": "desktop-tools",
         "platforms": [
           "aarch64-darwin"
@@ -2495,24 +2436,6 @@
         },
         "suppliers": [
           "nix"
-        ]
-      },
-      "swift-shift": {
-        "group": "desktop-tools",
-        "platforms": [
-          "aarch64-darwin"
-        ],
-        "profiles": [
-          "darwin"
-        ],
-        "requiredClasses": [],
-        "supplierPlatforms": {
-          "homebrew": [
-            "aarch64-darwin"
-          ]
-        },
-        "suppliers": [
-          "homebrew"
         ]
       },
       "syntax-highlight": {

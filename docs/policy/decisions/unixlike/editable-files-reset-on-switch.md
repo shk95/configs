@@ -98,3 +98,8 @@ ancestor/descendant ownership. This does not add a reusable-module assertion
 restricting consumer extensions or
 attempt to coordinate independent configuration managers. Existing contents at
 a selected destination still follow the backup and replacement policy above.
+
+Amended 2026-11-20. The provider declares its minimal WezTerm entry point as
+writable. The consumer selects its complete file set and declares the
+remaining nine writable targets in its module. The same per-file backup and
+replacement mechanism applies to all selected files.

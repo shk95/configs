@@ -20,13 +20,8 @@ _: {
         # Follow the terminal's ANSI palette, including Bluegray Light and
         # Ghostty's system-selected dark theme. This also works through SSH:
         # bat emits colour indices and the local terminal resolves them.
-        theme = "ansi";
-
-        # Default is `full`, which adds a grid, a file header and a line-number
-        # column to every invocation. Keeping `numbers` and `header` keeps what is
-        # useful when reading; dropping the grid is what makes the output paste
-        # cleanly somewhere else.
-        style = "numbers,changes,header";
+        theme = lib.mkDefault "ansi";
+        style = lib.mkDefault "numbers,changes,header";
       };
 
       # batman only, and the omissions are the decision. `man` itself is left

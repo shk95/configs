@@ -71,7 +71,9 @@ positive = '''let
   noMedia = graphical [{providerTools.groups.media = false;}];
   restoredImv = graphical [{providerTools.groups.media = false; providerTools.programs.imv.enable = true;}];
   imageTypes = ["image/gif" "image/jpeg" "image/png" "image/webp"];
-  wslFont = (p.lib.mkHome (spec // {environment = {wsl = true; graphical = false;};})).config;
+  fontChoice = {providerTools.programs.d2coding-nerd-font.enable = true;};
+  desktopFont = graphical [fontChoice];
+  wslFont = (p.lib.mkHome (spec // {environment = {wsl = true; graphical = false;}; homeModules = [fontChoice];})).config;
   individualOverrides = cfg [{providerTools.groups = {text = false; development = false; coding-agents = false;};
     providerTools.programs = {bat.enable = true; codex.enable = true;};}];
   noSettings = cfg [{providerTools.programs = {glow.enable = false; powershell.enable = false;};}];
@@ -105,7 +107,7 @@ in {
     && !gitConfigured noNativeGit && !gitBackup noNativeGit
     && gitConfigured restoredGit && gitBackup restoredGit;
   settingsOnlyGhostty = ghosttyConfigOnly.programs.ghostty.enable
-    && ghosttyConfigOnly.xdg.configFile."ghostty/themes/Bluegray Light".enable
+    && ghosttyConfigOnly.xdg.configFile."ghostty/config".source != null
     && !(builtins.elem "ghostty" (names ghosttyConfigOnly))
     && !(row "ghostty" ghosttyConfigOnly).selected;
   effectiveCasks = skipBrewSettings forcedCasks && (row "obsidian" forcedCasks).selected
@@ -123,7 +125,7 @@ in {
   in builtins.length rows == 1 && (row "fd" directBrew).selected
     && (row "fd" directBrew).source == "native-system" && (row "fd" directBrew).provider == "homebrew"
     && directBrew.system.build.toplevel.drvPath != "";
-  inventoryDeployment = (row "anki" m).deployment == "system"
+  inventoryDeployment = (row "chatgpt" m).deployment == "system"
     && (row "bettercap" m).deployment == "system"
     && (row "hello" m).deployment == "system"
     && (row "Example" m).deployment == "system"
@@ -134,7 +136,7 @@ in {
   groupOverride = allOff.providerTools.mise.tools == {} && !(allOff.home.activation ? providerMiseInstall);
   extra = (row "hello" extra).source == "native-home";
   complete = lib.all (n: builtins.elem n (inventoryNames c)) (names c);
-  darwin = builtins.length m.homebrew.casks == 39 && builtins.length m.homebrew.brews == 6;
+  darwin = builtins.length m.homebrew.casks == 34 && builtins.length m.homebrew.brews == 6;
   darwinAgents = lib.all (id: builtins.elem id (casks m) && (row id m).selected
     && (row id m).provider == "homebrew" && (row id m).deployment == "system"
     && !(builtins.elem id (names macHome)) && !(builtins.elem id (map lib.getName m.environment.systemPackages))) codingAgents
@@ -146,7 +148,7 @@ in {
     && lib.any (r: r.id == "mas" && r.source == "native-system") m.providerTools.inventory
     && lib.any (r: r.id == "hello" && r.source == "native-system") m.providerTools.inventory;
   sourceObjects = p.lib.programCatalog.ripgrep.owner == "modules/programs/text/ripgrep.nix"
-    && p.lib.programCatalog.anki.owner == "modules/programs/productivity/anki.nix"
+    && p.lib.programCatalog.chatgpt.owner == "modules/programs/productivity/chatgpt.nix"
     && p.lib.programCatalog.codex.owner == "modules/programs/coding-agents/codex.nix"
     && p.lib.programCatalog.ghostty.defaults == {linux = "nix"; darwin = "homebrew";};
   groupSubset = !(row "remmina" noNetworkOrProductivity).selected
@@ -157,14 +159,15 @@ in {
   mediaBindings = !(builtins.elem "imv" (names noMedia))
     && builtins.elem "imv" (names restoredImv)
     && lib.all (mime: !(builtins.hasAttr mime noMedia.xdg.mimeApps.defaultApplications)
-      && restoredImv.xdg.mimeApps.defaultApplications.${mime} == ["imv.desktop"]) imageTypes;
+      && !(builtins.hasAttr mime restoredImv.xdg.mimeApps.defaultApplications)) imageTypes;
   groupOptIn = (row "bat" individualOverrides).selected && builtins.elem "bat" (names individualOverrides)
     && !(row "ripgrep" individualOverrides).selected && !(builtins.elem "ripgrep" (names individualOverrides));
   individualDependency = (row "codex" individualOverrides).selected && (row "mise" individualOverrides).selected
     && builtins.elem "mise" (names individualOverrides) && !(row "claude-code" individualOverrides).selected;
-  overlappingProfiles = (row "d2coding-nerd-font" linuxDesktop).profiles == ["desktop" "wsl"]
+  consumerFontChoice = (row "d2coding-nerd-font" linuxDesktop).profiles == []
+    && !(row "d2coding-nerd-font" linuxDesktop).selected
     && (row "d2coding-nerd-font" linuxDesktop).group == "fonts"
-    && (row "d2coding-nerd-font" linuxDesktop).selected && (row "d2coding-nerd-font" wslFont).selected
+    && (row "d2coding-nerd-font" desktopFont).selected && (row "d2coding-nerd-font" wslFont).selected
     && !(row "d2coding-nerd-font" c).selected;
   directoryGroups = lib.all (entry:
     entry.group == builtins.elemAt (lib.splitString "/" entry.owner) 2
@@ -186,7 +189,7 @@ in {
     && !(row "ghostty" restoredZellij).selected;
   forcedGroupEligibility = (row "zellij" forcedHome.config).selected
     && !(row "ghostty" forcedHome.config).selected
-    && !(row "anki" forcedHome.config).selected
+    && !(row "chatgpt" forcedHome.config).selected
     && !(row "ripgrep" forcedHome.config).selected
     && forcedHome.activationPackage.drvPath != "";
   groupDependency = (row "mise" noDevelopment).selected && builtins.elem "mise" (names noDevelopment)
@@ -206,8 +209,8 @@ in {
   supplierPlatforms = p.lib.programCatalog.codex.providers.mise.platforms == ["x86_64-linux" "aarch64-linux"]
     && p.lib.programCatalog.bettercap.providers.homebrew.platforms == ["aarch64-darwin"];
   distinct = p.lib.programCatalog ? claude && p.lib.programCatalog ? claude-code;
-  linuxWritable = builtins.length (editable linuxDesktop) == 12;
-  darwinWritable = builtins.length (editable macHome) == 13;
+  linuxWritable = builtins.length (editable linuxDesktop) == 3;
+  darwinWritable = builtins.length (editable macHome) == 4;
   linuxDisabledWritable = editable linuxOff == [] && !linuxOff.programs.zellij.enable
     && !linuxOff.programs.ghostty.enable && !linuxOff.programs.wezterm.enable;
   darwinDisabledWritable = editable macOff == [".paneru.lua"] && !macOff.programs.zellij.enable
@@ -256,7 +259,7 @@ for label, module, message in [
     ('unknown ID', '{providerTools.programs.unknown.enable = true;}', 'unknown program ID'),
     ('unknown supplier', '{providerTools.programs.codex.provider = "unknown";}', 'not of type'),
     ('Linux Homebrew Codex', '{providerTools.programs.codex.provider = "homebrew";}', 'unsupported supplier platform for codex'),
-    ('unsupported platform', '{providerTools.programs.anki.enable = true;}', 'unsupported platform'),
+    ('unsupported platform', '{providerTools.programs.chatgpt.enable = true;}', 'unsupported platform'),
     ('supplier platform', '{providerTools.programs.bettercap.provider = "homebrew";}', 'unsupported supplier platform'),
     ('class unavailable', '{providerTools.programs.remmina.enable = true;}', 'remmina requires a host class from linuxGraphical'),
     ('system class unavailable', '{providerTools.programs.nix-ld.enable = true;}', 'nix-ld requires a host class from nixos'),

@@ -12,7 +12,7 @@ _: {
   }: {
     programs.skim = {
       enable = lib.mkDefault config.providerTools.programs.skim.enable;
-      enableZshIntegration = false;
+      enableZshIntegration = lib.mkDefault false;
 
       # skim's default theme is `dark`, and it is 256-colour indices chosen for
       # a dark background — 236 behind the current line, 144 for the match
@@ -33,7 +33,7 @@ _: {
       # #ffffff page, so the override earns its place under the current
       # palette as much as under the last one. ANSI 6 (cyan) and ANSI 8
       # (bright black) are mid-tones in both directions.
-      defaultOptions = ["--color=16,info:6,border:8,scrollbar:8"];
+      defaultOptions = lib.mkDefault ["--color=16,info:6,border:8,scrollbar:8"];
     };
   };
 }

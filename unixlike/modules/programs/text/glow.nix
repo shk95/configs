@@ -9,9 +9,8 @@ _: {
     pkgs,
     ...
   }: let
-    settings = (pkgs.formats.yaml {}).generate "glow.yml" {style = "light";};
     # Glow 3.0.0's TUI reads GLAMOUR_STYLE ahead of its YAML/CLI style.
-    # Clear it only in this process so both views honour glow's own settings.
+    # Clear it only in this process so its own configuration controls both views.
     glow = pkgs.symlinkJoin {
       name = "glow-${pkgs.glow.version}";
       paths = [pkgs.glow];
@@ -22,13 +21,5 @@ _: {
     };
   in {
     home.packages = lib.optional config.providerTools.programs.glow.enable glow;
-    # XDG takes precedence on both platforms. go-app-paths 0.2.2 also
-    # searches ~/Library/Preferences/glow on Darwin when XDG is unset.
-    xdg.configFile."glow/glow.yml" = lib.mkIf config.providerTools.programs.glow.enable {
-      source = settings;
-    };
-    home.file."Library/Preferences/glow/glow.yml" = lib.mkIf (pkgs.stdenv.hostPlatform.isDarwin && config.providerTools.programs.glow.enable) {
-      source = settings;
-    };
   };
 }

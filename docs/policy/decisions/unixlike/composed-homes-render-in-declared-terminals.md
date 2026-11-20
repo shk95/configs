@@ -86,3 +86,9 @@ files cited above to `unixlike/modules/wezterm/config/appearance.lua`,
 `unixlike/modules/ghostty.nix`, and `unixlike/modules/zellij/config.kdl`.
 The earlier paths identify those files at the time of the decision. The
 declared light scheme and the reopening condition are unchanged.
+
+Amended 2026-11-20. Terminal appearances and fixed palettes are owned by the
+Unix-like host repository. The public environment can be used with a
+terminal outside that repository's choices. Public defaults can follow
+terminal ANSI colors. The host owns the related Zellij, Delta and btop
+choices. Each Windows terminal payload remains independently owned.

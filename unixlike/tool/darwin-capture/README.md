@@ -66,8 +66,9 @@ homeModules = [{
 }];
 ```
 
-Each unit has an enable boolean defaulting true and a nullable settingsDocument
-path defaulting null. Null uses provider defaults. Effective management also
+Each unit has a nullable settingsDocument path and an enable flag. Providing
+a document enables the unit by default. Explicitly enabling a unit without a
+document selects the public example. Effective management also
 requires final Karabiner selection and existing appSettings gates. Disabling a
 unit excludes its document reads and provider apply operation without changing
 app selection or the other unit. The consumer chooses adoption/activation.

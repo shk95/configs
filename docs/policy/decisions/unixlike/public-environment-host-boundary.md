@@ -42,3 +42,13 @@ and host realization inseparable. Constructor names remain, but removed
 machine/profile fields are a declared breaking transition with migration
 guidance; old pinned source remains usable until a consumer adopts the new
 contract.
+
+Amended 2026-11-20. The provider owns installation, integration, compatibility
+and reusable defaults. Hosts own personal choices such as terminal colors,
+fonts, keymaps, shell behavior and desktop preferences. Nix uses the native
+option's merge rules and weak provider defaults. When a program reads a
+complete application file, the host supplies the file through the existing
+option or file declaration. An optional public file is a usable minimal
+default. Package declarations may have an empty default profile list when
+the host selects the package explicitly, as with the Nerd Fonts. The catalog
+still determines platform eligibility and installation ownership.

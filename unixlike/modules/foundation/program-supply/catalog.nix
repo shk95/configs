@@ -36,7 +36,7 @@
   in
     if builtins.length locations != 1
     then throw "programCatalog: duplicate definition for ${id} in ${lib.concatStringsSep ", " locations}"
-    else if profiles == [] || !(lib.all (name: builtins.elem name profileNames) profiles)
+    else if !(definition ? profiles) || !(lib.all (name: builtins.elem name profileNames) profiles)
     then throw "programCatalog: ${id} must declare valid default profiles"
     else if (definition.providers or {}) == {}
     then throw "programCatalog: ${id} must declare at least one supplier"
@@ -61,7 +61,10 @@
           })
         definition.providers;
         group = groupAt id owner;
-        area = builtins.head profiles;
+        area =
+          if profiles == []
+          then null
+          else builtins.head profiles;
       })
   config.programCatalog;
   groupNames = lib.unique (map (entry: entry.group) (lib.attrValues catalog));

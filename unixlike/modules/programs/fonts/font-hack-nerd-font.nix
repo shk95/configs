@@ -1,6 +1,6 @@
 _: {
   programCatalog.font-hack-nerd-font = {
-    profiles = ["darwin"];
+    profiles = [];
     platforms = ["aarch64-darwin"];
     kind = "font";
     providers.homebrew = {

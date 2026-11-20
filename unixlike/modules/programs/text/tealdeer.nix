@@ -11,14 +11,7 @@ _: {
   }: {
     programs.tealdeer = {
       enable = lib.mkDefault config.providerTools.programs.tealdeer.enable;
-      enableAutoUpdates = false;
-      settings = {
-        display = {
-          compact = false;
-          use_pager = true;
-        };
-        updates.auto_update = false;
-      };
+      settings.display.use_pager = lib.mkDefault true;
     };
   };
 }

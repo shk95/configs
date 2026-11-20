@@ -1,7 +1,4 @@
-# PowerShell is a configured interactive program, so this module owns both its
-# package and its CurrentUserAllHosts profile. The profile is a Unix-like-owned
-# adoption of the same platform-neutral policy used by Windows; neither domain
-# imports or generates the other one's payload.
+# PowerShell is available to both interactive users and the repository checks.
 #
 # Pester is here as well, because it is PowerShell module content rather than a
 # package of its own: nixpkgs carries no Pester, so this fetches the PSGallery
@@ -34,8 +31,6 @@ _: {
       packages = lib.optional config.providerTools.programs.powershell.enable pkgs.powershell;
 
       file = lib.mkIf config.providerTools.programs.powershell.enable {
-        ".config/powershell/profile.ps1".source = ./profile.ps1;
-
         # pwsh resolves a versioned module directory by name, so the version is
         # part of the path and a bump here is visible as a path change.
         ".local/share/powershell/Modules/Pester/5.7.1".source = pester;

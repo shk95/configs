@@ -1,7 +1,5 @@
 _: {
-  # Interactive shell behavior is user state, so every Unix-like home consumes
-  # one module. Platform modules add only genuine platform deltas such as the
-  # Darwin trash command.
+  # Shared shell initialization and command precedence for Unix-like homes.
   modules.homeManager.shared = {
     config,
     lib,
@@ -68,92 +66,27 @@ _: {
       }
     ];
 
-    home.sessionVariables = {
-      # Keep locale behavior independent of the login shell. Ubuntu provides
-      # this locale through its system archive; macOS supports it natively.
-      LANG = "en_US.UTF-8";
-    };
-
-    # Modal (vi) editing, declared rather than inherited by accident.
-    #
-    # Previously nothing declared it: neither `bindkey -e` nor `bindkey -v`
-    # ran, so zsh fell back to inspecting $VISUAL/$EDITOR and picked `viins`
-    # because modules/programs/development/neovim.nix sets `programs.neovim.defaultEditor = true`,
-    # exporting EDITOR=nvim, and "nvim" contains the substring "vi".
-    # Replacing Neovim with an editor whose name lacks "vi" would silently
-    # revert the shell to emacs bindings, with no error and nothing in the
-    # repository to explain the change. `defaultKeymap` below makes the
-    # choice structural instead of an accident of $EDITOR's spelling.
-    #
-    # zsh only edits zsh, and which shell a host logs into is decided per
-    # evaluator: the NixOS-WSL system layer selects zsh
-    # (modules/foundation/shell/wsl.nix), `modules/foundation/shell/darwin.nix` registers zsh as a
-    # permitted shell and leaves the selection to macOS, and the standalone
-    # Ubuntu home cannot select at all — there the choice is `chsh`, run
-    # out-of-band by `Justfile`'s `switch-shell` recipe (see
-    # docs/reference/troubleshooting.md). Until that has run, the Ubuntu host logs into
-    # whatever bash the account already had, so the zsh keymap alone would
-    # not reach every host. `programs.readline` below is the one declaration that reaches
-    # bash — and every other readline-linked program, such as python3, psql,
-    # sqlite3, gdb, and bc — regardless of which shell a host happens to log
-    # into, which is why it is declared next to the zsh keymap rather than in
-    # a file of its own: their two ergonomic knobs (zsh's KEYTIMEOUT below,
-    # and readline's keyseq-timeout/show-mode-in-prompt) are decided together
-    # here so the two editors do not drift into silently different behaviour.
     programs.readline = {
-      enable = true;
-      variables = {
-        editing-mode = "vi";
-
-        # readline's analogue of zsh's KEYTIMEOUT (see the comment on it
-        # below), already expressed in milliseconds (default 500). Matched to
-        # zsh's 200ms rather than decided separately.
-        keyseq-timeout = 200;
-
-        # Neither zsh nor readline shows the current mode by default, so
-        # there is no on-screen answer to "insert or normal". zsh's answer (a
-        # prompt segment) is excluded from this change — it belongs in
-        # modules/programs/terminal/starship.nix, whose header requires every key to change a
-        # default, and starship only sets `enableZshIntegration` here, so
-        # bash has no starship segment to add a glyph to anyway. readline's
-        # own `show-mode-in-prompt` has no such dependency: it is the only
-        # on-screen indicator bash and other readline programs get from this
-        # change, so it is turned on.
-        show-mode-in-prompt = true;
-      };
-
-      # Kept at its default (true): it emits `$include /etc/inputrc`, which is
-      # how the Ubuntu host keeps its distribution's own readline bindings
-      # alongside the two variables above.
-      includeSystemConfig = true;
+      enable = lib.mkDefault true;
+      # Retain the platform-provided inputrc alongside Home Manager.
+      includeSystemConfig = lib.mkDefault true;
     };
 
     programs.zsh = {
-      enable = true;
+      enable = lib.mkDefault true;
       enableCompletion = true;
+      completionInit = lib.mkDefault ''
+        autoload -Uz compinit
+        compinit
+
+        # Lowercase input can also complete uppercase names.
+        zstyle ':completion:*' matcher-list 'm:{a-z}={A-Z}'
+      '';
       syntaxHighlighting.enable = true;
 
       # Preserve the state-version 25.11 location explicitly before Home
       # Manager changes its default. Existing homes keep ~/.zshrc in place.
       dotDir = config.home.homeDirectory;
-
-      # Replaces the implicit $EDITOR-derived selection described above.
-      defaultKeymap = "viins";
-
-      # Completion behaviour belongs here rather than in initContent. `zstyle` is
-      # read by the completion system when a completion actually runs, so the two
-      # are identical in effect — but this option only exists when
-      # `enableCompletion` is on, which makes the dependency structural instead of
-      # something a reader has to notice.
-      completionInit = ''
-        autoload -Uz compinit
-        compinit
-
-        # Lowercase input matches uppercase names: `~/dow<tab>` finds `Downloads`.
-        # One-directional on purpose — uppercase input stays exact, so a name
-        # typed in full case still means what it says.
-        zstyle ':completion:*' matcher-list 'm:{a-z}={A-Z}'
-      '';
 
       initContent = lib.mkMerge [
         (lib.mkOrder 1000 ''

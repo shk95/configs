@@ -135,7 +135,7 @@ grep -q 'machine_specific' "$work/projection-plain" &&
 # holds dozens of entries in. A changed 60 is drift; an entry the payload does
 # not declare is not this repository's business either way.
 
-run_jq -S --indent 2 '.AppleSymbolicHotKeys["60"].enabled = false' \
+run_jq -S --indent 2 '.AppleSymbolicHotKeys["60"].enabled |= not' \
   "$hotkeys" >"$work/hotkeys-changed.json"
 run_jq -S --indent 2 '.AppleSymbolicHotKeys["7"] = {enabled: true, value: null}' \
   "$hotkeys" >"$work/hotkeys-extra.json"

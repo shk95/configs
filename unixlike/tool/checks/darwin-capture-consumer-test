@@ -42,7 +42,8 @@ cat > "$work/flake.nix" <<EOF
     absent = builtins.toPath "$work/never-read.json";
   in {
     darwinConfigurations = {
-      defaults = make {} true;
+      withoutDocuments = make {} true;
+      defaults = make {karabiner.enable = true; symbolicHotkeys.enable = true;} true;
       host = make {
         karabiner.settingsDocument = ./karabiner.json;
         symbolicHotkeys.settingsDocument = ./hotkeys.json;
@@ -53,8 +54,8 @@ cat > "$work/flake.nix" <<EOF
         karabiner = {enable = false; settingsDocument = absent;};
         symbolicHotkeys = {enable = false; settingsDocument = absent;};
       } true;
-      onlyKarabiner = make {symbolicHotkeys = {enable = false; settingsDocument = absent;};} true;
-      onlyHotkeys = make {karabiner = {enable = false; settingsDocument = absent;};} true;
+      onlyKarabiner = make {karabiner.enable = true; symbolicHotkeys = {enable = false; settingsDocument = absent;};} true;
+      onlyHotkeys = make {symbolicHotkeys.enable = true; karabiner = {enable = false; settingsDocument = absent;};} true;
       unselected = make {karabiner.settingsDocument = absent; symbolicHotkeys.settingsDocument = absent;} false;
       invalid = make {karabiner.settingsDocument = ./invalid.json;} true;
       duplicate = make {karabiner.settingsDocument = ./duplicate.json;} true;
@@ -86,7 +87,7 @@ if grep -Fq 'karabiner-host-settings.json' "$work/configs.activation"; then
 fi
 if grep -Fq -- '--unit symbolic-hotkeys' "$work/onlyKarabiner.activation"; then exit 1; fi
 if grep -Fq -- '--unit karabiner' "$work/onlyHotkeys.activation"; then exit 1; fi
-for case in disabled unselected; do
+for case in withoutDocuments disabled unselected; do
   nix eval --json "path:$work#darwinConfigurations.$case.config.home-manager.users.example.home.activation" \
     --apply 'entries: builtins.hasAttr "karabinerDesiredState" entries' | jq -e '. == false' >/dev/null
   nix eval --raw "path:$work#darwinConfigurations.$case.config.system.build.toplevel.drvPath" >/dev/null

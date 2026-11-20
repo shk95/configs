@@ -2,7 +2,11 @@
 # nixpkgs' NixOS module. greetd provides a small display manager without
 # importing a desktop environment.
 _: {
-  modules.nixos.graphical = {pkgs, ...}: {
+  modules.nixos.graphical = {
+    lib,
+    pkgs,
+    ...
+  }: {
     programs = {
       niri = {
         enable = true;
@@ -13,7 +17,7 @@ _: {
 
     services.greetd = {
       enable = true;
-      settings.default_session.command = "${pkgs.tuigreet}/bin/tuigreet --time --remember --remember-user-session --cmd niri-session";
+      settings.default_session.command = lib.mkDefault "${pkgs.tuigreet}/bin/tuigreet --cmd niri-session";
     };
   };
 }

@@ -182,3 +182,7 @@ proof after explicit current-Mac permission. Earlier three sandbox loader failur
 remain distinct; native success does not claim sandbox isolation, GUI/driver/input
 events, consumer adoption or host activation. Entry retirement changes no rendered
 settings and requires no new application execution.
+
+Amended 2026-11-20. The provider ships minimal examples. A consumer selects each
+managed unit by providing its document or explicitly enabling the example.
+The same projection applies to a host-owned profile and its hotkeys.

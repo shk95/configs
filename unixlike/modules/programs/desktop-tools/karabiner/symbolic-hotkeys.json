@@ -1,12 +1,12 @@
 {
   "AppleSymbolicHotKeys": {
     "60": {
-      "enabled": true,
+      "enabled": false,
       "value": {
         "parameters": [
-          65535,
-          79,
-          8388608
+          32,
+          49,
+          262144
         ],
         "type": "standard"
       }

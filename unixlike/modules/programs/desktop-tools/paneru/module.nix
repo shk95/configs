@@ -26,7 +26,7 @@
     services.paneru = {
       enable = lib.mkDefault config.providerTools.programs.paneru.enable;
       luaConfig.enable = true;
-      config = ./init.lua;
+      config = lib.mkDefault ./init.lua;
     };
   };
 }

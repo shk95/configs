@@ -6,6 +6,15 @@ is recorded under `docs/policy/decisions/`; the model those decisions implement
 is `docs/policy/architecture.md`. The other scopes' state is in the files
 beside this one.
 
+## Host-owned program settings prepared — 2026-11-20
+
+The provider keeps software supply, session integration, compatibility and
+minimal application defaults. Host modules supply their Nix preferences and
+complete application files through the existing native options. The Nerd
+Fonts are available for host selection. Karabiner units require a host
+document or explicit selection of the public example. See the
+[migration evidence](../work/unixlike/host-program-settings/report.md).
+
 ## Editable configuration files prepared on master — 2026-11-17
 
 The provider prepares file-specific writable copies
@@ -99,13 +108,10 @@ or activation.
 ## Paneru on Darwin
 
 The Darwin Home Manager class imports the locked upstream Paneru module and
-owns its package, launchd agent and Lua configuration together. The source
-payload is `unixlike/modules/programs/desktop-tools/paneru/init.lua`; edit that file to
-change the configuration. On 2026-11-06, its complete active configuration
-was replaced from the maintainer-selected local TOML, with command-string
-binding keys and Lua table syntax. It retains no settings from the previous
-payload that were absent from that source. The snapshot includes the global
-window defaults, utility-window floating rules and grid placements.
+owns its package and launchd agent. It supplies a minimal Lua file as the
+default for `services.paneru.config`. The consumer selects its complete Lua
+file with that option. The initial full Lua configuration was adopted from the
+maintainer-selected TOML on 2026-11-06.
 
 Upstream installs the payload as `~/.paneru.lua` when Home Manager's
 `xdg.enable` is false (the current provider default), or as
@@ -121,7 +127,7 @@ uses `makeBinaryWrapper` for extra executable or Lua search paths. The local
 final-package transformation and extra-path refusals are removed; upstream
 owns both execution paths. Native tests of the adopted 0.5.3 package passed
 with Nix Bash access disabled for both raw and Lua-extra cases on 2026-11-15.
-The current Lua payload is unchanged. The original workaround and its retirement
+The original workaround and its retirement
 evidence are recorded in
 `docs/policy/decisions/unixlike/paneru-unwrapped-until-upstream.md`.
 Consumer adoption still requires a separately requested activation.

@@ -14,8 +14,7 @@ _: {
   }: {
     programs.mpv = {
       enable = lib.mkDefault config.providerTools.programs.mpv.enable;
-      defaultProfiles = ["gpu-hq"];
-      scripts = [pkgs.mpvScripts.mpris];
+      scripts = lib.mkDefault [pkgs.mpvScripts.mpris];
     };
   };
 }

@@ -57,11 +57,12 @@ _: {
         else pkgs.writeText "${unit}-host-settings.json" (builtins.toJSON doc.settings);
     karabiner = effective capture.karabiner;
     hotkeys = effective capture.symbolicHotkeys;
-    unitOptions = name: {
+    unitOptions = key: name: {
       enable = lib.mkOption {
         type = lib.types.bool;
-        default = true;
-        description = "Enable provider management of the ${name} settings unit when Karabiner settings are selected.";
+        default = capture.${key}.settingsDocument != null;
+        defaultText = lib.literalExpression "settingsDocument != null";
+        description = "Apply this unit when Karabiner settings are selected. An explicit enable without a document uses the public example.";
       };
       settingsDocument = lib.mkOption {
         type = lib.types.nullOr lib.types.path;
@@ -71,8 +72,8 @@ _: {
     };
   in {
     options.providerDarwin.capture = {
-      karabiner = unitOptions "Karabiner";
-      symbolicHotkeys = unitOptions "symbolic hotkeys 60/61";
+      karabiner = unitOptions "karabiner" "Karabiner";
+      symbolicHotkeys = unitOptions "symbolicHotkeys" "symbolic hotkeys 60/61";
     };
     config = {
       home.activation = lib.mkIf (karabiner || hotkeys) {
