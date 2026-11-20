@@ -32,7 +32,7 @@ def init(root):
 class DevelopmentTest(unittest.TestCase):
     def setUp(self):
         self.temporary = tempfile.TemporaryDirectory(prefix='consumer-development-')
-        self.base = Path(self.temporary.name)
+        self.base = Path(self.temporary.name).resolve()
         self.provider = self.base / 'provider'
         self.consumer = self.base / 'consumer'
         init(self.provider)

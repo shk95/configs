@@ -37,6 +37,11 @@ def git(*args, cwd=None):
                                    env=dict(os.environ, GIT_OPTIONAL_LOCKS='0')).decode().strip()
 
 
+def shell_command(script):
+    path = Path(script)
+    return ['sh', path.as_posix()] if os.name == 'nt' else [str(path)]
+
+
 def unfinished_operations(cwd):
     markers = ('MERGE_HEAD', 'rebase-merge', 'rebase-apply', 'CHERRY_PICK_HEAD',
                'REVERT_HEAD', 'sequencer', 'BISECT_START')

@@ -51,3 +51,10 @@ commit under test — `github.event.pull_request.head.sha` when there is one,
 because a pull request's checkout is a synthetic merge commit whose date is
 the run time — so re-running an old commit gives the same answer twice.
 Under `pre-commit` the reference is today, which is the commit being made.
+
+## Amendment 2026-11-19: Overdue reviews are warnings
+
+Keep the registration, tagged lines and review date mandatory. Report an
+elapsed deadline as a warning using today's date. The owning scope can
+review or retire the measure independently of other commits in that scope.
+Hosted evidence covers registry integrity for its exact source.

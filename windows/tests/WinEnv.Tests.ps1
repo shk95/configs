@@ -3506,7 +3506,7 @@ Describe 'check entry points' {
         # as automation does, with prerequisites deliberately hidden. The
         # public entry point is not in this path.
         function Invoke-InternalCheck {
-            param([string] $Script, [string] $RequireNative, [switch] $HidePester)
+            param([string] $Script, [string] $RequireNative, [switch] $HidePester, [string[]] $Arguments)
             $savedPath = $env:PATH
             $savedNative = $env:REQUIRE_NATIVE
             try {
@@ -3523,7 +3523,7 @@ Describe 'check entry points' {
                         ForEach-Object { "$_" })
                 }
                 else {
-                    $output = @(& $pwshPath -NoProfile -File $scriptPath 2>&1 |
+                    $output = @(& $pwshPath -NoProfile -File $scriptPath @Arguments 2>&1 |
                         ForEach-Object { "$_" })
                 }
                 return [pscustomobject]@{ ExitCode = $LASTEXITCODE; Output = ($output -join "`n") }
@@ -3650,6 +3650,12 @@ Describe 'check entry points' {
     It 'INV windows/automation-tools-standalone: direct validation reports unavailable and required-native failure' {
         (Invoke-InternalCheck -Script 'check-desired-state.ps1' -RequireNative $null).ExitCode | Should -Be 69
         (Invoke-InternalCheck -Script 'check-desired-state.ps1' -RequireNative '1').ExitCode | Should -Be 1
+    }
+
+    It 'INV windows/automation-tools-standalone: focused application settings validation needs only the declared JSON parser' {
+        $result = Invoke-InternalCheck -Script 'check-desired-state.ps1' -RequireNative '1' -Arguments @('-SettingsOnly')
+        $result.ExitCode | Should -Be 0 -Because $result.Output
+        $result.Output | Should -Match 'Windows application JSON settings are valid'
     }
 
     It 'INV windows/automation-tools-standalone: direct suite reports unavailable and required-native failure without Pester' {

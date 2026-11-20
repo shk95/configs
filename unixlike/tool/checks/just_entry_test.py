@@ -20,7 +20,7 @@ class JustEntry(unittest.TestCase):
     def setUp(self):
         self.tmp = tempfile.TemporaryDirectory()
         self.addCleanup(self.tmp.cleanup)
-        self.work = Path(self.tmp.name)
+        self.work = Path(self.tmp.name).resolve()
         self.repo = self.work / 'provider with spaces'
         self.repo.mkdir()
         (self.repo / 'unixlike').mkdir()

@@ -85,3 +85,30 @@ selection. Local fixtures now read the runtime module/controller wiring, so
 those two source paths select repository fixtures at commit and push. This
 applies existing effect selection to the newly consumed inputs without changing
 configuration ownership, runtime version authority or the public interface.
+
+2026-11-19: the verification redesign bounds routine history checks to the
+commits entering the destination, including merge changes. Pre-push checks
+outgoing secrets before transfer. The CI workflow still exercises all its
+hosted lanes when its orchestration changes. Other workflow and dispatch
+changes exercise repository fixtures. Separate Git for Windows and Windows
+runtime-controller selections follow their inputs. A metadata-only release
+declaration receives policy checks. See the verification gates work record
+for implementation and qualification evidence.
+
+2026-11-19: the stable result and its proof depend on required checks only.
+The document-index and design-citation scans are operator diagnostics. Work
+record validation on commit and CI applies when the candidate changes those
+records. The invariant registry is checked at candidate verification.
+
+Changes to the CI definition qualify each platform contract and its routing
+fixtures. Application settings use their owning platform suite. A replay of
+100 first-parent changes selected neither a settings-only CI lane nor a
+retention-only exception. Focused settings checks remain available for local
+feedback.
+The Unix-like provider contract covers dependency refreshes. Development-tool
+fixtures follow their own inputs. Local Git for Windows can supply the native
+retirement fixture evidence.
+
+The root walkthroughs and guidance files use the document path for content
+edits. The evaluation driver's synthetic cases and missing-tool
+status fixtures follow changes to the Unix-like check tools.

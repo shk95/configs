@@ -8,8 +8,8 @@ registry exists and how it relates to the other documents.
 
 `tool/version-control/invariants` checks every entry and, in the other
 direction, every `INV <scope>/<slug>` tag in the tree. A failure names its
-rule as `C1` to `C10`; the checker's header defines each. It runs on every commit
-and in CI. It reads the index, like the hygiene scan, so stage a new entry
+rule as `C1` to `C10`; the checker's header defines each. Candidate verification
+and CI run it. It reads the index, like the hygiene scan, so stage a new entry
 before running it by hand. `tool/configs invariants --table` prints
 the registry as a table; it still reports any failure on stderr but exits 0
 either way.

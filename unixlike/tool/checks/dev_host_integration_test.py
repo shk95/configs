@@ -33,7 +33,7 @@ class BidirectionalTest(unittest.TestCase):
     def setUp(self):
         self.temp = tempfile.TemporaryDirectory(prefix='configs-dev-integration-')
         self.addCleanup(self.temp.cleanup)
-        self.base = Path(self.temp.name)
+        self.base = Path(self.temp.name).resolve()
         self.provider = self.base / 'provider'
         self.consumer = self.base / 'consumer'
         self.env = {**os.environ, 'FIXTURE_RUNTIME': str(self.base / 'active'), 'FIXTURE_PROVIDER': str(self.provider),
@@ -200,7 +200,7 @@ class ReadOnlyInfoTest(unittest.TestCase):
     def setUp(self):
         self.temp = tempfile.TemporaryDirectory(prefix='configs-dev-info-')
         self.addCleanup(self.temp.cleanup)
-        self.base = Path(self.temp.name)
+        self.base = Path(self.temp.name).resolve()
         self.provider = self.base / 'provider'
         self.provider.mkdir()
         self.env = {key: value for key, value in os.environ.items() if not key.startswith('GIT_')}

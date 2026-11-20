@@ -42,7 +42,8 @@ procedure.
 5. Put the tag `INV <scope>/<slug>` in every declared locator: a header
    comment in a script, the test name or a comment above a fixture, the
    loader's refusal message.
-6. Run `tool/configs invariants`. It runs again on every commit.
+6. Run `tool/configs invariants` for registry changes. Candidate verification
+   and CI also check the registry.
 
 Removing an invariant removes its file and every tag that named it; the check
 refuses an orphan tag. Weakening a statement is a governance change and is
@@ -114,10 +115,8 @@ temporary:
 3. Whatever must now remain true of that code is an invariant, not a
    provisional entry; register it through "Add or change an invariant".
 
-An overdue entry fails the check for a change in its own scope only, so a
-change in another domain is never blocked by it. That is not a reprieve: the
-next change to the owning scope stops until the entry is retired, extended or
-promoted.
+The registry reports overdue entries for the owning scope to review. Use the
+exit condition to decide whether to retire, extend or promote the measure.
 
 ## Record a decision
 

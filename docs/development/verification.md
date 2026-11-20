@@ -10,14 +10,14 @@ does not need workflow initialization, a clean checkout or commit permission.
 | Repository prose | Review the changed text and applicable document/global scans. For a new work pair, `tool/configs work --working-tree docs/work/<scope>/<slug>` checks that pair, including untracked files. | Default global scans read the index; their success does not verify unstaged prose. No artificial behavior suite is needed for explanatory corrections. |
 | Unix-like payload | Run `unixlike/tool/checks/payloads` and the fixture for the affected behavior. | These read the working tree. Run the provider suite for a final implementation result; consumer build/runtime stays separate. |
 | Unix-like Nix behavior | Run `unixlike/tool/checks/format`, `lint` and the affected fixture under the same checks directory. | The final provider suite is `unixlike/tool/checks/test`. |
-| Windows behavior | Use the native `windows/win-env.ps1 validate` and `test` verbs; use read-only `check` for relevant host observations. | A foreign host leaves native evidence unavailable. Setup installs tools; Apply is a separate requested deployment. |
+| Windows behavior | Use the native `windows/win-env.ps1 validate` and `test` verbs. For PowerToys or Terminal JSON, the underlying `windows/tool/check-desired-state.ps1` and `windows/tool/test.ps1` accept `-SettingsOnly` for local feedback. | A foreign host leaves native evidence unavailable. Setup installs tools. Apply is a separate requested deployment. |
 | Staged-only delivery | Stage only authorized source, inspect `git diff --cached`, and run the applicable index scans listed below; use `tool/configs work --staged` for work records. | Do not commit to make workflow check available. On a later authorized commit, the hook runs selected quick domain checks against an index snapshot, preserving unstaged work. Working-tree parser evidence must be labeled separately. |
 | Clean committed candidate | Use workflow check, or workflow merge when integration is requested, with reviewed full base/head SHA. | These alternatives run selected final suites and bind evidence to the candidate. Plan is optional inspection. |
 
 The index scans are `tool/configs hygiene`, `invariants`, `provisional`,
 `domain-reads`, `design-citations`, `records` and `work --staged`; select those
 applicable to the requested feedback. They do not run native parsers. The
-commit hook runs its required global scans once; do not repeat successful
+commit hook runs its required scans once; do not repeat successful
 checks merely to reproduce its checklist. Final candidate verification still
 has its own exact-source subject.
 
@@ -39,9 +39,10 @@ To inspect the same selected command sequence without executing checks, use
 Plan requires the same clean committed candidate, reports `not-run` commands,
 source subjects and known native/hosted blockers, and queries no hosted proof.
 It is optional, provides no verification/readiness/authorization evidence and
-is rebuilt by check; no saved plan is accepted as proof. Global scans remain
-local when `--ci-run` supplies suites. Dirty source uses narrow development
-checks instead of this exact-candidate operation.
+is rebuilt by check. With `--ci-run`, exact CI evidence supplies the covered
+incoming checks, repository policy and selected suites. Integration still
+checks the destination and resulting tree locally. Dirty source uses narrow
+development checks.
 
 The staged quick checks materialize the index once and execute the staged
 checker implementations there. They exclude unstaged and untracked content
@@ -136,10 +137,10 @@ only the domain checks whose dispatch or enforcement behavior changed. Secret
 scanning remains repository-wide. A governance change does not receive a
 domain tag.
 
-`tool/version-control/invariants` checks the invariant registry in both
-directions and runs on every commit beside the hygiene scan, whatever the
-scope of the change, because a renamed fixture in any scope can orphan the tag
-an entry depends on.
+`tool/configs invariants` checks the registry in both directions. Candidate
+verification checks it because a renamed fixture in any scope can orphan a
+registered invariant. Use `tool/configs design-citations` and `tool/configs
+records` when reviewing document citations and indexes.
 
 ```sh
 tool/configs test
@@ -153,14 +154,16 @@ tool/configs audit-remote  # for a requested remote inspection
 tool/configs hook-evidence
 ```
 
-Push runs bounded `audit --range <base> <tip>` for transmitted commits and
-`audit --tag <name>` for a transmitted release tag. It does not rerun native
-suites from the current checkout. Final candidate verification precedes local
-integration; master-push, optional PR and candidate-dispatch CI report their
-actual tested source independently.
+Push checks the complete messages, ownership and secret scan of the transmitted
+range. A new branch uses the receiver's master as the baseline. Fetch explicitly
+when its commit is missing locally. Install gitleaks for branch publication.
+Push checks the tag's version against the target's declaration, scans its
+annotation, and verifies its reachability from remote master.
+Candidate verification owns native suites. Master-push, optional PR and
+candidate-dispatch CI report their actual tested source independently.
 
-The full audit and `audit --history` remain explicit diagnostics for clone
-and integration history. The history diagnostic uses fetched remote snapshots
-when available; it is not proof of the current local candidate. Release
-planning uses selected local master. Refresh snapshots explicitly for remote
-operations. An unrelated local tag is not part of a branch push check.
+`tool/configs audit` and `tool/configs audit --history` are explicit diagnostics
+for clone and integration history. The history diagnostic uses fetched remote
+snapshots when available. `tool/configs audit --secrets-history` scans the
+patches reachable from local refs. Release planning uses selected local master.
+Refresh snapshots explicitly for remote operations.

@@ -1,8 +1,9 @@
 id: repository/release-tag-contract
-statement: A domain release tag is annotated, immutable, prefixed with its domain, uses domain SemVer and targets a commit reachable from master, except the two exact preserved historical tag objects; it certifies only its domain, with Windows host evidence in labelled blocks and Unix-like provider and common evidence at domain level.
+statement: A domain release tag is annotated, immutable, prefixed with its domain, matches the owning domain's declared SemVer at its target and targets a commit reachable from master, except the two exact preserved historical tag objects. Its evidence covers its domain, with labelled Windows host blocks and domain-level Unix-like provider or common evidence.
 rationale: docs/policy/architecture.md § Version control and releases
 enforced-by: tool tool/version-control/plan-release
 enforced-by: tool tool/version-control/audit
+enforced-by: schema tool/version-control/release_version.py
 enforced-by: fixture tool/version-control/test
 enforced-by: manual the reviewer reads the annotation for a machine name, an account name or a machine-unique identifier before the tag is created and reports that reading
 owner: repository maintainer

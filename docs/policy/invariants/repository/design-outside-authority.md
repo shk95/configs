@@ -19,6 +19,9 @@ rule names the directory (`docs/work/` and nothing that could continue a
 name). Placement rules can therefore name the directory without borrowing a
 work item's argument.
 
+Run the lexical diagnostic when reviewing citations in policy or procedure.
+The maintainer reviews where the authority for the change actually comes from.
+
 Status files may link a report instead of repeating its evidence, and the map
 of the document tree may name a work item. The area's format contract and
 roadmap hold no argument, so naming either is not a citation and passes

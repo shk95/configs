@@ -56,8 +56,7 @@ class StagedChecks(unittest.TestCase):
         for name in ('dispatch/select', 'version-control/classify', 'version-control/hooks.sh'):
             if (SOURCE / 'tool' / name).exists():
                 self.copy('tool/' + name)
-        for name in ('authoring', 'hygiene', 'domain-reads', 'design-citations',
-                     'records', 'work', 'invariants', 'provisional'):
+        for name in ('authoring', 'hygiene', 'domain-reads', 'work', 'provisional'):
             self.write(self.repo / 'tool/version-control' / name,
                        '#!/bin/sh\nexit 0\n', executable=True)
         for name in ('format', 'lint', 'payloads'):

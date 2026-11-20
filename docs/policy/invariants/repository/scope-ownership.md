@@ -11,6 +11,7 @@ enforced-by: fixture tool/version-control/test-staged-checks.py
 Ownership decides domain release scope and which domain may change a path.
 The classifier is the only ownership map; hooks and CI refuse an
 `unclassified` answer. A rename counts as a change to both owned paths.
-Merge commits may combine histories from several scopes. Check selection
+Merge commits may combine histories from several scopes. Every incoming merge
+effect still requires a classified path, including effects later reverted. Check selection
 follows change effect through `tool/dispatch/select`, independently of
 ownership.

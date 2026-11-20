@@ -185,7 +185,7 @@ case "$msys_fixture" in /tmp/*) rm -rf -- "$msys_fixture" ;; esac
 
 grep -q '^  required:$' "$root/.github/workflows/ci.yml"
 grep -q '^    name: Required checks$' "$root/.github/workflows/ci.yml"
-grep -q 'needs: \[classify, repository, unix, windows, secrets, topic\]' \
+grep -q 'needs: \[classify, repository, repository_windows, unix, windows, secrets, topic\]' \
   "$root/.github/workflows/ci.yml"
 grep -q 'run: tool/version-control/required-checks' \
   "$root/.github/workflows/ci.yml"
@@ -195,8 +195,8 @@ grep -q 'run: tool/version-control/required-checks' \
 # INV repository/conventional-subject: each gate names what it publishes, the
 # pushed tips or the commit under test, so their own subjects are judged.
 grep -q 'tool/version-control/audit --range' "$root/.githooks/pre-push"
-grep -q 'run: tool/version-control/audit --history HEAD$' "$root/.github/workflows/ci.yml"
-grep -q 'run: tool/version-control/audit --range "\$CI_BASE" HEAD$' "$root/.github/workflows/ci.yml"
+grep -q 'tool/version-control/scan-secrets --range' "$root/.githooks/pre-push"
+grep -q 'run: tool/version-control/verify-policy "\$CI_BASE" HEAD$' "$root/.github/workflows/ci.yml"
 # INV repository/local-gate-selects-by-effect: CI selects whole suites by
 # effect, retaining ownership separately for unconditional policy scans.
 grep -q 'run: tool/version-control/test$' "$root/.github/workflows/ci.yml"
@@ -206,7 +206,6 @@ for scope in repository unixlike windows; do
   grep -q "needs.classify.outputs.${scope}_checks }}" "$root/.github/workflows/ci.yml"
 done
 grep -q 'base=$(tool/dispatch/ci-base)' "$root/.github/workflows/ci.yml"
-grep -q 'run: tool/version-control/work --range "\$CI_BASE" HEAD' "$root/.github/workflows/ci.yml"
 
 # INV repository/merge-gate-requires-native
 # Every job that runs a check converts unverified into failure; the two jobs
@@ -288,11 +287,13 @@ run_gate() {
   env \
     CLASSIFY_RESULT=${CLASSIFY_RESULT:-success} \
     REPOSITORY_SCOPE=${REPOSITORY_SCOPE:-false} \
+    REPOSITORY_WINDOWS_SCOPE=${REPOSITORY_WINDOWS_SCOPE:-false} \
+    REPOSITORY_WINDOWS_RESULT=${REPOSITORY_WINDOWS_RESULT:-skipped} \
     REPOSITORY_RESULT=${REPOSITORY_RESULT:-skipped} \
     UNIXLIKE_SCOPE=${UNIXLIKE_SCOPE:-false} \
-    UNIXLIKE_RESULT=${UNIXLIKE_RESULT:-skipped} \
+    UNIXLIKE_RESULT=${UNIXLIKE_RESULT-skipped} \
     WINDOWS_SCOPE=${WINDOWS_SCOPE:-false} \
-    WINDOWS_RESULT=${WINDOWS_RESULT:-skipped} \
+    WINDOWS_RESULT=${WINDOWS_RESULT-skipped} \
     SECRETS_RESULT=${SECRETS_RESULT:-success} \
     TOPIC_SCOPE=${TOPIC_SCOPE:-false} \
     TOPIC_RESULT=${TOPIC_RESULT:-skipped} \
@@ -307,6 +308,11 @@ run_gate() {
 # persist it, which is why CI never saw this.
 run_gate >/dev/null
 (REPOSITORY_SCOPE=true REPOSITORY_RESULT=success run_gate) >/dev/null
+(REPOSITORY_WINDOWS_SCOPE=true REPOSITORY_WINDOWS_RESULT=success run_gate) >/dev/null
+if (REPOSITORY_WINDOWS_SCOPE=true run_gate) >/dev/null 2>&1; then
+  echo 'required-checks accepted a skipped selected native Git fixture' >&2
+  exit 1
+fi
 (UNIXLIKE_SCOPE=true UNIXLIKE_RESULT=success run_gate) >/dev/null
 (WINDOWS_SCOPE=true WINDOWS_RESULT=success run_gate) >/dev/null
 (TOPIC_SCOPE=true TOPIC_RESULT=success run_gate) >/dev/null
@@ -323,9 +329,8 @@ if (TOPIC_SCOPE=true TOPIC_RESULT=failure run_gate) >/dev/null 2>&1; then
   exit 1
 fi
 
-# INV repository/required-checks-gate: intended skips are accepted; missing,
-# cancelled, malformed or contradictory results cannot become a green gate.
-for result in skipped cancelled failure; do
+# INV repository/required-checks-gate: selected checks must actually succeed.
+for result in '' skipped cancelled failure; do
   if (UNIXLIKE_SCOPE=true UNIXLIKE_RESULT=$result run_gate) >/dev/null 2>&1; then
     echo "gate accepted selected job result $result" >&2; exit 1
   fi
@@ -335,9 +340,9 @@ for selection in unknown null; do
     echo "gate accepted invalid selection $selection" >&2; exit 1
   fi
 done
-if (WINDOWS_RESULT=success run_gate) >/dev/null 2>&1; then
-  echo 'gate accepted an unselected job running' >&2; exit 1
-fi
+for result in '' success failure skipped; do
+  (WINDOWS_RESULT=$result run_gate) >/dev/null
+done
 if (CLASSIFY_RESULT=failure run_gate) >/dev/null 2>&1; then
   echo 'gate accepted failed selection' >&2; exit 1
 fi
@@ -589,31 +594,50 @@ expect_units '' commit "$(printf 'M\ttool/work-session.sh')"
 expect_units '' commit "$codeowners_modified"
 
 # INV repository/local-gate-selects-by-effect
-# CI uses ownership only after removing documents and deliberately does not
-# narrow payloads. Cross-domain moves cover both ends.
+# CI uses the owning platform suite for both settings and structural changes.
 for change in "$docs_modified" "$entry_modified" "$measure_modified"; do
   expect_units '' ci "$change"
 done
+expect_units '' ci "$(printf 'M\tREADME.md\nM\tCONTRIBUTING.md\nM\tAGENTS.md')"
+expect_units 'repository:fixtures' ci "$(printf 'M\tREADME.md\nM\ttool/version-control/test')"
+expect_units 'repository:fixtures' ci "$(printf 'T\tAGENTS.md')"
 expect_units '' ci "$(printf 'M\tdocs/status/unixlike.md\nM\tdocs/status/windows.md')"
 expect_units 'unixlike:suite' ci "$concern_kdl_modified"
+expect_units 'unixlike:suite' ci "$(printf 'M\tunixlike/modules/programs/desktop-tools/paneru/init.lua\nM\tunixlike/release.json')"
+expect_units 'unixlike:suite' ci "$(printf 'M\tunixlike/modules/programs/desktop-tools/karabiner/units.json')"
+expect_units 'unixlike:suite' ci "$(printf 'T\tunixlike/modules/programs/terminal/zellij/config.kdl')"
 expect_units 'unixlike:suite' ci "$unixlike_module_modified"
 expect_units 'unixlike:suite' ci "$(printf 'M\tunixlike/flake.lock')"
+expect_units 'unixlike:tools' ci "$(printf 'M\tunixlike/tool/dev-host/main.py')"
+expect_units 'unixlike:tools' ci "$(printf 'M\tunixlike/tool/refresh-inputs')"
+expect_units 'unixlike:suite
+unixlike:tools' ci "$(printf 'M\tunixlike/flake.lock\nM\tunixlike/tool/dev-host/main.py')"
 expect_units 'unixlike:suite' ci "$(printf 'D\tunixlike/modules/old.nix')"
 expect_units 'unixlike:suite' ci "$renamed_into_assets"
 expect_units 'unixlike:suite
 windows:suite' ci "$(printf 'R100\tunixlike/modules/old.ps1\twindows/desired/new.ps1')"
 expect_units 'windows:suite' ci "$windows_modified"
+expect_units 'windows:suite' ci "$(printf 'M\twindows/desired/files/powertoys/File Explorer/settings.json')"
+expect_units 'windows:suite' ci "$(printf 'M\twindows/desired/files/terminal/settings.json')"
+expect_units 'windows:suite' ci "$(printf 'T\twindows/desired/files/terminal/settings.json')"
+expect_units 'windows:suite' ci "$(printf 'M\twindows/desired/files/powertoys/Awake/settings.json\nM\twindows/desired/manifest.json')"
+expect_units 'windows:suite' ci "$(printf 'A\twindows/desired/files/powertoys/new.json')"
 expect_units 'repository:fixtures' ci "$(printf 'M\ttool/work-session.sh')"
 expect_units 'repository:fixtures' ci "$(printf 'M\ttool/version-control/git_workflow.py')"
+expect_units 'repository:fixtures' ci "$(printf 'M\ttool/version-control/policy.json')"
 for path in tool/dispatch/select tool/dispatch/ci-base tool/version-control/classify tool/version-control/required-checks; do
-  expect_units 'repository:fixtures
-unixlike:suite
-windows:suite' ci "$(printf 'M\t%s' "$path")"
+  expect_units 'repository:fixtures' ci "$(printf 'M\t%s' "$path")"
 done
 expect_units 'repository:fixtures
+repository:windows-git
 unixlike:suite
+unixlike:tools
 windows:suite
 windows:runtime' ci "$(printf 'M\t.github/workflows/ci.yml')"
+expect_units 'repository:fixtures' ci "$(printf 'M\t.github/workflows/release.yml')"
+expect_units 'repository:fixtures
+repository:windows-git' ci "$(printf 'M\ttool/version-control/test-retired-capture.py')"
+expect_units '' ci "$(printf 'M\tunixlike/release.json\nM\twindows/release.json')"
 for input in "$unknown_modified" "$(printf 'M\tdocs/status/linux.md')" 'M' "$(printf 'R100\tdocs/a.md')"; do
   if printf '%s\n' "$input" | "$root/tool/dispatch/select" ci >/dev/null 2>&1; then
     echo 'CI selector accepted unknown or malformed input' >&2; exit 1
@@ -621,29 +645,19 @@ for input in "$unknown_modified" "$(printf 'M\tdocs/status/linux.md')" 'M' "$(pr
 done
 
 # INV repository/local-gate-selects-by-effect
-# Native stack events can advertise trunk base_ref with a layer base SHA.
-# Refuse them before producing any range rather than silently testing a layer.
+# Push uses the exact before object, or the empty tree for first publication.
+# PR and dispatch event constraints are exercised in test-mechanics.py.
 event_sha=$(git -C "$root" rev-parse HEAD)
 event_base() {
-  EVENT_NAME=${EVENT_NAME:-pull_request} PR_BASE=$event_sha \
-    PR_BASE_REF=${PR_BASE_REF:-master} EVENT_BASE_REF=${EVENT_BASE_REF:-master} \
-    PR_STACK=${PR_STACK:-null} PUSH_BASE=${PUSH_BASE:-$event_sha} \
-    "$root/tool/dispatch/ci-base"
+  EVENT_NAME=push PUSH_BASE=${PUSH_BASE:-$event_sha} "$root/tool/dispatch/ci-base"
 }
 [ "$(event_base)" = "$event_sha" ]
-[ "$(EVENT_NAME=push event_base)" = "$event_sha" ]
-[ "$(EVENT_NAME=push PUSH_BASE=0000000000000000000000000000000000000000 event_base)" = "$(git hash-object -t tree /dev/null)" ]
-if (PR_STACK='{"base":{"ref":"dev"}}' event_base) >/dev/null 2>&1; then
-  echo 'CI accepted an unsupported native stack' >&2; exit 1
-fi
-if (PR_BASE_REF=feature/repository-layer event_base) >/dev/null 2>&1; then
-  echo 'CI accepted layer-only stack coverage' >&2; exit 1
-fi
-if (EVENT_BASE_REF=dev event_base) >/dev/null 2>&1; then
-  echo 'CI accepted mismatched event bases' >&2; exit 1
-fi
-if (EVENT_NAME=push PUSH_BASE=bad event_base) >/dev/null 2>&1; then
+[ "$(PUSH_BASE=0000000000000000000000000000000000000000 event_base)" = "$(git hash-object -t tree --stdin </dev/null)" ]
+if (PUSH_BASE=bad event_base) >/dev/null 2>&1; then
   echo 'CI accepted an invalid event SHA' >&2; exit 1
+fi
+if (PUSH_BASE=ffffffffffffffffffffffffffffffffffffffff event_base) >/dev/null 2>&1; then
+  echo 'CI accepted an unavailable push base' >&2; exit 1
 fi
 
 # INV repository/local-gate-selects-by-effect
@@ -959,10 +973,10 @@ printf 'advance\n' >>"$audit_publisher/file"
 git -C "$audit_publisher" commit -q -am 'feat(repository): advance dev'
 git -C "$audit_publisher" switch -q master
 git -C "$audit_publisher" merge -q --no-ff dev -m "Merge branch 'dev'"
-git -C "$audit_publisher" tag -a common-v3.3.4 -m 'Domain: common' \
+git -C "$audit_publisher" tag -a common-v3.1.2 -m 'Domain: common' \
   -m 'Evaluation: passed; fixture' -m 'Build: passed; fixture' \
   -m 'Native runtime: passed; fixture'
-git -C "$audit_publisher" push -q origin master dev common-v3.3.4
+git -C "$audit_publisher" push -q origin master dev common-v3.1.2
 git -C "$audit_stale" fetch -q origin
 
 # A local master that lags origin/master, which contains the release tag.
@@ -997,13 +1011,13 @@ printf 'unpublished\n' >>"$audit_ahead/file"
 git -C "$audit_ahead" commit -q -am 'feat(repository): prepare an unpublished release'
 git -C "$audit_ahead" switch -q master
 git -C "$audit_ahead" merge -q --no-ff dev -m "Merge branch 'dev'"
-git -C "$audit_ahead" tag -a windows-v3.5.6 -m 'Domain: windows' -m 'Host: windows' \
+git -C "$audit_ahead" tag -a windows-v3.1.2 -m 'Domain: windows' -m 'Host: windows' \
   -m 'Evaluation: passed; fixture' -m 'Build: passed; fixture' \
   -m 'Native runtime: passed; fixture'
 audit_status=0
 audit_ahead_output=$(cd "$audit_ahead" && "$audit" --history 2>&1) || audit_status=$?
 if [ "$audit_status" -eq 0 ] ||
-  ! printf '%s\n' "$audit_ahead_output" | grep -q 'not reachable from master: windows-v3.5.6$' ||
+  ! printf '%s\n' "$audit_ahead_output" | grep -q 'not reachable from master: windows-v3.1.2$' ||
   ! printf '%s\n' "$audit_ahead_output" | grep -q '^summary: 0 warning(s), 1 failure(s)$'; then
   printf '%s\n' "$audit_ahead_output" >&2
   echo "audit --history judged a release tag against a local master ahead of origin/master" >&2
@@ -1115,8 +1129,8 @@ Host: wsl-nixos
   Evaluation: passed; fixture
 
 Deployment: not performed by release'
-tag_case accept windows-v3.6.1 '^ok: release tag is annotated, evidenced, and master-reachable: windows-v3.6.1$' "$two_hosts"
-tag_case accept common-v3.6.1 '^ok: .*: common-v3.6.1$' 'Domain: common
+tag_case accept windows-v3.1.2 '^ok: release tag is annotated, evidenced, and master-reachable: windows-v3.1.2$' "$two_hosts"
+tag_case accept common-v3.1.2 '^ok: .*: common-v3.1.2$' 'Domain: common
 Evaluation: passed; fixture
 Build: not applicable
 Native runtime: not applicable; deploys nowhere
@@ -1143,7 +1157,7 @@ Native runtime: probably'
 old_form='Evaluation: passed; fixture
 Build: passed; fixture
 Native runtime: passed; fixture'
-tag_case accept unixlike-v3.6.2 '^ok: .*: unixlike-v3.6.2$' "Domain: unixlike
+tag_case refuse unixlike-v3.6.2 "differs from its target's declared version 3.1.2" "Domain: unixlike
 $old_form"
 tag_case refuse windows-v3.6.2 'Build stands outside a host block (windows-v3.6.2)$' "Domain: windows
 $old_form"
@@ -1335,8 +1349,6 @@ git -C "$hooks_root" worktree remove --force "$hooks_wt"
 hygiene="$root/tool/version-control/hygiene"
 
 grep -q 'evidence_run hygiene tool/version-control/hygiene' "$root/.githooks/pre-commit"
-grep -q '^  secrets:$' "$root/.github/workflows/ci.yml"
-grep -q 'run: tool/version-control/hygiene' "$root/.github/workflows/ci.yml"
 
 backslash='\'
 backslashes='\\'
@@ -1844,8 +1856,6 @@ fi
 # arguments so this tracked file never carries an unregistered `INV` literal.
 
 invariants="$root/tool/version-control/invariants"
-grep -q 'evidence_run invariants tool/version-control/invariants' "$root/.githooks/pre-commit"
-grep -q 'run: tool/version-control/invariants' "$root/.github/workflows/ci.yml"
 inv_seq=0
 inv_new() {
   inv_seq=$((inv_seq + 1))
@@ -2251,74 +2261,64 @@ if [ "$inv_status" -ne 2 ]; then
   exit 1
 fi
 
-# The pre-commit wiring, in the style of the hygiene hook fixture: a real hook
-# run with a stand-in checker returning each of the three states.
-inv_hook_root="$test_root/invariants-hook"
-mkdir -p "$inv_hook_root/tool" "$inv_hook_root/unixlike/modules"
-mkdir -p "$inv_hook_root/unixlike/tool/checks"
+# A linked-worktree hook reports staged format checks and keeps recording
+# evidence when the candidate-only registry check would fail.
+evidence_hook_root="$test_root/format-hook"
+mkdir -p "$evidence_hook_root/tool" "$evidence_hook_root/unixlike/modules"
+mkdir -p "$evidence_hook_root/unixlike/tool/checks"
 for stub_check_name in format lint payloads; do
-  printf '#!/bin/sh\nexit 0\n' >"$inv_hook_root/unixlike/tool/checks/$stub_check_name"
-  chmod +x "$inv_hook_root/unixlike/tool/checks/$stub_check_name"
+  printf '#!/bin/sh\nexit 0\n' >"$evidence_hook_root/unixlike/tool/checks/$stub_check_name"
+  chmod +x "$evidence_hook_root/unixlike/tool/checks/$stub_check_name"
 done
-cp -R "$root/.githooks" "$inv_hook_root/.githooks"
-cp -R "$root/tool/version-control" "$inv_hook_root/tool/version-control"
-cp -R "$root/tool/dispatch" "$inv_hook_root/tool/dispatch"
-printf '#!/bin/sh\nexit 0\n' >"$inv_hook_root/tool/version-control/hygiene"
-chmod +x "$inv_hook_root/tool/version-control/hygiene"
+cp -R "$root/.githooks" "$evidence_hook_root/.githooks"
+cp -R "$root/tool/version-control" "$evidence_hook_root/tool/version-control"
+cp -R "$root/tool/dispatch" "$evidence_hook_root/tool/dispatch"
+printf '#!/bin/sh\nexit 0\n' >"$evidence_hook_root/tool/version-control/hygiene"
+chmod +x "$evidence_hook_root/tool/version-control/hygiene"
 # The hook runs tool/version-control/provisional beside the check under
-# test; a stand-in keeps these cases about the invariant check.
-printf '#!/bin/sh\nexit 0\n' >"$inv_hook_root/tool/version-control/provisional"
-chmod +x "$inv_hook_root/tool/version-control/provisional"
+# test; a stand-in keeps these cases about staged format evidence.
+printf '#!/bin/sh\nexit 0\n' >"$evidence_hook_root/tool/version-control/provisional"
+chmod +x "$evidence_hook_root/tool/version-control/provisional"
 # A passing stand-in secret scanner, so the outcome does not depend on
 # whether this host has gitleaks or on REQUIRE_NATIVE.
-mkdir -p "$inv_hook_root/stub"
-printf '#!/bin/sh\nexit 0\n' >"$inv_hook_root/stub/gitleaks"
-chmod +x "$inv_hook_root/stub/gitleaks"
+mkdir -p "$evidence_hook_root/stub"
+printf '#!/bin/sh\nexit 0\n' >"$evidence_hook_root/stub/gitleaks"
+chmod +x "$evidence_hook_root/stub/gitleaks"
 
-git -C "$inv_hook_root" init -q -b dev
-git -C "$inv_hook_root" config user.name Fixture
-git -C "$inv_hook_root" config user.email fixture@example.invalid
-printf 'fixture\n' >"$inv_hook_root/file"
-git -C "$inv_hook_root" add .
-git -C "$inv_hook_root" commit -q -m 'feat(repository): create invariants hook fixture'
+git -C "$evidence_hook_root" init -q -b dev
+git -C "$evidence_hook_root" config user.name Fixture
+git -C "$evidence_hook_root" config user.email fixture@example.invalid
+printf 'fixture\n' >"$evidence_hook_root/file"
+git -C "$evidence_hook_root" add .
+git -C "$evidence_hook_root" commit -q -m 'feat(repository): create format hook fixture'
 # INV repository/workspace-choice
-inv_hook_primary=$inv_hook_root
-inv_hook_root="$test_root/invariants-hook-linked"
-git -C "$inv_hook_primary" worktree add -q -b feature/repository-invariants-hook "$inv_hook_root"
-mkdir -p "$inv_hook_root/unixlike/modules"
-printf '_: {}\n' >"$inv_hook_root/unixlike/modules/fixture.nix"
-git -C "$inv_hook_root" add unixlike/modules/fixture.nix
+evidence_hook_primary=$evidence_hook_root
+evidence_hook_root="$test_root/format-hook-linked"
+git -C "$evidence_hook_primary" worktree add -q -b feature/repository-format-hook "$evidence_hook_root"
+mkdir -p "$evidence_hook_root/unixlike/modules"
+printf '_: {}\n' >"$evidence_hook_root/unixlike/modules/fixture.nix"
+git -C "$evidence_hook_root" add unixlike/modules/fixture.nix
 
-stub_invariants() {
+printf '#!/bin/sh\nexit 1\n' >"$evidence_hook_root/tool/version-control/invariants"
+chmod +x "$evidence_hook_root/tool/version-control/invariants"
+stub_format() {
   printf '#!/bin/sh\nexit %s\n' "$1" \
-    >"$inv_hook_root/tool/version-control/invariants"
-  chmod +x "$inv_hook_root/tool/version-control/invariants"
+    >"$evidence_hook_root/unixlike/tool/checks/format"
+  chmod +x "$evidence_hook_root/unixlike/tool/checks/format"
+  git -C "$evidence_hook_root" add -- unixlike/tool/checks/format
 }
-run_inv_pre_commit() {
-  (cd "$inv_hook_root" && PATH="$inv_hook_root/stub:$PATH" .githooks/pre-commit 2>&1)
+run_evidence_pre_commit() {
+  (cd "$evidence_hook_root" && PATH="$evidence_hook_root/stub:$PATH" .githooks/pre-commit 2>&1)
 }
 
-stub_invariants 0
-if ! run_inv_pre_commit >/dev/null; then
-  echo "pre-commit rejected a passing invariant check" >&2
+stub_format 0
+if ! run_evidence_pre_commit >/dev/null; then
+  echo "pre-commit rejected a passing staged format check" >&2
   exit 1
 fi
-
-stub_invariants 1
-if run_inv_pre_commit >/dev/null 2>&1; then
-  echo "pre-commit accepted a failing invariant check" >&2
-  exit 1
-fi
-
-stub_invariants 69
-if ! inv_hook_output=$(run_inv_pre_commit); then
-  printf '%s\n' "$inv_hook_output" >&2
-  echo "pre-commit blocked an invariant check that reported unverified" >&2
-  exit 1
-fi
-if ! printf '%s\n' "$inv_hook_output" | grep -q 'invariants unverified'; then
-  printf '%s\n' "$inv_hook_output" >&2
-  echo "pre-commit did not report the unverified invariant check" >&2
+stub_format 1
+if run_evidence_pre_commit >/dev/null 2>&1; then
+  echo "pre-commit accepted a failing staged format check" >&2
   exit 1
 fi
 
@@ -2326,65 +2326,64 @@ fi
 # INV repository/staged-checks-use-index
 # A selected check whose staged script this host cannot run is unverified, not
 # silently passed: the hook says so, and REQUIRE_NATIVE turns it into failure.
-rm "$inv_hook_root/unixlike/tool/checks/format"
-git -C "$inv_hook_root" add -u -- unixlike/tool/checks/format
-stub_invariants 0
-if ! inv_hook_output=$(run_inv_pre_commit); then
-  printf '%s\n' "$inv_hook_output" >&2
+rm "$evidence_hook_root/unixlike/tool/checks/format"
+git -C "$evidence_hook_root" add -u -- unixlike/tool/checks/format
+if ! evidence_hook_output=$(run_evidence_pre_commit); then
+  printf '%s\n' "$evidence_hook_output" >&2
   echo "pre-commit blocked a commit whose format check is absent" >&2
   exit 1
 fi
-if ! printf '%s\n' "$inv_hook_output" | grep -q 'format unverified'; then
-  printf '%s\n' "$inv_hook_output" >&2
+if ! printf '%s\n' "$evidence_hook_output" | grep -q 'format unverified'; then
+  printf '%s\n' "$evidence_hook_output" >&2
   echo "pre-commit passed an absent format check silently" >&2
   exit 1
 fi
-if inv_hook_output=$(REQUIRE_NATIVE=1; export REQUIRE_NATIVE; run_inv_pre_commit); then
-  printf '%s\n' "$inv_hook_output" >&2
+if evidence_hook_output=$(REQUIRE_NATIVE=1; export REQUIRE_NATIVE; run_evidence_pre_commit); then
+  printf '%s\n' "$evidence_hook_output" >&2
   echo "pre-commit accepted an absent format check under REQUIRE_NATIVE" >&2
   exit 1
 fi
-if ! printf '%s\n' "$inv_hook_output" | grep -q 'format is unverified'; then
-  printf '%s\n' "$inv_hook_output" >&2
+if ! printf '%s\n' "$evidence_hook_output" | grep -q 'format is unverified'; then
+  printf '%s\n' "$evidence_hook_output" >&2
   echo "pre-commit did not fail the absent format check under REQUIRE_NATIVE" >&2
   exit 1
 fi
-printf '#!/bin/sh\nexit 0\n' >"$inv_hook_root/unixlike/tool/checks/format"
-chmod +x "$inv_hook_root/unixlike/tool/checks/format"
-git -C "$inv_hook_root" add unixlike/tool/checks/format
+printf '#!/bin/sh\nexit 0\n' >"$evidence_hook_root/unixlike/tool/checks/format"
+chmod +x "$evidence_hook_root/unixlike/tool/checks/format"
+git -C "$evidence_hook_root" add unixlike/tool/checks/format
 
 # INV repository/hook-evidence-recorded
-inv_hook_log="$inv_hook_primary/.git/hooks-evidence.log"
-if [ ! -f "$inv_hook_log" ]; then
+evidence_hook_log="$evidence_hook_primary/.git/hooks-evidence.log"
+if [ ! -f "$evidence_hook_log" ]; then
   echo "pre-commit recorded no hook evidence" >&2
   exit 1
 fi
-if ! grep -q "$(printf 'pre-commit\tinvariants\tverified')" "$inv_hook_log"; then
-  cat "$inv_hook_log" >&2
-  echo "the hook log lacks the verified invariants outcome" >&2
+if ! grep -q "$(printf 'pre-commit\tformat\tverified')" "$evidence_hook_log"; then
+  cat "$evidence_hook_log" >&2
+  echo "the hook log lacks the verified format outcome" >&2
   exit 1
 fi
-if ! grep -q "$(printf 'pre-commit\tinvariants\tfailed')" "$inv_hook_log"; then
-  echo "the hook log lacks the failed invariants outcome" >&2
+if ! grep -q "$(printf 'pre-commit\tformat\tfailed')" "$evidence_hook_log"; then
+  echo "the hook log lacks the failed format outcome" >&2
   exit 1
 fi
-if ! grep -q "$(printf 'pre-commit\tinvariants\tunverified')" "$inv_hook_log"; then
-  echo "the hook log lacks the unverified invariants outcome" >&2
+if ! grep -q "$(printf 'pre-commit\tformat\tunverified')" "$evidence_hook_log"; then
+  echo "the hook log lacks the unverified format outcome" >&2
   exit 1
 fi
-if git -C "$inv_hook_root" status --porcelain | grep -q hooks-evidence; then
+if git -C "$evidence_hook_root" status --porcelain | grep -q hooks-evidence; then
   echo "the hook log is visible to git status; it must live under .git/" >&2
   exit 1
 fi
 hook_evidence="$root/tool/version-control/hook-evidence"
-if ! hook_summary=$(cd "$inv_hook_root" && "$hook_evidence"); then
+if ! hook_summary=$(cd "$evidence_hook_root" && "$hook_evidence"); then
   echo "hook-evidence failed to read the log" >&2
   exit 1
 fi
 printf '%s\n' "$hook_summary" | grep -q '^hook evidence: [0-9][0-9]* outcomes'
-printf '%s\n' "$hook_summary" | grep -q "$(printf '  invariants\tverified\t')"
-(cd "$inv_hook_root" && "$hook_evidence" --reset) >/dev/null
-if [ -s "$inv_hook_log" ]; then
+printf '%s\n' "$hook_summary" | grep -q "$(printf '  format\tverified\t')"
+(cd "$evidence_hook_root" && "$hook_evidence" --reset) >/dev/null
+if [ -s "$evidence_hook_log" ]; then
   echo "hook-evidence --reset left outcomes in the log" >&2
   exit 1
 fi
@@ -2408,10 +2407,7 @@ fi
 # registry would have to hold an entry for.
 
 provisional="$root/tool/version-control/provisional"
-# The wiring the two-way check depends on, asserted the way the invariant
-# section above asserts its own, so it cannot silently disappear.
 grep -q 'evidence_run provisional tool/version-control/provisional' "$root/.githooks/pre-commit"
-grep -q 'run: tool/version-control/provisional' "$root/.github/workflows/ci.yml"
 prov_seq=0
 prov_now=2026-09-05
 prov_new() {
@@ -2638,8 +2634,8 @@ ENTRY
 prov_expect_pass 'P4 a reviewed line moves the horizon' '1 registered, 0 overdue' \
   --date "$prov_now"
 
-# P8: an overdue entry fails the scopes the change touches and is reported
-# everywhere else, so a Windows commit is not blocked by a Unix-like measure.
+# INV repository/provisional-registry-coverage
+# P8: an overdue entry is reported and the integrity check still succeeds.
 prov_overdue() {
   prov_base
   prov_entry unixlike/probe-measure <<'ENTRY'
@@ -2658,18 +2654,8 @@ ENTRY
 }
 
 prov_overdue
-prov_expect_fail 'P8 overdue in a selected scope' \
-  'P8 review-by 2026-08-01 is overdue at 2026-09-05' \
-  --date "$prov_now" --scopes unixlike,repository
-
-prov_overdue
-prov_expect_pass 'P8 overdue outside the selected scopes is reported' \
-  '1 overdue outside the changed scopes (unixlike/probe-measure)' \
-  --date "$prov_now" --scopes windows
-
-prov_overdue
-prov_expect_pass 'P8 an unselected scope list fails nothing' \
-  '1 overdue outside the changed scopes' --date "$prov_now"
+prov_expect_pass 'P8 an overdue measure is visible and accepted' \
+  '1 overdue (unixlike/probe-measure)' --date "$prov_now"
 
 # A tree with no registry at all is zero entries and passes: the registry
 # exists to be emptied.
@@ -2715,11 +2701,9 @@ fi
 # and is not scanned; it must pass, because a read is code and prose is not.
 domain_reads="$root/tool/version-control/domain-reads"
 
-# Wired the way hygiene is: every commit, and the repository-wide CI scan
-# job. The Windows job's own parse loop from the checkout root was the
+# The Windows job's own parse loop from the checkout root was the
 # second known read across the boundary, so its absence is asserted too.
 grep -q 'evidence_run "domain reads" tool/version-control/domain-reads' "$root/.githooks/pre-commit"
-grep -q 'run: tool/version-control/domain-reads' "$root/.github/workflows/ci.yml"
 for windows_ci_script in setup-dev.ps1 check-desired-state.ps1 test.ps1; do
   if ! grep -Fq "windows/tool/$windows_ci_script" "$root/.github/scripts/windows-ci.ps1"; then
     echo "Windows CI no longer invokes the $windows_ci_script implementation" >&2
@@ -2748,7 +2732,7 @@ windows_ci_controller="$root/.github/scripts/windows-ci.ps1"
 for path in .github/scripts/WindowsCiRuntime.psm1 \
   .github/scripts/assert-windows-ci-runtime.ps1 \
   .github/scripts/prepare-windows-ci-runtime.ps1 \
-  .github/scripts/windows-ci.ps1 .github/tests/test-windows-ci-runtime.ps1; do
+  .github/scripts/windows-ci.ps1; do
   for status in M A D; do
     expect_units 'repository:fixtures
 windows:suite
@@ -2756,8 +2740,11 @@ windows:runtime' ci "$(printf '%s\t%s' "$status" "$path")"
   done
 done
 expect_units 'repository:fixtures
-windows:suite
 windows:runtime' ci "$(printf 'R100\tdocs/fixture.md\t.github/tests/test-windows-ci-runtime.ps1')"
+for path in windows/tool/ci-runtime.json windows/tool/read-ci-runtime.ps1; do
+  expect_units 'windows:suite
+windows:runtime' ci "$(printf 'M\t%s' "$path")"
+done
 expect_units 'repository:fixtures' ci "$(printf 'M\t.github/CODEOWNERS')"
 expect_units 'repository:fixtures' ci "$(printf 'M\t.github/scripts/unrelated.ps1')"
 expect_units '' commit "$(printf 'M\t.github/scripts/WindowsCiRuntime.psm1')"
@@ -2765,6 +2752,8 @@ expect_units '' commit "$(printf 'M\t.github/scripts/windows-ci.ps1')"
 expect_units '' commit "$(printf 'M\t.github/CODEOWNERS')"
 grep -Fq 'CONFIGS_CI_PWSH: ${{ steps.runtime.outputs.pwsh }}' "$windows_ci_workflow"
 grep -Fq '& $env:CONFIGS_CI_PWSH -NoLogo -NoProfile -NonInteractive -File' "$windows_ci_workflow"
+grep -Fq -- '-Check Runtime' "$windows_ci_workflow"
+grep -Fq -- '-Check Suite' "$windows_ci_workflow"
 grep -Fq '.github/tests/test-windows-ci-runtime.ps1' "$windows_ci_controller"
 grep -Fq 'Invoke-CiProcess -Executable $RuntimePath' "$windows_ci_controller"
 grep -Fq 'if ($LASTEXITCODE -ne 0) { throw' "$windows_ci_module"
@@ -2842,29 +2831,12 @@ fi
 #
 # INV repository/design-outside-authority
 # tool/version-control/design-citations scans the index for a work-item path
-# in authority-bearing material. The real repository is the positive case.
+# in authority-bearing material on operator request.
 # A fixture must refuse references from policy, procedures, hooks, CI and
 # domain code. Another must allow placement rules, slug templates, source
 # references in decision and provisional entries, candidate observations,
 # status evidence links, the document map and work-area format files.
 design_citations="$root/tool/version-control/design-citations"
-
-# Wired the way domain-reads is: every commit, and the repository-wide CI
-# scan job.
-grep -q 'evidence_run "design citations" tool/version-control/design-citations' "$root/.githooks/pre-commit"
-grep -q 'run: tool/version-control/design-citations' "$root/.github/workflows/ci.yml"
-
-if ! design_output=$(cd "$root" && "$design_citations" 2>&1); then
-  printf '%s\n' "$design_output" >&2
-  echo "the repository's own authority documents cite a work item" >&2
-  exit 1
-fi
-# A positive count, or a broken pathspec has retired the scan.
-printf '%s\n' "$design_output" | grep -q '^✓ design citations: [1-9][0-9]* tracked paths' || {
-  printf '%s\n' "$design_output" >&2
-  echo "design-citations did not report a positive count of scanned paths" >&2
-  exit 1
-}
 
 design_fixture=$(mktemp -d)
 git -C "$design_fixture" init -q
@@ -2941,23 +2913,12 @@ case "$design_fixture" in /tmp/*) rm -rf -- "$design_fixture" ;; esac
 
 # INV repository/document-index-generated
 # tool/version-control/records refuses an area README that names one of the
-# area's documents, and prints the area's index from the headers. The real
-# repository is the positive case. A throwaway repository holds a decision
+# area's documents on operator request, and prints the index from the
+# headers. A throwaway repository holds a decision
 # record the README lists (refused), then the same README without the row
 # (accepted, a slug template still in it), and a record nothing names, which
 # the table must list anyway.
 records="$root/tool/version-control/records"
-
-# Wired the way design-citations is: every commit, and the repository-wide
-# CI scan job.
-grep -q 'evidence_run records tool/version-control/records' "$root/.githooks/pre-commit"
-grep -q 'run: tool/version-control/records' "$root/.github/workflows/ci.yml"
-
-if ! records_output=$(cd "$root" && "$records" 2>&1); then
-  printf '%s\n' "$records_output" >&2
-  echo "the repository's own area READMEs keep a hand-maintained index" >&2
-  exit 1
-fi
 
 records_fixture=$(mktemp -d)
 git -C "$records_fixture" init -q
@@ -3015,10 +2976,8 @@ case "$records_fixture" in /tmp/*) rm -rf -- "$records_fixture" ;; esac
 # dated amendment names the criterion.
 work_check="$root/tool/version-control/work"
 
-# Wired the way records is: every commit, against what the commit changes,
-# and the repository-wide CI scan job, against the range under test.
+# The hook checks the staged change.
 grep -q 'evidence_run work tool/version-control/work --staged' "$root/.githooks/pre-commit"
-grep -q 'tool/version-control/work --range' "$root/.github/workflows/ci.yml"
 
 if ! work_output=$(cd "$root" && "$work_check" 2>&1); then
   printf '%s\n' "$work_output" >&2
@@ -3209,6 +3168,19 @@ work_new
 rm "$work_item/spec.md"
 work_expect_fail "a report without a spec" 'report.md: W2 has no spec.md beside it'
 
+work_new
+rm "$work_item/report.md"
+git -C "$work_repo" add -A
+git -C "$work_repo" commit -qm 'test(unixlike): carry a malformed historical record'
+work_base=$(git -C "$work_repo" rev-parse HEAD)
+printf 'unrelated\n' >"$work_repo/file"
+work_expect_pass "an unrelated staged change" --staged
+git -C "$work_repo" commit -qm 'test(unixlike): change unrelated file'
+work_head=$(git -C "$work_repo" rev-parse HEAD)
+work_expect_pass "an unrelated candidate" --range "$work_base" "$work_head"
+printf '\nchanged record\n' >>"$work_item/spec.md"
+work_expect_fail "a changed staged record still requires a report" 'spec.md: W2' --staged
+
 # W3: the spec's one scope is its directory's.
 work_new
 work_spec windows 'the output evaluates' 'evaluation, build'
@@ -3373,30 +3345,25 @@ work_overdue=$(cd "$work_repo" && "$work_check" --overdue --date 2026-03-01)
 # tool/version-control/closing-keywords owns the grammar. Every listed form —
 # nine keywords, with and without a colon, before `#<n>` and before
 # `<owner>/<repo>#<n>` — is refused in a subject and in a body by the real
-# commit-msg hook, in a commit of a range whose base is dev, and in a text
-# taken as a promotion's body. `Refs #<n>`, a keyword that does not stand
-# before the reference and a keyword that is the tail of a longer word are
-# accepted by all three. The same range is left unread when the base is
-# master, because dev carries commits from before the rule.
+# commit-msg hook, in an incoming commit, and in pull request text. `Refs #<n>`,
+# a keyword separated from the reference and the tail of a longer word pass.
 closing_keywords="$root/tool/version-control/closing-keywords"
 
-# Wired three ways: the hook, the merge gate's scan job for every pull
-# request, and the promotion job for the body.
+# Wired three ways: the hook, every incoming audit and the PR metadata job.
 grep -q 'tool/version-control/closing-keywords' "$root/.githooks/commit-msg"
-grep -q 'closing-keywords --range "$PR_BASE" "$PR_HEAD" --base-ref "$BASE_REF"' "$root/.github/workflows/ci.yml"
+grep -q 'closing-keywords" --range "$range_base" "$range_tip"' "$root/tool/version-control/audit"
 grep -q 'closing-keywords --text "$RUNNER_TEMP/promotion-body"' "$root/.github/workflows/ci.yml"
 
 closing_repo="$test_root/closing-keywords"
 mkdir -p "$closing_repo"
-git -C "$closing_repo" init -q -b dev
+git -C "$closing_repo" init -q -b master
 git -C "$closing_repo" config user.name Fixture
 git -C "$closing_repo" config user.email fixture@example.invalid
 git -C "$closing_repo" commit -q --allow-empty -m 'chore(repository): start'
 closing_base=$(git -C "$closing_repo" rev-parse HEAD)
 closing_file="$test_root/closing-keywords-message"
 
-# closing_refused <label> <message>: the hook, the text form and a range
-# based on dev each refuse it, and the range based on master leaves it unread.
+# closing_refused <label> <message>: the hook, text and incoming range refuse it.
 closing_refused() {
   printf '%s\n' "$2" >"$closing_file"
   if "$commit_msg" "$closing_file" >/dev/null 2>&1; then
@@ -3409,12 +3376,8 @@ closing_refused() {
   fi
   git -C "$closing_repo" reset -q --hard "$closing_base"
   git -C "$closing_repo" commit -q --allow-empty -F "$closing_file"
-  if (cd "$closing_repo" && "$closing_keywords" --range "$closing_base" HEAD --base-ref dev) >/dev/null 2>&1; then
-    echo "closing-keywords --range accepted a closing keyword on its way to dev: $1" >&2
-    exit 1
-  fi
-  if (cd "$closing_repo" && "$closing_keywords" --range "$closing_base" HEAD --base-ref master) >/dev/null 2>&1; then
-    echo "closing-keywords --range missed a keyword in promotion history: $1" >&2
+  if (cd "$closing_repo" && "$closing_keywords" --range "$closing_base" HEAD) >/dev/null 2>&1; then
+    echo "closing-keywords --range accepted a closing keyword: $1" >&2
     exit 1
   fi
 }
@@ -3427,7 +3390,7 @@ closing_accepted() {
     { echo "closing-keywords --text refused a text with no closing keyword: $1" >&2; exit 1; }
   git -C "$closing_repo" reset -q --hard "$closing_base"
   git -C "$closing_repo" commit -q --allow-empty -F "$closing_file"
-  (cd "$closing_repo" && "$closing_keywords" --range "$closing_base" HEAD --base-ref dev) >/dev/null 2>&1 ||
+  (cd "$closing_repo" && "$closing_keywords" --range "$closing_base" HEAD) >/dev/null 2>&1 ||
     { echo "closing-keywords --range refused a commit with no closing keyword: $1" >&2; exit 1; }
 }
 
@@ -3471,7 +3434,7 @@ git -C "$closing_repo" commit -q --allow-empty -m 'feat(repository): first' -m '
 git -C "$closing_repo" commit -q --allow-empty -m 'feat(repository): second' -m 'Fixes #13'
 closing_bad=$(git -C "$closing_repo" rev-parse --short HEAD)
 git -C "$closing_repo" commit -q --allow-empty -m 'feat(repository): third'
-if closing_output=$(cd "$closing_repo" && "$closing_keywords" --range "$closing_base" HEAD --base-ref dev 2>&1); then
+if closing_output=$(cd "$closing_repo" && "$closing_keywords" --range "$closing_base" HEAD 2>&1); then
   printf '%s\n' "$closing_output" >&2
   echo "closing-keywords --range missed a keyword in the middle of a range" >&2
   exit 1
@@ -3484,13 +3447,13 @@ printf '%s\n' "$closing_output" | grep -qF "$closing_bad:3:Fixes #13" || {
 git -C "$closing_repo" reset -q --hard "$closing_base"
 git -C "$closing_repo" commit -q --allow-empty -m 'feat(repository): first' -m 'Refs #12'
 git -C "$closing_repo" commit -q --allow-empty -m 'feat(repository): second'
-closing_output=$(cd "$closing_repo" && "$closing_keywords" --range "$closing_base" HEAD --base-ref dev)
+closing_output=$(cd "$closing_repo" && "$closing_keywords" --range "$closing_base" HEAD)
 printf '%s\n' "$closing_output" | grep -qF '2 commit messages carry none' || {
   printf '%s\n' "$closing_output" >&2
   echo "closing-keywords --range did not count the commits it read" >&2
   exit 1
 }
-if (cd "$closing_repo" && "$closing_keywords" --range 0000000000000000000000000000000000000000 HEAD --base-ref dev) >/dev/null 2>&1; then
+if (cd "$closing_repo" && "$closing_keywords" --range 0000000000000000000000000000000000000000 HEAD) >/dev/null 2>&1; then
   echo "closing-keywords --range passed a base that is no commit" >&2
   exit 1
 fi

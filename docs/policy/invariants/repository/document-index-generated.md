@@ -11,3 +11,6 @@ it drifts from the files it names because nothing reads it. The check is
 lexical: no line of the decision, candidate or work area's README names one
 of that area's documents by its file name. A file name written as a template
 (`<slug>.md`) names no document and passes.
+
+The lexical check is an optional diagnostic. A redundant link or a stale
+index entry does not block source acceptance.

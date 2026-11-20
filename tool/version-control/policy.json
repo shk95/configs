@@ -43,6 +43,11 @@
           "tool/version-control/test"
         ]
       ],
+      "repository:windows-git": [
+        [
+          "tool/version-control/test-retired-capture"
+        ]
+      ],
       "unixlike:suite": [
         [
           "unixlike/tool/checks/format"
@@ -51,7 +56,14 @@
           "unixlike/tool/checks/lint"
         ],
         [
-          "unixlike/tool/checks/test"
+          "unixlike/tool/checks/test",
+          "--provider"
+        ]
+      ],
+      "unixlike:tools": [
+        [
+          "unixlike/tool/checks/test",
+          "--tools"
         ]
       ],
       "windows:suite": [

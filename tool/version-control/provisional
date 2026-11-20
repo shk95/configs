@@ -3,7 +3,7 @@
 # Enforce INV repository/provisional-registry-coverage: every temporary
 # measure registered under docs/provisional/ names an exit condition and a review
 # date, every registration has a tagged measure in the tree, and an overdue
-# registration fails only its own scope.
+# registration is reported for review.
 #
 # A provisional measure is one file, docs/provisional/<scope>/<slug>.md, with a
 # header of `key: value` lines up to the first blank line and free prose
@@ -29,16 +29,12 @@
 #   P6  every entry is named by at least one `PROV <scope>/<slug>` tag in a
 #       tracked file outside docs/provisional/
 #   P7  every `PROV <scope>/<slug>` in a tracked file is registered
-#   P8  an entry whose review-by is before the reference date is overdue.
-#       An overdue entry whose scope was named with --scopes fails; any
-#       other overdue entry is reported in the summary only, because
-#       AGENTS.md forbids requiring an unrelated domain to pass.
+#   P8  report an entry whose review-by is before the reference date.
 #
 # A missing docs/provisional/ directory is zero entries and passes: the registry
 # exists to be emptied.
 #
-# usage: tool/version-control/provisional [--table] [--scopes <a,b>]
-#                                         [--date <YYYY-MM-DD>]
+# usage: tool/version-control/provisional [--table] [--date <YYYY-MM-DD>]
 #
 # Exit 0 verified, 69 unverified, any other status failed. See
 # docs/policy/architecture.md, "Repository governance plane", and .githooks/evidence,
@@ -77,7 +73,7 @@ require_command() {
 require_command git awk
 
 usage() {
-  echo "usage: tool/configs provisional [--table] [--scopes <a,b>] [--date <YYYY-MM-DD>]" >&2
+  echo "usage: tool/configs provisional [--table] [--date <YYYY-MM-DD>]" >&2
   exit 2
 }
 
@@ -103,21 +99,12 @@ date_valid() {
 }
 
 mode=check
-selected=
-# `date` is a POSIX shell utility rather than a prerequisite worth reporting
-# on: every host that can run this script has it. The reference date is
-# today by default, which under pre-commit is the commit being made; CI
-# passes the date of the commit under test so a re-run stays deterministic.
+# The reference date is today by default. Fixtures pass an explicit date.
 reference=$(date +%Y-%m-%d)
 
 while [ "$#" -gt 0 ]; do
   case "$1" in
     --table) mode=table ;;
-    --scopes)
-      [ "$#" -ge 2 ] || usage
-      selected=$2
-      shift
-      ;;
     --date)
       [ "$#" -ge 2 ] || usage
       date_valid "$2" || usage
@@ -178,13 +165,6 @@ day_number() {
       print era * 146097 + doe - 719468
     }
   '
-}
-
-selects_scope() {
-  case ",$selected," in
-    *",$1,"*) return 0 ;;
-  esac
-  return 1
 }
 
 git ls-files -- "$registry" >"$work/paths"
@@ -385,13 +365,9 @@ while IFS= read -r path; do
     elif [ "$((review_day - base_day))" -gt "$horizon" ]; then
       fail "$path: P4 review-by $review_by is more than $horizon days after $base"
     fi
-    # P8, decided per scope: an overdue entry is a repository-wide fact but
-    # only its own scope's commits and pull requests are blocked by it.
+    # P8: elapsed time warrants review independently of source changes.
     if [ "$review_day" -lt "$(day_number "$reference")" ]; then
       printf '%s\n' "$expected_id" >>"$work/overdue"
-      if selects_scope "$scope"; then
-        fail "$path: P8 review-by $review_by is overdue at $reference"
-      fi
     fi
   fi
 
@@ -448,7 +424,7 @@ fi
 
 overdue_count=$(wc -l <"$work/overdue" | tr -d ' ')
 if [ "$overdue_count" -gt 0 ]; then
-  printf '✓ provisional: %s registered, %s overdue outside the changed scopes (%s)\n' \
+  printf '⚠ provisional: %s registered, %s overdue (%s)\n' \
     "$count" "$overdue_count" \
     "$(paste -sd, "$work/overdue" | sed 's/,/, /g')"
 else

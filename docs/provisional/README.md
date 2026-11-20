@@ -13,7 +13,7 @@ temporary measure becomes permanent by neglect.
 
 `tool/version-control/provisional` checks every entry and, in the other
 direction, every `PROV <scope>/<slug>` tag in the tree. A failure names its
-rule as `P1` to `P8`; the checker's header defines each. It runs on every
+rule from `P1` to `P7`. The checker's header defines each rule. It runs on every
 commit and in CI. It reads the index, like the hygiene scan, so stage a new
 entry before running it by hand. `tool/configs provisional --table`
 prints the registry as a table. An absent registry is zero entries and
@@ -105,12 +105,9 @@ the record of how long a measure has been about to end.
 
 ## Overdue entries
 
-An entry whose `review-by` has passed is overdue. The checker fails an
-overdue entry only for a commit or a pull request that touches its own scope,
-and reports every other overdue entry in its summary, because `AGENTS.md`
-forbids requiring an unrelated domain to pass in order to validate the
-changed one. In CI the reference date is the date of the commit under test,
-so re-running an old commit gives the same answer twice.
+An entry whose `review-by` has passed is overdue. The checker reports it as
+a warning using today's date. The owning scope reviews the exit condition
+and retires, extends or promotes the measure.
 
 ## Adding or changing an entry
 

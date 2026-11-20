@@ -31,7 +31,13 @@ env:
 
 jobs:
   prepare:
-    if: (github.event_name != 'schedule' || vars.CONFIGS_RELEASE_SCHEDULE_ENABLED == '1') && (github.event_name != 'workflow_run' || (github.event.workflow_run.event == 'pull_request' && github.event.workflow_run.conclusion == 'success'))
+    # CI completion wakes the planner. The shared proof reader decides
+    # whether the live candidate has all required evidence.
+    if: >-
+      (github.event_name != 'schedule' || vars.CONFIGS_RELEASE_SCHEDULE_ENABLED == '1') &&
+      (github.event_name != 'workflow_run' ||
+      (github.event.workflow_run.event == 'pull_request' &&
+      github.event.workflow_run.head_repository.full_name == github.repository))
     runs-on: ubuntu-latest
     outputs:
       action: ${{ steps.plan.outputs.action }}
@@ -130,6 +136,8 @@ jobs:
         with:
           name: refreshed-lock
           path: ${{ runner.temp }}/refreshed
+      - name: Install outbound secret scanner
+        run: sh .github/scripts/install-gitleaks
       - uses: actions/create-github-app-token@v3
         id: app
         if: vars.CONFIGS_RELEASE_APP_ID != ''

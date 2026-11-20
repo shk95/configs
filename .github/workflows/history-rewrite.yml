@@ -63,6 +63,8 @@ jobs:
         with:
           name: history-recovery
           path: ${{ runner.temp }}/recovery
+      - name: Install outbound secret scanner
+        run: sh .github/scripts/install-gitleaks
       - uses: actions/create-github-app-token@v3
         id: writer
         # v3's generic permission handler accepts this API permission while

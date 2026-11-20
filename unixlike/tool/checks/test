@@ -8,9 +8,23 @@ set -eu
 checks=$(CDPATH= cd -- "$(dirname -- "$0")" && pwd)
 . "$checks/prerequisite"
 require_command nix
-for suite in programs-test just-entry-test dev-host-test refresh-inputs-test darwin-capture-test karabiner-entry-test \
+case "${1:-}" in
+  --payloads)
+    "$checks/payloads"
+    exec "$checks/karabiner-test"
+    ;;
+  --provider) shift ;;
+  *)
+    for suite in just-entry-test dev-host-test refresh-inputs-test karabiner-entry-test \
+      eval-coverage-test prerequisite-test; do
+      "$checks/$suite"
+    done
+    [ "${1:-}" != --tools ] || exit 0
+    ;;
+esac
+for suite in programs-test darwin-capture-test \
   payloads-test karabiner-test editable-files-test flake-test composition-test \
-  eval-coverage-test prerequisite-test import-order-test; do
+  import-order-test; do
   "$checks/$suite"
 done
 exec "$checks/evaluate" "$@"

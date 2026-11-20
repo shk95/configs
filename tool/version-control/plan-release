@@ -12,6 +12,7 @@ MSYS_NO_PATHCONV=1
 MSYS2_ARG_CONV_EXCL='*'
 export MSYS_NO_PATHCONV MSYS2_ARG_CONV_EXCL
 
+tools=$(CDPATH= cd -- "$(dirname -- "$0")" && pwd)
 root=$(git rev-parse --show-toplevel)
 cd "$root"
 
@@ -42,13 +43,7 @@ fi
 
 # The source declaration fixes the publication input; retries never allocate
 # another version. This read-only command does not claim CI or approval.
-version=$(git show "$target:$domain/release.json" | python3 -c '
-import json, re, sys
-value = json.load(sys.stdin)
-version = value["version"]
-if not isinstance(version, str) or not re.fullmatch(r"(0|[1-9][0-9]*)\.(0|[1-9][0-9]*)\.(0|[1-9][0-9]*)", version):
-    raise SystemExit("invalid source-owned SemVer")
-print(version)')
+version=$(git show "$target:$domain/release.json" | python3 "$tools/release_version.py")
 candidate="$domain-v$version"
 
 # Windows states evidence per host. The Unix-like provider and common domains

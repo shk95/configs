@@ -406,23 +406,26 @@ This scope is deliberately narrow:
 Check dispatch uses three evidence states rather than two. A check reports
 verified with exit status 0, failed with any other status, and unverified with
 69 when the host cannot supply one of its prerequisites. A failure outranks an
-unverified result. `REQUIRE_NATIVE=1` turns unverified into failure; CI sets it
-so the merge gate never accepts an unchecked change, and hooks leave it unset
-so a clone is never blocked from pushing work for a domain it cannot verify.
+unverified result. `REQUIRE_NATIVE=1` turns unverified into failure. CI requires
+its selected checks and pre-push requires outbound source and secret checks.
+Native domain prerequisites belong to candidate verification.
 The governance plane owns this contract and the hooks that consume it. Each
 domain owns the detection of its own prerequisites and reports through the
 contract rather than deciding what a missing tool means.
 
 Ownership and check selection answer different questions. Ownership determines
 which domain may author a path and which policy-scan scope applies. Gates select
-checks by change effect. Local gates select individual units for fast feedback;
-CI excludes documentation from suite selection and runs the complete native
-suite for every affected platform input. Changes to workflows, dispatch,
-classification or the stable gate conservatively exercise all suites. Global
-policy scans remain required. Unknown inputs, failed selection and unsupported
-native stack events fail the stable gate rather than becoming intentional skips.
-Windows CI runtime-governance inputs additionally require exact hosted native
-proof for local integration; ordinary domain tests do not cover that wiring.
+checks by change effect. Commit selects quick staged checks. Candidate
+verification selects common source scans for document edits and release
+declarations. It selects platform contracts and development-tool fixtures by
+effect. Focused payload checks provide local feedback. CI selects the owning
+platform's suite for application settings.
+Changes to the CI definition exercise platform contracts and routing fixtures.
+Git for Windows fixtures require native Git evidence;
+the Windows CI runtime-controller fixtures require hosted evidence.
+Global policy scans and incoming history
+checks cover each candidate. Unknown inputs, failed selection and unsupported
+native stack events fail the stable result.
 
 A staged gate checks the content selected for the commit. Unstaged edits and
 untracked replacements cannot supply or invalidate that evidence. Domain quick
@@ -601,19 +604,10 @@ still find out why the tree looks as it does. Extension is the third
 outcome and the only one that keeps the entry: it moves `review-by` and
 records why in the entry itself.
 
-An overdue entry fails the check only for a commit or a pull request that
-touches its own scope, and is reported in the summary everywhere else. That
-is this repository's standing rule about domains: a Unix-like change must
-not have to wait on a Windows measure, because requiring an unrelated domain
-to pass is how a gate becomes something to bypass. The scope that
-owns the entry is the scope that is blocked by it.
-
-The reference date is explicit rather than implied. Under `pre-commit` it is
-today, which is the commit being made. In CI it is the date of the commit
-under test, taken from the pull request's head commit when there is one,
-because a pull request's checkout is a synthetic merge commit whose date is
-the run time; re-running an old commit would otherwise change its verdict
-without changing the tree.
+The registry reports overdue reviews to the owning scope. Registration and
+the matching source tags carry the veto because omitting either would make a
+temporary measure hard to find. A review date passing calls for a maintenance
+decision independently of the source change being verified.
 
 ## Version control and releases
 
@@ -638,9 +632,9 @@ start independently at 1.0.0; no common release is introduced. CI and approval
 state stay in GitHub. The exact two 2026.08.31 tag objects remain historical
 exceptions to new-master reachability after reconstruction.
 
-Release tags are annotated and immutable. A release target must be reachable
-from `master`, but it need not be the newest commit when a domain intentionally
-releases an earlier accepted state. The annotation is the portable release
+Release tags are annotated and immutable. The version comes from the owning
+domain's release declaration at the target commit. A release target must be
+reachable from `master`, which permits an earlier accepted state. The annotation is the portable release
 evidence record and distinguishes evaluation, build, and native-runtime checks.
 Activation and Apply remain later deployment events and are never inferred
 from the tag.

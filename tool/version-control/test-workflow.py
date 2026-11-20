@@ -36,17 +36,23 @@ class Workflow(unittest.TestCase):
                  ' python3 -c \'import json,os,sys; '
                  'open(os.environ["FIXTURE_EXECUTION_LOG"],"a").write('
                  'json.dumps(sys.argv[1:])+"\\n")\' "$0" "$@"\nfi\n')
-        for name in ['workflow', 'authoring', 'policy', 'policy.json', 'repo_policy.py', 'git_workflow.py', 'github_proof.py', 'topic_scope.py', 'topic-source', 'audit', 'classify', 'closing-keywords', 'hooks.sh']:
+        for name in ['workflow', 'authoring', 'policy', 'policy.json', 'repo_policy.py', 'git_workflow.py', 'github_proof.py',
+                     'topic_scope.py', 'topic-source', 'audit', 'classify', 'closing-keywords', 'hooks.sh',
+                     'incoming-range.sh', 'scan-secrets', 'verify-policy', 'release_version.py']:
             dest = self.root / 'tool/version-control' / name
             dest.parent.mkdir(parents=True, exist_ok=True)
             shutil.copy(ROOT / 'tool/version-control' / name, dest)
-            if name == 'audit':
+            if name in ('audit', 'scan-secrets'):
                 dest.write_text(dest.read_text().replace('set -eu\n', 'set -eu\n' + trace, 1))
+        fixture_workflow = self.root / '.github/workflows/ci.yml'
+        fixture_workflow.parent.mkdir(parents=True)
+        shutil.copy(ROOT / '.github/workflows/ci.yml', fixture_workflow)
         (self.root / '.githooks').mkdir()
-        shutil.copy(ROOT / '.githooks/commit-msg', self.root / '.githooks/commit-msg')
+        for name in ('commit-msg', 'pre-push', 'evidence'):
+            shutil.copy(ROOT / '.githooks' / name, self.root / '.githooks' / name)
         # Real workflow invokes fixture-owned check commands; failure injection
         # proves checks and identities gate integration, not their semantics.
-        for name in ['work', 'hygiene', 'domain-reads', 'design-citations', 'records', 'invariants', 'provisional', 'test']:
+        for name in ['work', 'hygiene', 'domain-reads', 'invariants', 'provisional', 'test']:
             dest = self.root / 'tool/version-control' / name
             dest.write_text('#!/bin/sh\n' + trace + 'exit "${FIXTURE_CHECK_STATUS:-0}"\n')
             dest.chmod(0o755)
@@ -55,7 +61,7 @@ class Workflow(unittest.TestCase):
         dest.write_text('#!/bin/sh\ncat >/dev/null\nprintf "repository:fixtures\\n"\n')
         dest.chmod(0o755)
         dest = self.root / 'tool/gitleaks'
-        dest.write_text('#!/bin/sh\n' + trace + 'exit "${FIXTURE_SECRET_STATUS:-0}"\n')
+        dest.write_text('#!/bin/sh\nexit "${FIXTURE_SECRET_STATUS:-0}"\n')
         dest.chmod(0o755)
         self.commit('chore(repository): seed fixture')
         self.base = self.git('rev-parse', 'HEAD')
@@ -367,6 +373,140 @@ class Workflow(unittest.TestCase):
         self.assertIn('source commit has mixed or unclassified ownership', result.stderr)
         self.assertNotIn('transmitted content has an unclassified path', result.stderr)
 
+    def test_range_rejects_merge_only_effects_and_commit_bodies(self):
+        # INV repository/scope-ownership
+        # INV repository/flake-lock-isolated
+        # INV repository/no-closing-keyword
+        side = self.git('commit-tree', 'HEAD^{tree}', '-p', self.base, '-m', 'test(repository): also in history')
+        main = self.git('commit-tree', 'HEAD^{tree}', '-p', self.base, '-m', 'test(repository): integration line')
+        merge = self.git('commit-tree', 'HEAD^{tree}', '-p', main, '-p', side, '-m', 'Merge clean side')
+        audit = str(self.root / 'tool/version-control/audit')
+        self.call(audit, '--range', self.base, merge)
+
+        bad_body = self.git('commit-tree', 'HEAD^{tree}', '-p', main, '-p', side,
+                            '-m', 'Merge side', '-m', 'Fixes #23')
+        self.call(audit, '--range', self.base, bad_body, ok=False)
+        ordinary = self.git('commit-tree', 'HEAD^{tree}', '-p', main,
+                            '-m', 'fix(repository): ordinary source', '-m', 'Fixes #23')
+        self.call(audit, '--range', self.base, ordinary, ok=False)
+
+        for path, error in (('unowned', 'merge commit has an unclassified path'),
+                            ('unixlike/flake.lock', 'merge introduced a lock value')):
+            with self.subTest(path=path):
+                p = self.root / path
+                p.parent.mkdir(exist_ok=True)
+                p.write_text('appeared during integration\n')
+                self.git('add', path)
+                tree = self.git('write-tree')
+                bad = self.git('commit-tree', tree, '-p', main, '-p', side, '-m', 'Merge with unexpected content')
+                self.git('rm', '-q', '-f', path)
+                tip = self.git('commit-tree', 'HEAD^{tree}', '-p', bad, '-m', 'fix(repository): restore tree')
+                result = subprocess.run([audit, '--range', self.base, tip], cwd=self.root, text=True, capture_output=True)
+                self.assertNotEqual(result.returncode, 0)
+                self.assertIn(error, result.stderr)
+
+    def test_secret_range_passes_merge_diffs_and_side_commits_to_scanner(self):
+        # INV repository/no-secret-in-history
+        # Scanner stand-in uses the exact patch stream consumed by gitleaks.
+        scanner = self.root / 'tool/gitleaks'
+        scanner.write_text('''#!/usr/bin/env python3
+import subprocess
+import sys
+if sys.argv[1] == 'stdin':
+    sys.stdin.read()
+    sys.exit(0)
+options = next(arg.split('=', 1)[1].split() for arg in sys.argv if arg.startswith('--log-opts='))
+patch = subprocess.check_output(['git', '-C', sys.argv[-1], 'log', '-p', '-U0', *options], text=True)
+print(patch)
+''')
+        file = self.root / 'docs/status/repository.md'
+        file.write_text('side observation\n')
+        self.commit('test(repository): add side observation')
+        file.write_text('base\n')
+        side = self.commit('test(repository): remove side observation')
+        file.write_text('merge result observation\n')
+        self.git('add', str(file))
+        tree = self.git('write-tree')
+        merge = self.git('commit-tree', tree, '-p', self.base, '-p', side, '-m', 'Merge side with result')
+        scan = str(self.root / 'tool/version-control/scan-secrets')
+        output = self.call(scan, '--range', self.base, merge)
+        self.assertIn('+side observation', output)
+        self.assertIn('+merge result observation', output)
+        self.assertEqual(self.call(scan, '--range', merge, merge).strip(), '')
+        self.assertIn('+side observation', self.call(str(self.root / 'tool/version-control/audit'), '--secrets-history'))
+
+    def test_new_ref_uses_receiver_master_and_secret_refusal_vetoes_push(self):
+        # INV repository/no-secret-in-history
+        receiver = Path(self.tmp.name) / 'receiver.git'
+        self.git('init', '-q', '--bare', str(receiver))
+        self.git('push', '-q', '--no-verify', str(receiver), self.base + ':refs/heads/master')
+        self.git('config', 'core.hooksPath', '.githooks')
+        (self.root / 'docs/status/repository.md').write_text('new local master\n')
+        local_master = self.commit('test(repository): new local master')
+        env = dict(os.environ, FIXTURE_SECRET_STATUS='69')
+        self.git('push', '-q', str(receiver), 'HEAD:refs/heads/topic/new', ok=False, env=env)
+        self.assertEqual(self.git('ls-remote', str(receiver), 'refs/heads/topic/new'), '')
+        trace = Path(self.tmp.name) / 'push-commands.jsonl'
+        env.update(FIXTURE_SECRET_STATUS='0', FIXTURE_EXECUTION_LOG=str(trace))
+        self.git('push', '-q', str(receiver), 'HEAD:refs/heads/topic/new', env=env)
+        calls = [json.loads(line) for line in trace.read_text().splitlines()]
+        self.assertTrue(any(call[0].endswith('/scan-secrets') and call[1:] == ['--range', self.base, local_master] for call in calls))
+
+    def test_release_tag_cannot_publish_unaccepted_master_history(self):
+        # INV repository/release-tag-contract
+        receiver = Path(self.tmp.name) / 'receiver.git'
+        self.git('init', '-q', '--bare', str(receiver))
+        self.git('push', '-q', '--no-verify', str(receiver), self.base + ':refs/heads/master')
+        self.git('config', 'core.hooksPath', '.githooks')
+        (self.root / 'unixlike').mkdir()
+        (self.root / 'unixlike/release.json').write_text('{"version":"0.0.1"}\n')
+        self.commit('chore(unixlike): declare unpublished release')
+        tag = 'unixlike-v0.0.1'
+        self.git('tag', '-a', tag, '-m',
+                 'Domain: unixlike\nEvaluation: passed\nBuild: unavailable\nNative runtime: unavailable')
+        ref = 'refs/tags/' + tag
+        self.git('push', '-q', str(receiver), ref, ok=False)
+        self.assertEqual(self.git('ls-remote', str(receiver), ref), '')
+        self.git('push', '-q', str(receiver), 'refs/heads/master')
+        wrong = 'unixlike-v0.0.2'
+        self.git('tag', '-a', wrong, '-m',
+                 'Domain: unixlike\nEvaluation: passed\nBuild: unavailable\nNative runtime: unavailable')
+        self.git('push', '-q', str(receiver), 'refs/tags/' + wrong, ok=False)
+        self.assertEqual(self.git('ls-remote', str(receiver), 'refs/tags/' + wrong), '')
+        self.git('push', '-q', str(receiver), ref)
+        self.assertIn(self.git('rev-parse', ref), self.git('ls-remote', str(receiver), ref))
+
+    def test_push_scans_commit_messages_and_annotated_tags(self):
+        # INV repository/no-secret-in-history
+        scanner = self.root / 'tool/gitleaks'
+        scanner.write_text('''#!/usr/bin/env python3
+import sys
+if sys.argv[1] == 'stdin' and 'private-fixture-marker' in sys.stdin.read():
+    raise SystemExit(1)
+''')
+        receiver = Path(self.tmp.name) / 'receiver.git'
+        self.git('init', '-q', '--bare', str(receiver))
+        (self.root / 'unixlike').mkdir()
+        (self.root / 'unixlike/release.json').write_text('{"version":"0.0.1"}\n')
+        released = self.commit('chore(unixlike): declare scanner fixture release')
+        self.git('push', '-q', '--no-verify', str(receiver), released + ':refs/heads/master')
+        self.git('config', 'core.hooksPath', '.githooks')
+        self.git('-c', 'core.hooksPath=/dev/null', 'commit', '-q', '--allow-empty',
+                 '-m', 'test(repository): metadata fixture', '-m', 'private-fixture-marker')
+        self.git('push', '-q', str(receiver), 'master', ok=False)
+        self.assertIn(released, self.git('ls-remote', str(receiver), 'refs/heads/master'))
+
+        annotation = 'Domain: unixlike\nEvaluation: unavailable\nBuild: unavailable\nNative runtime: unavailable'
+        tag = 'unixlike-v0.0.1'
+        ref = 'refs/tags/' + tag
+        self.git('tag', '-a', tag, released, '-m', annotation + '\nprivate-fixture-marker')
+        self.git('push', '-q', str(receiver), ref, ok=False)
+        self.assertEqual(self.git('ls-remote', str(receiver), ref), '')
+        self.git('tag', '-d', tag)
+        self.git('tag', '-a', tag, released, '-m', annotation)
+        self.git('push', '-q', str(receiver), ref)
+        self.assertIn(self.git('rev-parse', ref), self.git('ls-remote', str(receiver), ref))
+
     def test_runtime_governance_requires_hosted_proof_even_on_native_windows(self):
         # INV repository/windows-ci-runtime-bound
         self.topic()
@@ -411,21 +551,24 @@ class Workflow(unittest.TestCase):
 
     def test_check_executes_the_ordered_local_plan(self):
         # INV repository/local-gate-selects-by-effect
+        # INV repository/no-secret-in-history
+        # INV repository/required-checks-gate
         self.topic()
         args = ['--base', self.base, '--head', self.head]
         planned = json.loads(self.workflow('plan', *args))
+        self.assertEqual([step['argv'] for step in planned['steps']], [
+            ['tool/version-control/verify-policy', self.base, self.head], ['tool/version-control/test']])
         trace = Path(self.tmp.name) / 'executed.jsonl'
-        self.workflow('check', *args, env=dict(os.environ, FIXTURE_EXECUTION_LOG=str(trace)))
-        observed = [json.loads(line) for line in trace.read_text().splitlines()]
-        expected = []
-        for step in planned['steps']:
-            command = step['argv'][:]
-            if command[0].startswith('tool/'):
-                command[0] = str(self.root / command[0])
-            else:
-                command[0] = str(self.root / 'tool' / command[0])
-            expected.append(command)
-        self.assertEqual(observed, expected)
+        env = dict(os.environ, FIXTURE_EXECUTION_LOG=str(trace))
+        commands = self.root / 'tool/version-control'
+        incoming = [[str(commands / name), '--range', self.base, self.head]
+                    for name in ('audit', 'scan-secrets', 'work')]
+        index = [[str(commands / name)] for name in ('hygiene', 'domain-reads', 'invariants', 'provisional', 'test')]
+        self.workflow('check', *args, env=env)
+        self.assertEqual([json.loads(line) for line in trace.read_text().splitlines()], incoming + index)
+        trace.unlink()
+        self.workflow('check', *args, ok=False, env=dict(env, FIXTURE_SECRET_STATUS='1'))
+        self.assertEqual([json.loads(line) for line in trace.read_text().splitlines()], incoming[:2])
 
     def test_plan_exposes_native_blocker_and_hosted_alternative_without_gh(self):
         # INV repository/windows-ci-runtime-bound
@@ -446,7 +589,34 @@ class Workflow(unittest.TestCase):
         self.assertEqual(hosted['blockers'], [])
         self.assertEqual([step['id'] for step in hosted['steps'] if step['source'] == 'hosted'],
                          ['ci-proof', 'windows:runtime'])
-        self.assertIn('hygiene', [step['id'] for step in hosted['steps'] if step['source'] == 'local'])
+        self.assertEqual([], [step['id'] for step in hosted['steps'] if step['source'] == 'local'])
+
+    def test_native_git_for_windows_can_supply_local_evidence(self):
+        # INV repository/local-gate-selects-by-effect
+        self.topic()
+        (self.root / 'tool/dispatch/select').write_text('#!/bin/sh\ncat >/dev/null\necho repository:windows-git\n')
+        head = self.commit('test(repository): select native Git evidence')
+        path = self.root / 'tool/version-control/workflow'
+        loader = SourceFileLoader('git_for_windows_fixture', str(path))
+        spec = importlib.util.spec_from_loader(loader.name, loader)
+        implementation = importlib.util.module_from_spec(spec)
+        loader.exec_module(implementation)
+        git = implementation.git
+        previous = Path.cwd()
+        os.chdir(self.root)
+        try:
+            with patch.object(implementation, 'os', SimpleNamespace(name='nt', environ=os.environ)), \
+                 patch.object(implementation.shutil, 'which', return_value='fixture-shell'), \
+                 patch.object(implementation, 'git', side_effect=lambda *args, **kwargs:
+                              'git version 2.51.0.windows.1' if args == ('--version',) else git(*args, **kwargs)):
+                plan = implementation.plan(self.root, self.base, head)
+                self.assertEqual(plan['blockers'], [])
+                self.assertEqual(plan['steps'][-1]['argv'][:2],
+                                 ['sh', 'tool/version-control/test-retired-capture'])
+            with patch.object(implementation, 'os', SimpleNamespace(name='posix', environ=os.environ)):
+                self.assertIn('Git for Windows', implementation.plan(self.root, self.base, head)['blockers'][0])
+        finally:
+            os.chdir(previous)
 
     def test_remote_contract_accepts_direct_master_and_refuses_unsafe_settings(self):
         # INV repository/local-development-integration

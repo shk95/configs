@@ -85,6 +85,10 @@ procedure and enforcement here; model-specific adapters only point to them.
 Local notes, installed plugins and agent memory supply no project rule or
 permission. Reusable orchestration is optional and owned externally.
 
+Give a check veto power where a plausible failure warrants stopping that
+operation. Keep unrelated checks available as diagnostics. Prefer broad
+verification when the effect of a source change is uncertain.
+
 When changing governance:
 
 - Put rationale in this file or `docs/policy/architecture.md` and invariants in
