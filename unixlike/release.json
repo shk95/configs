@@ -1,7 +1,7 @@
 {
-  "previous": "unixlike-v2.0.0",
-  "version": "2.0.1",
-  "summary": "Refresh permitted Unix-like inputs.",
+  "previous": "unixlike-v2.0.1",
+  "version": "2.0.2",
+  "summary": "Separate provider, development-tool, and payload verification modes.",
   "compatibility": "patch",
   "migration": ""
 }
