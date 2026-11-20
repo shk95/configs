@@ -145,6 +145,32 @@ Windows desired state is declared directly in
 WezTerm and Zellij copies, live below `windows/desired/files/`. Neither requires
 Nix to author, validate, or consume.
 
+## Unix-like 3.0 migration
+
+This release moves personal preferences and complete application files into
+consumer modules. Review the settings your hosts rely on before updating the
+provider pin.
+
+- Move any desired `anki`, `google-drive`, `hiddenbar`, or `swift-shift`
+  casks into `homebrew.casks` in Darwin `systemModules`. Remove the old
+  `providerTools.programs` references to those IDs.
+- Select D2Coding with `providerTools.programs.d2coding-nerd-font.enable = true`
+  in desktop or WSL `homeModules`. Select the Hack cask on Darwin with
+  `providerTools.programs.font-hack-nerd-font.enable = true`. Set terminal font
+  families in the consumer's application settings.
+- Connect host-owned Karabiner and symbolic hotkey documents through
+  `providerDarwin.capture.*.settingsDocument`. Explicitly enable a unit to
+  use its public example. See [Darwin capture](unixlike/tool/darwin-capture/README.md#darwin-settings-documents).
+- Use native options for the preferences your host needs. For complete
+  application files, select the host's file through the existing module
+  option. To keep WezTerm's `local.lua` support, supply a
+  `xdg.configFile."wezterm/wezterm.lua".source` that loads it. To retain
+  Zellij's named-session behavior, set `session_name` and `attach_to_session`
+  in `programs.zellij.extraConfig`.
+- Add any host-specific Linux idle actions in `services.hypridle.settings.listener`.
+  A consumer list replaces the provider's 15-minute lock default, so include
+  the lock action when the host should retain it.
+
 ## Develop
 
 Use `tool/configs workflow inspect` to see the current branch, changes and
@@ -235,12 +261,15 @@ just payloads
 just test
 just check
 
-just karabiner-check   # target Mac only; compares the Karabiner payloads
+just karabiner-check   # Compare this Mac with the bundled public examples
 just karabiner-test
 ```
 
-Observed Darwin settings use the pinned host-document preview/review/save
-workflow in [CONTRIBUTING.md](CONTRIBUTING.md#capture-darwin-host-documents).
+To check a Mac against its selected host documents, use the `preview` step of
+the [pinned capture workflow](CONTRIBUTING.md#capture-darwin-host-documents).
+For each document with host source, match the proposal entry by `unit` and
+compare its `document.settings` with the existing document's `settings`.
+Preview writes a private proposal and leaves the settings in place.
 
 `just check` verifies the provider contract, synthetic composition evaluation,
 locked payload parsers and owned tools. Focused generated-file and source-patch checks build the
