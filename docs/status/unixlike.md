@@ -243,10 +243,10 @@ source-patch checks and upstream watcher have been retired. Host adoption
 and Hangul rendering/readback verification belong to consumers; no host
 activation is part of this provider change.
 
-WezTerm and Ghostty are the desktop terminals; Home Manager installs the
-D2Coding Nerd Font package and configures `D2KodingLigature Nerd Font Mono`
-for both. On Darwin, WezTerm also reads Home Manager's nested font directory
-explicitly, and Home Manager state version 25.11 uses
+WezTerm and Ghostty are the desktop terminals. Consumers can select the
+D2Coding Nerd Font package or choose another font and configure the font
+family in their terminal settings. A Darwin consumer can point WezTerm at
+Home Manager's nested font directory. Home Manager state version 25.11 uses
 `targets.darwin.copyApps`, so the WezTerm bundle sits under `~/Applications/
 Home Manager Apps` as a Spotlight-compatible copy rather than a Nix-store
 symlink. Alacritty is fully inactive: there is no Alacritty package, Home
@@ -258,8 +258,9 @@ the two ordinary VM guests.
 `nixos.graphical` collects Niri, greetd/tuigreet, PipeWire/WirePlumber,
 portals, polkit, GNOME Keyring, dconf, graphics and removable-media services;
 `homeManager.linuxGraphical` collects Noctalia, Hypridle, XWayland Satellite,
-Fcitx5 Hangul, XDG/GTK integration and the selected Wayland applications.
-The existing `homeManager.desktop` terminal and font ownership is unchanged.
+Fcitx5, XDG/GTK integration and the selected Wayland applications. Hypridle
+locks after 15 minutes of inactivity by default. Consumers choose the input
+method language addons and profiles, including Hangul, in their settings.
 An x86_64 NixOS VM check composes the real classes and validates their
 generated configuration without a physical display. On 2026-09-23 UTM built
 and activated the graphical output natively. Its display card was changed to
@@ -312,16 +313,13 @@ The rules apply to both `xterm-ghostty` and `xterm-256color`, including Zellij;
 over SSH they belong to the host running the listing command. These source
 settings take effect on each host's next separately authorized activation.
 
-Karabiner's configuration is desired state and the application is not:
-`unixlike/modules/programs/desktop-tools/karabiner/karabiner.json` and
-`unixlike/modules/programs/desktop-tools/karabiner/symbolic-hotkeys.json` declare the members this
-repository owns, `unixlike/modules/programs/desktop-tools/karabiner/module.nix` delivers them from
-`homeManager.darwin` through an activation script rather than a link, and
-`unixlike/modules/programs/desktop-tools/karabiner/tool` compares and reads them back through one
-projection onto those members (`INV unixlike/host-written-payload-projected`,
-`just karabiner-check` and `just karabiner-capture`). Symbolic hotkeys other
-than 60 and 61 are unmanaged; the host dictionary holds dozens of entries and
-each declared one is written on its own.
+`unixlike/modules/programs/desktop-tools/karabiner/module.nix` selects the
+Karabiner and symbolic hotkey documents and applies managed values at Home
+Manager activation. Each unit can use a host document or an explicitly
+selected public example. The same projection is used for capture and apply.
+Symbolic hotkeys other than 60 and 61 are unmanaged. `just karabiner-check`
+compares the Mac with the public examples. The [pinned capture workflow](../../CONTRIBUTING.md#capture-darwin-host-documents)
+previews observed settings for comparison with host documents.
 
 `unixlike/modules/programs/desktop-tools/karabiner/karabiner.json` was a reconstruction of the host
 file from the description in #177 until 2026-09-06, when the Mac's own `check`

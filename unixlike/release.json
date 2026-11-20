@@ -1,7 +1,7 @@
 {
-  "previous": "unixlike-v2.0.1",
-  "version": "2.0.2",
-  "summary": "Separate provider, development-tool, and payload verification modes.",
-  "compatibility": "patch",
-  "migration": ""
+  "previous": "unixlike-v2.0.2",
+  "version": "3.0.0",
+  "summary": "Separate reusable Unix-like defaults from host-owned application settings.",
+  "compatibility": "breaking",
+  "migration": "See the Unix-like 3.0 migration in README.md for direct Homebrew declarations, explicit Nerd Font and Karabiner settings selection, and host-owned application files."
 }

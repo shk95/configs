@@ -177,7 +177,7 @@ darwin-switch:
 darwin-generations:
     darwin-rebuild --list-generations
 
-# Compare this Mac's Karabiner file and symbolic hotkeys with the payloads.
+# Compare this Mac's Karabiner file and symbolic hotkeys with the public examples.
 [group('host-observation')]
 karabiner-check:
     unixlike/modules/programs/desktop-tools/karabiner/tool check
