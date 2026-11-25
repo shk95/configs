@@ -213,13 +213,10 @@ owners. Nix owns a mise configuration fragment; local configuration remains
 writable. Configuration application installs missing declared tools, while
 updates are explicit and old versions and local tools are preserved by default.
 Supplementary application installation and updates do not run during
-evaluation or build. Mutable shims follow Nix
-commands in the managed shell; SDKMAN keeps its separate user-installed JVM
-and final shell-initialization contract.
+evaluation or build. Mutable shims follow Nix commands in the managed shell.
 
-Supplier changes do not alter the SDKMAN installation and shell-order
-contract; source preparation, package updates, configuration
-deployment and host activation remain distinct operations. The adoption
+Source preparation, package updates, configuration deployment and host
+activation remain distinct operations. The adoption
 rationale is in
 `docs/policy/decisions/unixlike/tool-supply-separated-from-configuration.md`.
 

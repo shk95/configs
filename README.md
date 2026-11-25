@@ -132,8 +132,8 @@ from successful evaluation.
 Nix supplies mise and `~/.config/mise/conf.d/10-provider.toml`. Keep temporary
 local tools in writable `~/.config/mise/config.toml`, for example using
 `mise use --global jq@latest`. Managed zsh appends mise shims after existing Nix
-commands, before the existing optional SDKMAN hook. Configuration application
-installs missing declared tools only and reports installation failure. Run
+commands. Configuration application installs missing declared tools only and
+reports installation failure. Run
 `mise upgrade --global` explicitly to update supplementary tools; automatic
 updates and pruning are disabled. Current Aqua metadata supplies release
 layout and platform mappings independently of the locked mise binary. Local configuration and previous versions
