@@ -6,6 +6,16 @@ is recorded under `docs/policy/decisions/`; the model those decisions implement
 is `docs/policy/architecture.md`. The other scopes' state is in the files
 beside this one.
 
+## Writable Zsh local settings
+
+Managed interactive Zsh reads `~/.zshrc.local` after the shared setup when the
+file exists and is readable. The provider starts it empty. A host can set
+`home.file.".zshrc.local".text` to supply its contents, and
+`configs.editableFiles.".zshrc.local" = false` selects normal link placement.
+With the default writable placement, activation backs up local changes and
+restores the declared contents using the same numbered diff as other editable
+files.
+
 ## Host-owned program settings prepared — 2026-11-20
 
 The provider keeps software supply, session integration, compatibility and

@@ -39,7 +39,20 @@
     });
   xdgMac = (provider.lib.mkDarwin (macArgs // {homeModules = [{xdg.enable = true;}];})).config.home-manager.users.example;
   future = (provider.lib.mkHome (homeArgs // {homeModules = [{xdg.configFile."wezterm/future.lua".text = "return {}";}];})).config;
-  restored = (provider.lib.mkHome (homeArgs // {homeModules = [{configs.editableFiles."${homePath}/.config/zellij/config.kdl" = false;}];})).config;
+  restored =
+    (provider.lib.mkHome (homeArgs
+      // {
+        homeModules = [
+          {
+            configs.editableFiles = {
+              "${homePath}/.config/zellij/config.kdl" = false;
+              ".zshrc.local" = false;
+            };
+            home.file.".zshrc.local".text = "alias local-example=example";
+          }
+        ];
+      })).config;
+  zshDisabled = (provider.lib.mkHome (homeArgs // {homeModules = [{programs.zsh.enable = false;}];})).config;
   selected = home: lib.attrNames (lib.filterAttrs (_: enabled: enabled) home.configs.editableFiles);
   # Only provider-owned compositions are inspected here. Consumer extensions
   # are not restricted by an assertion in the reusable Home Manager module.
@@ -92,7 +105,7 @@
   };
   expected = root: paneru:
     lib.sort builtins.lessThan (
-      ["${root}/.config/zellij/config.kdl" "${root}/.config/ghostty/config"]
+      [".zshrc.local" "${root}/.config/zellij/config.kdl" "${root}/.config/ghostty/config"]
       ++ ["${root}/.config/wezterm/wezterm.lua"]
       ++ lib.optional paneru ".paneru.lua"
     );
@@ -107,6 +120,13 @@
       (check "The provider supplies no fixed Ghostty theme" (!(mac.xdg.configFile ? "ghostty/themes/Bluegray Light")))
       (check "new WezTerm files retain normal links" (future.xdg.configFile."wezterm/future.lua".enable && !(builtins.elem "${homePath}/.config/wezterm/future.lua" (selected future))))
       (check "per-file opt-in to links" restored.xdg.configFile."zellij/config.kdl".enable)
+      (check "managed Zsh rc retains its ordinary link" linux.home.file."./.zshrc".enable)
+      (check "host Zsh local text and file placement are overridable" (
+        restored.home.file.".zshrc.local".text
+        == "alias local-example=example"
+        && restored.home.file.".zshrc.local".enable
+      ))
+      (check "disabling Zsh removes its local file declaration" (!(zshDisabled.home.file ? ".zshrc.local")))
       (check "preflight is before write boundary" (builtins.elem "writeBoundary" mac.home.activation.checkEditableFiles.before))
       (check "copy is after write boundary before links" (builtins.elem "writeBoundary" mac.home.activation.installEditableFiles.after && builtins.elem "linkGeneration" mac.home.activation.installEditableFiles.before))
       (check "callbacks follow installation and links" (builtins.elem "linkGeneration" mac.home.activation.onEditableFilesChange.after && builtins.elem "installEditableFiles" mac.home.activation.onEditableFilesChange.after))

@@ -213,11 +213,11 @@ in {
   supplierPlatforms = p.lib.programCatalog.codex.providers.mise.platforms == ["x86_64-linux" "aarch64-linux"]
     && p.lib.programCatalog.bettercap.providers.homebrew.platforms == ["aarch64-darwin"];
   distinct = p.lib.programCatalog ? claude && p.lib.programCatalog ? claude-code;
-  linuxWritable = builtins.length (editable linuxDesktop) == 3;
-  darwinWritable = builtins.length (editable macHome) == 4;
-  linuxDisabledWritable = editable linuxOff == [] && !linuxOff.programs.zellij.enable
+  linuxWritable = builtins.length (editable linuxDesktop) == 4;
+  darwinWritable = builtins.length (editable macHome) == 5;
+  linuxDisabledWritable = editable linuxOff == [".zshrc.local"] && !linuxOff.programs.zellij.enable
     && !linuxOff.programs.ghostty.enable && !linuxOff.programs.wezterm.enable;
-  darwinDisabledWritable = editable macOff == [".paneru.lua"] && !macOff.programs.zellij.enable
+  darwinDisabledWritable = editable macOff == [".paneru.lua" ".zshrc.local"] && !macOff.programs.zellij.enable
     && !macOff.programs.ghostty.enable && !macOff.programs.wezterm.enable;
   ghosttySettingsWritable = !(builtins.elem ("/Users/" + "example/.config/ghostty/config")
     (editable settingsOff.home-manager.users.example));

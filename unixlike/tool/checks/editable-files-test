@@ -86,8 +86,9 @@ command = shlex.split(pathlib.Path(sys.argv[1]).read_text())
 assert command.pop(0) == 'run'
 manifest_index = command.index('--manifest') + 1
 original = json.loads(pathlib.Path(command[manifest_index]).read_text())
-count = 4 if sys.platform == 'darwin' else 3
+count = 5 if sys.platform == 'darwin' else 4
 assert len(original['files']) == count
+assert any(entry['target'] == original['home'] + '/.zshrc.local' for entry in original['files'])
 with tempfile.TemporaryDirectory() as temporary:
     home = pathlib.Path(temporary).resolve()
     old_home = pathlib.Path(original['home'])
