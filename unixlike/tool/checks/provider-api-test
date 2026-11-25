@@ -168,10 +168,8 @@ refuse 'standalone system modules' 'systemModules' '(provider.lib.mkHome {system
 refuse 'unknown NixOS field' 'unknownField' '(provider.lib.mkNixos {system = "x86_64-linux"; user = "example"; inherit git systemModules; unknownField = 1;}).config.system.stateVersion'
 refuse 'unknown common package exclusion' 'not-a-provider-package' '(provider.lib.mkHome (homeInput // {homeModules = [{providerTools.excludedPackages = ["not-a-provider-package"];}];})).activationPackage.drvPath'
 
-# INV unixlike/version-manager-last and INV unixlike/package-ownership:
+# INV unixlike/package-ownership:
 # extend public constructors with one violating native module at a time.
-refuse 'late PATH entry' 'INV unixlike/version-manager-last' '(provider.lib.mkHome (homeInput // {homeModules = [({lib, ...}: {programs.zsh.initContent = lib.mkOrder 2000 "path+=(\"/opt/late/bin\")";})];})).activationPackage.drvPath'
-refuse 'declarative JDK beside SDKMAN' 'INV unixlike/version-manager-last' '(provider.lib.mkHome (homeInput // {homeModules = [({pkgs, ...}: {home.packages = [pkgs.openjdk];})];})).activationPackage.drvPath'
 refuse 'duplicate home package' 'INV unixlike/package-ownership' '(provider.lib.mkHome (homeInput // {homeModules = [({pkgs, ...}: {home.packages = [pkgs.ripgrep];})];})).activationPackage.drvPath'
 refuse 'duplicate NixOS system package' 'INV unixlike/package-ownership' '(provider.lib.mkNixos {system = "x86_64-linux"; user = "example"; inherit git; environment.graphical = false; systemModules = systemModules ++ [({pkgs, ...}: {environment.systemPackages = [pkgs.ripgrep];})];}).config.system.build.toplevel.drvPath'
 refuse 'duplicate Darwin system package' 'INV unixlike/package-ownership' '(provider.lib.mkDarwin {system = "aarch64-darwin"; user = "example"; inherit git; systemModules = [{system.primaryUser = "example"; users.users.example.home = ("/Users/" + "example");} ({pkgs, ...}: {environment.systemPackages = [pkgs.ripgrep];})];}).config.system.build.toplevel.drvPath'

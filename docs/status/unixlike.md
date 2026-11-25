@@ -210,14 +210,7 @@ using the pinned nixpkgs module's default libraries. Darwin and standalone
 Home Manager do not receive this loader configuration. Consumer activation
 and execution of downloaded binaries require separate host-specific evidence.
 
-SDKMAN is adopted but not owned
-(`docs/policy/decisions/unixlike/sdkman-adopted-not-owned.md`). Its hook is the last
-thing the generated zsh initialisation runs: since 2026-09-04 it sits after
-Home Manager's own late pieces (starship, direnv, syntax highlighting),
-where before it ran inside the repository's default-order block ahead of
-them, and an assertion refuses a PATH assignment placed later.
-
-Three other generated things changed on 2026-09-04 and reach a home on its
+Three generated things changed on 2026-09-04 and reach a home on its
 next activation: `~/.config/zellij/config.kdl` is Home Manager's rendering
 of the asset (a blank line and an `// extraConfig` marker, then the asset)
 rather than a link to it; every home carries Pester 5.7.1 under

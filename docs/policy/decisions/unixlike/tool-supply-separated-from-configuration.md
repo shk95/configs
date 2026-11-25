@@ -28,8 +28,7 @@ components.
 Supported Linux homes use Nix-supplied mise for Claude Code and Codex.
 Nix owns their mise configuration fragment, while local tool configuration
 stays writable. Configuration application installs missing requests. Updates
-use `mise upgrade --global` explicitly, and old versions are retained. SDKMAN
-keeps its existing ownership and shell order.
+use `mise upgrade --global` explicitly, and old versions are retained.
 
 On 2026-11-19, the provider adopted mise as the sole supplier for both CLIs on
 Linux and the Homebrew casks `claude-code` and `codex` on macOS. Homebrew

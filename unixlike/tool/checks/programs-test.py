@@ -311,7 +311,6 @@ r = evaluate('(cfg []).programs.zsh.initContent')
 assert r.returncode == 0, r.stderr
 init = json.loads(r.stdout)
 path_line = next(line.strip() for line in init.splitlines() if '/mise/shims' in line and 'path=' in line)
-assert init.index(path_line) < init.index('sdkman-init.sh')
 with tempfile.TemporaryDirectory() as directory:
     directory = Path(directory)
     managed, shims = directory / 'nix/bin', directory / 'mise/shims'
@@ -325,4 +324,4 @@ with tempfile.TemporaryDirectory() as directory:
     r = subprocess.run([shutil.which('zsh'), '-f', '-c', line + '; node; claude'],
         env=os.environ | {'PATH': f'{shims}:{managed}:/usr/bin:/bin'}, text=True, capture_output=True)
     assert r.returncode == 0 and r.stdout.splitlines() == ['nix', 'claude'], r
-print('✓ mise PATH: Nix priority, available supplementary command, SDKMAN last')
+print('✓ mise PATH: Nix priority, available supplementary command')

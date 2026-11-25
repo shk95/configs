@@ -42,7 +42,6 @@ _: {
         home.packages = [pkgs.mise];
         xdg.configFile."mise/conf.d/10-provider.toml".source = fragment;
         # Append shims; don't install a prompt hook that prepends mutable tools.
-        # SDKMAN's existing mkAfter hook still runs last.
         programs.zsh.initContent = lib.mkOrder 1100 ''
           path=("''${(@)path:#${config.xdg.dataHome}/mise/shims}" "${config.xdg.dataHome}/mise/shims")
         '';
