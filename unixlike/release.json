@@ -1,7 +1,7 @@
 {
-  "previous": "unixlike-v3.0.4",
-  "version": "3.1.0",
-  "summary": "Load an editable Zsh local configuration and retire provider-owned SDKMAN initialization.",
-  "compatibility": "minor",
-  "migration": "Declare any SDKMAN initialization you still use in your host's .zshrc.local text. Activation backs up an existing local file as a numbered diff before installing the declared contents."
+  "previous": "unixlike-v3.1.0",
+  "version": "3.1.1",
+  "summary": "Refresh permitted Unix-like inputs.",
+  "compatibility": "patch",
+  "migration": ""
 }
